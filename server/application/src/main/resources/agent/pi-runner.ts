@@ -48,7 +48,7 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
-import { buildBrief, buildSameWorkContext } from "./pi-review-brief.ts";
+import { buildBrief, buildPublicReviewHistory, buildSameWorkContext } from "./pi-review-brief.ts";
 import {
 	type Work,
 	deriveWindows,
@@ -69,14 +69,22 @@ import {
 	type ReviewPractice,
 	REVIEW_CONTRACT_VERSION,
 	REVIEW_TOOL_DESCRIPTION,
+	type ReviewSelection,
+	type ReviewedObservation,
+	SELECTION_TOOL_DESCRIPTION,
 	WITHHOLD_REASONS,
 	buildReviewTurn,
 	decidedByReview,
 	notReachedNote,
+	priorAdviceWitnesses,
 	priorPublicFeedback,
 	publicObservations,
 	readReview,
+	readSelection,
 	reviewToolParameters,
+	selectionMismatch,
+	selectionText,
+	selectionToolParameters,
 	uncertainOutcomes,
 	undeliverableUnits,
 	validateFeedbackEvidence,
@@ -1123,10 +1131,14 @@ async function refusal<T>(toolCallId: string, text: string): Promise<AgentToolRe
 	throw new Error(text);
 }
 
-/** The tools a turn exists to call: what it records with them is what it owes. */
+/**
+ * The tools a turn exists to call: what it records with them is what it owes. select_feedback stores nothing, but its
+ * answer is a function of its arguments like theirs, so it shares their repeat and attempt bounds.
+ */
 const RECORDING_TOOLS: ReadonlySet<string> = new Set([
 	"report_observation",
 	"report_feedback",
+	"select_feedback",
 	"report_review",
 ]);
 
@@ -1685,9 +1697,9 @@ const COMPOSITION_NUDGE =
 
 /** What the composer of the review on the work is told near its budget's end. */
 const REVIEW_NUDGE =
-	`Everything this review may rest on is in this turn's prompt. Store the review now with one ` +
-	`report_review call: the complete summary, any line notes, and every NOT_MET observation you decided ` +
-	`not to raise under withheld. No prose outside the call.`;
+	`Everything this review may rest on is in this turn's prompt. Without an accepted selection, send one ` +
+	`select_feedback call now; with one, store the final review with one report_review call: the complete summary, ` +
+	`any line notes, and the selection's withholding decisions. No prose outside the calls.`;
 
 /** Calls a composition may make before its first recording call; at this one it is nudged to persist. */
 const COMPOSITION_EXPLORATION_NUDGE = 12;
@@ -1764,6 +1776,8 @@ const COMPOSITION_REQUEST_PATH = INPUT_PATHS.compositionRequest;
 const FEEDBACK_PATH = outputPath(OUTPUT, "feedback.json");
 const COMPOSER_PROMPT_PATH = `${CWD}/feedback-composer.md`;
 const REVIEW_COMPOSER_PROMPT_PATH = `${CWD}/review-composer.md`;
+/** The writing style both compositions share, ahead of each one's own instructions. */
+const FEEDBACK_STYLE_PATH = `${CWD}/feedback-style.md`;
 const PREPARED_FEEDBACK_PATH = INPUT_PATHS.preparedFeedback;
 const COMPOSITION_OBSERVATIONS_PATH = `${CWD}/work/composition/observations.json`;
 let compositionAdmitted = false;
@@ -2228,12 +2242,20 @@ interface ReportReviewDetails {
 	stored: number;
 }
 
-/**
- * report_review: the one tool of the review composition. It reads the review against only the observations the
- * review may rest on — those admission marked publicEligible — and stores it whole or refuses it with every reason.
- */
-function buildReviewTool(lineNotes: boolean, reviewable: readonly Record<string, unknown>[]) {
-	const restable = new Map(
+interface SelectFeedbackDetails {
+	accepted: boolean;
+}
+
+/** Once final, both tools refuse every call: one response can carry several calls after the final one. */
+interface PublicReviewState {
+	selection: ReviewSelection | null;
+	final: boolean;
+}
+
+function reviewableById(
+	reviewable: readonly Record<string, unknown>[],
+): Map<string, ReviewedObservation> {
+	return new Map(
 		reviewable.map((observation) => [
 			String(observation.id),
 			{
@@ -2246,6 +2268,73 @@ function buildReviewTool(lineNotes: boolean, reviewable: readonly Record<string,
 			},
 		]),
 	);
+}
+
+const REVIEW_FINAL = "The review on this work is final; this composition accepts nothing more.";
+
+/** A refused selection leaves the accepted one standing; nothing the tool accepts is stored or published. */
+function buildSelectionTool(
+	restable: ReadonlyMap<string, ReviewedObservation>,
+	reviewable: readonly Record<string, unknown>[],
+	witnesses: ReturnType<typeof priorAdviceWitnesses>,
+	state: PublicReviewState,
+) {
+	const eligible = [...witnesses].filter(([, witness]) => witness.eligibleForPriorAdvice);
+	return defineTool({
+		name: "select_feedback",
+		exposure: "model-only",
+		label: "Select Feedback",
+		description: SELECTION_TOOL_DESCRIPTION,
+		parameters: selectionToolParameters(
+			restable,
+			eligible.map(([id]) => id),
+		),
+		execute: async (toolCallId, params): Promise<AgentToolResult<SelectFeedbackDetails>> => {
+			if (!compositionAdmitted) {
+				return refusal<SelectFeedbackDetails>(
+					toolCallId,
+					"Feedback composition opens only after Java admits the completed observations.",
+				);
+			}
+			if (state.final) {
+				return refusal<SelectFeedbackDetails>(toolCallId, REVIEW_FINAL);
+			}
+			const read = readSelection(params, restable, witnesses);
+			if ("errors" in read) {
+				const standing =
+					state.selection === null
+						? "no selection is accepted yet"
+						: "the selection accepted before it still stands";
+				const reasons = read.errors.map((error) => `- ${error}`).join("\n");
+				const stands =
+					state.selection === null
+						? ""
+						: `\nThe selection that stands:\n${selectionText(state.selection, reviewable)}`;
+				return refusal<SelectFeedbackDetails>(
+					toolCallId,
+					`selection refused, ${standing}:\n${reasons}${stands}`,
+				);
+			}
+			state.selection = read.selection;
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Accepted the selection:\n${selectionText(read.selection, reviewable)}\nNow store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions. A later select_feedback call replaces this selection until the review is final.`,
+					},
+				],
+				details: { accepted: true },
+			};
+		},
+	});
+}
+
+/** Reads the review against only the observations admission marked publicEligible, and the accepted selection. */
+function buildReviewTool(
+	lineNotes: boolean,
+	restable: ReadonlyMap<string, ReviewedObservation>,
+	state: PublicReviewState,
+) {
 	return defineTool({
 		name: "report_review",
 		exposure: "model-only",
@@ -2259,15 +2348,34 @@ function buildReviewTool(lineNotes: boolean, reviewable: readonly Record<string,
 					"Feedback composition opens only after Java admits the completed observations.",
 				);
 			}
-			const read = readReview(params, restable, lineNotes);
-			if ("errors" in read) {
+			if (state.final) {
+				return refusal<ReportReviewDetails>(toolCallId, REVIEW_FINAL);
+			}
+			if (state.selection === null) {
 				return refusal<ReportReviewDetails>(
 					toolCallId,
-					`review refused, nothing was stored:\n${read.errors.map((error) => `- ${error}`).join("\n")}`,
+					"review refused, nothing was stored: no selection is accepted yet. Choose with one select_feedback call first, then send the whole review.",
 				);
 			}
+			const read = readReview(params, restable, lineNotes);
+			const errors =
+				"errors" in read ? read.errors : selectionMismatch(read.review, state.selection);
+			if ("errors" in read || errors.length > 0) {
+				return refusal<ReportReviewDetails>(
+					toolCallId,
+					`review refused, nothing was stored:\n${errors.map((error) => `- ${error}`).join("\n")}`,
+				);
+			}
+			// Final only once persisted: a failed write leaves the review unaccepted, so it is never delivered.
+			const previous = composedFeedback.review;
 			composedFeedback.review = read.review;
-			persistComposedFeedback();
+			try {
+				persistComposedFeedback();
+			} catch (error) {
+				composedFeedback.review = previous;
+				throw error;
+			}
+			state.final = true;
 			if (currentTurn) {
 				currentTurn.stored += 1;
 			}
@@ -2279,11 +2387,11 @@ function buildReviewTool(lineNotes: boolean, reviewable: readonly Record<string,
 				content: [
 					{
 						type: "text",
-						text: `Stored the review: ${said}, ${inline.length} line note(s), ${withheld.length} withholding decision(s). A later report_review call replaces it whole.`,
+						text: `Stored the review: ${said}, ${inline.length} line note(s), ${withheld.length} withholding decision(s). It is final.`,
 					},
 				],
 				details: { stored: 1 },
-				terminate: turnDemand?.endsWhenPaid === true && turnDemand.owed() === 0,
+				terminate: true,
 			};
 		},
 	});
@@ -2298,13 +2406,21 @@ function undecidedByReview(reviewable: readonly Record<string, unknown>[]): stri
 		.filter((id) => !decided.has(id));
 }
 
-/** The review composition's one retry: the observations it left undecided, by id. */
-function finishReviewText(undecided: readonly string[]): string {
-	return (
-		`## Undecided\nThe review leaves these NOT_MET observations undecided: ${undecided.join(", ")}. ` +
-		`Send the whole review again with one report_review call, with each of them spoken about in the summary ` +
-		`or a line note, or named under withheld with its reason. No prose outside the call.`
-	);
+/** Carries the accepted selection, which a compaction may have removed from the session's context. */
+function finishReviewText(
+	undecided: readonly string[],
+	selection: ReviewSelection | null,
+	reviewable: readonly Record<string, unknown>[],
+): string {
+	const owed =
+		undecided.length > 0
+			? `## Undecided\nThe review leaves these NOT_MET observations undecided: ${undecided.join(", ")}.`
+			: "## Unfinished\nThe review on this work is not final yet.";
+	const next =
+		selection === null
+			? "Choose with one select_feedback call, then store the final review with one report_review call."
+			: `${selectionText(selection, reviewable)}\nThis selection stands. Store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions, or select again first.`;
+	return `${owed}\n${next} A review that says nothing is still one final report_review call. No prose outside the calls.`;
 }
 
 /** Explanatory context on each practice the review's observations were measured against, from the staged index. */
@@ -2712,7 +2828,7 @@ function buildCompositionTurn(
 	const coverageNote = notReachedNote(notReached);
 	const admitted = JSON.stringify({ observations: observations.map(composerView) }, null, 1);
 	const onTheWork = composedFeedback.review
-		? `### The review planned for this work (a draft, not delivered)\nIt was written separately and may not reach the work if a delivery check holds it, so it is not something already said: only the feedback history supports ALREADY_SAID. Do not copy its argument about this change, and do not withhold useful private guidance only because it exists.\n\`\`\`json\n${JSON.stringify(composedFeedback.review, null, 1)}\n\`\`\`\n`
+		? `### The review planned for this work (a draft, not delivered)\nIt was written separately and may not reach the work if a delivery check holds it, so it is not something already said: only the feedback history supports ALREADY_SAID. Each surface is read on its own, so private feedback may make the same point where that helps this person; do not withhold useful private guidance only because the draft exists.\n\`\`\`json\n${JSON.stringify(composedFeedback.review, null, 1)}\n\`\`\`\n`
 		: "";
 	const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
 	const context = [
@@ -2884,11 +3000,16 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 			owed.length > 0
 				? `Still owed: ${owed.join(", ")}. Record what the evidence you have read supports for these`
 				: "Record what the evidence you have read supports";
+		// The review's next tool depends on whether a selection stands, which REVIEW_NUDGE already says.
+		let correction = `Correct what its answer names and send one ${recording ? toolName : composerTool} call.`;
+		if (composerTool === "report_review") {
+			correction = `Correct what its answer names. ${REVIEW_NUDGE}`;
+		}
 		void steer(
 			activeSession,
 			measuring
 				? `You have run the same ${toolName} call ${repeats} times; its result will not change. ${next}, in one report_observation call. ${PERSIST_DISCIPLINE}`
-				: `You have run the same ${toolName} call ${repeats} times; its result will not change. Correct what its answer names and send one ${composerTool} call.`,
+				: `You have run the same ${toolName} call ${repeats} times; its result will not change. ${correction}`,
 		);
 	}
 	if (repeats >= (recording ? REPEATED_RECORDING_ABORT : REPEATED_CALL_ABORT)) {
@@ -3680,9 +3801,8 @@ async function main() {
 	process.exit(0);
 
 	/**
-	 * The review on the work, in a session of its own: fresh, with report_review as its only tool and every input
-	 * inline — the captured record of this work, the observations of this work it may rest on, what was already said
-	 * on this work, and the practices. Private history is not staged into this tool-free session.
+	 * The review on the work, in a fresh session of its own whose only tools choose and store the review, with every
+	 * input inline. Private history is not staged into it, and it can read nothing from the workspace.
 	 */
 	async function composeReview(
 		request: CompositionRequest,
@@ -3696,16 +3816,41 @@ async function main() {
 			agentDir: AGENT_DIR,
 			settingsManager,
 			...PUBLIC_REVIEW_RESOURCE_LOADER_OPTIONS,
-			systemPrompt: readFileSync(REVIEW_COMPOSER_PROMPT_PATH, "utf8"),
+			systemPrompt: `${readFileSync(FEEDBACK_STYLE_PATH, "utf8")}\n\n${readFileSync(REVIEW_COMPOSER_PROMPT_PATH, "utf8")}`,
 			agentsFilesOverride: () => ({ agentsFiles: [] }),
 			extensionFactories: [],
 		});
 		await reviewLoader.reload();
+		const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
+		const history = existsSync(`${historyRoot}/feedback.json`)
+			? parseJson(readFileSync(`${historyRoot}/feedback.json`, "utf8"))
+			: null;
+		const framing = {
+			repositoryFullName: taskEnvelope.repositoryFullName,
+			pullRequestNumber: taskEnvelope.pullRequestNumber,
+		};
+		const captured = buildPublicReviewHistory(
+			CWD,
+			taskEnvelope.paths.contextRoot,
+			folderIndex,
+			framing,
+		);
+		const alreadySaid = priorPublicFeedback(history, THIS_WORK, captured.capturedAt);
+		const restable = reviewableById(reviewable);
+		const state: PublicReviewState = { selection: null, final: false };
 		const { session: reviewSession } = await createAgentSession({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
 			tools: PUBLIC_REVIEW_TOOLS,
-			customTools: [buildReviewTool(lineNotes, reviewable)],
+			customTools: [
+				buildSelectionTool(
+					restable,
+					reviewable,
+					priorAdviceWitnesses(alreadySaid.feedback, captured.statements),
+					state,
+				),
+				buildReviewTool(lineNotes, restable, state),
+			],
 			sessionManager: SessionManager.inMemory(),
 			settingsManager,
 			resourceLoader: reviewLoader,
@@ -3713,6 +3858,17 @@ async function main() {
 			model,
 			thinkingLevel,
 		});
+		// Pi requires every tool to terminate a mixed batch, then AgentSession drains queued nudges.
+		// Preserve its boundary; a persisted final review also ends this isolated session's internal queue.
+		const { finishTurn } = reviewSession.agent;
+		reviewSession.agent.finishTurn = async (turn, signal) => {
+			const decision = await finishTurn?.(turn, signal);
+			if (state.final) {
+				reviewSession.clearQueue();
+				return { action: "end" };
+			}
+			return decision ?? undefined;
+		};
 		const unsubscribeReview = subscribeSession(reviewSession);
 		let reviewContextHeld = false;
 		const unsubscribeContext = reviewSession.subscribe((event) => {
@@ -3722,23 +3878,19 @@ async function main() {
 		});
 		activeSession = reviewSession;
 		composerTool = "report_review";
-		const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
-		const history = existsSync(`${historyRoot}/feedback.json`)
-			? parseJson(readFileSync(`${historyRoot}/feedback.json`, "utf8"))
-			: null;
 		const text = buildReviewTurn({
-			sameWork: buildSameWorkContext(CWD, taskEnvelope.paths.contextRoot, folderIndex, {
-				repositoryFullName: taskEnvelope.repositoryFullName,
-				pullRequestNumber: taskEnvelope.pullRequestNumber,
-			}),
+			sameWork: buildSameWorkContext(CWD, taskEnvelope.paths.contextRoot, folderIndex, framing),
 			observations: reviewable,
 			undecided: uncertainOutcomes(admittedObservations),
-			alreadySaid: priorPublicFeedback(history, THIS_WORK),
+			alreadySaid: alreadySaid.feedback,
+			ownHistoryOmissions: alreadySaid.omissions,
+			captured,
 			practices: practiceContext(reviewable),
 			notReached: notReachedSlugs,
 			lineNotes,
 		});
-		const owed = () => undecidedByReview(reviewable).length;
+		// The composition owes one final review, whatever it decides: an all-MET review is final only when sent.
+		const owed = () => (state.final ? 0 : Math.max(1, undecidedByReview(reviewable).length));
 		const budget = compositionBudget(owed());
 		let started = false;
 		const wasStarted = () => started;
@@ -3780,12 +3932,14 @@ async function main() {
 			if (
 				wasStarted() &&
 				(trace.stoppedBy === null || trace.stoppedBy === "loop") &&
-				left.length > 0 &&
+				!state.final &&
 				(await settleSession(reviewSession, "review composition", ABORT_SETTLE_MS)) &&
 				!safety.expired()
 			) {
 				console.error(
-					`[pi-runner] the review left ${left.length} NOT_MET observation(s) undecided — asking once more`,
+					left.length > 0
+						? `[pi-runner] the review left ${left.length} NOT_MET observation(s) undecided — asking once more`
+						: "[pi-runner] the review is not final — asking once more",
 				);
 				const retry = openTurnTrace("review composition once more", budget, {
 					owed,
@@ -3797,7 +3951,8 @@ async function main() {
 						(async () => {
 							const prepared = await prepareTurnText(
 								reviewSession,
-								() => `${reviewContextHeld ? "" : `${text}\n\n`}${finishReviewText(left)}`,
+								() =>
+									`${reviewContextHeld ? "" : `${text}\n\n`}${finishReviewText(left, state.selection, reviewable)}`,
 							);
 							if (safety.expired()) {
 								return;
@@ -3839,7 +3994,7 @@ async function main() {
 		request: CompositionRequest,
 		safety: ReturnType<typeof scheduleDeadline>,
 	): Promise<void> {
-		const instructions = readFileSync(COMPOSER_PROMPT_PATH, "utf8");
+		const instructions = `${readFileSync(FEEDBACK_STYLE_PATH, "utf8")}\n\n${readFileSync(COMPOSER_PROMPT_PATH, "utf8")}`;
 		composerTool = "report_feedback";
 		if (privateLanesOpen) {
 			const notMet = notMetPractices(admittedObservations);

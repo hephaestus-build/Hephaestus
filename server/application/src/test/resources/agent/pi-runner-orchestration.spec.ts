@@ -44,6 +44,39 @@ const admittedObservation = {
 	},
 };
 
+/** admittedObservation as the review on the work is shown it: whole, without its verification digests. */
+const publicRow = {
+	outcome: "NOT_MET",
+	id: "observation-1",
+	practiceSlug: "test-practice",
+	severity: "MAJOR",
+	anchorable: true,
+	publicEligible: true,
+	evidence: {
+		search: { consulted: ["scm.pull-request.diff"], lookedFor: "x", boundary: "y" },
+	},
+	citations: [
+		{
+			index: 0,
+			sourceKind: "scm.pull-request.diff",
+			path: "src/Auth.java",
+			side: "NEW",
+			startLine: 10,
+			endLine: 10,
+			quote: "+ insecure();",
+			anchorable: true,
+		},
+	],
+};
+
+/** The accepted selection and the rows it chose, as a composition text shows them. */
+function selectedRowsOf(text: string): unknown {
+	const block = /```json\n(?<selection>\{\n "acceptedSelection"[\s\S]*?\n\})\n```/u.exec(text);
+	const selection = block?.groups?.selection;
+	assert.ok(selection !== undefined, text);
+	return JSON.parse(selection);
+}
+
 const changeCitation = {
 	sourceKind: "scm.pull-request.diff",
 	artifactPath: "evidence/change.json",
@@ -182,7 +215,8 @@ if (scenario !== undefined && scenario !== "") {
 					},
 				];
 			}
-			case "compose-quiet": {
+			case "compose-quiet":
+			case "compose-empty": {
 				return [{ ...admittedObservation, outcome: "MET", severity: null }];
 			}
 			case "compose-unknown-outcome": {
@@ -213,6 +247,8 @@ if (scenario !== undefined && scenario !== "") {
 		buildSessionProjection: () => ({ messages: [] }),
 	};
 	let prompts = 0;
+	/** What the runner steered the session with, in order. */
+	const steered: string[] = [];
 	let wasCompacted = false;
 	/** The stall scenario's first prompt ends only when the runner aborts it, like a call in flight. */
 	let releasePrompt: (() => void) | undefined;
@@ -282,6 +318,7 @@ if (scenario !== undefined && scenario !== "") {
 			},
 			async createAgentSession(options: { tools: string[]; customTools: CustomTool[] }) {
 				const handlers = new Set<(event: unknown) => void>();
+				let queued = 0;
 				const emit = (event: unknown) => {
 					for (const handler of handlers) {
 						handler(event);
@@ -307,7 +344,13 @@ if (scenario !== undefined && scenario !== "") {
 					extensionsResult: { errors: [] },
 					session: {
 						state: { messages: [] },
-						agent: { state: { tools: [] } },
+						agent: {
+							state: { tools: [] },
+							finishTurn: async () => {
+								record("native-finish-turn");
+								return { action: "continue" };
+							},
+						},
 						systemPrompt: "",
 						model: { contextWindow: 128_000, maxTokens: 16_384 },
 						settingsManager: { getCompactionSettings: () => ({ reserveTokens: 16_384 }) },
@@ -318,7 +361,12 @@ if (scenario !== undefined && scenario !== "") {
 								handlers.delete(handler);
 							};
 						},
-						clearQueue: () => undefined,
+						clearQueue: () => {
+							queued = 0;
+						},
+						get pendingMessageCount() {
+							return queued;
+						},
 						getContextUsage: () => ({
 							tokens:
 								scenario === "compose-overflow" && !wasCompacted && prompts >= 2 ? 120_000 : 1000,
@@ -354,8 +402,12 @@ if (scenario !== undefined && scenario !== "") {
 							return waitForIdle();
 						},
 						dispose: () => record("dispose"),
-						steer: async () => {
+						steer: async (message?: string) => {
+							queued += 1;
 							record("steer");
+							if (message !== undefined) {
+								steered.push(message);
+							}
 						},
 						async prompt(
 							text: string,
@@ -457,21 +509,40 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (
 								text.includes("## The review to write") ||
-								text.includes("The review leaves these NOT_MET observations undecided")
+								text.includes("The review leaves these NOT_MET observations undecided") ||
+								text.includes("The review on this work is not final yet")
 							) {
-								// The review composition, in its own session: report_review is all it can call.
-								assert.deepEqual(options.tools, ["report_review"]);
+								// The review composition, in its own session: choosing and storing the review is all it
+								// can do.
+								assert.deepEqual(options.tools, ["select_feedback", "report_review"]);
 								assert.deepEqual(
 									options.customTools.map((custom) => custom.name),
-									["report_review"],
+									["select_feedback", "report_review"],
 								);
 								const review = tool("report_review");
-								if (text.includes("The review leaves")) {
+								const selection = tool("select_feedback");
+								if (
+									text.includes("The review leaves") ||
+									text.includes("The review on this work is not final yet")
+								) {
 									record("review-retry");
 									return;
 								}
+								const choose = async (id: string, args: unknown) => {
+									try {
+										return JSON.stringify(await selection.execute(id, args));
+									} catch (error) {
+										return JSON.stringify(error instanceof Error ? error.message : String(error));
+									}
+								};
 								if (scenario === "compose-settle-deadline") {
-									// The response ended, but its auto-compaction remains busy until the deadline.
+									// A selection is accepted, and then the response ends while its auto-compaction
+									// remains busy until the deadline: no final review is ever sent.
+									record(
+										`selection-only:${await choose("s-d", {
+											withheld: [{ basedOn: ["observation-1"], reason: "BELOW_BAR" }],
+										})}`,
+									);
 									compacting = true;
 									return;
 								}
@@ -508,8 +579,126 @@ if (scenario !== undefined && scenario !== "") {
 										return JSON.stringify(error instanceof Error ? error.message : String(error));
 									}
 								};
+								if (scenario === "compose-repeat-select" || scenario === "compose-invalid-select") {
+									// Each call as the SDK runs it: started and ended as events, so the runner's repeat
+									// guard sees it, and executed by the native tool.
+									const native = async (name: string, id: string, args: unknown) => {
+										emit({ type: "tool_execution_start", toolCallId: id, toolName: name, args });
+										try {
+											const result = await tool(name).execute(id, args);
+											emit({
+												type: "tool_execution_end",
+												toolCallId: id,
+												toolName: name,
+												isError: false,
+												result,
+											});
+											return JSON.stringify(result);
+										} catch (error) {
+											const errorMessage = error instanceof Error ? error.message : String(error);
+											emit({
+												type: "tool_execution_end",
+												toolCallId: id,
+												toolName: name,
+												isError: true,
+												result: { content: [{ type: "text", text: errorMessage }] },
+											});
+											return JSON.stringify(errorMessage);
+										}
+									};
+									/** The tools a steering message tells the session to call. */
+									const toolsNamed = (from: number) =>
+										steered
+											.slice(from)
+											.map((message) =>
+												["select_feedback", "report_review"].filter((name) =>
+													message.includes(name),
+												),
+											);
+									const said = { summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] } };
+									if (scenario === "compose-repeat-select") {
+										const speak = { selected: ["observation-1"] };
+										record(`repeat-accepted:${await native("select_feedback", "s-1", speak)}`);
+										record(
+											`repeat-mismatch:${await native("report_review", "r-1", {
+												withheld: [{ basedOn: ["observation-1"], reason: "BELOW_BAR" }],
+											})}`,
+										);
+										const before = steered.length;
+										record(`repeat-again:${await native("select_feedback", "s-2", speak)}`);
+										record(`repeat-nudge:${JSON.stringify(toolsNamed(before))}`);
+										record(`repeat-final:${await native("report_review", "r-2", said)}`);
+										return;
+									}
+									const unaccepted = { selected: [] };
+									record(`invalid-select:${await native("select_feedback", "s-1", unaccepted)}`);
+									record(`invalid-report:${await native("report_review", "r-1", said)}`);
+									const before = steered.length;
+									record(`invalid-again:${await native("select_feedback", "s-2", unaccepted)}`);
+									record(`invalid-nudge:${JSON.stringify(toolsNamed(before))}`);
+									record(
+										`invalid-corrected:${await native("select_feedback", "s-3", { selected: ["observation-1"] })}`,
+									);
+									record(`invalid-final:${await native("report_review", "r-2", said)}`);
+									return;
+								}
+								if (scenario === "compose-recover") {
+									// A selection is accepted and the response ends without the final review.
+									record(`recover-select:${await choose("s-r", { selected: ["observation-1"] })}`);
+									return;
+								}
+								if (scenario === "compose-reselect") {
+									// The composer writes before choosing, chooses wrongly, then rightly, writes a review
+									// that does not match its choice, chooses again and writes the review that does.
+									const said = {
+										summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+									};
+									await this.steer();
+									record(`reselect-unselected:${await attempt("r-0", said)}`);
+									record(`reselect-before-final:${JSON.stringify(await this.agent.finishTurn())}`);
+									record(`reselect-retained:${this.pendingMessageCount}`);
+									record(`reselect-incomplete:${await choose("s-1", { selected: [] })}`);
+									record(
+										`reselect-withhold:${await choose("s-2", {
+											withheld: [{ basedOn: ["observation-1"], reason: "BELOW_BAR" }],
+										})}`,
+									);
+									record(
+										`reselect-unwitnessed:${await choose("s-3", {
+											withheld: [{ basedOn: ["observation-1"], reason: "ALREADY_SAID" }],
+										})}`,
+									);
+									record(`reselect-mismatch:${await attempt("r-1", said)}`);
+									record(`reselect-speak:${await choose("s-4", { selected: ["observation-1"] })}`);
+									// A refused replacement answers with the selection that stands, never the one refused.
+									try {
+										await selection.execute("s-4b", { selected: ["observation-history"] });
+									} catch (error) {
+										writeFileSync(
+											nodePath.join(cwd, "refused-standing.txt"),
+											error instanceof Error ? error.message : String(error),
+										);
+									}
+									record(`reselect-final:${await attempt("r-2", said)}`);
+									record(`reselect-terminal:${JSON.stringify(await this.agent.finishTurn())}`);
+									record(`reselect-drained:${this.pendingMessageCount}`);
+									// One response can carry more calls after the final one; none of them is accepted.
+									record(
+										`reselect-after-select:${await choose("s-5", { selected: ["observation-1"] })}`,
+									);
+									record(`reselect-after-review:${await attempt("r-3", said)}`);
+									return;
+								}
+								if (scenario === "compose-empty") {
+									// Only a routine strength was measured, and nothing on the work earns a comment.
+									record(`empty-select:${await choose("s-e", {})}`);
+									record(`empty-final:${await attempt("r-e", {})}`);
+									record(`empty-terminal:${JSON.stringify(await this.agent.finishTurn())}`);
+									return;
+								}
 								if (scenario === "compose-quiet") {
 									// Only a strength was measured: the review may say so, specifically.
+									record(`strength-select:${await choose("s-q", { selected: ["observation-1"] })}`);
 									record(
 										`review-strength:${await attempt("r-q", {
 											summary: {
@@ -521,6 +710,11 @@ if (scenario !== undefined && scenario !== "") {
 									return;
 								}
 								if (scenario === "compose-abstention") {
+									// Only the strength can be chosen: an abstention is not among what the review rests on.
+									record(
+										`abstention-select:${await choose("s-a", { selected: ["observation-2"] })}`,
+									);
+									record(`met-select:${await choose("s-m", { selected: ["observation-1"] })}`);
 									record(
 										`review-abstention:${await attempt("r-a", {
 											summary: { body: "Nothing to settle here.", basedOn: ["observation-2"] },
@@ -537,6 +731,7 @@ if (scenario !== undefined && scenario !== "") {
 									return;
 								}
 								if (scenario === "compose" || scenario === "compose-foreign-provider") {
+									record(`review-select:${await choose("s-1", { selected: ["observation-1"] })}`);
 									record(
 										`review-refused:${await attempt("r-1", {
 											summary: { body: "Fine. <!-- marker -->", basedOn: ["observation-1"] },
@@ -568,16 +763,14 @@ if (scenario !== undefined && scenario !== "") {
 									);
 									return;
 								}
-								// Every other composing scenario decides the review's one problem by withholding it.
+								// Every other composing scenario decides the review's problems by withholding them.
 								const ids =
 									scenario === "compose-fold"
 										? ["observation-1", "observation-2"]
 										: ["observation-1"];
-								record(
-									`review-withheld:${await attempt("r-w", {
-										withheld: [{ basedOn: ids, reason: "ALREADY_SAID" }],
-									})}`,
-								);
+								const withheld = [{ basedOn: ids, reason: "BELOW_BAR" }];
+								record(`review-select:${await choose("s-w", { withheld })}`);
+								record(`review-withheld:${await attempt("r-w", { withheld })}`);
 								return;
 							}
 							if (text.includes("## Undecided")) {
@@ -1348,6 +1541,11 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-silent",
 		"compose-loop",
 		"compose-quiet",
+		"compose-empty",
+		"compose-reselect",
+		"compose-recover",
+		"compose-repeat-select",
+		"compose-invalid-select",
 		"compose-fold",
 		"compose-abstention",
 		"compose-unknown-outcome",
@@ -1393,6 +1591,16 @@ if (scenario !== undefined && scenario !== "") {
 				"compose-loop":
 					"ends a composition that keeps calling a recording tool without recording anything",
 				"compose-quiet": "skips a WITHHOLD on a practice with nothing to withhold and asks no more",
+				"compose-empty":
+					"ends the review composition on an intentionally empty final review of positive results",
+				"compose-reselect":
+					"stores only a final review that matches the selection accepted last, and nothing after it",
+				"compose-recover":
+					"asks once more for a review left unfinished, carrying the admitted rows its selection chose",
+				"compose-repeat-select":
+					"points a repeated accepted selection at the final review, which is then stored without an abort",
+				"compose-invalid-select":
+					"gives an unaccepted selection no authority over the review until a corrected one is accepted",
 				"compose-fold":
 					"counts a NOT_MET practice folded into another practice's unit as decided and asks no more",
 				"compose-abstention":
@@ -1420,6 +1628,7 @@ if (scenario !== undefined && scenario !== "") {
 						"Compose from admitted observations.",
 					);
 					writeFileSync(nodePath.join(cwd, "review-composer.md"), "Write the review on the work.");
+					writeFileSync(nodePath.join(cwd, "feedback-style.md"), "Write clear, useful feedback.");
 					if (stage === "compose" || stage === "compose-foreign-provider") {
 						// The person's history, staged as the server stages it for the measurement and private lanes.
 						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
@@ -1678,6 +1887,16 @@ if (scenario !== undefined && scenario !== "") {
 								!events.some((event) => event.startsWith("private-turn")),
 								events.join("\n"),
 							);
+							// An accepted selection is not a review: nothing is left to deliver on the work.
+							assert.match(
+								events.find((event) => event.startsWith("selection-only:")) ?? "",
+								/Accepted the selection/u,
+							);
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback));
+							assert.equal(feedback.review ?? null, null);
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -2064,13 +2283,17 @@ if (scenario !== undefined && scenario !== "") {
 							assert.deepEqual(
 								events
 									.filter((event) => event.startsWith("create:"))
-									.map((event) => event.includes("tools=report_review") && !event.includes(",")),
+									.map((event) => event.endsWith("tools=select_feedback,report_review")),
 								[false, true],
+							);
+							assert.match(
+								events.find((event) => event.startsWith("review-select:")) ?? "",
+								/Accepted the selection/u,
 							);
 							assert.ok(events.includes("review-loader extensions=0"), events.join("\n"));
 							assert.equal(
 								readFileSync(nodePath.join(cwd, "review-system-prompt.md"), "utf8"),
-								"Write the review on the work.",
+								"Write clear, useful feedback.\n\nWrite the review on the work.",
 							);
 							assert.ok(!events.includes("compact"), child.stderr);
 							// What the review composition was given: this work, and nothing about the person.
@@ -2101,7 +2324,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								events.find((event) => event.startsWith("review-stored:")) ?? "",
-								/Stored the review: a summary resting on 1 observation\(s\), 1 line note\(s\), 0 withholding decision\(s\)/u,
+								/Stored the review: a summary resting on 1 observation\(s\), 1 line note\(s\), 0 withholding decision\(s\)[\s\S]*"terminate":true/u,
 							);
 							assert.ok(!events.includes("review-retry"), events.join("\n"));
 							// The private lanes keep the person's history, and see what the review said.
@@ -2288,6 +2511,171 @@ if (scenario !== undefined && scenario !== "") {
 							assert.doesNotMatch(child.stderr, /asking once more/u);
 							break;
 						}
+						case "compose-empty": {
+							assert.equal(child.status, 0, child.stderr);
+							// An empty final review is a decision: it ends the composition, and nobody asks again.
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1", "prompt:2"],
+							);
+							assert.match(
+								events.find((event) => event.startsWith("empty-final:")) ?? "",
+								/Stored the review: no summary, 0 line note\(s\), 0 withholding decision\(s\)[\s\S]*"terminate":true/u,
+							);
+							assert.ok(events.includes('empty-terminal:{"action":"end"}'), events.join("\n"));
+							assert.equal(events.filter((event) => event === "native-finish-turn").length, 1);
+							assert.ok(!events.includes("review-retry"), events.join("\n"));
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback));
+							assert.deepEqual(feedback.review, { summary: null, inline: [], withheld: [] });
+							break;
+						}
+						case "compose-repeat-select":
+						case "compose-invalid-select": {
+							assert.equal(child.status, 0, child.stderr);
+							const said = (label: string) =>
+								events.find((event) => event.startsWith(`${label}:`)) ?? "";
+							const prefix = stage === "compose-repeat-select" ? "repeat" : "invalid";
+							if (stage === "compose-repeat-select") {
+								assert.match(said("repeat-accepted"), /Accepted the selection/u);
+								assert.match(said("repeat-mismatch"), /review refused, nothing was stored/u);
+								assert.match(said("repeat-again"), /Accepted the selection/u);
+								// With a selection standing, the nudge points at the final review as well as reselection.
+								assert.equal(
+									said("repeat-nudge"),
+									`repeat-nudge:${JSON.stringify([["select_feedback", "report_review"]])}`,
+								);
+							} else {
+								assert.match(
+									said("invalid-select"),
+									/selection refused, no selection is accepted yet/u,
+								);
+								// An unaccepted selection gives the review nothing to rest on.
+								assert.match(said("invalid-report"), /no selection is accepted yet/u);
+								assert.match(
+									said("invalid-again"),
+									/selection refused, no selection is accepted yet/u,
+								);
+								assert.equal(
+									said("invalid-nudge"),
+									`invalid-nudge:${JSON.stringify([["select_feedback", "report_review"]])}`,
+								);
+								assert.match(said("invalid-corrected"), /Accepted the selection/u);
+							}
+							assert.match(
+								child.stderr,
+								/the same select_feedback call 2 times — nudging to record/u,
+							);
+							assert.doesNotMatch(child.stderr, /the same select_feedback call 3 times/u);
+							assert.match(said(`${prefix}-final`), /Stored the review[\s\S]*"terminate":true/u);
+							assert.ok(!events.includes("review-retry"), events.join("\n"));
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback));
+							assert.deepEqual(feedback.review, {
+								summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+								inline: [],
+								withheld: [],
+							});
+							break;
+						}
+						case "compose-recover": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.match(
+								events.find((event) => event.startsWith("recover-select:")) ?? "",
+								/Accepted the selection/u,
+							);
+							assert.ok(events.includes("review-retry"), events.join("\n"));
+							// The retry holds only what is owed and the selection that stands, with its admitted row.
+							const retry = events
+								.filter((event) => event.startsWith("prompt:"))
+								.map((event) =>
+									readFileSync(
+										nodePath.join(cwd, `prompt-${event.slice("prompt:".length)}.md`),
+										"utf8",
+									),
+								)
+								.find((prompt) => prompt.startsWith("## Undecided"));
+							assert.ok(retry !== undefined, events.join("\n"));
+							assert.deepEqual(selectedRowsOf(retry), {
+								acceptedSelection: { selected: ["observation-1"], withheld: [] },
+								selectedObservations: [publicRow],
+							});
+							break;
+						}
+						case "compose-reselect": {
+							assert.equal(child.status, 0, child.stderr);
+							const said = (label: string) =>
+								events.find((event) => event.startsWith(`${label}:`)) ?? "";
+							assert.match(said("reselect-unselected"), /no selection is accepted yet/u);
+							assert.ok(
+								events.includes('reselect-before-final:{"action":"continue"}'),
+								events.join("\n"),
+							);
+							assert.ok(events.includes("reselect-retained:1"), events.join("\n"));
+							assert.match(
+								said("reselect-incomplete"),
+								/selection refused, no selection is accepted yet:[\s\S]*observation-1 has no decision/u,
+							);
+							assert.match(said("reselect-withhold"), /Accepted the selection/u);
+							// A refused selection leaves the accepted one standing: the next review is read against it.
+							assert.match(
+								said("reselect-unwitnessed"),
+								/selection refused, the selection accepted before it still stands:[\s\S]*ALREADY_SAID names in witnessIds/u,
+							);
+							assert.match(
+								said("reselect-mismatch"),
+								/review refused, nothing was stored:[\s\S]*speaks about observation-1, which the accepted selection does not select[\s\S]*withheld differs from the accepted selection for observation-1/u,
+							);
+							assert.match(said("reselect-speak"), /Accepted the selection/u);
+							const refused = readFileSync(nodePath.join(cwd, "refused-standing.txt"), "utf8");
+							assert.deepEqual(selectedRowsOf(refused), {
+								acceptedSelection: { selected: ["observation-1"], withheld: [] },
+								selectedObservations: [publicRow],
+							});
+							assert.match(
+								said("reselect-final"),
+								/Stored the review: a summary resting on 1 observation\(s\)[\s\S]*"terminate":true/u,
+							);
+							assert.ok(events.includes('reselect-terminal:{"action":"end"}'), events.join("\n"));
+							assert.ok(events.includes("reselect-drained:0"), events.join("\n"));
+							assert.equal(events.filter((event) => event === "native-finish-turn").length, 2);
+							assert.match(
+								said("reselect-after-select"),
+								/final; this composition accepts nothing more/u,
+							);
+							assert.match(
+								said("reselect-after-review"),
+								/final; this composition accepts nothing more/u,
+							);
+							// The final review was the one the composition owed, so it is not asked for again.
+							assert.ok(!events.includes("review-retry"), events.join("\n"));
+							const reviewPrompts = events
+								.filter((event) => event.startsWith("prompt:"))
+								.map((event) =>
+									readFileSync(
+										nodePath.join(cwd, `prompt-${event.slice("prompt:".length)}.md`),
+										"utf8",
+									),
+								)
+								.filter((prompt) =>
+									/^## (?:The review to write|Undecided|Unfinished)/u.test(prompt),
+								);
+							assert.equal(reviewPrompts.length, 1);
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback));
+							assert.deepEqual(feedback.review, {
+								summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+								inline: [],
+								withheld: [],
+							});
+							break;
+						}
 						case "compose-fold": {
 							assert.equal(child.status, 0, child.stderr);
 							assert.match(
@@ -2314,6 +2702,14 @@ if (scenario !== undefined && scenario !== "") {
 								["prompt:1", "prompt:2"],
 							);
 							// An abstention cannot carry a claim about the work; the strength beside it can.
+							assert.match(
+								events.find((event) => event.startsWith("abstention-select:")) ?? "",
+								/selected names observation-2, which is not one of the observations this review may rest on/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("met-select:")) ?? "",
+								/Accepted the selection/u,
+							);
 							assert.match(
 								events.find((event) => event.startsWith("review-abstention:")) ?? "",
 								/observation-2, which is not one of the observations this review may rest on/u,

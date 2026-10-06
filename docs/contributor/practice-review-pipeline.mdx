@@ -555,13 +555,38 @@ Reasons are source state, an unrecorded file, empty, too large, unreadable, or n
 The record supplies captured intent, identity and state for orientation.
 Only admitted observations authorize assessments and concerns.
 
-Then the session receives eligible current-work observations, prior public feedback on the same work,
-and each owning practice revision's name, purpose and known limitations.
+Then the session receives eligible current-work observations, prior public feedback and captured discussion on the same work.
+It also receives each owning practice revision's name, purpose and known limitations.
+Delivered feedback retains its identity, reviewed revision and original observation support.
+Captured discussion retains native identity, authorship, timestamps and the reviewed revision where the provider records it.
+Unavailable or incomplete discussion is qualified explicitly.
+An equal code revision does not establish unchanged discussion or intent.
+
+Prior Hephaestus feedback uses the same per-entry and total bounds.
+Omitted entries are counted by reason and cannot be prior-advice witnesses.
+
 It receives scope bounds for undecided and unreached practices, which support no claims.
 An observation that cites or consulted a private or unknown source stays out of this session entirely.
 Removing a private citation would not remove the information from the observation's prose.
-The public session has only the recording tool.
+The public session has only selection and recording tools.
 It has no file, search or execution tools and loads no private context.
+
+Within that session, `select_feedback` chooses observation IDs to discuss and exact withholding decisions.
+Every eligible `NOT_MET` observation must be selected or withheld.
+Selecting `MET` observations is optional.
+Repetition reasons must name eligible prior statements from the supplied history.
+This check establishes a located, dated statement by another author or usable delivered feedback, not semantic equivalence.
+The model still judges whether the advice repeats, whether circumstances changed and whether it adds value.
+
+A refused selection leaves the last accepted selection intact.
+An accepted replacement revises it.
+
+`report_review` proposes the complete summary and line notes against the accepted selection.
+It must account for exactly the selected observations and repeat the accepted withholding decisions.
+Invalid proposals receive correction reasons within the existing turn budget.
+An accepted proposal ends the composition, including an intentionally quiet review.
+Selection remains transient.
+The stored review and independent server admission retain their existing contract.
 
 The private session retains authorized artifact context and receives bounded observation history,
 feedback history and unread prepared feedback.
@@ -575,13 +600,18 @@ The exact staged files belong to the [agent workspace ABI](agent/workspace-abi.m
 
 The [practice feedback language](./practice-feedback-language.md) defines where channels land.
 The [practice review glossary](./practice-review-glossary.mdx#the-three-channels-are-three-levels) defines their levels.
-Composition must not render one advice string three ways:
+Each channel is understandable on its own.
+A recipient need not read the others.
+The same supported action may appear across channels when it serves each channel's purpose.
+The shared writing guide and each channel's prompt define those purposes:
 
-- `IN_CONTEXT` is public task-level feedback. One `report_review` call replaces the whole proposed review:
+- `IN_CONTEXT` is public task-level feedback. `report_review` submits the whole final review:
   an optional complete summary, complete line notes, and exact observation-scoped withholding decisions.
   Each body names every admitted decided observation it speaks about in `basedOn`.
   The model writes the prose.
   The server never joins fragments or publishes raw observation summaries.
+  Summary and line notes coordinate without repeating the full argument in both places.
+  Independent actions use short blocks, bullets or headings when helpful, without a fixed comment template.
 - `IN_APP` is private process-level feedback about a pattern in the recipient's work.
 - `IN_CHAT` prepares `situation`, `capability`, `evidenceSummary` and `inConversationSignal` as private notes,
   not dialogue. A later conversational turn may adapt, defer or discard them.

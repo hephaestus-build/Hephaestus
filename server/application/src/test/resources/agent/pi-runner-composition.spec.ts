@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { Ajv } from "ajv";
 
+import type { PublicReviewHistory } from "../../../main/resources/agent/pi-review-brief.ts";
+
 import {
 	type Channel,
 	type ComposedFeedbackEnvelope,
@@ -13,11 +15,18 @@ import {
 	buildReviewTurn,
 	decidedByReview,
 	notReachedNote,
+	type ComposedReview,
+	type PriorAdviceWitness,
+	priorAdviceWitnesses,
 	priorPublicFeedback,
 	publicObservations,
 	readReview,
+	readSelection,
 	reviewToolParameters,
 	sameLinesNote,
+	selectionMismatch,
+	selectionText,
+	selectionToolParameters,
 	uncertainOutcomes,
 	undeliverableUnits,
 	validateFeedbackEvidence,
@@ -418,6 +427,12 @@ void test("the review composition sees only what admission marked eligible, and 
 			},
 		]),
 		alreadySaid: [],
+		captured: {
+			capturedAt: null,
+			recipient: { author: null, authorId: null },
+			sources: [],
+			statements: [],
+		},
 		practices: [
 			{
 				slug: "describe-what-and-why",
@@ -441,7 +456,73 @@ void test("the review composition sees only what admission marked eligible, and 
 	assert.match(turn, /Looked at and not decided[^\n]*ships-tests \(NOT_APPLICABLE\)/u);
 	assert.ok(!turn.includes("No behaviour changed"), turn);
 	assert.match(turn, /did not settle one of its practices: keeps-tests-honest/u);
-	assert.match(turn, /Nothing has been said on this work yet\./u);
+	assert.match(turn, /No same-work delivered feedback is shown here\./u);
+	// A discussion this run did not capture is unknown, never an empty one.
+	assert.match(turn, /was not part of this capture, so it is unknown/u);
+});
+
+void test("the public turn carries captured discussion once, with its locator and omission qualifications", () => {
+	const captured = {
+		capturedAt: "2026-10-06T09:00:00Z",
+		recipient: { author: "developer", authorId: "10" },
+		sources: [
+			{
+				kind: "scm.issue.comments",
+				path: "context/comments.json",
+				availability: "AVAILABLE",
+				content: "NONEMPTY",
+				completeness: "PARTIAL",
+				limitations: ["Older comments are outside the captured window."],
+				omitted: null,
+				qualifications: [],
+			},
+		],
+		statements: [
+			{
+				witnessId: "comment:context/comments.json:7",
+				sourcePath: "context/comments.json",
+				sourceKind: "scm.issue.comments",
+				nativeId: "7",
+				author: "reviewer",
+				authorId: "11",
+				origin: "UNKNOWN",
+				body: "Please describe how to try the screen.",
+				statedAt: "2026-10-06T08:00:00Z",
+				updatedAt: null,
+				reviewedRevision: null,
+				eligibleForPriorAdvice: true,
+				state: null,
+				dismissed: null,
+				outdated: null,
+			},
+		],
+	} satisfies PublicReviewHistory;
+	const turn = buildReviewTurn({
+		sameWork: "The captured issue asks for a login screen.",
+		observations: [],
+		undecided: [],
+		alreadySaid: [],
+		captured,
+		practices: [],
+		notReached: [],
+		lineNotes: false,
+	});
+	assert.equal(turn.split('"path": "context/comments.json"').length - 1, 1);
+	assert.equal(turn.split("Please describe how to try the screen.").length - 1, 1);
+	assert.ok(turn.includes('"witnessId": "comment:context/comments.json:7"'));
+	assert.ok(turn.includes("Older comments are outside the captured window."));
+	const omitted = "Captured discussion and its omission index exceed the size bound.";
+	const withoutBodies = buildReviewTurn({
+		sameWork: "The captured issue asks for a login screen.",
+		observations: [],
+		undecided: [],
+		alreadySaid: [],
+		captured: { ...captured, sources: [], statements: [], omitted },
+		practices: [],
+		notReached: [],
+		lineNotes: false,
+	});
+	assert.ok(withoutBodies.includes(omitted));
 });
 
 void test("an observation admission did not mark, or one that decided nothing, is left out", () => {
@@ -501,15 +582,165 @@ void test("only what was said on this same work, on the work, is supplied as alr
 			},
 		],
 	};
-	assert.deepEqual(priorPublicFeedback(history, work), [
+	assert.deepEqual(priorPublicFeedback(history, work, "2026-10-06T09:00:00Z").feedback, [
 		{
+			// The history names no id for it: shown as context, never as advice this work received.
+			witnessId: null,
 			deliveredAt: "2026-10-05T09:00:00Z",
 			body: "Earlier comment on this change.",
 			recordedClaimCurrentness: "CURRENT",
 			withdrawn: undefined,
+			eligibleForPriorAdvice: false,
 		},
 	]);
-	assert.deepEqual(priorPublicFeedback(history, undefined), []);
+	assert.deepEqual(priorPublicFeedback(history, undefined, "2026-10-06T09:00:00Z").feedback, []);
+});
+
+const historyFeedbackId = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+
+void test("own feedback on this work stands as prior advice only when named, current, shown and delivered before the capture", () => {
+	const work = "scm.pull_request:https://gitlab.example/group/repo/-/merge_requests/3";
+	const artifact = {
+		kind: "scm.pull_request",
+		url: "https://gitlab.example/group/repo/-/merge_requests/3",
+	};
+	const entry = (n: number, overrides: Record<string, unknown> = {}) => ({
+		channel: "IN_CONTEXT",
+		artifact,
+		id: historyFeedbackId(n),
+		reviewedRevision: "a".repeat(40),
+		basedOn: [{ observationId: `earlier-${n}` }],
+		deliveredAt: "2026-10-05T09:00:00Z",
+		body: `Delivered comment ${n}.`,
+		recordedClaimCurrentness: "CURRENT",
+		...overrides,
+	});
+	const history = {
+		feedback: [
+			entry(1),
+			entry(2, { deliveredAt: "2026-10-07T09:00:00Z" }),
+			entry(3, { recordedClaimCurrentness: "STALE", body: undefined }),
+			entry(4, { withdrawn: true, body: undefined }),
+			entry(5, { deliveredAt: undefined }),
+		],
+	};
+	const said = priorPublicFeedback(history, work, "2026-10-06T09:00:00Z").feedback;
+	assert.deepEqual(
+		said.map((statement) => [statement.witnessId, statement.eligibleForPriorAdvice]),
+		[
+			[`feedback:${historyFeedbackId(1)}`, true],
+			[`feedback:${historyFeedbackId(2)}`, false],
+			[`feedback:${historyFeedbackId(3)}`, false],
+			[`feedback:${historyFeedbackId(4)}`, false],
+			[`feedback:${historyFeedbackId(5)}`, false],
+		],
+	);
+	// What the history recorded about the feedback stays as it was staged.
+	const original = said[0];
+	assert.ok(original);
+	assert.equal(original.reviewedRevision, "a".repeat(40));
+	assert.deepEqual(original.basedOn, [{ observationId: "earlier-1" }]);
+	// Without a known capture time nothing can be placed before it.
+	assert.ok(
+		priorPublicFeedback(history, work, null).feedback.every(
+			(statement) => !statement.eligibleForPriorAdvice,
+		),
+	);
+	const witnesses = priorAdviceWitnesses(said, [
+		{
+			witnessId: "github:review-comment:7",
+			sourcePath: "context/review_threads.json",
+			sourceKind: "scm.pull-request.review-threads",
+			nativeId: "7",
+			author: "tutor",
+			authorId: "11",
+			origin: "UNKNOWN",
+			body: "Please describe how to try this.",
+			statedAt: "2026-10-05T08:00:00Z",
+			updatedAt: null,
+			reviewedRevision: null,
+			eligibleForPriorAdvice: true,
+			state: null,
+			dismissed: null,
+			outdated: null,
+		},
+	]);
+	assert.deepEqual(witnesses.get(`feedback:${historyFeedbackId(1)}`), {
+		eligibleForPriorAdvice: true,
+	});
+	assert.deepEqual(witnesses.get(`feedback:${historyFeedbackId(4)}`), {
+		eligibleForPriorAdvice: false,
+	});
+	assert.deepEqual(witnesses.get("github:review-comment:7"), { eligibleForPriorAdvice: true });
+});
+
+void test("own history omits whole oversized or over-budget entries without hiding later usable advice", () => {
+	const artifact = {
+		kind: "scm.pull_request",
+		url: "https://gitlab.example/group/repo/-/merge_requests/3",
+	};
+	const entry = (n: number, body: string) => ({
+		channel: "IN_CONTEXT",
+		artifact,
+		id: historyFeedbackId(n),
+		body,
+		deliveredAt: "2026-10-05T09:00:00Z",
+		recordedClaimCurrentness: "CURRENT",
+	});
+	const history = {
+		feedback: [
+			entry(1, "oversized ".repeat(300)),
+			entry(2, "Useful earlier advice."),
+			entry(3, "Long earlier advice. ".repeat(35)),
+			entry(4, "Later usable advice."),
+		],
+	};
+	const limits = { sourceChars: 1200, totalChars: 1300 };
+	const view = priorPublicFeedback(
+		history,
+		"scm.pull_request:https://gitlab.example/group/repo/-/merge_requests/3",
+		"2026-10-06T09:00:00Z",
+		limits,
+	);
+	assert.deepEqual(
+		view.feedback.map((row) => row.id),
+		[historyFeedbackId(2), historyFeedbackId(4)],
+	);
+	assert.deepEqual(view.omissions, { oversizedEntries: 1, budgetEntries: 1 });
+	const witnesses = priorAdviceWitnesses(view.feedback, []);
+	assert.ok(!witnesses.has(`feedback:${historyFeedbackId(1)}`));
+	assert.ok(!witnesses.has(`feedback:${historyFeedbackId(3)}`));
+	assert.equal(witnesses.get(`feedback:${historyFeedbackId(4)}`)?.eligibleForPriorAdvice, true);
+	const input = {
+		sameWork: "The captured work.",
+		observations: [],
+		undecided: [],
+		alreadySaid: view.feedback,
+		captured: {
+			capturedAt: null,
+			recipient: { author: null, authorId: null },
+			sources: [],
+			statements: [],
+		},
+		practices: [],
+		notReached: [],
+		lineNotes: false,
+	};
+	const turn = buildReviewTurn({ ...input, ownHistoryOmissions: view.omissions });
+	const own = turn
+		.split("### Already said on this work\n")[1]
+		?.split("What people and tools said")[0];
+	assert.ok(typeof own === "string");
+	assert.ok(own.length <= limits.totalChars);
+	assert.match(own, /1 entries exceed the per-entry limit/u);
+	assert.match(own, /1 exceed the total history limit/u);
+	assert.ok(!turn.includes(historyFeedbackId(1)));
+	assert.ok(!turn.includes(historyFeedbackId(3)));
+	assert.ok(!turn.includes("oversized"));
+	assert.equal(
+		buildReviewTurn(input),
+		buildReviewTurn({ ...input, ownHistoryOmissions: { oversizedEntries: 0, budgetEntries: 0 } }),
+	);
 });
 
 // --- The report_review schema of one run ---------------------------------------------------------
@@ -593,7 +824,7 @@ void test("a run with nothing to withhold or no line to sit on takes no such ite
 	);
 });
 
-void test("an empty or partial public review leaves negatives undecided, while all-MET silence is intentional", () => {
+void test("an empty or partial public review leaves negatives undecided, while an empty all-MET review is a valid decision", () => {
 	const negative = new Map<string, ReviewedObservation>([
 		["one", { practiceSlug: "one", outcome: "NOT_MET", citations: [] }],
 		["two", { practiceSlug: "two", outcome: "NOT_MET", citations: [] }],
@@ -648,4 +879,343 @@ void test("summary-only support refuses a whole inline body while allowing its s
 				true,
 			),
 	);
+});
+
+// --- The selection before the review ------------------------------------------------------------
+
+/** A tutor's comment and Hephaestus's own delivered comment may stand as prior advice; the author's own may not. */
+const witnesses = new Map<string, PriorAdviceWitness>([
+	["github:review-comment:7", { eligibleForPriorAdvice: true }],
+	["feedback:00000000-0000-4000-8000-000000000001", { eligibleForPriorAdvice: true }],
+	["github:issue-comment:9", { eligibleForPriorAdvice: false }],
+]);
+
+const selectionErrors = (value: unknown): string[] => {
+	const read = readSelection(value, observations, witnesses);
+	return "errors" in read ? read.errors : [];
+};
+
+void test("a selection decides every NOT_MET observation once, and only from what the review may rest on", () => {
+	assert.deepEqual(
+		readSelection(
+			{
+				selected: ["colors", "why"],
+				withheld: [{ basedOn: ["handoff", "description"], reason: "BELOW_BAR" }],
+			},
+			observations,
+			witnesses,
+		),
+		{
+			selection: {
+				selected: ["colors", "why"],
+				withheld: [{ basedOn: ["handoff", "description"], reason: "BELOW_BAR" }],
+			},
+		},
+	);
+	const missing = selectionErrors({ selected: ["colors"] }).join("\n");
+	assert.match(missing, /handoff, why, description has no decision/u);
+	assert.match(
+		selectionErrors({
+			selected: ["colors", "why", "handoff"],
+			withheld: [{ basedOn: ["why", "description"], reason: "BELOW_BAR" }],
+		}).join("\n"),
+		/why is both selected and withheld/u,
+	);
+	assert.match(
+		selectionErrors({
+			selected: ["colors", "colors", "why", "handoff"],
+			withheld: [
+				{ basedOn: ["description"], reason: "BELOW_BAR" },
+				{ basedOn: ["description"], reason: "BELOW_BAR" },
+			],
+		}).join("\n"),
+		/selected names colors more than once[\s\S]*description is withheld more than once/u,
+	);
+	const strays = selectionErrors({
+		selected: ["colors", "why", "handoff", "description", "elsewhere", "unsure"],
+	}).join("\n");
+	assert.match(strays, /selected names elsewhere, which is not one of the observations/u);
+	assert.match(strays, /selected names unsure, which decided nothing/u);
+	assert.match(
+		selectionErrors({
+			selected: ["colors", "why", "handoff", "description"],
+			withheld: [{ basedOn: ["preview"], reason: "BELOW_BAR" }],
+		}).join("\n"),
+		/only an admitted NOT_MET observation can be withheld/u,
+	);
+	assert.match(selectionErrors({ selected: "colors" }).join("\n"), /selected must be an array/u);
+	// A withholding container that is not a list is refused, never read as one decision or as none.
+	for (const container of [{ basedOn: ["handoff"], reason: "BELOW_BAR" }, "BELOW_BAR", 3]) {
+		assert.match(
+			selectionErrors({ selected: ["colors", "why", "description"], withheld: container }).join(
+				"\n",
+			),
+			/withheld must be an array of withholding decisions/u,
+		);
+	}
+	// An absent or null container means nothing is withheld.
+	assert.ok(
+		"selection" in
+			readSelection(
+				{ selected: ["colors", "why", "handoff", "description"], withheld: null },
+				observations,
+				witnesses,
+			),
+	);
+	assert.match(selectionErrors({ chosen: [] }).join("\n"), /unknown selection field\(s\): chosen/u);
+});
+
+void test("a MET observation is selected only for an acknowledgement worth making, and all-MET work may stay quiet", () => {
+	const metOnly = new Map([...observations].filter(([id]) => id === "preview"));
+	assert.deepEqual(readSelection({}, metOnly, witnesses), {
+		selection: { selected: [], withheld: [] },
+	});
+	assert.deepEqual(readSelection({ selected: ["preview"] }, metOnly, witnesses), {
+		selection: { selected: ["preview"], withheld: [] },
+	});
+	// With problems on the work, a MET observation is still optional.
+	assert.ok(
+		"selection" in
+			readSelection(
+				{ selected: ["colors", "why", "handoff", "description"] },
+				observations,
+				witnesses,
+			),
+	);
+});
+
+const selectedWithheld = (withheld: unknown) => ({
+	selected: ["colors", "why", "description"],
+	withheld: [withheld],
+});
+
+void test("a withholding that says the advice was given names a statement that may stand as that advice", () => {
+	for (const reason of ["ALREADY_SAID", "NO_MATERIAL_CHANGE"]) {
+		assert.match(
+			selectionErrors(selectedWithheld({ basedOn: ["handoff"], reason })).join("\n"),
+			new RegExp(`withheld #1: ${reason} names in witnessIds`, "u"),
+		);
+	}
+	assert.match(
+		selectionErrors(
+			selectedWithheld({
+				basedOn: ["handoff"],
+				reason: "ALREADY_SAID",
+				witnessIds: ["github:issue-comment:9"],
+			}),
+		).join("\n"),
+		/github:issue-comment:9, which is shown as context but cannot stand as advice/u,
+	);
+	assert.match(
+		selectionErrors(
+			selectedWithheld({
+				basedOn: ["handoff"],
+				reason: "ALREADY_SAID",
+				witnessIds: ["github:review-comment:8"],
+			}),
+		).join("\n"),
+		/github:review-comment:8, which is not a statement shown under what was already said/u,
+	);
+	// A human reviewer's request and Hephaestus's own delivered comment can each stand as the advice.
+	for (const witness of [
+		"github:review-comment:7",
+		"feedback:00000000-0000-4000-8000-000000000001",
+	]) {
+		assert.deepEqual(
+			readSelection(
+				selectedWithheld({
+					basedOn: ["handoff"],
+					reason: "NO_MATERIAL_CHANGE",
+					witnessIds: [witness],
+				}),
+				observations,
+				witnesses,
+			),
+			{
+				selection: {
+					selected: ["colors", "why", "description"],
+					withheld: [{ basedOn: ["handoff"], reason: "NO_MATERIAL_CHANGE", witnessIds: [witness] }],
+				},
+			},
+		);
+	}
+	// Below the bar is a judgement about this reader, not a claim about what was said before.
+	assert.ok(
+		"selection" in
+			readSelection(
+				selectedWithheld({ basedOn: ["handoff"], reason: "BELOW_BAR" }),
+				observations,
+				witnesses,
+			),
+	);
+});
+
+const selectedReview = (overrides: Partial<ComposedReview>): ComposedReview => ({
+	summary: { body: "Say why, and keep the preview.", basedOn: ["why", "preview"] },
+	inline: [
+		{
+			body: "Use an adaptive color here.",
+			basedOn: ["colors"],
+			anchor: { observationId: "colors", citationIndex: 0 },
+		},
+	],
+	withheld: [{ basedOn: ["handoff", "description"], reason: "BELOW_BAR" }],
+	...overrides,
+});
+
+void test("a final review rests on exactly the accepted selection, positives and withholdings included", () => {
+	const selection = {
+		selected: ["colors", "why", "preview"],
+		withheld: [{ basedOn: ["handoff", "description"], reason: "BELOW_BAR" as const }],
+	};
+	assert.deepEqual(selectionMismatch(selectedReview({}), selection), []);
+	// Withholdings may be grouped differently; each observation keeps its accepted reason.
+	assert.deepEqual(
+		selectionMismatch(
+			selectedReview({
+				withheld: [
+					{ basedOn: ["description"], reason: "BELOW_BAR" },
+					{ basedOn: ["handoff"], reason: "BELOW_BAR" },
+				],
+			}),
+			selection,
+		),
+		[],
+	);
+	assert.match(
+		selectionMismatch(
+			selectedReview({ summary: { body: "Say why.", basedOn: ["why"] } }),
+			selection,
+		).join("\n"),
+		/selects preview, which no text speaks about/u,
+	);
+	assert.match(
+		selectionMismatch(
+			selectedReview({
+				summary: {
+					body: "Say why, keep the preview, and link the issue.",
+					basedOn: ["why", "preview", "handoff"],
+				},
+				withheld: [{ basedOn: ["description"], reason: "BELOW_BAR" }],
+			}),
+			selection,
+		).join("\n"),
+		/speaks about handoff, which the accepted selection does not select[\s\S]*withheld differs from the accepted selection for handoff/u,
+	);
+	assert.match(
+		selectionMismatch(
+			selectedReview({
+				withheld: [{ basedOn: ["handoff", "description"], reason: "ALREADY_SAID" }],
+			}),
+			selection,
+		).join("\n"),
+		/withheld differs from the accepted selection for handoff, description/u,
+	);
+});
+
+const selectionValidatorFor = (eligible: readonly string[], reviewable = decidedOnly) =>
+	new Ajv({ strict: true, allErrors: true }).compile(selectionToolParameters(reviewable, eligible));
+
+void test("the selection schema offers this run's decided ids and only the witnesses that may stand as prior advice", () => {
+	const withWitness = selectionValidatorFor(["github:review-comment:7"]);
+	assert.ok(
+		withWitness({}),
+		"an empty selection is valid in shape; readSelection decides coverage",
+	);
+	assert.ok(
+		withWitness({
+			selected: ["colors", "preview"],
+			withheld: [
+				{ basedOn: ["handoff"], reason: "ALREADY_SAID", witnessIds: ["github:review-comment:7"] },
+			],
+		}),
+		JSON.stringify(withWitness.errors),
+	);
+	assert.ok(!withWitness({ selected: ["unsure"] }));
+	assert.ok(!withWitness({ withheld: [{ basedOn: ["preview"], reason: "BELOW_BAR" }] }));
+	assert.ok(
+		!withWitness({
+			withheld: [
+				{ basedOn: ["handoff"], reason: "ALREADY_SAID", witnessIds: ["github:issue-comment:9"] },
+			],
+		}),
+	);
+	const noWitness = selectionValidatorFor([]);
+	assert.ok(noWitness({ withheld: [{ basedOn: ["handoff"], reason: "BELOW_BAR" }] }));
+	assert.ok(
+		!noWitness({ withheld: [{ basedOn: ["handoff"], reason: "ALREADY_SAID", witnessIds: ["x"] }] }),
+	);
+	const metOnly = selectionValidatorFor(
+		[],
+		new Map([...observations].filter(([id]) => id === "preview")),
+	);
+	assert.ok(metOnly({ selected: ["preview"] }));
+	assert.ok(!metOnly({ withheld: [{ basedOn: ["preview"], reason: "BELOW_BAR" }] }));
+	assert.throws(() =>
+		selectionToolParameters(new Map([...observations].filter(([id]) => id === "unsure")), []),
+	);
+});
+
+void test("an accepted selection is shown with the admitted public rows it selected, whole, and no others", () => {
+	const qualification =
+		`The captured diff shows the label is set in code only; whether a screen reader announces it was not run, and the second view's preview was not part of this capture. `.repeat(
+			4,
+		);
+	const reviewable = publicObservations([
+		{
+			id: "spoken",
+			practiceSlug: "makes-ui-accessible",
+			outcome: "NOT_MET",
+			publicEligible: true,
+			summary: "The save button has no accessible label",
+			evidenceRationale: qualification,
+			citations: [
+				{
+					index: 0,
+					path: "App/Editor.swift",
+					startLine: 24,
+					quote: 'Button(action: save) { Image(systemName: "checkmark") }',
+					verification: { status: "VERIFIED" },
+				},
+			],
+		},
+		{
+			id: "held",
+			practiceSlug: "describe-what-and-why",
+			outcome: "NOT_MET",
+			publicEligible: true,
+			summary: "The description gives no reason",
+			citations: [],
+		},
+		{
+			id: "routine",
+			practiceSlug: "ships-a-preview",
+			outcome: "MET",
+			publicEligible: true,
+			citations: [],
+		},
+		{
+			id: "private",
+			practiceSlug: "makes-ui-accessible",
+			outcome: "NOT_MET",
+			publicEligible: false,
+			summary: "Told twice before",
+			citations: [],
+		},
+	]);
+	const selection = {
+		selected: ["spoken", "private"],
+		withheld: [{ basedOn: ["held"], reason: "BELOW_BAR" as const }],
+	};
+	const text = selectionText(selection, reviewable);
+	const shown: unknown = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+	// The selected row exactly as admission's public view carries it: its rationale and citation unchanged.
+	assert.deepEqual(shown, {
+		acceptedSelection: selection,
+		selectedObservations: [reviewable.find((row) => row.id === "spoken")],
+	});
+	assert.ok(text.includes(JSON.stringify(qualification)), text);
+	assert.ok(!text.includes("Told twice before"), text);
+	assert.ok(!text.includes("The description gives no reason"), text);
+	assert.ok(!text.includes('"verification"'), text);
 });
