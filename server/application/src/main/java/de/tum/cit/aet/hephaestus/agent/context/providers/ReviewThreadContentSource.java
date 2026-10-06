@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -86,7 +87,7 @@ public class ReviewThreadContentSource implements EvidenceSource {
         files.putAll(capture(request, selectedKinds).files());
     }
 
-    private ObjectNode collect(long pullRequestId) {
+    private ObjectNode collect(long pullRequestId, JsonNode metadata) {
         try {
             List<Long> threadIds =
                     new ArrayList<>(threadRepository.findRecentIdsByPullRequestId(pullRequestId, Pageable.unpaged()));
@@ -102,6 +103,23 @@ public class ReviewThreadContentSource implements EvidenceSource {
                     PullRequestReview::getSubmittedAt, Comparator.nullsLast(Comparator.naturalOrder())));
 
             ObjectNode root = objectMapper.createObjectNode();
+            if ("REVIEWER".equals(MetaJson.optString(metadata, "subject_role"))) {
+                Long reviewId = MetaJson.optLong(metadata, "review_id");
+                Long aboutUserId = MetaJson.optLong(metadata, "about_user_id");
+                for (PullRequestReview review : reviews) {
+                    User author = review.getAuthor();
+                    if (reviewId != null
+                            && aboutUserId != null
+                            && reviewId.equals(review.getId())
+                            && author != null
+                            && aboutUserId.equals(author.getId())) {
+                        ObjectNode recipient = root.putObject("reviewRecipient");
+                        recipient.put("author", author.getLogin());
+                        recipient.put("authorId", author.getNativeId());
+                        break;
+                    }
+                }
+            }
 
             ArrayNode threadArray = objectMapper.createArrayNode();
             for (PullRequestReviewThread t : threads) {
@@ -164,7 +182,7 @@ public class ReviewThreadContentSource implements EvidenceSource {
         if (pullRequest == null || pullRequest.getDeletedAt() != null) {
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
-        ObjectNode root = collect(pullRequestId);
+        ObjectNode root = collect(pullRequestId, metadata);
         boolean empty =
                 root.path("threads").isEmpty() && root.path("reviewDecisions").isEmpty();
         boolean truncated = root.path("truncated").asBoolean();
@@ -239,6 +257,7 @@ public class ReviewThreadContentSource implements EvidenceSource {
 
     private ObjectNode toDecision(PullRequestReview review) {
         ObjectNode node = objectMapper.createObjectNode();
+        node.put("nativeId", review.getNativeId());
         node.put("state", review.getState().name());
         if (review.isDismissed()) {
             node.put("dismissed", true);
@@ -249,6 +268,15 @@ public class ReviewThreadContentSource implements EvidenceSource {
             if (review.getAuthor() != null && review.getAuthor().getType() == User.Type.BOT) {
                 node.put("bot", true);
             }
+        }
+        if (review.getAuthor() != null) {
+            node.put("authorId", review.getAuthor().getNativeId());
+        }
+        if (review.getCommitId() != null) {
+            node.put("commitId", review.getCommitId());
+        }
+        if (review.getUpdatedAt() != null) {
+            node.put("updatedAt", review.getUpdatedAt().toString());
         }
         // Raw timestamp so the agent can compute supersession (a later APPROVE by the same reviewer
         // overriding an earlier CHANGES_REQUESTED) downstream — this connector loads facts, it does not judge.

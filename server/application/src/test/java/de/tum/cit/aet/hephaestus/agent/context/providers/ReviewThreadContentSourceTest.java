@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -141,6 +142,44 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void capturedReviewerIdentityRequiresBothOriginalReviewAndSubject() throws Exception {
+        var target = review(PullRequestReview.State.COMMENTED, "reviewer", Instant.parse("2025-06-01T12:00:00Z"));
+        ReflectionTestUtils.setField(target, "id", 31L);
+        var author = Objects.requireNonNull(target.getAuthor());
+        ReflectionTestUtils.setField(author, "id", 32L);
+        author.setNativeId(33L);
+        when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
+                .thenReturn(List.of(target));
+        var metadata = metadataWithPr();
+        metadata.put("subject_role", "REVIEWER");
+        metadata.put("review_id", 31L);
+        metadata.put("about_user_id", 32L);
+        JsonNode matched = objectMapper.readTree(provider.capture(request(metadata), provider.sourceKinds())
+                .files()
+                .get(FILE_KEY));
+        assertThat(matched.path("reviewRecipient").path("authorId").asLong()).isEqualTo(33L);
+        assertThat(matched.path("reviewRecipient").path("author").asString()).isEqualTo("reviewer");
+        assertThat(matched.path("reviewDecisions")).isEmpty();
+        metadata.put("about_user_id", 99L);
+        JsonNode wrongSubject = objectMapper.readTree(provider.capture(request(metadata), provider.sourceKinds())
+                .files()
+                .get(FILE_KEY));
+        assertThat(wrongSubject.has("reviewRecipient")).isFalse();
+        metadata.put("about_user_id", 32L);
+        metadata.put("review_id", 99L);
+        JsonNode wrongReview = objectMapper.readTree(provider.capture(request(metadata), provider.sourceKinds())
+                .files()
+                .get(FILE_KEY));
+        assertThat(wrongReview.has("reviewRecipient")).isFalse();
+        metadata.put("review_id", 31L);
+        metadata.remove("subject_role");
+        JsonNode authorReview = objectMapper.readTree(provider.capture(request(metadata), provider.sourceKinds())
+                .files()
+                .get(FILE_KEY));
+        assertThat(authorReview.has("reviewRecipient")).isFalse();
+    }
+
+    @Test
     void contribute_noPrId_reportsCollectionError() {
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put("repository_id", 123L);
@@ -170,11 +209,14 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
 
     @Test
     void contribute_changesRequestedReview_emittedAsRawDecisionRow() throws Exception {
+        PullRequestReview recorded =
+                review(PullRequestReview.State.CHANGES_REQUESTED, "reviewer-a", Instant.parse("2025-06-01T10:00:00Z"));
+        recorded.setNativeId(71L);
+        Objects.requireNonNull(recorded.getAuthor()).setNativeId(72L);
+        recorded.setCommitId("original-reviewed-head");
+        recorded.setUpdatedAt(Instant.parse("2025-06-01T10:30:00Z"));
         when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
-                .thenReturn(List.of(review(
-                        PullRequestReview.State.CHANGES_REQUESTED,
-                        "reviewer-a",
-                        Instant.parse("2025-06-01T10:00:00Z"))));
+                .thenReturn(List.of(recorded));
 
         Map<String, byte[]> files = new HashMap<>();
         provider.contribute(request(metadataWithPr()), files);
@@ -182,7 +224,13 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         assertThat(files).containsKey(FILE_KEY);
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
         JsonNode decision = out.get("reviewDecisions").get(0);
-        assertThat(decision.propertyNames()).containsExactlyInAnyOrder("state", "author", "submittedAt");
+        assertThat(decision.propertyNames())
+                .containsExactlyInAnyOrder(
+                        "state", "author", "submittedAt", "nativeId", "authorId", "commitId", "updatedAt");
+        assertThat(decision.path("nativeId").asLong()).isEqualTo(71L);
+        assertThat(decision.path("authorId").asLong()).isEqualTo(72L);
+        assertThat(decision.path("commitId").asString()).isEqualTo("original-reviewed-head");
+        assertThat(decision.path("updatedAt").asString()).isEqualTo("2025-06-01T10:30:00Z");
         assertThat(decision.get("state").asString()).isEqualTo("CHANGES_REQUESTED");
         assertThat(decision.get("author").asString()).isEqualTo("reviewer-a");
         // submittedAt is emitted raw so the agent (not this connector) can compute supersession.

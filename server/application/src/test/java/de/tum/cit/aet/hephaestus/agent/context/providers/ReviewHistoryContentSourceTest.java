@@ -54,6 +54,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -203,6 +204,57 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void reviewerHistoryBelongsToTheActualSubjectRatherThanTheWorkAuthor() {
+        long reviewerId = AUTHOR_ID + 1;
+        Observation authorObservation = observationWithRationale("Author history.");
+        Observation reviewerObservation = observationWithRationale("Reviewer history.");
+        when(observationRepository.findForPersonHistory(AUTHOR_ID, WORKSPACE_ID))
+                .thenReturn(List.of(authorObservation));
+        when(observationRepository.findForPersonHistory(reviewerId, WORKSPACE_ID))
+                .thenReturn(List.of(reviewerObservation));
+        var authorRequest = prRequest();
+        ObjectNode metadata =
+                (ObjectNode) Objects.requireNonNull(authorRequest.job().getMetadata());
+        metadata.put("subject_role", "AUTHOR");
+        metadata.put("about_user_id", reviewerId);
+        JsonNode authorHistory =
+                read(provider.capture(authorRequest, Set.of(ReviewHistoryContentSource.OBSERVATION_HISTORY))
+                        .files()
+                        .get("inputs/history/observations.json"));
+        assertThat(authorHistory.path("observations")).hasSize(1);
+        assertThat(authorHistory.path("observations").get(0).path("id").asString())
+                .isEqualTo(authorObservation.getId().toString());
+        metadata.put("subject_role", "REVIEWER");
+        JsonNode reviewerHistory =
+                read(provider.capture(authorRequest, Set.of(ReviewHistoryContentSource.OBSERVATION_HISTORY))
+                        .files()
+                        .get("inputs/history/observations.json"));
+        assertThat(reviewerHistory.path("observations")).hasSize(1);
+        assertThat(reviewerHistory.path("observations").get(0).path("id").asString())
+                .isEqualTo(reviewerObservation.getId().toString());
+    }
+
+    @Test
+    void aMissingOrInvalidReviewerSubjectIsUnavailableRatherThanAuthorHistory() {
+        var request = prRequest();
+        ObjectNode metadata = (ObjectNode) Objects.requireNonNull(request.job().getMetadata());
+        metadata.put("subject_role", "REVIEWER");
+        for (long subject : new long[] {0, -1}) {
+            metadata.put("about_user_id", subject);
+            var capture = provider.capture(request, provider.sourceKinds());
+            assertThat(capture.files()).isEmpty();
+            assertThat(capture.stateOverrides().values())
+                    .allMatch(state -> state instanceof SourceCaptureState.Unavailable);
+        }
+        metadata.remove("about_user_id");
+        var missing = provider.capture(request, provider.sourceKinds());
+        assertThat(missing.files()).isEmpty();
+        assertThat(missing.stateOverrides().values())
+                .allMatch(state -> state instanceof SourceCaptureState.Unavailable);
+        verifyNoInteractions(observationRepository, feedbackRepository, pullRequestRepository);
+    }
+
+    @Test
     void aFirstEverReviewGetsAPresentAndEmptyHistory() {
         var observationsCapture = captureObservationHistory();
         var feedbackCapture = captureFeedbackHistory();
@@ -284,8 +336,8 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     @Test
     void stagesEarlierObservationsAsThePracticeTheVerdictAndTheSummary() {
-        when(observationRepository.findForPersonHistory(any(), any()))
-                .thenReturn(List.of(observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID)));
+        Observation original = observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID);
+        when(observationRepository.findForPersonHistory(any(), any())).thenReturn(List.of(original));
 
         var captured = captureObservationHistory();
 
@@ -293,7 +345,9 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 .get("observations")
                 .get(0);
         assertThat(entry.propertyNames())
-                .containsExactlyInAnyOrder("practiceSlug", "summary", "outcome", "severity", "artifact", "observedAt");
+                .containsExactlyInAnyOrder(
+                        "id", "practiceSlug", "summary", "outcome", "severity", "artifact", "observedAt");
+        assertThat(entry.path("id").asString()).isEqualTo(original.getId().toString());
         assertThat(entry.get("practiceSlug").asString()).isEqualTo("swallows-errors");
         assertThat(entry.get("summary").asString()).isEqualTo("Caught and ignored");
         assertThat(captured.contentStates())
@@ -727,6 +781,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 .id(UUID.randomUUID())
                 .practice(practice)
                 .practiceRevision(revision)
+                .outcome(Outcome.MET)
                 .supersededAt(retired ? Instant.parse("2026-07-01T10:00:00Z") : null)
                 .build();
     }
@@ -741,6 +796,46 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         public Observation getObservation() {
             return observation;
         }
+    }
+
+    @Test
+    void deliveredHistoryRetainsOriginalSupportAndRevisionWithoutCurrentSubstitution() {
+        Feedback note = Feedback.builder()
+                .id(UUID.randomUUID())
+                .channel(FeedbackChannel.IN_CONTEXT)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(DELIVERED_ARTIFACT_ROW_ID)
+                .body("Review the failure path.")
+                .deliveredAt(Instant.parse("2026-07-01T09:00:00Z"))
+                .reviewedRevision("original-head")
+                .build();
+        Observation support = boundObservation(false);
+        support.getPractice().setSlug("review-the-change");
+        PracticeRevision original = Objects.requireNonNull(support.getPracticeRevision());
+        when(original.getId()).thenReturn(157L);
+        when(original.getRevisionNumber()).thenReturn(2);
+        PracticeRevision current = mock(PracticeRevision.class);
+        when(current.getReviewRuleFingerprint()).thenReturn("v5:rules");
+        support.getPractice().setCurrentRevision(current);
+        boundTo.put(note.getId(), List.of(support));
+        when(feedbackRepository.findDeliveredForPersonHistory(any(), any())).thenReturn(List.of(note));
+
+        JsonNode row = read(captureFeedbackHistory().files().get("inputs/history/feedback.json"))
+                .path("feedback")
+                .get(0);
+
+        assertThat(row.path("id").asString()).isEqualTo(note.getId().toString());
+        assertThat(row.path("reviewedRevision").asString()).isEqualTo("original-head");
+        assertThat(row.path("body").asString()).isEqualTo(note.getBody());
+        JsonNode capturedSupport = row.path("basedOn").get(0);
+        assertThat(capturedSupport.path("id").asString())
+                .isEqualTo(support.getId().toString());
+        assertThat(capturedSupport.path("practiceSlug").asString()).isEqualTo("review-the-change");
+        assertThat(capturedSupport.path("outcome").asString()).isEqualTo("MET");
+        assertThat(capturedSupport.path("practiceRevision").path("id").asString())
+                .isEqualTo("157");
+        assertThat(capturedSupport.path("practiceRevision").path("number").asInt())
+                .isEqualTo(2);
     }
 
     private EvidenceContribution captureFeedbackHistory() {

@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommen
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.StoredComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
@@ -179,6 +180,7 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
             meta.put("html_url", issue.getHtmlUrl());
             meta.put("repository_full_name", repoFullName);
             meta.put("author", issue.getAuthor() != null ? issue.getAuthor().getLogin() : null);
+            meta.put("author_id", issue.getAuthor() != null ? issue.getAuthor().getNativeId() : null);
             meta.put(
                     "issue_type",
                     issue.getIssueType() != null ? issue.getIssueType().getName() : null);
@@ -217,7 +219,12 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
             ArrayNode commentsArr = objectMapper.createArrayNode();
             for (StoredComment c : ordered) {
                 ObjectNode cn = objectMapper.createObjectNode();
+                cn.put("native_id", c.getNativeId());
                 cn.put("author", c.getAuthorLogin());
+                cn.put("author_id", c.getAuthorNativeId());
+                if (c.getAuthorType() == User.Type.BOT) {
+                    cn.put("bot", true);
+                }
                 cn.put("created_at", c.getCreatedAt() != null ? c.getCreatedAt().toString() : null);
                 cn.put("updated_at", c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null);
                 cn.put("body", c.getBody());

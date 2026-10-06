@@ -333,6 +333,11 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
         assertThat(storedDigest()).isNotEqualTo(closedRecord).isEqualTo(currentRevision());
         edit(human, OWN_FEEDBACK);
         assertThat(reviewedBodies()).containsExactly(OWN_FEEDBACK);
+        var storedHuman = revisions.reviewedComments(issueId).get(0);
+        assertThat(storedHuman.getNativeId()).isEqualTo(601L);
+        assertThat(storedHuman.getAuthorNativeId()).isEqualTo(commenter.getNativeId());
+        assertThat(storedHuman.getAuthorType()).isEqualTo(commenter.getType());
+        assertThat(storedHuman.getUpdatedAt()).isNotNull();
         AgentJob capture = new AgentJob();
         capture.setId(UUID.randomUUID());
         capture.setMetadata(new ObjectMapper().valueToTree(Map.of("issue_id", issueId)));

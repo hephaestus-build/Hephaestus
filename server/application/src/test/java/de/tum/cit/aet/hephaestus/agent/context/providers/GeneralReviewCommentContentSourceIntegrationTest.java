@@ -20,6 +20,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -64,15 +67,20 @@ class GeneralReviewCommentContentSourceIntegrationTest extends BaseIntegrationTe
     @Autowired
     private IdentityProviderRepository gitProviderRepository;
 
+    @Autowired
+    private WorkspaceRepository workspaceRepository;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private IdentityProvider provider;
     private Repository repository;
+    private Workspace workspace;
     private long nativeIdSeq = 7_000L;
 
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
+        workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("general-review-comments"));
 
         provider = gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
@@ -157,6 +165,7 @@ class GeneralReviewCommentContentSourceIntegrationTest extends BaseIntegrationTe
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put("pull_request_id", pr.getId());
         AgentJob job = new AgentJob();
+        job.setWorkspace(workspace);
         job.setMetadata(metadata);
         var request = new ContextRequest.PracticeReviewRequest(job);
         pr.setDeletedAt(Instant.now());
@@ -175,6 +184,7 @@ class GeneralReviewCommentContentSourceIntegrationTest extends BaseIntegrationTe
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put("pull_request_id", pullRequest.getId());
         AgentJob job = new AgentJob();
+        job.setWorkspace(workspace);
         job.setMetadata(metadata);
         Map<String, byte[]> files = new HashMap<>();
 

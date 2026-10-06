@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NoteIdProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.RepositoryItemCountProjection;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -77,8 +78,8 @@ public interface IssueCommentRepository extends JpaRepository<IssueComment, Long
      * set, while the column holds them as PostgreSQL rounded them, so a digest of entities would differ from the
      * same digest taken after commit.
      */
-    @Query("SELECT ic.id AS id, ic.nativeId AS nativeId, a.login AS authorLogin, ic.createdAt AS createdAt, "
-            + "ic.updatedAt AS updatedAt, ic.body AS body "
+    @Query("SELECT ic.id AS id, ic.nativeId AS nativeId, a.login AS authorLogin, a.nativeId AS authorNativeId, "
+            + "a.type AS authorType, ic.createdAt AS createdAt, ic.updatedAt AS updatedAt, ic.body AS body "
             + "FROM IssueComment ic LEFT JOIN ic.author a "
             + "WHERE ic.issue.id = :issueId AND ic.body IS NOT NULL AND TRIM(ic.body) <> '' "
             + "ORDER BY ic.createdAt ASC NULLS LAST, ic.id ASC")
@@ -94,6 +95,12 @@ public interface IssueCommentRepository extends JpaRepository<IssueComment, Long
 
         @Nullable
         String getAuthorLogin();
+
+        /** Native attribution; the issue revision digest does not include account metadata. */
+        @Nullable
+        Long getAuthorNativeId();
+
+        User.@Nullable Type getAuthorType();
 
         @Nullable
         Instant getCreatedAt();
