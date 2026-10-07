@@ -6,6 +6,7 @@ ARG NODE_VERSION
 WORKDIR /opt/pi-sdk
 RUN pnpm runtime set node ${NODE_VERSION} -g
 COPY pi/package.json pi/pnpm-lock.yaml pi/pnpm-workspace.yaml ./
+COPY pi/patches/ ./patches/
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
 WORKDIR /opt/precompute

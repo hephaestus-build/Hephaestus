@@ -73,8 +73,8 @@ export function addAssistantUsage(
 	ledger.model = msg.model ?? ledger.model;
 	ledger.inputTokens += usage.input || 0;
 	ledger.outputTokens += usage.output || 0;
-	// Pi includes reasoning in output and exposes no separate count. The proxy supplies reasoning
-	// usage to the server; keep this contract field zero to avoid double-counting.
+	// Reasoning is a subset of output when the provider reports it: reported, never priced separately.
+	ledger.reasoningTokens += usage.reasoning ?? 0;
 	ledger.cacheReadTokens += usage.cacheRead || 0;
 	ledger.cacheWriteTokens += usage.cacheWrite || 0;
 	ledger.costUsd += usage.cost.total || 0;
@@ -82,31 +82,32 @@ export function addAssistantUsage(
 	ledger.stopReasons[sr] = (ledger.stopReasons[sr] ?? 0) + 1;
 }
 
-/** Use the larger total per bucket: events survive compaction, messages cover missed events. */
+/** Prompt tokens in every classification: ordinary input, cache reads and cache writes. */
+function promptTokensOf(usage: UsageLedger): number {
+	return usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
+}
+
+function covers(a: UsageLedger, b: UsageLedger): boolean {
+	return promptTokensOf(a) >= promptTokensOf(b) && a.outputTokens >= b.outputTokens;
+}
+
+/**
+ * Report one view whole. The stream ledger survives compaction; the message walk covers events the
+ * ledger missed. The walk is reported only when its prompt and output totals both cover the ledger's.
+ * Otherwise the ledger is reported, even when neither covers the other: the two views classify calls
+ * independently, so their buckets cannot be combined. This reports what one view observed, not a
+ * guarantee that every call was observed.
+ */
 export function extractUsageFromSession(
 	session: { messages?: SessionMessage[] },
 	streamLedger: UsageLedger | null = null,
 ): UsageReport {
-	const messages = session.messages ?? [];
 	const walked = newUsageLedger();
-	for (const msg of messages) {
+	for (const msg of session.messages ?? []) {
 		addAssistantUsage(walked, msg);
 	}
-	const source = streamLedger ?? walked;
-
-	return {
-		model: source.model ?? walked.model,
-		inputTokens: Math.max(walked.inputTokens, source.inputTokens),
-		outputTokens: Math.max(walked.outputTokens, source.outputTokens),
-		reasoningTokens: Math.max(walked.reasoningTokens, source.reasoningTokens),
-		cacheReadTokens: Math.max(walked.cacheReadTokens, source.cacheReadTokens),
-		cacheWriteTokens: Math.max(walked.cacheWriteTokens, source.cacheWriteTokens),
-		costUsd: Math.max(walked.costUsd, source.costUsd),
-		totalCalls: Math.max(walked.totalCalls, source.totalCalls),
-		assistantMessages: Math.max(walked.assistantMessages, source.assistantMessages),
-		stopReasons:
-			source.assistantMessages >= walked.assistantMessages
-				? source.stopReasons
-				: walked.stopReasons,
-	};
+	const ledger = streamLedger ?? walked;
+	const source = !covers(ledger, walked) && covers(walked, ledger) ? walked : ledger;
+	const { seenIds: _seenIds, ...report } = source;
+	return { ...report, model: source.model ?? ledger.model ?? walked.model };
 }

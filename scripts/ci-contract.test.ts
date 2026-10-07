@@ -1217,14 +1217,29 @@ void describe("CI contract", () => {
 		assert.doesNotMatch(pathFilter(detection, "application-server"), /- 'docs\/\*\*'/u);
 		assert.match(pathFilter(detection, "postgres-image"), /- 'docker\/postgres\/\*\*'/u);
 		assert.match(pathFilter(detection, "webapp-image"), /- 'patches\/\*\*'/u);
+		assert.match(pathFilter(detection, "webapp-image"), /- 'docker\/agents\/pi\/patches\/\*\*'/u);
 	});
 
 	void test("provides dependency patches before image installs and validates extension patch changes", async () => {
 		const dockerfile = await readFile("webapp/Dockerfile", "utf8");
-		const patchCopy = dockerfile.indexOf("COPY patches/ /repo/patches/");
-		assert.ok(patchCopy !== -1, "The filtered install still reads every configured patch");
+		const workspace = parseDocument(await readFile("pnpm-workspace.yaml", "utf8"));
+		const patched = workspace.get("patchedDependencies");
+		assert.ok(isMap(patched) && patched.items.length > 0, "The workspace configures patches");
+		// The filtered install still reads every configured patch.
 		for (const command of ["pnpm fetch --filter webapp", "pnpm install --offline"]) {
-			assert.ok(dockerfile.indexOf(command) > patchCopy, `${command} requires the patches first`);
+			const at = dockerfile.indexOf(command);
+			assert.ok(at !== -1, `webapp/Dockerfile runs ${command}`);
+			const sources = buildStageCopySources(dockerfile.slice(0, at));
+			for (const { value } of patched.items) {
+				const file = isScalar(value) ? value.value : undefined;
+				assert.ok(typeof file === "string", "A patched dependency names its patch file");
+				assert.ok(
+					sources.some((source) =>
+						source.endsWith("/") ? file.startsWith(source) : file === source,
+					),
+					`${command} requires ${file} first`,
+				);
+			}
 		}
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const detection = job(source, "detect-changes");

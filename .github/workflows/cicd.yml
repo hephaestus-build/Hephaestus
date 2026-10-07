@@ -218,6 +218,7 @@ jobs:
               - '!webapp/src/test/**'
               - '.oxfmtrc.json'
               - 'patches/**'
+              - 'docker/agents/pi/patches/**'
               - 'webapp/public/**'
               - 'webapp/docker/**'
               - 'webapp/Dockerfile'

@@ -15,3 +15,8 @@ minimumReleaseAgeExclude:
 # @earendil-works/pi-coding-agent pins undici exactly; take the TLS and WebSocket fixes without a new agent.
 overrides:
   "undici@>=8.0.0 <8.11.2": 8.11.2
+
+# OpenAI-compatible proxies may name cache writes created_cache_tokens; read it like cache_write_tokens.
+# The repository root workspace applies the same file.
+patchedDependencies:
+  "@earendil-works/pi-ai@1.0.0": patches/@earendil-works__pi-ai@1.0.0.patch

@@ -131,17 +131,51 @@ void test("with no ledger at all the report is exactly the message walk", () => 
 	assert.equal(reported.outputTokens, 5);
 });
 
-void test("every bucket is taken from whichever view saw more, independently", () => {
+void test("cache writes one view counted as input are reported once", () => {
+	const walked = assistant("kept", { input: 49_624, output: 900, cacheRead: 21_600 });
+	const ledger = newUsageLedger();
+	addAssistantUsage(
+		ledger,
+		assistant("kept", { input: 4024, output: 900, cacheRead: 21_600, cacheWrite: 45_600 }),
+	);
+
+	const reported = extractUsageFromSession(sessionOf(walked), ledger);
+
+	assert.equal(reported.inputTokens + reported.cacheReadTokens + reported.cacheWriteTokens, 71_224);
+	assert.equal(reported.cacheWriteTokens, 45_600);
+});
+
+void test("a walk that saw calls the ledger missed is reported whole", () => {
+	const ledger = newUsageLedger();
+	addAssistantUsage(ledger, assistant("a", { input: 100, output: 10 }));
+	const messages = [
+		assistant("a", { input: 100, output: 10 }),
+		assistant("b", { input: 50, output: 5, cacheRead: 20 }),
+	];
+
+	const reported = extractUsageFromSession(sessionOf(...messages), ledger);
+
+	assert.equal(reported.totalCalls, 2);
+	assert.equal(reported.inputTokens, 150);
+	assert.equal(reported.cacheReadTokens, 20);
+});
+
+void test("views that each saw more of something are not combined", () => {
 	const walked = assistant("kept", { input: 10, output: 9000, cacheWrite: 40 });
 	const ledger = newUsageLedger();
 	addAssistantUsage(ledger, assistant("dropped", { input: 5000, cacheRead: 70 }));
 
 	const reported = extractUsageFromSession(sessionOf(walked), ledger);
 
-	assert.equal(reported.inputTokens, 5000);
-	assert.equal(reported.outputTokens, 9000);
-	assert.equal(reported.cacheReadTokens, 70);
-	assert.equal(reported.cacheWriteTokens, 40);
+	assert.deepEqual(
+		[
+			reported.inputTokens,
+			reported.outputTokens,
+			reported.cacheReadTokens,
+			reported.cacheWriteTokens,
+		],
+		[5000, 0, 70, 0],
+	);
 });
 
 void test("a session that never ran reports zero rather than throwing", () => {
