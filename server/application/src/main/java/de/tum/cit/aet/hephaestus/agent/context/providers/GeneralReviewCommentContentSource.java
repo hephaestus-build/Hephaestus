@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
@@ -49,16 +50,19 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
     static final String FILE_NAME = "general_comments.json";
 
     private final ObjectMapper objectMapper;
+    private final DeliveredPullRequestCommentLookup deliveredCommentLookup;
     private final IssueCommentRepository issueCommentRepository;
     private final PullRequestRepository pullRequestRepository;
 
     public GeneralReviewCommentContentSource(
             ObjectMapper objectMapper,
             IssueCommentRepository issueCommentRepository,
-            PullRequestRepository pullRequestRepository) {
+            PullRequestRepository pullRequestRepository,
+            DeliveredPullRequestCommentLookup deliveredCommentLookup) {
         this.objectMapper = objectMapper;
         this.issueCommentRepository = issueCommentRepository;
         this.pullRequestRepository = pullRequestRepository;
+        this.deliveredCommentLookup = deliveredCommentLookup;
     }
 
     @Override
@@ -94,7 +98,7 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
         if (!pullRequestRepository.existsByIdAndDeletedAtIsNull(pullRequestId)) {
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
-        ObjectNode root = collect(pullRequestId);
+        ObjectNode root = collect(review.job().getWorkspace().getId(), pullRequestId);
         boolean truncated = root.path("truncated").asBoolean(false);
         return new EvidenceContribution(
                 Map.of(
@@ -119,13 +123,19 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
         files.putAll(capture(request, selectedKinds).files());
     }
 
-    private ObjectNode collect(long pullRequestId) {
+    private ObjectNode collect(long workspaceId, long pullRequestId) {
         try {
+            Set<Long> postedComments = deliveredCommentLookup
+                    .findForPullRequest(workspaceId, pullRequestId)
+                    .general();
             List<IssueComment> comments = new ArrayList<>(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(
                     pullRequestId, WorkspaceScmProjection.HEPHAESTUS_MARKER, Pageable.unpaged()));
             comments.removeIf(comment -> {
                 String body = comment == null ? null : comment.getBody();
-                return body == null || body.isBlank() || body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER);
+                return body == null
+                        || body.isBlank()
+                        || body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER)
+                        || (comment.getNativeId() != null && postedComments.contains(comment.getNativeId()));
             });
             boolean truncated = false;
             comments.sort(
@@ -151,6 +161,7 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
 
     private ObjectNode toComment(IssueComment c, String body) {
         ObjectNode node = objectMapper.createObjectNode();
+        node.put("nativeId", c.getNativeId());
         String author = login(c.getAuthor());
         if (author != null) {
             node.put("author", author);
@@ -158,9 +169,15 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
                 node.put("bot", true);
             }
         }
+        if (c.getAuthor() != null) {
+            node.put("authorId", c.getAuthor().getNativeId());
+        }
         node.put("body", body);
         if (c.getCreatedAt() != null) {
             node.put("createdAt", c.getCreatedAt().toString());
+        }
+        if (c.getUpdatedAt() != null) {
+            node.put("updatedAt", c.getUpdatedAt().toString());
         }
         return node;
     }

@@ -12,6 +12,7 @@ import { expectSettledVisible } from "@/stories/overlay";
 import {
 	detailObservation,
 	detailPractices,
+	detailRun,
 	detailRuns,
 	focusedChanges,
 	requestedCleanRun,
@@ -260,7 +261,8 @@ export const FeedbackTab: Story = {
 
 /**
  * Nothing open and nothing resolved: the same empty block the Observations tab draws, and no
- * "Current feedback" or "Resolved feedback" label claims a list of nothing.
+ * "Current feedback" or "Resolved feedback" label claims a list of nothing. It says where feedback
+ * about a single piece of work is instead.
  */
 export const FeedbackEmpty: Story = {
 	// A practice no feedback was ever written about, so the tab has nothing to list.
@@ -269,12 +271,53 @@ export const FeedbackEmpty: Story = {
 		await expectSettledVisible(await screen.findByText("No feedback yet"));
 		await expect(
 			screen.getByText(
-				"Feedback appears here once a review sees the same pattern in your work more than once.",
+				"Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on a single piece of work stays there. Open its observation to find recorded comment links.",
 			),
 		).toBeVisible();
 		await expect(screen.getByRole("heading", { level: 2, name: "Feedback" })).toBeVisible();
 		await expect(screen.queryByText("Current feedback")).not.toBeInTheDocument();
 		await expect(screen.queryByText("Resolved feedback")).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * Feedback was left on the pull request, and no pattern has repeated into a card yet. The empty tab
+ * leads to the observations, where the row links each comment that carries the feedback.
+ */
+export const FeedbackOnTheWorkOnly: Story = {
+	args: {
+		tab: "feedback",
+		feedbackCards: [],
+		feed: {
+			...readyFeed,
+			runs: [
+				{
+					...detailRun,
+					observations: [
+						{
+							...detailObservation,
+							feedbackCommentUrls: [
+								"https://github.com/HephaestusTest/practice-validation/pull/902#issuecomment-1",
+							],
+						},
+					],
+				},
+				...detailRuns.slice(1),
+			],
+		},
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("No feedback yet"));
+		await userEvent.click(screen.getByRole("button", { name: "Show observations" }));
+		await expect(screen.getByRole("tab", { name: "Observations 3" })).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await expect(screen.getByText("Feedback on the work")).toBeVisible();
+		await expect(screen.getByRole("link", { name: /Read the feedback comment/u })).toHaveAttribute(
+			"href",
+			"https://github.com/HephaestusTest/practice-validation/pull/902#issuecomment-1",
+		);
 	},
 };
 

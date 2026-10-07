@@ -24,6 +24,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-review-brief.ts",
             "pi-folder-index.ts",
             "pi-review-turns.ts",
+            "pi-turn-context.ts",
             "pi-runner-output.ts",
             "pi-runner-usage.ts",
             "pi-runner-retry.ts",
@@ -31,8 +32,10 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-session-lifecycle.ts",
             SandboxLayout.PROVIDER_HELPER_FILENAME);
 
-    private static final List<String> PROMPTS =
-            List.of(SandboxLayout.FEEDBACK_COMPOSER_PROMPT_FILENAME, SandboxLayout.REVIEW_COMPOSER_PROMPT_FILENAME);
+    private static final List<String> PROMPTS = List.of(
+            SandboxLayout.FEEDBACK_STYLE_PROMPT_FILENAME,
+            SandboxLayout.FEEDBACK_COMPOSER_PROMPT_FILENAME,
+            SandboxLayout.REVIEW_COMPOSER_PROMPT_FILENAME);
 
     @Override
     public String runnerScript() {

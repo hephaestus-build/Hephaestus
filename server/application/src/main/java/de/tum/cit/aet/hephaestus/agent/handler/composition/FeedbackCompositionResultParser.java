@@ -34,6 +34,54 @@ public class FeedbackCompositionResultParser {
 
     private static final int MAX_OBSERVATION_ID_LENGTH = 64;
 
+    public static final String INCOMPLETE_COMPOSITION_MESSAGE = "Some feedback could not be composed.";
+
+    public enum CompositionStatus {
+        LEGACY_UNKNOWN,
+        NO_RECORDED_FAILURE,
+        INCOMPLETE,
+        INVALID;
+
+        public @Nullable String message() {
+            return switch (this) {
+                case INCOMPLETE -> INCOMPLETE_COMPOSITION_MESSAGE;
+                case INVALID -> "Feedback composition status could not be read.";
+                case LEGACY_UNKNOWN, NO_RECORDED_FAILURE -> null;
+            };
+        }
+
+        public boolean failed() {
+            return this == INCOMPLETE || this == INVALID;
+        }
+    }
+
+    /** Missing legacy metadata is unknown; malformed present metadata cannot certify quiet output. */
+    public static CompositionStatus compositionStatus(@Nullable JsonNode jobOutput) {
+        JsonNode payload = payloadOf(jobOutput);
+        JsonNode failures = payload == null ? null : payload.get("compositionFailures");
+        if (failures == null) return CompositionStatus.LEGACY_UNKNOWN;
+        if (!failures.isArray() || failures.size() > 2) return CompositionStatus.INVALID;
+        Set<String> phases = new HashSet<>();
+        Set<String> reasons =
+                Set.of("MODEL_ERROR", "RUNTIME_ERROR", "BUDGET", "STALL", "SAFETY", "LOOP", "NO_DECISION");
+        for (JsonNode failure : failures) {
+            JsonNode phase = failure.get("phase");
+            JsonNode reason = failure.get("reason");
+            if (!failure.isObject()
+                    || !onlyFields(failure, "phase", "reason")
+                    || phase == null
+                    || !phase.isString()
+                    || reason == null
+                    || !reason.isString()
+                    || !Set.of("PUBLIC_REVIEW", "PRIVATE_FEEDBACK").contains(phase.asString())
+                    || !phases.add(phase.asString())
+                    || !reasons.contains(reason.asString())) {
+                return CompositionStatus.INVALID;
+            }
+        }
+        return failures.isEmpty() ? CompositionStatus.NO_RECORDED_FAILURE : CompositionStatus.INCOMPLETE;
+    }
+
     /** The private-lane units of a composition: the developer's practice pages and the mentor conversation. */
     public List<ComposedFeedbackUnit> parse(@Nullable JsonNode jobOutput) {
         JsonNode payload = payloadOf(jobOutput);

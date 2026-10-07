@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommen
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.StoredComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
@@ -143,17 +144,20 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
                 return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
             }
         }
-        // The snapshot token distinguishes this close from later edits and reopen/close cycles.
-        if (ScmSignals.ISSUE_CLOSED.value().equals(signal)) {
+        // An open or close review is admitted with the issue's snapshot token, which a later material change moves.
+        // Publication checks the token again; refusing here spares a review that publication would refuse.
+        if (ScmSignals.ISSUE_OPENED.value().equals(signal)
+                || ScmSignals.ISSUE_CLOSED.value().equals(signal)) {
             String admittedSnapshot = metadata.path("review_snapshot_id").asString("");
             UUID currentSnapshot = issue.getReviewSnapshotId();
             if (admittedSnapshot.isBlank()
                     || currentSnapshot == null
                     || !admittedSnapshot.equals(currentSnapshot.toString())) {
                 log.info(
-                        "Issue snapshot changed since the close review was admitted: issueId={}, jobId={}",
+                        "Issue snapshot changed since the review was admitted: issueId={}, jobId={}, signal={}",
                         issueId,
-                        job.getId());
+                        job.getId(),
+                        signal);
                 return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
             }
         }
@@ -176,6 +180,7 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
             meta.put("html_url", issue.getHtmlUrl());
             meta.put("repository_full_name", repoFullName);
             meta.put("author", issue.getAuthor() != null ? issue.getAuthor().getLogin() : null);
+            meta.put("author_id", issue.getAuthor() != null ? issue.getAuthor().getNativeId() : null);
             meta.put(
                     "issue_type",
                     issue.getIssueType() != null ? issue.getIssueType().getName() : null);
@@ -214,7 +219,12 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
             ArrayNode commentsArr = objectMapper.createArrayNode();
             for (StoredComment c : ordered) {
                 ObjectNode cn = objectMapper.createObjectNode();
+                cn.put("native_id", c.getNativeId());
                 cn.put("author", c.getAuthorLogin());
+                cn.put("author_id", c.getAuthorNativeId());
+                if (c.getAuthorType() == User.Type.BOT) {
+                    cn.put("bot", true);
+                }
                 cn.put("created_at", c.getCreatedAt() != null ? c.getCreatedAt().toString() : null);
                 cn.put("updated_at", c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null);
                 cn.put("body", c.getBody());

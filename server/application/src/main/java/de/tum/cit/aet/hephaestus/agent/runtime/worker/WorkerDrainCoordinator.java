@@ -20,20 +20,23 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.SmartLifecycle;
 
 /**
- * Graceful shutdown for the worker. Runs at
- * {@link WebServerApplicationContext#GRACEFUL_SHUTDOWN_PHASE} {@code - 1024} (after HTTP
- * server stop, before executor teardown). Liveness stays {@code CORRECT} — kubelet must
- * not kill the pod early; only readiness flips to {@code REFUSING_TRAFFIC}.
+ * Graceful shutdown for the worker. Liveness stays {@code CORRECT} — kubelet must not kill the
+ * pod early; only readiness flips to {@code REFUSING_TRAFFIC}.
  *
  * <p>Sequence: readiness flip → final {@code Heartbeat{draining}} + capacity report with
  * {@code spare=0} → stop accepting new jobs → await in-flight (or cancel immediately when
  * {@code timeout=0}).
+ *
+ * <p>The phase is one above {@link WebServerApplicationContext#GRACEFUL_SHUTDOWN_PHASE}, so the drain
+ * stops before the web server's graceful shutdown starts. A review that is drained still sends its
+ * model requests through the sandbox gateway, a connector of that same server, and graceful shutdown
+ * closes every connector.
  */
 public class WorkerDrainCoordinator implements SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(WorkerDrainCoordinator.class);
 
-    static final int PHASE = WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE - 1024;
+    static final int PHASE = WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE + 1;
 
     private final WorkerControlClient client;
     private final WorkerCapacityState state;
@@ -88,28 +91,33 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
                         snap.reviewMax(), snap.mentorMax(), snap.inFlightReview(), snap.inFlightMentor(), 0, 0));
 
                 mentorSessions.ifPresent(WorkerMentorSessions::stop);
-                executor.ifPresent(e -> drainExecutor(e, timeout));
-                log.info("Worker drain complete.");
+                boolean complete = executor.map(e -> drainExecutor(e, timeout)).orElse(true);
+                if (complete) {
+                    log.info("Worker drain finished: owned job states settled and container stop calls returned.");
+                } else {
+                    log.warn("Worker drain incomplete: a job state was not settled, or a container stop failed or"
+                            + " did not return.");
+                }
             }
         } finally {
             callback.run();
         }
     }
 
-    private void drainExecutor(AgentJobExecutor exec, Duration timeout) {
+    /** Drains the executor; false if a job was left unsettled or a container stop did not return. */
+    private boolean drainExecutor(AgentJobExecutor exec, Duration timeout) {
         exec.stopAcceptingNewJobs();
         if (timeout.isZero()) {
             log.info("Drain mode IMMEDIATE — cancelling in-flight jobs without waiting.");
-            exec.cancelInFlight(AgentJobCancellationReason.DRAIN_IMMEDIATE);
-            return;
+            return exec.cancelInFlight(AgentJobCancellationReason.DRAIN_IMMEDIATE);
         }
         boolean clean = exec.awaitInFlight(timeout);
         if (clean) {
             log.info("Drain awaited cleanly; no jobs left to cancel.");
-        } else {
-            log.warn("Drain budget exhausted after {}; cancelling in-flight jobs.", timeout);
-            exec.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL);
+            return true;
         }
+        log.warn("Drain budget exhausted after {}; cancelling in-flight jobs.", timeout);
+        return exec.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL);
     }
 
     private void safeSend(WorkerControlFrame frame) {

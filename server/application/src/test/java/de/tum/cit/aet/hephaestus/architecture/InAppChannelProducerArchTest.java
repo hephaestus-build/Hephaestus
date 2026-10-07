@@ -15,6 +15,8 @@ class InAppChannelProducerArchTest extends HephaestusArchitectureTest {
     private static final String READER_PACKAGE = "..practices.feedback.inapp..";
     private static final String OPERATOR_WITHHOLDER =
             "de.tum.cit.aet.hephaestus.practices.reviewoutput.ReviewFeedbackQueryService";
+    private static final String HISTORY_READER =
+            "de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource";
 
     private static final String COMPOSITION_PACKAGE = "..agent.handler.composition..";
 
@@ -33,6 +35,8 @@ class InAppChannelProducerArchTest extends HephaestusArchitectureTest {
                 .haveNameNotMatching(ObservationOrigin.class.getName() + "(\\$.*)?")
                 .and()
                 .haveNameNotMatching(OPERATOR_WITHHOLDER + "(\\$.*)?")
+                .and()
+                .haveNameNotMatching(HISTORY_READER + "(\\$.*)?")
                 .should()
                 .accessField(FeedbackChannel.class, "IN_APP")
                 .because("private IN_APP feedback must stay inside its approved producers and readers");

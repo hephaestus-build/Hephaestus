@@ -38,6 +38,11 @@ public class ObservationAdmissionService {
 
     public static final String INADMISSIBLE_REASON_CODE = "inadmissible_observations";
 
+    /** Why an admitted job that lost its run is failed instead of measured again. */
+    public static final String INTERRUPTED_AFTER_ADMISSION =
+            "The review was interrupted after its observations were admitted. No completed feedback was saved. "
+                    + "The observations are kept.";
+
     static boolean observationsWereRefused(AgentJob job) {
         return job.getMetadata() != null
                 && !job.getMetadata()

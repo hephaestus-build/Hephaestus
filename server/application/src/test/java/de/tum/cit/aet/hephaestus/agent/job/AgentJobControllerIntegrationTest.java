@@ -70,6 +70,34 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     @WithAdminUser
+    void compositionOnlyDeliveryRetryRollsBackItsClaimAndPreservesPartialOutput() {
+        Workspace workspace = setupWorkspace();
+        AgentJob job = createJob(workspace, AgentJobStatus.COMPLETED);
+        job.setDeliveryStatus(DeliveryStatus.FAILED);
+        job.setErrorMessage("Some feedback could not be composed.");
+        var output = OBJECT_MAPPER.readTree("""
+            {"feedback":{"compositionFailures":[{"phase":"PRIVATE_FEEDBACK","reason":"MODEL_ERROR"}],
+              "review":{"summary":{"body":"An already prepared supported review.","basedOn":[]},"inline":[],"withheld":[]}}}
+            """);
+        job.setOutput(output);
+        agentJobRepository.saveAndFlush(job);
+        webTestClient
+                .post()
+                .uri("/workspaces/{slug}/agents/jobs/{id}/delivery/retry", workspace.getWorkspaceSlug(), job.getId())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody(Void.class);
+        AgentJob retained = agentJobRepository.findById(job.getId()).orElseThrow();
+        assertThat(retained.getStatus()).isEqualTo(AgentJobStatus.COMPLETED);
+        assertThat(retained.getDeliveryStatus()).isEqualTo(DeliveryStatus.FAILED);
+        assertThat(retained.getOutput()).isEqualTo(output);
+        assertThat(retained.getErrorMessage()).isEqualTo("Some feedback could not be composed.");
+    }
+
+    @Test
+    @WithAdminUser
     void shouldNotExposePrivateExecutionEvidenceOverHttp() {
         Workspace workspace = setupWorkspace();
         AgentJob job = createJob(workspace, AgentJobStatus.COMPLETED);

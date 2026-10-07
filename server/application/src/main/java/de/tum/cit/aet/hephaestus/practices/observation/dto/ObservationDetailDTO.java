@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -70,6 +71,13 @@ public record ObservationDetailDTO(
                                 + "eligible feedback exists or the newest eligible feedback has failed delivery)")
         FeedbackResponseDTO feedbackResponse,
 
+        @Nullable
+        @Schema(
+                description = "Links to the comments on the reviewed work that carry the feedback behind "
+                        + "feedbackResponse, summary first (null when that feedback was not delivered on the work "
+                        + "or the platform returned no link)")
+        List<String> feedbackCommentUrls,
+
         @Nullable @Schema(description = "Cross-run locus key; null when continuity is unavailable")
         String recurrenceKey,
 
@@ -98,11 +106,12 @@ public record ObservationDetailDTO(
      * One piece of feedback answers both {@code deliveredFeedback} and {@code feedbackResponse}, so the
      * developer answers the feedback they received, even when it landed only as inline notes. FAILED feedback's text is still shown — it was composed
      * and may have reached them on the artifact — but it carries no response handle, because only DELIVERED
-     * feedback can be answered.
+     * feedback can be answered. {@code feedbackCommentUrls} are the comments of that same delivered feedback.
      */
     public static ObservationDetailDTO from(
             Observation observation,
             @Nullable ObservationFeedback feedback,
+            @Nullable List<String> feedbackCommentUrls,
             @Nullable String nextStep,
             @Nullable String artifactUrl,
             boolean includeEvidence,
@@ -122,6 +131,7 @@ public record ObservationDetailDTO(
                 feedback == null ? null : feedback.getBody(),
                 nextStep,
                 responseTo(feedback),
+                feedbackCommentUrls,
                 observation.getRecurrenceKey(),
                 ReviewClaimCurrentness.of(observation.getPracticeRevision(), practice, observation.getSupersededAt()),
                 invalidation == null ? null : invalidation.getInvalidatedAt(),

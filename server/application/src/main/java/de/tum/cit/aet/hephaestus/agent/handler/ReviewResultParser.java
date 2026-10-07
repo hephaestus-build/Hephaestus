@@ -15,23 +15,16 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
-import tools.jackson.core.json.JsonReadFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Validates submitted observations into typed ones without throwing on malformed entries. */
 public class ReviewResultParser {
 
-    private static final Logger log = LoggerFactory.getLogger(ReviewResultParser.class);
-
     public static final int MAX_SUMMARY_LENGTH = 160;
     private static final int MAX_EVIDENCE_RATIONALE_LENGTH = 10_000;
     private static final int MAX_EVIDENCE_BYTES = 64 * 1024;
-
-    private static final int MAX_RAW_OUTPUT_LENGTH = 1_000_000;
 
     static final int MAX_MR_NOTE_LENGTH = 60_000;
 
@@ -45,50 +38,9 @@ public class ReviewResultParser {
     static final int MAX_DELIVERY_DIFF_NOTES = ComposedReview.MAX_INLINE_NOTES;
 
     private final JsonMapper objectMapper;
-    private final JsonMapper lenientMapper;
 
     public ReviewResultParser(JsonMapper objectMapper) {
         this.objectMapper = objectMapper;
-        // LLMs produce JSON with literal newlines/tabs/control chars inside string values that strict JSON rejects.
-        this.lenientMapper = objectMapper
-                .rebuild()
-                .enable(JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS)
-                .build();
-    }
-
-    /** Parses a raw model output whose {@code rawOutput} text carries the observations, leniently. */
-    public ParseResult parse(@Nullable JsonNode jobOutput) {
-        if (jobOutput == null || jobOutput.isNull() || jobOutput.isMissingNode()) {
-            return ParseResult.empty("jobOutput is null or missing");
-        }
-        JsonNode rawOutputNode = jobOutput.get("rawOutput");
-        if (rawOutputNode == null || rawOutputNode.isNull() || rawOutputNode.isMissingNode()) {
-            return ParseResult.empty("missing rawOutput field in job output");
-        }
-        String rawOutputText = rawOutputNode.asString();
-        if (rawOutputText.isBlank()) {
-            return ParseResult.empty("rawOutput is blank");
-        }
-        // Reject before parsing to bound memory use on untrusted model output.
-        if (rawOutputText.length() > MAX_RAW_OUTPUT_LENGTH) {
-            log.warn("parse: rawOutput too large ({} chars), skipping", rawOutputText.length());
-            return ParseResult.empty("rawOutput too large");
-        }
-
-        String sanitizedText = sanitizeJsonEscapes(rawOutputText);
-        JsonNode root;
-        try {
-            root = lenientMapper.readTree(sanitizedText);
-        } catch (JacksonException e) {
-            root = extractJsonFromText(sanitizedText);
-            if (root == null) {
-                return ParseResult.empty("invalid JSON in rawOutput: " + e.getMessage());
-            }
-        }
-        if (root == null || root.isNull()) {
-            return ParseResult.empty("rawOutput parsed to null");
-        }
-        return parseObservations(root.get("observations"));
     }
 
     /** Validates an already-structured observations array, as the runner submits it for admission. */
@@ -204,68 +156,6 @@ public class ReviewResultParser {
         } catch (IllegalArgumentException e) {
             throw new EntryValidationException("invalid " + field + " value: '" + node.asString() + "'", e);
         }
-    }
-
-    /**
-     * Doubles any backslash that precedes a character invalid after {@code \} in JSON (only
-     * {@code " \ / b f n r t u} are valid), turning e.g. Swift's {@code \(var)} interpolation into a literal
-     * backslash Jackson can read rather than a malformed escape.
-     */
-    static String sanitizeJsonEscapes(String text) {
-        if (text.indexOf('\\') < 0) {
-            return text;
-        }
-        StringBuilder sb = new StringBuilder(text.length() + 64);
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '\\' && i + 1 < text.length()) {
-                char next = text.charAt(i + 1);
-                if (isValidJsonEscapeChar(next)) {
-                    sb.append(c);
-                    sb.append(next);
-                    i++;
-                } else {
-                    sb.append('\\');
-                    // Don't skip `next`: it is not itself a backslash, so it still needs its own pass.
-                    sb.append('\\');
-                }
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
-    }
-
-    private static boolean isValidJsonEscapeChar(char c) {
-        return (c == '"' || c == '\\' || c == '/' || c == 'b' || c == 'f' || c == 'n' || c == 'r' || c == 't'
-                || c == 'u');
-    }
-
-    /**
-     * The orchestrator protocol emits phase markers (e.g. {@code [PHASE0]...}) before its JSON object; this
-     * finds the first opening brace that starts a valid object containing an {@code "observations"} array.
-     */
-    @Nullable
-    private JsonNode extractJsonFromText(String text) {
-        if (text.length() > MAX_RAW_OUTPUT_LENGTH) {
-            log.warn("extractJsonFromText: input too large ({} chars), skipping", text.length());
-            return null;
-        }
-        int startIdx = 0;
-        for (int attempt = 0; attempt < 5; attempt++) {
-            int braceIdx = text.indexOf('{', startIdx);
-            if (braceIdx < 0) break;
-            try {
-                JsonNode node = lenientMapper.readTree(text.substring(braceIdx));
-                if (node != null && node.isObject() && node.has("observations")) {
-                    return node;
-                }
-            } catch (JacksonException ignored) {
-                // try the next '{'
-            }
-            startIdx = braceIdx + 1;
-        }
-        return null;
     }
 
     private static class EntryValidationException extends RuntimeException {

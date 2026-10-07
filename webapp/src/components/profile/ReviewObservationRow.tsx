@@ -4,6 +4,7 @@ import { Fragment, type ReactNode, useState } from "react";
 
 import type { FeedbackResponseRequest, ObservationDetail } from "@/api/types.gen";
 import { FOCUS_RING, FOCUS_RING_INSET } from "@/components/common/focus";
+import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
 import { ResponseCommentBand } from "@/components/common/ResponseCommentBand";
 import { SectionLabel } from "@/components/common/SectionLabel";
@@ -106,7 +107,15 @@ export function ReviewObservationRow({
 	const checks = toEvidenceCheck(observation.evidence);
 	const nextStep = capitalise(observation.nextStep ?? "");
 	// A response needs feedback to respond to and a route that records it.
-	const respondTo = hasText(observation.feedbackResponse?.feedbackId) ? onRespond : undefined;
+	const hasFeedback = hasText(observation.feedbackResponse?.feedbackId);
+	const respondTo = hasFeedback ? onRespond : undefined;
+	const commentUrls = observation.feedbackCommentUrls ?? [];
+	// Without a recorded comment link the reviewed work is the nearest truthful place to go, and it
+	// says so rather than posing as a link to the feedback.
+	const workUrl =
+		hasFeedback && commentUrls.length === 0 && hasText(observation.artifactUrl)
+			? observation.artifactUrl
+			: undefined;
 	const hasWorkLine = rendersContent(work);
 	const hasBody =
 		invalidated ||
@@ -115,6 +124,8 @@ export function ReviewObservationRow({
 		checks.length > 0 ||
 		evidenceLocations.length > 0 ||
 		hasText(nextStep) ||
+		commentUrls.length > 0 ||
+		workUrl !== undefined ||
 		respondTo !== undefined;
 	// The summary is the row's anchor and the heaviest text in it; the practice under it is the pill
 	// every practice surface names a practice with, and it stands alone when the observation has no
@@ -244,6 +255,18 @@ export function ReviewObservationRow({
 								<ReviewerText>{nextStep}</ReviewerText>
 							</DetailSection>
 						)}
+						{commentUrls.length > 0 && (
+							<DetailSection label="Feedback on the work">
+								<FeedbackCommentLinks urls={commentUrls} />
+							</DetailSection>
+						)}
+						{workUrl !== undefined && (
+							<p className="text-sm">
+								<InlineLink href={workUrl} external>
+									Open reviewed work
+								</InlineLink>
+							</p>
+						)}
 					</div>
 					{respondTo && (
 						<ObservationResponse
@@ -255,6 +278,33 @@ export function ReviewObservationRow({
 				</CollapsibleContent>
 			</Collapsible>
 		</li>
+	);
+}
+
+/**
+ * The comments that carry this observation's feedback on the reviewed work, in the order the
+ * server gives: the summary first, then the line notes.
+ */
+function FeedbackCommentLinks({ urls }: { urls: string[] }) {
+	if (urls.length === 1) {
+		return (
+			<p className="text-sm">
+				<InlineLink href={urls[0]} external>
+					Read the feedback comment
+				</InlineLink>
+			</p>
+		);
+	}
+	return (
+		<ul className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+			{urls.map((url, index) => (
+				<li key={url}>
+					<InlineLink href={url} external>
+						Read feedback comment {index + 1}
+					</InlineLink>
+				</li>
+			))}
+		</ul>
 	);
 }
 

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.util.HashSet;
@@ -40,6 +41,15 @@ class CatalogCriteriaCasesTest extends BaseUnitTest {
                     assertThat(Outcome.values())
                             .extracting(Outcome::name)
                             .contains(expected.getValue().asString());
+                }
+                // Severity is asserted only where the case names one, and only an expected NOT_MET carries one.
+                for (var severity : scenario.path("expectedSeverity").properties()) {
+                    assertThat(scenario.path("expected").path(severity.getKey()).asString())
+                            .as("%s expects a severity only for NOT_MET", scenario.path("id"))
+                            .isEqualTo(Outcome.NOT_MET.name());
+                    assertThat(Severity.values())
+                            .extracting(Severity::name)
+                            .contains(severity.getValue().asString());
                 }
                 for (var file : scenario.path("files").properties()) {
                     assertThat(file.getKey()).matches("(?:repo|context)/.+").doesNotContain("..");

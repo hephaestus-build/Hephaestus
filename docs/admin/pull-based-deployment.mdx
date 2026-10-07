@@ -256,6 +256,33 @@ Re-enable the timer after recovery.
 A new promotion reapplies Compose configuration, not arbitrary container-file changes.
 The reconciler refuses a release checkout with modified tracked files.
 
+### How an apply stops the worker
+
+An apply stops the worker before it replaces a service that the worker depends on.
+After the signed lock and every rendered Compose configuration of the new release pass their checks, the reconciler stops the running worker.
+It uses the `app` configuration and retained lock of the release that the host applied last.
+This also stops the worker when the new release removes it.
+It waits until the stop is complete and then applies the stacks.
+
+Compose waits up to the `stop_grace_period` that the running worker was started with while the worker drains, then stops the container.
+A review that is still running at that time stops with the worker.
+
+The database stays available during the stop.
+The `app` stack's normal `up` starts the worker of the new release, if that release has one.
+
+There is nothing to stop on a first install, or when the applied release has no `application-worker` service.
+A host without the `app` stack skips the stop, and an unchanged channel never stops the worker.
+If the stop fails, the reconciler applies no stack and records no release.
+The next tick tries again.
+
+The reconciler also applies nothing when it cannot identify the worker that runs.
+The applied record must identify its source commit.
+The retained lock must be present and name that same commit.
+Verify the revision that the host runs before you let it apply another release.
+
+The reconciler runs the tooling that the host already adopted.
+Thus, the apply that brings this step runs without it, and later applies include it.
+
 ### What restarts the database
 
 An apply recreates a container whose image or Compose definition changed.

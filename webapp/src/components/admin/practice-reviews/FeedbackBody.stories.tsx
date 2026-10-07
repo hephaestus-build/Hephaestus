@@ -125,6 +125,44 @@ export const NoComposedText: Story = {
 	},
 };
 
+const UUID = "0b7d3c2e-8f14-4a6b-9c5d-2e1f0a3b4c5d";
+const marker = `<!-- hephaestus:practice-review:${UUID} -->`;
+const disclosure =
+	"<sub>Practice review &middot; Model. This feedback is AI-generated and can be inaccurate. Answer or dispute it in [Hephaestus](https://example.com/respond).</sub>";
+const settings = "<sub>[Why you see this and how to stop it](https://example.com/settings)</sub>";
+const postedBody = [
+	marker,
+	`The controller stays focused on HTTP concerns.\n\n\`\`\`md\n${marker}\n${disclosure}\n\`\`\``,
+	"<details>kept as written</details>",
+	"---",
+	`${disclosure}\n${settings}\n`,
+].join("\n\n");
+
+/**
+ * A body as Hephaestus posted it on the work: the comment it finds its copy by is left out of the
+ * rendered view and the footer reads as words and links, while the source shows the stored text
+ * exactly and a code block quoting either keeps it.
+ */
+export const AsPostedOnTheWork: Story = {
+	args: { feedback: { body: postedBody, channel: "IN_CONTEXT", deliveryState: "DELIVERED" } },
+	play: async ({ canvas, userEvent }) => {
+		const rendered = canvas.getByRole("tabpanel", { name: "Rendered" });
+		await expect(within(rendered).getByRole("link", { name: "Hephaestus" })).toHaveAttribute(
+			"href",
+			"https://example.com/respond",
+		);
+		within(rendered).getByRole("link", { name: "Why you see this and how to stop it" });
+		await expect(rendered.textContent).toContain("Practice review · Model.");
+		// Only the quote in the code block still carries the comment and the tags.
+		await expect(rendered.textContent.split(UUID)).toHaveLength(2);
+		await expect(rendered.textContent.split("<sub>")).toHaveLength(2);
+		await expect(rendered.textContent).toContain("<details>");
+
+		await userEvent.click(canvas.getByRole("tab", { name: "Source" }));
+		await expect(canvas.getByRole("tabpanel", { name: "Source" }).textContent).toBe(postedBody);
+	},
+};
+
 /**
  * A composed body is model output that quotes a developer's own text, so it is rendered as untrusted
  * Markdown: images are dropped entirely and only `http(s)` links stay links.

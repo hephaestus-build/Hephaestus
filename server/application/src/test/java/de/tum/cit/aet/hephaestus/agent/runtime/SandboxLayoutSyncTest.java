@@ -60,7 +60,7 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
     void shouldResolvePromptLocationsFromTheTask() throws IOException {
         for (String prompt : new String[] {"pi-orchestrator.md", "feedback-composer.md"}) {
             String body = Files.readString(resolveResource("agent/" + prompt));
-            assertThat(body).contains("task.json.paths", "<practiceIndex>").doesNotContain("inputs/");
+            assertThat(body).contains("task.json", "<practiceIndex>").doesNotContain("task.json.paths", "inputs/");
         }
     }
 

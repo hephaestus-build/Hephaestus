@@ -295,16 +295,26 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                     .thenReturn(List.of(orphan(jobId, 7L, 5))); // retryCount == maxRetries
             AgentJob persistedJob = orphanedJob(jobId, 7L, 5);
             when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(persistedJob));
-            when(jobRepository.transitionStatus(
-                            eq(jobId), eq(AgentJobStatus.FAILED), any(), any(), eq(Set.of(AgentJobStatus.RUNNING))))
+            when(jobRepository.transitionStatusOwnedBy(
+                            eq(jobId),
+                            eq(AgentJobStatus.FAILED),
+                            any(),
+                            any(),
+                            eq(Set.of(AgentJobStatus.RUNNING)),
+                            eq(DEAD_WORKER_ID)))
                     .thenReturn(1);
 
             sweeper.recoverOrphanedJobs();
 
             verify(jobRepository, never()).requeueOrphan(any(), any(), anyInt(), any(), any(), any());
             verify(jobRepository)
-                    .transitionStatus(
-                            eq(jobId), eq(AgentJobStatus.FAILED), any(), any(), eq(Set.of(AgentJobStatus.RUNNING)));
+                    .transitionStatusOwnedBy(
+                            eq(jobId),
+                            eq(AgentJobStatus.FAILED),
+                            any(),
+                            any(),
+                            eq(Set.of(AgentJobStatus.RUNNING)),
+                            eq(DEAD_WORKER_ID));
             ArgumentCaptor<LlmUsageRecorder.LlmUsageSample> sample =
                     ArgumentCaptor.forClass(LlmUsageRecorder.LlmUsageSample.class);
             verify(usageRecorder).recordUnverifiable(eq(7L), sample.capture());

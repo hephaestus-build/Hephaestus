@@ -13818,6 +13818,13 @@ components:
         evidenceRationale:
           type: string
           description: Evidence-based rationale for the observation
+        feedbackCommentUrls:
+          type: array
+          description: "Links to the comments on the reviewed work that carry the\
+            \ feedback behind feedbackResponse, summary first (null when that feedback\
+            \ was not delivered on the work or the platform returned no link)"
+          items:
+            type: string
         feedbackResponse:
           $ref: "#/components/schemas/FeedbackResponse"
           description: "The developer's standing answer and response handle for the\

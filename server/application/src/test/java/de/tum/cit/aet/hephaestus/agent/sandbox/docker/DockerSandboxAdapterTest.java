@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
@@ -54,6 +55,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -704,8 +706,9 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     .hasMessageContaining("cancelled");
         }
 
-        @Test
-        void shouldStopRunningContainer() throws Exception {
+        @ParameterizedTest
+        @ValueSource(booleans = {false, true})
+        void shouldKeepCancellationAndContainerTrackingWhenAStopFails(boolean stopFails) throws Exception {
             CountDownLatch containerStarted = new CountDownLatch(1);
             CountDownLatch cancelDone = new CountDownLatch(1);
             var thrownException = new AtomicReference<Exception>();
@@ -732,13 +735,24 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             });
             bg.start();
 
-            assertThat(containerStarted.await(5, TimeUnit.SECONDS)).isTrue();
-            sandboxAdapter.cancel(JOB_ID);
-            cancelDone.countDown();
-            bg.join(5000);
+            try {
+                assertThat(containerStarted.await(5, TimeUnit.SECONDS)).isTrue();
+                if (stopFails) {
+                    doThrow(new SandboxInfrastructureException("daemon unavailable"))
+                            .doNothing()
+                            .when(containerManager)
+                            .stopContainer(CONTAINER_ID);
+                    assertThatThrownBy(() -> sandboxAdapter.cancel(JOB_ID))
+                            .isInstanceOf(SandboxInfrastructureException.class);
+                }
+                sandboxAdapter.cancel(JOB_ID);
+            } finally {
+                cancelDone.countDown();
+                bg.join(5000);
+            }
             assertThat(bg.isAlive()).isFalse();
 
-            verify(containerManager).stopContainer(CONTAINER_ID);
+            verify(containerManager, times(stopFails ? 2 : 1)).stopContainer(CONTAINER_ID);
             assertThat(thrownException.get()).isInstanceOf(SandboxCancelledException.class);
         }
 

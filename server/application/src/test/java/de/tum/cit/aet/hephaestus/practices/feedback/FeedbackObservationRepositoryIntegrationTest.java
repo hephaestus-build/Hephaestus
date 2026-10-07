@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedbackBody;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository.PostedCommentUrl;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -65,9 +66,13 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private IdentityProviderRepository gitProviderRepository;
 
+    @Autowired
+    private FeedbackPlacementRepository feedbackPlacementRepository;
+
     private Workspace workspace;
     private Practice practice;
     private AgentJob agentJob;
+    private IdentityProvider provider;
     private User recipient;
 
     @BeforeEach
@@ -91,7 +96,7 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         agentJob.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
         agentJob = agentJobRepository.save(agentJob);
 
-        IdentityProvider provider = gitProviderRepository
+        provider = gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseGet(() -> gitProviderRepository.save(
                         new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
@@ -294,6 +299,120 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("findDeliveredCommentUrls returns the stored links of delivered in-context feedback, summary first "
+            + "and line notes in file order, including feedback that landed only as line notes")
+    void shouldReturnStoredCommentLinksWhenFeedbackWasDeliveredOnTheWork() {
+        Instant postedAt = Instant.parse("2026-01-01T00:00:00Z");
+        Feedback withSummary = saveFeedback(50, FeedbackDeliveryState.DELIVERED, "Split the retry out.");
+        placeInline(withSummary, "src/B.java", "note-b", "https://github.com/o/r/pull/7#discussion_r2", postedAt);
+        placeSummary(withSummary, "comment-1", "https://github.com/o/r/pull/7#issuecomment-1", postedAt);
+        placeInline(withSummary, "src/A.java", "note-a", "https://github.com/o/r/pull/7#discussion_r1", postedAt);
+        // Recorded before permalinks were captured, or with a blank one: there is nothing to link to.
+        placeInline(withSummary, "src/C.java", "note-c", null, postedAt);
+        placeInline(withSummary, "src/D.java", "note-d", "  ", postedAt);
+        Feedback inlineOnly = saveFeedback(51, FeedbackDeliveryState.DELIVERED, null);
+        String lineNote = "https://gitlab.example.com/a/b/-/merge_requests/1#note_1";
+        placeInline(inlineOnly, "src/Main.java", "note-1", lineNote, postedAt);
+
+        Map<UUID, List<String>> urls = commentUrls(withSummary.getId(), inlineOnly.getId());
+
+        assertThat(urls.get(withSummary.getId()))
+                .containsExactly(
+                        "https://github.com/o/r/pull/7#issuecomment-1",
+                        "https://github.com/o/r/pull/7#discussion_r1",
+                        "https://github.com/o/r/pull/7#discussion_r2");
+        assertThat(urls.get(inlineOnly.getId())).containsExactly(lineNote);
+    }
+
+    @Test
+    @DisplayName("findDeliveredCommentUrls links only delivered in-context feedback to this developer in this "
+            + "workspace, and not a comment that newer feedback took over")
+    void shouldNotLinkCommentsWhenFeedbackIsNotThisDevelopersDeliveredFeedbackOnTheWork() {
+        Instant postedAt = Instant.parse("2026-01-01T00:00:00Z");
+        Feedback prepared = saveFeedback(60, FeedbackDeliveryState.PREPARED, "Not yet delivered");
+        placeInline(prepared, "src/A.java", "note-prepared", "https://github.com/o/r/pull/7#discussion_r10", postedAt);
+        Feedback failed = saveFeedback(61, FeedbackDeliveryState.FAILED, "Could not be placed");
+        placeInline(failed, "src/A.java", "note-failed", "https://github.com/o/r/pull/7#discussion_r11", postedAt);
+        Feedback inChat = saveFeedback(
+                null, 62, FeedbackDeliveryState.DELIVERED, "Said in conversation", postedAt, FeedbackChannel.IN_CHAT);
+        placeInline(inChat, "src/A.java", "note-chat", "https://github.com/o/r/pull/7#discussion_r12", postedAt);
+
+        User someoneElse = userRepository.save(TestUserFactory.createUser(101L, "someone-else", provider));
+        Feedback toSomeoneElse = feedbackRepository.save(Feedback.builder()
+                .agentJobId(agentJob.getId())
+                .workspaceId(workspace.getId())
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(42L)
+                .recipientUserId(someoneElse.getId())
+                .aboutUserId(someoneElse.getId())
+                .channel(FeedbackChannel.IN_CONTEXT)
+                .position(63)
+                .deliveryState(FeedbackDeliveryState.DELIVERED)
+                .body("For another developer")
+                .source(FeedbackSource.AGENT)
+                .createdAt(postedAt)
+                .deliveredAt(postedAt)
+                .build());
+        placeInline(
+                toSomeoneElse, "src/A.java", "note-other", "https://github.com/o/r/pull/7#discussion_r13", postedAt);
+
+        Workspace otherWorkspace =
+                workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("feedback-observation-other"));
+        AgentJob otherJob = new AgentJob();
+        otherJob.setWorkspace(otherWorkspace);
+        otherJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        otherJob.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
+        otherJob = agentJobRepository.save(otherJob);
+        Feedback inOtherWorkspace = feedbackRepository.save(Feedback.builder()
+                .agentJobId(otherJob.getId())
+                .workspaceId(otherWorkspace.getId())
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(42L)
+                .recipientUserId(recipient.getId())
+                .aboutUserId(recipient.getId())
+                .channel(FeedbackChannel.IN_CONTEXT)
+                .position(0)
+                .deliveryState(FeedbackDeliveryState.DELIVERED)
+                .body("In another workspace")
+                .source(FeedbackSource.AGENT)
+                .createdAt(postedAt)
+                .deliveredAt(postedAt)
+                .build());
+        placeInline(
+                inOtherWorkspace,
+                "src/A.java",
+                "note-elsewhere",
+                "https://github.com/o/r/pull/7#discussion_r14",
+                postedAt);
+
+        // One issue summary edited in place: the comment now shows the newer feedback only.
+        Feedback editedOver = saveFeedback(64, FeedbackDeliveryState.DELIVERED, "The first summary");
+        placeSummary(editedOver, "issue-summary", "https://github.com/o/r/issues/8#issuecomment-8", postedAt);
+        Feedback newer = saveFeedback(65, FeedbackDeliveryState.DELIVERED, "The summary that replaced it");
+        placeSummary(
+                newer, "issue-summary", "https://github.com/o/r/issues/8#issuecomment-8", postedAt.plusSeconds(60));
+
+        Map<UUID, List<String>> urls = commentUrls(
+                prepared.getId(),
+                failed.getId(),
+                inChat.getId(),
+                toSomeoneElse.getId(),
+                inOtherWorkspace.getId(),
+                editedOver.getId(),
+                newer.getId());
+
+        assertThat(urls)
+                .doesNotContainKeys(
+                        prepared.getId(),
+                        failed.getId(),
+                        inChat.getId(),
+                        toSomeoneElse.getId(),
+                        inOtherWorkspace.getId(),
+                        editedOver.getId());
+        assertThat(urls.get(newer.getId())).containsExactly("https://github.com/o/r/issues/8#issuecomment-8");
+    }
+
+    @Test
     @DisplayName("deleting the parent Feedback cascades the join row away (ON DELETE CASCADE)")
     void deletingFeedbackCascadesJoinRow() {
         Feedback feedback = saveFeedback(0, FeedbackDeliveryState.DELIVERED, "Body");
@@ -310,6 +429,40 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
 
     private void bind(Feedback feedback, Observation observation) {
         feedbackObservationRepository.insertIfAbsent(feedback.getId(), observation.getId(), "PRIMARY", 0);
+    }
+
+    private Map<UUID, List<String>> commentUrls(UUID... feedbackIds) {
+        return feedbackPlacementRepository
+                .findDeliveredCommentUrls(workspace.getId(), recipient.getId(), List.of(feedbackIds))
+                .stream()
+                .collect(Collectors.groupingBy(
+                        PostedCommentUrl::getFeedbackId,
+                        Collectors.mapping(PostedCommentUrl::getUrl, Collectors.toList())));
+    }
+
+    private void placeSummary(Feedback feedback, String ref, String url, Instant createdAt) {
+        feedbackPlacementRepository.save(FeedbackPlacement.builder()
+                .feedback(feedback)
+                .placementType(PlacementType.SUMMARY)
+                .postedCommentRef(ref)
+                .postedCommentUrl(url)
+                .createdAt(createdAt)
+                .build());
+    }
+
+    private void placeInline(Feedback feedback, String path, String ref, @Nullable String url, Instant createdAt) {
+        feedbackPlacementRepository.save(FeedbackPlacement.builder()
+                .feedback(feedback)
+                .placementType(PlacementType.INLINE)
+                .anchorKind(PlacementAnchorKind.LINE)
+                .anchorPath(path)
+                .anchorStartLine(1)
+                .anchorEndLine(1)
+                .anchorSide(PlacementAnchorSide.NEW)
+                .postedCommentRef(ref)
+                .postedCommentUrl(url)
+                .createdAt(createdAt)
+                .build());
     }
 
     private Feedback saveFeedback(int position, FeedbackDeliveryState state, @Nullable String body) {

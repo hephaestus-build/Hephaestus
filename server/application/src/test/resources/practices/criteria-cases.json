@@ -214,6 +214,33 @@
 		"workType": "pull_request"
 	},
 	{
+		"id": "review-checks-and-merge-conditions-handoff",
+		"expected": {
+			"ready-and-traceable-handoff": "MET"
+		},
+		"files": {
+			"context/description.md": "Closes #42\n\nAdds the quiz results screen, including its empty-results state.\n\n## How to review\n\nI have not checked these on a device; please verify them as part of the review.\n\n- [ ] Finish a quiz, open the results screen and check that the score is shown\n- [ ] Open the results screen before any quiz and check that \"No results yet\" is shown\n\nDo not merge until the pipeline passes and a tutor has approved.\n\nSharing results is not part of this change; it follows separately in #43.\n",
+			"repo/App/Results.swift": "import SwiftUI\nstruct Results: View {\n    let score: Int?\n    var body: some View {\n        if let score {\n            Text(\"Score: \\(score)\")\n        } else {\n            Text(\"No results yet\")\n        }\n    }\n}\n"
+		},
+		"reason": "The open items are checks the author asks reviewers to do, the merge conditions follow review, and the sharing work is placed outside this slice; none says the delivered slice is unfinished.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "authored-review-hold-handoff",
+		"expected": {
+			"ready-and-traceable-handoff": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"ready-and-traceable-handoff": "MINOR"
+		},
+		"files": {
+			"context/description.md": "Closes #42\n\nAdds the quiz results screen. Please wait with reviewing until I have pushed the empty-results state.\n",
+			"repo/App/Results.swift": "import SwiftUI\nstruct Results: View {\n    let score: Int\n    var body: some View { Text(\"Score: \\(score)\") }\n}\n"
+		},
+		"reason": "The author asks reviewers to wait for unfinished work within the slice while the pull request asks for review.",
+		"workType": "pull_request"
+	},
+	{
 		"id": "uikit-constant-background",
 		"expected": {
 			"uses-adaptive-colors-for-every-appearance": "NOT_MET"
@@ -430,5 +457,157 @@
 		},
 		"reason": "Polite wording does not turn an unanswered request about broken behavior into optional future advice.",
 		"workType": "pull_request"
+	},
+	{
+		"id": "defect-symptom-without-path",
+		"expected": {
+			"issue-states-an-actionable-problem": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"issue-states-an-actionable-problem": "MINOR"
+		},
+		"files": {
+			"context/comments.json": "[]\n",
+			"context/description.md": "The app crashes in the plant list.\n",
+			"context/metadata.json": "{\"title\": \"Fix a crash in the plant list\", \"body\": \"The app crashes in the plant list.\\n\"}"
+		},
+		"reason": "A stated crash is part of a defect's core, so the missing expected behavior and reproduction path are a minor gap.",
+		"workType": "issue"
+	},
+	{
+		"id": "defect-without-substance",
+		"expected": {
+			"issue-states-an-actionable-problem": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"issue-states-an-actionable-problem": "MAJOR"
+		},
+		"files": {
+			"context/comments.json": "[]\n",
+			"context/description.md": "",
+			"context/metadata.json": "{\"title\": \"Fix the app\", \"body\": \"\"}"
+		},
+		"reason": "Neither a malfunction nor a reproduction path is stated, so no part of the defect's core is there.",
+		"workType": "issue"
+	},
+	{
+		"id": "defect-generic-malfunction",
+		"expected": {
+			"issue-states-an-actionable-problem": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"issue-states-an-actionable-problem": "MAJOR"
+		},
+		"files": {
+			"context/comments.json": "[]\n",
+			"context/description.md": "The app doesn't work properly.\n",
+			"context/metadata.json": "{\"title\": \"Fix the app\", \"body\": \"The app doesn't work properly.\\n\"}"
+		},
+		"reason": "Saying the app does not work properly names no behavior a maintainer could observe and no place or path to look, so it supplies no concrete symptom.",
+		"workType": "issue"
+	},
+	{
+		"id": "defect-complete",
+		"expected": {
+			"issue-states-an-actionable-problem": "MET"
+		},
+		"files": {
+			"context/comments.json": "[]\n",
+			"context/description.md": "Saving a plant with an empty name crashes the app with \"Fatal error: Index out of range\".\n\nExpected: the form shows a validation message and the plant is not saved.\n\nSteps to reproduce:\n1. Open the plant list.\n2. Tap Add.\n3. Leave the name empty and tap Save.\n",
+			"context/metadata.json": "{\"title\": \"Saving a plant with an empty name crashes the app\", \"body\": \"Saving a plant with an empty name crashes the app with \\\"Fatal error: Index out of range\\\".\\n\\nExpected: the form shows a validation message and the plant is not saved.\\n\\nSteps to reproduce:\\n1. Open the plant list.\\n2. Tap Add.\\n3. Leave the name empty and tap Save.\\n\"}"
+		},
+		"reason": "Actual behavior, expected behavior and a repeatable path together are the defect's whole core.",
+		"workType": "issue"
+	},
+	{
+		"id": "preview-of-stored-defaults",
+		"expected": {
+			"ships-a-preview-with-each-new-view": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"ships-a-preview-with-each-new-view": "MINOR"
+		},
+		"files": {
+			"repo/Sources/ReminderSettingsView.swift": "import SwiftUI\n\nstruct ReminderSettingsView: View {\n    @AppStorage(\"remindersEnabled\") private var remindersEnabled = false\n    @AppStorage(\"reminderHour\") private var reminderHour = 9\n\n    var body: some View {\n        Form {\n            Toggle(\"Daily reminder\", isOn: $remindersEnabled)\n            if remindersEnabled {\n                Stepper(\"Remind at \\(reminderHour):00\", value: $reminderHour, in: 0...23)\n            }\n        }\n        .navigationTitle(\"Reminders\")\n    }\n}\n\n#Preview {\n    NavigationStack {\n        ReminderSettingsView()\n    }\n}\n"
+		},
+		"reason": "The preview supplies no sample of its own: it constructs only the view's stored defaults, so the enabled reminder state is never given to a preview. What storage holds at runtime is not evidence.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "preview-with-samples-and-empty-state",
+		"expected": {
+			"ships-a-preview-with-each-new-view": "MET"
+		},
+		"files": {
+			"repo/Sources/PlantListView.swift": "import SwiftUI\n\nstruct Plant: Identifiable {\n    let id = UUID()\n    let name: String\n    let daysUntilWatering: Int\n}\n\nstruct PlantListView: View {\n    let plants: [Plant]\n\n    var body: some View {\n        if plants.isEmpty {\n            ContentUnavailableView(\"No plants yet\", systemImage: \"leaf\", description: Text(\"Add a plant to start a watering schedule.\"))\n        } else {\n            List(plants) { plant in\n                LabeledContent(plant.name, value: plant.daysUntilWatering == 0 ? \"Water today\" : \"In \\(plant.daysUntilWatering) days\")\n            }\n        }\n    }\n}\n\n#Preview(\"Plants\") {\n    PlantListView(plants: [\n        Plant(name: \"Monstera\", daysUntilWatering: 0),\n        Plant(name: \"Basil\", daysUntilWatering: 2),\n        Plant(name: \"Snake plant\", daysUntilWatering: 12)\n    ])\n}\n\n#Preview(\"Empty\") {\n    PlantListView(plants: [])\n}\n"
+		},
+		"reason": "The same change supplies explicit plants covering both watering labels and the empty state the view declares.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "preview-of-fixed-presentation",
+		"expected": {
+			"ships-a-preview-with-each-new-view": "MET"
+		},
+		"files": {
+			"repo/Sources/BadgeView.swift": "import SwiftUI\n\nstruct BadgeView: View {\n    var body: some View {\n        Text(\"Beta\")\n            .font(.caption.bold())\n            .padding(.horizontal, 6)\n            .background(.blue, in: Capsule())\n            .foregroundStyle(.white)\n    }\n}\n\n#Preview {\n    BadgeView()\n}\n"
+		},
+		"reason": "The badge shows only constant content, so a preview that constructs it covers it without sample data.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "closed-issue-vague-activity",
+		"expected": {
+			"closed-issue-outcome-recorded": "NOT_APPLICABLE"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"CLOSED\", \"state_reason\": \"completed\", \"title\": \"Rework of UML\", \"body\": \"\"}\n",
+			"context/description.md": "",
+			"context/comments.json": "[]\n"
+		},
+		"reason": "An activity name with no observable end condition states no checkable outcome for closure accounting.",
+		"workType": "issue"
+	},
+	{
+		"id": "closed-issue-concrete-title-accounted",
+		"expected": {
+			"closed-issue-outcome-recorded": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"CLOSED\", \"state_reason\": \"completed\", \"title\": \"Export audit entries as a CSV file\", \"body\": \"\"}\n",
+			"context/description.md": "",
+			"context/comments.json": "[{\"native_id\": 91, \"author\": \"developer\", \"author_id\": 41, \"created_at\": \"2026-05-04T10:00:00Z\", \"updated_at\": \"2026-05-04T10:00:00Z\", \"body\": \"CSV export for audit entries is available.\"}]\n"
+		},
+		"reason": "A concrete title states the observable output, and the authored comment accounts for that output without needing a checklist.",
+		"workType": "issue"
+	},
+	{
+		"id": "closed-issue-concrete-title-unaccounted",
+		"expected": {
+			"closed-issue-outcome-recorded": "NOT_MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"CLOSED\", \"state_reason\": \"completed\", \"title\": \"Export audit entries as a CSV file\", \"body\": \"\"}\n",
+			"context/description.md": "",
+			"context/comments.json": "[]\n"
+		},
+		"reason": "The title states a checkable output, but the closed state alone does not account for it.",
+		"workType": "issue",
+		"expectedSeverity": {
+			"closed-issue-outcome-recorded": "MINOR"
+		}
+	},
+	{
+		"id": "closed-issue-remainders-accounted",
+		"expected": {
+			"closed-issue-outcome-recorded": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"CLOSED\", \"state_reason\": \"completed\", \"title\": \"Export audit entries as CSV, JSON and XML files\", \"body\": \"\"}\n",
+			"context/description.md": "",
+			"context/comments.json": "[{\"native_id\": 91, \"author\": \"developer\", \"author_id\": 41, \"created_at\": \"2026-05-04T10:00:00Z\", \"updated_at\": \"2026-05-04T10:00:00Z\", \"body\": \"CSV export for audit entries is available. JSON export is dropped because no consumer needs it. XML export is deferred until the retention format is agreed; follow-up is tracked in #24.\"}]\n"
+		},
+		"reason": "The authored record confirms one output and explicitly accounts for the others as dropped or deferred; it does not prove execution.",
+		"workType": "issue"
 	}
 ]

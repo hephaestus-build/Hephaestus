@@ -136,23 +136,23 @@ void test("public composition cannot discover or read private history through na
 		cwd: CWD,
 		agentDir: AGENT_DIR,
 		tools: PUBLIC_REVIEW_TOOLS,
-		customTools: [
+		customTools: ["select_feedback", "report_review"].map((name) =>
 			defineTool({
-				name: "report_review",
-				label: "Record review",
-				description: "Record a public review.",
+				name,
+				label: name,
+				description: "Choose or record a public review.",
 				exposure: "model-only",
 				parameters: { type: "object", properties: {} },
 				execute: async () => ({ content: [{ type: "text", text: "Recorded" }], details: {} }),
 			}),
-		],
+		),
 		resourceLoader,
 		settingsManager,
 		modelRuntime,
 		sessionManager: SessionManager.inMemory(CWD),
 	});
 	try {
-		assert.deepEqual(session.getActiveToolNames(), ["report_review"]);
+		assert.deepEqual(session.getActiveToolNames(), ["select_feedback", "report_review"]);
 		assert.deepEqual(session.getCallableToolNames(), []);
 		session.setActiveToolsByName(["read", "grep", "bash", "codemode"]);
 		assert.deepEqual(session.getActiveToolNames(), []);

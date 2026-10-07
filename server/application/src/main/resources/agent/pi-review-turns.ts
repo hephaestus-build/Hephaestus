@@ -1,5 +1,5 @@
-// How one review session spends its practices and its work: practices go to the model in turns, a
-// turn per catalog group (chunked when a group is large), and each turn may spend model calls and output
+// How a review schedules its practices and work: each catalog group (chunked when large) shares a
+// turn budget across its fresh practice sessions. Each turn may spend model calls and output
 // tokens in proportion to the practices it carries — its own budget, whatever the other turns spent.
 // The whole-run safety ceiling still applies, so later practices may not be reached.
 // Pure rules, so a test can call them; pi-runner.ts reads the workspace at module scope.

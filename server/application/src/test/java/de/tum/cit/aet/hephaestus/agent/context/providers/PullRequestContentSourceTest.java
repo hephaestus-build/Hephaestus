@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -19,6 +20,9 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
@@ -42,9 +46,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.JsonNode;
@@ -74,13 +81,24 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     private static final String HEAD = "abc123def456";
     private static final String BASE = "a".repeat(40);
 
+    @Mock
+    private DeliveredPullRequestCommentLookup deliveredCommentLookup;
+
     private PullRequestContentSource provider;
 
     @BeforeEach
     void setUp() {
+        lenient()
+                .when(deliveredCommentLookup.findForPullRequest(anyLong(), anyLong()))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of()));
         lenient().when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(new PullRequest()));
         provider = new PullRequestContentSource(
-                objectMapper, gitRepositoryManager, pullRequestRepository, reviewCommentRepository, repositoryPreparer);
+                objectMapper,
+                gitRepositoryManager,
+                pullRequestRepository,
+                reviewCommentRepository,
+                repositoryPreparer,
+                deliveredCommentLookup);
     }
 
     private static final RepositoryKey REPOSITORY = new RepositoryKey(WORKSPACE_ID, 123L);
@@ -168,6 +186,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         void shouldReadCoreFromTheSnapshotWithoutRequiringGit() {
             assertThat(provider.capture(request(sampleMetadata()), Set.of(CORE)).files())
                     .containsKey("context/metadata.json");
+            verifyNoInteractions(deliveredCommentLookup);
         }
 
         @Test
@@ -234,6 +253,13 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     .files()
                     .get("context/metadata.json"));
 
+            assertThat(metadataJson.path("subject_role").asString()).isEqualTo("AUTHOR");
+            var reviewerMetadata = sampleMetadata();
+            reviewerMetadata.put("subject_role", "REVIEWER");
+            JsonNode reviewerCore = objectMapper.readTree(provider.capture(request(reviewerMetadata), Set.of(CORE))
+                    .files()
+                    .get("context/metadata.json"));
+            assertThat(reviewerCore.path("subject_role").asString()).isEqualTo("REVIEWER");
             assertThat(metadataJson.get("state").asString()).isEqualTo("CLOSED");
             assertThat(metadataJson.get("is_merged").asBoolean()).isTrue();
             assertThat(metadataJson.get("labels").valueStream().map(JsonNode::asString))
@@ -304,6 +330,48 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldExcludeRecordedMarkerlessInlineFeedbackWithoutDroppingOtherComments() throws Exception {
+            PullRequestReviewComment own = new PullRequestReviewComment();
+            own.setNativeId(81L);
+            own.setBody("Explain how to try the timer.");
+            PullRequestReviewComment human = new PullRequestReviewComment();
+            human.setNativeId(82L);
+            human.setBody(own.getBody());
+            PullRequestReviewComment unknownId = new PullRequestReviewComment();
+            unknownId.setBody(own.getBody());
+            when(deliveredCommentLookup.findForPullRequest(WORKSPACE_ID, 456L))
+                    .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(82L), Set.of(81L)));
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                    .thenReturn(List.of(own, human, unknownId));
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
+            JsonNode comments = objectMapper.readTree(captured.files().get("context/comments.json"));
+
+            assertThat(comments).hasSize(2);
+            assertThat(comments.get(0).path("native_id").asLong()).isEqualTo(82L);
+            assertThat(comments.get(1).path("body").asString()).isEqualTo(own.getBody());
+            assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.COMPLETE);
+        }
+
+        @Test
+        void shouldKeepCompleteEmptyCaptureWhenOnlyRecordedInlineFeedbackExists() throws Exception {
+            PullRequestReviewComment own = new PullRequestReviewComment();
+            own.setNativeId(81L);
+            own.setBody("Explain how to try the timer.");
+            when(deliveredCommentLookup.findForPullRequest(WORKSPACE_ID, 456L))
+                    .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(81L)));
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                    .thenReturn(List.of(own));
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
+
+            assertThat(objectMapper.readTree(captured.files().get("context/comments.json")))
+                    .isEmpty();
+            assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.COMPLETE);
+            assertThat(captured.contentStates()).containsEntry(COMMENTS, SourceContentState.EMPTY);
+        }
+
+        @Test
         void writesCommentsJson() throws Exception {
             PullRequestReviewComment full = new PullRequestReviewComment();
             full.setPath("src/Main.java");
@@ -354,6 +422,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             root.setLine(10);
             root.setSide(PullRequestReviewComment.Side.LEFT);
             root.setOutdated(true);
+            root.setNativeId(61L);
+            root.setCommitId("original-comment-head");
+            root.setUpdatedAt(Instant.parse("2025-06-01T12:30:00Z"));
             root.setBody("This branch was removed on purpose?");
             root.setCreatedAt(Instant.parse("2025-06-01T12:00:00Z"));
             PullRequestReviewComment reply = new PullRequestReviewComment();
@@ -377,8 +448,21 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             JsonNode first = comments.get(0);
             assertThat(first.propertyNames())
                     .containsExactlyInAnyOrder(
-                            "id", "thread", "path", "line", "side", "outdated", "body", "created_at");
+                            "id",
+                            "thread",
+                            "path",
+                            "line",
+                            "side",
+                            "outdated",
+                            "native_id",
+                            "commit_id",
+                            "body",
+                            "created_at",
+                            "updated_at");
             assertThat(first.get("id").asLong()).isEqualTo(1L);
+            assertThat(first.path("native_id").asLong()).isEqualTo(61L);
+            assertThat(first.path("commit_id").asString()).isEqualTo("original-comment-head");
+            assertThat(first.path("updated_at").asString()).isEqualTo("2025-06-01T12:30:00Z");
             assertThat(first.get("thread").asLong()).isEqualTo(70L);
             assertThat(first.get("side").asString()).isEqualTo("LEFT");
             assertThat(first.get("outdated").asBoolean()).isTrue();
@@ -387,6 +471,44 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(second.get("thread").asLong()).isEqualTo(70L);
             assertThat(second.has("side")).isFalse();
             assertThat(second.has("outdated")).isFalse();
+        }
+
+        @ParameterizedTest
+        @CsvSource(
+                value = {
+                    "GITHUB, original-head, current-head, original-head",
+                    "GITHUB, NULL, current-head, current-head",
+                    "GITHUB, '', current-head, current-head",
+                    "GITHUB, NULL, NULL, NULL",
+                    "GITHUB, '', '', NULL",
+                    "GITHUB, '   ', '   ', NULL",
+                    "GITLAB, comparison-base, reviewed-head, reviewed-head",
+                    "GITLAB, comparison-base, NULL, NULL"
+                },
+                nullValues = "NULL")
+        void shouldKeepTheProvidersActualCommentRevision(
+                IdentityProviderType type,
+                @Nullable String original,
+                @Nullable String current,
+                @Nullable String expected)
+                throws Exception {
+            var comment = new PullRequestReviewComment();
+            comment.setProvider(new IdentityProvider(type, "https://scm.example"));
+            comment.setOriginalCommitId(original);
+            comment.setCommitId(current);
+            comment.setPath("src/Main.java");
+            comment.setBody("Use the shared helper here.");
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                    .thenReturn(List.of(comment));
+
+            JsonNode captured = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(COMMENTS))
+                    .files()
+                    .get("context/comments.json"));
+            if (expected == null) {
+                assertThat(captured.get(0).has("commit_id")).isFalse();
+            } else {
+                assertThat(captured.get(0).path("commit_id").asString()).isEqualTo(expected);
+            }
         }
 
         @Test

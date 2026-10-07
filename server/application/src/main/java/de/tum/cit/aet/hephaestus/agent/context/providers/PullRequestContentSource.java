@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
@@ -82,6 +83,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     }
 
     private final ObjectMapper objectMapper;
+    private final DeliveredPullRequestCommentLookup deliveredCommentLookup;
     private final GitRepositoryManager gitRepositoryManager;
     private final PullRequestRepository pullRequestRepository;
     private final PullRequestReviewCommentRepository reviewCommentRepository;
@@ -92,12 +94,14 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             GitRepositoryManager gitRepositoryManager,
             PullRequestRepository pullRequestRepository,
             PullRequestReviewCommentRepository reviewCommentRepository,
-            ReviewRepositoryPreparer repositoryPreparer) {
+            ReviewRepositoryPreparer repositoryPreparer,
+            DeliveredPullRequestCommentLookup deliveredCommentLookup) {
         this.objectMapper = objectMapper;
         this.gitRepositoryManager = gitRepositoryManager;
         this.pullRequestRepository = pullRequestRepository;
         this.reviewCommentRepository = reviewCommentRepository;
         this.repositoryPreparer = repositoryPreparer;
+        this.deliveredCommentLookup = deliveredCommentLookup;
     }
 
     @Override
@@ -154,7 +158,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             }
         }
         if (selectedKinds.contains(COMMENTS)) {
-            CommentCapture comments = loadComments(pullRequestId);
+            CommentCapture comments = loadComments(job.getWorkspace().getId(), pullRequestId);
             storeComments(files, comments.comments());
             completeness.put(COMMENTS, comments.complete() ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL);
             contentStates.put(
@@ -234,6 +238,9 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         result.put("source_branch", requireText(jobMetadata, "source_branch"));
         result.put("target_branch", requireText(jobMetadata, "target_branch"));
         result.put("commit_sha", requireText(jobMetadata, "commit_sha"));
+        result.put(
+                "subject_role",
+                "REVIEWER".equals(MetaJson.optString(jobMetadata, "subject_role")) ? "REVIEWER" : "AUTHOR");
 
         result.put("title", pullRequest.getTitle());
         result.put("body", pullRequest.getBody());
@@ -252,6 +259,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         result.put("changed_files", pullRequest.getChangedFiles());
         if (pullRequest.getAuthor() != null) {
             result.put("author", pullRequest.getAuthor().getLogin());
+            result.put("author_id", pullRequest.getAuthor().getNativeId());
             if (pullRequest.getAuthor().getType() == User.Type.BOT) {
                 result.put("author_bot", true);
             }
@@ -289,9 +297,13 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         if (instant != null) node.put(field, instant.toString());
     }
 
-    private CommentCapture loadComments(long pullRequestId) {
+    private CommentCapture loadComments(long workspaceId, long pullRequestId) {
+        Set<Long> postedComments = deliveredCommentLookup
+                .findForPullRequest(workspaceId, pullRequestId)
+                .inline();
         var comments = new ArrayList<>(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
                 pullRequestId, WorkspaceScmProjection.HEPHAESTUS_MARKER, Pageable.unpaged()));
+        comments.removeIf(comment -> comment.getNativeId() != null && postedComments.contains(comment.getNativeId()));
         boolean complete = true;
         comments.sort(Comparator.comparing(
                 PullRequestReviewComment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
@@ -326,12 +338,21 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             if (Boolean.TRUE.equals(comment.getOutdated())) {
                 commentNode.put("outdated", true);
             }
+            commentNode.put("native_id", comment.getNativeId());
+            String reviewedRevision = comment.reviewedRevision();
+            if (reviewedRevision != null) {
+                commentNode.put("commit_id", reviewedRevision);
+            }
             commentNode.put("body", comment.getBody());
             if (comment.getCreatedAt() != null) {
                 commentNode.put("created_at", comment.getCreatedAt().toString());
             }
+            if (comment.getUpdatedAt() != null) {
+                commentNode.put("updated_at", comment.getUpdatedAt().toString());
+            }
             if (comment.getAuthor() != null) {
                 commentNode.put("author", comment.getAuthor().getLogin());
+                commentNode.put("author_id", comment.getAuthor().getNativeId());
                 if (comment.getAuthor().getType() == User.Type.BOT) {
                     commentNode.put("bot", true);
                 }

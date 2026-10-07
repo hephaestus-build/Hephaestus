@@ -41,7 +41,9 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
 
     @Modifying
     @Transactional
-    @Query("DELETE FROM CommitFileChange f WHERE f.commit.repository.id = :repositoryId AND f.commit.sha = :sha")
+    // Hibernate renders joined deletes as correlated EXISTS; resolving the commit once permits the commit_id index.
+    @Query("DELETE FROM CommitFileChange f WHERE f.commit.id = "
+            + "(SELECT c.id FROM Commit c WHERE c.repository.id = :repositoryId AND c.sha = :sha)")
     void deleteFileChanges(@Param("repositoryId") Long repositoryId, @Param("sha") String sha);
 
     @Query(

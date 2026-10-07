@@ -53,6 +53,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -62,6 +64,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -107,6 +110,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private TeamRepository teamRepository;
+
+    @Autowired
+    private ThreadPoolTaskScheduler taskScheduler;
 
     @Autowired
     private WorkspaceTeamRepositorySettingsRepository settingsRepository;
@@ -504,12 +510,21 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @Test
     @WithUser
     @DisplayName("the overview and the tiles run as many statements for six more developers as without them")
-    void shouldRunTheSameStatementsWhenTheWorkspaceCountsMoreDevelopers() {
+    void shouldRunTheSameStatementsWhenTheWorkspaceCountsMoreDevelopers() throws InterruptedException {
         Statistics statistics =
                 entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         boolean wasEnabled = statistics.isStatisticsEnabled();
-        statistics.setStatisticsEnabled(true);
+        // The statement count spans the whole session factory, so a scheduled task would be counted with the reads.
+        boolean wasRunning = taskScheduler.isRunning();
         try {
+            if (wasRunning) {
+                var paused = new CountDownLatch(1);
+                taskScheduler.stop(paused::countDown);
+                assertThat(paused.await(10, TimeUnit.SECONDS))
+                        .as("scheduled tasks already running finish")
+                        .isTrue();
+            }
+            statistics.setStatisticsEnabled(true);
             List<Long> before = statementsPerRead(statistics);
             for (int index = 0; index < 6; index++) {
                 User developer = member("across-more-" + index);
@@ -520,6 +535,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
             assertThat(statementsPerRead(statistics)).isEqualTo(before);
         } finally {
             statistics.setStatisticsEnabled(wasEnabled);
+            if (wasRunning) {
+                taskScheduler.start();
+            }
         }
     }
 

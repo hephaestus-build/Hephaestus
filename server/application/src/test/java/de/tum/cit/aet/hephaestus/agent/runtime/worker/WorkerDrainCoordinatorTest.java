@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
@@ -31,8 +32,9 @@ import org.springframework.context.ApplicationEventPublisher;
 class WorkerDrainCoordinatorTest extends BaseUnitTest {
 
     @Test
-    void drainsAfterWebServerShutdown() {
-        assertThat(WorkerDrainCoordinator.PHASE).isLessThan(WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE);
+    void shouldDrainBeforeWebServerGracefulShutdown() {
+        // Spring stops higher phases first.
+        assertThat(WorkerDrainCoordinator.PHASE).isGreaterThan(WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE);
     }
 
     @Test
@@ -81,6 +83,32 @@ class WorkerDrainCoordinatorTest extends BaseUnitTest {
         coordinator.stop();
 
         verify(executor).cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL);
+    }
+
+    @Test
+    void shouldCompleteShutdownWithoutRepeatingCleanupWhenContainerStopsAreIncomplete() {
+        WorkerProperties props = propsWithDrain(Duration.ZERO);
+        AgentJobExecutor executor = mock(AgentJobExecutor.class);
+        when(executor.cancelInFlight(AgentJobCancellationReason.DRAIN_IMMEDIATE))
+                .thenReturn(false);
+        WorkerDrainCoordinator coordinator = new WorkerDrainCoordinator(
+                mock(WorkerControlClient.class),
+                new WorkerCapacityState(props),
+                props,
+                Optional.of(executor),
+                Optional.empty(),
+                mock(ApplicationEventPublisher.class),
+                new SimpleMeterRegistry());
+        coordinator.start();
+        AtomicInteger completed = new AtomicInteger();
+
+        coordinator.stop(completed::incrementAndGet);
+        coordinator.stop(completed::incrementAndGet);
+
+        assertThat(completed.get()).isEqualTo(2);
+        assertThat(coordinator.isRunning()).isFalse();
+        assertThat(coordinator.isDraining()).isTrue();
+        verify(executor, times(1)).cancelInFlight(AgentJobCancellationReason.DRAIN_IMMEDIATE);
     }
 
     @Test

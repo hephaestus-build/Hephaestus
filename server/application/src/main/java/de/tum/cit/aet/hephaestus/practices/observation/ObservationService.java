@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository.PostedCommentUrl;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
@@ -43,6 +45,7 @@ public class ObservationService {
 
     private final ObservationRepository observationRepository;
     private final FeedbackObservationRepository feedbackObservationRepository;
+    private final FeedbackPlacementRepository feedbackPlacementRepository;
     private final UserRepository userRepository;
     private final ReviewRunLookup reviewRunLookup;
     private final ReviewRunNarrativeLookup reviewRunNarrativeLookup;
@@ -156,8 +159,8 @@ public class ObservationService {
      * The detail read model of each observation, in the given order, from one batched query per collaborator:
      * the newest piece of feedback that said something about each observation to this developer (ADR 0021: advice
      * lives on the delivered {@code Feedback}, not the immutable observation), which carries both the text the
-     * developer reads and — when it delivered — the handle they answer it with, so the two can never come from
-     * different pieces of feedback. A caller hands in observations it has already loaded and gated, inside the
+     * developer reads and — when it delivered — the handle they answer it with and the links to the comments that
+     * carry it on the work, so none of them can come from a different piece of feedback. A caller hands in observations it has already loaded and gated, inside the
      * transaction their lazy associations are read in: evidence is included only for the ids in
      * {@code evidencePermitted}, which is {@link EvidenceAuthorization}'s answer for the delivery purpose, and the
      * artifact link comes from the run target of the observation's job, absent when the target is no longer
@@ -179,6 +182,7 @@ public class ObservationService {
         List<UUID> observationIds =
                 observations.stream().map(Observation::getId).toList();
         Map<UUID, ObservationFeedback> feedback = feedbackByObservation(workspaceId, developerId, observationIds);
+        Map<UUID, List<String>> commentUrls = commentUrlsByFeedback(workspaceId, developerId, feedback.values());
         Map<UUID, ObservationInvalidation> invalidations =
                 invalidationRepository.findActiveFor(workspaceId, observationIds).stream()
                         .collect(Collectors.toMap(ObservationInvalidation::getObservationId, Function.identity()));
@@ -186,9 +190,12 @@ public class ObservationService {
                 .map(observation -> {
                     ReviewRunLookup.Target target = targets.get(observation.getAgentJobId());
                     ReviewRunNarrative narrative = narratives.get(observation.getAgentJobId());
+                    ObservationFeedback selected = feedback.get(observation.getId());
+                    UUID deliveredId = selected == null ? null : selected.getFeedbackId();
                     return ObservationDetailDTO.from(
                             observation,
-                            feedback.get(observation.getId()),
+                            selected,
+                            deliveredId == null ? null : commentUrls.get(deliveredId),
                             narrative == null ? null : narrative.nextStepFor(observation.getId()),
                             target == null ? null : target.url(),
                             evidencePermitted.contains(observation.getId()),
@@ -203,5 +210,26 @@ public class ObservationService {
                 .findLatestFeedbackByObservationIds(workspaceId, recipientUserId, observationIds, FEEDBACK_CHANNELS)
                 .stream()
                 .collect(Collectors.toMap(ObservationFeedback::getObservationId, Function.identity()));
+    }
+
+    /**
+     * The comment links of the feedback already selected per observation, looked up only for the delivered ones:
+     * a link is never borrowed from other feedback bound to the same observation.
+     */
+    private Map<UUID, List<String>> commentUrlsByFeedback(
+            Long workspaceId, Long recipientUserId, Collection<ObservationFeedback> selected) {
+        Set<UUID> deliveredIds = selected.stream()
+                .map(ObservationFeedback::getFeedbackId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (deliveredIds.isEmpty()) {
+            return Map.of();
+        }
+        return feedbackPlacementRepository.findDeliveredCommentUrls(workspaceId, recipientUserId, deliveredIds).stream()
+                .collect(Collectors.groupingBy(
+                        PostedCommentUrl::getFeedbackId,
+                        Collectors.collectingAndThen(
+                                Collectors.mapping(PostedCommentUrl::getUrl, Collectors.toList()),
+                                urls -> urls.stream().distinct().toList())));
     }
 }

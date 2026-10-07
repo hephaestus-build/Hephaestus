@@ -27,6 +27,7 @@ import {
 	type ReviewRunFeedState,
 } from "@/components/profile/review-runs";
 import { ReviewRunFeed, ReviewRunFeedSkeleton } from "@/components/profile/ReviewRunFeed";
+import { Button } from "@/components/ui/button";
 import { DrawerBody } from "@/components/ui/drawer";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
@@ -217,10 +218,19 @@ export function PracticeDetailLevel({
 					<Section
 						size="lg"
 						title="Feedback"
-						description="The feedback written about this practice: the open card, then the ones that resolved, newest first."
+						description="Feedback about patterns in your work: the open card, then the ones that resolved, newest first."
 					>
 						{feedbackCount === 0 ? (
-							<FeedbackEmpty />
+							<FeedbackEmpty
+								description="Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on a single piece of work stays there. Open its observation to find recorded comment links."
+								action={
+									onTabChange && (
+										<Button variant="outline" size="sm" onClick={() => onTabChange("observations")}>
+											Show observations
+										</Button>
+									)
+								}
+							/>
 						) : (
 							<div className="flex flex-col gap-6">
 								{feedback.open && (

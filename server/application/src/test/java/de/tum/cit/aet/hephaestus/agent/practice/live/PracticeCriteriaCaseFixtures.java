@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,12 +29,15 @@ final class PracticeCriteriaCaseFixtures {
 
     static final String COMMITS = "context/commits.json";
 
-    /** The source each staged context file belongs to; any other context file is the work's core record. */
+    static final String COMMENTS = "context/comments.json";
+
+    /**
+     * The source each staged context file belongs to; any other context file is the work's core record, and
+     * {@link #COMMENTS} belongs to the work's own comments source.
+     */
     private static final Map<String, String> CONTEXT_KINDS = Map.of(
             "context/change.json",
             "scm.pull-request.diff",
-            "context/comments.json",
-            "scm.pull-request.comments",
             COMMITS,
             "scm.pull-request.core",
             "context/review_threads.json",
@@ -69,8 +73,11 @@ final class PracticeCriteriaCaseFixtures {
         String base = fixtureCommand(workspace, "git", "-C", repo.toString(), "rev-parse", "HEAD")
                 .trim();
         var manifest = MAPPER.createObjectNode();
-        String coreKind =
-                scenario.path("workType").asString().equals("issue") ? "scm.issue.core" : "scm.pull-request.core";
+        boolean issue = scenario.path("workType").asString().equals("issue");
+        String coreKind = issue ? "scm.issue.core" : "scm.pull-request.core";
+        String commentsKind = issue ? "scm.issue.comments" : "scm.pull-request.comments";
+        Map<String, String> contextKinds = new HashMap<>(CONTEXT_KINDS);
+        contextKinds.put(COMMENTS, commentsKind);
         // One home per artifact: a file the scenario supplies is staged as supplied, and a default fills only
         // what it leaves out. A path the scenario omits is left uncaptured rather than generated.
         Map<String, String> artifacts = new LinkedHashMap<>();
@@ -85,10 +92,10 @@ final class PracticeCriteriaCaseFixtures {
             Files.createDirectories(file.getParent());
             Files.writeString(file, entry.getValue().asString());
             artifacts.put(
-                    relative, repositoryFile ? "scm.repository.tree" : CONTEXT_KINDS.getOrDefault(relative, coreKind));
+                    relative, repositoryFile ? "scm.repository.tree" : contextKinds.getOrDefault(relative, coreKind));
         }
-        if (!scenario.path("files").has("context/comments.json")) {
-            Files.writeString(workspace.resolve("context/comments.json"), "[]\n");
+        if (!scenario.path("files").has(COMMENTS)) {
+            Files.writeString(workspace.resolve(COMMENTS), "[]\n");
         }
         fixtureCommand(workspace, "git", "-C", repo.toString(), "add", "--all");
         fixtureCommand(workspace, "git", "-C", repo.toString(), "commit", "--allow-empty", "-m", "Add captured files");
@@ -176,13 +183,13 @@ final class PracticeCriteriaCaseFixtures {
         contents.put(
                 "scm.pull-request.diff",
                 Files.size(workspace.resolve(CHANGE_VIEW_PREFIX + "diff.patch")) == 0 ? "EMPTY" : "NON_EMPTY");
-        contents.put("scm.pull-request.comments", content(workspace.resolve("context/comments.json")));
+        contents.put(commentsKind, content(workspace.resolve(COMMENTS)));
         contents.put("scm.repository.tree", files.isEmpty() ? "EMPTY" : "NON_EMPTY");
         for (String file : List.of("diff.patch", "files.json", "description.authored.md")) {
             artifacts.putIfAbsent(CHANGE_VIEW_PREFIX + file, "scm.pull-request.diff");
         }
-        for (String file : List.of("context/description.md", "context/metadata.json", "context/comments.json")) {
-            artifacts.putIfAbsent(file, CONTEXT_KINDS.getOrDefault(file, coreKind));
+        for (String file : List.of("context/description.md", "context/metadata.json", COMMENTS)) {
+            artifacts.putIfAbsent(file, contextKinds.getOrDefault(file, coreKind));
         }
         artifacts.putIfAbsent("context/change.json", "scm.pull-request.diff");
         if (commitsCaptured) {

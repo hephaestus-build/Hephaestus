@@ -505,9 +505,24 @@ Server admission refuses a package with repeated practices before recording obse
 After admission, recorded observations stay immutable. Correction uses the existing [invalidation flow](./practice-review-glossary.mdx#invalidated-observations).
 
 Measurement and composition are separate phases.
+Measurement keeps the catalog group turns as scheduling and work-budget scopes.
+Each scope gets one work budget for its practice count, shared across its sessions.
+Each practice in a scope gets a fresh session in the same sandbox, one after another.
+That session receives the task, the brief and the complete criteria and leads of its practice only.
+
+It can record and revise only its practice.
+An item for another practice is refused before any draft changes.
+
+Drafts and coverage stay on disk across sessions, and admission receives every recorded draft once.
+Practices that the budget, the safety line, a stall or an oversized input leave without a result stay not reached.
+The finish scope retries remaining unblocked practices one by one under one shared budget.
+Reported native assistant usage events are accumulated once across sessions.
+The model proxy remains authoritative for request accounting, including calls such as compaction that may not emit those events.
+
 Public composition starts a fresh session.
-Private composition may resume the measurement session.
-An authenticated callback admits observations between them.
+Private composition starts its own fresh session after measurement stops.
+It holds no measuring transcript.
+An authenticated callback admits observations before either composition session.
 Composition can reference only the persisted projection.
 
 An observation states a claim that can be checked against the captured work.
@@ -555,16 +570,54 @@ Reasons are source state, an unrecorded file, empty, too large, unreadable, or n
 The record supplies captured intent, identity and state for orientation.
 Only admitted observations authorize assessments and concerns.
 
-Then the session receives eligible current-work observations, prior public feedback on the same work,
-and each owning practice revision's name, purpose and known limitations.
+Then the session receives eligible current-work observations, prior public feedback and captured discussion on the same work.
+It also receives each owning practice revision's name, purpose and known limitations.
+Delivered feedback retains its identity, reviewed revision and original observation support.
+Captured discussion retains native identity, authorship, timestamps and the reviewed revision where the provider records it.
+Unavailable or incomplete discussion is qualified explicitly.
+An equal code revision does not establish unchanged discussion or intent.
+
+Prior Hephaestus feedback uses the same per-entry and total bounds.
+Omitted entries are counted by reason and cannot be prior-advice witnesses.
+
 It receives scope bounds for undecided and unreached practices, which support no claims.
 An observation that cites or consulted a private or unknown source stays out of this session entirely.
 Removing a private citation would not remove the information from the observation's prose.
-The public session has only the recording tool.
+The public session has only selection and recording tools.
 It has no file, search or execution tools and loads no private context.
 
-The private session retains authorized artifact context and receives bounded observation history,
-feedback history and unread prepared feedback.
+Within that session, `select_feedback` chooses observation IDs to discuss and exact withholding decisions.
+Every eligible `NOT_MET` observation must be selected or withheld.
+Selecting `MET` observations is optional.
+Repetition reasons must name eligible prior statements from the supplied history.
+This check establishes a located, dated statement by another author or usable delivered feedback, not semantic equivalence.
+The model still judges whether the advice repeats, whether circumstances changed and whether it adds value.
+
+A refused selection leaves the last accepted selection intact.
+An accepted replacement revises it.
+
+`report_review` proposes the complete summary and line notes against the accepted selection.
+It must account for exactly the selected observations and repeat the accepted withholding decisions.
+Invalid proposals receive correction reasons within the existing turn budget.
+An accepted proposal ends the composition, including an intentionally quiet review.
+Selection remains transient.
+The stored review and independent server admission retain their existing contract.
+
+The private session receives the task, the brief, the admitted observations with their qualifications,
+bounded observation history, feedback history and unread prepared feedback.
+Its first turn carries the complete staged criteria of each practice with a `NOT_MET` observation before the admitted observations.
+It carries no measuring leads.
+A criterion too large to show is named with its file.
+
+Current `MET` and `NOT_MET` observations retain their rationale, evidence qualifications and citation coordinates.
+Full quoted evidence remains in the admission file.
+
+Delivered and unread prepared feedback retain their staged metadata.
+Permitted bodies stay in the unchanged history files at named locations.
+The accepted public draft also carries its support and placement metadata with a locator to its persisted body, never the status of prior communication.
+The session reads these files when earlier wording matters.
+
+It reads with the evidence tools and records only with `report_feedback`.
 A repeated pattern requires evidence from each work item.
 Absence from history proves no absence of behavior.
 Shared practice or location keys alone establish neither repetition nor resolution.
@@ -575,16 +628,27 @@ The exact staged files belong to the [agent workspace ABI](agent/workspace-abi.m
 
 The [practice feedback language](./practice-feedback-language.md) defines where channels land.
 The [practice review glossary](./practice-review-glossary.mdx#the-three-channels-are-three-levels) defines their levels.
-Composition must not render one advice string three ways:
+Each channel is understandable on its own.
+A recipient need not read the others.
+The same supported action may appear across channels when it serves each channel's purpose.
+The shared writing guide and each channel's prompt define those purposes:
 
-- `IN_CONTEXT` is public task-level feedback. One `report_review` call replaces the whole proposed review:
+- `IN_CONTEXT` is public task-level feedback. `report_review` submits the whole final review:
   an optional complete summary, complete line notes, and exact observation-scoped withholding decisions.
   Each body names every admitted decided observation it speaks about in `basedOn`.
   The model writes the prose.
   The server never joins fragments or publishes raw observation summaries.
+  Summary and line notes coordinate without repeating the full argument in both places.
+  Independent actions use short blocks, bullets or headings when helpful, without a fixed comment template.
 - `IN_APP` is private process-level feedback about a pattern in the recipient's work.
 - `IN_CHAT` prepares `situation`, `capability`, `evidenceSummary` and `inConversationSignal` as private notes,
   not dialogue. A later conversational turn may adapt, defer or discard them.
+
+A work-state refusal stops `IN_CONTEXT` delivery.
+Closed work, changed work, and merged work that the workspace setting excludes get no note on the work.
+`IN_APP` and `IN_CHAT` retain their own evidence and visibility gates.
+Preparation alone does not certify that a unit may be shown.
+Missing work and a recipient who is not the subject of the work refuse every channel.
 
 An issue supports only a summary.
 A pull or merge request may carry a summary, line notes, or line notes without a summary.
@@ -623,6 +687,21 @@ A body cannot both speak about and withhold the same observation.
 ### Missing composition and recovery
 
 A composition failure does not invalidate admitted observations.
+The runner records at most one incomplete status per public or private composition phase in `feedback.json`.
+It records a finite stop reason after settlement and, where applicable, the existing correction attempt, when a required decision remains.
+A final accepted review, including a valid empty review, pays the public obligation.
+A private decision is paid by the existing practice-level unit, folding or withholding contract, not by one unit per channel.
+Disabled channels and inapplicable composition do not create obligations.
+
+Valid partial feedback remains eligible for normal preparation and delivery.
+The review can complete with admitted observations while its delivery status stays `FAILED` for incomplete composition.
+Malformed present status also fails delivery processing.
+Absent legacy metadata remains unknown.
+
+For known incomplete or unreadable composition, a delivery retry requires an actual failed persisted package.
+Delivery recovery never repeats measurement or composition.
+Recovery preserves the incomplete status after posting or finding an existing partial package.
+
 Each eligible public `NOT_MET` observation must be named by a body or an explicit withholding decision.
 An empty review is intentional silence only when it leaves no such observation undecided.
 A required review that is missing or breaks its contract is a delivery failure, never silence.

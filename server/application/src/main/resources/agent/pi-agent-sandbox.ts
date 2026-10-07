@@ -35,5 +35,8 @@ export const PUBLIC_REVIEW_RESOURCE_LOADER_OPTIONS = {
 	noPromptTemplates: true,
 };
 
-/** Public composition has no tool capable of reading or executing against the measurement workspace. */
-export const PUBLIC_REVIEW_TOOLS = ["report_review"];
+/**
+ * Public composition has no tool capable of reading or executing against the measurement workspace: it chooses what
+ * to say and stores the review, both from what its turn holds.
+ */
+export const PUBLIC_REVIEW_TOOLS = ["select_feedback", "report_review"];

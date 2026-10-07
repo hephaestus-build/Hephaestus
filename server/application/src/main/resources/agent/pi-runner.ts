@@ -48,7 +48,7 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
-import { buildBrief, buildSameWorkContext } from "./pi-review-brief.ts";
+import { buildBrief, buildPublicReviewHistory, buildSameWorkContext } from "./pi-review-brief.ts";
 import {
 	type Work,
 	deriveWindows,
@@ -69,14 +69,22 @@ import {
 	type ReviewPractice,
 	REVIEW_CONTRACT_VERSION,
 	REVIEW_TOOL_DESCRIPTION,
+	type ReviewSelection,
+	type ReviewedObservation,
+	SELECTION_TOOL_DESCRIPTION,
 	WITHHOLD_REASONS,
 	buildReviewTurn,
 	decidedByReview,
 	notReachedNote,
+	priorAdviceWitnesses,
 	priorPublicFeedback,
 	publicObservations,
 	readReview,
+	readSelection,
 	reviewToolParameters,
+	selectionMismatch,
+	selectionText,
+	selectionToolParameters,
 	uncertainOutcomes,
 	undeliverableUnits,
 	validateFeedbackEvidence,
@@ -95,8 +103,9 @@ import { stopSession } from "./pi-session-lifecycle.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 import { hasText, isBlank } from "./pi-text.ts";
 import { prepareObservationArguments } from "./pi-tool-arguments.ts";
+import { prepareTurnText } from "./pi-turn-context.ts";
 
-// One session measures and composes. Persisted work/ notes survive context compaction.
+// Staged work notes survive isolated sessions and context compaction.
 
 function parseJson(text: string): unknown {
 	return JSON.parse(text);
@@ -533,6 +542,8 @@ const usageTotals: UsageTotals = {
 	totalCalls: 0,
 };
 interface TurnTrace {
+	modelError: boolean;
+	runtimeError: boolean;
 	label: string;
 	durationMs: number;
 	calls: number;
@@ -858,6 +869,10 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 			`unknown practice '${observation.practiceSlug}'; this turn's practices are ${currentTurnSlugs.join(", ")}`,
 		);
 	}
+	const fenced = outsideActivePractice(observation.practiceSlug);
+	if (fenced !== null) {
+		throw new Error(fenced);
+	}
 	// The manifest says which source staged an artifact; a citation that names the artifact under
 	// another source kind is read as the manifest reads it, and the correction is echoed back.
 	for (const citation of observation.evidence.citations) {
@@ -1122,10 +1137,14 @@ async function refusal<T>(toolCallId: string, text: string): Promise<AgentToolRe
 	throw new Error(text);
 }
 
-/** The tools a turn exists to call: what it records with them is what it owes. */
+/**
+ * The tools a turn exists to call: what it records with them is what it owes. select_feedback stores nothing, but its
+ * answer is a function of its arguments like theirs, so it shares their repeat and attempt bounds.
+ */
 const RECORDING_TOOLS: ReadonlySet<string> = new Set([
 	"report_observation",
 	"report_feedback",
+	"select_feedback",
 	"report_review",
 ]);
 
@@ -1255,10 +1274,11 @@ function noteCutOff(turn: TurnTrace, cutOff: boolean): void {
 		return;
 	}
 	turn.cutOff += 1;
-	if (turn.cutOff >= CUT_OFF_ABORT) {
+	sessionGuards.cutOff += 1;
+	if (sessionGuards.cutOff >= CUT_OFF_ABORT) {
 		stopTurn(
 			"loop",
-			`${turn.cutOff} calls in this turn ran into the ${outputLimit}-token output limit — aborting this turn`,
+			`${sessionGuards.cutOff} calls in this session ran into the ${outputLimit}-token output limit — aborting this turn`,
 		);
 		return;
 	}
@@ -1313,6 +1333,12 @@ const IDENTICAL_REFUSAL_ABORT = 2;
 
 function record(raw: unknown): Recorded {
 	const slug = slugOf(raw);
+	// Answered before anything is counted: an item for a known practice outside the session's own neither
+	// records, revises, nor spends that practice's refusals.
+	const fenced = admittedPractices.has(slug) ? outsideActivePractice(slug) : null;
+	if (fenced !== null) {
+		return { kind: "refused", slug, reason: fenced };
+	}
 	// An item with no slug is answered with what it lacks, never with the bound of a practice named
 	// "unknown": the refusal it is counted under is a bookkeeping name, not one the session sent.
 	if (slug !== "unknown" && blockedPractices.has(slug)) {
@@ -1403,12 +1429,15 @@ function persistRecordedNotes(): void {
 	}
 }
 
-/** One line per current draft, for later turns and the review's notes. */
-function recordedSoFar(): string {
-	if (reviewState.observations.length === 0) {
+/** One line per current draft, of the given practices or of all, for a session's opening and the review's notes. */
+function recordedSoFar(only?: readonly string[]): string {
+	const drafts = reviewState.observations.filter(
+		(observation) => only === undefined || only.includes(observation.practiceSlug),
+	);
+	if (drafts.length === 0) {
 		return "Nothing recorded yet.";
 	}
-	return reviewState.observations
+	return drafts
 		.map((observation) => {
 			const verdict = observation.outcome;
 			const cited = [...new Set(observation.evidence.citations.map((citation) => citation.path))];
@@ -1441,13 +1470,26 @@ function logRefusal(slug: string, reason: string): void {
 	}
 }
 
-/** The practices the current turn asked about; a recorded result for one of them is what the turn owes. */
+/** The practices the current session asked about; a recorded result for one of them is what it owes. */
 let currentTurnSlugs: readonly string[] = [];
 
-/** The practices of the turn in flight with no recorded result that may still get one. */
-function owedPractices(): string[] {
+/**
+ * The one practice the measuring session in flight assesses, or null outside measurement. Each practice gets
+ * a session of its own, and an item for another practice is refused before it can record or revise anything.
+ */
+let activePractice: string | null = null;
+
+/** Why an item for this practice falls outside the session's own, or null when it does not. */
+function outsideActivePractice(slug: string): string | null {
+	return activePractice === null || slug === activePractice
+		? null
+		: `this session assesses only '${activePractice}'; '${slug}' is recorded and revised only in its own session`;
+}
+
+/** The given practices, by default the session's, with no recorded result that may still get one. */
+function owedPractices(slugs: readonly string[] = currentTurnSlugs): string[] {
 	const observed = new Set(reviewState.observations.map((item) => item.practiceSlug));
-	return currentTurnSlugs.filter((slug) => !observed.has(slug) && !blockedPractices.has(slug));
+	return slugs.filter((slug) => !observed.has(slug) && !blockedPractices.has(slug));
 }
 
 /** JSON Schema keywords that refuse; what they say is applied per observation instead. */
@@ -1518,8 +1560,8 @@ function buildReportObservationTool() {
 		exposure: "model-only",
 		label: "Report Observations",
 		description:
-			"Record up to three evidenced practice observations per call in local review state, for server admission " +
-			"after the measuring turns. Record one draft per practice. Its draft reference is the practice slug. " +
+			"Record one complete evidenced observation for this session’s active practice in local review state, " +
+			"for server admission after measuring. Its draft reference is the practice slug. " +
 			"Correct it explicitly with revises and a complete observation. Send at most one item per practice in a call; repeated practices refuse the whole call.",
 		parameters: {
 			type: "object",
@@ -1560,7 +1602,9 @@ function buildReportObservationTool() {
 			const repeated = slugs.filter((slug, index) => slug !== "" && slugs.indexOf(slug) !== index);
 			if (repeated.length > 0) {
 				for (const slug of new Set(repeated)) {
-					countRefusal(slug);
+					if (slug === activePractice) {
+						countRefusal(slug);
+					}
 					logRefusal(slug, "more than one item for this practice in the call");
 				}
 				return refusal(
@@ -1579,6 +1623,7 @@ function buildReportObservationTool() {
 			}
 			if (currentTurn) {
 				currentTurn.stored += stored.length;
+				sessionGuards.stored += stored.length;
 			}
 			if (stored.length > 0) {
 				persistReviewState();
@@ -1684,9 +1729,9 @@ const COMPOSITION_NUDGE =
 
 /** What the composer of the review on the work is told near its budget's end. */
 const REVIEW_NUDGE =
-	`Everything this review may rest on is in this turn's prompt. Store the review now with one ` +
-	`report_review call: the complete summary, any line notes, and every NOT_MET observation you decided ` +
-	`not to raise under withheld. No prose outside the call.`;
+	`Everything this review may rest on is in this turn's prompt. Without an accepted selection, send one ` +
+	`select_feedback call now; with one, store the final review with one report_review call: the complete summary, ` +
+	`any line notes, and the selection's withholding decisions. No prose outside the calls.`;
 
 /** Calls a composition may make before its first recording call; at this one it is nudged to persist. */
 const COMPOSITION_EXPLORATION_NUDGE = 12;
@@ -1696,10 +1741,7 @@ const PERSIST_DISCIPLINE =
 	`and no next step to write. Use tools only from this point onward; no planning prose.`;
 
 /** What a turn is told once its remaining work only pays for recording what it owes. */
-const RECORD_NUDGE =
-	`This turn has the work left to write its observations and no more. Stop exploring. ` +
-	`Record what the inspected evidence supports for the listed practices. Send up to three observations ` +
-	`per report_observation call. ${PERSIST_DISCIPLINE}`;
+const RECORD_NUDGE = `This turn has the work left to write its observations and no more. Stop exploring. Record what the inspected evidence supports for this session's practice with report_observation. ${PERSIST_DISCIPLINE}`;
 
 /** Tells the server to retry a review whose admission endpoint was unreachable. */
 const SERVER_UNREACHABLE_EXIT = 75;
@@ -1763,6 +1805,8 @@ const COMPOSITION_REQUEST_PATH = INPUT_PATHS.compositionRequest;
 const FEEDBACK_PATH = outputPath(OUTPUT, "feedback.json");
 const COMPOSER_PROMPT_PATH = `${CWD}/feedback-composer.md`;
 const REVIEW_COMPOSER_PROMPT_PATH = `${CWD}/review-composer.md`;
+/** The writing style both compositions share, ahead of each one's own instructions. */
+const FEEDBACK_STYLE_PATH = `${CWD}/feedback-style.md`;
 const PREPARED_FEEDBACK_PATH = INPUT_PATHS.preparedFeedback;
 const COMPOSITION_OBSERVATIONS_PATH = `${CWD}/work/composition/observations.json`;
 let compositionAdmitted = false;
@@ -1829,7 +1873,22 @@ interface LeanObservation {
 }
 
 /** What gets written to feedback.json, with the fields the reader resolves references against. */
+type CompositionPhase = "PUBLIC_REVIEW" | "PRIVATE_FEEDBACK";
+type CompositionFailureReason =
+	| "MODEL_ERROR"
+	| "RUNTIME_ERROR"
+	| "BUDGET"
+	| "STALL"
+	| "SAFETY"
+	| "LOOP"
+	| "NO_DECISION";
+interface CompositionFailure {
+	phase: CompositionPhase;
+	reason: CompositionFailureReason;
+}
+
 interface ComposedFeedback extends ComposedFeedbackEnvelope {
+	compositionFailures: CompositionFailure[];
 	contractVersion: number;
 	admissionDigest: string | null;
 	observations: LeanObservation[];
@@ -1840,6 +1899,7 @@ interface ComposedFeedback extends ComposedFeedbackEnvelope {
 
 // Echo the exact composition inputs so Java validates references against the same snapshot.
 const composedFeedback: ComposedFeedback = {
+	compositionFailures: [],
 	contractVersion: REVIEW_CONTRACT_VERSION,
 	admissionDigest: null,
 	observations: [],
@@ -2097,7 +2157,7 @@ function buildFeedbackTool(
 									type: "string",
 									enum: ACTIONS,
 									description:
-										"NEW to say something; SUPERSEDE to replace a message that is queued and unread; " +
+										"NEW to say something; SUPERSEDE to replace prepared feedback that has not been delivered; " +
 										"WITHHOLD to record, with a reason, that you decided to stay quiet.",
 								},
 								supersedesThreadKey: {
@@ -2139,21 +2199,21 @@ function buildFeedbackTool(
 											type: "string",
 											maxLength: FEEDBACK_TEXT_BOUNDS.situation,
 											description:
-												"What you saw: factual, specific, the artifacts named. Your words about them, " +
-												"not words for them - third person, never addressed to the developer as 'you', " +
-												"and never a judgement of the person.",
+												"The concern the observations have in common, as it can be observed, stated once rather than " +
+												"listing each artifact again. Your words about it, not words for it - third person, never " +
+												"addressed to the developer as 'you', and never a judgement of the person.",
 										},
 										capability: {
 											type: "string",
 											maxLength: FEEDBACK_TEXT_BOUNDS.capability,
 											description:
-												"The understanding or self-check this conversation should support. State the capability, not a solution such as a required heading/template, and not a question, script, diagnosis, or fixed tactic.",
+												"The self-check of the assessed behaviour this conversation should support: how the developer can tell whether their own work shows it, not only whether something is wired up. State the capability, not a solution such as a required heading/template, and not a question, script, diagnosis, or fixed tactic.",
 										},
 										evidenceSummary: {
 											type: "string",
 											maxLength: FEEDBACK_TEXT_BOUNDS.evidenceSummary,
 											description:
-												"A concise account of the artifacts and observations that ground this note. " +
+												"Where the concern occurred, compactly: each supporting work and observation located once. " +
 												"Summarise rather than inventing a quote; the original observation evidence is " +
 												"staged separately for the mentor to inspect.",
 										},
@@ -2161,13 +2221,13 @@ function buildFeedbackTool(
 											type: "string",
 											maxLength: FEEDBACK_TEXT_BOUNDS.inConversationSignal,
 											description:
-												"A sign detectable before the conversation ends: a distinction, decision, question, or self-check the developer can articulate. Not a promise, future artifact, message text, or compliance target.",
+												"Understanding the developer articulates in a way that can be observed before the conversation ends: a distinction, decision, question, or self-check they say. Not a promise, future artifact, message text, or compliance target.",
 										},
 										alreadySaid: {
 											type: "string",
 											maxLength: FEEDBACK_TEXT_BOUNDS.alreadySaid,
 											description:
-												"Optional. Where this has already been put to the developer and what has moved without help, from the feedback history. Omit it when the history has nothing on this practice: absent means nothing has been said yet, which the mentor reads differently from nothing to say.",
+												"Optional. Relevant prior communication the shown history records, and movement the shown evidence supports. Omit when none is shown. Partial or missing history leaves coverage unknown: it never proves that nothing was said or that a concern was resolved.",
 										},
 									},
 								},
@@ -2204,6 +2264,7 @@ function buildFeedbackTool(
 			const stored = outcomes.filter((outcome) => outcome.stored).length;
 			if (currentTurn) {
 				currentTurn.stored += stored;
+				sessionGuards.stored += stored;
 			}
 			if (stored > 0) {
 				persistComposedFeedback();
@@ -2227,12 +2288,20 @@ interface ReportReviewDetails {
 	stored: number;
 }
 
-/**
- * report_review: the one tool of the review composition. It reads the review against only the observations the
- * review may rest on — those admission marked publicEligible — and stores it whole or refuses it with every reason.
- */
-function buildReviewTool(lineNotes: boolean, reviewable: readonly Record<string, unknown>[]) {
-	const restable = new Map(
+interface SelectFeedbackDetails {
+	accepted: boolean;
+}
+
+/** Once final, both tools refuse every call: one response can carry several calls after the final one. */
+interface PublicReviewState {
+	selection: ReviewSelection | null;
+	final: boolean;
+}
+
+function reviewableById(
+	reviewable: readonly Record<string, unknown>[],
+): Map<string, ReviewedObservation> {
+	return new Map(
 		reviewable.map((observation) => [
 			String(observation.id),
 			{
@@ -2245,6 +2314,73 @@ function buildReviewTool(lineNotes: boolean, reviewable: readonly Record<string,
 			},
 		]),
 	);
+}
+
+const REVIEW_FINAL = "The review on this work is final; this composition accepts nothing more.";
+
+/** A refused selection leaves the accepted one standing; nothing the tool accepts is stored or published. */
+function buildSelectionTool(
+	restable: ReadonlyMap<string, ReviewedObservation>,
+	reviewable: readonly Record<string, unknown>[],
+	witnesses: ReturnType<typeof priorAdviceWitnesses>,
+	state: PublicReviewState,
+) {
+	const eligible = [...witnesses].filter(([, witness]) => witness.eligibleForPriorAdvice);
+	return defineTool({
+		name: "select_feedback",
+		exposure: "model-only",
+		label: "Select Feedback",
+		description: SELECTION_TOOL_DESCRIPTION,
+		parameters: selectionToolParameters(
+			restable,
+			eligible.map(([id]) => id),
+		),
+		execute: async (toolCallId, params): Promise<AgentToolResult<SelectFeedbackDetails>> => {
+			if (!compositionAdmitted) {
+				return refusal<SelectFeedbackDetails>(
+					toolCallId,
+					"Feedback composition opens only after Java admits the completed observations.",
+				);
+			}
+			if (state.final) {
+				return refusal<SelectFeedbackDetails>(toolCallId, REVIEW_FINAL);
+			}
+			const read = readSelection(params, restable, witnesses);
+			if ("errors" in read) {
+				const standing =
+					state.selection === null
+						? "no selection is accepted yet"
+						: "the selection accepted before it still stands";
+				const reasons = read.errors.map((error) => `- ${error}`).join("\n");
+				const stands =
+					state.selection === null
+						? ""
+						: `\nThe selection that stands:\n${selectionText(state.selection, reviewable)}`;
+				return refusal<SelectFeedbackDetails>(
+					toolCallId,
+					`selection refused, ${standing}:\n${reasons}${stands}`,
+				);
+			}
+			state.selection = read.selection;
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Accepted the selection:\n${selectionText(read.selection, reviewable)}\nNow store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions. A later select_feedback call replaces this selection until the review is final.`,
+					},
+				],
+				details: { accepted: true },
+			};
+		},
+	});
+}
+
+/** Reads the review against only the observations admission marked publicEligible, and the accepted selection. */
+function buildReviewTool(
+	lineNotes: boolean,
+	restable: ReadonlyMap<string, ReviewedObservation>,
+	state: PublicReviewState,
+) {
 	return defineTool({
 		name: "report_review",
 		exposure: "model-only",
@@ -2258,17 +2394,37 @@ function buildReviewTool(lineNotes: boolean, reviewable: readonly Record<string,
 					"Feedback composition opens only after Java admits the completed observations.",
 				);
 			}
-			const read = readReview(params, restable, lineNotes);
-			if ("errors" in read) {
+			if (state.final) {
+				return refusal<ReportReviewDetails>(toolCallId, REVIEW_FINAL);
+			}
+			if (state.selection === null) {
 				return refusal<ReportReviewDetails>(
 					toolCallId,
-					`review refused, nothing was stored:\n${read.errors.map((error) => `- ${error}`).join("\n")}`,
+					"review refused, nothing was stored: no selection is accepted yet. Choose with one select_feedback call first, then send the whole review.",
 				);
 			}
+			const read = readReview(params, restable, lineNotes);
+			const errors =
+				"errors" in read ? read.errors : selectionMismatch(read.review, state.selection);
+			if ("errors" in read || errors.length > 0) {
+				return refusal<ReportReviewDetails>(
+					toolCallId,
+					`review refused, nothing was stored:\n${errors.map((error) => `- ${error}`).join("\n")}`,
+				);
+			}
+			// Final only once persisted: a failed write leaves the review unaccepted, so it is never delivered.
+			const previous = composedFeedback.review;
 			composedFeedback.review = read.review;
-			persistComposedFeedback();
+			try {
+				persistComposedFeedback();
+			} catch (error) {
+				composedFeedback.review = previous;
+				throw error;
+			}
+			state.final = true;
 			if (currentTurn) {
 				currentTurn.stored += 1;
+				sessionGuards.stored += 1;
 			}
 			const { summary, inline, withheld } = read.review;
 			const said = summary
@@ -2278,11 +2434,11 @@ function buildReviewTool(lineNotes: boolean, reviewable: readonly Record<string,
 				content: [
 					{
 						type: "text",
-						text: `Stored the review: ${said}, ${inline.length} line note(s), ${withheld.length} withholding decision(s). A later report_review call replaces it whole.`,
+						text: `Stored the review: ${said}, ${inline.length} line note(s), ${withheld.length} withholding decision(s). It is final.`,
 					},
 				],
 				details: { stored: 1 },
-				terminate: turnDemand?.endsWhenPaid === true && turnDemand.owed() === 0,
+				terminate: true,
 			};
 		},
 	});
@@ -2297,13 +2453,21 @@ function undecidedByReview(reviewable: readonly Record<string, unknown>[]): stri
 		.filter((id) => !decided.has(id));
 }
 
-/** The review composition's one retry: the observations it left undecided, by id. */
-function finishReviewText(undecided: readonly string[]): string {
-	return (
-		`## Undecided\nThe review leaves these NOT_MET observations undecided: ${undecided.join(", ")}. ` +
-		`Send the whole review again with one report_review call, with each of them spoken about in the summary ` +
-		`or a line note, or named under withheld with its reason. No prose outside the call.`
-	);
+/** Carries the accepted selection, which a compaction may have removed from the session's context. */
+function finishReviewText(
+	undecided: readonly string[],
+	selection: ReviewSelection | null,
+	reviewable: readonly Record<string, unknown>[],
+): string {
+	const owed =
+		undecided.length > 0
+			? `## Undecided\nThe review leaves these NOT_MET observations undecided: ${undecided.join(", ")}.`
+			: "## Unfinished\nThe review on this work is not final yet.";
+	const next =
+		selection === null
+			? "Choose with one select_feedback call, then store the final review with one report_review call."
+			: `${selectionText(selection, reviewable)}\nThis selection stands. Store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions, or select again first.`;
+	return `${owed}\n${next} A review that says nothing is still one final report_review call. No prose outside the calls.`;
 }
 
 /** Explanatory context on each practice the review's observations were measured against, from the staged index. */
@@ -2669,9 +2833,8 @@ function normalizeQuotedText(value: string): string {
 
 /** Omit duplicated quotes and verification digests; the full admission record remains on disk. */
 function composerView(observation: AdmittedObservation): Record<string, unknown> {
-	// Feedback is composed from NOT_MET observations; the others are shown by what they found, and
-	// their full record stays in work/composition/observations.json.
-	if (observation.outcome !== "NOT_MET") {
+	// Abstentions cannot support claims. MET counterevidence keeps the same qualifications as NOT_MET.
+	if (observation.outcome !== "NOT_MET" && observation.outcome !== "MET") {
 		const { id, practiceSlug, outcome, summary } = observation;
 		return { id, practiceSlug, outcome, summary };
 	}
@@ -2686,8 +2849,10 @@ function composerView(observation: AdmittedObservation): Record<string, unknown>
 	};
 }
 
+const COMPOSITION_BLOCK_LIMIT = 32_000;
+
 /** A staged file as a titled block of the composition turn, or a pointer to it when it is too large. */
-function shown(label: string, file: string, limit = 32_000): string {
+function shown(label: string, file: string, limit = COMPOSITION_BLOCK_LIMIT): string {
 	if (!existsSync(file)) {
 		return "";
 	}
@@ -2695,6 +2860,104 @@ function shown(label: string, file: string, limit = 32_000): string {
 	return text.length > limit
 		? `### ${label} — too large to show here; read \`${file}\`\n`
 		: `### ${label}\n\`\`\`json\n${text}\n\`\`\`\n`;
+}
+
+/**
+ * The complete staged criteria of each practice with a NOT_MET observation: feedback addresses the standard that was
+ * assessed. The measuring leads and source directives belong to assessment and stay out. Each is shown whole, named
+ * with where to read it when too large, or named as not staged or not readable; never cut.
+ */
+function notMetCriteria(
+	observations: readonly AdmittedObservation[],
+	limit = COMPOSITION_BLOCK_LIMIT,
+): string {
+	return notMetPractices(observations)
+		.map((slug) => {
+			const file = criteriaPathOf(slug);
+			if (!existsSync(file)) {
+				return `### Criteria of \`${slug}\` — not staged for this review; nothing is known about them here\n`;
+			}
+			let text: string;
+			try {
+				text = readFileSync(file, "utf8").trim();
+			} catch {
+				return `### Criteria of \`${slug}\` — \`${file}\` could not be read; nothing is known about them here\n`;
+			}
+			if (text.length === 0) {
+				return `### Criteria of \`${slug}\` — \`${file}\` is empty; no standard is available here\n`;
+			}
+			if (text.length > limit) {
+				return `### Criteria of \`${slug}\` — too large to show here; read \`${file}\`\n`;
+			}
+			const longestRun = Math.max(
+				0,
+				...[...text.matchAll(/`+/gu)].map((backticks) => backticks[0].length),
+			);
+			const fence = "`".repeat(Math.max(3, longestRun + 1));
+			return `### Criteria of \`${slug}\`\n${fence}markdown\n${text}\n${fence}\n`;
+		})
+		.join("\n");
+}
+
+/** The producer owns body eligibility. Keep its facts here and locate only bodies it actually staged. */
+function priorFeedbackFacts(label: string, file: string, key: "feedback" | "prepared"): string {
+	if (!existsSync(file)) {
+		return "";
+	}
+	const pointer = `### ${label} — read \`${file}\` for the recorded history; its contents are not shown here\n`;
+	let history: unknown;
+	try {
+		history = parseJson(readFileSync(file, "utf8"));
+	} catch {
+		return pointer;
+	}
+	if (!isRecord(history) || !Array.isArray(history[key])) {
+		return pointer;
+	}
+	const entries = jsonArray(history[key]);
+	if (
+		entries.some(
+			(entry) => !isRecord(entry) || (entry.body != null && typeof entry.body !== "string"),
+		)
+	) {
+		return pointer;
+	}
+	const projected = entries.map((entry, index) => {
+		if (!isRecord(entry)) {
+			return entry;
+		}
+		const { body, ...facts } = entry;
+		return {
+			...facts,
+			...(typeof body === "string"
+				? { bodyAt: `${file} → ${key}[${index}].body (${body.length} characters)` }
+				: {}),
+		};
+	});
+	const text = JSON.stringify({ ...history, [key]: projected }, null, 1);
+	return text.length > COMPOSITION_BLOCK_LIMIT
+		? pointer
+		: `### ${label} — bodies remain at their \`bodyAt\` in the unchanged file; read them when earlier wording matters\n\`\`\`json\n${text}\n\`\`\`\n`;
+}
+
+/** The accepted public draft is persisted here, but has not passed delivery and is not prior advice. */
+function plannedReviewFacts(): string {
+	const { review } = composedFeedback;
+	if (!review) {
+		return "";
+	}
+	const stored = existsSync(FEEDBACK_PATH);
+	const bodyAt = (field: string) =>
+		stored ? { bodyAt: `${FEEDBACK_PATH} → review.${field}` } : {};
+	const facts = {
+		summary: review.summary ? { basedOn: review.summary.basedOn, ...bodyAt("summary.body") } : null,
+		inline: review.inline.map(({ body: _body, ...note }, index) => ({
+			...note,
+			...bodyAt(`inline[${index}].body`),
+		})),
+		withheld: review.withheld,
+	};
+	return `### The review planned for this work (a draft, not delivered)\nThis accepted draft may still be withheld at delivery. It is not prior communication. Private channels remain independently useful and may make the same supported point. ${stored ? "Read the located bodies if their wording matters." : "Its wording is not available as a staged file here."}\n\`\`\`json\n${JSON.stringify(facts, null, 1)}\n\`\`\`\n`;
 }
 
 function buildCompositionTurn(
@@ -2710,24 +2973,24 @@ function buildCompositionTurn(
 		closed.length > 0 ? ` Closed this turn, so write nothing for them: ${closed.join(", ")}.` : "";
 	const coverageNote = notReachedNote(notReached);
 	const admitted = JSON.stringify({ observations: observations.map(composerView) }, null, 1);
-	const onTheWork = composedFeedback.review
-		? `### The review planned for this work (a draft, not delivered)\nIt was written separately and may not reach the work if a delivery check holds it, so it is not something already said: only the feedback history supports ALREADY_SAID. Do not copy its argument about this change, and do not withhold useful private guidance only because it exists.\n\`\`\`json\n${JSON.stringify(composedFeedback.review, null, 1)}\n\`\`\`\n`
-		: "";
+	const onTheWork = plannedReviewFacts();
 	const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
 	const context = [
 		shown("The composition request (lanes, caps, placements)", COMPOSITION_REQUEST_PATH),
 		shown("What earlier reviews recorded about this person", `${historyRoot}/observations.json`),
-		shown("What was already said to them", `${historyRoot}/feedback.json`),
-		shown(
-			"What is written for them and still unread (supersession targets)",
+		priorFeedbackFacts("Recorded delivered feedback", `${historyRoot}/feedback.json`, "feedback"),
+		priorFeedbackFacts(
+			"Prepared feedback (not delivered; supersession targets)",
 			PREPARED_FEEDBACK_PATH,
+			"prepared",
 		),
 	]
 		.filter((block) => block !== "")
 		.join("\n");
 	return `## This turn
-The review just finished. Its ${observations.length} admitted measurement(s) follow. The NOT_MET ones carry their rationale and their citations by coordinates, the others only what they found; the full record, quoted lines included, is \`work/composition/observations.json\`. The history follows them.
+The review just finished. The criteria its NOT_MET practices were assessed against come first, as staged; its ${observations.length} admitted measurement(s) follow them. The MET and NOT_MET ones carry their rationale and their citations by coordinates, the abstentions only what they recorded; the full record, quoted lines included, is \`work/composition/observations.json\`. The history follows them.
 
+${notMetCriteria(observations)}
 \`\`\`json
 ${admitted}
 \`\`\`
@@ -2859,7 +3122,7 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 	if (
 		!measuring &&
 		!RECORDING_TOOLS.has(toolName) &&
-		turn.recordingCalls === 0 &&
+		sessionGuards.recordingCalls === 0 &&
 		calls === COMPOSITION_EXPLORATION_NUDGE
 	) {
 		console.error(
@@ -2883,11 +3146,16 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 			owed.length > 0
 				? `Still owed: ${owed.join(", ")}. Record what the evidence you have read supports for these`
 				: "Record what the evidence you have read supports";
+		// The review's next tool depends on whether a selection stands, which REVIEW_NUDGE already says.
+		let correction = `Correct what its answer names and send one ${recording ? toolName : composerTool} call.`;
+		if (composerTool === "report_review") {
+			correction = `Correct what its answer names. ${REVIEW_NUDGE}`;
+		}
 		void steer(
 			activeSession,
 			measuring
 				? `You have run the same ${toolName} call ${repeats} times; its result will not change. ${next}, in one report_observation call. ${PERSIST_DISCIPLINE}`
-				: `You have run the same ${toolName} call ${repeats} times; its result will not change. Correct what its answer names and send one ${composerTool} call.`,
+				: `You have run the same ${toolName} call ${repeats} times; its result will not change. ${correction}`,
 		);
 	}
 	if (repeats >= (recording ? REPEATED_RECORDING_ABORT : REPEATED_CALL_ABORT)) {
@@ -2896,23 +3164,35 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 	// SDK schema refusals bypass tool execution and its per-practice cap; count attempts here too.
 	if (RECORDING_TOOLS.has(toolName)) {
 		turn.recordingCalls += 1;
-		if (turn.recordingCalls >= MAX_RECORDING_ATTEMPTS_PER_TURN && turn.stored === 0) {
+		sessionGuards.recordingCalls += 1;
+		if (
+			sessionGuards.recordingCalls >= MAX_RECORDING_ATTEMPTS_PER_TURN &&
+			sessionGuards.stored === 0
+		) {
 			stopTurn(
 				"loop",
-				`${turn.recordingCalls} recording calls without a record — aborting this turn`,
+				`${sessionGuards.recordingCalls} recording calls without a record — aborting this turn`,
 			);
 		}
 	}
 }
 
-/** How often each call of the current turn has been made: the loop guard's memory, reset per turn. */
+/** Guard memory belongs to one native session; the turn trace still accumulates its shared work. */
 const repeatedCalls = new Map<string, number>();
-
-function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTrace {
+let sessionGuards = { cutOff: 0, recordingCalls: 0, stored: 0 };
+function resetSessionGuards(): void {
 	repeatedCalls.clear();
 	refusedItems.clear();
+	recordingMessageTokens = 0;
+	sessionGuards = { cutOff: 0, recordingCalls: 0, stored: 0 };
+}
+
+function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTrace {
+	resetSessionGuards();
 	lastEventAt = Date.now();
 	currentTurn = {
+		modelError: false,
+		runtimeError: false,
 		label,
 		durationMs: Date.now(),
 		calls: 0,
@@ -2993,7 +3273,7 @@ async function settleSession(
 	label: string,
 	maxMs: number,
 ): Promise<boolean> {
-	if (!session.isStreaming) {
+	if (session.isIdle) {
 		return true;
 	}
 	const started = Date.now();
@@ -3012,8 +3292,13 @@ async function settleSession(
 	return idle;
 }
 
+/** Where the practice's criteria are staged for this review. */
+function criteriaPathOf(slug: string): string {
+	return `${nodePath.dirname(INPUT_PATHS.practiceIndex)}/${slug}.md`;
+}
+
 function criteriaFileOf(slug: string): string | null {
-	const file = `${nodePath.dirname(INPUT_PATHS.practiceIndex)}/${slug}.md`;
+	const file = criteriaPathOf(slug);
 	return existsSync(file) ? readFileSync(file, "utf8").trim() : null;
 }
 
@@ -3042,25 +3327,28 @@ function criteriaOf(slugs: readonly string[]): string {
 }
 
 /**
- * Whether the task, the brief and the example are still in the session's context. The first turn
- * carries them; a compaction summarizes them away, so the turn after it carries them again, with what
- * was recorded, and the model quotes the exact text rather than a summary of it.
+ * Whether the task, the brief and the example are still in the current session's context. A fresh session
+ * holds none of them, so its first turn carries them; a compaction summarizes them away, so the turn after
+ * it carries them again, and the model quotes the exact text rather than a summary of it.
  */
 let openingInContext = false;
 
 /**
- * The task, the brief and the example, when the context no longer holds them; nothing otherwise. The
- * composer records no observation, so it gets the task and the brief alone.
+ * The task, the brief and the example, when the context no longer holds them; nothing otherwise. A measuring
+ * session sees only its own practice's draft: other practices' results are not its context. The composer
+ * records no observation, so it gets the task and the brief alone.
  */
 function openingIfNeeded(brief: string, composing = false): string {
 	if (openingInContext) {
 		return "";
 	}
-	openingInContext = true;
+	const ownDrafts = reviewState.observations.some((observation) =>
+		currentTurnSlugs.includes(observation.practiceSlug),
+	);
 	return composing
 		? `${prompt}\n\n${brief}\n\n`
 		: `${prompt}\n\n${brief}\n\n${OBSERVATION_EXAMPLE}\n\n${
-				reviewState.observations.length === 0 ? "" : `## Recorded so far\n${recordedSoFar()}\n\n`
+				ownDrafts ? `## Recorded so far\n${recordedSoFar(currentTurnSlugs)}\n\n` : ""
 			}`;
 }
 
@@ -3156,38 +3444,11 @@ ${JSON.stringify({ observations: example }, null, 1)}
  * A turn of practices, after the opening when the context does not hold it. Its work budget is not stated:
  * told its call budget up front, an open model read less and missed more not-met practices.
  */
-function practicesTurnText(heading: string, slugs: readonly string[], brief: string): string {
+function practiceTurnText(heading: string, slug: string, brief: string): string {
 	return `${openingIfNeeded(brief)}${heading}
-Evaluate these practices: ${slugs.join(", ")}. Their criteria follow and decide the outcome. What the brief shows is yours to quote; read more only when a criterion needs it, and when it needs more than one read or search, run them together in one codemode script that prints only the lines you will quote. Record one observation per practice — the outcome the criteria and the evidence support, NOT_APPLICABLE and UNDETERMINED included — with report_observation, up to three observations per call.
+Evaluate this practice: ${slug}. Its criteria follow and decide the outcome. What the brief shows is yours to quote; read more only when the criteria need it, and when they need more than one read or search, run them together in one codemode script that prints only the lines you will quote. Record one observation for this practice — the outcome the criteria and the evidence support, NOT_APPLICABLE and UNDETERMINED included — with report_observation. This session records and revises only this practice.
 
-${criteriaOf(slugs)}`;
-}
-
-/**
- * Include the incoming composition prompt in the space check. Pi's automatic preflight compaction
- * checks the previous assistant message, before appending this prompt. A failed manual compaction
- * leaves the SDK's normal overflow recovery available.
- */
-async function makeRoomFor(
-	session: AgentSession,
-	model: { contextWindow: number; maxTokens?: number },
-	text: string,
-): Promise<boolean> {
-	const held = session.getContextUsage()?.tokens ?? 0;
-	const needed = Math.ceil(text.length / 4) + (model.maxTokens ?? 0);
-	if (held + needed <= model.contextWindow) {
-		return false;
-	}
-	console.error(
-		`[pi-runner] composition: ${held} tokens held and ${needed} needed exceed the ${model.contextWindow} window — compacting first`,
-	);
-	try {
-		await session.compact();
-		return true;
-	} catch (error) {
-		console.error(`[pi-runner] composition: compaction failed: ${errorText(error)}`);
-		return false;
-	}
+${criteriaOf([slug])}`;
 }
 
 /** The practices with an admitted NOT_MET observation: what the composer has a decision to record on. */
@@ -3209,14 +3470,55 @@ function compositionBudget(notMet: number): Work {
 	return turnBudget(Math.min(Math.max(1, notMet), PRACTICES_PER_TURN), PER_PRACTICE_WORK);
 }
 
+/** Existing private decision obligation: a stored unit or withholding may fold several practices in. */
+function undecidedPrivatePractices(): string[] {
+	const practiceOf = new Map(
+		admittedObservations.map((observation) => [observation.id, observation.practiceSlug]),
+	);
+	const decided = new Set(
+		composedFeedback.units.flatMap((unit) => [
+			unit.practiceSlug,
+			...unit.basedOn.flatMap((id) => practiceOf.get(id) ?? []),
+		]),
+	);
+	return notMetPractices(admittedObservations).filter((slug) => !decided.has(slug));
+}
+
+function recordCompositionFailure(phase: CompositionPhase, reason: CompositionFailureReason): void {
+	if (!composedFeedback.compositionFailures.some((failure) => failure.phase === phase)) {
+		composedFeedback.compositionFailures.push({ phase, reason });
+	}
+}
+
+function incompleteCompositionReason(
+	trace: TurnTrace,
+	safetyExpired: boolean,
+): CompositionFailureReason {
+	const stops = { budget: "BUDGET", stall: "STALL", safety: "SAFETY", loop: "LOOP" } as const;
+	if (trace.stoppedBy !== null) {
+		return stops[trace.stoppedBy];
+	}
+	if (safetyExpired) {
+		return "SAFETY";
+	}
+	if (trace.modelError) {
+		return "MODEL_ERROR";
+	}
+	if (trace.runtimeError) {
+		return "RUNTIME_ERROR";
+	}
+	return "NO_DECISION";
+}
+
 /** Retry undecided composition once, under its own work budget and the run's safety line. */
 async function askComposerOnceMore(
 	session: AgentSession,
 	notMet: readonly string[],
 	undecided: () => readonly string[],
 	request: CompositionRequest,
+	buildText: () => string,
 	safety: ReturnType<typeof scheduleDeadline>,
-): Promise<void> {
+): Promise<TurnTrace> {
 	console.error(
 		`[pi-runner] composition left ${notMet.length} NOT_MET practice(s) undecided — asking once more`,
 	);
@@ -3230,9 +3532,33 @@ async function askComposerOnceMore(
 			throw new Error("the session was still busy when the composition was asked once more");
 		}
 		if (!safety.expired()) {
-			await Promise.race([session.prompt(finishCompositionText(notMet, request)), safety.elapsed]);
+			await Promise.race([
+				(async () => {
+					const prepared = await prepareTurnText(
+						session,
+						() => `${buildText()}
+
+${finishCompositionText(notMet, request)}`,
+					);
+					if (safety.expired()) {
+						return;
+					}
+					if (prepared === null) {
+						throw new Error("essential composition input exceeds the context window");
+					}
+					await session.prompt(prepared, {
+						preflightResult: (disposition) => {
+							if (disposition === "started") {
+								openingInContext = true;
+							}
+						},
+					});
+				})(),
+				safety.elapsed,
+			]);
 		}
 	} catch (error) {
+		trace.runtimeError = trace.stoppedBy === null && !safety.expired();
 		console.error(`[pi-runner] composition failed: ${errorText(error)}`);
 	} finally {
 		if (trace.stoppedBy !== null) {
@@ -3240,6 +3566,7 @@ async function askComposerOnceMore(
 		}
 		closeTurnTrace(trace);
 	}
+	return trace;
 }
 
 function finishCompositionText(notMet: readonly string[], request: CompositionRequest): string {
@@ -3264,7 +3591,7 @@ function finishCompositionText(notMet: readonly string[], request: CompositionRe
 }
 
 async function main() {
-	console.error(`[pi-runner] One-session review`);
+	console.error(`[pi-runner] Review: one fresh session per practice, then composition`);
 	console.error(
 		`[pi-runner] Work per practice: ${PER_PRACTICE_WORK.modelCalls} model calls, ${PER_PRACTICE_WORK.outputTokens} output tokens; ` +
 			`safety ceiling ${AGENT_BUDGET_MS}ms, measuring hands in by ${WINDOWS.measureMs}ms`,
@@ -3315,7 +3642,7 @@ async function main() {
 	);
 
 	const compositionRequest = loadCompositionRequest();
-	// The private lanes are composed in this session, which holds the person's authorized history; the review on
+	// The private lanes receive authorized history in their own fresh session; the review on
 	// the work gets a session of its own after admission, and this tool never sees it.
 	const privateLanesOpen =
 		compositionRequest !== null &&
@@ -3390,6 +3717,9 @@ async function main() {
 				);
 			}
 			if (event.type === "auto_retry_end" && !event.success) {
+				if (currentTurn) {
+					currentTurn.modelError = true;
+				}
 				const finalError = event.finalError ?? "no error given";
 				// Only measurement failures can make a review eligible for provider retry.
 				if (measuring) {
@@ -3402,6 +3732,9 @@ async function main() {
 			if (event.type === "message_end" && event.message.role === "assistant") {
 				addAssistantUsage(streamUsage, event.message);
 				const { stopReason } = event.message;
+				if (currentTurn) {
+					currentTurn.modelError = stopReason === "error";
+				}
 				const types = listOrEmpty(event.message.content).map((c) => c.type);
 				const toolCalls = types.filter((t) => t === "toolCall").length;
 				const { rawStopReason } = event.message;
@@ -3441,32 +3774,75 @@ async function main() {
 		);
 	}
 
-	const customTools = [buildReportObservationTool()];
-	if (feedbackTool) {
-		customTools.push(feedbackTool);
-	}
+	const reportObservationTool = buildReportObservationTool();
 	if (tooLate) {
 		logPracticeCoverage();
 		finalizeOutput();
 		process.exit(1);
 	}
-	const { session, extensionsResult } = await createAgentSession({
-		cwd: CWD,
-		agentDir: AGENT_DIR,
-		tools: [...PRACTICE_TOOLS, "report_observation", ...(feedbackTool ? ["report_feedback"] : [])],
-		customTools,
-		sessionManager: SessionManager.create(CWD, `${CWD}/.sessions`),
-		settingsManager,
-		resourceLoader: loader,
-		modelRuntime,
-		model,
-		thinkingLevel,
-	});
-	for (const error of extensionsResult.errors) {
-		console.error(`[pi-runner] extension error: ${error.path}: ${error.error}`);
+
+	type SessionOptions = NonNullable<Parameters<typeof createAgentSession>[0]>;
+	/**
+	 * A fresh native session in this sandbox, with the orchestrator, the evidence tools and the given recording
+	 * tool. Reported native assistant usage events go to one stream ledger across these sessions.
+	 */
+	async function openSession(
+		tools: string[],
+		customTools: SessionOptions["customTools"],
+		resourceLoader = loader,
+	) {
+		const { session: fresh, extensionsResult } = await createAgentSession({
+			cwd: CWD,
+			agentDir: AGENT_DIR,
+			tools,
+			customTools,
+			sessionManager: SessionManager.create(CWD, `${CWD}/.sessions`),
+			settingsManager,
+			resourceLoader,
+			modelRuntime,
+			model,
+			thinkingLevel,
+		});
+		for (const error of extensionsResult.errors) {
+			console.error(`[pi-runner] extension error: ${error.path}: ${error.error}`);
+		}
+		resetSessionGuards();
+		openingInContext = false;
+		lastEventAt = Date.now();
+		activeSession = fresh;
+		return { session: fresh, unsubscribe: subscribeSession(fresh) };
 	}
-	activeSession = session;
-	const unsubscribe = subscribeSession(session);
+
+	/** Keep settlement events subscribed until the native session stops before another scope starts. */
+	async function stopBeforeSwitching(session: AgentSession): Promise<void> {
+		const deadline = scheduleDeadline(ABORT_SETTLE_MS, () => undefined);
+		try {
+			const stopped = await Promise.race([
+				stopSession(session).then(() => true),
+				deadline.elapsed.then(() => false),
+			]);
+			if (!stopped) {
+				throw new Error("Native session did not settle; no later session may start");
+			}
+		} catch (error) {
+			measurementClosed = true;
+			throw error;
+		} finally {
+			clearTimeout(deadline.timer);
+		}
+	}
+
+	async function closeSession(opened: Awaited<ReturnType<typeof openSession>>): Promise<void> {
+		opened.session.abortCompaction();
+		try {
+			await stopBeforeSwitching(opened.session);
+		} finally {
+			opened.unsubscribe();
+			if (activeSession === opened.session) {
+				activeSession = null;
+			}
+		}
+	}
 
 	// Liveness, not a budget: a turn that shows no sign of life for STALL_MS is aborted.
 	const stallWatch = setInterval(() => {
@@ -3480,18 +3856,17 @@ async function main() {
 	stallWatch.unref();
 
 	/**
-	 * One turn under its own work budget, whatever the turns before it spent; the safety line ends it only
-	 * when the run nears its ceiling. Returns why the runner ended it, or null when the model did.
+	 * One scope — a catalog group's turn, or the practices no turn recorded — under the one work budget its
+	 * practice count earns, whatever the scopes before it spent. The budget is spent across one fresh session per
+	 * practice, in order: each receives the task, the brief and that practice's complete criteria, and records only
+	 * that practice. Once the budget, the safety line or a stall ends the scope, its remaining practices are not
+	 * reached. Returns why the runner ended it, or null when every session ended on its own.
 	 */
-	async function runTurn(
+	async function runScope(
 		label: string,
-		text: string,
+		heading: string,
 		slugs: readonly string[],
 	): Promise<StopReason | null> {
-		if (!(await settleSession(session, label, ABORT_SETTLE_MS))) {
-			console.error(`[pi-runner] ${label}: session still busy — skipped`);
-			return "stall";
-		}
 		const safetyMs = measureEnd - Date.now();
 		if (safetyMs <= 0) {
 			console.error(`[pi-runner] ${label}: the run is near its safety ceiling — skipped`);
@@ -3499,37 +3874,93 @@ async function main() {
 		}
 		const budget = turnBudget(slugs.length, PER_PRACTICE_WORK);
 		console.error(
-			`[pi-runner] ${label}: ${slugs.length} practice(s), up to ${budget.modelCalls} calls and ` +
-				`${budget.outputTokens} output tokens (${tokensPerObservation} tokens per observation so far)`,
+			`[pi-runner] ${label}: ${slugs.length} practice(s), up to ${budget.modelCalls} calls and ${budget.outputTokens} output tokens (${tokensPerObservation} tokens per observation so far)`,
 		);
 		const trace = openTurnTrace(label, budget, {
-			owed: () => owedPractices().length,
+			owed: () => owedPractices(slugs).length,
 			nudge: RECORD_NUDGE,
 		});
-		const safety = scheduleDeadline(safetyMs, () => {
-			stopTurn("safety", "the run is near its safety ceiling — aborting this turn");
-		});
+		const safety = scheduleDeadline(safetyMs, () =>
+			stopTurn("safety", "the run is near its safety ceiling — aborting this turn"),
+		);
+		// Native events may stop a turn while awaited work settles or another session opens.
+		const stoppedBy = () => trace.stoppedBy;
+		const pastSafety = () => safety.expired() || Date.now() >= measureEnd;
+		async function promptPractice(session: AgentSession, text: () => string, slug: string) {
+			if (pastSafety()) {
+				return;
+			}
+			const prepared = await prepareTurnText(session, text);
+			if (pastSafety()) {
+				return;
+			}
+			if (prepared === null) {
+				blockedPractices.add(slug);
+				console.error(
+					`[pi-runner] ${label}: essential input for ${slug} exceeds the context window — not reached`,
+				);
+				return;
+			}
+			await session.prompt(prepared, {
+				preflightResult: (disposition) => {
+					if (disposition === "started") {
+						openingInContext = true;
+					}
+				},
+			});
+		}
 		try {
-			await Promise.race([session.prompt(text), safety.elapsed]);
-		} catch (error) {
-			console.error(`[pi-runner] ${label} failed: ${errorText(error)}`);
+			for (const [index, slug] of slugs.entries()) {
+				if (stoppedBy() !== null || pastSafety()) {
+					break;
+				}
+				if (owedPractices([slug]).length === 0) {
+					continue;
+				}
+				activePractice = slug;
+				currentTurnSlugs = [slug];
+				// The nudge names the session's practice, so a later session may be told again.
+				trace.askedToRecord = false;
+				const opened = await openSession(
+					[...PRACTICE_TOOLS, "report_observation"],
+					[reportObservationTool],
+				);
+				const text = () =>
+					practiceTurnText(
+						`${heading}\nPractice ${index + 1} of ${slugs.length} in this turn.`,
+						slug,
+						brief,
+					);
+				try {
+					await Promise.race([promptPractice(opened.session, text, slug), safety.elapsed]);
+				} catch (error) {
+					console.error(`[pi-runner] ${label} (${slug}) failed: ${errorText(error)}`);
+				} finally {
+					await closeSession(opened);
+				}
+			}
 		} finally {
 			clearTimeout(safety.timer);
-			if (trace.stoppedBy !== null) {
-				await settleSession(session, label, ABORT_SETTLE_MS);
-			}
+			activePractice = null;
+			currentTurnSlugs = slugs;
 			closeTurnTrace(trace);
 		}
-		return trace.stoppedBy;
+		if (pastSafety() && stoppedBy() === null) {
+			console.error(
+				`[pi-runner] ${label}: the run is near its safety ceiling — the rest is not reached`,
+			);
+			return "safety";
+		}
+		return stoppedBy();
 	}
 
+	let measureUsage: UsageReport;
 	try {
 		let stalls = 0;
 		for (const [index, turn] of turns.entries()) {
-			currentTurnSlugs = turn.slugs;
-			const stop = await runTurn(
+			const stop = await runScope(
 				`turn ${index + 1}/${turns.length} (${turn.id})`,
-				practicesTurnText(`## Turn ${index + 1} of ${turns.length}: ${turn.id}`, turn.slugs, brief),
+				`## Turn ${index + 1} of ${turns.length}: ${turn.id}`,
 				turn.slugs,
 			);
 			stalls = stop === "stall" ? stalls + 1 : 0;
@@ -3549,40 +3980,34 @@ async function main() {
 			console.error(
 				`[pi-runner] Finishing ${unfinished.length} practice(s): ${unfinished.join(", ")}`,
 			);
-			currentTurnSlugs = unfinished;
-			await runTurn(
+			await runScope(
 				"finish",
-				practicesTurnText(
-					"## Unfinished practices\nNo turn recorded a result for these practices; evaluate them now.",
-					unfinished,
-					brief,
-				),
+				"## Unfinished practices\nNo turn recorded a result for this practice; evaluate it now.",
 				unfinished,
 			);
 		}
 	} finally {
 		measuring = false;
+		const measureDurationMs = Date.now() - startMs;
+		measureUsage = extractUsageFromSession({}, streamUsage);
+		accumulateUsage(null, measureUsage);
+		runnerDebug.attempts.push({
+			label: "measure",
+			durationMs: measureDurationMs,
+			assistantMessages: measureUsage.assistantMessages,
+			stopReasons: measureUsage.stopReasons,
+			usage: measureUsage,
+			resultFilePresent: hasPersistedReviewState(),
+		});
+		persistRunnerDebug();
+		persistUsage();
+		console.error(
+			`[pi-runner] Measured: ${(measureDurationMs / 1000).toFixed(1)}s, calls=${measureUsage.totalCalls}, ` +
+				`stopped=[${runnerDebug.turns
+					.flatMap((turn) => (turn.stoppedBy === null ? [] : [`${turn.label}: ${turn.stoppedBy}`]))
+					.join("; ")}], observations=${reviewState.observations.length}`,
+		);
 	}
-
-	const measureDurationMs = Date.now() - startMs;
-	const measureUsage = extractUsageFromSession({}, streamUsage);
-	accumulateUsage(null, measureUsage);
-	runnerDebug.attempts.push({
-		label: "measure",
-		durationMs: measureDurationMs,
-		assistantMessages: measureUsage.assistantMessages,
-		stopReasons: measureUsage.stopReasons,
-		usage: measureUsage,
-		resultFilePresent: hasPersistedReviewState(),
-	});
-	persistRunnerDebug();
-	persistUsage();
-	console.error(
-		`[pi-runner] Measured: ${(measureDurationMs / 1000).toFixed(1)}s, calls=${measureUsage.totalCalls}, ` +
-			`stopped=[${runnerDebug.turns
-				.flatMap((turn) => (turn.stoppedBy === null ? [] : [`${turn.label}: ${turn.stoppedBy}`]))
-				.join("; ")}], observations=${reviewState.observations.length}`,
-	);
 
 	const notReached = missingSlugs(
 		allSlugs,
@@ -3596,8 +4021,6 @@ async function main() {
 	}
 
 	if (!maybeWriteResultFile()) {
-		await stopSession(session);
-		unsubscribe();
 		if (providerFailures > 0) {
 			console.error(
 				`[pi-runner] UNREACHABLE: this review reached no practice, and ${providerFailures} model call(s) ` +
@@ -3616,8 +4039,21 @@ async function main() {
 	persistComposedFeedback();
 	maybeWriteResultFile();
 	if (compositionRequest && admittedObservations.length > 0) {
+		const markRemaining = (reason: CompositionFailureReason) => {
+			if (
+				compositionRequest.channels.IN_CONTEXT.enabled &&
+				publicObservations(admittedObservations).length > 0 &&
+				composedFeedback.review === null
+			) {
+				recordCompositionFailure("PUBLIC_REVIEW", reason);
+			}
+			if (privateLanesOpen && undecidedPrivatePractices().length > 0) {
+				recordCompositionFailure("PRIVATE_FEEDBACK", reason);
+			}
+		};
 		const safetyMs = AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS);
 		if (safetyMs <= 0) {
+			markRemaining("SAFETY");
 			console.error(
 				"[pi-runner] The run reached its safety ceiling before composition — preserving admitted observations",
 			);
@@ -3628,24 +4064,32 @@ async function main() {
 					"the run is near its safety ceiling — preserving observations and composed feedback so far",
 				);
 			});
-			// Only an observation that decided something can carry a claim about the work; a review of
-			// uncertainty alone has nothing to say there, and opens no session.
-			const reviewable = publicObservations(admittedObservations);
-			if (compositionRequest.channels.IN_CONTEXT.enabled && reviewable.length > 0) {
-				await composeReview(compositionRequest, reviewable, notReached, safety);
+			try {
+				// Only an observation that decided something can carry a claim about the work; a review of
+				// uncertainty alone has nothing to say there, and opens no session.
+				const reviewable = publicObservations(admittedObservations);
+				if (compositionRequest.channels.IN_CONTEXT.enabled && reviewable.length > 0) {
+					await composeReview(compositionRequest, reviewable, notReached, safety);
+				}
+				if (feedbackTool && notMetPractices(admittedObservations).length > 0 && !safety.expired()) {
+					await composePrivately(compositionRequest, safety);
+				}
+			} catch (error) {
+				markRemaining(safety.expired() ? "SAFETY" : "RUNTIME_ERROR");
+				throw error;
+			} finally {
+				if (safety.expired()) {
+					markRemaining("SAFETY");
+				}
+				clearTimeout(safety.timer);
+				persistComposedFeedback();
+				// Every session's calls are in the one stream ledger; no single session's messages hold them all.
+				const combinedUsage = extractUsageFromSession({}, streamUsage);
+				accumulateUsage(measureUsage, combinedUsage);
+				persistUsage();
 			}
-			if (feedbackTool && notMetPractices(admittedObservations).length > 0 && !safety.expired()) {
-				await composePrivately(compositionRequest, safety);
-			}
-			clearTimeout(safety.timer);
-			persistComposedFeedback();
-			const combinedUsage = extractUsageFromSession(session.state, streamUsage);
-			accumulateUsage(measureUsage, combinedUsage);
-			persistUsage();
 		}
 	}
-	await stopSession(session);
-	unsubscribe();
 	console.error(
 		`[pi-runner] SUCCESS: result.json holds ${reviewState.observations.length} observation(s)`,
 	);
@@ -3653,9 +4097,8 @@ async function main() {
 	process.exit(0);
 
 	/**
-	 * The review on the work, in a session of its own: fresh, with report_review as its only tool and every input
-	 * inline — the captured record of this work, the observations of this work it may rest on, what was already said
-	 * on this work, and the practices. Private history is not staged into this tool-free session.
+	 * The review on the work, in a fresh session of its own whose only tools choose and store the review, with every
+	 * input inline. Private history is not staged into it, and it can read nothing from the workspace.
 	 */
 	async function composeReview(
 		request: CompositionRequest,
@@ -3669,16 +4112,41 @@ async function main() {
 			agentDir: AGENT_DIR,
 			settingsManager,
 			...PUBLIC_REVIEW_RESOURCE_LOADER_OPTIONS,
-			systemPrompt: readFileSync(REVIEW_COMPOSER_PROMPT_PATH, "utf8"),
+			systemPrompt: `${readFileSync(FEEDBACK_STYLE_PATH, "utf8")}\n\n${readFileSync(REVIEW_COMPOSER_PROMPT_PATH, "utf8")}`,
 			agentsFilesOverride: () => ({ agentsFiles: [] }),
 			extensionFactories: [],
 		});
 		await reviewLoader.reload();
+		const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
+		const history = existsSync(`${historyRoot}/feedback.json`)
+			? parseJson(readFileSync(`${historyRoot}/feedback.json`, "utf8"))
+			: null;
+		const framing = {
+			repositoryFullName: taskEnvelope.repositoryFullName,
+			pullRequestNumber: taskEnvelope.pullRequestNumber,
+		};
+		const captured = buildPublicReviewHistory(
+			CWD,
+			taskEnvelope.paths.contextRoot,
+			folderIndex,
+			framing,
+		);
+		const alreadySaid = priorPublicFeedback(history, THIS_WORK, captured.capturedAt);
+		const restable = reviewableById(reviewable);
+		const state: PublicReviewState = { selection: null, final: false };
 		const { session: reviewSession } = await createAgentSession({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
 			tools: PUBLIC_REVIEW_TOOLS,
-			customTools: [buildReviewTool(lineNotes, reviewable)],
+			customTools: [
+				buildSelectionTool(
+					restable,
+					reviewable,
+					priorAdviceWitnesses(alreadySaid.feedback, captured.statements),
+					state,
+				),
+				buildReviewTool(lineNotes, restable, state),
+			],
 			sessionManager: SessionManager.inMemory(),
 			settingsManager,
 			resourceLoader: reviewLoader,
@@ -3686,35 +4154,72 @@ async function main() {
 			model,
 			thinkingLevel,
 		});
+		// Pi requires every tool to terminate a mixed batch, then AgentSession drains queued nudges.
+		// Preserve its boundary; a persisted final review also ends this isolated session's internal queue.
+		const { finishTurn } = reviewSession.agent;
+		reviewSession.agent.finishTurn = async (turn, signal) => {
+			const decision = await finishTurn?.(turn, signal);
+			if (state.final) {
+				reviewSession.clearQueue();
+				return { action: "end" };
+			}
+			return decision ?? undefined;
+		};
 		const unsubscribeReview = subscribeSession(reviewSession);
+		let reviewContextHeld = false;
+		const unsubscribeContext = reviewSession.subscribe((event) => {
+			if (event.type === "compaction_end" && !event.aborted && !hasText(event.errorMessage)) {
+				reviewContextHeld = false;
+			}
+		});
 		activeSession = reviewSession;
 		composerTool = "report_review";
-		const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
-		const history = existsSync(`${historyRoot}/feedback.json`)
-			? parseJson(readFileSync(`${historyRoot}/feedback.json`, "utf8"))
-			: null;
 		const text = buildReviewTurn({
-			sameWork: buildSameWorkContext(CWD, taskEnvelope.paths.contextRoot, folderIndex, {
-				repositoryFullName: taskEnvelope.repositoryFullName,
-				pullRequestNumber: taskEnvelope.pullRequestNumber,
-			}),
+			sameWork: buildSameWorkContext(CWD, taskEnvelope.paths.contextRoot, folderIndex, framing),
 			observations: reviewable,
 			undecided: uncertainOutcomes(admittedObservations),
-			alreadySaid: priorPublicFeedback(history, THIS_WORK),
+			alreadySaid: alreadySaid.feedback,
+			ownHistoryOmissions: alreadySaid.omissions,
+			captured,
 			practices: practiceContext(reviewable),
 			notReached: notReachedSlugs,
 			lineNotes,
 		});
-		const owed = () => undecidedByReview(reviewable).length;
+		// The composition owes one final review, whatever it decides: an all-MET review is final only when sent.
+		const owed = () => (state.final ? 0 : Math.max(1, undecidedByReview(reviewable).length));
 		const budget = compositionBudget(owed());
+		let started = false;
+		const wasStarted = () => started;
+		const trace = openTurnTrace("review composition", budget, { owed, nudge: REVIEW_NUDGE });
+		let finalTrace = trace;
 		try {
-			const trace = openTurnTrace("review composition", budget, { owed, nudge: REVIEW_NUDGE });
 			try {
 				if (safety.expired()) {
+					trace.stoppedBy = "safety";
 					throw new Error("the run reached its safety ceiling before the review was due");
 				}
-				await Promise.race([reviewSession.prompt(text), safety.elapsed]);
+				await Promise.race([
+					(async () => {
+						const prepared = await prepareTurnText(reviewSession, () => text);
+						if (safety.expired()) {
+							return;
+						}
+						if (prepared === null) {
+							throw new Error("essential review input exceeds the context window");
+						}
+						await reviewSession.prompt(prepared, {
+							preflightResult: (disposition) => {
+								if (disposition === "started") {
+									started = true;
+									reviewContextHeld = true;
+								}
+							},
+						});
+					})(),
+					safety.elapsed,
+				]);
 			} catch (error) {
+				trace.runtimeError = trace.stoppedBy === null && !safety.expired();
 				console.error(`[pi-runner] review composition failed: ${errorText(error)}`);
 			} finally {
 				if (trace.stoppedBy !== null) {
@@ -3724,22 +4229,51 @@ async function main() {
 			}
 			const left = undecidedByReview(reviewable);
 			if (
+				wasStarted() &&
+				!trace.modelError &&
+				!trace.runtimeError &&
 				(trace.stoppedBy === null || trace.stoppedBy === "loop") &&
-				left.length > 0 &&
+				!state.final &&
 				(await settleSession(reviewSession, "review composition", ABORT_SETTLE_MS)) &&
 				!safety.expired()
 			) {
 				console.error(
-					`[pi-runner] the review left ${left.length} NOT_MET observation(s) undecided — asking once more`,
+					left.length > 0
+						? `[pi-runner] the review left ${left.length} NOT_MET observation(s) undecided — asking once more`
+						: "[pi-runner] the review is not final — asking once more",
 				);
 				const retry = openTurnTrace("review composition once more", budget, {
 					owed,
 					nudge: REVIEW_NUDGE,
 					endsWhenPaid: true,
 				});
+				finalTrace = retry;
 				try {
-					await Promise.race([reviewSession.prompt(finishReviewText(left)), safety.elapsed]);
+					await Promise.race([
+						(async () => {
+							const prepared = await prepareTurnText(
+								reviewSession,
+								() =>
+									`${reviewContextHeld ? "" : `${text}\n\n`}${finishReviewText(left, state.selection, reviewable)}`,
+							);
+							if (safety.expired()) {
+								return;
+							}
+							if (prepared === null) {
+								throw new Error("essential review input exceeds the context window");
+							}
+							await reviewSession.prompt(prepared, {
+								preflightResult: (disposition) => {
+									if (disposition === "started") {
+										reviewContextHeld = true;
+									}
+								},
+							});
+						})(),
+						safety.elapsed,
+					]);
 				} catch (error) {
+					retry.runtimeError = retry.stoppedBy === null && !safety.expired();
 					console.error(`[pi-runner] review composition failed: ${errorText(error)}`);
 				} finally {
 					if (retry.stoppedBy !== null) {
@@ -3749,67 +4283,138 @@ async function main() {
 				}
 			}
 		} finally {
-			persistComposedFeedback();
-			unsubscribeReview();
-			await stopSession(reviewSession);
-			activeSession = session;
+			try {
+				await stopBeforeSwitching(reviewSession);
+				if (!state.final) {
+					recordCompositionFailure(
+						"PUBLIC_REVIEW",
+						incompleteCompositionReason(finalTrace, safety.expired()),
+					);
+				}
+				persistComposedFeedback();
+			} finally {
+				unsubscribeReview();
+				unsubscribeContext();
+			}
+			activeSession = null;
 			composerTool = "report_feedback";
 		}
 	}
 
-	/** The private lanes, in the measurement session: it holds the person's authorized history. */
+	/**
+	 * The private lanes, in a fresh session opened after measurement ended: it receives the task, the brief, the
+	 * admitted observations and the person's authorized history, reads with the evidence tools, and records only
+	 * with report_feedback. No measuring transcript is in its context.
+	 */
 	async function composePrivately(
 		request: CompositionRequest,
 		safety: ReturnType<typeof scheduleDeadline>,
 	): Promise<void> {
-		const instructions = readFileSync(COMPOSER_PROMPT_PATH, "utf8");
+		const privateLoader = new DefaultResourceLoader({
+			cwd: CWD,
+			agentDir: AGENT_DIR,
+			settingsManager,
+			...SANDBOX_RESOURCE_LOADER_OPTIONS,
+			systemPrompt: `${readFileSync(FEEDBACK_STYLE_PATH, "utf8")}\n\n${readFileSync(COMPOSER_PROMPT_PATH, "utf8")}`,
+			agentsFilesOverride: () => ({ agentsFiles: [] }),
+			extensionFactories: [createCodemodeExtension({ mode: "on", models: false })],
+		});
+		await privateLoader.reload();
 		composerTool = "report_feedback";
-		if (privateLanesOpen) {
-			const notMet = notMetPractices(admittedObservations);
-			// A NOT_MET practice is decided by a unit of its own, or by one that folds its observation in.
-			const practiceOf = new Map(
-				admittedObservations.map((observation) => [observation.id, observation.practiceSlug]),
+		if (privateLanesOpen && feedbackTool) {
+			currentTurnSlugs = [];
+			const opened = await openSession(
+				[...PRACTICE_TOOLS, "report_feedback"],
+				[feedbackTool],
+				privateLoader,
 			);
-			const undecided = () => {
-				const decided = new Set(
-					composedFeedback.units.flatMap((unit) => [
-						unit.practiceSlug,
-						...unit.basedOn.flatMap((id) => practiceOf.get(id) ?? []),
-					]),
+			const { session } = opened;
+			let finalTrace: TurnTrace;
+			try {
+				finalTrace = await composeInto(session);
+			} finally {
+				await closeSession(opened);
+			}
+			if (undecidedPrivatePractices().length > 0) {
+				recordCompositionFailure(
+					"PRIVATE_FEEDBACK",
+					incompleteCompositionReason(finalTrace, safety.expired()),
 				);
-				return notMet.filter((slug) => !decided.has(slug));
-			};
+			}
+		}
+
+		async function composeInto(session: AgentSession): Promise<TurnTrace> {
+			const notMet = notMetPractices(admittedObservations);
+			const undecided = undecidedPrivatePractices;
+			let started = false;
+			const wasStarted = () => started;
 			const trace = openTurnTrace("composition", compositionBudget(notMet.length), {
 				owed: () => undecided().length,
 				nudge: COMPOSITION_NUDGE,
 			});
+			let finalTrace = trace;
 			try {
-				if (!(await settleSession(session, "composition", ABORT_SETTLE_MS)) || safety.expired()) {
-					throw new Error("the session was still busy when composition was due");
-				}
-				const compositionTurn = `${instructions}\n\n${buildCompositionTurn(request, admittedObservations, notReached)}`;
-				await makeRoomFor(session, model, compositionTurn);
-				// When room had to be made, the brief goes with the turn again.
-				const compositionText = `${openingIfNeeded(brief, true)}${compositionTurn}`;
 				if (safety.expired()) {
-					throw new Error("the run reached its safety ceiling while the session was compacted");
+					trace.stoppedBy = "safety";
+					throw new Error("the run reached its safety ceiling before composition was due");
 				}
-				await Promise.race([session.prompt(compositionText), safety.elapsed]);
+				const compositionTurn = buildCompositionTurn(request, admittedObservations, notReached);
+				await Promise.race([
+					(async () => {
+						const compositionText = await prepareTurnText(
+							session,
+							() => `${openingIfNeeded(brief, true)}${compositionTurn}`,
+						);
+						if (safety.expired()) {
+							return;
+						}
+						if (compositionText === null) {
+							throw new Error("essential composition input exceeds the context window");
+						}
+						await session.prompt(compositionText, {
+							preflightResult: (disposition) => {
+								if (disposition === "started") {
+									openingInContext = true;
+									started = true;
+								}
+							},
+						});
+					})(),
+					safety.elapsed,
+				]);
 			} catch (error) {
+				trace.runtimeError = trace.stoppedBy === null && !safety.expired();
 				console.error(`[pi-runner] composition failed: ${errorText(error)}`);
 			} finally {
+				if (trace.stoppedBy !== null) {
+					await settleSession(session, "composition", ABORT_SETTLE_MS);
+				}
 				closeTurnTrace(trace);
 			}
 			// A composer that ended on its own, or was cut off by a loop guard, is asked once more for the
 			// NOT_MET practices it left undecided; otherwise they have no composed next step.
 			const left = undecided();
 			if (
+				wasStarted() &&
+				!trace.modelError &&
+				!trace.runtimeError &&
 				(trace.stoppedBy === null || trace.stoppedBy === "loop") &&
 				left.length > 0 &&
 				!safety.expired()
 			) {
-				await askComposerOnceMore(session, left, undecided, request, safety);
+				finalTrace = await askComposerOnceMore(
+					session,
+					left,
+					undecided,
+					request,
+					() =>
+						openingInContext
+							? ""
+							: `${openingIfNeeded(brief, true)}${buildCompositionTurn(request, admittedObservations, notReached)}`,
+					safety,
+				);
 			}
+			return finalTrace;
 		}
 	}
 }

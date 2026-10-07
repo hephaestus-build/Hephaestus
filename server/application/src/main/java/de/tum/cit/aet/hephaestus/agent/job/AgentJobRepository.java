@@ -54,6 +54,70 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
         String getUrl();
     }
 
+    /**
+     * The mirrored comments of one pull request that this workspace's delivery recorded posting, whatever became of
+     * the feedback since. Each recorded identity is compared with a comment of this pull request on its own
+     * provider, so it cannot name a comment on other work or another provider: GitLab records the note's global or
+     * legacy numeric id, GitHub an opaque node id whose permalink carries the native id.
+     */
+    @Query(value = """
+        WITH receipt AS (
+            SELECT p.posted_comment_ref AS ref, p.posted_comment_url AS url
+              FROM feedback_placement p JOIN feedback f ON f.id = p.feedback_id
+             WHERE f.workspace_id = :workspaceId
+               AND f.artifact_kind = 'scm.pull_request' AND f.artifact_id = :pullRequestId
+               AND p.placement_type IN ('SUMMARY', 'LOCATION_COMMENT', 'INLINE')
+               AND p.posted_comment_ref IS NOT NULL
+            UNION
+            SELECT d.delivered_external_ref, d.delivered_external_url
+              FROM feedback_dispatch d JOIN agent_job j ON j.id = d.agent_job_id AND j.workspace_id = d.workspace_id
+             WHERE d.workspace_id = :workspaceId AND j.artifact_kind = 'scm.pull_request'
+               AND j.metadata ->> 'pull_request_id' = CAST(:pullRequestId AS text)
+               AND d.delivered_external_ref IS NOT NULL
+            UNION
+            SELECT e ->> 'externalRef', e ->> 'externalUrl'
+              FROM feedback_dispatch d JOIN agent_job j ON j.id = d.agent_job_id AND j.workspace_id = d.workspace_id
+                   CROSS JOIN jsonb_array_elements(d.delivered_placements) e
+             WHERE d.workspace_id = :workspaceId AND j.artifact_kind = 'scm.pull_request'
+               AND j.metadata ->> 'pull_request_id' = CAST(:pullRequestId AS text)
+               AND e ->> 'externalRef' IS NOT NULL
+            UNION
+            SELECT j.delivery_comment_id, NULL
+              FROM agent_job j
+             WHERE j.workspace_id = :workspaceId AND j.artifact_kind = 'scm.pull_request'
+               AND j.metadata ->> 'pull_request_id' = CAST(:pullRequestId AS text)
+               AND j.delivery_comment_id IS NOT NULL
+        ),
+        mirrored AS (
+            SELECT FALSE AS is_inline, c.native_id, 'issuecomment-' AS anchor, ip.type AS provider
+              FROM issue_comment c JOIN identity_provider ip ON ip.id = c.provider_id
+              JOIN issue pr ON pr.id = c.issue_id AND pr.provider_id = c.provider_id
+             WHERE pr.id = :pullRequestId AND pr.issue_type = 'PULL_REQUEST'
+            UNION ALL
+            SELECT TRUE, c.native_id, 'discussion_r', ip.type
+              FROM pull_request_review_comment c JOIN identity_provider ip ON ip.id = c.provider_id
+              JOIN issue pr ON pr.id = c.pull_request_id AND pr.provider_id = c.provider_id
+             WHERE pr.id = :pullRequestId AND pr.issue_type = 'PULL_REQUEST'
+        )
+        SELECT m.is_inline AS "inline", m.native_id AS "nativeId"
+          FROM mirrored m
+         WHERE EXISTS (
+                SELECT 1 FROM receipt r
+                 WHERE (m.provider = 'GITLAB' AND r.ref IN (
+                            'gid://gitlab/Note/' || m.native_id,
+                            'gid://gitlab/DiffNote/' || m.native_id,
+                            CAST(m.native_id AS text)))
+                    OR (m.provider = 'GITHUB' AND split_part(r.url, '#', 2) = m.anchor || m.native_id))
+        """, nativeQuery = true)
+    List<DeliveredPullRequestCommentRow> findDeliveredPullRequestComments(
+            @Param("workspaceId") long workspaceId, @Param("pullRequestId") long pullRequestId);
+
+    interface DeliveredPullRequestCommentRow {
+        boolean getInline();
+
+        Long getNativeId();
+    }
+
     @Modifying(flushAutomatically = true)
     @Query("DELETE FROM AgentJob j WHERE j.workspace.id = :workspaceId")
     int deleteAllByWorkspaceId(@Param("workspaceId") Long workspaceId);
@@ -879,7 +943,8 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             + "j.jobToken = :newJobToken, j.jobTokenHash = :newJobTokenHash, "
             + "j.llmTotalCalls = 0, j.llmTotalInputTokens = 0, j.llmTotalOutputTokens = 0, "
             + "j.llmTotalReasoningTokens = 0, j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 "
-            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.retryCount < :maxRetries")
+            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.retryCount < :maxRetries "
+            + "AND " + NOT_ADMITTED)
     int requeueOrphan(
             @Param("id") UUID id,
             @Param("workerId") String workerId,
@@ -887,6 +952,36 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             @Param("availableAt") Instant availableAt,
             @Param("newJobToken") String newJobToken,
             @Param("newJobTokenHash") String newJobTokenHash);
+
+    /**
+     * The admission's digest is absent. Requeuing an admitted attempt would discard the observations its
+     * citations were verified for: the next attempt captures again and cannot submit against the digest
+     * the job carries. The predicate sits in the UPDATE, so it is evaluated under the row lock the
+     * admission takes, whatever the caller read before.
+     */
+    String NOT_ADMITTED = "COALESCE(FUNCTION('jsonb_extract_path_text', j.metadata, '"
+            + ObservationAdmissionService.DIGEST_METADATA_KEY + "'), '') = ''";
+
+    /**
+     * Ends a RUNNING attempt whose observations were admitted but whose run was lost before it finished:
+     * it fails with what is known, and its observations, capture and digest stay as recorded. Fenced on
+     * the owning worker and the attempt, so a stale caller cannot end a run another claim started;
+     * {@link #requeueOrphan} refuses exactly these rows.
+     *
+     * @return 1 if this caller ended the attempt, 0 if the row is not admitted or no longer that attempt
+     */
+    @WorkspaceAgnostic("ID-based fenced terminal write; caller is @WorkspaceAgnostic sweeper or worker-local drain")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE AgentJob j SET j.status = de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus.FAILED, "
+            + "j.completedAt = :now, j.errorMessage = :error "
+            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.retryCount = :attempt "
+            + "AND NOT (" + NOT_ADMITTED + ")")
+    int failAdmittedOwnedBy(
+            @Param("id") UUID id,
+            @Param("workerId") String workerId,
+            @Param("attempt") int attempt,
+            @Param("now") Instant now,
+            @Param("error") String error);
 
     /**
      * Requeue of a claim this same worker just won but could not dispatch (sandbox executor pool

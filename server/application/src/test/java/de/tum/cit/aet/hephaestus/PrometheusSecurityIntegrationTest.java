@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
@@ -15,6 +14,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -62,9 +62,10 @@ class PrometheusSecurityIntegrationTest {
         application.setAdditionalProfiles(role);
         try (var context = application.run(
                         "--server.port=0",
+                        "--server.address=127.0.0.1",
                         "--management.server.port=0",
                         "--management.server.address=${test.management.host}",
-                        "--test.management.host=127.0.0.2",
+                        "--test.management.host=::1",
                         "--test.decoder-enabled=" + decoderEnabled,
                         "--hephaestus.runtime.server.enabled=" + role.equals("server"),
                         "--hephaestus.runtime.worker.enabled=" + role.equals("worker"),
@@ -78,8 +79,9 @@ class PrometheusSecurityIntegrationTest {
             int applicationPort = environment.getRequiredProperty("local.server.port", Integer.class);
             assertThat(managementPort).isNotEqualTo(applicationPort);
             assertThat(environment.getRequiredProperty("management.server.address"))
-                    .isEqualTo("127.0.0.2");
+                    .isEqualTo("::1");
             var registry = context.getBean(MeterRegistry.class);
+            String listenerId = registerListenerProbe(registry);
             registry.counter(IntegrationCoreMetrics.INTEGRATION_CONSUMER_POISON, "kind", "github")
                     .increment();
             registry.counter(AgentMetrics.LLM_BUDGET_EXHAUSTED).increment();
@@ -91,7 +93,7 @@ class PrometheusSecurityIntegrationTest {
                     .tag("stream", "github")
                     .register(registry);
 
-            var scrape = send(client, "127.0.0.2", managementPort, "/actuator/prometheus", "GET", false);
+            var scrape = send(client, "::1", managementPort, "/actuator/prometheus", "GET", false);
             assertThat(scrape.statusCode()).isEqualTo(200);
             assertThat(scrape.body())
                     .contains(
@@ -100,11 +102,11 @@ class PrometheusSecurityIntegrationTest {
                             "llm_budget_exhausted_total",
                             "llm_budget_blocked_total",
                             "agent_job_total",
-                            "webhook_stream_poll_age_seconds");
-            assertThatThrownBy(() -> send(client, managementPort, "/actuator/prometheus", "GET", false))
-                    .isInstanceOf(IOException.class);
+                            "webhook_stream_poll_age_seconds",
+                            listenerId);
+            assertNoListenerProbe(client, "127.0.0.1", managementPort, listenerId);
             // Irrelevant or expired user credentials must not break a scraper.
-            assertThat(send(client, "127.0.0.2", managementPort, "/actuator/prometheus", "GET", true)
+            assertThat(send(client, "::1", managementPort, "/actuator/prometheus", "GET", true)
                             .statusCode())
                     .isEqualTo(200);
             assertThat(send(client, applicationPort, "/actuator/prometheus", "GET", false)
@@ -113,21 +115,21 @@ class PrometheusSecurityIntegrationTest {
             assertThat(send(client, applicationPort, "/actuator/prometheus", "GET", true)
                             .statusCode())
                     .isEqualTo(403);
-            assertThat(send(client, "127.0.0.2", managementPort, "/actuator/prometheus", "POST", false)
+            assertThat(send(client, "::1", managementPort, "/actuator/prometheus", "POST", false)
                             .statusCode())
                     .isEqualTo(403);
-            assertThat(send(client, "127.0.0.2", managementPort, "/actuator/metrics", "GET", false)
+            assertThat(send(client, "::1", managementPort, "/actuator/metrics", "GET", false)
                             .statusCode())
                     .isBetween(400, 499);
             if (decoderEnabled) {
-                assertThat(send(client, "127.0.0.2", managementPort, "/actuator/metrics", "GET", true)
+                assertThat(send(client, "::1", managementPort, "/actuator/metrics", "GET", true)
                                 .statusCode())
                         .isEqualTo(200);
             }
             for (int port : List.of(applicationPort, managementPort)) {
                 assertThat(send(
                                         client,
-                                        port == managementPort ? "127.0.0.2" : "127.0.0.1",
+                                        port == managementPort ? "::1" : "127.0.0.1",
                                         port,
                                         port == applicationPort ? "/livez" : "/actuator/health/liveness",
                                         "GET",
@@ -136,7 +138,7 @@ class PrometheusSecurityIntegrationTest {
                         .isEqualTo(200);
                 assertThat(send(
                                         client,
-                                        port == managementPort ? "127.0.0.2" : "127.0.0.1",
+                                        port == managementPort ? "::1" : "127.0.0.1",
                                         port,
                                         port == applicationPort ? "/readyz" : "/actuator/health/readiness",
                                         "GET",
@@ -151,16 +153,37 @@ class PrometheusSecurityIntegrationTest {
     void shouldKeepDefaultManagementListenerOnLoopback() throws Exception {
         var application = new SpringApplication(MetricsApplication.class);
         try (var context = application.run(
-                        "--server.port=0", "--management.server.port=0", "--spring.main.banner-mode=off");
+                        "--server.port=0",
+                        "--server.address=127.0.0.1",
+                        "--management.server.port=0",
+                        "--spring.main.banner-mode=off");
                 var client = HttpClient.newBuilder()
                         .connectTimeout(Duration.ofSeconds(3))
                         .build()) {
             int managementPort = context.getEnvironment().getRequiredProperty("local.management.port", Integer.class);
-            assertThat(send(client, managementPort, "/actuator/prometheus", "GET", false)
-                            .statusCode())
-                    .isEqualTo(200);
-            assertThatThrownBy(() -> send(client, "127.0.0.2", managementPort, "/actuator/prometheus", "GET", false))
-                    .isInstanceOf(IOException.class);
+            String listenerId = registerListenerProbe(context.getBean(MeterRegistry.class));
+            var scrape = send(client, managementPort, "/actuator/prometheus", "GET", false);
+            assertThat(scrape.statusCode()).isEqualTo(200);
+            assertThat(scrape.body()).contains(listenerId);
+            assertNoListenerProbe(client, "::1", managementPort, listenerId);
+        }
+    }
+
+    private static String registerListenerProbe(MeterRegistry registry) {
+        String listenerId = UUID.randomUUID().toString();
+        registry.counter("test_management_listener", "context", listenerId).increment();
+        return listenerId;
+    }
+
+    private static void assertNoListenerProbe(HttpClient client, String host, int port, String listenerId)
+            throws Exception {
+        try {
+            var response = send(client, host, port, "/actuator/prometheus", "GET", false);
+            assertThat(response.body())
+                    .as("HTTP %s on %s must not expose this listener's metrics", response.statusCode(), host)
+                    .doesNotContain(listenerId);
+        } catch (IOException ignored) {
+            // Different bind addresses can share a port; its vacancy is not this listener's boundary.
         }
     }
 
@@ -171,7 +194,7 @@ class PrometheusSecurityIntegrationTest {
 
     private static HttpResponse<String> send(
             HttpClient client, String host, int port, String path, String method, boolean token) throws Exception {
-        var request = HttpRequest.newBuilder(URI.create("http://" + host + ":" + port + path))
+        var request = HttpRequest.newBuilder(new URI("http", null, host, port, path, null, null))
                 .timeout(Duration.ofSeconds(10))
                 .method(method, HttpRequest.BodyPublishers.noBody());
         if (token) {

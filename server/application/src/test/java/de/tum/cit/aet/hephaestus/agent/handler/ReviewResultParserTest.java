@@ -35,11 +35,9 @@ class ReviewResultParserTest extends BaseUnitTest {
         parser = new ReviewResultParser(objectMapper);
     }
 
-    /** Wraps a raw JSON string in the jobOutput envelope ({rawOutput: "..."}). */
-    private ObjectNode wrapRawOutput(String rawJson) {
-        ObjectNode jobOutput = objectMapper.createObjectNode();
-        jobOutput.put("rawOutput", rawJson);
-        return jobOutput;
+    /** The observations array of a serialized result, as admission receives it; null when it has none. */
+    private @Nullable JsonNode observationsOf(String json) {
+        return objectMapper.readTree(json).get("observations");
     }
 
     /** Creates a minimal valid observation JSON object. */
@@ -100,60 +98,8 @@ class ReviewResultParserTest extends BaseUnitTest {
     class StructuralValidation {
 
         @Test
-        void nullJobOutput() {
-            ParseResult result = parser.parse(null);
-
-            assertThat(result.validObservations()).isEmpty();
-            assertThat(result.discarded()).hasSize(1);
-            assertThat(result.discarded().get(0).reason()).contains("null");
-        }
-
-        @Test
-        void missingRawOutput() {
-            ObjectNode jobOutput = objectMapper.createObjectNode();
-            jobOutput.put("somethingElse", "value");
-
-            ParseResult result = parser.parse(jobOutput);
-
-            assertThat(result.validObservations()).isEmpty();
-            assertThat(result.discarded()).hasSize(1);
-            assertThat(result.discarded().get(0).reason()).contains("missing rawOutput");
-        }
-
-        @Test
-        void blankRawOutput() {
-            ParseResult result = parser.parse(wrapRawOutput("  "));
-
-            assertThat(result.validObservations()).isEmpty();
-            assertThat(result.discarded()).hasSize(1);
-            assertThat(result.discarded().get(0).reason()).contains("blank");
-        }
-
-        @Test
-        void oversizedRawOutputIsRejectedBeforeSanitizing() {
-            // A runaway/oversized sandbox output must be rejected up front — before readTree or
-            // sanitizeJsonEscapes walk the whole string — not just in the fallback extractor.
-            String huge = "{\"observations\":[" + "\\".repeat(1_000_001) + "]}";
-
-            ParseResult result = parser.parse(wrapRawOutput(huge));
-
-            assertThat(result.validObservations()).isEmpty();
-            assertThat(result.discarded()).hasSize(1);
-            assertThat(result.discarded().get(0).reason()).contains("too large");
-        }
-
-        @Test
-        void invalidJson() {
-            ParseResult result = parser.parse(wrapRawOutput("not json {{{"));
-
-            assertThat(result.validObservations()).isEmpty();
-            assertThat(result.discarded()).hasSize(1);
-            assertThat(result.discarded().get(0).reason()).contains("invalid JSON");
-        }
-
-        @Test
         void missingObservations() {
-            ParseResult result = parser.parse(wrapRawOutput("{\"summary\":\"hello\"}"));
+            ParseResult result = parser.parseObservations(observationsOf("{\"summary\":\"hello\"}"));
 
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded()).hasSize(1);
@@ -162,7 +108,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void emptyObservations() {
-            ParseResult result = parser.parse(wrapRawOutput("{\"observations\":[]}"));
+            ParseResult result = parser.parseObservations(observationsOf("{\"observations\":[]}"));
 
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded()).hasSize(1);
@@ -179,7 +125,7 @@ class ReviewResultParserTest extends BaseUnitTest {
                 arr.add(f);
             }
 
-            ParseResult result = parser.parse(wrapRawOutput(root.toString()));
+            ParseResult result = parser.parseObservations(observationsOf(root.toString()));
 
             assertThat(result.validObservations()).hasSize(5);
             assertThat(result.validObservations().get(0).practiceSlug()).isEqualTo("practice-0");
@@ -194,7 +140,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             arr.add("not an object");
             arr.add(validObservationNode());
 
-            ParseResult result = parser.parse(wrapRawOutput(root.toString()));
+            ParseResult result = parser.parseObservations(observationsOf(root.toString()));
 
             assertThat(result.validObservations()).hasSize(1);
             assertThat(result.discarded()).hasSize(1);
@@ -207,7 +153,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void validObservation() {
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(validObservationNode())));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(validObservationNode())));
 
             assertThat(result.validObservations()).hasSize(1);
             assertThat(result.discarded()).isEmpty();
@@ -224,7 +170,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode observation = validObservationNode();
             observation.remove("practiceSlug");
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded()).hasSize(1);
@@ -236,7 +182,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode observation = validObservationNode();
             observation.put("summary", "  ");
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded()).hasSize(1);
@@ -249,7 +195,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode observation = validObservationNode();
             observation.put("outcome", outcome.name());
             if (outcome == Outcome.NOT_MET) observation.put("severity", "MINOR");
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
             assertThat(result.validObservations())
                     .singleElement()
                     .satisfies(parsed -> assertThat(parsed.outcome()).isEqualTo(outcome));
@@ -305,7 +251,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode observation = validObservationNode();
             observation.put("outcome", outcome);
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded())
                     .singleElement()
@@ -318,7 +264,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             observation.put("outcome", "NOT_MET");
             observation.put("severity", "major");
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded())
@@ -331,7 +277,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode observation = validObservationNode();
             observation.put("severity", "EXTREME");
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             assertThat(result.validObservations()).isEmpty();
         }
@@ -340,7 +286,7 @@ class ReviewResultParserTest extends BaseUnitTest {
         void missingSeverityIsRejected() {
             ObjectNode observation = validObservationNode();
             observation.remove("severity");
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded()).hasSize(1);
         }
@@ -350,7 +296,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode observation = validObservationNode();
             observation.putNull("severity");
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             assertThat(result.validObservations()).hasSize(1);
             assertThat(result.validObservations().get(0).severity()).isNull();
@@ -361,7 +307,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode observation = validObservationNode();
             observation.put("confidence", 0.9);
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded())
@@ -396,7 +342,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode observation = validObservationNode();
             observation.put("practiceSlug", "PR_Description_Quality");
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             assertThat(result.validObservations()).hasSize(1);
             assertThat(result.validObservations().get(0).practiceSlug()).isEqualTo("pr-description-quality");
@@ -410,7 +356,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             evidence.putArray("citations").addObject().put("quote", "Quoted source text");
             observation.set("evidence", evidence);
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             ValidatedObservation f = result.validObservations().get(0);
             assertThat(f.evidenceRationale()).isEqualTo("Some evidenceRationale");
@@ -426,7 +372,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             observation.put("evidenceRationale", "Some evidenceRationale");
             observation.put("guidance", "Rotate the credential and re-run the pipeline.");
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded())
@@ -443,7 +389,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             evidence.putArray("citations").addObject().put("quote", "x".repeat(70_000));
             observation.set("evidence", evidence);
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded())
@@ -459,7 +405,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode observation = validObservationNode();
             observation.put("evidenceRationale", "r".repeat(15_000));
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(observation)));
 
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded())
@@ -479,7 +425,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode invalid = validObservationNode();
             invalid.put("outcome", "BOGUS");
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(valid, invalid)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(valid, invalid)));
 
             assertThat(result.validObservations()).hasSize(1);
             assertThat(result.discarded()).hasSize(1);
@@ -493,7 +439,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode bad2 = validObservationNode();
             bad2.remove("summary");
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(bad1, bad2)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(bad1, bad2)));
 
             assertThat(result.validObservations()).isEmpty();
             assertThat(result.discarded()).hasSize(2);
@@ -516,7 +462,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode f3 = validObservationNode();
             f3.put("practiceSlug", "code-hygiene");
 
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(f1, f2, f3)));
+            ParseResult result = parser.parseObservations(observationsOf(wrapObservations(f1, f2, f3)));
 
             // All three observations kept — no dedup
             assertThat(result.validObservations()).hasSize(3);
@@ -531,66 +477,6 @@ class ReviewResultParserTest extends BaseUnitTest {
     }
 
     @Nested
-    class JsonExtractionFromMixedText {
-
-        @Test
-        void extractsJsonFromPhaseMarkers() {
-            String mixed = """
-                [PHASE0] Context loaded: 1 files changed
-                [PHASE1] RELEVANT: avoids-insecure-defaults-and-over-broad-permissions
-                [PHASE4] Output ready
-                {"observations": [%s]}
-                """.formatted(validObservationNode().toString());
-
-            ParseResult result = parser.parse(wrapRawOutput(mixed));
-
-            assertThat(result.validObservations()).hasSize(1);
-        }
-
-        @Test
-        void returnsEmptyWhenNoJsonInText() {
-            String text = "[PHASE0] no json here at all {notjson";
-
-            ParseResult result = parser.parse(wrapRawOutput(text));
-
-            assertThat(result.validObservations()).isEmpty();
-        }
-    }
-
-    @Nested
-    class JsonEscapeSanitization {
-
-        @Test
-        void fixesSwiftInterpolation() {
-            // Simulate agent output with Swift \(error) in code snippets
-            // Jackson would fail on \( because it's not a valid JSON escape
-            String rawWithSwiftEscapes = """
-                {"observations":[{"practiceSlug":"silent-failure","summary":"Empty catch","outcome": "NOT_MET","severity":"MAJOR","evidence":{},"evidenceRationale":"```swift\\nprint(\\"Error: \\(error)\\")\\n```"}]}
-                """;
-
-            ParseResult result = parser.parse(wrapRawOutput(rawWithSwiftEscapes));
-
-            assertThat(result.validObservations()).hasSize(1);
-            assertThat(result.validObservations().get(0).practiceSlug()).isEqualTo("silent-failure");
-        }
-
-        @Test
-        void fixesInvalidParenEscape() {
-            String input = "print(\\\"\\(error)\\\")";
-            String result = ReviewResultParser.sanitizeJsonEscapes(input);
-            assertThat(result).isEqualTo("print(\\\"\\\\(error)\\\")");
-        }
-
-        @Test
-        void handlesAlreadyEscaped() {
-            // \\( in the input means the text literally has \( which is valid JSON (\\)
-            String input = "print(\\\\(error))";
-            String result = ReviewResultParser.sanitizeJsonEscapes(input);
-            assertThat(result).isEqualTo(input);
-        }
-    }
-
-    @Nested
     class ContractTest {
 
         @Test
@@ -599,11 +485,8 @@ class ReviewResultParserTest extends BaseUnitTest {
             assertThat(is).as("sample fixture must exist").isNotNull();
 
             JsonNode fixture = objectMapper.readTree(is);
-            // Wrap in jobOutput envelope
-            ObjectNode jobOutput = objectMapper.createObjectNode();
-            jobOutput.put("rawOutput", objectMapper.writeValueAsString(fixture));
 
-            ParseResult result = parser.parse(jobOutput);
+            ParseResult result = parser.parseObservations(observationsOf(objectMapper.writeValueAsString(fixture)));
 
             assertThat(result.validObservations()).hasSize(5);
             assertThat(result.discarded()).isEmpty();

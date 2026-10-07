@@ -296,14 +296,35 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("artifactKind") String artifactKind,
             @Param("artifactId") long artifactId);
 
-    /** The same delivered-feedback selection without a review history window. */
-    @Query("""
-        SELECT f FROM Feedback f WHERE f.workspaceId = :workspaceId AND f.recipientUserId = :recipientUserId
-          AND f.deliveryState = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
-        ORDER BY f.createdAt DESC, f.id DESC
-        """)
+    /**
+     * Feedback said to its recipient: delivered, or delivered on the work with a recorded publication and later
+     * replaced by newer feedback. Replaced feedback without a recorded publication on the work is not history.
+     */
+    String SAID_TO_RECIPIENT = """
+        (f.deliveryState = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
+         OR (f.deliveryState = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.SUPERSEDED
+             AND f.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_CONTEXT
+             AND f.deliveredAt IS NOT NULL
+             AND EXISTS (
+                 SELECT p.id FROM FeedbackPlacement p
+                 WHERE p.feedbackId = f.id
+                   AND p.placementType IN (
+                       de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.SUMMARY,
+                       de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.INLINE,
+                       de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.LOCATION_COMMENT)
+                   AND p.postedCommentRef IS NOT NULL AND TRIM(p.postedCommentRef) <> '')))
+        """;
+
+    /** Everything said to one person, without a review history window, newest first. */
+    @Query("SELECT f FROM Feedback f WHERE f.workspaceId = :workspaceId AND f.recipientUserId = :recipientUserId AND "
+            + SAID_TO_RECIPIENT
+            + " ORDER BY f.createdAt DESC, f.id DESC")
     List<Feedback> findDeliveredForPersonHistory(
             @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId);
+
+    /** One row of that history, by the id a review cites. */
+    @Query("SELECT f FROM Feedback f WHERE f.id = :id AND f.workspaceId = :workspaceId AND " + SAID_TO_RECIPIENT)
+    Optional<Feedback> findPersonHistoryRecord(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
     /** Delivered summary and inline-only feedback for a recipient, newest first. */
     @Query("""

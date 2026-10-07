@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { feedbackDisplayMarkdown } from "./feedback-display";
 import { feedbackPreviewText } from "./feedback-preview";
 
 const preview = (bodyPreview: string | undefined, bodyTruncated = false) =>
@@ -65,19 +66,57 @@ describe("feedbackPreviewText", () => {
 		expect(preview("```java\nreturn null;\n```")).toBeUndefined();
 	});
 
-	it("leaves out the marker and the HTML tags of a posted comment", () => {
+	it("leaves out the comment Hephaestus finds its copy by, even in a preview cut short", () => {
+		expect(preview(`${MARKER}\nThe lookup collapses two failures`, true)).toBe(
+			"The lookup collapses two failures…",
+		);
+	});
+
+	it("shows only the authored words of a short posted body", () => {
+		expect(preview(`${MARKER}\nKeep it focused.\n\n---\n${DISCLOSURE}\n${SETTINGS}\n`)).toBe(
+			"Keep it focused.",
+		);
+	});
+
+	it("leaves out a footer the cut ended inside", () => {
 		expect(
-			preview(
-				"<!-- hephaestus:practice-review:774b9e9b-2c40-4d6b-9e76-7094dda3a7a2 -->\nThe description needs its purpose and coverage.\n\n---\n<sub>Practice review &middot; gpt-6-luna.</sub>",
-			),
-		).toBe("The description needs its purpose and coverage. Practice review · gpt-6-luna…");
+			preview(`${MARKER}\nKeep it focused.\n\n---\n<sub>Practice review &middot; Mod`, true),
+		).toBe("Keep it focused…");
 	});
 
-	it("leaves out a marker the preview cut before it closed", () => {
-		expect(preview("<!-- hephaestus:practice-review:774b9e9b", true)).toBeUndefined();
+	it("keeps a footer quoted in code to the existing quote handling", () => {
+		const body = `Quoted:\n\n\`\`\`md\n${DISCLOSURE}\n\`\`\`\n`;
+		expect(feedbackDisplayMarkdown(body)).toBe(body);
+		expect(preview(body)).toBe("Quoted:…");
+	});
+});
+
+const MARKER = "<!-- hephaestus:practice-review:0b7d3c2e-8f14-4a6b-9c5d-2e1f0a3b4c5d -->";
+const DISCLOSURE =
+	"<sub>Practice review &middot; Model. This feedback is AI-generated and can be inaccurate. Answer or dispute it in [Hephaestus](https://example.com/respond).</sub>";
+const SETTINGS = "<sub>[Why you see this and how to stop it](https://example.com/settings)</sub>";
+
+describe("feedbackDisplayMarkdown", () => {
+	it("drops the marker and unwraps the footer of a posted body, keeping its words and links", () => {
+		expect(
+			feedbackDisplayMarkdown(`${MARKER}\nKeep it focused.\n\n---\n${DISCLOSURE}\n${SETTINGS}\n`),
+		).toBe(
+			"Keep it focused.\n\n---\nPractice review &middot; Model. This feedback is AI-generated and can be inaccurate. Answer or dispute it in [Hephaestus](https://example.com/respond).\n[Why you see this and how to stop it](https://example.com/settings)\n",
+		);
 	});
 
-	it("keeps a generic type in prose", () => {
-		expect(preview("Return a List<String> here.")).toBe("Return a List<String> here.");
+	it("returns a body with neither as the same string", () => {
+		const body = "Keep it focused.\r\n\r\n  - one   \n\n<sub>authored aside</sub>\n";
+		expect(feedbackDisplayMarkdown(body)).toBe(body);
+	});
+
+	it.each([
+		["a backtick fence", `\`\`\`md\n${MARKER}\n${DISCLOSURE}\n\`\`\`\n`],
+		["a tilde fence", `~~~\n${MARKER}\n${DISCLOSURE}\n~~~\n`],
+		["indented code", `Quoted:\n\n    ${MARKER}\n\n    ${DISCLOSURE}\n`],
+		["inline code", `Write \`${MARKER}\` or \`${DISCLOSURE}\`.\n`],
+		["other HTML", `<details>\n\n${DISCLOSURE} said by the author\n\n</details>\n`],
+	])("leaves both alone when they are quoted in %s", (_case, body) => {
+		expect(feedbackDisplayMarkdown(body)).toBe(body);
 	});
 });

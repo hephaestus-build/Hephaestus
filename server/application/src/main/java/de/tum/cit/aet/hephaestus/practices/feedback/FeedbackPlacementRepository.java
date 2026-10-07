@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -103,6 +104,44 @@ public interface FeedbackPlacementRepository extends JpaRepository<FeedbackPlace
         String getBody();
 
         Boolean getApproved();
+    }
+
+    /**
+     * The provider permalinks of the comments that still show each of these pieces of delivered in-context feedback
+     * to this developer, summary first, then line notes in file order. A placement recorded without a permalink (or
+     * with a blank one), or
+     * whose comment a later placement took over, has no row, since no link to it would show this feedback.
+     */
+    @Query(value = """
+        SELECT pl.feedback_id AS "feedbackId", pl.posted_comment_url AS "url"
+        FROM feedback_placement pl
+        JOIN feedback f ON f.id = pl.feedback_id
+        WHERE pl.feedback_id IN (:feedbackIds) AND f.workspace_id = :workspaceId
+          AND f.recipient_user_id = :recipientUserId AND f.channel = 'IN_CONTEXT'
+          AND f.delivery_state = 'DELIVERED' AND NULLIF(btrim(pl.posted_comment_url), '') IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM feedback_placement newer
+              JOIN feedback newer_feedback ON newer_feedback.id = newer.feedback_id
+              WHERE newer.posted_comment_ref = pl.posted_comment_ref
+                AND newer_feedback.workspace_id = f.workspace_id
+                AND newer.created_at > pl.created_at)
+        ORDER BY pl.feedback_id,
+                 CASE pl.placement_type WHEN 'SUMMARY' THEN 0 ELSE 1 END,
+                 pl.anchor_path NULLS FIRST,
+                 pl.anchor_start_line NULLS FIRST,
+                 pl.anchor_end_line NULLS FIRST,
+                 pl.created_at,
+                 pl.id
+        """, nativeQuery = true)
+    List<PostedCommentUrl> findDeliveredCommentUrls(
+            @Param("workspaceId") Long workspaceId,
+            @Param("recipientUserId") Long recipientUserId,
+            @Param("feedbackIds") Collection<UUID> feedbackIds);
+
+    interface PostedCommentUrl {
+        UUID getFeedbackId();
+
+        String getUrl();
     }
 
     /** The practices behind this feedback whose observations a workspace admin currently holds invalidated. */

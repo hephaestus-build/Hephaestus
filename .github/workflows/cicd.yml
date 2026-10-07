@@ -1018,6 +1018,8 @@ jobs:
 
       - name: Evaluate CI results
         id: evaluate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         run: |
           echo "detect-changes: ${{ needs.detect-changes.result }}"
           echo "workflow-lint: ${{ needs.workflow-lint.result }}"
@@ -1048,6 +1050,13 @@ jobs:
           # A skipped preflight is a missing release verdict, not a successful one.
           if [[ "${{ needs.detect-changes.outputs.release-candidate == 'true' && needs.Release-preflight.result != 'success' }}" == "true" ]]; then
             echo "The release candidate requires a successful release evidence preflight; this run's was '${{ needs.Release-preflight.result }}'."
+            echo "status=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # Unknown or missing results must not produce a passing verdict.
+          if ! jq -e 'type == "object" and length > 0 and all(.[]; type == "object" and (.result == "success" or .result == "skipped"))' <<< "$NEEDS" > /dev/null; then
+            echo "Every job this gate needs must have succeeded or been skipped, and at least one has no such result."
             echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
           fi
@@ -1103,10 +1112,13 @@ jobs:
       - name: Create commit status
         if: ${{ !cancelled() }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        # The job's own status, not the evaluation's: a step after it that failed fails the gate too.
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           script: |
             const sha = context.payload.pull_request?.head?.sha || context.sha;
-            const outcome = '${{ steps.evaluate.outputs.status }}' || 'failure';
+            const outcome = process.env.JOB_STATUS || 'failure';
             // createCommitStatus accepts error, failure, pending or success and 422s on anything
             // else, so a cancelled run has to be reported as one of them rather than by its name.
             const REPORTED = {

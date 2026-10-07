@@ -62,6 +62,9 @@ public final class SandboxLayout {
     /** Workspace-relative filename of the composition stage's instructions, staged beside the runner. */
     public static final String FEEDBACK_COMPOSER_PROMPT_FILENAME = "feedback-composer.md";
 
+    /** Writing guidance shared by the public and private feedback prompts. */
+    public static final String FEEDBACK_STYLE_PROMPT_FILENAME = "feedback-style.md";
+
     /** The system prompt of the review on the work, which the runner composes in a session of its own. */
     public static final String REVIEW_COMPOSER_PROMPT_FILENAME = "review-composer.md";
 
