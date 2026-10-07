@@ -2139,7 +2139,7 @@ function buildFeedbackTool(
 									type: "string",
 									enum: ACTIONS,
 									description:
-										"NEW to say something; SUPERSEDE to replace a message that is queued and unread; " +
+										"NEW to say something; SUPERSEDE to replace prepared feedback that has not been delivered; " +
 										"WITHHOLD to record, with a reason, that you decided to stay quiet.",
 								},
 								supersedesThreadKey: {
@@ -2960,9 +2960,9 @@ function buildCompositionTurn(
 	const context = [
 		shown("The composition request (lanes, caps, placements)", COMPOSITION_REQUEST_PATH),
 		shown("What earlier reviews recorded about this person", `${historyRoot}/observations.json`),
-		priorFeedbackFacts("What was already said to them", `${historyRoot}/feedback.json`, "feedback"),
+		priorFeedbackFacts("Recorded delivered feedback", `${historyRoot}/feedback.json`, "feedback"),
 		priorFeedbackFacts(
-			"What is written for them and still unread (supersession targets)",
+			"Prepared feedback (not delivered; supersession targets)",
 			PREPARED_FEEDBACK_PATH,
 			"prepared",
 		),

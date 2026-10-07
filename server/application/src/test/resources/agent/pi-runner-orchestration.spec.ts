@@ -92,8 +92,40 @@ const OVERLONG_SUMMARY = "A summary that runs on ".repeat(8).trim();
 /** Words only the person's history holds: they may reach the private lanes and never the review on the work. */
 const PRIVATE_HISTORY_SENTENCE = "Earlier reviews told this person about the insecure call twice.";
 
+/** What the staged history establishes, as the server writes it on both history files. */
+const HISTORY_COVERAGE = {
+	scope: "AUTHORIZED_REVIEW_RECORDS_FOR_SUBJECT",
+	workChronology: "NOT_ESTABLISHED",
+	communicationHistory: "NOT_ESTABLISHED",
+};
+
+/** The person's prepared feedback, as the server stages it for the private lanes, byte for byte. */
+const STAGED_PREPARED_HISTORY = JSON.stringify({
+	coverage: HISTORY_COVERAGE,
+	recordRole: "PREPARED_NOT_DELIVERED",
+	prepared: [
+		{
+			threadKey: "queued-current",
+			practiceSlug: "test-practice",
+			channel: "IN_CHAT",
+			recordedClaimCurrentness: "CURRENT",
+			bodyRole: "MENTOR_NOTES",
+			body: "Earlier prepared mentor wording.",
+		},
+		{
+			threadKey: "queued-withdrawn",
+			practiceSlug: "test-practice",
+			channel: "IN_CHAT",
+			withdrawn: true,
+			recordedClaimCurrentness: "STALE",
+		},
+	],
+});
+
 /** The person's delivered feedback, as the server stages it for the private lanes, byte for byte. */
 const STAGED_FEEDBACK_HISTORY = JSON.stringify({
+	coverage: HISTORY_COVERAGE,
+	recordRole: "RECORDED_DELIVERY",
 	feedback: [
 		{
 			id: "feedback-same-work",
@@ -113,6 +145,7 @@ const STAGED_FEEDBACK_HISTORY = JSON.stringify({
 				},
 			],
 			recordedClaimCurrentness: "CURRENT",
+			bodyRole: "COMPOSED_GUIDANCE",
 			body: "An earlier comment on this same change.",
 		},
 		{
@@ -126,6 +159,7 @@ const STAGED_FEEDBACK_HISTORY = JSON.stringify({
 			reviewedRevision: null,
 			basedOn: [],
 			recordedClaimCurrentness: "CURRENT",
+			bodyRole: "COMPOSED_GUIDANCE",
 			body: PRIVATE_HISTORY_SENTENCE,
 		},
 		{
@@ -147,6 +181,20 @@ const STAGED_FEEDBACK_HISTORY = JSON.stringify({
 			],
 			recordedClaimCurrentness: "STALE",
 			withdrawn: true,
+		},
+		{
+			id: "feedback-legacy",
+			channel: null,
+			artifact: {
+				kind: "scm.pull_request",
+				url: "https://gitlab.example/group/repo/-/merge_requests/4",
+			},
+			deliveredAt: "2026-07-01T10:00:00Z",
+			reviewedRevision: null,
+			basedOn: [],
+			recordedClaimCurrentness: "CURRENT",
+			bodyRole: "UNKNOWN",
+			body: "A legacy delivered note without a recorded channel.",
 		},
 	],
 });
@@ -1023,10 +1071,6 @@ if (scenario !== undefined && scenario !== "") {
 								}
 								assert.match(schema, /One of: IN_APP\./u);
 								assert.match(schema, /Required: channel, practiceSlug, basedOn, action\./u);
-								assert.match(
-									schema,
-									/SUPERSEDE to replace a message that is queued and unread; WITHHOLD/u,
-								);
 								// One occurrence is not a pattern: with no history, the card is refused, and a
 								// call that stored nothing is an error the session must correct.
 								const alone = await feedback
@@ -1977,27 +2021,7 @@ if (scenario !== undefined && scenario !== "") {
 						// The person's history, staged as the server stages it for the measurement and private lanes.
 						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
 						writeFileSync(nodePath.join(cwd, "history/feedback.json"), STAGED_FEEDBACK_HISTORY);
-						writeFileSync(
-							nodePath.join(cwd, "history/prepared.json"),
-							JSON.stringify({
-								prepared: [
-									{
-										threadKey: "queued-current",
-										practiceSlug: "test-practice",
-										channel: "IN_CHAT",
-										recordedClaimCurrentness: "CURRENT",
-										body: "Earlier prepared mentor wording.",
-									},
-									{
-										threadKey: "queued-withdrawn",
-										practiceSlug: "test-practice",
-										channel: "IN_CHAT",
-										withdrawn: true,
-										recordedClaimCurrentness: "STALE",
-									},
-								],
-							}),
-						);
+						writeFileSync(nodePath.join(cwd, "history/prepared.json"), STAGED_PREPARED_HISTORY);
 					}
 					if (fixture === "compose-context-unavailable") {
 						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
@@ -2875,33 +2899,66 @@ if (scenario !== undefined && scenario !== "") {
 								assert.ok(text.includes(expected), text);
 							}
 
-							const located = [
-								...composerTurn.matchAll(
-									/"bodyAt": "(?<file>[^"]+) → feedback\[(?<entry>\d+)\]\.body/gu,
-								),
-							];
-							// The withdrawn entry has no permitted body, so it names none.
-							assert.deepEqual(
-								located.map((match) => match.groups?.entry),
-								["0", "1"],
-							);
-							assert.equal(
-								readFileSync(nodePath.join(cwd, "history/feedback.json"), "utf8"),
-								STAGED_FEEDBACK_HISTORY,
-							);
-							// Each locator reads back the body as it was staged.
-							for (const match of located) {
-								const history: unknown = JSON.parse(readFileSync(match.groups?.file ?? "", "utf8"));
-								assert.ok(isRecord(history) && Array.isArray(history.feedback));
-								const entryIndex = match.groups?.entry;
-								assert.ok(entryIndex !== undefined);
-								const entry: unknown = history.feedback[Number(entryIndex)];
-								assert.ok(isRecord(entry) && typeof entry.body === "string");
-								assert.ok(
-									composerTurn.includes(
-										`feedback[${entryIndex}].body (${entry.body.length} characters)`,
-									),
+							// Each history file's projection keeps every staged root and row fact; a body is replaced by
+							// its locator in the unchanged file, and a row without one (withdrawn, stale) names none.
+							const projections = [
+								...composerTurn.matchAll(/```json\n(?<json>[\s\S]*?)\n```/gu),
+							].map((match): unknown => JSON.parse(match.groups?.json ?? "null"));
+							for (const [role, key, file, staged, bodyRoles] of [
+								[
+									"RECORDED_DELIVERY",
+									"feedback",
+									"history/feedback.json",
+									STAGED_FEEDBACK_HISTORY,
+									["COMPOSED_GUIDANCE", "COMPOSED_GUIDANCE", undefined, "UNKNOWN"],
+								],
+								[
+									"PREPARED_NOT_DELIVERED",
+									"prepared",
+									"history/prepared.json",
+									STAGED_PREPARED_HISTORY,
+									["MENTOR_NOTES", undefined],
+								],
+							] as const) {
+								assert.equal(readFileSync(nodePath.join(cwd, file), "utf8"), staged);
+								const view = projections.find(
+									(projection) => isRecord(projection) && projection.recordRole === role,
 								);
+								assert.ok(isRecord(view), role);
+								assert.deepEqual(view.coverage, HISTORY_COVERAGE);
+								const rows = view[key];
+								assert.ok(Array.isArray(rows));
+								assert.deepEqual(
+									rows.map((row: unknown) => (isRecord(row) ? row.bodyRole : null)),
+									bodyRoles,
+								);
+								const original: unknown = JSON.parse(staged);
+								const sourceRows = isRecord(original) ? original[key] : null;
+								assert.ok(Array.isArray(sourceRows) && sourceRows.length === rows.length);
+								for (const [bodyIndex, source] of sourceRows.entries()) {
+									assert.ok(isRecord(source));
+									const { body, ...facts } = source;
+									const row: unknown = rows[bodyIndex];
+									assert.ok(isRecord(row));
+									const { bodyAt, ...kept } = row;
+									assert.deepEqual(kept, facts);
+									assert.ok(!Object.hasOwn(row, "body"));
+									const sourcePath = nodePath.join(cwd, file);
+									assert.equal(
+										bodyAt,
+										typeof body === "string"
+											? `${sourcePath} → ${key}[${bodyIndex}].body (${body.length} characters)`
+											: undefined,
+									);
+									// The locator identifies the original bytes and the staged body index.
+									const located = readFileSync(sourcePath, "utf8");
+									assert.equal(located, staged);
+									const reread: unknown = JSON.parse(located);
+									const rereadRows = isRecord(reread) ? reread[key] : null;
+									assert.ok(Array.isArray(rereadRows));
+									const entry: unknown = rereadRows[bodyIndex];
+									assert.ok(isRecord(entry) && entry.body === body);
+								}
 							}
 							assert.doesNotMatch(composerTurn, /"quote"/u);
 							assert.doesNotMatch(composerTurn, /"verification"/u);
