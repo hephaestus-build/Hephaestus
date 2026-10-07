@@ -542,6 +542,8 @@ const usageTotals: UsageTotals = {
 	totalCalls: 0,
 };
 interface TurnTrace {
+	modelError: boolean;
+	runtimeError: boolean;
 	label: string;
 	durationMs: number;
 	calls: number;
@@ -1871,7 +1873,22 @@ interface LeanObservation {
 }
 
 /** What gets written to feedback.json, with the fields the reader resolves references against. */
+type CompositionPhase = "PUBLIC_REVIEW" | "PRIVATE_FEEDBACK";
+type CompositionFailureReason =
+	| "MODEL_ERROR"
+	| "RUNTIME_ERROR"
+	| "BUDGET"
+	| "STALL"
+	| "SAFETY"
+	| "LOOP"
+	| "NO_DECISION";
+interface CompositionFailure {
+	phase: CompositionPhase;
+	reason: CompositionFailureReason;
+}
+
 interface ComposedFeedback extends ComposedFeedbackEnvelope {
+	compositionFailures: CompositionFailure[];
 	contractVersion: number;
 	admissionDigest: string | null;
 	observations: LeanObservation[];
@@ -1882,6 +1899,7 @@ interface ComposedFeedback extends ComposedFeedbackEnvelope {
 
 // Echo the exact composition inputs so Java validates references against the same snapshot.
 const composedFeedback: ComposedFeedback = {
+	compositionFailures: [],
 	contractVersion: REVIEW_CONTRACT_VERSION,
 	admissionDigest: null,
 	observations: [],
@@ -3173,6 +3191,8 @@ function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTra
 	resetSessionGuards();
 	lastEventAt = Date.now();
 	currentTurn = {
+		modelError: false,
+		runtimeError: false,
 		label,
 		durationMs: Date.now(),
 		calls: 0,
@@ -3450,6 +3470,46 @@ function compositionBudget(notMet: number): Work {
 	return turnBudget(Math.min(Math.max(1, notMet), PRACTICES_PER_TURN), PER_PRACTICE_WORK);
 }
 
+/** Existing private decision obligation: a stored unit or withholding may fold several practices in. */
+function undecidedPrivatePractices(): string[] {
+	const practiceOf = new Map(
+		admittedObservations.map((observation) => [observation.id, observation.practiceSlug]),
+	);
+	const decided = new Set(
+		composedFeedback.units.flatMap((unit) => [
+			unit.practiceSlug,
+			...unit.basedOn.flatMap((id) => practiceOf.get(id) ?? []),
+		]),
+	);
+	return notMetPractices(admittedObservations).filter((slug) => !decided.has(slug));
+}
+
+function recordCompositionFailure(phase: CompositionPhase, reason: CompositionFailureReason): void {
+	if (!composedFeedback.compositionFailures.some((failure) => failure.phase === phase)) {
+		composedFeedback.compositionFailures.push({ phase, reason });
+	}
+}
+
+function incompleteCompositionReason(
+	trace: TurnTrace,
+	safetyExpired: boolean,
+): CompositionFailureReason {
+	const stops = { budget: "BUDGET", stall: "STALL", safety: "SAFETY", loop: "LOOP" } as const;
+	if (trace.stoppedBy !== null) {
+		return stops[trace.stoppedBy];
+	}
+	if (safetyExpired) {
+		return "SAFETY";
+	}
+	if (trace.modelError) {
+		return "MODEL_ERROR";
+	}
+	if (trace.runtimeError) {
+		return "RUNTIME_ERROR";
+	}
+	return "NO_DECISION";
+}
+
 /** Retry undecided composition once, under its own work budget and the run's safety line. */
 async function askComposerOnceMore(
 	session: AgentSession,
@@ -3458,7 +3518,7 @@ async function askComposerOnceMore(
 	request: CompositionRequest,
 	buildText: () => string,
 	safety: ReturnType<typeof scheduleDeadline>,
-): Promise<void> {
+): Promise<TurnTrace> {
 	console.error(
 		`[pi-runner] composition left ${notMet.length} NOT_MET practice(s) undecided — asking once more`,
 	);
@@ -3498,6 +3558,7 @@ ${finishCompositionText(notMet, request)}`,
 			]);
 		}
 	} catch (error) {
+		trace.runtimeError = trace.stoppedBy === null && !safety.expired();
 		console.error(`[pi-runner] composition failed: ${errorText(error)}`);
 	} finally {
 		if (trace.stoppedBy !== null) {
@@ -3505,6 +3566,7 @@ ${finishCompositionText(notMet, request)}`,
 		}
 		closeTurnTrace(trace);
 	}
+	return trace;
 }
 
 function finishCompositionText(notMet: readonly string[], request: CompositionRequest): string {
@@ -3655,6 +3717,9 @@ async function main() {
 				);
 			}
 			if (event.type === "auto_retry_end" && !event.success) {
+				if (currentTurn) {
+					currentTurn.modelError = true;
+				}
 				const finalError = event.finalError ?? "no error given";
 				// Only measurement failures can make a review eligible for provider retry.
 				if (measuring) {
@@ -3667,6 +3732,9 @@ async function main() {
 			if (event.type === "message_end" && event.message.role === "assistant") {
 				addAssistantUsage(streamUsage, event.message);
 				const { stopReason } = event.message;
+				if (currentTurn) {
+					currentTurn.modelError = stopReason === "error";
+				}
 				const types = listOrEmpty(event.message.content).map((c) => c.type);
 				const toolCalls = types.filter((t) => t === "toolCall").length;
 				const { rawStopReason } = event.message;
@@ -3971,8 +4039,21 @@ async function main() {
 	persistComposedFeedback();
 	maybeWriteResultFile();
 	if (compositionRequest && admittedObservations.length > 0) {
+		const markRemaining = (reason: CompositionFailureReason) => {
+			if (
+				compositionRequest.channels.IN_CONTEXT.enabled &&
+				publicObservations(admittedObservations).length > 0 &&
+				composedFeedback.review === null
+			) {
+				recordCompositionFailure("PUBLIC_REVIEW", reason);
+			}
+			if (privateLanesOpen && undecidedPrivatePractices().length > 0) {
+				recordCompositionFailure("PRIVATE_FEEDBACK", reason);
+			}
+		};
 		const safetyMs = AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS);
 		if (safetyMs <= 0) {
+			markRemaining("SAFETY");
 			console.error(
 				"[pi-runner] The run reached its safety ceiling before composition — preserving admitted observations",
 			);
@@ -3993,7 +4074,13 @@ async function main() {
 				if (feedbackTool && notMetPractices(admittedObservations).length > 0 && !safety.expired()) {
 					await composePrivately(compositionRequest, safety);
 				}
+			} catch (error) {
+				markRemaining(safety.expired() ? "SAFETY" : "RUNTIME_ERROR");
+				throw error;
 			} finally {
+				if (safety.expired()) {
+					markRemaining("SAFETY");
+				}
 				clearTimeout(safety.timer);
 				persistComposedFeedback();
 				// Every session's calls are in the one stream ledger; no single session's messages hold them all.
@@ -4103,10 +4190,12 @@ async function main() {
 		const budget = compositionBudget(owed());
 		let started = false;
 		const wasStarted = () => started;
+		const trace = openTurnTrace("review composition", budget, { owed, nudge: REVIEW_NUDGE });
+		let finalTrace = trace;
 		try {
-			const trace = openTurnTrace("review composition", budget, { owed, nudge: REVIEW_NUDGE });
 			try {
 				if (safety.expired()) {
+					trace.stoppedBy = "safety";
 					throw new Error("the run reached its safety ceiling before the review was due");
 				}
 				await Promise.race([
@@ -4130,6 +4219,7 @@ async function main() {
 					safety.elapsed,
 				]);
 			} catch (error) {
+				trace.runtimeError = trace.stoppedBy === null && !safety.expired();
 				console.error(`[pi-runner] review composition failed: ${errorText(error)}`);
 			} finally {
 				if (trace.stoppedBy !== null) {
@@ -4140,6 +4230,8 @@ async function main() {
 			const left = undecidedByReview(reviewable);
 			if (
 				wasStarted() &&
+				!trace.modelError &&
+				!trace.runtimeError &&
 				(trace.stoppedBy === null || trace.stoppedBy === "loop") &&
 				!state.final &&
 				(await settleSession(reviewSession, "review composition", ABORT_SETTLE_MS)) &&
@@ -4155,6 +4247,7 @@ async function main() {
 					nudge: REVIEW_NUDGE,
 					endsWhenPaid: true,
 				});
+				finalTrace = retry;
 				try {
 					await Promise.race([
 						(async () => {
@@ -4180,6 +4273,7 @@ async function main() {
 						safety.elapsed,
 					]);
 				} catch (error) {
+					retry.runtimeError = retry.stoppedBy === null && !safety.expired();
 					console.error(`[pi-runner] review composition failed: ${errorText(error)}`);
 				} finally {
 					if (retry.stoppedBy !== null) {
@@ -4189,9 +4283,15 @@ async function main() {
 				}
 			}
 		} finally {
-			persistComposedFeedback();
 			try {
 				await stopBeforeSwitching(reviewSession);
+				if (!state.final) {
+					recordCompositionFailure(
+						"PUBLIC_REVIEW",
+						incompleteCompositionReason(finalTrace, safety.expired()),
+					);
+				}
+				persistComposedFeedback();
 			} finally {
 				unsubscribeReview();
 				unsubscribeContext();
@@ -4229,36 +4329,33 @@ async function main() {
 				privateLoader,
 			);
 			const { session } = opened;
+			let finalTrace: TurnTrace;
 			try {
-				await composeInto(session);
+				finalTrace = await composeInto(session);
 			} finally {
 				await closeSession(opened);
 			}
+			if (undecidedPrivatePractices().length > 0) {
+				recordCompositionFailure(
+					"PRIVATE_FEEDBACK",
+					incompleteCompositionReason(finalTrace, safety.expired()),
+				);
+			}
 		}
 
-		async function composeInto(session: AgentSession): Promise<void> {
+		async function composeInto(session: AgentSession): Promise<TurnTrace> {
 			const notMet = notMetPractices(admittedObservations);
-			// A NOT_MET practice is decided by a unit of its own, or by one that folds its observation in.
-			const practiceOf = new Map(
-				admittedObservations.map((observation) => [observation.id, observation.practiceSlug]),
-			);
-			const undecided = () => {
-				const decided = new Set(
-					composedFeedback.units.flatMap((unit) => [
-						unit.practiceSlug,
-						...unit.basedOn.flatMap((id) => practiceOf.get(id) ?? []),
-					]),
-				);
-				return notMet.filter((slug) => !decided.has(slug));
-			};
+			const undecided = undecidedPrivatePractices;
 			let started = false;
 			const wasStarted = () => started;
 			const trace = openTurnTrace("composition", compositionBudget(notMet.length), {
 				owed: () => undecided().length,
 				nudge: COMPOSITION_NUDGE,
 			});
+			let finalTrace = trace;
 			try {
 				if (safety.expired()) {
+					trace.stoppedBy = "safety";
 					throw new Error("the run reached its safety ceiling before composition was due");
 				}
 				const compositionTurn = buildCompositionTurn(request, admittedObservations, notReached);
@@ -4286,6 +4383,7 @@ async function main() {
 					safety.elapsed,
 				]);
 			} catch (error) {
+				trace.runtimeError = trace.stoppedBy === null && !safety.expired();
 				console.error(`[pi-runner] composition failed: ${errorText(error)}`);
 			} finally {
 				if (trace.stoppedBy !== null) {
@@ -4298,11 +4396,13 @@ async function main() {
 			const left = undecided();
 			if (
 				wasStarted() &&
+				!trace.modelError &&
+				!trace.runtimeError &&
 				(trace.stoppedBy === null || trace.stoppedBy === "loop") &&
 				left.length > 0 &&
 				!safety.expired()
 			) {
-				await askComposerOnceMore(
+				finalTrace = await askComposerOnceMore(
 					session,
 					left,
 					undecided,
@@ -4314,6 +4414,7 @@ async function main() {
 					safety,
 				);
 			}
+			return finalTrace;
 		}
 	}
 }

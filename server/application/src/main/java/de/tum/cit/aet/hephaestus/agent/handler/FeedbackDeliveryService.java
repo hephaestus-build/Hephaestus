@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
@@ -142,7 +143,7 @@ class FeedbackDeliveryService {
                         signals,
                         dispatch.getDeliveredExternalRef(),
                         dispatch.getDeliveredExternalUrl());
-                reconcileJob(dispatch, DeliveryStatus.DELIVERED);
+                reconcileJob(job, dispatch, DeliveryStatus.DELIVERED);
                 return;
             }
             if (dispatch.getState() == FeedbackDispatchState.SUPPRESSED) {
@@ -150,7 +151,7 @@ class FeedbackDeliveryService {
                         FeedbackSuppressionReason.valueOf(Objects.requireNonNull(dispatch.getSuppressionReason()));
                 if (!summaryDelivered && !inlineDelivered) {
                     feedbackLedgerRecorder.recordSuppressedUnit(job, delivery, reason);
-                    reconcileJob(dispatch, DeliveryStatus.DELIVERED);
+                    reconcileJob(job, dispatch, DeliveryStatus.DELIVERED);
                     return;
                 }
                 feedbackLedgerRecorder.recordWithoutConversation(
@@ -162,7 +163,7 @@ class FeedbackDeliveryService {
                         dispatch.getDeliveredExternalUrl());
                 feedbackLedgerRecorder.recordSuppressedRemainder(
                         job, delivery, reason, missingInlineKeys(delivery, signals));
-                reconcileJob(dispatch, DeliveryStatus.DELIVERED);
+                reconcileJob(job, dispatch, DeliveryStatus.DELIVERED);
                 return;
             }
             if (dispatch.getState() == FeedbackDispatchState.FAILED) {
@@ -179,14 +180,21 @@ class FeedbackDeliveryService {
                 } else {
                     feedbackLedgerRecorder.recordUndelivered(job, delivery);
                 }
-                reconcileJob(dispatch, DeliveryStatus.FAILED);
+                reconcileJob(job, dispatch, DeliveryStatus.FAILED);
             }
         });
     }
 
-    private void reconcileJob(FeedbackDispatch dispatch, DeliveryStatus status) {
+    private void reconcileJob(AgentJob job, FeedbackDispatch dispatch, DeliveryStatus status) {
+        DeliveryStatus effectiveStatus = FeedbackCompositionResultParser.compositionStatus(job.getOutput())
+                        .failed()
+                ? DeliveryStatus.FAILED
+                : status;
         agentJobRepository.reconcileDispatchDeliveryStatus(
-                dispatch.getAgentJobId(), dispatch.getWorkspaceId(), status, dispatch.getDeliveredExternalRef());
+                dispatch.getAgentJobId(),
+                dispatch.getWorkspaceId(),
+                effectiveStatus,
+                dispatch.getDeliveredExternalRef());
     }
 
     /**

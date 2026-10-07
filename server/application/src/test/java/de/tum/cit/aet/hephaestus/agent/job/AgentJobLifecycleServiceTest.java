@@ -9,6 +9,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.transaction.TransactionStatus;
@@ -417,6 +419,38 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
         }
 
         @Test
+        void compositionOnlyFailureCannotRetryDeliveryWithoutAPersistedFailedPackage() {
+            completedJob.setOutput(
+                    new ObjectMapper()
+                            .readTree(
+                                    "{\"feedback\":{\"compositionFailures\":[{\"phase\":\"PRIVATE_FEEDBACK\",\"reason\":\"MODEL_ERROR\"}]}}"));
+            when(agentJobRepository.findByIdAndWorkspaceId(jobId, WORKSPACE_ID)).thenReturn(Optional.of(completedJob));
+            when(agentJobRepository.transitionDeliveryStatus(eq(jobId), eq(DeliveryStatus.PENDING), any()))
+                    .thenReturn(1);
+            assertThatThrownBy(() -> service.retryDelivery(WORKSPACE_ID, jobId))
+                    .isInstanceOf(AgentJobStateConflictException.class);
+            verify(handler, never()).deliver(any());
+        }
+
+        @Test
+        void persistedFailedPackageCanRetryWithoutErasingIncompleteComposition() {
+            completedJob.setOutput(
+                    new ObjectMapper()
+                            .readTree(
+                                    "{\"feedback\":{\"compositionFailures\":[{\"phase\":\"PRIVATE_FEEDBACK\",\"reason\":\"BUDGET\"}]}}"));
+            when(agentJobRepository.findByIdAndWorkspaceId(jobId, WORKSPACE_ID)).thenReturn(Optional.of(completedJob));
+            when(agentJobRepository.transitionDeliveryStatus(eq(jobId), eq(DeliveryStatus.PENDING), any()))
+                    .thenReturn(1);
+            when(feedbackDispatchRepository.resetFailedAutomaticPackage(jobId, WORKSPACE_ID))
+                    .thenReturn(1);
+            when(agentJobRepository.findById(jobId)).thenReturn(Optional.of(completedJob));
+            service.retryDelivery(WORKSPACE_ID, jobId);
+            verify(handler).deliver(completedJob);
+            verify(agentJobRepository)
+                    .updateDeliveryStatus(jobId, DeliveryStatus.FAILED, completedJob.getDeliveryCommentId());
+        }
+
+        @Test
         void shouldRevertToFailedOnDeliveryException() {
             when(agentJobRepository.findByIdAndWorkspaceId(jobId, WORKSPACE_ID)).thenReturn(Optional.of(completedJob));
             when(agentJobRepository.transitionDeliveryStatus(eq(jobId), eq(DeliveryStatus.PENDING), any()))
@@ -484,6 +518,30 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
                             jobId,
                             DeliveryStatus.DELIVERED,
                             "existing-comment-id",
+                            Set.of(DeliveryStatus.PENDING),
+                            CLAIMED_ATTEMPTS);
+        }
+
+        @ParameterizedTest
+        @ValueSource(booleans = {true, false})
+        void recoveryPreservesIncompleteCompositionAfterFoundCopyOrSuccessfulPartialDelivery(boolean found) {
+            completedJob.setOutput(
+                    new ObjectMapper()
+                            .readTree(
+                                    "{\"feedback\":{\"compositionFailures\":[{\"phase\":\"PRIVATE_FEEDBACK\",\"reason\":\"NO_DECISION\"}]}}"));
+            when(handler.findExistingDelivery(completedJob))
+                    .thenReturn(found ? ExistingDeliveryLookup.found("partial-copy") : ExistingDeliveryLookup.absent());
+            when(agentJobRepository.transitionDeliveryStatusFenced(
+                            eq(jobId), eq(DeliveryStatus.FAILED), any(), any(), eq(CLAIMED_ATTEMPTS)))
+                    .thenReturn(1);
+            assertThat(service.recoverStuckDelivery(completedJob, CLAIMED_ATTEMPTS))
+                    .isTrue();
+            verify(handler, times(found ? 0 : 1)).deliver(completedJob);
+            verify(agentJobRepository)
+                    .transitionDeliveryStatusFenced(
+                            jobId,
+                            DeliveryStatus.FAILED,
+                            found ? "partial-copy" : completedJob.getDeliveryCommentId(),
                             Set.of(DeliveryStatus.PENDING),
                             CLAIMED_ATTEMPTS);
         }

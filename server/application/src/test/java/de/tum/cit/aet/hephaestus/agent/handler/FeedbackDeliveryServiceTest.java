@@ -39,6 +39,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import tools.jackson.databind.ObjectMapper;
 
 class FeedbackDeliveryServiceTest extends BaseUnitTest {
 
@@ -263,6 +264,22 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
         verify(jobRepository)
                 .reconcileDispatchDeliveryStatus(
                         job.getId(), WORKSPACE_ID, DeliveryStatus.DELIVERED, "dispatch-summary");
+    }
+
+    @Test
+    void sentPartialPackageKeepsItsPublicationLedgerWithoutCertifyingCompleteComposition() {
+        AgentJob job = job();
+        job.setOutput(
+                new ObjectMapper()
+                        .readTree(
+                                "{\"feedback\":{\"compositionFailures\":[{\"phase\":\"PRIVATE_FEEDBACK\",\"reason\":\"MODEL_ERROR\"}]}}"));
+        FeedbackDispatch dispatch = projectableDispatch(FeedbackDispatchState.SENT, "partial-summary", null);
+        DeliveryContent delivery = delivery();
+        project(dispatch, delivery, List.of());
+        service.projectAutomaticPackage(job, dispatch);
+        verify(ledgerRecorder).record(job, delivery, ArtifactKinds.PULL_REQUEST, List.of(), "partial-summary", null);
+        verify(jobRepository)
+                .reconcileDispatchDeliveryStatus(job.getId(), WORKSPACE_ID, DeliveryStatus.FAILED, "partial-summary");
     }
 
     @Test

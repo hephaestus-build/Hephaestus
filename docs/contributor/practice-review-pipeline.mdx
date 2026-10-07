@@ -681,6 +681,21 @@ A body cannot both speak about and withhold the same observation.
 ### Missing composition and recovery
 
 A composition failure does not invalidate admitted observations.
+The runner records at most one incomplete status per public or private composition phase in `feedback.json`.
+It records a finite stop reason after settlement and, where applicable, the existing correction attempt, when a required decision remains.
+A final accepted review, including a valid empty review, pays the public obligation.
+A private decision is paid by the existing practice-level unit, folding or withholding contract, not by one unit per channel.
+Disabled channels and inapplicable composition do not create obligations.
+
+Valid partial feedback remains eligible for normal preparation and delivery.
+The review can complete with admitted observations while its delivery status stays `FAILED` for incomplete composition.
+Malformed present status also fails delivery processing.
+Absent legacy metadata remains unknown.
+
+For known incomplete or unreadable composition, a delivery retry requires an actual failed persisted package.
+Delivery recovery never repeats measurement or composition.
+Recovery preserves the incomplete status after posting or finding an existing partial package.
+
 Each eligible public `NOT_MET` observation must be named by a body or an explicit withholding decision.
 An empty review is intentional silence only when it leaves no such observation undecided.
 A required review that is missing or breaks its contract is a delivery failure, never silence.

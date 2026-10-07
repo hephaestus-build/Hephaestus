@@ -1139,6 +1139,45 @@ class AgentJobExecutorTest extends BaseUnitTest {
             assertThat(sample.getValue().outputTokens()).isEqualTo(50);
         }
 
+        @ParameterizedTest
+        @ValueSource(booleans = {false, true})
+        void incompleteCompositionPreservesAcceptedObservationsUsageAndPartialDelivery(boolean malformed) {
+            job.setConfigSnapshot(snapshot.withPriceSnapshot(pricedSnapshot()).toJson(objectMapper));
+            stubClaimableJob();
+            JobTypeHandler handler =
+                    setupFullExecution(new SandboxResult(0, Map.of(), "", false, Duration.ofSeconds(5)));
+            Map<String, Object> payload = Map.of(
+                    "compositionFailures",
+                    malformed ? "invalid" : List.of(Map.of("phase", "PRIVATE_FEEDBACK", "reason", "MODEL_ERROR")),
+                    "units",
+                    List.of());
+            when(practiceAgent.parseResult(any())).thenReturn(new AgentResult(true, Map.of("feedback", payload)));
+            AgentJob fresh = freshJob();
+            fresh.setMetadata(
+                    objectMapper.createObjectNode().put(ObservationAdmissionService.DIGEST_METADATA_KEY, "accepted"));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.findById(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.transitionStatus(any(), any(), any(), any(), any()))
+                    .thenReturn(1);
+            when(jobRepository.findLlmUsageById(jobId))
+                    .thenReturn(Optional.of(new AgentJobLlmUsage(2, 100, 50, 0, 0, 0)));
+            executor.processJob(jobId);
+            verify(jobRepository)
+                    .transitionStatus(
+                            eq(jobId),
+                            eq(AgentJobStatus.COMPLETED),
+                            any(),
+                            eq(
+                                    malformed
+                                            ? "Feedback composition status could not be read."
+                                            : "Some feedback could not be composed."),
+                            eq(Set.of(AgentJobStatus.RUNNING)));
+            verify(handler).deliver(fresh);
+            verify(jobRepository).updateDeliveryStatus(eq(jobId), eq(DeliveryStatus.FAILED), isNull());
+            assertThat(requireNonNull(fresh.getOutput()).path("feedback")).isEqualTo(objectMapper.valueToTree(payload));
+            verify(usageRecorder).record(eq(99L), any());
+        }
+
         private static Stream<Arguments> failedOutputs() {
             return Stream.of(
                     Arguments.of(false, "local draft", AgentJobStatus.FAILED, null),
