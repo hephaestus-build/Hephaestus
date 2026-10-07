@@ -6,6 +6,7 @@ description: See how your work stands across practice groups, which practices we
 
 Use your Practice profile to read feedback, choose a next step, and check the evidence behind your practice standing.
 Other developers cannot see it.
+They see your standings only as part of the counts on [Practices across the workspace](#practices-across-the-workspace).
 [Your data in Hephaestus](./privacy.mdx#ai-processing-and-visibility) lists who else can.
 
 The profile uses practice review results about your own pull requests, merge requests, issues, conversations, and documents.
@@ -240,14 +241,18 @@ Each developer counts with the standing that their Practice profile shows now, s
 ### Small counts
 
 The page shows every count, however small, and everyone sees the same bars.
-It never names a developer.
-But a part of a bar can hold only one or two developers.
-Then other members can sometimes tell where you stand, for example if they know where everyone else stands.
+It never names a developer, but a small count can tell other members where you stand:
 
-- Each bar always shows all its parts, also parts with one developer or none.
-- A figure shows its band as soon as it counts one developer.
-  When it counts only a few, the band can show the value of one person.
-- Before anybody has a standing, each bar is a dashed track with **No developer has a standing yet** under it.
+- If everyone in a bar is in one part, each of them has that standing.
+- If you are alone in a part, a member who can tell that it is you knows your standing.
+  A member who shares a part of two with you knows that you have the same standing.
+- A member who compares the page before and after your next review can see your part change.
+- When a figure counts only one or two developers, its band shows their values.
+
+A workspace admin can hide you from the workspace. Then the page does not count you.
+
+Each bar shows every part that holds a developer, also a part of one.
+Before anybody has a standing, each bar is a dashed track with **No developer has a standing yet** under it.
 
 ### Open a group
 

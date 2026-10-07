@@ -1,12 +1,11 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.MiddleHalf;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.Split;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceTilesDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceRangeDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceTileDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
@@ -36,8 +35,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Practices across the workspace exactly as it was composed before its counts were shared between readers: every
- * read counts the whole workspace for its reader. The golden the shared counts are compared with; test only. Its
- * splits and middle halves show whatever they count, as the page's do since the page dropped its smallest count.
+ * read counts the whole workspace for its reader. The golden the shared counts are compared with; test only.
  */
 @RequiredArgsConstructor
 class PracticesAcrossWorkspaceReference {
@@ -69,16 +67,16 @@ class PracticesAcrossWorkspaceReference {
             PracticeGroup group = groups.get(groupIndex);
             List<WorkspacePracticeSplitDTO> practiceSplits = new ArrayList<>();
             for (Practice practice : practices.get(groupIndex)) {
-                Split split = WorkspaceSplits.split(current.withAStanding().stream()
+                WorkspaceSplitDTO split = WorkspaceSplits.split(current.withAStanding().stream()
                         .map(developer -> standingIn(current.snapshotOf(developer), practice.getSlug()))
                         .toList());
                 practiceSplits.add(new WorkspacePracticeSplitDTO(
                         practice.getSlug(),
                         practice.getName(),
                         current.readerCounted() ? standingIn(yours, practice.getSlug()) : null,
-                        WorkspaceSplitDTO.from(split)));
+                        split));
             }
-            Split groupSplit = WorkspaceSplits.split(current.withAStanding().stream()
+            WorkspaceSplitDTO groupSplit = WorkspaceSplits.split(current.withAStanding().stream()
                     .map(developer ->
                             current.groupStandingOf(developer, group.getSlug()).asPracticeStanding())
                     .toList());
@@ -88,18 +86,18 @@ class PracticesAcrossWorkspaceReference {
                     group.getIcon(),
                     group.getColor(),
                     current.readerCounted() ? current.groupStandingOf(members.reader(), group.getSlug()) : null,
-                    WorkspaceSplitDTO.from(groupSplit),
+                    groupSplit,
                     practiceSplits));
         }
 
         // Open now for everyone, whatever window the tiles read, so the tile never sets a moment beside a span.
         Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, members.read());
         @Nullable Long reader = members.reader();
-        MiddleHalf openMiddle = WorkspaceSplits.middleHalf(members.eligible().stream()
+        WorkspaceRangeDTO openMiddle = WorkspaceSplits.middleHalf(members.eligible().stream()
                 .map(developer -> openFeedback.getOrDefault(developer, 0))
                 .toList());
         return new PracticesAcrossWorkspaceDTO(
-                WorkspaceTileDTO.of(reader == null ? 0 : openFeedback.getOrDefault(reader, 0), openMiddle), rows);
+                new WorkspaceTileDTO(reader == null ? 0 : openFeedback.getOrDefault(reader, 0), openMiddle), rows);
     }
 
     /** The reader's figures over the window beside the middle half of the developers with a standing in it. */
@@ -200,7 +198,7 @@ class PracticesAcrossWorkspaceReference {
 
     private static WorkspaceTileDTO tile(
             StandingSnapshot yours, List<StandingSnapshot> withAStanding, ToIntFunction<StandingSnapshot> figure) {
-        return WorkspaceTileDTO.of(
+        return new WorkspaceTileDTO(
                 figure.applyAsInt(yours),
                 WorkspaceSplits.middleHalf(
                         withAStanding.stream().map(figure::applyAsInt).toList()));

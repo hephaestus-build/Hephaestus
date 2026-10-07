@@ -74,7 +74,7 @@ export const threeWay = (
 	developers: total,
 });
 
-/** A split with parts of one, two and none: shown as it is, like any other. */
+/** A split with parts of one, two and nobody. */
 export const SMALL_PARTS: WorkspaceSplit = threeWay([1, 0, 2]);
 
 /** A split that counts nobody: no developer has a standing yet. */
@@ -94,7 +94,7 @@ const group = (
 	practices: WorkspacePracticeSplit[] = [],
 ): WorkspaceGroupSplit => ({ ...of, yourStanding, split, practices });
 
-/** Packaging's five practices, two of them with small parts, each shown as it is. */
+/** Packaging’s five practices, two of them with small parts. */
 export const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 	practice(
 		"keep-the-diff-reviewable",

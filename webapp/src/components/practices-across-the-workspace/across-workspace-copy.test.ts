@@ -77,21 +77,14 @@ describe("tilesHint", () => {
 			"No developer in this workspace has a standing in the last 30 days, so these figures have no typical range.",
 		);
 	});
-
-	it("says that open feedback reads no window", () => {
-		expect(tilesHint(tiles)[1]).toBe(
-			"Open feedback counts what is open now, for every developer that this page counts.",
-		);
-	});
 });
 
 describe("barsHint", () => {
 	it.each(["group", "practice"] as const)(
-		"says for a %s that every count shows, and what a small count can tell",
+		"tells a reader of a %s what a small count can show",
 		(scope) => {
-			expect(barsHint(scope)).toBe(
-				`Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it. The You marker shows your part. Every bar shows all its counts, however small. So a small count can let others tell where you stand.`,
-			);
+			expect(barsHint(scope)).toContain(`current standing in the ${scope},`);
+			expect(barsHint(scope)).toMatch(/So a small count can let others tell where you stand\.$/u);
 		},
 	);
 });

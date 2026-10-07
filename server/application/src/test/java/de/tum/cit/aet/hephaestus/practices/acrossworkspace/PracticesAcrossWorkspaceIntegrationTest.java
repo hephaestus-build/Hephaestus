@@ -77,8 +77,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * {@code GET /practices/workspace-overview} over a workspace this class seeds: the owner, the reader and twenty six
- * developers, every one with a standing. Every group shows all its parts: Issues has only four developers with a
- * standing and Craft only three without one. Every count asserted is one of these rows.
+ * developers, every one with a standing. Issues has four developers with a verdict, and Craft has three without
+ * one. Every count asserted is one of these rows.
  */
 class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
@@ -308,33 +308,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .satisfies(group -> assertThat(group.practices())
                         .extracting(WorkspacePracticeSplitDTO::practiceSlug, WorkspacePracticeSplitDTO::yourStanding)
                         .containsExactly(tuple("atomic", null), tuple("explain", null)));
-    }
-
-    @Test
-    @WithUser
-    @DisplayName("a practice whose split falls short of its group's by fewer than three shows all its parts")
-    void shouldSplitAPracticeThatFallsShortOfItsGroupByFewerThanThree() {
-        Practice small = persistPractice(workspace, packagingGroup, "small", "Small", null);
-        // The second practice says of seventeen developers what the first says and nothing of the eighteenth or the
-        // reader: the group less it counts the two it leaves out, and the page shows it all the same.
-        for (int index = 0; index < 17; index++) {
-            standing(small, developer("across-dev-" + index), index);
-        }
-
-        read().jsonPath(practicePart("review-ready-work", "explain", "STRENGTH"))
-                .isEqualTo(7)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".yourStanding")
-                .isEqualTo("NOT_OBSERVED")
-                .jsonPath(practicePart("review-ready-work", "small", "DEVELOPING"))
-                .isEqualTo(6)
-                .jsonPath(practicePart("review-ready-work", "small", "MIXED"))
-                .isEqualTo(6)
-                .jsonPath(practicePart("review-ready-work", "small", "STRENGTH"))
-                .isEqualTo(5)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".split.noneYet")
-                .isEqualTo(11);
     }
 
     @Test

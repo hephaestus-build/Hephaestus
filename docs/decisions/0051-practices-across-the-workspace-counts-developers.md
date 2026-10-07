@@ -2,7 +2,7 @@
 
 **Status:** Proposed
 **Date:** 2026-10-02
-**Amended:** 2026-10-07. The page has no smallest count. *Amendment of 2026-10-07* gives the change.
+**Amended:** 2026-10-07, proposed. The page has no smallest count. *Amendment of 2026-10-07* gives the change. *Open decisions* gives the decision that it waits for.
 **Authors:** Valentin Grüner
 **Builds on:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md) (no score, no rank),
 [ADR 0047](0047-the-practice-profile-has-one-reader.md) (the Practice profile has one reader)
@@ -44,9 +44,9 @@ What the page shows of the reader:
 How small a shown count can be:
 
 1. **K = 5, with a merged bar when a split cannot show all parts.** Rejected. A practice split then needs 6 developers in each part. Workspaces of 30 to 40 developers seldom have that. The merged bar also shows no standing.
-2. **K = 10, the default of the ONS and the NCHS [4, 6].** Rejected. Almost every split in a workspace of 30 to 40 developers is then held back.
-3. **K = 3, with all four parts or only the total.** Chosen on 2026-10-02. Replaced on 2026-10-07.
-4. **No smallest count. Every split shows all its parts.** Chosen on 2026-10-07. The section *Amendment of 2026-10-07* gives the reasons.
+2. **K = 10, as the ABS uses [5].** Rejected. Almost every split in a workspace of 30 to 40 developers is then held back.
+3. **K = 3, with all four parts or only the total.** Chosen on 2026-10-02.
+4. **No smallest count. Every split shows all its parts.** Proposed on 2026-10-07 to replace option 3. The section *Amendment of 2026-10-07* gives the reasons.
 
 How the reader controls the comparison:
 
@@ -57,6 +57,7 @@ How the reader controls the comparison:
 
 **Practices across the workspace** is a separate page that shows the workspace, not the reader.
 It counts developers in each practice group and practice and never names one.
+A small count can still identify one developer. *Amendment of 2026-10-07* gives the cases.
 `WorkspaceSplits` counts the splits and the middle halves.
 
 ### What the page counts
@@ -81,7 +82,8 @@ The same rules apply whether the reader is in the count or not, so every reader 
 - The tiles show the number of developers with a standing in the window, also when it is small.
 
 The amendment changes no rule about who and what is counted.
-The AI choice of each developer, hidden members, hidden repositories, and invalidated observations apply as before.
+Hidden members, hidden repositories, and invalidated observations stay out of every count.
+**No AI** stops new reviews about a developer. A standing from earlier reviews still counts.
 
 ### What the page shows of the reader
 
@@ -96,9 +98,7 @@ Every count held 4 developers or more.
 A split with a smaller part showed only its total, and a smaller total showed nothing.
 Three differences between splits were also guarded.
 
-The maintainer removed these thresholds on 2026-10-07.
-The page now shows all counts and all splits.
-The supervisor is to be informed.
+The maintainer proposed on 2026-10-07 to remove these thresholds and show all counts and all splits.
 
 The reasons:
 
@@ -107,9 +107,13 @@ The reasons:
 - With K = 3, most bars in a real workspace stayed held back until many developers had a review. The page then showed almost nothing.
 
 The page accepts a larger risk than before.
-A part can hold 1 developer.
-A reader who knows the standings of the other developers in a split can find the standing of the last one.
-The middle half can be equal to the value of one developer.
+It names nobody, but a reader can find the standing of one developer in these cases:
+
+- All developers of a split are in one part. Each of them has that standing.
+- A part holds 1 developer, or 2 with the reader among them. The reader can know who has a verdict there, for example from the reviews on the provider. Then the reader knows the standing of that developer.
+- The reader compares the page before and after the review of a colleague.
+- The middle half counts 1 or 2 developers. Then it gives the value of each of them.
+
 The page and the user docs say this to the reader.
 
 ### The middle half
@@ -121,18 +125,25 @@ The page never says whose value it is.
 
 ## Consequences
 
-- ADR 0047 stays valid. The Practice profile has one reader, and this page shows other developers only in a count.
-- Since 2026-10-07, small groups show the same bars as large ones.
-- In a small workspace, a reader can sometimes tell the standing of another developer from a count.
+- ADR 0047 stays valid for the Practice profile, which has one reader.
+  This page shows other developers only in counts.
+  But a small count can tell the members of the workspace the standing of one developer.
+- Small groups show the same bars as large ones.
 - The local practices demo shows small and large splits with synthetic members.
 
 ## Known limitation
 
-The page has no smallest count, so it does not guard a count, a difference between counts, or two reads against each other [8].
-A reader can compare two windows, or the page before and after the review of a colleague.
+The page has no smallest count, so it does not guard a count, a difference between counts, or two reads against each other [7].
 
 ## Open decisions
 
+- **Smallest count.** The amendment gives other members a view that can identify the standing of one developer.
+  The DPIA pre-screen makes a new developer audience a reassessment trigger, and the controller's DPIA decision is still pending.
+  See `docs/admin/dsms/dpia-prescreen.md` § 6.
+  The TUM/AET data-protection coordinator decides before a TUM-operated deployment shows the page without a smallest count.
+  An alternative keeps a smallest count of 3 and also shows parts of 0. The PTAC calls 3 the absolute minimum [6].
+  A part of 0 holds no developer.
+  But a split with all its developers in one part still gives each of them their standing.
 - **Source use.** The page reads observations of other developers under `PRACTICE_FEEDBACK_DELIVERY`. The maintainer and the controller decide if a count needs its own purpose. See `docs/admin/dsms/artifact-source-governance.md`.
 
 ## Revisit trigger
@@ -140,6 +151,8 @@ A reader can compare two windows, or the page before and after the review of a c
 A workspace that asks to show the same counts to its instructors.
 A request to compare with a selected peer group.
 A user test that shows that the page lowers self-efficacy for readers at Needs attention.
+A member who reports that the page told others their standing.
+The controller's DPIA decision.
 
 ## Sources
 
@@ -147,7 +160,6 @@ A user test that shows that the page lowers self-efficacy for readers at Needs a
 2. Jivet et al. 2018, *License to evaluate*: <https://doi.org/10.1145/3170358.3170421>
 3. Teasley 2017, *Student facing dashboards: one size fits all?*: <https://link.springer.com/article/10.1007/s10758-017-9314-3>
 4. UK Data Service, *Handbook on Statistical Disclosure Control for Outputs* v2.0: <https://ukdataservice.ac.uk/app/uploads/sdc-handbook-v2.0.pdf>
-5. NCHS, *Data Presentation Standards for Proportions*: <https://www.cdc.gov/nchs/data/series/sr_02/sr02_175.pdf>
-6. ABS DataLab, *Safe Outputs*: <https://www.abs.gov.au/system/files/documents/bec1cc42a3e20dd01d9748b621f8b8b7/DataLab%20Safe%20Researcher%20Virtual%20Training_Pt3_Safe%20Outputs_JAN%202024.pdf>
-7. US Department of Education PTAC, *Frequently Asked Questions: Disclosure Avoidance*: <https://studentprivacy.ed.gov/sites/default/files/resource_document/file/FAQs_disclosure_avoidance_0.pdf>
-8. ONS, *Policy on protecting confidentiality in tables of birth and death statistics*: <https://www.ons.gov.uk/methodology/methodologytopicsandstatisticalconcepts/disclosurecontrol/policyonprotectingconfidentialityintablesofbirthanddeathstatistics>
+5. ABS DataLab, *Safe Outputs*: <https://www.abs.gov.au/system/files/documents/bec1cc42a3e20dd01d9748b621f8b8b7/DataLab%20Safe%20Researcher%20Virtual%20Training_Pt3_Safe%20Outputs_JAN%202024.pdf>
+6. US Department of Education PTAC, *Frequently Asked Questions: Disclosure Avoidance*: <https://studentprivacy.ed.gov/sites/default/files/resource_document/file/FAQs_disclosure_avoidance_0.pdf>
+7. ONS, *Policy on protecting confidentiality in tables of birth and death statistics*: <https://www.ons.gov.uk/methodology/methodologytopicsandstatisticalconcepts/disclosurecontrol/policyonprotectingconfidentialityintablesofbirthanddeathstatistics>

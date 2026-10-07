@@ -149,6 +149,12 @@ As a deployment governance requirement, reassess the DPIA and amend it where the
   This includes a new artifact source, source combination, private-conversation use or repository-history use.
   It also includes research/evaluation reuse, retention extension or a developer/admin audience.
 
+Practices across the workspace without a smallest count (ADR 0051, amendment of 2026-10-07) is such a change.
+It gives the other members of a workspace counts of practice standings with no smallest count.
+A small count can tell them the standing of one developer, so it is a new developer audience for an evaluation.
+It also needs the derivation decision of rule 6 in [`artifact-source-governance.md`](./artifact-source-governance.md).
+Record the decision before a TUM-operated deployment runs a release that contains it.
+
 The source-specific decision and test checklist lives in
 [`artifact-source-governance.md`](./artifact-source-governance.md). The controller's decision identifier and date
 must replace the pending status at the top of this file when the determination is recorded.

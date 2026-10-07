@@ -1,16 +1,14 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceRangeDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitPartDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO.Standing;
 import java.util.Collection;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/**
- * How the page counts developers (ADR 0051): a split per practice group and practice, and the middle half of a
- * figure. Every split shows all its parts and every middle half shows, however few developers they count. Who and
- * what is counted at all is decided before: a developer's AI choice, hidden members, hidden repositories and
- * invalidated observations apply before these counts.
- */
+/** How the page counts developers (ADR 0051): a split per practice group and practice, and a middle half per figure. */
 public final class WorkspaceSplits {
 
     private WorkspaceSplits() {}
@@ -32,35 +30,28 @@ public final class WorkspaceSplits {
         }
     }
 
-    public record Part(Verdict standing, int developers) {}
-
-    /** One split: a part per verdict in {@link Verdict} order, none yet, and their total. */
-    public record Split(List<Part> parts, int noneYet, int developers) {}
-
     /** How the developers with a standing split over their standings in one group or practice. */
-    public static Split split(Collection<Standing> withAStanding) {
-        List<Part> parts = List.of(Verdict.values()).stream()
-                .map(verdict -> new Part(verdict, (int) withAStanding.stream()
+    public static WorkspaceSplitDTO split(Collection<Standing> withAStanding) {
+        List<WorkspaceSplitPartDTO> parts = List.of(Verdict.values()).stream()
+                .map(verdict -> new WorkspaceSplitPartDTO(verdict, (int) withAStanding.stream()
                         .filter(standing -> Verdict.of(standing) == verdict)
                         .count()))
                 .toList();
-        int none =
-                withAStanding.size() - parts.stream().mapToInt(Part::developers).sum();
-        return new Split(parts, none, withAStanding.size());
+        int withAVerdict =
+                parts.stream().mapToInt(WorkspaceSplitPartDTO::developers).sum();
+        return new WorkspaceSplitDTO(parts, withAStanding.size() - withAVerdict, withAStanding.size());
     }
-
-    public record MiddleHalf(int low, int high) {}
 
     /**
      * The middle half of one figure across the developers counted, or null when nobody is counted. Only the two
      * quartiles leave, each interpolated linearly and rounded.
      */
-    public static @Nullable MiddleHalf middleHalf(List<Integer> values) {
+    public static @Nullable WorkspaceRangeDTO middleHalf(List<Integer> values) {
         if (values.isEmpty()) {
             return null;
         }
         List<Integer> sorted = values.stream().sorted().toList();
-        return new MiddleHalf(quartile(sorted, 0.25), quartile(sorted, 0.75));
+        return new WorkspaceRangeDTO(quartile(sorted, 0.25), quartile(sorted, 0.75));
     }
 
     private static int quartile(List<Integer> sorted, double fraction) {

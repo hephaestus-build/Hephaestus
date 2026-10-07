@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto;
 
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.Split;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -22,14 +21,4 @@ public record WorkspaceSplitDTO(
         @Schema(
                 description = "Every developer the split counts, the parts and none yet together, the reader included"
                         + " when counted")
-        Integer developers) {
-
-    public static WorkspaceSplitDTO from(Split split) {
-        return new WorkspaceSplitDTO(
-                split.parts().stream()
-                        .map(part -> new WorkspaceSplitPartDTO(part.standing(), part.developers()))
-                        .toList(),
-                split.noneYet(),
-                split.developers());
-    }
-}
+        Integer developers) {}

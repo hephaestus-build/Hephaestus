@@ -54,9 +54,9 @@ export const SPLITS: Record<string, [number, number, number, number]> = {
 	"review-ready-work": [9, 9, 10, 12],
 	"decisions-and-documentation": [9, 9, 9, 13],
 	"constructive-code-review": [10, 10, 9, 11],
-	// Two at Needs attention, and the reader there too: a small part, shown as it is.
+	// Two at Needs attention, and the reader there too: a part of three.
 	"testing-discipline": [2, 12, 13, 13],
-	// Three with a standing: small parts, shown as they are.
+	// Three with a standing: a part of one at each verdict.
 	"issue-traceability-and-lifecycle": [1, 1, 1, 37],
 	"actionable-issue-authoring": [9, 9, 10, 12],
 	"code-craftsmanship": [10, 9, 9, 12],

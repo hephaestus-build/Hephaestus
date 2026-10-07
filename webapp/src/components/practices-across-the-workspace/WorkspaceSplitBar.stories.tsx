@@ -42,15 +42,16 @@ export const Default: Story = {
 /** The parts and the You marker carry color meaning, so dark mode is asserted, not assumed. */
 export const Dark: Story = { globals: { theme: "dark" } };
 
-/** Parts of one, two and none draw like any other split, the reader marked. */
+/** Parts of one and two draw like any other part. A part of nobody draws nothing; the text alternative still names it. */
 export const SmallParts: Story = {
 	args: { split: SMALL_PARTS, yourStanding: "STRENGTH" },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
 			"28 developers with a current standing in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. The You marker is on Going well.",
 		);
+		await expect(canvas.getByTitle("Needs attention: 1")).toBeVisible();
+		await expect(canvas.queryByTitle("Mixed feedback: 0")).toBeNull();
 		await expect(canvas.getByText("You")).toBeVisible();
-		await expect(canvas.getByText("28 developers")).toBeVisible();
 	},
 };
 

@@ -71,9 +71,8 @@ function YouMarker() {
 /**
  * How the developers with a current standing split across one practice group or practice, as one
  * bar counted in developers. Each part carries its count and its standing's icon under it, so no
- * part rests on colour alone (WCAG 2.2 SC 1.4.1). Every split shows all its parts, however few
- * developers they count. A split that counts nobody is a dashed track that says so, at the same
- * width, so the rows line up.
+ * part rests on colour alone (WCAG 2.2 SC 1.4.1). A split that counts nobody is a dashed track that
+ * says so, at the same width, so the rows line up.
  */
 export function WorkspaceSplitBar({ split, yourStanding }: WorkspaceSplitBarProps) {
 	if (split.developers === 0) {
@@ -96,7 +95,8 @@ export function WorkspaceSplitBar({ split, yourStanding }: WorkspaceSplitBarProp
 			count: split.noneYet,
 			isYours: yourStanding !== undefined && !isSettledStanding(yourStanding),
 		},
-	];
+		// `min-w-10` would draw a part of nobody as a coloured block; the text alternative names it.
+	].filter(({ count }) => count > 0);
 	return (
 		<div className="flex w-full min-w-0 flex-col gap-1">
 			<div role="img" aria-label={description} className="flex w-full min-w-0 gap-0.5">

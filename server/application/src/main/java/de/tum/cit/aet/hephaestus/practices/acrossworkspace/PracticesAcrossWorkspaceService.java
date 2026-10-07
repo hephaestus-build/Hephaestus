@@ -2,12 +2,11 @@ package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.MiddleHalf;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.Split;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceTilesDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceRangeDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceTileDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
@@ -116,7 +115,7 @@ public class PracticesAcrossWorkspaceService {
                                 ? yours.practices()
                                         .getOrDefault(practice.slug(), PracticeStandingDTO.Standing.NOT_OBSERVED)
                                 : null,
-                        WorkspaceSplitDTO.from(practice.split())));
+                        practice.split()));
             }
             rows.add(new WorkspaceGroupSplitDTO(
                     group.slug(),
@@ -126,11 +125,11 @@ public class PracticesAcrossWorkspaceService {
                     readerCounted
                             ? yours.groups().getOrDefault(group.slug(), PracticeGroupStandingDTO.Standing.NOT_OBSERVED)
                             : null,
-                    WorkspaceSplitDTO.from(group.split()),
+                    group.split(),
                     practiceSplits));
         }
         return new PracticesAcrossWorkspaceDTO(
-                WorkspaceTileDTO.of(yourOpenFeedback, overview.openFeedbackMiddle()), rows);
+                new WorkspaceTileDTO(yourOpenFeedback, overview.openFeedbackMiddle()), rows);
     }
 
     /** The reader's figures over the window beside the middle half of the developers with a standing in it. */
@@ -155,9 +154,9 @@ public class PracticesAcrossWorkspaceService {
                 window,
                 tiles.developersWithAStanding(),
                 yours.practices(),
-                WorkspaceTileDTO.of(yours.reviewedWork(), tiles.reviewedWork()),
-                WorkspaceTileDTO.of(yours.goingWell(), tiles.goingWell()),
-                WorkspaceTileDTO.of(yours.needingAttention(), tiles.needingAttention()));
+                new WorkspaceTileDTO(yours.reviewedWork(), tiles.reviewedWork()),
+                new WorkspaceTileDTO(yours.goingWell(), tiles.goingWell()),
+                new WorkspaceTileDTO(yours.needingAttention(), tiles.needingAttention()));
     }
 
     private <T> T inReadOnly(Supplier<T> read) {
@@ -228,7 +227,7 @@ public class PracticesAcrossWorkspaceService {
         }
 
         Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, eligible);
-        MiddleHalf openMiddle = WorkspaceSplits.middleHalf(eligible.stream()
+        WorkspaceRangeDTO openMiddle = WorkspaceSplits.middleHalf(eligible.stream()
                 .map(developer -> openFeedback.getOrDefault(developer, 0))
                 .toList());
         return new Overview(List.copyOf(rows), Map.copyOf(marks), openMiddle);
@@ -265,17 +264,17 @@ public class PracticesAcrossWorkspaceService {
     private record Overview(
             List<GroupRow> groups,
             Map<Long, Marks> marks,
-            @Nullable MiddleHalf openFeedbackMiddle) {}
+            @Nullable WorkspaceRangeDTO openFeedbackMiddle) {}
 
     private record GroupRow(
             String slug,
             String name,
             @Nullable String icon,
             @Nullable String color,
-            Split split,
+            WorkspaceSplitDTO split,
             List<PracticeRow> practices) {}
 
-    private record PracticeRow(String slug, String name, Split split) {}
+    private record PracticeRow(String slug, String name, WorkspaceSplitDTO split) {}
 
     /** A counted developer's standing in each group and practice the page shows: their marker, when they read it. */
     private record Marks(
@@ -289,9 +288,9 @@ public class PracticesAcrossWorkspaceService {
             Instant since,
             int developersWithAStanding,
             Map<Long, Figures> figures,
-            @Nullable MiddleHalf reviewedWork,
-            @Nullable MiddleHalf goingWell,
-            @Nullable MiddleHalf needingAttention) {}
+            @Nullable WorkspaceRangeDTO reviewedWork,
+            @Nullable WorkspaceRangeDTO goingWell,
+            @Nullable WorkspaceRangeDTO needingAttention) {}
 
     /** One developer's figures over a window. */
     private record Figures(int practices, int reviewedWork, int goingWell, int needingAttention) {
