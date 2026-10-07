@@ -105,12 +105,6 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     @Query("SELECT f FROM Observation f WHERE f.id = :id AND f.workspaceId = :workspaceId")
     Optional<Observation> findByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
-    /** {@link #findByIdAndWorkspaceId} for several ids at once; an id outside the workspace has no row. */
-    @EntityGraph(attributePaths = {"practice.currentRevision", "practiceRevision"})
-    @Query("SELECT f FROM Observation f WHERE f.id IN :ids AND f.workspaceId = :workspaceId")
-    List<Observation> findByIdInAndWorkspaceId(
-            @Param("ids") Collection<UUID> ids, @Param("workspaceId") Long workspaceId);
-
     /**
      * Serializes corrections of one observation with each other and with delivery admission, which holds it
      * {@code FOR SHARE}; the row itself is never written.

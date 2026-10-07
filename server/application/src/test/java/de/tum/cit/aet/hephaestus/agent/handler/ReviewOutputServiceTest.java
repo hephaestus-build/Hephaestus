@@ -73,7 +73,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -154,8 +153,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         mock(FeedbackObservationRepository.class),
                         mock(FeedbackRepository.class)),
                 mock(PracticeSignalOptions.class),
-                citedSourceAccess,
-                mock(ApplicationEventPublisher.class));
+                citedSourceAccess);
 
         lenient().when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);
 

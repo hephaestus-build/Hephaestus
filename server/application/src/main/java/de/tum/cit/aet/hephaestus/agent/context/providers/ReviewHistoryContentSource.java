@@ -287,7 +287,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         if (type.equals("observation")) {
             return authorizeObservations(
                             workspaceId,
-                            observationRepository.findByIdInAndWorkspaceId(ids, workspaceId),
+                            observationRepository.findAllByIdInAndWorkspaceId(ids, workspaceId),
                             null,
                             purpose)
                     .stream()
@@ -316,7 +316,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         if (ids.isEmpty()) return Map.of();
         Map<UUID, List<JsonNode>> citations = new HashMap<>();
         if (type.equals("observation")) {
-            for (Observation row : observationRepository.findByIdInAndWorkspaceId(ids, workspaceId)) {
+            for (Observation row : observationRepository.findAllByIdInAndWorkspaceId(ids, workspaceId)) {
                 citations.put(row.getId(), citationsOf(row));
             }
         } else if (type.equals("feedback")) {

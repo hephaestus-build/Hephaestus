@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
@@ -26,6 +28,8 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.JsonNode;
@@ -44,6 +48,7 @@ public class CitedSourceAccess {
     private final ReviewMemberAiPolicy memberPolicy;
     private final MemberAiPreferences preferences;
     private final WorkspaceMembershipRepository memberships;
+    private final PersonProcessingSuppression suppression;
 
     public CitedSourceAccess(
             ConversationThreadProjection conversations,
@@ -54,7 +59,8 @@ public class CitedSourceAccess {
             ObjectMapper mapper,
             ReviewMemberAiPolicy memberPolicy,
             MemberAiPreferences preferences,
-            WorkspaceMembershipRepository memberships) {
+            WorkspaceMembershipRepository memberships,
+            PersonProcessingSuppression suppression) {
         this.conversations = conversations;
         this.documents = documents;
         this.repositories = repositories;
@@ -66,6 +72,7 @@ public class CitedSourceAccess {
         this.memberPolicy = memberPolicy;
         this.preferences = preferences;
         this.memberships = memberships;
+        this.suppression = suppression;
     }
 
     public boolean permitsReviewResult(AgentJob job) {
@@ -183,20 +190,21 @@ public class CitedSourceAccess {
     }
 
     public boolean permits(long workspace, JsonNode citation, SourceUsePurpose purpose) {
-        return checks(workspace, purpose).permits(citation);
+        Checks sources = checks(workspace, purpose);
+        sources.prepare(List.of(citation));
+        return sources.permits(citation);
     }
 
-    /**
-     * Citations checked against one workspace and purpose, each answered as {@link #permits} answers it. A record
-     * cited again takes the answer it got the first time, and the workspace's permitted repositories are read once,
-     * so checking every observation of a workspace costs one owner check per distinct source rather than per
-     * citation. Built for one read: a source that changes while it is in use is not seen until the next one.
-     */
+    /** Source answers for one workspace, purpose, reader, and thread. Never retain them across reads. */
     public Checks checks(long workspace, SourceUsePurpose purpose) {
         // A history record is checked by authorizing the observations it names, which checks their citations in
         // turn: those nested checks join the read that asked, so a source is still checked once per read.
         RecordChecks active = ACTIVE_CHECKS.get();
-        if (active != null && active.workspace == workspace && active.purpose == purpose) {
+        if (active != null
+                && active.owner.equals(this)
+                && active.workspace == workspace
+                && active.purpose == purpose
+                && active.sameReader()) {
             return active;
         }
         return new RecordChecks(workspace, purpose);
@@ -229,6 +237,13 @@ public class CitedSourceAccess {
     private static final ThreadLocal<@Nullable RecordChecks> ACTIVE_CHECKS = new ThreadLocal<>();
 
     private final class RecordChecks implements Checks {
+        private final CitedSourceAccess owner = CitedSourceAccess.this;
+        private final Thread thread = Thread.currentThread();
+        private final @Nullable Authentication reader =
+                SecurityContextHolder.getContext().getAuthentication();
+        private final Set<Long> actors = CurrentScmIdentityHolder.getAccountActorIds();
+        private final @Nullable Long actor =
+                CurrentScmIdentityHolder.getUserId().orElse(null);
         private final long workspace;
         private final SourceUsePurpose purpose;
         private final Map<String, Boolean> recordAnswers = new HashMap<>();
@@ -245,8 +260,22 @@ public class CitedSourceAccess {
             this.purpose = purpose;
         }
 
+        private boolean sameReader() {
+            return Objects.equals(reader, SecurityContextHolder.getContext().getAuthentication())
+                    && Objects.equals(
+                            actor, CurrentScmIdentityHolder.getUserId().orElse(null))
+                    && actors.equals(CurrentScmIdentityHolder.getAccountActorIds());
+        }
+
+        private void requireReadContext() {
+            if (!thread.equals(Thread.currentThread()) || !sameReader()) {
+                throw new IllegalStateException("Source checks belong to one reader on one thread");
+            }
+        }
+
         @Override
         public boolean permits(JsonNode citation) {
+            requireReadContext();
             String artifact = citation.path("artifactPath").asString("");
             if (artifact.startsWith("inputs/history/") || artifact.equals("context/project_inventory.json"))
                 return false;
@@ -281,6 +310,7 @@ public class CitedSourceAccess {
         /** One record's own check; a record that does not parse is not permitted, nor is the citation naming it. */
         private boolean permitsRecord(JsonNode record) {
             try {
+                if (!validRecord(record)) return false;
                 if (record.has("person") && !permitsPerson(record.path("person").asLong())) return false;
                 return switch (record.path("type").asString("")) {
                     case "person" -> true;
@@ -322,14 +352,10 @@ public class CitedSourceAccess {
             }
         }
 
-        /**
-         * Answers every history record the citations name, and every record those records' own checks name in turn,
-         * in as few batches as the longest such chain is long: first the records whose own citations name no
-         * unanswered record, then the ones that only waited on those, and so on. Each batch is checked exactly as
-         * one record alone is, so no answer changes, only how many statements the answers take.
-         */
+        /** Load history dependencies with IN queries, then authorize leaves before their dependents. */
         @Override
         public void prepare(Iterable<JsonNode> citations) {
+            requireReadContext();
             Map<String, HistoryRecord> found = new HashMap<>();
             Map<String, Set<String>> waitsOn = new LinkedHashMap<>();
             Set<String> frontier = unansweredHistory(citations, found);
@@ -351,8 +377,11 @@ public class CitedSourceAccess {
                 waitsOn.forEach((key, needed) -> {
                     if (needed.stream().allMatch(historyAnswers::containsKey)) ready.add(key);
                 });
-                // Only records that name each other leave none ready; checked together, each is asked one by one.
-                if (ready.isEmpty()) ready.addAll(waitsOn.keySet());
+                // No leaf remains: cycles and every record that depends on them are denied without recursion.
+                if (ready.isEmpty()) {
+                    waitsOn.keySet().forEach(key -> historyAnswers.put(key, false));
+                    break;
+                }
                 inBatch.addAll(ready);
                 try {
                     byType(ready, found).forEach((type, ids) -> {
@@ -377,7 +406,7 @@ public class CitedSourceAccess {
             Set<String> keys = new LinkedHashSet<>();
             for (JsonNode citation : citations) {
                 for (JsonNode record : citation.path("sourceReference").path("records")) {
-                    if (!isHistory(record)) continue;
+                    if (!isHistory(record) || !validRecord(record)) continue;
                     String type = record.path("type").asString("");
                     UUID id;
                     try {
@@ -438,6 +467,26 @@ public class CitedSourceAccess {
             }
         }
 
+        private static boolean positiveId(JsonNode id) {
+            return id.isIntegralNumber() && id.canConvertToLong() && id.asLong() > 0;
+        }
+
+        private static boolean text(JsonNode node) {
+            return node.isString() && !node.asString().isBlank();
+        }
+
+        private static boolean validRecord(JsonNode record) {
+            if (!record.isObject() || (record.has("person") && !positiveId(record.path("person")))) return false;
+            return switch (record.path("type").asString("")) {
+                case "person" -> positiveId(record.path("person"));
+                case "repository", "document" -> positiveId(record.path("id"));
+                case "chat" -> text(record.path("channel")) && text(record.path("message"));
+                case "docs" -> text(record.path("id")) && text(record.path("slug")) && text(record.path("collection"));
+                case "observation", "feedback" -> positiveId(record.path("person")) && text(record.path("id"));
+                default -> false;
+            };
+        }
+
         private static boolean isHistory(JsonNode record) {
             String type = record.path("type").asString("");
             return type.equals("observation") || type.equals("feedback");
@@ -464,7 +513,8 @@ public class CitedSourceAccess {
         private boolean permitsAi(long person) {
             Boolean answer = aiAnswers.get(person);
             if (answer == null) {
-                answer = preferences.forDeveloper(workspace, person).permitsAi();
+                answer = !suppression.isUserSuppressed(person)
+                        && preferences.forDeveloper(workspace, person).permitsAi();
                 aiAnswers.put(person, answer);
             }
             return answer;

@@ -23,6 +23,7 @@ import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "./pi-agent-sandbox.ts";
+import { assessmentCacheExtension } from "./pi-assessment-cache.ts";
 import { CHANGE_ROOT } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
 import { folderCitationIndex } from "./pi-folder-index.ts";
@@ -3333,6 +3334,11 @@ function criteriaOf(slugs: readonly string[]): string {
  */
 let openingInContext = false;
 
+/** The shared user context, before any practice-specific task or recorded draft. */
+function assessmentOpening(brief: string): string {
+	return `${prompt}\n\n${brief}\n\n${OBSERVATION_EXAMPLE}\n\n`;
+}
+
 /**
  * The task, the brief and the example, when the context no longer holds them; nothing otherwise. A measuring
  * session sees only its own practice's draft: other practices' results are not its context. The composer
@@ -3347,7 +3353,7 @@ function openingIfNeeded(brief: string, composing = false): string {
 	);
 	return composing
 		? `${prompt}\n\n${brief}\n\n`
-		: `${prompt}\n\n${brief}\n\n${OBSERVATION_EXAMPLE}\n\n${
+		: `${assessmentOpening(brief)}${
 				ownDrafts ? `## Recorded so far\n${recordedSoFar(currentTurnSlugs)}\n\n` : ""
 			}`;
 }
@@ -3603,17 +3609,6 @@ async function main() {
 	// Disable instruction discovery; load only the server-staged orchestrator (see pi-agent-sandbox.ts).
 	const orchestratorPath = `${AGENT_DIR}/AGENTS.md`;
 	const orchestrator = orchestratorWithPaths(readFileSync(orchestratorPath, "utf8"));
-	const loader = new DefaultResourceLoader({
-		cwd: CWD,
-		agentDir: AGENT_DIR,
-		settingsManager,
-		...SANDBOX_RESOURCE_LOADER_OPTIONS,
-		systemPrompt: orchestrator,
-		agentsFilesOverride: () => ({ agentsFiles: [] }),
-		// "on" keeps every tool callable directly as well; scripts get no model catalog to call.
-		extensionFactories: [createCodemodeExtension({ mode: "on", models: false })],
-	});
-	await loader.reload();
 	const modelRuntime = await ModelRuntime.create({
 		authPath: `${AGENT_DIR}/auth.json`,
 		modelsPath: `${AGENT_DIR}/models.json`,
@@ -3781,6 +3776,30 @@ async function main() {
 		process.exit(1);
 	}
 
+	const cacheExtension = assessmentCacheExtension(
+		providerConfig,
+		modelRuntime,
+		assessmentOpening(brief),
+		taskEnvelope.workspaceId,
+		taskEnvelope.jobId,
+	);
+
+	async function assessmentLoader() {
+		// Extension bindings belong to the native session that uses them.
+		const resourceLoader = new DefaultResourceLoader({
+			cwd: CWD,
+			agentDir: AGENT_DIR,
+			settingsManager,
+			...SANDBOX_RESOURCE_LOADER_OPTIONS,
+			systemPrompt: orchestrator,
+			agentsFilesOverride: () => ({ agentsFiles: [] }),
+			// "on" keeps every tool callable directly as well; scripts get no model catalog to call.
+			extensionFactories: [createCodemodeExtension({ mode: "on", models: false }), cacheExtension],
+		});
+		await resourceLoader.reload();
+		return resourceLoader;
+	}
+
 	type SessionOptions = NonNullable<Parameters<typeof createAgentSession>[0]>;
 	/**
 	 * A fresh native session in this sandbox, with the orchestrator, the evidence tools and the given recording
@@ -3789,7 +3808,7 @@ async function main() {
 	async function openSession(
 		tools: string[],
 		customTools: SessionOptions["customTools"],
-		resourceLoader = loader,
+		resourceLoader?: SessionOptions["resourceLoader"],
 	) {
 		const { session: fresh, extensionsResult } = await createAgentSession({
 			cwd: CWD,
@@ -3798,7 +3817,7 @@ async function main() {
 			customTools,
 			sessionManager: SessionManager.create(CWD, `${CWD}/.sessions`),
 			settingsManager,
-			resourceLoader,
+			resourceLoader: resourceLoader ?? (await assessmentLoader()),
 			modelRuntime,
 			model,
 			thinkingLevel,

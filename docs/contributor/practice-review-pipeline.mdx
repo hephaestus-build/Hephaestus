@@ -510,6 +510,15 @@ Each scope gets one work budget for its practice count, shared across its sessio
 Each practice in a scope gets a fresh session in the same sandbox, one after another.
 That session receives the task, the brief and the complete criteria and leads of its practice only.
 
+The native model catalogue identifies Responses models that support explicit prompt caching.
+Measurement requests for these models mark the end of the shared task, brief and example within the user message.
+The practice criteria follow that boundary without changing their authority or text.
+
+These sessions use one cache key for the workspace and review, while keeping their conversation
+histories separate. The provider's implicit caching remains available for later conversation turns.
+Other models and protocols keep their native requests unchanged. Cache reuse depends on the provider.
+It does not establish a latency or cost improvement.
+
 It can record and revise only its practice.
 An item for another practice is refused before any draft changes.
 
@@ -643,6 +652,12 @@ The shared writing guide and each channel's prompt define those purposes:
 - `IN_APP` is private process-level feedback about a pattern in the recipient's work.
 - `IN_CHAT` prepares `situation`, `capability`, `evidenceSummary` and `inConversationSignal` as private notes,
   not dialogue. A later conversational turn may adapt, defer or discard them.
+
+A work-state refusal stops `IN_CONTEXT` delivery.
+Closed work, changed work, and merged work that the workspace setting excludes get no note on the work.
+`IN_APP` and `IN_CHAT` retain their own evidence and visibility gates.
+Preparation alone does not certify that a unit may be shown.
+Missing work and a recipient who is not the subject of the work refuse every channel.
 
 An issue supports only a summary.
 A pull or merge request may carry a summary, line notes, or line notes without a summary.

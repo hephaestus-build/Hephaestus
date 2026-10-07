@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.config.FeedbackLaneExecutor;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -142,7 +143,18 @@ public class InAppCompositionListener {
             if (recipient == null) {
                 continue;
             }
-            prepared += prepareFor(outputJobId, workspaceId, recipient, messages, positionBase);
+            // The pulled page's practice authority belongs to InAppFeedbackRouter, per message.
+            if (deliveryPolicy
+                    .evaluateForRecipient(
+                            sourceJob,
+                            DeliveryPolicyStage.COMPOSITION,
+                            null,
+                            DeliveryPolicySurface.IN_APP,
+                            recipient,
+                            List.of())
+                    .allowed()) {
+                prepared += prepareFor(outputJobId, workspaceId, recipient, messages, positionBase);
+            }
             positionBase += messages.size();
         }
         return prepared;

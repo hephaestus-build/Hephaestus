@@ -666,8 +666,8 @@ export function validateEvidenceSources(
 						"artifactPath, or the pull request record (metadata.json) as scm.pull-request.core."
 					: "";
 				throw new Error(
-					`artifact '${citation.artifactPath}' was not staged; the staged artifacts are: ` +
-						`${[...artifactSources.keys()].toSorted().join(", ")}.${derived}`,
+					`artifact '${citation.artifactPath}' was not staged by '${sourceKind}'; ` +
+						`choose a staged artifact for this source from the task-declared manifest.${derived}`,
 				);
 			}
 			throw new Error(

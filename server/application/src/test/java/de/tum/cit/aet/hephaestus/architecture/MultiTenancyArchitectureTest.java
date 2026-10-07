@@ -542,13 +542,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         // Carries workspaceId + collectionId. An in-module after-commit hop: the
                                         // Outline collection resume must not kick its async sync until the ENABLED
                                         // write is committed, or the sync reads PAUSED and no-ops.
-                                        "OutlineCollectionResumedEvent",
-                                        // Carries workspaceId directly; recorded or retracted review results drop
-                                        // or recount the workspace's practices-across-the-workspace counts.
-                                        "ReviewResultsChangedEvent",
-                                        // Carries workspaceId directly, or none for an account's AI choice, which
-                                        // holds in every workspace the account is in.
-                                        "WorkspacePrivacyChangedEvent");
+                                        "OutlineCollectionResumedEvent");
 
                                 boolean isWorkspaceAware =
                                         workspaceAwareEventPrefixes.stream().anyMatch(paramTypeName::contains);

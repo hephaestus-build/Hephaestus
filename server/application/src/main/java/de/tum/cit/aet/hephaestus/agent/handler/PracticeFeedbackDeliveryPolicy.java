@@ -184,18 +184,23 @@ public class PracticeFeedbackDeliveryPolicy {
                 : null;
         boolean closedWhenQueued = metadata != null
                 && "closed".equalsIgnoreCase(metadata.path("state").asString(""));
+        // Work-state refusal belongs to the public note. Private channels retain their own evidence and visibility
+        // gates.
         FeedbackSuppressionReason artifactRefusal = target == null
                 ? FeedbackSuppressionReason.ARTIFACT_GONE
-                : closedWhenQueued || target.getState() == Issue.State.CLOSED
-                        ? FeedbackSuppressionReason.ARTIFACT_CLOSED
-                        : target.getReviewSnapshotId() == null
-                                        || !target.getReviewSnapshotId()
-                                                .toString()
-                                                .equals(Objects.requireNonNull(metadata, "eligible issue has metadata")
-                                                        .path("review_snapshot_id")
-                                                        .asString(""))
-                                ? FeedbackSuppressionReason.ISSUE_SNAPSHOT_CHANGED
-                                : null;
+                : surface != DeliveryPolicySurface.ARTIFACT
+                        ? null
+                        : closedWhenQueued || target.getState() == Issue.State.CLOSED
+                                ? FeedbackSuppressionReason.ARTIFACT_CLOSED
+                                : target.getReviewSnapshotId() == null
+                                                || !target.getReviewSnapshotId()
+                                                        .toString()
+                                                        .equals(Objects.requireNonNull(
+                                                                        metadata, "eligible issue has metadata")
+                                                                .path("review_snapshot_id")
+                                                                .asString(""))
+                                        ? FeedbackSuppressionReason.ISSUE_SNAPSHOT_CHANGED
+                                        : null;
         String repositoryName = issue == null || issue.getRepository() == null
                 ? null
                 : issue.getRepository().getNameWithOwner();
@@ -305,17 +310,17 @@ public class PracticeFeedbackDeliveryPolicy {
                 ? pullRequest
                 : null;
         PracticeReviewSettings settings = workspace.getReviewSettings();
-        // Merged work keeps its feedback on the developer's own surfaces: a retrospective is what the
-        // merge-stage practices exist for. Only a comment on the merged work itself is the setting's call.
+        // Private preparation retains its own evidence gates. The merged-work setting governs only the public note.
         FeedbackSuppressionReason artifactRefusal = target == null
                 ? FeedbackSuppressionReason.ARTIFACT_GONE
-                : target.getState() == Issue.State.CLOSED
-                        ? FeedbackSuppressionReason.ARTIFACT_CLOSED
-                        : target.getState() == Issue.State.MERGED
-                                        && surface == DeliveryPolicySurface.ARTIFACT
-                                        && !settings.resolveDeliverToMerged(reviewProperties.deliverToMerged())
-                                ? FeedbackSuppressionReason.ARTIFACT_MERGED
-                                : null;
+                : surface != DeliveryPolicySurface.ARTIFACT
+                        ? null
+                        : target.getState() == Issue.State.CLOSED
+                                ? FeedbackSuppressionReason.ARTIFACT_CLOSED
+                                : target.getState() == Issue.State.MERGED
+                                                && !settings.resolveDeliverToMerged(reviewProperties.deliverToMerged())
+                                        ? FeedbackSuppressionReason.ARTIFACT_MERGED
+                                        : null;
         String repositoryName = pullRequest == null || pullRequest.getRepository() == null
                 ? null
                 : pullRequest.getRepository().getNameWithOwner();
