@@ -58,6 +58,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +66,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
@@ -312,64 +317,122 @@ public class AgentJobExecutor {
         }
     }
 
+    /** One envelope for all container stops of a drain, not one per job. */
+    private static final Duration DRAIN_CLEANUP_TIMEOUT = Duration.ofSeconds(30);
+
     /**
      * Settles this worker's jobs before stopping their containers. Unadmitted attempts may requeue;
      * admitted attempts retain their observations and fail without repeating the review. The drain
      * contract is in docs/admin/runtime-roles.mdx.
+     *
+     * @return {@code true} if every job this worker still owned was settled and every container stop
+     *     it issued returned; {@code false} if a settlement failed or a stop failed, did not return in
+     *     time, or was interrupted
      */
-    public void cancelInFlight(AgentJobCancellationReason reason) {
+    public boolean cancelInFlight(AgentJobCancellationReason reason) {
+        return cancelInFlight(reason, DRAIN_CLEANUP_TIMEOUT);
+    }
+
+    /**
+     * Settles every job first, one short transaction each, so no container stop delays custody. Only a
+     * job whose settlement transition won here is stopped: a job another worker or a cancellation now
+     * owns keeps running there.
+     */
+    boolean cancelInFlight(AgentJobCancellationReason reason, Duration cleanupTimeout) {
         Set<UUID> snapshot = Set.copyOf(localRunningJobs);
-        if (snapshot.isEmpty()) return;
+        if (snapshot.isEmpty()) return true;
         log.info("Draining {} in-flight job(s) owned by this worker with reason {}", snapshot.size(), reason);
+        boolean settledAll = true;
+        List<UUID> settled = new ArrayList<>();
         for (UUID jobId : snapshot) {
             try {
-                transactionTemplate.executeWithoutResult(status -> {
-                    AgentJob job =
-                            jobRepository.findByIdWithWorkspaceForUpdate(jobId).orElse(null);
-                    if (job == null) return;
-                    // BEFORE requeuing: the requeue zeroes the accumulators, so a later read bills zero.
-                    AgentJobLlmUsage drainCounts = job.getExecutionStartedAt() != null
-                            ? jobRepository.findLlmUsageById(jobId).orElse(null)
-                            : null;
-                    int updated =
-                            workerId != null ? requeueOrphanWithRotation(jobId, workerId, job.getRetryCount()) : 0;
-                    // An attempt whose observations were admitted is never measured again: the requeue
-                    // refused it, so it ends here with what it recorded.
-                    if (updated == 0 && workerId != null) {
-                        updated = jobRepository.failAdmittedOwnedBy(
-                                jobId,
-                                workerId,
-                                job.getRetryCount(),
-                                Instant.now(),
-                                ObservationAdmissionService.INTERRUPTED_AFTER_ADMISSION);
-                    }
-                    if (updated > 0) {
-                        if (job.getExecutionStartedAt() != null) {
-                            billTerminatedJob(job, "worker draining", drainCounts);
-                        }
-                        return;
-                    }
-                    int cancelled = workerId != null
-                            ? jobRepository.transitionToCancelledOwnedBy(
-                                    jobId,
-                                    Instant.now(),
-                                    "worker draining",
-                                    reason,
-                                    Set.of(AgentJobStatus.RUNNING),
-                                    workerId)
-                            : jobRepository.transitionToCancelled(
-                                    jobId, Instant.now(), "worker draining", reason, Set.of(AgentJobStatus.RUNNING));
-                    if (cancelled > 0 && job.getExecutionStartedAt() != null) {
-                        billTerminatedJob(job, "worker draining");
-                    }
-                });
-                sandboxManager.cancel(jobId);
+                if (Boolean.TRUE.equals(transactionTemplate.execute(status -> settleForDrain(jobId, reason)))) {
+                    settled.add(jobId);
+                }
             } catch (Exception e) {
+                settledAll = false;
                 log.warn(
-                        "Failed to drain in-flight job {}: {}",
+                        "Failed to settle in-flight job {} for drain: {}",
                         jobId,
                         e.getClass().getSimpleName());
             }
+        }
+        boolean stopped = stopContainers(settled, cleanupTimeout);
+        return settledAll && stopped;
+    }
+
+    /** Settles one job under its ownership fence; true only if a transition made here won. */
+    private boolean settleForDrain(UUID jobId, AgentJobCancellationReason reason) {
+        AgentJob job = jobRepository.findByIdWithWorkspaceForUpdate(jobId).orElse(null);
+        if (job == null) return false;
+        // BEFORE requeuing: the requeue zeroes the accumulators, so a later read bills zero.
+        AgentJobLlmUsage drainCounts = job.getExecutionStartedAt() != null
+                ? jobRepository.findLlmUsageById(jobId).orElse(null)
+                : null;
+        int updated = workerId != null ? requeueOrphanWithRotation(jobId, workerId, job.getRetryCount()) : 0;
+        // An attempt whose observations were admitted is never measured again: the requeue
+        // refused it, so it ends here with what it recorded.
+        if (updated == 0 && workerId != null) {
+            updated = jobRepository.failAdmittedOwnedBy(
+                    jobId,
+                    workerId,
+                    job.getRetryCount(),
+                    Instant.now(),
+                    ObservationAdmissionService.INTERRUPTED_AFTER_ADMISSION);
+        }
+        if (updated > 0) {
+            if (job.getExecutionStartedAt() != null) {
+                billTerminatedJob(job, "worker draining", drainCounts);
+            }
+            return true;
+        }
+        int cancelled = workerId != null
+                ? jobRepository.transitionToCancelledOwnedBy(
+                        jobId, Instant.now(), "worker draining", reason, Set.of(AgentJobStatus.RUNNING), workerId)
+                : jobRepository.transitionToCancelled(
+                        jobId, Instant.now(), "worker draining", reason, Set.of(AgentJobStatus.RUNNING));
+        if (cancelled > 0 && job.getExecutionStartedAt() != null) {
+            billTerminatedJob(job, "worker draining");
+        }
+        return cancelled > 0;
+    }
+
+    /**
+     * Stops the settled jobs' containers concurrently under one deadline. Platform threads, because
+     * docker-java's blocking I/O pins a virtual thread; a pool of their own, because the sandbox pool's
+     * threads are the ones still waiting on these containers. A stop blocked in native I/O may ignore
+     * the interrupt and finish after this returns; custody has already been settled, and daemon
+     * threads allow shutdown to continue.
+     */
+    private boolean stopContainers(List<UUID> jobIds, Duration timeout) {
+        if (jobIds.isEmpty()) return true;
+        List<Callable<Object>> stops = jobIds.stream()
+                .map(jobId -> Executors.callable(() -> sandboxManager.cancel(jobId)))
+                .toList();
+        ExecutorService pool = Executors.newFixedThreadPool(
+                stops.size(),
+                Thread.ofPlatform().name("agent-drain-stop-", 0).daemon(true).factory());
+        try {
+            List<Future<Object>> results = pool.invokeAll(stops, timeout.toMillis(), TimeUnit.MILLISECONDS);
+            boolean acknowledged = true;
+            for (int i = 0; i < results.size(); i++) {
+                Future<Object> result = results.get(i);
+                if (result.state() == Future.State.SUCCESS) continue;
+                acknowledged = false;
+                log.warn(
+                        "Container stop for drained job {} {}",
+                        jobIds.get(i),
+                        result.state() == Future.State.FAILED
+                                ? "failed: " + result.exceptionNow().getClass().getSimpleName()
+                                : "did not return within " + timeout);
+            }
+            return acknowledged;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while stopping {} drained job container(s)", jobIds.size());
+            return false;
+        } finally {
+            pool.shutdownNow();
         }
     }
 

@@ -358,11 +358,7 @@ public class DockerSandboxAdapter implements SandboxManager {
 
             // Keep stopping atomic with unregistration by cleanup.
             activeContainers.computeIfPresent(jobId, (id, containerId) -> {
-                try {
-                    containerManager.stopContainer(containerId);
-                } catch (Exception e) {
-                    log.warn("Failed to stop container for cancelled job: jobId={}, error={}", jobId, e.getMessage());
-                }
+                containerManager.stopContainer(containerId);
                 return containerId;
             });
         } else {
