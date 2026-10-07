@@ -67,7 +67,7 @@ export function PracticesAcrossTheWorkspacePage({
 		<PageLayout className="space-y-8">
 			<PageHeader
 				title="Practices across the workspace"
-				description="This page shows where the developers in this workspace stand in each practice group. Your next step is in your Practice profile."
+				description="This page shows where the developers in this workspace stand in each practice group. Each standing comes from AI review of their work and can be wrong, so it is not a grade. Your next step is in your Practice profile."
 			/>
 			{/* The live region is there from the start, so the note is announced when it appears. */}
 			<p

@@ -39,6 +39,12 @@ const figuresSection = (canvas: {
 
 export const Default: Story = {
 	play: async ({ canvas, args }) => {
+		// A standing is an AI reading of the work, never a grade: the page says so before any count.
+		await expect(
+			canvas.getByText(
+				/Each standing comes from AI review of their work and can be wrong, so it is not a grade\./u,
+			),
+		).toBeVisible();
 		// The hints carry the response's own number, 26 in the window, and say plainly that small
 		// counts show too.
 		await expect(

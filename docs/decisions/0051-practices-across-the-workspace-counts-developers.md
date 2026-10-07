@@ -2,7 +2,7 @@
 
 **Status:** Proposed
 **Date:** 2026-10-02
-**Amended:** 2026-10-07, proposed. The page has no smallest count. *Amendment of 2026-10-07* gives the change. *Open decisions* gives the decision that it waits for.
+**Amended:** 2026-10-07, accepted. The page has no smallest count. *Amendment of 2026-10-07* gives the change.
 **Authors:** Valentin Grüner
 **Builds on:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md) (no score, no rank),
 [ADR 0047](0047-the-practice-profile-has-one-reader.md) (the Practice profile has one reader)
@@ -45,8 +45,8 @@ How small a shown count can be:
 
 1. **K = 5, with a merged bar when a split cannot show all parts.** Rejected. A practice split then needs 6 developers in each part. Workspaces of 30 to 40 developers seldom have that. The merged bar also shows no standing.
 2. **K = 10, as the ABS uses [5].** Rejected. Almost every split in a workspace of 30 to 40 developers is then held back.
-3. **K = 3, with all four parts or only the total.** Chosen on 2026-10-02.
-4. **No smallest count. Every split shows all its parts.** Proposed on 2026-10-07 to replace option 3. The section *Amendment of 2026-10-07* gives the reasons.
+3. **K = 3, with all four parts or only the total.** The PTAC calls 3 the absolute minimum [6]. Chosen on 2026-10-02. Replaced on 2026-10-07.
+4. **No smallest count. Every split shows all its parts.** Chosen on 2026-10-07. It replaces option 3. The section *Amendment of 2026-10-07* gives the reasons.
 
 How the reader controls the comparison:
 
@@ -98,13 +98,21 @@ Every count held 4 developers or more.
 A split with a smaller part showed only its total, and a smaller total showed nothing.
 Three differences between splits were also guarded.
 
-The maintainer proposed on 2026-10-07 to remove these thresholds and show all counts and all splits.
+On 2026-10-07, the maintainer, as product owner, removed these thresholds after a reassessment of the new audience.
+The page now shows all counts and all splits.
+The reassessment found a low residual risk.
+It is recorded in `docs/admin/dsms/dpia-prescreen.md` § 6.
+The TUM/AET data-protection coordinator confirms it in the full DPIA.
 
 The reasons:
 
-- The workspace is closed. Its members already see the pull requests, issues, and reviews of each other on the provider.
-- The page counts standings in practices. It shows no health, income, or other sensitive attribute.
 - With K = 3, most bars in a real workspace stayed held back until many developers had a review. The page then showed almost nothing.
+- The page shows only a coarse standing per practice group and practice, as counts. It shows no feedback text, no observations, and no work content.
+- The workspace is closed. Its members already see the pull requests that the standing comes from.
+- A standing is not a grade, and a person still assesses the work. Thus, the page makes no automated decision under Art. 22 GDPR.
+- Tutors, as workspace admins, already see individual observations. Thus, the extra exposure is only towards peers.
+- The realistic worst case is mild social discomfort.
+- The page says that a standing comes from AI review and can be wrong. The admin docs say that standings must not be used to grade or assess a person.
 
 The page accepts a larger risk than before.
 It names nobody, but a reader can find the standing of one developer in these cases:
@@ -114,7 +122,7 @@ It names nobody, but a reader can find the standing of one developer in these ca
 - The reader compares the page before and after the review of a colleague.
 - The middle half counts 1 or 2 developers. Then it gives the value of each of them.
 
-The page and the user docs say this to the reader.
+The page, the user docs, and the privacy notice say this to the reader.
 
 ### The middle half
 
@@ -137,13 +145,6 @@ The page has no smallest count, so it does not guard a count, a difference betwe
 
 ## Open decisions
 
-- **Smallest count.** The amendment gives other members a view that can identify the standing of one developer.
-  The DPIA pre-screen makes a new developer audience a reassessment trigger, and the controller's DPIA decision is still pending.
-  See `docs/admin/dsms/dpia-prescreen.md` § 6.
-  The TUM/AET data-protection coordinator decides before a TUM-operated deployment shows the page without a smallest count.
-  An alternative keeps a smallest count of 3 and also shows parts of 0. The PTAC calls 3 the absolute minimum [6].
-  A part of 0 holds no developer.
-  But a split with all its developers in one part still gives each of them their standing.
 - **Source use.** The page reads observations of other developers under `PRACTICE_FEEDBACK_DELIVERY`. The maintainer and the controller decide if a count needs its own purpose. See `docs/admin/dsms/artifact-source-governance.md`.
 
 ## Revisit trigger
@@ -152,7 +153,7 @@ A workspace that asks to show the same counts to its instructors.
 A request to compare with a selected peer group.
 A user test that shows that the page lowers self-efficacy for readers at Needs attention.
 A member who reports that the page told others their standing.
-The controller's DPIA decision.
+A full DPIA that does not confirm the reassessment of 2026-10-07.
 
 ## Sources
 
