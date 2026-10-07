@@ -1615,30 +1615,6 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							assert.match(report.description, /local review state/u);
-							// The SDK checks a call against this schema all or nothing, so it carries the shape and
-							// the vocabulary and no rule: a rule is applied per observation, by the tool.
-							const schema = JSON.stringify(report.parameters);
-							for (const keyword of ["maxLength", "additionalProperties", "enum", "pattern"]) {
-								assert.ok(
-									!schema.includes(`"${keyword}"`),
-									`${keyword} in ${schema.slice(0, 200)}`,
-								);
-							}
-							assert.match(schema, /One of: evidence\/change\.json, evidence\/metadata\.json/u);
-							assert.match(schema, /One of: OLD, NEW/u);
-							// The outer recording list is typed; each item keeps the existing per-item validation hints.
-							const parameters: unknown = report.parameters;
-							assert.ok(typeof parameters === "object" && parameters !== null);
-							const properties: unknown = Reflect.get(parameters, "properties");
-							assert.ok(typeof properties === "object" && properties !== null);
-							const items = JSON.stringify(Reflect.get(properties, "observations"));
-							assert.ok(!items.includes('"type":"object"'), items.slice(0, 200));
-							const observationsSchema: unknown = Reflect.get(properties, "observations");
-							assert.ok(isRecord(observationsSchema));
-							assert.equal(observationsSchema.type, "array");
-							assert.equal(Object.hasOwn(observationsSchema, "anyOf"), false);
-							assert.match(items, /"startLine":\{"description":"[^"]*","type":"integer"\}/u);
-							assert.match(items, /Required: practiceSlug, summary/u);
 							if (scenario === "repeat") {
 								// A codemode script reading one file six times is the script's work: its nested
 								// calls carry the script's call id and never trip the guard on the model's calls.
@@ -2888,6 +2864,7 @@ if (scenario !== undefined && scenario !== "") {
 									`import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 const { validateToolArguments } = await import(import.meta.resolve("@earendil-works/pi-ai", import.meta.resolve("@earendil-works/pi-coding-agent")));
+const { stream } = await import(import.meta.resolve("@earendil-works/pi-ai/api/openai-completions", import.meta.resolve("@earendil-works/pi-coding-agent")));
 const { prepareObservationArguments } = await import(process.argv[2]);
 const captured = JSON.parse(readFileSync(process.argv[1], "utf8"));
 const tool = { name: "report_observation", parameters: captured.parameters };
@@ -2896,7 +2873,60 @@ assert.deepEqual(validate(captured.arguments), prepareObservationArguments(captu
 const encoded = JSON.stringify(captured.arguments.observations);
 for (const observations of [encoded, encoded + '"', captured.arguments.observations[0]]) {
   assert.throws(() => validate({ observations }));
-}`,
+}
+// The canonical observation reaches the SDK whole: nested shapes, required fields and vocabularies refuse the call.
+const base = prepareObservationArguments(captured.arguments).observations[0];
+const citation = base.evidence.citations[0];
+const without = (record, key) => Object.fromEntries(Object.entries(record).filter(([name]) => name !== key));
+for (const item of [
+  { ...base, outcome: "PASSED" },
+  { ...base, severity: "SEVERE" },
+  { ...base, confidence: 0.9 },
+  { ...base, summary: "x".repeat(10000) },
+  without(base, "evidence"),
+  without(base, "evidenceRationale"),
+  { ...base, evidence: {} },
+  { ...base, evidence: { citations: [] } },
+  { ...base, evidence: { citations: [without(citation, "artifactPath")] } },
+  { ...base, evidence: { citations: [{ ...citation, sourceKind: "hephaestus.observation-history" }] } },
+  { ...base, evidence: { citations: [{ ...citation, side: "MIDDLE" }] } },
+  { ...base, evidence: { citations: [{ ...citation, startLine: 0 }] } },
+]) {
+  assert.throws(() => validate({ observations: [item] }), JSON.stringify(item).slice(0, 160));
+}
+// Optional fields stay optional: their absence is accepted as it is, not filled in.
+for (const item of [
+  { ...base, evidence: { citations: [without(without(without(citation, "side"), "endLine"), "quote")] } },
+  { ...base, outcome: "MET", severity: null },
+  { ...base, outcome: "NOT_APPLICABLE", severity: null, evidence: { citations: [citation], inapplicability: { consulted: [citation.sourceKind], subject: "Runtime behavior", ruledOutBy: "Only documentation changed." } } },
+  { ...base, outcome: "UNDETERMINED", severity: null, evidence: { citations: [citation], undecidability: { openQuestion: "Was the described test run?", wouldSettleIt: "The referenced test report." } } },
+]) {
+  assert.deepEqual(validate({ observations: [item] }), { observations: [item] });
+}
+// The declaration leaves the SDK unchanged for an OpenAI-compatible endpoint: same model, no forced strict mode.
+let payload;
+const model = {
+  id: "configured-model",
+  name: "configured-model",
+  api: "openai-completions",
+  provider: "hephaestus",
+  baseUrl: "http://127.0.0.1:9/v1",
+  reasoning: false,
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 128000,
+  maxTokens: 1000,
+};
+const answer = await stream(
+  model,
+  { messages: [{ role: "system", content: "Record observations.", toolsAdded: [{ name: tool.name, description: "Record observations.", parameters: tool.parameters }], timestamp: 0 }, { role: "user", content: "Record it.", timestamp: 0 }] },
+  { apiKey: "test-key", onPayload: (params) => { payload = params; throw new Error("stopped before any request left"); } },
+).result();
+assert.equal(answer.stopReason, "error");
+assert.equal(payload.model, model.id);
+const outgoing = payload.tools.find((entry) => entry.function?.name === tool.name);
+assert.deepEqual(outgoing.function.parameters, tool.parameters);
+assert.notEqual(outgoing.function.strict, true);`,
 									nodePath.join(cwd, "observation-call.json"),
 									new URL("../../../main/resources/agent/pi-tool-arguments.ts", import.meta.url)
 										.href,
