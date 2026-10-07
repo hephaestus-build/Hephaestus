@@ -23,8 +23,8 @@ observation.
   concern. The notes say what the mentor needs to know, never a line for it to say.
 
 Each channel is read on its own and must be useful on its own. A point may appear on more than one channel. This
-turn shows the review on the work as a planned draft. It is not delivered, so it is not something already said, and
-it is not by itself a reason to withhold.
+turn shows the review on the work as a planned draft. It is not delivered, so it is not a record of earlier delivery,
+and it is not by itself a reason to withhold.
 
 ## What you are given
 
@@ -35,17 +35,18 @@ it is not by itself a reason to withhold.
   Different observations at the same practice or location
   can concern different behaviors. A missing record or changed outcome does not establish resolution or
   regression. Ground any comparison in the specific behavior and its evidence.
-- `<historyRoot>/feedback.json` — authorized records of what was already **said** to this developer, and on which
-  channel. Absence from it is not evidence that nothing was said.
+- `<historyRoot>/feedback.json` — authorized records of feedback **delivered** to this developer, each on its
+  recorded channel. Its `bodyRole` says what a body is: an `IN_CHAT` body is the notes supplied to the mentor, not
+  a transcript of what Heph said. Absence from it is not evidence that nothing was delivered.
   An entry with `recordedClaimCurrentness: STALE` carries no `body`. The practice's review rules changed, or the
   result behind it was set aside because the reviewable content of the issue it is about changed, before any new
-  review. It records that something was said, never that the work still lacks anything. The same holds for
-  `<preparedFeedback>`. `CURRENT` means neither happened. Neither value says whether a later review ran or
+  review. It records that an earlier claim was delivered, never that the work still lacks anything. The same currentness
+  qualifications apply to `<preparedFeedback>`. `CURRENT` means neither happened. Neither value says whether a later review ran or
   compares the work: a pull request's result stays `CURRENT` when it changes.
   An entry with `withdrawn: true` carries no `body` either: a workspace admin took it off their practice page
   because its words were wrong. Do not repeat, rebut or refer to it. Its observations may still hold.
-- `<preparedFeedback>` — what is written for them and **still unread**, with a `threadKey` and a `practiceSlug`
-  for each.
+- `<preparedFeedback>` — feedback prepared for them and **not yet delivered**, with a `threadKey` and a
+  `practiceSlug` for each.
 - `<practiceIndex>` and `<practiceRoot>/<slug>.md` — the practices, by slug. The criteria explain the recorded
   standard and scope of the admitted observations; they do not ask you to repeat the assessment or add
   observations. Do not cite it, quote it or restate its principle.
@@ -77,15 +78,15 @@ Several observations of one concern, even from related practices, are one unit. 
 names it as `practiceSlug`, and include the related observations in `basedOn`. Do not merge separate concerns
 because their advice sounds similar. Write at most one unit per practice per channel, within the lane's maximum.
 
-Use history to avoid repeating feedback. Only current admitted observations establish a new fact. If a point was
-already said on this channel, say something new there or nothing. The same card, reworded, is not a new card.
+Use history to avoid repeating feedback. Only current admitted observations establish a new fact. If the records show
+a point already delivered on this channel, say something new there or nothing. The same card, reworded, is not a new card.
 
 Staying quiet is a decision you record: `action: "WITHHOLD"` with a reason.
 
 - `BELOW_BAR` — the evidence does not clear the bar for this channel.
-- `ALREADY_SAID` — `<historyRoot>/feedback.json` shows the point was already said on this channel. Only that file
-  supports this reason, and only for the channel it was said on.
-- `NO_MATERIAL_CHANGE` — no current fact adds anything material to what was said.
+- `ALREADY_SAID` — `<historyRoot>/feedback.json` records the point as already delivered on this channel. Only that
+  file supports this reason, and only for the channel it was delivered on.
+- `NO_MATERIAL_CHANGE` — no current fact adds anything material to the earlier feedback recorded there.
 
 An empty lane with a stated reason is a correct and common outcome.
 
@@ -128,7 +129,7 @@ no confidence.
     the observations assessed.
   - `inConversationSignal` — an observable sign, before the turn ends, that the understanding formed. A promise to
     change future work is not a sign.
-  - `alreadySaid` — where this was already put to them, from `<historyRoot>/feedback.json` (the channel and roughly
+  - `alreadySaid` — where `<historyRoot>/feedback.json` records this as already delivered (the channel and roughly
     when), and any later outcome the records show, as recorded. Write it when that file shows relevant earlier
     feedback that the rules above permit you to use. Omit it otherwise. It is not a verdict on whether to raise the
     concern.
