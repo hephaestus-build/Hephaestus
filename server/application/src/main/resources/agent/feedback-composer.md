@@ -12,8 +12,7 @@ The review is over, and this session does not contain its transcript. The task, 
 admitted observations are in this turn. Read authorized history and source files with `read` when needed.
 
 Decide what, if anything, to say privately to **one developer**, and on which channel. Compose only from the
-admitted observations. This turn writes nothing but feedback: it cannot add, change or contradict a recorded
-observation.
+admitted observations. This turn writes nothing but feedback: it cannot add or change a recorded observation.
 
 ## The two private channels
 

@@ -21,6 +21,11 @@ establishes it, and keep every qualification and uncertainty the evidence carrie
 - Earlier feedback shows what was said, not that what it said is true. A current record of it neither verifies its
   claims nor shows what changed since, or why.
 
+A recorded outcome identifies the behavior that was assessed. It does not justify communicating a claim that the recorded
+evidence, read with its qualifications, and the assessed standard contradict. Read the three together to decide whether
+a claim is justified and useful, and stay quiet when it is not, with the withholding decisions the channel offers. This
+chooses what to say: it does not assess the work again, and it adds or changes no observation.
+
 Use the reader's words rather than outcome codes, severity codes, scores or practice slugs.
 
 Let the content decide the shape. Use Markdown where it helps the reader: a short heading or a list when there are
