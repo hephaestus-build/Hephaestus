@@ -554,5 +554,60 @@
 		},
 		"reason": "The badge shows only constant content, so a preview that constructs it covers it without sample data.",
 		"workType": "pull_request"
+	},
+	{
+		"id": "closed-issue-vague-activity",
+		"expected": {
+			"closed-issue-outcome-recorded": "NOT_APPLICABLE"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"CLOSED\", \"state_reason\": \"completed\", \"title\": \"Rework of UML\", \"body\": \"\"}\n",
+			"context/description.md": "",
+			"context/comments.json": "[]\n"
+		},
+		"reason": "An activity name with no observable end condition states no checkable outcome for closure accounting.",
+		"workType": "issue"
+	},
+	{
+		"id": "closed-issue-concrete-title-accounted",
+		"expected": {
+			"closed-issue-outcome-recorded": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"CLOSED\", \"state_reason\": \"completed\", \"title\": \"Export audit entries as a CSV file\", \"body\": \"\"}\n",
+			"context/description.md": "",
+			"context/comments.json": "[{\"native_id\": 91, \"author\": \"developer\", \"author_id\": 41, \"created_at\": \"2026-05-04T10:00:00Z\", \"updated_at\": \"2026-05-04T10:00:00Z\", \"body\": \"CSV export for audit entries is available.\"}]\n"
+		},
+		"reason": "A concrete title states the observable output, and the authored comment accounts for that output without needing a checklist.",
+		"workType": "issue"
+	},
+	{
+		"id": "closed-issue-concrete-title-unaccounted",
+		"expected": {
+			"closed-issue-outcome-recorded": "NOT_MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"CLOSED\", \"state_reason\": \"completed\", \"title\": \"Export audit entries as a CSV file\", \"body\": \"\"}\n",
+			"context/description.md": "",
+			"context/comments.json": "[]\n"
+		},
+		"reason": "The title states a checkable output, but the closed state alone does not account for it.",
+		"workType": "issue",
+		"expectedSeverity": {
+			"closed-issue-outcome-recorded": "MINOR"
+		}
+	},
+	{
+		"id": "closed-issue-remainders-accounted",
+		"expected": {
+			"closed-issue-outcome-recorded": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"CLOSED\", \"state_reason\": \"completed\", \"title\": \"Export audit entries as CSV, JSON and XML files\", \"body\": \"\"}\n",
+			"context/description.md": "",
+			"context/comments.json": "[{\"native_id\": 91, \"author\": \"developer\", \"author_id\": 41, \"created_at\": \"2026-05-04T10:00:00Z\", \"updated_at\": \"2026-05-04T10:00:00Z\", \"body\": \"CSV export for audit entries is available. JSON export is dropped because no consumer needs it. XML export is deferred until the retention format is agreed; follow-up is tracked in #24.\"}]\n"
+		},
+		"reason": "The authored record confirms one output and explicitly accounts for the others as dropped or deferred; it does not prove execution.",
+		"workType": "issue"
 	}
 ]
