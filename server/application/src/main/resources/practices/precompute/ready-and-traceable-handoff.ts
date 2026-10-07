@@ -33,14 +33,9 @@ export default async function readyAndTraceableHandoff(
 	const description = m.body ?? "";
 	const ticked = (description.match(/^\s*[-*+]\s*\[[xX]\]/gmu) ?? []).length;
 	const unticked = (description.match(/^\s*[-*+]\s*\[ \]/gmu) ?? []).length;
-	const draftMarker = /\b(?:wip|do not merge|draft)\b/iu.test(m.title ?? "");
 	if (ticked + unticked > 0) {
 		directions.push(
-			`Checklist fact: the description carries ${ticked} ticked and ${unticked} unticked checkbox line(s)${draftMarker ? "; the title carries a draft-style word" : ""}. These counts say neither whose lines they are nor what was done. Where work/change/description.authored.md exists, it separates the form's lines from the author's; otherwise compare description.md with the form. Judge whether the author adopted the checklist or wrote equivalent prose; a form's line left unticked as supplied is boilerplate, not unfinished work, and a tick is a claim, not a result.`,
-		);
-	} else if (draftMarker) {
-		directions.push(
-			"Readiness fact: the title carries a draft-style word; check the draft flag in metadata.json.",
+			`Checklist fact: the description carries ${ticked} ticked and ${unticked} unticked checkbox line(s). These counts say neither whose lines they are nor what was done. Where work/change/description.authored.md exists, it separates the form's lines from the author's; otherwise compare description.md with the form. Judge whether the author adopted the checklist or wrote equivalent prose; a form's line left unticked as supplied is boilerplate, not unfinished work, and a tick is a claim, not a result.`,
 		);
 	}
 
