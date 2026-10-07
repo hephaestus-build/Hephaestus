@@ -33,5 +33,5 @@ several independent points, plain paragraphs when there is one. No fixed section
 needed only where it helps the reader understand or choose. Avoid the marks of a template: the same opening for every
 point, a label on every line, a closing line that repeats what came before.
 
-Each piece of feedback is read on its own and stands on its own. The same point may appear on more than one surface
-when it serves the reader there. Within one surface, make each argument once.
+Each piece of feedback is read on its own and stands on its own. The same point may appear in more than one channel
+when it serves the reader there. On the work, the summary and its line notes form one review; they are not separate channels.
