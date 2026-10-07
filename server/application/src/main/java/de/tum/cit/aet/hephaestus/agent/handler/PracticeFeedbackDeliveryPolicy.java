@@ -192,12 +192,11 @@ public class PracticeFeedbackDeliveryPolicy {
                 && "closed".equalsIgnoreCase(metadata.path("state").asString(""));
         // Work-state refusal belongs to the public note. Private channels retain their own evidence and visibility
         // gates.
-        FeedbackSuppressionReason artifactRefusal = target == null
+        FeedbackSuppressionReason artifactRefusal = metadata == null || target == null
                 ? FeedbackSuppressionReason.ARTIFACT_GONE
                 : surface != DeliveryPolicySurface.ARTIFACT
                         ? null
-                        : metadata == null
-                                        || !PublicReviewEligibility.isAuthorJob(metadata)
+                        : !PublicReviewEligibility.isAuthorJob(metadata)
                                         || !publicSupportsAllowed(job, feedbackId, contributingPracticeSlugs, citedIds)
                                 ? FeedbackSuppressionReason.PUBLIC_SUBJECT_INELIGIBLE
                                 : closedWhenQueued || target.getState() == Issue.State.CLOSED
@@ -320,8 +319,8 @@ public class PracticeFeedbackDeliveryPolicy {
                 : null;
         PracticeReviewSettings settings = workspace.getReviewSettings();
         // Private preparation retains its own evidence gates. Public placement is only for the author's work.
-        boolean aboutTheAuthor = target != null
-                && metadata != null
+        boolean aboutTheAuthor = metadata != null
+                && target != null
                 && PublicReviewEligibility.isAuthorJob(metadata)
                 && Objects.equals(target.reviewSubject().actorId(), subjectUserId);
         FeedbackSuppressionReason artifactRefusal = target == null

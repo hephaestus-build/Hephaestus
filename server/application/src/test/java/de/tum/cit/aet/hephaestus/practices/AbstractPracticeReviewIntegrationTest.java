@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -151,6 +152,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
         AgentJob job = new AgentJob();
         job.setWorkspace(workspace);
         job.setJobType(jobType);
+        job.setArtifactKind(AgentJobService.artifactKindFor(jobType));
         job.setIntegrationKind(IntegrationKind.GITHUB);
         job.setMetadata(OBJECT_MAPPER.valueToTree(metadata));
         job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
