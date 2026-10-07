@@ -1,3 +1,13 @@
+pluginManagement {
+    repositories {
+        mavenCentral {
+            // Plugin markers retain the verified metadata published by the Plugin Portal.
+            content { excludeModuleByRegex(".*", ".*\\.gradle\\.plugin") }
+        }
+        gradlePluginPortal()
+    }
+}
+
 rootProject.name = "hephaestus-server"
 
 include("generated-clients", "application")
