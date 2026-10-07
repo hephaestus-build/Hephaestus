@@ -92,6 +92,113 @@ const OVERLONG_SUMMARY = "A summary that runs on ".repeat(8).trim();
 /** Words only the person's history holds: they may reach the private lanes and never the review on the work. */
 const PRIVATE_HISTORY_SENTENCE = "Earlier reviews told this person about the insecure call twice.";
 
+/** What the staged history establishes, as the server writes it on both history files. */
+const HISTORY_COVERAGE = {
+	scope: "AUTHORIZED_REVIEW_RECORDS_FOR_SUBJECT",
+	workChronology: "NOT_ESTABLISHED",
+	communicationHistory: "NOT_ESTABLISHED",
+};
+
+/** The person's prepared feedback, as the server stages it for the private lanes, byte for byte. */
+const STAGED_PREPARED_HISTORY = JSON.stringify({
+	coverage: HISTORY_COVERAGE,
+	recordRole: "PREPARED_NOT_DELIVERED",
+	prepared: [
+		{
+			threadKey: "queued-current",
+			practiceSlug: "test-practice",
+			channel: "IN_CHAT",
+			recordedClaimCurrentness: "CURRENT",
+			bodyRole: "MENTOR_NOTES",
+			body: "Earlier prepared mentor wording.",
+		},
+		{
+			threadKey: "queued-withdrawn",
+			practiceSlug: "test-practice",
+			channel: "IN_CHAT",
+			withdrawn: true,
+			recordedClaimCurrentness: "STALE",
+		},
+	],
+});
+
+/** The person's delivered feedback, as the server stages it for the private lanes, byte for byte. */
+const STAGED_FEEDBACK_HISTORY = JSON.stringify({
+	coverage: HISTORY_COVERAGE,
+	recordRole: "RECORDED_DELIVERY",
+	feedback: [
+		{
+			id: "feedback-same-work",
+			channel: "IN_CONTEXT",
+			artifact: {
+				kind: "scm.pull_request",
+				url: "https://gitlab.example/group/repo/-/merge_requests/3",
+			},
+			deliveredAt: "2026-09-01T10:00:00Z",
+			reviewedRevision: "c".repeat(40),
+			basedOn: [
+				{
+					id: "earlier-1",
+					practiceSlug: "test-practice",
+					practiceRevision: null,
+					outcome: "NOT_MET",
+				},
+			],
+			recordedClaimCurrentness: "CURRENT",
+			bodyRole: "COMPOSED_GUIDANCE",
+			body: "An earlier comment on this same change.",
+		},
+		{
+			id: "feedback-earlier-work",
+			channel: "IN_APP",
+			artifact: {
+				kind: "scm.pull_request",
+				url: "https://gitlab.example/group/repo/-/merge_requests/1",
+			},
+			deliveredAt: "2026-08-01T10:00:00Z",
+			reviewedRevision: null,
+			basedOn: [],
+			recordedClaimCurrentness: "CURRENT",
+			bodyRole: "COMPOSED_GUIDANCE",
+			body: PRIVATE_HISTORY_SENTENCE,
+		},
+		{
+			id: "feedback-withdrawn",
+			channel: "IN_APP",
+			artifact: {
+				kind: "scm.pull_request",
+				url: "https://gitlab.example/group/repo/-/merge_requests/2",
+			},
+			deliveredAt: "2026-08-15T10:00:00Z",
+			reviewedRevision: "d".repeat(40),
+			basedOn: [
+				{
+					id: "earlier-2",
+					practiceSlug: "test-practice",
+					practiceRevision: null,
+					outcome: "NOT_MET",
+				},
+			],
+			recordedClaimCurrentness: "STALE",
+			withdrawn: true,
+		},
+		{
+			id: "feedback-legacy",
+			channel: null,
+			artifact: {
+				kind: "scm.pull_request",
+				url: "https://gitlab.example/group/repo/-/merge_requests/4",
+			},
+			deliveredAt: "2026-07-01T10:00:00Z",
+			reviewedRevision: null,
+			basedOn: [],
+			recordedClaimCurrentness: "CURRENT",
+			bodyRole: "UNKNOWN",
+			body: "A legacy delivered note without a recorded channel.",
+		},
+	],
+});
+
 /** The review composition's whole summary, as the composer wrote it, paragraphs and all. */
 const REVIEW_SUMMARY =
 	"The login change calls `insecure()` on the path every sign-in takes.\n\n" +
@@ -167,6 +274,8 @@ interface CustomTool {
 }
 
 const scenario = process.env.PI_ORCHESTRATION_SCENARIO;
+const unavailableContext = process.env.PI_UNAVAILABLE_CONTEXT === "true";
+const counterevidence = process.env.PI_COUNTEREVIDENCE === "true";
 if (scenario !== undefined && scenario !== "") {
 	const cwd = process.env.PI_RUNNER_CWD;
 	assert.ok(cwd !== undefined && cwd !== "");
@@ -197,7 +306,27 @@ if (scenario !== undefined && scenario !== "") {
 			case "compose-fold": {
 				return [
 					admittedObservation,
-					{ ...admittedObservation, id: "observation-2", practiceSlug: "second-practice" },
+					{
+						...admittedObservation,
+						id: "observation-2",
+						practiceSlug: "second-practice",
+						...(counterevidence
+							? {
+									outcome: "MET",
+									severity: null,
+									evidenceRationale:
+										"The helper path is present in the source; its runtime behavior was not executed.",
+									evidence: {
+										citations: [changeCitation],
+										search: {
+											consulted: ["scm.pull-request.diff"],
+											lookedFor: "A recorded relaunch result",
+											boundary: "Source only; no relaunch result recorded.",
+										},
+									},
+								}
+							: {}),
+					},
 				];
 			}
 			case "compose":
@@ -827,12 +956,20 @@ if (scenario !== undefined && scenario !== "") {
 								}
 								// Every other composing scenario decides the review's problems by withholding them.
 								const ids =
-									scenario === "compose-fold"
+									scenario === "compose-fold" && !counterevidence
 										? ["observation-1", "observation-2"]
 										: ["observation-1"];
 								const withheld = [{ basedOn: ids, reason: "BELOW_BAR" }];
 								record(`review-select:${await choose("s-w", { withheld })}`);
 								record(`review-withheld:${await attempt("r-w", { withheld })}`);
+								if (unavailableContext) {
+									rmSync(nodePath.join(cwd, "catalog/practices/test-practice.md"));
+									writeFileSync(nodePath.join(cwd, "catalog/practices/second-practice.md"), "");
+									writeFileSync(
+										nodePath.join(cwd, "history/feedback.json"),
+										JSON.stringify({ unexpected: "Unknown historical prose" }),
+									);
+								}
 								return;
 							}
 							if (text.includes("## Undecided")) {
@@ -934,10 +1071,6 @@ if (scenario !== undefined && scenario !== "") {
 								}
 								assert.match(schema, /One of: IN_APP\./u);
 								assert.match(schema, /Required: channel, practiceSlug, basedOn, action\./u);
-								assert.match(
-									schema,
-									/SUPERSEDE to replace a message that is queued and unread; WITHHOLD/u,
-								);
 								// One occurrence is not a pattern: with no history, the card is refused, and a
 								// call that stored nothing is an error the session must correct.
 								const alone = await feedback
@@ -1737,7 +1870,7 @@ if (scenario !== undefined && scenario !== "") {
 	});
 	await import("../../../main/resources/agent/pi-runner.ts");
 } else {
-	for (const stage of [
+	for (const fixture of [
 		"scope-cut-off",
 		"scope-recording-guard",
 		"scope-repeat",
@@ -1776,10 +1909,16 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-repeat-select",
 		"compose-invalid-select",
 		"compose-fold",
+		"compose-context-unavailable",
+		"compose-counterevidence",
 		"compose-abstention",
 		"compose-unknown-outcome",
 		"compose-null-outcome",
 	]) {
+		const stage =
+			fixture === "compose-context-unavailable" || fixture === "compose-counterevidence"
+				? "compose-fold"
+				: fixture;
 		void test(
 			{
 				"scope-cut-off":
@@ -1846,6 +1985,10 @@ if (scenario !== undefined && scenario !== "") {
 					"points a repeated accepted selection at the final review, which is then stored without an abort",
 				"compose-invalid-select":
 					"gives an unaccepted selection no authority over the review until a corrected one is accepted",
+				"compose-counterevidence":
+					"private counterevidence retains MET source qualifications and coordinates without quoted or verified-runtime claims",
+				"compose-context-unavailable":
+					"keeps missing and empty standards and unknown history explicit without inventing their contents",
 				"compose-fold":
 					"counts a NOT_MET practice folded into another practice's unit as decided and asks no more",
 				"compose-abstention":
@@ -1854,8 +1997,8 @@ if (scenario !== undefined && scenario !== "") {
 					"refuses an admitted outcome outside the vocabulary before composing",
 				"compose-null-outcome":
 					"refuses an admitted observation without an outcome before composing",
-			}[stage] ?? stage,
-			() => {
+			}[fixture] ?? fixture,
+			async () => {
 				const cwd = mkdtempSync(nodePath.join(tmpdir(), "pi-orchestration-"));
 				try {
 					mkdirSync(nodePath.join(cwd, "catalog/practices"), { recursive: true });
@@ -1877,29 +2020,11 @@ if (scenario !== undefined && scenario !== "") {
 					if (stage === "compose" || stage === "compose-foreign-provider") {
 						// The person's history, staged as the server stages it for the measurement and private lanes.
 						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
-						writeFileSync(
-							nodePath.join(cwd, "history/feedback.json"),
-							JSON.stringify({
-								feedback: [
-									{
-										channel: "IN_CONTEXT",
-										artifact: {
-											kind: "scm.pull_request",
-											url: "https://gitlab.example/group/repo/-/merge_requests/3",
-										},
-										body: "An earlier comment on this same change.",
-									},
-									{
-										channel: "IN_APP",
-										artifact: {
-											kind: "scm.pull_request",
-											url: "https://gitlab.example/group/repo/-/merge_requests/1",
-										},
-										body: PRIVATE_HISTORY_SENTENCE,
-									},
-								],
-							}),
-						);
+						writeFileSync(nodePath.join(cwd, "history/feedback.json"), STAGED_FEEDBACK_HISTORY);
+						writeFileSync(nodePath.join(cwd, "history/prepared.json"), STAGED_PREPARED_HISTORY);
+					}
+					if (fixture === "compose-context-unavailable") {
+						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
 					}
 					writeFileSync(nodePath.join(cwd, "events"), "");
 					writeFileSync(
@@ -2047,7 +2172,9 @@ if (scenario !== undefined && scenario !== "") {
 					writeFileSync(nodePath.join(cwd, "catalog/practices/index.json"), JSON.stringify(index));
 					writeFileSync(
 						nodePath.join(cwd, "catalog/practices/second-practice.md"),
-						"Complete second criterion. Its own independent question.",
+						stage === "compose-fold"
+							? "Long criterion. ".repeat(2500)
+							: "Complete second criterion. Its own independent question.",
 					);
 					writeFileSync(
 						nodePath.join(cwd, "pi-provider.json"),
@@ -2082,6 +2209,8 @@ if (scenario !== undefined && scenario !== "") {
 							env: {
 								...process.env,
 								PI_ORCHESTRATION_SCENARIO: stage,
+								PI_UNAVAILABLE_CONTEXT: String(fixture === "compose-context-unavailable"),
+								PI_COUNTEREVIDENCE: String(fixture === "compose-counterevidence"),
 								PI_RUNNER_CWD: cwd,
 								PI_CODING_AGENT_DIR: cwd,
 								AGENT_BUDGET_MS: budgetMs,
@@ -2723,10 +2852,114 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(second, /"id": "observation-1"/u);
 							// The quoted lines and the verification records stay on disk, where the composer
-							// can read them if it must; the search it recorded is still shown. (The shared opening
-							// above the composer's turn carries the observation example, quotes and all.)
+							// can read them if needed; the search it recorded is still shown.
 							assert.ok(second.includes("## This turn"));
 							const composerTurn = second.slice(second.indexOf("## This turn"));
+							// The NOT_MET practice's criteria come whole before the admitted rows, without its
+							// measuring leads or a sibling's criteria; the staged files stay readable.
+							const criteriaAt = composerTurn.indexOf("# Test practice\nCriteria.");
+							assert.ok(criteriaAt !== -1, composerTurn);
+							assert.ok(criteriaAt < composerTurn.indexOf('"id": "observation-1"'), composerTurn);
+							assert.doesNotMatch(
+								composerTurn,
+								/Precomputed leads|insecure call: |Complete second criterion/u,
+							);
+							// Earlier feedback keeps every fact it was staged with and names where its words are.
+							for (const fact of [
+								'"id": "feedback-same-work"',
+								'"deliveredAt": "2026-08-15T10:00:00Z"',
+								`"reviewedRevision": "${"d".repeat(40)}"`,
+								'"id": "earlier-2"',
+								'"recordedClaimCurrentness": "STALE"',
+								'"withdrawn": true',
+							]) {
+								assert.ok(composerTurn.includes(fact), fact);
+							}
+							assert.ok(!composerTurn.includes("An earlier comment on this same change."));
+							assert.ok(!composerTurn.includes("Earlier prepared mentor wording."));
+							assert.ok(!composerTurn.includes(REVIEW_SUMMARY));
+							assert.match(composerTurn, /prepared\[0\]\.body/u);
+							assert.doesNotMatch(composerTurn, /prepared\[1\]\.body/u);
+							assert.match(composerTurn, /review\.summary\.body/u);
+							assert.match(composerTurn, /review\.inline\[0\]\.body/u);
+							// The native evidence reader can retrieve the original source at a displayed locator.
+							const { createReadTool } = await import("@earendil-works/pi-coding-agent");
+							const reader = createReadTool(cwd);
+							for (const [path, expected] of [
+								["history/feedback.json", "An earlier comment on this same change."],
+								["history/prepared.json", "Earlier prepared mentor wording."],
+								["out/feedback.json", JSON.stringify(REVIEW_SUMMARY).slice(1, -1)],
+							]) {
+								assert.ok(path !== undefined && expected !== undefined);
+								const result = await reader.execute(`jit-${path}`, { path });
+								const text = result.content
+									.filter((block) => block.type === "text")
+									.map((block) => block.text)
+									.join("\n");
+								assert.ok(text.includes(expected), text);
+							}
+
+							// Each history file's projection keeps every staged root and row fact; a body is replaced by
+							// its locator in the unchanged file, and a row without one (withdrawn, stale) names none.
+							const projections = [
+								...composerTurn.matchAll(/```json\n(?<json>[\s\S]*?)\n```/gu),
+							].map((match): unknown => JSON.parse(match.groups?.json ?? "null"));
+							for (const [role, key, file, staged, bodyRoles] of [
+								[
+									"RECORDED_DELIVERY",
+									"feedback",
+									"history/feedback.json",
+									STAGED_FEEDBACK_HISTORY,
+									["COMPOSED_GUIDANCE", "COMPOSED_GUIDANCE", undefined, "UNKNOWN"],
+								],
+								[
+									"PREPARED_NOT_DELIVERED",
+									"prepared",
+									"history/prepared.json",
+									STAGED_PREPARED_HISTORY,
+									["MENTOR_NOTES", undefined],
+								],
+							] as const) {
+								assert.equal(readFileSync(nodePath.join(cwd, file), "utf8"), staged);
+								const view = projections.find(
+									(projection) => isRecord(projection) && projection.recordRole === role,
+								);
+								assert.ok(isRecord(view), role);
+								assert.deepEqual(view.coverage, HISTORY_COVERAGE);
+								const rows = view[key];
+								assert.ok(Array.isArray(rows));
+								assert.deepEqual(
+									rows.map((row: unknown) => (isRecord(row) ? row.bodyRole : null)),
+									bodyRoles,
+								);
+								const original: unknown = JSON.parse(staged);
+								const sourceRows = isRecord(original) ? original[key] : null;
+								assert.ok(Array.isArray(sourceRows) && sourceRows.length === rows.length);
+								for (const [bodyIndex, source] of sourceRows.entries()) {
+									assert.ok(isRecord(source));
+									const { body, ...facts } = source;
+									const row: unknown = rows[bodyIndex];
+									assert.ok(isRecord(row));
+									const { bodyAt, ...kept } = row;
+									assert.deepEqual(kept, facts);
+									assert.ok(!Object.hasOwn(row, "body"));
+									const sourcePath = nodePath.join(cwd, file);
+									assert.equal(
+										bodyAt,
+										typeof body === "string"
+											? `${sourcePath} → ${key}[${bodyIndex}].body (${body.length} characters)`
+											: undefined,
+									);
+									// The locator identifies the original bytes and the staged body index.
+									const located = readFileSync(sourcePath, "utf8");
+									assert.equal(located, staged);
+									const reread: unknown = JSON.parse(located);
+									const rereadRows = isRecord(reread) ? reread[key] : null;
+									assert.ok(Array.isArray(rereadRows));
+									const entry: unknown = rereadRows[bodyIndex];
+									assert.ok(isRecord(entry) && entry.body === body);
+								}
+							}
 							assert.doesNotMatch(composerTurn, /"quote"/u);
 							assert.doesNotMatch(composerTurn, /"verification"/u);
 							assert.match(second, /"lookedFor": "x"/u);
@@ -3033,6 +3266,45 @@ if (scenario !== undefined && scenario !== "") {
 								/0 line note\(s\), 1 withholding decision\(s\)/u,
 							);
 							assert.doesNotMatch(child.stderr, /asking once more/u);
+							// An oversized criterion is named with where to read it, never cut; the other is shown whole.
+							const privateTurn = ["prompt-1.md", "prompt-2.md", "prompt-3.md", "prompt-4.md"]
+								.map((name) => readFileSync(nodePath.join(cwd, name), "utf8"))
+								.find((text) => text.includes("## This turn"));
+							assert.ok(privateTurn !== undefined);
+							if (fixture === "compose-counterevidence") {
+								assert.ok(
+									privateTurn.includes(
+										"The helper path is present in the source; its runtime behavior was not executed.",
+									),
+								);
+								assert.ok(privateTurn.includes("Source only; no relaunch result recorded."));
+								assert.match(privateTurn, /"startLine": 10/u);
+								assert.doesNotMatch(
+									privateTurn,
+									/"quote"|"verification"|Criteria of `second-practice`/u,
+								);
+								break;
+							}
+
+							if (fixture === "compose-context-unavailable") {
+								assert.match(privateTurn, /Criteria of `test-practice` — not staged/u);
+								assert.match(privateTurn, /Criteria of `second-practice`[^\n]*is empty/u);
+								assert.match(
+									privateTurn,
+									/read `[^`]*history\/feedback\.json` for the recorded history/u,
+								);
+								assert.doesNotMatch(
+									privateTurn,
+									/Unknown historical prose|# Test practice|Long criterion|review\.summary\.body/u,
+								);
+								break;
+							}
+							assert.match(
+								privateTurn,
+								/### Criteria of `second-practice` — too large to show here; read `[^`]*catalog\/practices\/second-practice\.md`/u,
+							);
+							assert.ok(!privateTurn.includes("Long criterion. Long criterion."));
+							assert.ok(privateTurn.includes("# Test practice\nCriteria."));
 							break;
 						}
 						case "compose-abstention": {
