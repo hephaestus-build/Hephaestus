@@ -338,6 +338,66 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldStageEarlierObservationsWithTheEvidenceAndRevisionTheyWereRecordedWith() {
+        String rationale =
+                "The catch block logs and continues.\nOnly the changed file was read; callers were not searched.";
+        ObjectNode evidence = objectMapper.createObjectNode();
+        ObjectNode citation = evidence.putArray("citations").addObject();
+        citation.put("sourceKind", "scm.pull-request.diff");
+        citation.put("artifactPath", "inputs/change/diff.patch");
+        citation.put("path", "src/Loader.swift");
+        citation.put("side", "NEW");
+        citation.put("startLine", 12);
+        citation.put("endLine", 14);
+        citation.put("quote", "do {\n    try load()\n} catch {}");
+        citation.put("quoteRedacted", false);
+        ObjectNode search = evidence.putObject("search");
+        search.putArray("consulted").add("scm.pull-request.diff");
+        search.put("lookedFor", "error handling");
+        search.put("boundary", "changed files only");
+        PracticeRevision recordedRevision = mock(PracticeRevision.class);
+        when(recordedRevision.getId()).thenReturn(157L);
+        when(recordedRevision.getRevisionNumber()).thenReturn(2);
+        Practice practice = new Practice();
+        practice.setSlug("swallows-errors");
+        practice.setCurrentRevision(mock(PracticeRevision.class));
+        Observation recorded = Observation.builder()
+                .id(UUID.randomUUID())
+                .practice(practice)
+                .practiceRevision(recordedRevision)
+                .recurrenceKey("rec-1")
+                .summary("Caught and ignored")
+                .outcome(Outcome.NOT_MET)
+                .observedAt(Instant.parse("2026-07-01T09:00:00Z"))
+                .evidenceRationale(rationale)
+                .evidence(evidence)
+                .build();
+        Observation unrecorded = Observation.builder()
+                .id(UUID.randomUUID())
+                .practice(practice)
+                .recurrenceKey("rec-2")
+                .summary("Missing restart check")
+                .outcome(Outcome.NOT_MET)
+                .observedAt(Instant.parse("2026-06-01T09:00:00Z"))
+                .build();
+        when(observationRepository.findForPersonHistory(any(), any())).thenReturn(List.of(recorded, unrecorded));
+
+        JsonNode records = read(captureObservationHistory().files().get("inputs/history/observations.json"))
+                .get("observations");
+
+        JsonNode staged = records.get(0);
+        assertThat(staged.path("evidenceRationale").asString()).isEqualTo(rationale);
+        assertThat(staged.get("evidence")).isEqualTo(evidence);
+        assertThat(staged.path("practiceRevision").path("id").asString()).isEqualTo("157");
+        assertThat(staged.path("practiceRevision").path("number").asInt()).isEqualTo(2);
+        // What was not recorded stays unknown; nothing current stands in for it.
+        JsonNode unknown = records.get(1);
+        assertThat(unknown.get("evidenceRationale").isNull()).isTrue();
+        assertThat(unknown.get("evidence").isNull()).isTrue();
+        assertThat(unknown.get("practiceRevision").isNull()).isTrue();
+    }
+
+    @Test
     void stagesEarlierObservationsAsThePracticeTheVerdictAndTheSummary() {
         Observation original = observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID);
         when(observationRepository.findForPersonHistory(any(), any())).thenReturn(List.of(original));
@@ -349,7 +409,16 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 .get(0);
         assertThat(entry.propertyNames())
                 .containsExactlyInAnyOrder(
-                        "id", "practiceSlug", "summary", "outcome", "severity", "artifact", "observedAt");
+                        "id",
+                        "practiceSlug",
+                        "summary",
+                        "outcome",
+                        "severity",
+                        "evidenceRationale",
+                        "evidence",
+                        "practiceRevision",
+                        "artifact",
+                        "observedAt");
         assertThat(entry.path("id").asString()).isEqualTo(original.getId().toString());
         assertThat(entry.get("practiceSlug").asString()).isEqualTo("swallows-errors");
         assertThat(entry.get("summary").asString()).isEqualTo("Caught and ignored");
