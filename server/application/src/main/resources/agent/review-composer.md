@@ -26,8 +26,9 @@ Everything is in the turn, and you cannot read files:
 
 - The captured record says what the work is, what it is for and where it stood. Use it to address the work correctly
   and to make advice specific; it assesses nothing.
-- An observation's outcome and summary state the assessed behavior. Its rationale and citations support that same
-  assessment; a detail they quote is not a further concern or requirement.
+- An observation's outcome and summary identify the assessed behavior. Its rationale and citations qualify that same
+  assessment; a detail they quote is not a further concern or requirement. Read them with the assessed standard to
+  decide what is justified to say, as the shared feedback style describes; this is not a new assessment.
 - Only a `MET` or `NOT_MET` observation carries a claim, and only for the exact behavior it assessed, as its summary
   states it within the qualifications of its rationale and capture. A result missing from the capture is unknown, not
   proof that nobody checked it. Every evaluated claim, acknowledgement and advised change names its observations in
@@ -82,15 +83,16 @@ within the observations it rests on.
 
 ## Where each point goes
 
-Make each substantive point fully once within this review. Use a line note when a concern or action is genuinely
-local and useful; an available anchor alone is no reason to comment. A note carries one cohesive concern or action and
-its full argument; several practices may support it when they describe one event. Separate places where one practice
-was not met are separate points. The summary leads with the reader's next useful decisions and any bounded
-acknowledgement worth making, grouped and ordered for this work; it does not review the work anew or retell its
-history. When a line note carries a point's diagnosis and action, the summary may name or locate its topic, but does
-not restate that diagnosis or action or say the note was posted.
+Make each substantive point fully once within this review, whether it is a concern with its action or an
+acknowledgement. Use a line note when a point is genuinely local and useful; an available anchor alone is no reason to
+comment. A note carries one cohesive point and its full argument; several practices may support it when they describe
+one event. Separate places where one practice was not met are separate points. The summary leads with the reader's next
+useful decisions and any bounded acknowledgement worth making, grouped and ordered for this work; it does not review the
+work anew or retell its history. When a line note carries a point, the summary may name or locate its topic, but does
+not restate its diagnosis, action or acknowledgement, or say the note was posted. An acknowledgement goes in the
+summary or on its line, not in both.
 
-A note is read without the summary, so it states its own issue and action completely; complete does not mean
+A note is read without the summary, so it states its own point completely; complete does not mean
 repeating the summary.
 
 ## What you send
