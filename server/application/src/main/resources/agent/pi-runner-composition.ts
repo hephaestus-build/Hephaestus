@@ -902,18 +902,41 @@ export const REVIEW_TOOL_DESCRIPTION =
 export function selectionText(
 	selection: ReviewSelection,
 	reviewable: readonly Record<string, unknown>[],
+	stagedCriteria: (practiceSlug: string) => string | null,
 ): string {
 	const chosen = new Set(selection.selected);
 	const selectedObservations = reviewable.filter(
 		(observation) => observation.publicEligible === true && chosen.has(String(observation.id)),
 	);
-	return (
-		`\`\`\`json\n${JSON.stringify({ acceptedSelection: selection, selectedObservations }, null, 1)}\n\`\`\`\n` +
+	const practices = [
+		...new Set(selectedObservations.map((observation) => String(observation.practiceSlug))),
+	];
+	const guidance =
 		"Write from these selected assessments, preserving their evidence qualifications. A declared affordance " +
 		"supports its bounded benefit, not an unobserved runtime or test outcome. Keep the remedy focused on the " +
 		"recorded gap and preserve unrelated behavior. Do not make another change a prerequisite unless the admitted " +
-		"evidence establishes that dependency."
-	);
+		"evidence establishes that dependency.";
+	const reference =
+		"The criteria the selected assessments were made against, as staged. They explain the standard and the " +
+		"responses it accepts; the assessments above alone establish what this review raises.";
+	const criteria =
+		practices.length === 0
+			? ""
+			: `\n\n${reference}\n${practices.map((slug) => criteriaBlock(slug, stagedCriteria(slug))).join("\n")}`;
+	return `\`\`\`json\n${JSON.stringify({ acceptedSelection: selection, selectedObservations }, null, 1)}\n\`\`\`\n${guidance}${criteria}`;
+}
+
+/** One practice's staged criteria, whole and fenced so their own code blocks cannot close it; never cut or rewritten. */
+function criteriaBlock(slug: string, criteria: string | null): string {
+	if (criteria === null) {
+		return `### Criteria of \`${slug}\` — not available for this review; nothing is known about them here\n`;
+	}
+	if (criteria.length === 0) {
+		return `### Criteria of \`${slug}\` — staged empty; no standard is available here\n`;
+	}
+	const longestRun = Math.max(0, ...[...criteria.matchAll(/`+/gu)].map((run) => run[0].length));
+	const fence = "`".repeat(Math.max(3, longestRun + 1));
+	return `### Criteria of \`${slug}\`\n${fence}markdown\n${criteria}\n${fence}\n`;
 }
 
 /** Offered before the body to orient generation; field order is not enforced. */

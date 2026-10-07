@@ -1207,7 +1207,7 @@ void test("an accepted selection is shown with the admitted public rows it selec
 		selected: ["spoken", "private"],
 		withheld: [{ basedOn: ["held"], reason: "BELOW_BAR" as const }],
 	};
-	const text = selectionText(selection, reviewable);
+	const text = selectionText(selection, reviewable, () => null);
 	const shown: unknown = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
 	// The selected row exactly as admission's public view carries it: its rationale and citation unchanged.
 	assert.deepEqual(shown, {
@@ -1218,4 +1218,94 @@ void test("an accepted selection is shown with the admitted public rows it selec
 	assert.ok(!text.includes("Told twice before"), text);
 	assert.ok(!text.includes("The description gives no reason"), text);
 	assert.ok(!text.includes('"verification"'), text);
+});
+
+const ENGAGEMENT_CRITERIA =
+	"## The standard\nA review request is answered by a fix, a reasoned decline, or a clarification.\n\n" +
+	"## Judge\n- MET: each request has one of those responses.\n- NOT_MET: a request has none.\n\n" +
+	"```swift\n// a staged example stays inside its own fence\n```";
+
+void test("an accepted selection carries the whole staged criteria of the practices it selected, once each", () => {
+	const reviewable = publicObservations([
+		{
+			id: "unanswered",
+			practiceSlug: "engages-with-review",
+			outcome: "NOT_MET",
+			publicEligible: true,
+			summary: "A design request has no reply",
+			citations: [],
+		},
+		{
+			id: "unanswered-again",
+			practiceSlug: "engages-with-review",
+			outcome: "NOT_MET",
+			publicEligible: true,
+			summary: "A second request has no reply",
+			citations: [],
+		},
+		{
+			id: "held",
+			practiceSlug: "describe-what-and-why",
+			outcome: "NOT_MET",
+			publicEligible: true,
+			summary: "The description gives no reason",
+			citations: [],
+		},
+		{
+			id: "routine",
+			practiceSlug: "ships-a-preview",
+			outcome: "MET",
+			publicEligible: true,
+			citations: [],
+		},
+	]);
+	const read: string[] = [];
+	const staged = (slug: string) => {
+		read.push(slug);
+		return slug === "engages-with-review"
+			? ENGAGEMENT_CRITERIA
+			: `Criteria of ${slug} must not travel.`;
+	};
+
+	const text = selectionText(
+		{
+			selected: ["unanswered", "unanswered-again"],
+			withheld: [{ basedOn: ["held"], reason: "BELOW_BAR" }],
+		},
+		reviewable,
+		staged,
+	);
+
+	// Exactly the selected practice's criteria, read once, whole and unchanged, alternatives included.
+	assert.deepEqual(read, ["engages-with-review"]);
+	assert.ok(text.includes(`\`\`\`\`markdown\n${ENGAGEMENT_CRITERIA}\n\`\`\`\``), text);
+	assert.equal(text.split("### Criteria of `engages-with-review`").length, 2, text);
+	assert.ok(!text.includes("must not travel"), text);
+});
+
+void test("a selection with nothing selected carries no criteria, and an unavailable one says so", () => {
+	const reviewable = publicObservations([
+		{
+			id: "held",
+			practiceSlug: "describe-what-and-why",
+			outcome: "NOT_MET",
+			publicEligible: true,
+			summary: "The description gives no reason",
+			citations: [],
+		},
+	]);
+	const quiet = selectionText(
+		{ selected: [], withheld: [{ basedOn: ["held"], reason: "BELOW_BAR" }] },
+		reviewable,
+		() => {
+			throw new Error("an empty selection reads no criteria");
+		},
+	);
+	assert.ok(!quiet.includes("### Criteria of"), quiet);
+
+	const missing = selectionText({ selected: ["held"], withheld: [] }, reviewable, () => null);
+	assert.ok(
+		missing.includes("### Criteria of `describe-what-and-why` — not available for this review"),
+		missing,
+	);
 });

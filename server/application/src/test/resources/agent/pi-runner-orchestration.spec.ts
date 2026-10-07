@@ -2189,12 +2189,16 @@ if (scenario !== undefined && scenario !== "") {
 						nodePath.join(cwd, "work/change/diff.patch"),
 						"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,0 +10,1 @@\n[L10] + insecure();\n",
 					);
-					writeFileSync(
-						nodePath.join(cwd, "catalog/practices/test-practice.md"),
-						stage === "context-unfit"
-							? "Essential criteria. ".repeat(30_000)
-							: "# Test practice\nCriteria.",
-					);
+					let practiceCriteria = "# Test practice\nCriteria.";
+					if (stage === "context-unfit") {
+						practiceCriteria = "Essential criteria. ".repeat(30_000);
+					} else if (stage === "compose-reselect" || stage === "compose-recover") {
+						// Leading indentation is a Markdown code block; trimming it would change the standard.
+						practiceCriteria =
+							"    let reply = answer(request)\n\n# Engages with review\n" +
+							"A review request is answered by a fix, a reasoned decline, or a clarification.  \n\n";
+					}
+					writeFileSync(nodePath.join(cwd, "catalog/practices/test-practice.md"), practiceCriteria);
 					// What the practice's precompute script derived, as the precompute runner writes it.
 					mkdirSync(nodePath.join(cwd, "work/precompute-out"), { recursive: true });
 					writeFileSync(
@@ -3383,6 +3387,14 @@ if (scenario !== undefined && scenario !== "") {
 						}
 						case "compose-recover": {
 							assert.equal(child.status, 0, child.stderr);
+							const criteria = readFileSync(
+								nodePath.join(cwd, "catalog/practices/test-practice.md"),
+								"utf8",
+							);
+							assert.match(criteria, /^ {4}let reply[\s\S]*reasoned decline[\s\S]* {2}\n\n$/u);
+							const staged = `markdown\n${criteria}\n`;
+							const accepted = events.find((event) => event.startsWith("recover-select:")) ?? "";
+							assert.ok(accepted.includes(JSON.stringify(staged).slice(1, -1)), accepted);
 							assert.match(
 								events.find((event) => event.startsWith("recover-select:")) ?? "",
 								/Accepted the selection/u,
@@ -3403,6 +3415,8 @@ if (scenario !== undefined && scenario !== "") {
 								acceptedSelection: { selected: ["observation-1"], withheld: [] },
 								selectedObservations: [publicRow],
 							});
+							assert.ok(retry.includes(staged), retry);
+							assert.ok(!retry.includes("### Criteria of `second-practice`"), retry);
 							break;
 						}
 						case "compose-reselect": {
@@ -3430,7 +3444,19 @@ if (scenario !== undefined && scenario !== "") {
 								/review refused, nothing was stored:[\s\S]*speaks about observation-1, which the accepted selection does not select[\s\S]*withheld differs from the accepted selection for observation-1/u,
 							);
 							assert.match(said("reselect-speak"), /Accepted the selection/u);
+							const criteria = readFileSync(
+								nodePath.join(cwd, "catalog/practices/test-practice.md"),
+								"utf8",
+							);
+							assert.match(criteria, /^ {4}let reply[\s\S]*reasoned decline[\s\S]* {2}\n\n$/u);
+							const staged = `markdown\n${criteria}\n`;
+							assert.ok(
+								said("reselect-speak").includes(JSON.stringify(staged).slice(1, -1)),
+								said("reselect-speak"),
+							);
 							const refused = readFileSync(nodePath.join(cwd, "refused-standing.txt"), "utf8");
+							assert.ok(refused.includes(staged), refused);
+							assert.ok(!refused.includes("### Criteria of `second-practice`"), refused);
 							assert.deepEqual(selectedRowsOf(refused), {
 								acceptedSelection: { selected: ["observation-1"], withheld: [] },
 								selectedObservations: [publicRow],
