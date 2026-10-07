@@ -312,13 +312,14 @@ public interface ArtifactSignalRepository extends JpaRepository<ArtifactSignal, 
      * deliberately, the ones it said nothing about, which no job-derived listing can show.
      */
     @Query(
-            value = "SELECT s.artifactKind AS artifactKind, s.artifactId AS artifactId,"
-                    + " MAX(s.occurredAt) AS lastSignalAt, COUNT(s) AS signalCount,"
-                    + " SUM(CASE WHEN s.state = de.tum.cit.aet.hephaestus.integration.core.signal.SignalState.TRIGGERED"
-                    + " THEN 1 ELSE 0 END) AS reviewedSignalCount"
-                    + " FROM ArtifactSignal s WHERE s.workspace.id = :workspaceId"
-                    + " AND (:artifactKind IS NULL OR s.artifactKind = :artifactKind)"
-                    + " GROUP BY s.artifactKind, s.artifactId ORDER BY MAX(s.occurredAt) DESC, s.artifactId DESC",
+            value =
+                    "SELECT s.artifactKind AS artifactKind, s.artifactId AS artifactId,"
+                            + " MAX(s.occurredAt) AS lastSignalAt, COUNT(s) AS signalCount,"
+                            + " SUM(CASE WHEN s.state = de.tum.cit.aet.hephaestus.integration.core.signal.SignalState.TRIGGERED"
+                            + " THEN 1 ELSE 0 END) AS reviewedSignalCount"
+                            + " FROM ArtifactSignal s WHERE s.workspace.id = :workspaceId"
+                            + " AND (:artifactKind IS NULL OR s.artifactKind = :artifactKind)"
+                            + " GROUP BY s.artifactKind, s.artifactId ORDER BY MAX(s.occurredAt) DESC, s.artifactId DESC, s.artifactKind DESC",
             countQuery =
                     "SELECT COUNT(DISTINCT CONCAT(s.artifactKind, ':', s.artifactId)) FROM ArtifactSignal s"
                             + " WHERE s.workspace.id = :workspaceId AND (:artifactKind IS NULL OR s.artifactKind = :artifactKind)")
