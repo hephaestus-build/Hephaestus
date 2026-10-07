@@ -436,9 +436,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId, Pageable pageable);
 
     /**
-     * Retires DELIVERED feedback that newer feedback replaces (compare-and-set): a prior in-context summary
-     * when a new one is posted, while inline-only deliveries stay DELIVERED on the same thread; and an open
-     * in-app card when a newer card about the same practice is prepared. The state predicate makes concurrent
+     * Retires an open in-app card when a newer card about the same practice is prepared (compare-and-set).
+     * Separately posted public comments retain their own delivery records. The state predicate makes concurrent
      * retries idempotent, and {@link #markSuperseded} is its twin for feedback still queued.
      *
      * @return {@code 1} when this caller retired it, {@code 0} when it was not delivered

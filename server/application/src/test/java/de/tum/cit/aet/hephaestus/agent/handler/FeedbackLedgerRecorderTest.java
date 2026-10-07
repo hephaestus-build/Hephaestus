@@ -28,7 +28,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository.ProviderPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -46,7 +45,6 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -93,7 +91,6 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 .when(feedbackObservationRepository.insertIfAbsent(any(), any(), any(), anyInt()))
                 .thenReturn(1);
         when(feedbackPlacementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(feedbackPlacementRepository.findLatestDeliveredSummary(any())).thenReturn(Optional.empty());
         return new FeedbackLedgerRecorder(
                 observationRepository,
                 feedbackRepository,
@@ -583,17 +580,11 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     }
 
     @Test
-    void reReview_priorDeliveredUnit_isSupersededAndNewRowReplacesIt() {
-        // B1: the re-review SUPERSEDED branch (every other test stubs the prior lookup to Optional.empty()).
-        // A prior live DELIVERED unit on this continuity line → the new row's replacesId points at it AND the
-        // prior is flipped to SUPERSEDED via the native supersedeDelivered, AFTER the new row lands (never zero live).
+    void shouldRecordANewSummaryBesideEarlierOnesWithoutReplacingThem() {
+        // A later review's summary is its own comment; the earlier summaries stay on the work as they were.
         var observation = problem();
         when(observationRepository.findByAgentJobId(any(), anyLong())).thenReturn(List.of(observation));
         var recorder = recorder();
-        UUID priorId = UUID.randomUUID();
-        FeedbackPlacement priorSummary = mock(FeedbackPlacement.class);
-        when(priorSummary.getFeedbackId()).thenReturn(priorId);
-        when(feedbackPlacementRepository.findLatestDeliveredSummary(any())).thenReturn(Optional.of(priorSummary));
 
         recorder.record(
                 job(),
@@ -603,16 +594,14 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 "summary-ref",
                 null);
 
-        // The prior is superseded by id, inside its workspace.
-        verify(feedbackRepository).supersedeDelivered(1L, priorId);
-        // The freshly saved DELIVERED unit carries replacesId = the prior id.
+        verify(feedbackRepository, never()).supersedeDelivered(any(), any());
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository, atLeastOnce()).save(saved.capture());
         Feedback delivered = saved.getAllValues().stream()
                 .filter(f -> f.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
                 .findFirst()
                 .orElseThrow();
-        assertThat(delivered.getReplacesId()).isEqualTo(priorId);
+        assertThat(delivered.getReplacesId()).isNull();
     }
 
     @Test
@@ -698,7 +687,6 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(savedPlacement.capture());
         assertThat(savedPlacement.getValue().placementType()).isEqualTo(PlacementType.INLINE.name());
         assertThat(savedPlacement.getValue().postedCommentRef()).isEqualTo("note-1");
-        verify(feedbackPlacementRepository, never()).findLatestDeliveredSummary(any());
     }
 
     @Test
@@ -952,24 +940,20 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReferenceLiveUnitWithoutSupersedingWhenReReviewIsSuppressed() {
+    void shouldNeitherReplaceNorRetireDeliveredFeedbackWhenReReviewIsSuppressed() {
         Observation bad = problem();
-        UUID liveFeedbackId = UUID.randomUUID();
         FeedbackLedgerRecorder rec = recorder();
-        FeedbackPlacement livePlacement = mock(FeedbackPlacement.class);
-        when(livePlacement.getFeedbackId()).thenReturn(liveFeedbackId);
         when(observationRepository.findByAgentJobId(any(), anyLong())).thenReturn(List.of(bad));
-        when(feedbackPlacementRepository.findLatestDeliveredSummary(any())).thenReturn(Optional.of(livePlacement));
 
         rec.recordSuppressedUnit(
                 job(),
-                new DeliveryContent("would have updated", List.of(), List.of(), null),
+                new DeliveryContent("would have been posted", List.of(), List.of(), null),
                 FeedbackSuppressionReason.INSTANCE_SILENCED);
 
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository).save(saved.capture());
-        assertThat(saved.getValue().getReplacesId()).isEqualTo(liveFeedbackId);
-        verify(feedbackRepository, never()).supersedeDelivered(1L, liveFeedbackId);
+        assertThat(saved.getValue().getReplacesId()).isNull();
+        verify(feedbackRepository, never()).supersedeDelivered(any(), any());
     }
 
     @Test

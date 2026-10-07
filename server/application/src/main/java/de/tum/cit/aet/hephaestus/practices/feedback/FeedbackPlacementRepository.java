@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -54,21 +53,10 @@ public interface FeedbackPlacementRepository extends JpaRepository<FeedbackPlace
             @Nullable String postedCommentRef,
             @Nullable String postedCommentUrl) {}
 
-    @Query("""
-        SELECT p FROM FeedbackPlacement p
-        WHERE p.feedback.threadKey = :threadKey
-          AND p.feedback.deliveryState = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
-          AND p.placementType = de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.SUMMARY
-          AND p.postedCommentRef IS NOT NULL
-        ORDER BY p.feedback.createdAt DESC
-        LIMIT 1
-        """)
-    Optional<FeedbackPlacement> findLatestDeliveredSummary(@Param("threadKey") String threadKey);
-
     /**
      * The comments Hephaestus posted on a provider for in-context feedback citing this observation, including one the
-     * provider confirmed without an id, leaving out a placement whose comment a later placement took over (an issue
-     * summary edited in place by a newer review), since its text is no longer what the provider shows.
+     * provider confirmed without an id. A newer placement for the same comment reference replaces that copy;
+     * separately posted comments retain their own placements.
      */
     @Query(value = """
         SELECT pl.posted_comment_ref AS "commentRef", pl.placement_type AS "placementType",
