@@ -510,6 +510,15 @@ Each scope gets one work budget for its practice count, shared across its sessio
 Each practice in a scope gets a fresh session in the same sandbox, one after another.
 That session receives the task, the brief and the complete criteria and leads of its practice only.
 
+The native model catalogue identifies Responses models that support explicit prompt caching.
+Measurement requests for these models mark the end of the shared task, brief and example within the user message.
+The practice criteria follow that boundary without changing their authority or text.
+
+These sessions use one cache key for the workspace and review, while keeping their conversation
+histories separate. The provider's implicit caching remains available for later conversation turns.
+Other models and protocols keep their native requests unchanged. Cache reuse depends on the provider.
+It does not establish a latency or cost improvement.
+
 It can record and revise only its practice.
 An item for another practice is refused before any draft changes.
 
