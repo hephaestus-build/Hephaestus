@@ -4,6 +4,12 @@ import { HttpResponse, http } from "msw";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+	listPracticeReviewsInfiniteQueryKey,
+	listPracticeReviewsQueryKey,
+	listTracedArtifactsInfiniteQueryKey,
+	listTracedArtifactsQueryKey,
+} from "@/api/@tanstack/react-query.gen";
+import {
 	practiceCounts,
 	reviewFeedbackDetail,
 	reviewObservations,
@@ -11,7 +17,7 @@ import {
 } from "@/components/admin/practice-reviews/fixtures";
 import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
 import { reviewHandlers } from "@/components/admin/practice-reviews/story-mock-server";
-import { artifactTrace } from "@/components/practice-trace/fixtures";
+import { artifactTrace, tracedArtifacts } from "@/components/practice-trace/fixtures";
 import { browserTimeZone } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { levelsOpenedBy } from "@/test/detail-stack";
@@ -486,23 +492,78 @@ describe("the reviewed-work level", () => {
 		}
 	});
 
-	it("reads the trace again once an ask is accepted", async () => {
+	it("reads the trace and the workspace's work and review lists again once an ask is accepted", async () => {
 		settledTrace();
+		const [work] = tracedArtifacts;
+		let counts = { signalCount: 3, reviewedSignalCount: 3 };
 		server.use(
-			http.post(REQUESTS, () =>
-				HttpResponse.json({ status: "SUBMITTED", jobId: "0f2b7c1e-9a3d-4c5b-8e1f-2d6a7b8c9d01" }),
+			http.get("*/workspaces/:workspaceSlug/practices/trace", () =>
+				HttpResponse.json({
+					content: [{ ...work, ...counts }],
+					page: { number: 0, size: 20, totalElements: 1, totalPages: 1 },
+				}),
 			),
+			http.post(REQUESTS, () => {
+				counts = { signalCount: 4, reviewedSignalCount: 4 };
+				return HttpResponse.json({
+					status: "SUBMITTED",
+					jobId: "0f2b7c1e-9a3d-4c5b-8e1f-2d6a7b8c9d01",
+				});
+			}),
 		);
-		renderRouteAtWithRouter(`${REVIEWS}/work?detail=work:pull-request:1423`);
+		const { queryClient } = renderRouteAtWithRouter(
+			`${REVIEWS}/work?detail=work:pull-request:1423`,
+		);
 		const level = await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
+		await screen.findByText(
+			"3 moments recorded · 3 started a review",
+			undefined,
+			ROUTE_RENDER_WAIT,
+		);
+		// Lists no screen shows right now: other filters, pages and infinite reads, and another workspace.
+		const acme = { workspaceSlug: "acme" };
+		const other = { workspaceSlug: "other" };
+		const paged = [
+			listTracedArtifactsQueryKey({ path: acme, query: { artifactKind: "scm.issue", page: 2 } }),
+			listPracticeReviewsQueryKey({ path: acme, query: { page: 3 } }),
+		];
+		const infinite = [
+			listTracedArtifactsInfiniteQueryKey({ path: acme, query: { artifactKind: "scm.issue" } }),
+			listPracticeReviewsInfiniteQueryKey({ path: acme, query: { size: 7 } }),
+		];
+		const refreshed = [...paged, ...infinite];
+		const untouched = [
+			listTracedArtifactsQueryKey({ path: other }),
+			listPracticeReviewsQueryKey({ path: other }),
+		];
+		for (const key of [...paged, ...untouched]) {
+			queryClient.setQueryData(key, { content: [] });
+		}
+		for (const key of infinite) {
+			queryClient.setQueryData(key, { pages: [], pageParams: [] });
+		}
+
 		await userEvent.click(
 			await within(level).findByRole("button", { name: "Request review" }, ROUTE_RENDER_WAIT),
 		);
 
-		await waitFor(
-			() => expect(requestsTo(TRACE_1423).length).toBeGreaterThan(1),
+		await waitFor(() => {
+			expect(requestsTo(TRACE_1423).length).toBeGreaterThan(1);
+			for (const key of refreshed) {
+				expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+			}
+		}, ROUTE_RENDER_WAIT);
+		for (const key of untouched) {
+			expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+		}
+		expect(within(level).queryByText("No review was started")).toBeNull();
+
+		fireEvent.keyDown(document.body, { key: "Escape" });
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), ROUTE_RENDER_WAIT);
+		await screen.findByText(
+			"4 moments recorded · 4 started a review",
+			undefined,
 			ROUTE_RENDER_WAIT,
 		);
-		expect(within(level).queryByText("No review was started")).toBeNull();
 	});
 });

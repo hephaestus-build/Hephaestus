@@ -5,10 +5,22 @@ import { toast } from "sonner";
 import {
 	getArtifactTraceQueryKey,
 	getPracticeProfileOverviewQueryKey,
+	listPracticeReviewsQueryKey,
+	listTracedArtifactsQueryKey,
 	requestPracticeReviewMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { CreateReviewRequest, ReviewRequestOutcome } from "@/api/types.gen";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
+
+function listsOfStartedReview(workspaceSlug: string): ReadonlySet<string> {
+	const path = { workspaceSlug };
+	return new Set(
+		[listTracedArtifactsQueryKey({ path }), listPracticeReviewsQueryKey({ path })].map(
+			([key]) => key._id,
+		),
+	);
+}
 
 /** Why an ask about one piece of work started nothing, for the level that shows that work. */
 export interface ReviewRefusal {
@@ -26,7 +38,8 @@ interface RequestPracticeReviewOptions {
 
 /**
  * "Request review", and the one home of what its answer shows. A started review refreshes the
- * asked-about work's trace and the practice profile's latest-review chip; a refusal is `refusal`
+ * asked-about work's trace, the practice profile's latest-review chip, and the workspace's lists of work
+ * and of reviews; a refusal is `refusal`
  * where a level shows the work, and a toast carrying the server's sentence otherwise.
  *
  * Both are handled here rather than in callbacks passed to `mutate`, which TanStack Query calls only
@@ -66,6 +79,11 @@ export function useRequestPracticeReview(
 			void queryClient.invalidateQueries({
 				queryKey: getPracticeProfileOverviewQueryKey({ path }),
 			});
+			void invalidateWorkspaceReads(
+				queryClient,
+				path.workspaceSlug,
+				listsOfStartedReview(path.workspaceSlug),
+			);
 			toast.success("Review started");
 		},
 		onError: (error) =>
