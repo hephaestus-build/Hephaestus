@@ -712,10 +712,12 @@ const result = spawnSync(${JSON.stringify(realGit)}, args, { stdio: "inherit" })
 process.exit(result.status ?? 1);`,
 		cosign: 'process.exit(process.env.FAIL_VERIFICATION === "1" ? 1 : 0);',
 		systemctl: 'if (args[0] === "show") console.log("yes");',
-		docker: `if (args.includes("config")) {
+		docker: `if (process.env.FAIL_WORKER_STOP === "1" && args.includes("stop")) process.exit(1);
+if (args.includes("config")) {
 const stack = args[args.indexOf("--project-name") + 1];
 const image = stack === process.env.UNLOCKED_STACK ? "example.invalid/unverified:latest" : ${JSON.stringify(image)};
-console.log(JSON.stringify({ services: { app: { image } } }));
+const services = stack === "app" ? { "application-worker": { image }, app: { image } } : { app: { image } };
+console.log(JSON.stringify({ services }));
 }`,
 	})) {
 		await writeFile(
@@ -752,12 +754,14 @@ await main(${JSON.stringify(units)});\n`,
 			cli = false,
 			failVerification = false,
 			failWorktreeRemove = false,
+			failWorkerStop = false,
 			unlockedStack,
 			channel = "test",
 		}: {
 			cli?: boolean;
 			failVerification?: boolean;
 			failWorktreeRemove?: boolean;
+			failWorkerStop?: boolean;
 			channel?: string;
 			unlockedStack?: string;
 		} = {}) =>
@@ -776,6 +780,7 @@ await main(${JSON.stringify(units)});\n`,
 						HEPHAESTUS_METRICS_FILE: metricsFile,
 						FAIL_VERIFICATION: failVerification ? "1" : "0",
 						FAIL_WORKTREE_REMOVE: failWorktreeRemove ? "1" : "0",
+						FAIL_WORKER_STOP: failWorkerStop ? "1" : "0",
 						UNLOCKED_STACK: unlockedStack,
 					}),
 				},
@@ -905,17 +910,18 @@ await test(
 			assert.match(calls[0] ?? "", /^cosign verify-blob/u);
 			assert.equal(calls[1], "trusted verifier");
 			const docker = calls.filter((line) => line.startsWith("docker"));
-			assert.equal(docker.length, 7);
+			assert.equal(docker.length, 8);
 			for (const [index, stack] of ["app", "core", "proxy"].entries()) {
 				assert.match(
 					docker[index] ?? "",
 					new RegExp(`--project-name ${stack} .* config --format json$`, "u"),
 				);
 			}
-			assert.match(docker[3] ?? "", /--project-name core .* up .* nats-server$/u);
+			assert.match(docker[3] ?? "", /--project-name app .* stop application-worker$/u);
+			assert.match(docker[4] ?? "", /--project-name core .* up .* nats-server$/u);
 			for (const [index, stack] of ["app", "core", "proxy"].entries()) {
 				assert.match(
-					docker[index + 4] ?? "",
+					docker[index + 5] ?? "",
 					new RegExp(`--project-name ${stack} .* up .* --remove-orphans$`, "u"),
 				);
 			}
@@ -967,7 +973,32 @@ await test(
 			assert.match(result.stderr, /proxy renders images outside the release lock/u);
 			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), previous);
 			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
-			assert.doesNotMatch(await fixture.calls(), / up |systemctl/u);
+			assert.doesNotMatch(await fixture.calls(), / up | stop |systemctl/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"a worker that cannot be stopped leaves every stack, the applied release and the tooling untouched",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-worker-stop-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const previous = { ...fixture.record, release: "v0.9.0" };
+			await writeFile(path.join(directory, "applied.json"), JSON.stringify(previous));
+
+			const result = fixture.run({ failWorkerStop: true });
+
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /docker exited with code 1/u);
+			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), previous);
+			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
+			const calls = await fixture.calls();
+			assert.match(calls, /--project-name app .* stop application-worker$/mu);
+			assert.doesNotMatch(calls, / up |systemctl/u);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}

@@ -735,6 +735,13 @@ async function startStacks(
 	releaseTree: string,
 	composeArgsByStack: ReadonlyMap<Stack, string[]>,
 ): Promise<void> {
+	// Keep the worker's dependencies available for its existing drain: `stop` waits up to the
+	// service's stop_grace_period, and the `up` below starts it again.
+	const app = composeArgsByStack.get("app");
+	if (app) {
+		await run("docker", [...app, "stop", "application-worker"], { cwd: releaseTree });
+	}
+
 	for (const [stack, composeArgs] of composeArgsByStack) {
 		const foundation = FOUNDATION[stack];
 		if (!foundation) {
