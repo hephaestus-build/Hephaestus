@@ -48,6 +48,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -476,6 +477,15 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             node.put("outcome", o.getOutcome().name());
             node.put(
                     "severity", o.getSeverity() == null ? null : o.getSeverity().name());
+            // As recorded, with the qualifications and bounds it carried then; a missing value stays unknown.
+            node.put("evidenceRationale", o.getEvidenceRationale());
+            JsonNode evidence = o.getEvidence();
+            if (evidence == null || evidence.isNull() || evidence.isMissingNode()) {
+                node.putNull("evidence");
+            } else {
+                node.set("evidence", evidence.deepCopy());
+            }
+            putPracticeRevision(node, o.getPracticeRevision());
             names.stageInto(node, o.getArtifactKind(), o.getArtifactId());
             node.put(
                     "observedAt",
