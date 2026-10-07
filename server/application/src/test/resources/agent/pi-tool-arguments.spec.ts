@@ -20,20 +20,27 @@ const observation = {
 	evidence: { citations: [citation] },
 };
 
-void test("decodes JSON containers without changing the observation", () => {
+void test("decodes nested containers while keeping the outer observation list typed", () => {
 	const input = {
-		observations: JSON.stringify([
+		observations: [
 			{ ...observation, evidence: JSON.stringify({ citations: JSON.stringify([citation]) }) },
-		]),
+		],
 	};
 	assert.deepEqual(prepareObservationArguments(input), { observations: [observation] });
-	assert.equal(typeof input.observations, "string");
+	assert.equal(typeof input.observations[0]?.evidence, "string");
 });
 
-void test("wraps a single observation and a single citation without dropping fields", () => {
+void test("keeps non-array outer submissions unchanged for the reporter to refuse", () => {
+	for (const observations of [
+		observation,
+		JSON.stringify([observation]),
+		`${JSON.stringify([observation])}"`,
+	]) {
+		assert.deepEqual(prepareObservationArguments({ observations }), { observations });
+	}
 	assert.deepEqual(
 		prepareObservationArguments({
-			observations: { ...observation, evidence: { citations: citation } },
+			observations: [{ ...observation, evidence: { citations: citation } }],
 		}),
 		{ observations: [observation] },
 	);

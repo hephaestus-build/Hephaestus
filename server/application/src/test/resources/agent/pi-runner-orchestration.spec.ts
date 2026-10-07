@@ -1506,14 +1506,17 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							assert.match(schema, /One of: evidence\/change\.json, evidence\/metadata\.json/u);
 							assert.match(schema, /One of: OLD, NEW/u);
-							// Container types go, so items are answered one by one; scalar types stay as the model's hint.
+							// The outer recording list is typed; each item keeps the existing per-item validation hints.
 							const parameters: unknown = report.parameters;
 							assert.ok(typeof parameters === "object" && parameters !== null);
 							const properties: unknown = Reflect.get(parameters, "properties");
 							assert.ok(typeof properties === "object" && properties !== null);
 							const items = JSON.stringify(Reflect.get(properties, "observations"));
 							assert.ok(!items.includes('"type":"object"'), items.slice(0, 200));
-							assert.ok(!items.includes('"type":"array"'), items.slice(0, 200));
+							const observationsSchema: unknown = Reflect.get(properties, "observations");
+							assert.ok(isRecord(observationsSchema));
+							assert.equal(observationsSchema.type, "array");
+							assert.equal(Object.hasOwn(observationsSchema, "anyOf"), false);
 							assert.match(items, /"startLine":\{"description":"[^"]*","type":"integer"\}/u);
 							assert.match(items, /Required: practiceSlug, summary/u);
 							if (scenario === "repeat") {
@@ -1667,7 +1670,7 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (scenario === "argument-repairs") {
 								const encoded = (quote: string, endLine = "[L10]") => ({
-									observations: JSON.stringify([
+									observations: [
 										{
 											...observation("test-practice", "Unsafe authentication call"),
 											evidence: JSON.stringify({
@@ -1676,8 +1679,15 @@ if (scenario !== undefined && scenario !== "") {
 												]),
 											}),
 										},
-									]),
+									],
 								});
+								writeFileSync(
+									nodePath.join(cwd, "observation-call.json"),
+									JSON.stringify({
+										parameters: report.parameters,
+										arguments: encoded("+ insecure();"),
+									}),
+								);
 								await assert.rejects(
 									report.execute("invalid-quote", encoded("invented();")),
 									/citation does not match/u,
@@ -1894,39 +1904,34 @@ if (scenario !== undefined && scenario !== "") {
 								revises: "test-practice",
 								...observation("test-practice", summary, citation),
 							});
-							const oneBraceTooMany = `${JSON.stringify([revise("Sent as a string with an extra brace")]).slice(0, -1)}}]`;
-							await report.execute("o-00", { observations: oneBraceTooMany });
-							const intact = JSON.stringify([revise("Sent as a string closed one brace early")]);
-							const early = intact.replace(',"evidence":{', '},"evidence":{');
-							assert.notEqual(early, intact);
-							await report.execute("o-01", { observations: early });
-							const two = JSON.stringify([
-								revise("First of two, its evidence left open"),
-								observation("second-practice", "Second of two, starting inside the first"),
-							]);
-							const unclosed = two.replace('}]}},{"practiceSlug"', '}]},{"practiceSlug"');
-							assert.notEqual(unclosed, two);
-							await report.execute("o-02", { observations: unclosed });
-							// The evidence object left open, so the item's own keys land inside it: closed before them.
-							// Keys in the order the model writes them, so evidence comes before the item's own keys.
-							const sorted = Object.fromEntries(
-								Object.entries(revise("Evidence left open before the item's own keys")).toSorted(
-									([a], [b]) => a.localeCompare(b),
-								),
-							);
-							const whole = JSON.stringify([sorted]);
-							const evidenceOpen = whole.replace(/\}(?<next>,"evidenceRationale")/u, "$<next>");
-							assert.notEqual(evidenceOpen, whole);
-							const evidenceOpenReply = await report.execute("o-03", {
-								observations: evidenceOpen,
-							});
-							record(`repaired-evidence-open:${JSON.stringify(evidenceOpenReply)}`);
-							await report
-								.execute("o-0", { observations: "[{not json" })
-								.then(() => record("unparsed:accepted"))
-								.catch((error: unknown) =>
-									record(`unparsed:${error instanceof Error ? error.message : String(error)}`),
+							const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
+							const encoded = JSON.stringify([revise("A typed correction")]);
+							for (const observations of [
+								encoded,
+								`${encoded}"`,
+								"[{not json",
+								revise("A lone object"),
+							]) {
+								await assert.rejects(report.execute("non-array", { observations }));
+								assert.equal(
+									readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
+									before,
 								);
+							}
+							record("non-array:unchanged");
+							const corrected = await report.execute("typed-correction", {
+								observations: [revise("A typed correction")],
+							});
+							assert.ok(isRecord(corrected) && isRecord(corrected.details));
+							assert.equal(corrected.details.revised, 1);
+							const revised = readObservations(nodePath.join(cwd, "out/review-state.json"))[0];
+							assert.ok(isRecord(revised));
+							const { evidence } = revised;
+							assert.ok(isRecord(evidence));
+							assert.ok(Array.isArray(evidence.citations));
+							const quoted: unknown = evidence.citations[0];
+							assert.ok(isRecord(quoted));
+							assert.equal(quoted.quote, " insecure();");
 							const { side: _side, ...sideless } = changeCitation;
 							const reply = await report.execute("o-1", {
 								observations: [
@@ -2724,6 +2729,32 @@ if (scenario !== undefined && scenario !== "") {
 							assert.deepEqual(result[0].evidence.citations, [
 								{ ...changeCitation, quote: " insecure();" },
 							]);
+							// Exercise Pi's public validator on the actual reporter declaration and prepared arguments.
+							const native = spawnSync(
+								process.execPath,
+								[
+									"--experimental-import-meta-resolve",
+									"--input-type=module",
+									"-e",
+									`import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const { validateToolArguments } = await import(import.meta.resolve("@earendil-works/pi-ai", import.meta.resolve("@earendil-works/pi-coding-agent")));
+const { prepareObservationArguments } = await import(process.argv[2]);
+const captured = JSON.parse(readFileSync(process.argv[1], "utf8"));
+const tool = { name: "report_observation", parameters: captured.parameters };
+const validate = (args) => validateToolArguments(tool, { name: tool.name, arguments: prepareObservationArguments(args) });
+assert.deepEqual(validate(captured.arguments), prepareObservationArguments(captured.arguments));
+const encoded = JSON.stringify(captured.arguments.observations);
+for (const observations of [encoded, encoded + '"', captured.arguments.observations[0]]) {
+  assert.throws(() => validate({ observations }));
+}`,
+									nodePath.join(cwd, "observation-call.json"),
+									new URL("../../../main/resources/agent/pi-tool-arguments.ts", import.meta.url)
+										.href,
+								],
+								{ encoding: "utf8", cwd: process.cwd() },
+							);
+							assert.equal(native.status, 0, native.stderr);
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -2805,14 +2836,7 @@ if (scenario !== undefined && scenario !== "") {
 								events.find((event) => event.startsWith("resent:")) ?? "",
 								/already recorded; this item changed nothing, so do not send it again/u,
 							);
-							assert.match(
-								events.find((event) => event.startsWith("repaired-evidence-open:")) ?? "",
-								/#1 test-practice: revised/u,
-							);
-							assert.match(
-								events.find((event) => event.startsWith("unparsed:")) ?? "",
-								/observations refused — the list arrived as a string that is not valid JSON \(.*\); it breaks here: "\[\{" ⟵ "not json\}\]"/u,
-							);
+							assert.ok(events.includes("non-array:unchanged"), events.join("\n"));
 							const reply = events.find((event) => event.startsWith("batch:")) ?? "";
 							assert.match(reply, /#1 test-practice: revised \(negative\)/u, child.stderr);
 							assert.match(reply, /#2 second-practice: refused/u);

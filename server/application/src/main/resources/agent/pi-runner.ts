@@ -161,18 +161,6 @@ function submittedList(
 	return { items: listOrItem(value), repaired: false };
 }
 
-/**
- * The keys of an observation that never belong to an object inside it. evidenceRationale is sometimes
- * written under evidence on purpose; closing back to the item before it puts it where it belongs either way.
- */
-const OBSERVATION_ITEM_KEYS: ReadonlySet<string> = new Set([
-	"revises",
-	"evidenceRationale",
-	"practiceSlug",
-	"summary",
-	"outcome",
-	"severity",
-]);
 /** The keys of a feedback unit that never belong to an object inside it. */
 const UNIT_ITEM_KEYS: ReadonlySet<string> = new Set([
 	"channel",
@@ -1568,7 +1556,7 @@ function buildReportObservationTool() {
 			type: "object",
 			required: ["observations"],
 			properties: {
-				observations: documentedShape(listSchema(observationSchema, "observations")),
+				observations: { type: "array", items: documentedShape(observationSchema) },
 			},
 		},
 		prepareArguments: prepareObservationArguments,
@@ -1587,17 +1575,14 @@ function buildReportObservationTool() {
 					},
 				};
 			}
-			const submitted = submittedList(
-				isRecord(params) ? params.observations : null,
-				OBSERVATION_ITEM_KEYS,
-			);
-			if ("error" in submitted) {
-				// No practice is charged for a list nobody could read: the repeated-call guard ends a session
-				// that keeps sending the same string, and the practices stay owed.
-				logRefusal("(unparsed list)", submitted.error);
-				return refusal(toolCallId, `observations refused — ${submitted.error}`);
+			// The recording list is a typed value, never a second JSON document to parse or repair.
+			if (!isRecord(params) || !Array.isArray(params.observations)) {
+				const reason = "observations must be a JSON array of observation objects";
+				logRefusal("(not an array)", reason);
+				return refusal(toolCallId, `observations refused — ${reason}. No draft changed.`);
 			}
-			const slugs = submitted.items.map((item) =>
+			const submitted = params.observations;
+			const slugs = submitted.map((item) =>
 				isRecord(item) ? normalizePracticeSlug(item.practiceSlug) : "",
 			);
 			const repeated = slugs.filter((slug, index) => slug !== "" && slugs.indexOf(slug) !== index);
@@ -1613,7 +1598,7 @@ function buildReportObservationTool() {
 					`Call refused without changing any drafts: more than one item for ${[...new Set(repeated)].join(", ")}. Send one complete observation per practice.`,
 				);
 			}
-			const outcomes = submitted.items.map(record);
+			const outcomes = submitted.map(record);
 			const stored = outcomes.filter(
 				(outcome) => outcome.kind === "stored" || outcome.kind === "revised",
 			);
@@ -1646,9 +1631,6 @@ function buildReportObservationTool() {
 				}
 				return `${head} refused — ${outcome.reason}`;
 			});
-			if (submitted.repaired) {
-				lines.push("(The list's brackets did not balance; it was read with them balanced.)");
-			}
 			lines.push(
 				remainingPractices.length > 0
 					? `No recorded result yet for: ${remainingPractices.join(", ")}.`
@@ -3359,9 +3341,8 @@ function openingIfNeeded(brief: string, composing = false): string {
 }
 
 /**
- * Three observations written out, with this review's real artifact paths: the shape of a call the model
- * has not yet made, shown once with the brief. One each of met, not met and not applicable, so no
- * outcome reads as the expected one.
+ * Separate single-observation examples with this review's artifact paths. Alternative outcomes keep
+ * the call shape consistent with one practice per session without making an outcome the expected one.
  */
 const OBSERVATION_EXAMPLE = (() => {
 	const context = taskEnvelope.paths.contextRoot;
@@ -3439,10 +3420,13 @@ const OBSERVATION_EXAMPLE = (() => {
 		},
 	];
 	return `## How report_observation takes observations
-\`observations\` is a JSON array with one object per practice, every object carrying every key shown (null where the contract says so). An illustration, not evidence from this work:
-\`\`\`json
-${JSON.stringify({ observations: example }, null, 1)}
-\`\`\``;
+\`observations\` is an array with one complete object for this session's practice, not a JSON-encoded string. These are alternative call illustrations, not evidence from this work:
+${example
+	.map(
+		(observation) =>
+			`\`\`\`json\n${JSON.stringify({ observations: [observation] }, null, 1)}\n\`\`\``,
+	)
+	.join("\n\n")}`;
 })();
 
 /**
