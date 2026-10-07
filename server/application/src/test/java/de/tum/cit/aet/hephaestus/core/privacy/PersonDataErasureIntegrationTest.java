@@ -405,7 +405,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                     practice_slugs,package_content,delivered_placements,write_started,inline_write_started,
                     next_attempt_at,attempt_count,created_at,updated_at)
                 VALUES (?,?,?,?,'AUTOMATIC_REVIEW_PACKAGE','PENDING','Prepared feedback','[]'::jsonb,
-                    '{"diffNotes":[]}'::jsonb,'[]'::jsonb,FALSE,FALSE,CURRENT_TIMESTAMP,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                    '{"diffNotes":[]}'::jsonb,'[]'::jsonb,FALSE,FALSE,CURRENT_TIMESTAMP + INTERVAL '1 day',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
                 """, dispatchId, "review:" + job.getId(), workspace.getId(), job.getId());
         return new ExternalInspectionFixture(
                 Objects.requireNonNull(administrator.getId()),
