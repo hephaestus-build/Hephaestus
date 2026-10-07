@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
@@ -12,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.io.Serial;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -72,6 +74,7 @@ public class ObservationAdmissionService {
     private final TransactionTemplate transactions;
     private final JobEvidenceFiles evidenceFiles;
     private final PublicReviewEligibility publicReviewEligibility;
+    private final ReviewHistoryContentSource reviewHistory;
 
     /** Retries join in-flight verification rather than launching duplicate Git operations. */
     private final ConcurrentHashMap<AdmissionIdentity, Flight> flights = new ConcurrentHashMap<>();
@@ -85,7 +88,8 @@ public class ObservationAdmissionService {
             JsonMapper mapper,
             PlatformTransactionManager transactionManager,
             JobEvidenceFiles evidenceFiles,
-            PublicReviewEligibility publicReviewEligibility) {
+            PublicReviewEligibility publicReviewEligibility,
+            ReviewHistoryContentSource reviewHistory) {
         this.jobs = jobs;
         this.observations = observations;
         this.handlers = handlers;
@@ -93,6 +97,7 @@ public class ObservationAdmissionService {
         this.transactions = new TransactionTemplate(transactionManager);
         this.evidenceFiles = evidenceFiles;
         this.publicReviewEligibility = publicReviewEligibility;
+        this.reviewHistory = reviewHistory;
     }
 
     /** Records refusals on the job before rethrowing them. */
@@ -185,6 +190,34 @@ public class ObservationAdmissionService {
                     JsonNodeFactory.instance.arrayNode());
             throw inadmissible;
         }
+    }
+
+    /** A separately dated communication read: it cannot roll back or replace the admitted assessment. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public ObjectNode publicFeedbackHistory(AdmissionIdentity identity) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            AgentJob job = ownedJob(identity);
+            if (admissionDigest(job).isBlank()) {
+                throw new PublicHistoryRefusedException("This review's observations have not been admitted");
+            }
+            List<Observation> admitted = observations.findByAgentJobId(identity.jobId(), identity.workspaceId());
+            Set<UUID> publicIds = publicReviewEligibility.publicObservationIds(job, admitted);
+            Observation speaksToAuthor = admitted.stream()
+                    .filter(observation -> publicIds.contains(observation.getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new PublicHistoryRefusedException(
+                            "No admitted observation may be spoken about on this work"));
+            ObjectNode history = reviewHistory.publicSameWorkFeedback(
+                    identity.workspaceId(),
+                    speaksToAuthor.getAboutUserId(),
+                    speaksToAuthor.getArtifactKind(),
+                    speaksToAuthor.getArtifactId());
+            ObjectNode root = mapper.createObjectNode();
+            root.put("schemaVersion", 1);
+            root.put("readAt", Instant.now().toString());
+            root.set("history", history);
+            return root;
+        }));
     }
 
     public static boolean isAdmitted(AgentJob job) {
@@ -305,6 +338,16 @@ public class ObservationAdmissionService {
         // The review on the work is composed from the observations marked here and admitted by the same rule.
         out.put("publicEligible", publicEligible);
         return out;
+    }
+
+    public static class PublicHistoryRefusedException extends RuntimeException {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        public PublicHistoryRefusedException(String reason) {
+            super(reason);
+        }
     }
 
     public static class AdmissionConflictException extends RuntimeException {

@@ -567,6 +567,15 @@ Document and conversation reviews record observations without composing feedback
 An authenticated callback admits observations before composition starts.
 Composition can bind only to the persisted projection returned by that callback.
 
+Before the public session starts, its authenticated attempt reads current authorized public deliveries for the same work and author.
+This communication read has its own timestamp and does not replace captured work, assessment history or admitted observations.
+A later delivery can establish that a point has already been communicated, but prior-advice and response claims retain the original work capture cutoff.
+A failed read records a public composition failure while preserving admitted observations and independent private preparation.
+The runner trace retains the read time, original cutoff and shown record eligibility without feedback bodies.
+
+Two public sessions can still read before either publishes.
+This refresh does not coordinate simultaneous composition or skip complementary review occasions.
+
 The public session first receives the captured record of the same work.
 This record comes from the exact metadata file of the core source and, for a pull request, the linked work items file.
 Each is used only when its source is `AVAILABLE` and the capture index records that file under that source.

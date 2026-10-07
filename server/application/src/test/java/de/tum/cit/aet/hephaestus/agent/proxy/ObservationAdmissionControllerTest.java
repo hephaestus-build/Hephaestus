@@ -144,6 +144,30 @@ class ObservationAdmissionControllerTest extends BaseUnitTest {
         assertThat(meterRegistry.getMeters()).isEmpty();
     }
 
+    @Test
+    void refreshesHistoryOnlyForTheAuthenticatedAgentAttempt() {
+        UUID id = UUID.randomUUID();
+        ObjectNode answer = mapper.createObjectNode().put("schemaVersion", 1);
+        when(service.publicFeedbackHistory(identity(id)))
+                .thenReturn(answer)
+                .thenThrow(new ObservationAdmissionService.StaleAttemptException())
+                .thenThrow(new ObservationAdmissionService.PublicHistoryRefusedException("Not admitted"));
+        assertThat(controller.publicFeedbackHistory(authentication(LlmUsageSourceType.AGENT_JOB, id)))
+                .isSameAs(answer);
+        assertStatus(
+                HttpStatus.FORBIDDEN,
+                () -> controller.publicFeedbackHistory(authentication(LlmUsageSourceType.MENTOR_TURN, id)));
+        assertStatus(
+                HttpStatus.FORBIDDEN,
+                () -> controller.publicFeedbackHistory(new TestingAuthenticationToken("unexpected", "[REDACTED]")));
+        assertStatus(
+                HttpStatus.CONFLICT,
+                () -> controller.publicFeedbackHistory(authentication(LlmUsageSourceType.AGENT_JOB, id)));
+        assertStatus(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                () -> controller.publicFeedbackHistory(authentication(LlmUsageSourceType.AGENT_JOB, id)));
+    }
+
     private static ObservationAdmissionService.AdmissionIdentity identity(UUID id) {
         return new ObservationAdmissionService.AdmissionIdentity(id, 1L, 0, "worker-1");
     }

@@ -593,6 +593,7 @@ void test("only what was said on this same work, on the work, is supplied as alr
 			recordedClaimCurrentness: "CURRENT",
 			withdrawn: undefined,
 			eligibleForPriorAdvice: false,
+			eligibleForAlreadySaid: false,
 		},
 	]);
 	assert.deepEqual(priorPublicFeedback(history, undefined, "2026-10-06T09:00:00Z").feedback, []);
@@ -670,11 +671,16 @@ void test("own feedback on this work stands as prior advice only when named, cur
 	]);
 	assert.deepEqual(witnesses.get(`feedback:${historyFeedbackId(1)}`), {
 		eligibleForPriorAdvice: true,
+		eligibleForAlreadySaid: true,
 	});
 	assert.deepEqual(witnesses.get(`feedback:${historyFeedbackId(4)}`), {
 		eligibleForPriorAdvice: false,
+		eligibleForAlreadySaid: false,
 	});
-	assert.deepEqual(witnesses.get("github:review-comment:7"), { eligibleForPriorAdvice: true });
+	assert.deepEqual(witnesses.get("github:review-comment:7"), {
+		eligibleForPriorAdvice: true,
+		eligibleForAlreadySaid: true,
+	});
 });
 
 void test("own history omits whole oversized or over-budget entries without hiding later usable advice", () => {
@@ -889,9 +895,12 @@ void test("summary-only support refuses a whole inline body while allowing its s
 
 /** A tutor's comment and Hephaestus's own delivered comment may stand as prior advice; the author's own may not. */
 const witnesses = new Map<string, PriorAdviceWitness>([
-	["github:review-comment:7", { eligibleForPriorAdvice: true }],
-	["feedback:00000000-0000-4000-8000-000000000001", { eligibleForPriorAdvice: true }],
-	["github:issue-comment:9", { eligibleForPriorAdvice: false }],
+	["github:review-comment:7", { eligibleForPriorAdvice: true, eligibleForAlreadySaid: true }],
+	[
+		"feedback:00000000-0000-4000-8000-000000000001",
+		{ eligibleForPriorAdvice: true, eligibleForAlreadySaid: true },
+	],
+	["github:issue-comment:9", { eligibleForPriorAdvice: false, eligibleForAlreadySaid: false }],
 ]);
 
 const selectionErrors = (value: unknown): string[] => {
@@ -1334,4 +1343,132 @@ void test("public history excludes unqualified legacy and reviewer advice while 
 			.feedback.length,
 		1,
 	);
+});
+
+void test("a delivery after work capture informs novelty without becoming advice the captured work answered", () => {
+	const artifact = {
+		kind: "scm.pull_request",
+		url: "https://gitlab.example/group/repo/-/merge_requests/3",
+	};
+	const history = {
+		feedback: [
+			{
+				id: historyFeedbackId(1),
+				channel: "IN_CONTEXT",
+				publicEligible: true,
+				artifact,
+				body: "Handle the failure visibly.",
+				deliveredAt: "2026-10-07T10:00:00Z",
+				recordedClaimCurrentness: "CURRENT",
+			},
+		],
+	};
+	const original = JSON.stringify(history);
+	const said = priorPublicFeedback(
+		history,
+		`${artifact.kind}:${artifact.url}`,
+		"2026-10-07T09:00:00Z",
+		undefined,
+		"2026-10-07T11:00:00Z",
+	).feedback;
+	const late = said.at(0);
+	assert.ok(late !== undefined);
+	assert.equal(late.eligibleForAlreadySaid, true);
+	assert.equal(late.eligibleForPriorAdvice, false);
+	const proof = priorAdviceWitnesses(said, []);
+	const currentRows = new Map<string, ReviewedObservation>([
+		["current", { practiceSlug: "errors", outcome: "NOT_MET", citations: [] }],
+	]);
+	const selected = (reason: string) =>
+		readSelection(
+			{
+				selected: [],
+				withheld: [
+					{ basedOn: ["current"], reason, witnessIds: [`feedback:${historyFeedbackId(1)}`] },
+				],
+			},
+			currentRows,
+			proof,
+		);
+	assert.ok(!("errors" in selected("ALREADY_SAID")));
+	assert.ok("errors" in selected("NO_MATERIAL_CHANGE"));
+	assert.equal(JSON.stringify(history), original);
+	const unknownCapture = priorPublicFeedback(
+		history,
+		`${artifact.kind}:${artifact.url}`,
+		null,
+		undefined,
+		"2026-10-07T11:00:00Z",
+	).feedback;
+	const unknownCutoff = unknownCapture.at(0);
+	assert.ok(unknownCutoff !== undefined);
+	assert.equal(unknownCutoff.eligibleForAlreadySaid, true);
+	assert.equal(unknownCutoff.eligibleForPriorAdvice, false);
+	const turn = buildReviewTurn({
+		sameWork: "Captured work without a known capture time.",
+		observations: [],
+		undecided: [],
+		alreadySaid: unknownCapture,
+		ownHistoryReadAt: "2026-10-07T11:00:00Z",
+		captured: {
+			capturedAt: null,
+			recipient: { author: null, authorId: null },
+			sources: [],
+			statements: [],
+		},
+		practices: [],
+		notReached: [],
+		lineNotes: false,
+	});
+	assert.ok(turn.includes('"eligibleForAlreadySaid": true'));
+	assert.ok(!turn.includes("was delivered after this work was captured"));
+	const unknownDelivery = priorPublicFeedback(
+		{ feedback: history.feedback.map((row) => ({ ...row, deliveredAt: null })) },
+		`${artifact.kind}:${artifact.url}`,
+		"2026-10-07T09:00:00Z",
+		undefined,
+		"2026-10-07T11:00:00Z",
+	).feedback;
+	const unknownTime = unknownDelivery.at(0);
+	assert.ok(unknownTime !== undefined);
+	assert.equal(unknownTime.deliveredAt, null);
+	assert.equal(unknownTime.eligibleForAlreadySaid, false);
+	assert.equal(unknownTime.eligibleForPriorAdvice, false);
+	assert.equal(
+		priorPublicFeedback(
+			history,
+			`${artifact.kind}:${artifact.url}`,
+			"2026-10-07T10:30:00Z",
+			undefined,
+			"2026-10-07T11:00:00Z",
+		).feedback[0]?.eligibleForPriorAdvice,
+		true,
+	);
+	assert.equal(
+		priorPublicFeedback(
+			history,
+			`${artifact.kind}:${artifact.url}`,
+			"2026-10-07T09:00:00Z",
+			undefined,
+			"2026-10-07T09:30:00Z",
+		).feedback[0]?.eligibleForAlreadySaid,
+		false,
+	);
+	for (const change of [
+		{ withdrawn: true },
+		{ recordedClaimCurrentness: "STALE" },
+		{ body: undefined },
+		{ publicEligible: false },
+		{ channel: "IN_CHAT" },
+		{ artifact: { ...artifact, url: "https://gitlab.example/group/repo/-/merge_requests/4" } },
+	]) {
+		const limited = priorPublicFeedback(
+			{ feedback: history.feedback.map((row) => ({ ...row, ...change })) },
+			`${artifact.kind}:${artifact.url}`,
+			"2026-10-07T09:00:00Z",
+			undefined,
+			"2026-10-07T11:00:00Z",
+		);
+		assert.ok(limited.feedback.every((row) => !row.eligibleForAlreadySaid));
+	}
 });

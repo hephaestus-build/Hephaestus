@@ -140,6 +140,42 @@ class ReviewHistoryConsentGateIntegrationTest extends AbstractSlackConsentGateIn
                 .isEmpty();
     }
 
+    @Test
+    void shouldReadOnlyDeliveredPublicHistoryForTheRequestedWorkspaceRecipientAndWork() {
+        UUID observation = observe(ArtifactKinds.PULL_REQUEST.value(), 4242L, "Seen on the pull request");
+        UUID published = replaced(observation, "Published then replaced", FeedbackChannel.IN_CONTEXT, true, "IC_1");
+        UUID unposted = replaced(observation, "Never posted", FeedbackChannel.IN_CONTEXT, true, null);
+        UUID privateNote = replaced(observation, "Private card", FeedbackChannel.IN_APP, true, "IC_2");
+        UUID otherWork = replaced(observation, "Other work", FeedbackChannel.IN_CONTEXT, true, "IC_3");
+        UUID otherKind = replaced(observation, "Other kind", FeedbackChannel.IN_CONTEXT, true, "IC_4");
+        UUID prepared = replaced(observation, "Prepared only", FeedbackChannel.IN_CONTEXT, true, "IC_5");
+        UUID deliveredUnknownTime =
+                replaced(observation, "Delivered at an unknown time", FeedbackChannel.IN_CONTEXT, false, null);
+        jdbcTemplate.update("UPDATE feedback SET delivery_state = 'DELIVERED' WHERE id = ?", privateNote);
+        jdbcTemplate.update("UPDATE feedback SET artifact_id = 4243 WHERE id = ?", otherWork);
+        jdbcTemplate.update(
+                "UPDATE feedback SET artifact_kind = ? WHERE id = ?", ArtifactKinds.ISSUE.value(), otherKind);
+        jdbcTemplate.update("UPDATE feedback SET delivery_state = 'PREPARED' WHERE id = ?", prepared);
+        jdbcTemplate.update("UPDATE feedback SET delivery_state = 'DELIVERED' WHERE id = ?", deliveredUnknownTime);
+        List<UUID> selected = feedbackRepository
+                .findDeliveredForPublicWorkHistory(
+                        workspace.getId(), recipient.getId(), ArtifactKinds.PULL_REQUEST, 4242L)
+                .stream()
+                .map(Feedback::getId)
+                .toList();
+        assertThat(selected)
+                .contains(published, deliveredUnknownTime)
+                .doesNotContain(unposted, privateNote, otherWork, otherKind, prepared);
+        assertThat(feedbackRepository.findDeliveredForPublicWorkHistory(
+                        workspace.getId() + 1, recipient.getId(), ArtifactKinds.PULL_REQUEST, 4242L))
+                .extracting(Feedback::getId)
+                .doesNotContain(published, deliveredUnknownTime);
+        assertThat(feedbackRepository.findDeliveredForPublicWorkHistory(
+                        workspace.getId(), recipient.getId() + 1, ArtifactKinds.PULL_REQUEST, 4242L))
+                .extracting(Feedback::getId)
+                .doesNotContain(published, deliveredUnknownTime);
+    }
+
     private boolean permits(UUID feedbackId) {
         return historySource.permitsHistoryRecord(
                 workspace.getId(), "feedback", feedbackId, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);

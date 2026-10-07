@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -365,6 +366,22 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                 // again as history would turn a first occurrence into an apparent recurrence.
                 .filter(o -> excludedJobId == null || !excludedJobId.equals(o.getAgentJobId()))
                 .toList();
+    }
+
+    /** Public composition uses the history projection without ever projecting another work or a private body. */
+    @Transactional(readOnly = true)
+    public ObjectNode publicSameWorkFeedback(long workspaceId, long authorId, ArtifactKind kind, long artifactId) {
+        List<Feedback> sameWork =
+                feedbackRepository.findDeliveredForPublicWorkHistory(workspaceId, authorId, kind, artifactId);
+        ShownFeedback shown = shownFeedback(workspaceId, sameWork, List.of());
+        List<Feedback> permitted = sameWork.stream()
+                .filter(f -> shown.currentness().containsKey(f.getId())
+                        && publicReviewEligibility.permitsPublicHistory(
+                                f, shown.basedOn().getOrDefault(f.getId(), List.of())))
+                .toList();
+        Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(
+                workspaceId, permitted.stream().map(Feedback::getId).collect(Collectors.toSet()));
+        return feedbackPayload(workspaceId, permitted, shown, withdrawn);
     }
 
     /**

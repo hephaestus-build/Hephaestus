@@ -115,6 +115,9 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     @Mock
     private IssueRepository issueRepository;
 
+    @Mock
+    private PublicReviewEligibility publicEligibility;
+
     private ReviewHistoryContentSource provider;
 
     private final Map<UUID, List<Observation>> boundTo = new HashMap<>();
@@ -132,7 +135,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 issueRepository,
                 new StagedArtifactNames(ReviewHistoryContentSourceTest::identitiesOf),
                 objectMapper,
-                mock(PublicReviewEligibility.class));
+                publicEligibility);
         lenient().when(conversationLiveness.activeThreadIds(anyLong(), any())).thenAnswer(invocation -> {
             Collection<Long> threads = invocation.getArgument(1);
             return threads.stream()
@@ -1099,6 +1102,37 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     private static Observation observationAgainst(ArtifactKind kind, long artifactId) {
         return observation("swallows-errors", "rec-1", "Caught and ignored", kind, artifactId);
+    }
+
+    @Test
+    void freshPublicHistoryKeepsOnlyAuthorizedPublicDeliveriesOnThisWork() {
+        Feedback author = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
+        Feedback replaced = Feedback.builder()
+                .id(UUID.randomUUID())
+                .channel(FeedbackChannel.IN_CONTEXT)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(DELIVERED_ARTIFACT_ROW_ID)
+                .body("Earlier published guidance")
+                .deliveredAt(Instant.parse("2026-07-01T09:00:00Z"))
+                .deliveryState(FeedbackDeliveryState.SUPERSEDED)
+                .build();
+        Feedback reviewer = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
+        when(feedbackRepository.findDeliveredForPublicWorkHistory(
+                        WORKSPACE_ID, AUTHOR_ID, ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID))
+                .thenReturn(List.of(author, replaced, reviewer));
+        when(publicEligibility.permitsPublicHistory(eq(author), any())).thenReturn(true);
+        when(publicEligibility.permitsPublicHistory(eq(replaced), any())).thenReturn(true);
+        when(withdrawalRepository.withdrawnAmong(eq(WORKSPACE_ID), any())).thenReturn(Set.of(replaced.getId()));
+
+        JsonNode rows = provider.publicSameWorkFeedback(
+                        WORKSPACE_ID, AUTHOR_ID, ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID)
+                .path("feedback");
+        assertThat(rows.size()).isEqualTo(2);
+        assertThat(rows.get(0).path("body").asString()).isEqualTo(author.getBody());
+        assertThat(rows.get(1).path("withdrawn").asBoolean()).isTrue();
+        assertThat(rows.get(1).has("body")).isFalse();
+        verify(feedbackRepository, never()).findDeliveredForPersonHistory(any(), any());
+        verify(observationRepository, never()).findForPersonHistory(any(), any());
     }
 
     private static Feedback deliveredAgainst(ArtifactKind kind, long artifactId) {

@@ -17,7 +17,8 @@ Everything is in the turn, and you cannot read files:
   citation marked `anchorable` is a line of this change that a note can sit on.
 - What was already said on this same work: the feedback Hephaestus delivered here, and, when captured, what people
   and tools said here. Each statement that may stand as advice this work already received has a `witnessId` and is
-  marked `eligibleForPriorAdvice`. A discussion that was not captured is unknown, not silent.
+  marked `eligibleForPriorAdvice`. A later own delivery may be `eligibleForAlreadySaid` for novelty without being
+  advice the captured work could have answered. A discussion that was not captured is unknown, not silent.
 - Practice context: what each practice is about and its known limits.
 - Once a selection is accepted, the staged criteria of the practices it selected, shown whole when available.
 - Practices looked at and not decided, and practices not reached, by name only.

@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
@@ -23,12 +24,14 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
@@ -81,6 +84,9 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     @Mock
     private JobEvidenceFiles evidenceFiles;
 
+    @Mock
+    private ReviewHistoryContentSource reviewHistory;
+
     private ObservationAdmissionService service;
     private AgentJob job;
     private ObservationAdmissionService.AdmissionIdentity identity;
@@ -110,7 +116,8 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                 mapper,
                 transactionManager,
                 evidenceFiles,
-                publicEligibility);
+                publicEligibility,
+                reviewHistory);
         job = new AgentJob();
         job.setId(UUID.randomUUID());
         job.setStatus(AgentJobStatus.RUNNING);
@@ -126,6 +133,65 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                 .when(observations.findByAgentJobId(
                         job.getId(), job.getWorkspace().getId()))
                 .thenReturn(List.of());
+    }
+
+    @Test
+    void refreshesCommunicationAfterAdmissionWithoutChangingCanonicalEvidence() {
+        service.admit(identity, mapper.createArrayNode());
+        JsonNode metadata = Objects.requireNonNull(job.getMetadata()).deepCopy();
+        Observation author = Observation.builder()
+                .id(UUID.randomUUID())
+                .aboutUserId(7L)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(42L)
+                .build();
+        when(observations.findByAgentJobId(job.getId(), 1L)).thenReturn(List.of(author));
+        ObjectNode first = mapper.createObjectNode();
+        first.putArray("feedback");
+        ObjectNode later = first.deepCopy();
+        later.withArray("feedback").addObject().put("body", "Earlier public advice");
+        when(reviewHistory.publicSameWorkFeedback(1L, 7L, ArtifactKinds.PULL_REQUEST, 42L))
+                .thenReturn(first, later);
+
+        assertThat(service.publicFeedbackHistory(identity).path("history")).isEqualTo(first);
+        ObjectNode refreshed = service.publicFeedbackHistory(identity);
+        assertThat(refreshed.path("history")).isEqualTo(later);
+        assertThat(Instant.parse(refreshed.path("readAt").asString())).isNotNull();
+        assertThat(job.getMetadata()).isEqualTo(metadata);
+        verify(prepared, times(1)).record(job);
+        verify(pullRequests(), times(1)).prepareObservations(eq(job), any());
+    }
+
+    @Test
+    void refusesHistoryBeforeAdmissionAndAfterOwnershipLoss() {
+        assertThatThrownBy(() -> service.publicFeedbackHistory(identity))
+                .isInstanceOf(ObservationAdmissionService.PublicHistoryRefusedException.class);
+        verifyNoInteractions(reviewHistory);
+        service.admit(identity, mapper.createArrayNode());
+        job.setWorkerId("another-worker");
+        assertThatThrownBy(() -> service.publicFeedbackHistory(identity))
+                .isInstanceOf(ObservationAdmissionService.StaleAttemptException.class);
+        verifyNoInteractions(reviewHistory);
+    }
+
+    @Test
+    void refusesIneligiblePublicHistoryAndPreservesAdmissionWhenAHistoryQueryFails() {
+        service.admit(identity, mapper.createArrayNode());
+        JsonNode metadata = Objects.requireNonNull(job.getMetadata()).deepCopy();
+        assertThatThrownBy(() -> service.publicFeedbackHistory(identity))
+                .isInstanceOf(ObservationAdmissionService.PublicHistoryRefusedException.class);
+        Observation author = Observation.builder()
+                .id(UUID.randomUUID())
+                .aboutUserId(7L)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(42L)
+                .build();
+        when(observations.findByAgentJobId(job.getId(), 1L)).thenReturn(List.of(author));
+        when(reviewHistory.publicSameWorkFeedback(1L, 7L, ArtifactKinds.PULL_REQUEST, 42L))
+                .thenThrow(new IllegalStateException("history unavailable"));
+        assertThatThrownBy(() -> service.publicFeedbackHistory(identity)).isInstanceOf(IllegalStateException.class);
+        assertThat(job.getMetadata()).isEqualTo(metadata);
+        verify(prepared, times(1)).record(job);
     }
 
     /** Submits an admission and returns once its thread is parked on the running one. */
