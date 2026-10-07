@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -30,6 +31,8 @@ import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSourc
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedReview;
+import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalDeliveryListener;
+import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppCompositionListener;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -63,6 +66,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHand
 import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentProjector;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -76,6 +81,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
@@ -703,6 +709,134 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(p, 1));
         p.setCurrentRevision(revision);
         return practiceRepository.saveAndFlush(p);
+    }
+
+    @Autowired
+    private IssueRepository issueRepository;
+
+    @Autowired
+    private InAppCompositionListener inAppLane;
+
+    @Autowired
+    private ConversationalDeliveryListener conversationLane;
+
+    @Test
+    void shouldPrepareBothPrivateChannelsWhenTheIssueCommentIsSuppressedAsClosed() {
+        Practice practice = createPractice("record-issue-outcome", "Record the issue outcome");
+        PracticeTestEvidence.configure(practice, ArtifactKinds.ISSUE);
+        practice = practiceRepository.saveAndFlush(practice);
+        AgentJob current = agentJob;
+        UUID currentObservation = UUID.randomUUID();
+        for (int number = 71; number <= 73; number++) {
+            Issue issue = new Issue();
+            issue.setProvider(repository.getProvider());
+            issue.setNativeId(9000L + number);
+            issue.setNumber(number);
+            issue.setTitle("Export " + number);
+            issue.setBody("Record the exported format.");
+            issue.setRepository(repository);
+            issue.setAuthor(developer);
+            issue.setState(Issue.State.CLOSED);
+            issue.setCreatedAt(Instant.now().minusSeconds(3600));
+            issue.setUpdatedAt(Instant.now());
+            issue.setHtmlUrl("https://github.com/org/pipeline-repo/issues/" + number);
+            issue = issueRepository.saveAndFlush(issue);
+            AgentJob run = new AgentJob();
+            run.setWorkspace(workspace);
+            run.setJobType(AgentJobType.ISSUE_REVIEW);
+            run.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+            run.setIntegrationKind(IntegrationKind.GITHUB);
+            run.setStatus(AgentJobStatus.COMPLETED);
+            run.setCompletedAt(Instant.now());
+            run.setConfigSnapshot(agentJob.getConfigSnapshot());
+            run.setEvidenceSnapshot(EvidenceSnapshotFixtures.snapshot(OBJECT_MAPPER, ArtifactKinds.ISSUE.value()));
+            run.setMetadata(OBJECT_MAPPER
+                    .createObjectNode()
+                    .put("issue_id", issue.getId())
+                    .put("issue_number", number)
+                    .put("state", "closed")
+                    .put(ObservationAdmissionService.DIGEST_METADATA_KEY, "private-lifecycle-digest")
+                    .put("repository_id", repository.getId())
+                    .put("repository_full_name", repository.getNameWithOwner()));
+            run = agentJobRepository.saveAndFlush(run);
+            UUID observationId = UUID.randomUUID();
+            observationRepository.insertIfAbsent(
+                    observationId,
+                    "occ-" + observationId,
+                    run.getId(),
+                    workspace.getId(),
+                    practice.getId(),
+                    practice.getCurrentRevision().getId(),
+                    ArtifactKinds.ISSUE.value(),
+                    issue.getId(),
+                    developer.getId(),
+                    "The issue has no recorded outcome",
+                    "NOT_MET",
+                    "MINOR",
+                    AdmittedObservationFixtures.evidence(run.getId(), "scm.issue.core")
+                            .toString(),
+                    "The closed issue does not record the exported format.",
+                    null,
+                    Instant.now(),
+                    "LIVE");
+            current = run;
+            currentObservation = observationId;
+        }
+        current.setOutput(OBJECT_MAPPER.readTree("""
+                {"feedback":{"admissionDigest":"private-lifecycle-digest","observations":[{"id":"%s","practiceSlug":"%s","outcome":"NOT_MET"}],
+                "units":[
+                  {"channel":"IN_APP","action":"NEW","practiceSlug":"%s","basedOn":["%s"],
+                   "title":"Record the outcome","body":"Three closed issues omit the exported format.",
+                   "nextStep":"Name the exported format when closing the next issue."},
+                  {"channel":"IN_CHAT","action":"NEW","practiceSlug":"%s","basedOn":["%s"],
+                   "title":"Record the outcome","notes":{
+                    "situation":"Closed issues omit the exported format.",
+                    "capability":"Check that the outcome is named.",
+                    "evidenceSummary":"Three closed issues omit the format.",
+                    "inConversationSignal":"When planning the next export."}}],
+                "contractVersion":2,"review":{"summary":{"body":"Record the exported format.","basedOn":["%s"]},
+                "inline":[],"withheld":[]}}}
+                """.formatted(
+                        currentObservation,
+                        practice.getSlug(),
+                        practice.getSlug(),
+                        currentObservation,
+                        practice.getSlug(),
+                        currentObservation,
+                        currentObservation)));
+        current = agentJobRepository.saveAndFlush(current);
+        UUID jobId = current.getId();
+        handlerRegistry.getHandler(AgentJobType.ISSUE_REVIEW).deliver(current);
+        await().untilAsserted(() -> {
+            AgentJob routed = agentJobRepository.findById(jobId).orElseThrow();
+            assertThat(routed.getInAppPreparedAt()).isNotNull();
+            assertThat(routed.getInChatPreparedAt()).isNotNull();
+            assertThat(feedbackRepository.findAll().stream()
+                            .filter(row -> jobId.equals(row.getAgentJobId()))
+                            .toList())
+                    .extracting(Feedback::getChannel, Feedback::getDeliveryState)
+                    .containsExactlyInAnyOrder(
+                            tuple(FeedbackChannel.IN_CONTEXT, FeedbackDeliveryState.SUPPRESSED),
+                            tuple(FeedbackChannel.IN_APP, FeedbackDeliveryState.PREPARED),
+                            tuple(FeedbackChannel.IN_CHAT, FeedbackDeliveryState.PREPARED));
+        });
+        assertThat(feedbackRepository.findAll().stream()
+                        .filter(row ->
+                                jobId.equals(row.getAgentJobId()) && row.getChannel() == FeedbackChannel.IN_CONTEXT)
+                        .toList())
+                .singleElement()
+                .satisfies(row ->
+                        assertThat(row.getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.ARTIFACT_CLOSED));
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM feedback_placement p
+                JOIN feedback f ON f.id = p.feedback_id WHERE f.agent_job_id = ?
+                """, Integer.class, jobId)).isZero();
+        assertThat(conversationLane.prepare(jobId, workspace.getId())).isZero();
+        inAppLane.prepare(jobId, workspace.getId());
+        assertThat(feedbackRepository.findAll().stream()
+                        .filter(row -> jobId.equals(row.getAgentJobId()))
+                        .toList())
+                .hasSize(3);
     }
 
     private void setJobOutput(String rawOutput) {

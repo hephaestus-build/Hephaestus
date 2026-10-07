@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -486,24 +487,33 @@ public class FeedbackLedgerRecorder {
      * (ordinal {@link #GATE_SUPPRESSED_UNIT_ORDINAL}) binding its assessed observations, with the composed body
      * kept for audit. Without it, a gate-withheld review reads exactly like one that was delivered and ignored.
      *
-     * <p>Publishes the lane trigger when the reason concerns only the note on the work:
-     * {@link FeedbackSuppressionReason#INSTANCE_SILENCED}, which stops what leaves the instance,
-     * {@link FeedbackSuppressionReason#REPEATS_DELIVERED_NOTE}, whose words are already there, and
-     * {@link FeedbackSuppressionReason#ARTIFACT_MERGED}, which the delivery policy gives only for a note on the
-     * merged work. The developer's own pages and conversations are then prepared now rather than when the hourly
-     * sweeper next passes, each under its own policy. Any other reason wakes nothing; the lanes' own policies
-     * decide their channels. No-ops when a DELIVERED feedback already exists for the job or on retry.
+     * <p>Publishes the lane trigger when the reason concerns only the note on the work
+     * ({@code NOTE_ON_WORK_ONLY}). The developer's own pages and conversations are then prepared now rather than
+     * when the hourly sweeper next passes, each under its own policy. Any other reason wakes nothing; the lanes' own
+     * policies decide their channels. No-ops when a DELIVERED feedback already exists for the job or on retry.
      * REQUIRES_NEW, best-effort: callers wrap in try/catch.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuppressedUnit(AgentJob job, DeliveryContent delivery, FeedbackSuppressionReason reason) {
         recordSuppressedUnitInCurrentTransaction(job, delivery, reason);
-        if (reason == FeedbackSuppressionReason.INSTANCE_SILENCED
-                || reason == FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE
-                || reason == FeedbackSuppressionReason.ARTIFACT_MERGED) {
+        if (NOTE_ON_WORK_ONLY.contains(reason)) {
             publishFeedbackLaneTrigger(job);
         }
     }
+
+    /**
+     * Reasons that withhold only the note on the work: silent mode stops what leaves the instance, a repeated note's
+     * words are already there, and the delivery policy refuses closed, merged or changed work only for that note.
+     * Gone work, a refused recipient and the workspace's own gates refuse the developer's own surfaces too, so they
+     * wake nothing.
+     */
+    private static final Set<FeedbackSuppressionReason> NOTE_ON_WORK_ONLY = EnumSet.of(
+            FeedbackSuppressionReason.INSTANCE_SILENCED,
+            FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE,
+            FeedbackSuppressionReason.ARTIFACT_MERGED,
+            FeedbackSuppressionReason.ARTIFACT_CLOSED,
+            FeedbackSuppressionReason.ISSUE_SNAPSHOT_CHANGED,
+            FeedbackSuppressionReason.REVIEWED_REVISION_CHANGED);
 
     private void recordSuppressedUnitInCurrentTransaction(
             AgentJob job, DeliveryContent delivery, FeedbackSuppressionReason reason) {
@@ -524,12 +534,20 @@ public class FeedbackLedgerRecorder {
         saveSuppressedUnit(job, delivery, reason, observations, writtenFrom(observations, delivery));
     }
 
+    /**
+     * Record what a partially delivered package withheld, beside the unit its placed copies already have. The placed
+     * copies were recorded without waking the lanes, so a reason that concerns only the note on the work wakes them
+     * here, as {@link #recordSuppressedUnit} does.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuppressedRemainder(
             AgentJob job,
             DeliveryContent delivery,
             FeedbackSuppressionReason reason,
             List<String> suppressedDeliveryKeys) {
+        if (NOTE_ON_WORK_ONLY.contains(reason) && job.getWorkspace() != null) {
+            publishFeedbackLaneTrigger(job);
+        }
         if (delivery == null || job.getWorkspace() == null) {
             return;
         }
