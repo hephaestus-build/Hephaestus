@@ -261,7 +261,7 @@ void test("a citation must name a source this run staged, and the artifact that 
 				new Set(["scm.pull-request.diff"]),
 				new Map([["inputs/context/change.json", "scm.pull-request.diff"]]),
 			),
-		/was not staged; the staged artifacts are: inputs\/context\/change\.json\.$/u,
+		/was not staged by 'scm\.pull-request\.diff';/u,
 	);
 	// The change view is derived in the container; a citation of it is told what the artifact is.
 	const derived = normalizeObservation(baseObservation());
@@ -269,6 +269,33 @@ void test("a citation must name a source this run staged, and the artifact that 
 	assert.throws(
 		() => validateEvidenceSources(derived, new Set(["scm.pull-request.diff"]), new Map()),
 		/work\/ is derived here and is not an artifact: quote a changed line from work\/change\/diff\.patch/u,
+	);
+});
+
+void test("an unstaged citation refuses its reference without disclosing every staged repository path", () => {
+	const observation = normalizeObservation(baseObservation());
+	const sources = new Map<string, string>(
+		Array.from({ length: 10_000 }, (_, at) => [
+			`repository/unrelated-${at}.swift`,
+			"scm.repository.tree",
+		]),
+	);
+	let refusal: unknown;
+	try {
+		validateEvidenceSources(observation, new Set(["scm.pull-request.diff"]), sources);
+	} catch (error) {
+		refusal = error;
+	}
+	assert.ok(refusal instanceof Error);
+	assert.ok(refusal.message.includes(onlyCitation(observation.evidence.citations).artifactPath));
+	assert.ok(refusal.message.includes("scm.pull-request.diff"));
+	assert.equal(
+		[...sources.keys()].some((path) => refusal.message.includes(path)),
+		false,
+	);
+	assert.throws(
+		() => validateEvidenceSources(observation, new Set(["scm.pull-request.diff"]), new Map()),
+		{ message: refusal.message },
 	);
 });
 

@@ -12,6 +12,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
     /** Relative imports require these scripts to share the runner's directory. */
     private static final List<String> SIDECARS = List.of(
             "pi-agent-sandbox.ts",
+            "pi-assessment-cache.ts",
             "pi-task-paths.ts",
             "pi-tool-arguments.ts",
             "pi-change.ts",
