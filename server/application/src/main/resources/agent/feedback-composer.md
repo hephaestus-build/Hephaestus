@@ -2,7 +2,7 @@
 
 ## Input locations
 
-Read `task.json.paths`. `<compositionRequest>`, `<practiceIndex>` and
+Read `task.json`. `<compositionRequest>`, `<practiceIndex>` and
 `<preparedFeedback>` refer to its fields, not literal filenames. `<practiceRoot>` is the directory
 containing `practiceIndex`; `<historyRoot>` is the directory containing `preparedFeedback`.
 
@@ -46,8 +46,9 @@ it is not by itself a reason to withhold.
   because its words were wrong. Do not repeat, rebut or refer to it. Its observations may still hold.
 - `<preparedFeedback>` — what is written for them and **still unread**, with a `threadKey` and a `practiceSlug`
   for each.
-- `<practiceIndex>` and `<practiceRoot>/<slug>.md` — the practices, by slug. A practice tells you what to look
-  for. Do not cite it, quote it or restate its principle.
+- `<practiceIndex>` and `<practiceRoot>/<slug>.md` — the practices, by slug. The criteria explain the recorded
+  standard and scope of the admitted observations; they do not ask you to repeat the assessment or add
+  observations. Do not cite it, quote it or restate its principle.
 - `<compositionRequest>` — which lanes are open, how many units each may carry, and `minDistinctArtifacts`.
 
 A piece of work is the entry's `artifact` object: its `title`, its `container`, its `url`, and — when the provider
