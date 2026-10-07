@@ -130,6 +130,11 @@ hephaestus:
         # Traefik strips /api before the request reaches the app (see docker/compose.app.yaml), and
         # native forward-headers can't restore the prefix — re-add it to the browser-facing OAuth URLs.
         api-base-path: /api
+        passkeys:
+            rp-id: ${HEPHAESTUS_AUTH_PASSKEYS_RP_ID:}
+            allowed-origins: ${HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS:}
+            instance-admin-required: ${HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED:true}
+            workspace-admin-required: ${HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED:false}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # GITLAB INTEGRATION (Production)

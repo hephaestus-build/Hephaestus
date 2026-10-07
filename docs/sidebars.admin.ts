@@ -10,6 +10,7 @@ const sidebars: SidebarsConfig = {
 			items: [
 				"install",
 				"configuration-readiness",
+				"passkeys",
 				"production-setup",
 				"compatibility-policy",
 				"browser-extension",

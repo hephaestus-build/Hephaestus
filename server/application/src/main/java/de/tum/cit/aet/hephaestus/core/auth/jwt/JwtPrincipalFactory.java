@@ -41,7 +41,8 @@ public class JwtPrincipalFactory {
      * instance-admin authority comes only from {@link Account.AppRole#APP_ADMIN}. {@code admin} is
      * also reserved, because it is the per-workspace role name.
      */
-    private static final Set<String> RESERVED_INSTANCE_AUTHORITIES = Set.of("app_admin", "admin");
+    private static final Set<String> RESERVED_INSTANCE_AUTHORITIES =
+            Set.of("app_admin", "admin", "FACTOR_WEBAUTHN", "FACTOR_AUTHORIZATION_CODE");
 
     private final IdentityLinkRepository identityLinkRepository;
     private final AccountFeatureRepository accountFeatureRepository;

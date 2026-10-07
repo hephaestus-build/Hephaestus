@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.RecentSignInPolicy;
+import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyAssurancePolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,11 @@ class UserViewAccessServiceTest extends BaseUnitTest {
     private final IdentityLinkRepository identityLinks = mock(IdentityLinkRepository.class);
     private final AuthEventWriter writer = mock(AuthEventWriter.class);
     private final UserViewAccessService service = new UserViewAccessService(
-            identityLinks, new AuthEventLogger(writer), new JsonMapper(), mock(RecentSignInPolicy.class));
+            identityLinks,
+            new AuthEventLogger(writer),
+            new JsonMapper(),
+            mock(RecentSignInPolicy.class),
+            mock(PasskeyAssurancePolicy.class));
 
     @BeforeEach
     void signInAsAdministrator() {

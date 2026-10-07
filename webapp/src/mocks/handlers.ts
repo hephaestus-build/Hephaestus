@@ -6,7 +6,12 @@
 
 import { HttpResponse, http, type PathParams } from "msw";
 
-import type { AccountAiChoice, AccountAiChoiceRequest } from "@/api/types.gen";
+import type {
+	AccountAiChoice,
+	AccountAiChoiceRequest,
+	PasskeyStatus,
+	WorkspacePasskeyPolicy,
+} from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 
 import { workspaceOnboarding } from "./fixtures/onboarding";
@@ -32,6 +37,22 @@ interface AdminUserPatch {
 }
 
 export const handlers = [
+	http.get("*/user/passkeys", () =>
+		HttpResponse.json({
+			protectionEnabled: false,
+			recoveryRequired: false,
+			instanceAdminRequired: true,
+			workspaceAdminRequired: false,
+			verified: false,
+			credentials: [],
+		} satisfies Wire<PasskeyStatus>),
+	),
+	http.get("*/workspaces/:workspaceSlug/passkey-policy", () =>
+		HttpResponse.json({
+			required: false,
+			instanceRequired: false,
+		} satisfies Wire<WorkspacePasskeyPolicy>),
+	),
 	// Opening Heph prepares the member's sandbox; the server accepts and answers with no body.
 	http.post(
 		"*/workspaces/:workspaceSlug/mentor/sandbox",

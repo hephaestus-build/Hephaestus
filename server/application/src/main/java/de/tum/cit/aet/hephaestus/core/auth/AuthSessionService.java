@@ -121,8 +121,10 @@ public class AuthSessionService {
                 clearCookie(response);
                 return false;
             }
-            HephaestusJwtIssuer.Token token =
-                    jwtIssuer.issue(accountId, TokenConstraints.session(sessionExpiresAt, context.authTime()), request);
+            HephaestusJwtIssuer.Token token = jwtIssuer.issue(
+                    accountId,
+                    new TokenConstraints(sessionExpiresAt, context.authTime(), null, context.passkeyTime()),
+                    request);
             authEventLogger
                     .event(AuthEvent.EventType.TOKEN_REFRESH, AuthEvent.Result.SUCCESS)
                     .account(accountId)

@@ -16,6 +16,9 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 @PersonDataStores({
+    "passkey_credential",
+    "passkey_challenge",
+    "passkey_recovery_code",
     "account_feature",
     "identity_link",
     "issued_jwt",
@@ -42,6 +45,36 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
     public List<PersonDataContributor> contributors() {
         return List.of(
                 new PersonDataStoreAdministrationContributor(jdbc, mapper),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "passkey_credential",
+                        "passkey_credential",
+                        "t.account_id = :account",
+                        "id,account_id",
+                        "id",
+                        "",
+                        910),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "passkey_challenge",
+                        "passkey_challenge",
+                        "t.account_id = :account",
+                        "id,account_id,purpose,expires_at",
+                        "id",
+                        "",
+                        910),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "passkey_recovery_code",
+                        "passkey_recovery_code",
+                        "t.account_id = :account",
+                        "account_id",
+                        "hash",
+                        "",
+                        910),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

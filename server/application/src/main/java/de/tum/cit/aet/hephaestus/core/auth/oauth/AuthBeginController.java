@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
+import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyRequiredException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
@@ -100,6 +101,8 @@ public class AuthBeginController {
             Long currentAccountId;
             try {
                 currentAccountId = identityLinkAuthentication.resolveAuthenticatedAccountId(request);
+            } catch (PasskeyRequiredException e) {
+                return new RedirectView("/settings#passkeys", false);
             } catch (StepUpRequiredException e) {
                 // The dance has not started yet, so there is nothing to resume: send the browser to the
                 // SPA's confirmation copy instead of an OAuth redirect it would have to unwind.

@@ -65,6 +65,9 @@ spring:
 # Disable workspace bootstrapping during tests to prevent API calls
 hephaestus:
     auth:
+        passkeys:
+            rp-id: localhost
+            allowed-origins: http://localhost:4200
         rate-limit:
             enabled: false
         # The development extension key's id: installed-client sign-in and its CORS origin under test.

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace.authorization;
 
+import de.tum.cit.aet.hephaestus.core.AdminAccess;
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -20,5 +21,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 @Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
+@AdminAccess(AdminAccess.Scope.WORKSPACE)
 @PreAuthorize("@workspaceSecure.isAdmin()")
 public @interface RequireAtLeastWorkspaceAdmin {}

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.RecentSignInPolicy;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
+import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyAssurancePolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
@@ -57,7 +58,8 @@ class IdentityLinkAuthenticationTest extends BaseUnitTest {
                 new AuthEventLogger(mock(AuthEventWriter.class)),
                 new AuthMetrics(new SimpleMeterRegistry()),
                 Clock.fixed(NOW, ZoneOffset.UTC));
-        identityLinkAuthentication = new IdentityLinkAuthentication(bearerTokenResolver, jwtDecoder, converter, policy);
+        identityLinkAuthentication = new IdentityLinkAuthentication(
+                bearerTokenResolver, jwtDecoder, converter, policy, mock(PasskeyAssurancePolicy.class));
     }
 
     private void presenting(@Nullable Jwt jwt) {

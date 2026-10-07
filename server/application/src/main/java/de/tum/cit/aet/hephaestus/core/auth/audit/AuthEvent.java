@@ -116,6 +116,8 @@ public class AuthEvent {
     public enum EventType {
         USER_VIEW,
         LOGIN,
+        PASSKEY_CHANGED,
+        PASSKEY_VERIFIED,
         LOGIN_FAILED,
         LOGOUT,
         TOKEN_REFRESH,

@@ -31,6 +31,8 @@ export type AuthEventType = NonNullable<
 
 export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 	USER_VIEW: "User view authorized",
+	PASSKEY_CHANGED: "Passkey changes",
+	PASSKEY_VERIFIED: "Passkey verification",
 	LOGIN: "Sign-in",
 	LOGIN_FAILED: "Failed sign-in",
 	LOGOUT: "Sign-out",

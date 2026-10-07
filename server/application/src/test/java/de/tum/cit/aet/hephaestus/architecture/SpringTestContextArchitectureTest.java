@@ -42,6 +42,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("agent.job.ClosedIssueDiscussionIntegrationTest", "issue-event-transaction"),
             assignment("agent.job.IssueUpdateCoalescerIntegrationTest", "issue-coalescer-transaction"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"),
+            assignment("core.auth.webauthn.PasskeyLifecycleIntegrationTest", "required-passkeys"),
             assignment("StartupBudgetIntegrationTest", "startup"),
             assignment("core.auth.dev.DevLoginIntegrationTest", "dev-login"),
             assignment("core.auth.consent.ConsentSignInBootstrapIntegrationTest", "consent-sign-in"),
@@ -87,6 +88,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry(
                     "issue-coalescer-transaction",
                     "real proxied job submission with controlled issue admission and bounded database lock waits"),
+            Map.entry(
+                    "required-passkeys",
+                    "mandatory instance-admin policy with real signed cookies, WebAuthn signatures, and database-backed recovery"),
             Map.entry("real-auth", "real OAuth and authentication wiring without test security"),
             Map.entry("startup", "production main-method startup instrumentation"),
             Map.entry("dev-login", "dev-login feature-property behavior"),
@@ -124,6 +128,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
+            "core.auth.webauthn.PasskeyLifecycleIntegrationTest",
             "agent.handler.PracticeReviewPipelineIntegrationTest",
             "agent.mentor.chat.MentorWorkerSplitIntegrationTest",
             "notification.AccountDeletionEmailIntegrationTest",
@@ -200,7 +205,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
         Set<String> mergedKeys =
                 fullContextTests.stream().map(this::mergedContextKey).collect(Collectors.toCollection(TreeSet::new));
-        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(19);
+        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(20);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.keySet()).isEqualTo(mergedKeys);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.values())
                 .allSatisfy(reason -> assertThat(reason).isNotBlank());

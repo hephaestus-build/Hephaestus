@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Settings2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
+import { usePasskeySettings } from "@/hooks/use-passkey-settings";
 
 import {
 	adminGetInstanceSettingsOptions,
@@ -16,6 +17,7 @@ import { SilentModeCard } from "@/components/admin/instance/SilentModeCard";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
+import { PasskeySettings } from "@/components/settings/PasskeySettings";
 import { Skeleton } from "@/components/ui/skeleton";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
@@ -26,6 +28,7 @@ export const Route = createFileRoute("/_authenticated/admin/settings")({
 });
 
 function WorkspaceSettingsPage() {
+	const passkeys = usePasskeySettings();
 	const queryClient = useQueryClient();
 	const settingsQuery = useQuery(adminGetInstanceSettingsOptions());
 
@@ -123,6 +126,7 @@ function WorkspaceSettingsPage() {
 					onSendTest={(to) => testEmailMutation.mutate({ body: { to } })}
 				/>
 			</div>
+			<PasskeySettings {...passkeys} />
 		</PageLayout>
 	);
 }

@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.annotation.AnnotatedElementUtils;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
@@ -32,11 +31,7 @@ class UserViewArchitectureTest extends HephaestusArchitectureTest {
                                 controller.isAnnotatedWith(WorkspaceScopedController.class),
                                 controller.getSimpleName() + " is not @WorkspaceScopedController"),
                         unless(
-                                controller
-                                        .tryGetAnnotationOfType(PreAuthorize.class)
-                                        .map(PreAuthorize::value)
-                                        .filter("hasAuthority('app_admin')"::equals)
-                                        .isPresent(),
+                                MultiTenancyArchitectureTest.isInstanceAdminGated(controller),
                                 controller.getSimpleName() + " is not instance-admin only")))
                 .sorted()
                 .toList();

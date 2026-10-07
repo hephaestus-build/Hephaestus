@@ -49,7 +49,7 @@ public class RecentSignInAuthorizationConfig {
         };
         AuthorizationManagerBeforeMethodInterceptor interceptor = new AuthorizationManagerBeforeMethodInterceptor(
                 new AnnotationMatchingPointcut(null, RequiresRecentSignIn.class, true), manager);
-        interceptor.setOrder(AuthorizationInterceptorsOrder.PRE_AUTHORIZE.getOrder() + 1);
+        interceptor.setOrder(AuthorizationInterceptorsOrder.PRE_AUTHORIZE.getOrder() + 2);
         return interceptor;
     }
 

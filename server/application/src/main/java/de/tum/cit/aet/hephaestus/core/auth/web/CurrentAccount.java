@@ -159,6 +159,13 @@ public final class CurrentAccount {
         return authTime instanceof Number seconds ? Instant.ofEpochSecond(seconds.longValue()) : null;
     }
 
+    @Nullable
+    public static Instant passkeyTime() {
+        Jwt jwt = jwtOrNull();
+        Object time = jwt == null ? null : jwt.getClaim("passkey_time");
+        return time instanceof Number seconds ? Instant.ofEpochSecond(seconds.longValue()) : null;
+    }
+
     private static Jwt requireJwt() {
         Jwt jwt = jwtOrNull();
         if (jwt == null) {

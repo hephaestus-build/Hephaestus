@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.audit.web;
 
+import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntryViewDTO;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditFilterParams;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditQuery;
@@ -11,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/admin/config-audit")
 @Tag(name = "Admin", description = "Instance-admin account management")
-@PreAuthorize("hasAuthority('app_admin')")
+@RequireInstanceAdmin
 @RequiredArgsConstructor
 public class AdminConfigAuditController {
 

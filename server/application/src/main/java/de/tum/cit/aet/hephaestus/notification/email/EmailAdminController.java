@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.notification.email;
 
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
+import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
@@ -16,7 +17,6 @@ import jakarta.validation.Valid;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ProblemDetail;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/admin/email")
 @Tag(name = "Instance Email", description = "Instance-wide email transport verification")
 @RecentSignInExempt(reason = "sends one test email; changes no access and stores no credential")
-@PreAuthorize("hasAuthority('app_admin')")
+@RequireInstanceAdmin
 public class EmailAdminController {
 
     private final EmailGateway gateway;

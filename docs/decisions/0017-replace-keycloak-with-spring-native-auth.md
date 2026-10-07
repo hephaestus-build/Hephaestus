@@ -182,3 +182,40 @@ lookup in `RevocationAwareJwtDecoder` are unchanged. The rejection of Spring Aut
 stands for first-party installed clients; the escape hatch for third-party clients above is unchanged.
 Decision and rejected alternatives:
 [ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md).
+
+## Admin passkey protection
+
+Local passkey verification supersedes this decision's earlier deferral of local MFA.
+OAuth still establishes identity. Spring Security WebAuthn verifies account-owned credentials before protected admin capabilities.
+Passkeys are not SCM providers and have no synthetic provider identity.
+
+Production instance administration requires passkeys by default. Workspace owners can require them for workspace administration.
+Instance policy can require this protection for all workspaces. Personal settings cannot weaken mandatory policy.
+
+Single-use challenges use PostgreSQL, not servlet sessions. Verification preserves the original absolute session deadline.
+Recovery permits credential replacement but not direct admin access.
+The [operator procedure](../admin/passkeys.mdx) owns enrollment, policy configuration, and recovery.
+
+### Implementation references
+
+- [Spring Security WebAuthn](https://docs.spring.io/spring-security/reference/servlet/authentication/passkeys.html) provides relying-party verification and credential repository extension points.
+- [Spring Security factor authorization](https://docs.spring.io/spring-security/reference/servlet/authentication/mfa.html) provides factor age checks.
+- [WebAuthn Level 3](https://www.w3.org/TR/webauthn-3/) defines RP IDs, origins, challenges, and user verification.
+- [MDN browser JSON conversion](https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredential/parseCreationOptionsFromJSON_static) supplies native browser codecs.
+- [NIST authenticator guidance](https://pages.nist.gov/800-63-4/sp800-63b.html) distinguishes phishing-resistant authentication from account recovery.
+
+The application uses Spring's relying-party operations rather than its servlet session filters because the existing browser session is a revocable JWT cookie.
+Challenge rows bind the account, token ID, purpose, and expiry.
+A separate transaction consumes each challenge before verification, including failed verification.
+Typed storage snapshots are necessary because the framework's browser JSON module serializes options but does not deserialize them or credential records.
+Cryptographic verification remains in WebAuthn4J through Spring Security.
+
+Spring Security 7.1.1 fixes [CVE-2026-47841](https://spring.io/security/cve-2026-47841/), a user-verification bypass in serialized HTTP sessions.
+This implementation uses that fixed version and restores the required verification policy explicitly from typed challenge snapshots.
+The integration suite rejects assertions without user verification after a database round trip.
+
+Administrative handlers use composed role annotations with an explicit assurance scope.
+Native role authorization runs first, passkey assurance second, and recent-sign-in assurance third.
+Successful passkey audit runs after commit; failed-attempt audit runs after transaction completion.
+An independent audit transaction must not run while a credential operation holds the account write lock.
+Browser registration and verification are separate user actions; only the cookie-changing completion request holds the session lock.

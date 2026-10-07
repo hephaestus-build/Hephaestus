@@ -112,10 +112,14 @@ services:
           exit 1
         fi
 
+        # Passkeys belong to the source RP; recovery codes and challenges must not enter a clone.
         echo "Dumping staging data from $$SOURCE"
         pg_dump -h "$$SOURCE" -U "$$PREVIEW_SEED_SOURCE_USERNAME" \
           -d "$$PREVIEW_SEED_SOURCE_DATABASE" \
-          --format=custom --no-owner --no-privileges --no-large-objects > /tmp/seed.dump
+          --format=custom --no-owner --no-privileges --no-large-objects \
+          --exclude-table-data=public.passkey_credential \
+          --exclude-table-data=public.passkey_challenge \
+          --exclude-table-data=public.passkey_recovery_code > /tmp/seed.dump
         test -s /tmp/seed.dump
 
         export PGPASSWORD="$$POSTGRES_PASSWORD"
@@ -306,6 +310,10 @@ services:
       # enough that a redeploy resumes on its own cursor.
       HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD: 72h
       HEPHAESTUS_AUTH_ISSUER: https://${SERVICE_FQDN_WEBAPP}
+      HEPHAESTUS_AUTH_PASSKEYS_RP_ID: ${SERVICE_FQDN_WEBAPP}
+      HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS: https://${SERVICE_FQDN_WEBAPP}
+      HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED: "true"
+      HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED: "false"
       HEPHAESTUS_AUTH_STATE_COOKIE_KEY: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY:?Set HEPHAESTUS_AUTH_STATE_COOKIE_KEY to a Base64-encoded 32-byte key}
       HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS: ${HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS:-}
       HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS: ${HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS:-}

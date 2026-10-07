@@ -25,6 +25,7 @@ dependencies {
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.shedlock.spring)
     implementation(libs.shedlock.provider.jdbc.template)
+    implementation("org.springframework.security:spring-security-webauthn")
     implementation(libs.spring.boot.starter.oauth2.client)
     implementation(libs.spring.boot.starter.oauth2.resource.server)
     implementation(libs.spring.boot.starter.security)
