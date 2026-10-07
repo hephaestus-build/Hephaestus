@@ -176,8 +176,10 @@ export const MarkdownNextStep: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("PagingControllerTest", { selector: "code" })).toBeVisible();
-		await expect(canvas.queryByText(/`/u)).toBeNull();
+		const code = canvas.getByText("PagingControllerTest", { selector: "code" });
+		await expect(code).toBeVisible();
+		// The typography plugin draws a backtick on each side of inline code unless told not to.
+		await expect(getComputedStyle(code, "::before").content).toBe("none");
 	},
 };
 

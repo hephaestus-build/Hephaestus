@@ -125,8 +125,10 @@ export const MarkdownRationale: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("CacheService.find", { selector: "code" })).toBeVisible();
-		await expect(panel.queryByText(/`/u)).toBeNull();
+		const code = panel.getByText("CacheService.find", { selector: "code" });
+		await expect(code).toBeVisible();
+		// The typography plugin draws a backtick on each side of inline code unless told not to.
+		await expect(getComputedStyle(code, "::before").content).toBe("none");
 	},
 };
 
