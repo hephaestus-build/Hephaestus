@@ -349,7 +349,8 @@ On SIGTERM, the worker does these actions in order:
 1. It sends `Heartbeat{draining=true}` to the hub.
    The dispatcher stops claiming new jobs for it.
 2. It waits up to `hephaestus.worker.drain.timeout` (default 5 min) for active jobs to finish.
-3. It settles remaining jobs under their ownership fence, then stops their containers.
+3. It settles each remaining job under its ownership fence before it waits for any container stop.
+4. It stops the settled jobs' containers in parallel, with one 30s cleanup deadline for the batch.
 
 The worker's HTTP connectors, including the sandbox gateway, stay open during step 2.
 Thus, an active review can still send model requests while the worker waits for it.
@@ -362,7 +363,17 @@ An interrupted review without saved completed feedback fails with an explicit re
 Completed reviews continue through normal delivery and delivery recovery.
 `timeout=0` skips step 2 and immediately applies the same recovery decisions.
 
-The compose template pins `stop_grace_period: 6m` to give the JVM 60s of headroom before Docker SIGKILLs.
+Container cleanup does not delay settlement of the other jobs.
+A failed settlement does not stop the other jobs from being settled.
+Only a job whose settlement won its ownership fence has its container stopped.
+
+If a stop fails or exceeds the cleanup deadline, the worker records incomplete cleanup.
+A Docker call that does not respond to interruption can finish after the deadline.
+The worker does not wait indefinitely for that call.
+Leftover containers remain subject to normal sandbox reconciliation.
+
+The compose template keeps `stop_grace_period: 6m`.
+The cleanup deadline does not extend this grace period or guarantee that all containers stop.
 
 ## See also
 
