@@ -119,7 +119,7 @@ export function PracticesAcrossTheWorkspacePage({
 											stale && STALE,
 										)}
 									>
-										{tilesHint(windowTiles, overview.openFeedback).map((line) => (
+										{tilesHint(windowTiles).map((line) => (
 											<p key={line}>{line}</p>
 										))}
 									</div>
@@ -131,7 +131,7 @@ export function PracticesAcrossTheWorkspacePage({
 					<Section
 						size="lg"
 						title={ALL_PRACTICE_GROUPS}
-						description={overview && barsHint(overview.minimumDevelopersPerCount, "group")}
+						description={overview && barsHint("group")}
 					>
 						<SplitLegend />
 						<GroupsTable

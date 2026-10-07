@@ -1,11 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import {
-	threeWay,
-	TOTAL_ONLY,
-	WITHHELD,
-} from "@/stories/practices-across-the-workspace-story-data";
+import { NOBODY, SMALL_PARTS, threeWay } from "@/stories/practices-across-the-workspace-story-data";
 
 import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
@@ -46,25 +42,24 @@ export const Default: Story = {
 /** The parts and the You marker carry color meaning, so dark mode is asserted, not assumed. */
 export const Dark: Story = { globals: { theme: "dark" } };
 
-/** A part would hold too few: one neutral bar with the total, and no marker. */
-export const TotalOnly: Story = {
-	args: { split: TOTAL_ONLY, yourStanding: undefined },
+/** Parts of one, two and none draw like any other split, the reader marked. */
+export const SmallParts: Story = {
+	args: { split: SMALL_PARTS, yourStanding: "STRENGTH" },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			"28 developers with a current standing in this workspace. The split is held back so no one can be singled out.",
+			"28 developers with a current standing in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. The You marker is on Going well.",
 		);
-		await expect(canvas.getByText("Split held back")).toBeVisible();
+		await expect(canvas.getByText("You")).toBeVisible();
 		await expect(canvas.getByText("28 developers")).toBeVisible();
-		await expect(canvas.queryByText("You")).toBeNull();
 	},
 };
 
-/** The total would hold too few as well: an empty track and its reason. */
-export const Withheld: Story = {
-	args: { split: WITHHELD, yourStanding: undefined },
+/** Nobody has a standing yet: an empty track that says so, and no marker. */
+export const NobodyYet: Story = {
+	args: { split: NOBODY, yourStanding: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("img")).toBeNull();
-		await expect(canvas.getByText("Held back so no one can be singled out.")).toBeVisible();
+		await expect(canvas.getByText("No developer has a standing yet.")).toBeVisible();
 		await expect(canvas.queryByText("You")).toBeNull();
 	},
 };

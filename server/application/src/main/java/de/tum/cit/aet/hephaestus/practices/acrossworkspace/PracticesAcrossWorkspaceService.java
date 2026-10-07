@@ -2,11 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Developer;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Split;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Standings;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.MiddleHalf;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.Split;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceTilesDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
@@ -38,7 +35,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -46,7 +42,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Composes Practices across the workspace from one scan of the workspace's observations per count, classified by the
- * same standing and group standing rules the practice profile uses, then counted under {@link CohortPrivacyPolicy}.
+ * same standing and group standing rules the practice profile uses, then counted by {@link WorkspaceSplits}.
  * The splits and the open feedback read the current standing, so the reader's marker is the standing their profile
  * shows; only the tiles read a window. Aggregating in SQL instead would put a second copy of the standing rules
  * beside the profile's, free to disagree with it.
@@ -116,11 +112,10 @@ public class PracticesAcrossWorkspaceService {
                 practiceSplits.add(new WorkspacePracticeSplitDTO(
                         practice.slug(),
                         practice.name(),
-                        CohortPrivacyPolicy.marker(
-                                practice.split(),
-                                readerCounted,
-                                yours.practices()
-                                        .getOrDefault(practice.slug(), PracticeStandingDTO.Standing.NOT_OBSERVED)),
+                        readerCounted
+                                ? yours.practices()
+                                        .getOrDefault(practice.slug(), PracticeStandingDTO.Standing.NOT_OBSERVED)
+                                : null,
                         WorkspaceSplitDTO.from(practice.split())));
             }
             rows.add(new WorkspaceGroupSplitDTO(
@@ -128,17 +123,14 @@ public class PracticesAcrossWorkspaceService {
                     group.name(),
                     group.icon(),
                     group.color(),
-                    CohortPrivacyPolicy.marker(
-                            group.split(),
-                            readerCounted,
-                            yours.groups().getOrDefault(group.slug(), PracticeGroupStandingDTO.Standing.NOT_OBSERVED)),
+                    readerCounted
+                            ? yours.groups().getOrDefault(group.slug(), PracticeGroupStandingDTO.Standing.NOT_OBSERVED)
+                            : null,
                     WorkspaceSplitDTO.from(group.split()),
                     practiceSplits));
         }
         return new PracticesAcrossWorkspaceDTO(
-                CohortPrivacyPolicy.MINIMUM_DEVELOPERS_PER_COUNT,
-                WorkspaceTileDTO.of(yourOpenFeedback, overview.openFeedbackMiddle()),
-                rows);
+                WorkspaceTileDTO.of(yourOpenFeedback, overview.openFeedbackMiddle()), rows);
     }
 
     /** The reader's figures over the window beside the middle half of the developers with a standing in it. */
@@ -161,8 +153,7 @@ public class PracticesAcrossWorkspaceService {
         }
         return new PracticesAcrossWorkspaceTilesDTO(
                 window,
-                CohortPrivacyPolicy.MINIMUM_DEVELOPERS_FOR_MIDDLE_HALF,
-                CohortPrivacyPolicy.count(tiles.developersWithAStanding()),
+                tiles.developersWithAStanding(),
                 yours.practices(),
                 WorkspaceTileDTO.of(yours.reviewedWork(), tiles.reviewedWork()),
                 WorkspaceTileDTO.of(yours.goingWell(), tiles.goingWell()),
@@ -183,7 +174,7 @@ public class PracticesAcrossWorkspaceService {
     }
 
     /**
-     * Everything of the overview every reader shares: each split as {@link CohortPrivacyPolicy} releases it, the
+     * Everything of the overview every reader shares: each split of the developers with a standing, the
      * standings of each developer counted, which only that developer reads as their marker, and the middle half of
      * the open feedback.
      */
@@ -199,30 +190,27 @@ public class PracticesAcrossWorkspaceService {
         List<List<Practice>> practices = groups.stream()
                 .map(group -> standings.eligiblePracticesByGroup().getOrDefault(group.getSlug(), List.of()))
                 .toList();
-        List<GroupRelease> release = CohortPrivacyPolicy.page(
-                current.withAStanding().stream()
-                        .map(developer -> developerOf(current, developer, groups, practices))
-                        .toList(),
-                practices.stream().map(List::size).toList());
-
         List<GroupRow> rows = new ArrayList<>();
         for (int groupIndex = 0; groupIndex < groups.size(); groupIndex++) {
             PracticeGroup group = groups.get(groupIndex);
-            GroupRelease groupRelease = release.get(groupIndex);
             List<PracticeRow> practiceRows = new ArrayList<>();
-            for (int index = 0; index < practices.get(groupIndex).size(); index++) {
-                Practice practice = practices.get(groupIndex).get(index);
+            for (Practice practice : practices.get(groupIndex)) {
                 practiceRows.add(new PracticeRow(
                         practice.getSlug(),
                         practice.getName(),
-                        groupRelease.practices().get(index)));
+                        WorkspaceSplits.split(current.withAStanding().stream()
+                                .map(developer -> standingIn(current.snapshotOf(developer), practice.getSlug()))
+                                .toList())));
             }
             rows.add(new GroupRow(
                     group.getSlug(),
                     group.getName(),
                     group.getIcon(),
                     group.getColor(),
-                    groupRelease.group(),
+                    WorkspaceSplits.split(current.withAStanding().stream()
+                            .map(developer -> current.groupStandingOf(developer, group.getSlug())
+                                    .asPracticeStanding())
+                            .toList()),
                     List.copyOf(practiceRows)));
         }
 
@@ -240,7 +228,7 @@ public class PracticesAcrossWorkspaceService {
         }
 
         Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, eligible);
-        MiddleHalf openMiddle = CohortPrivacyPolicy.middleHalf(eligible.stream()
+        MiddleHalf openMiddle = WorkspaceSplits.middleHalf(eligible.stream()
                 .map(developer -> openFeedback.getOrDefault(developer, 0))
                 .toList());
         return new Overview(List.copyOf(rows), Map.copyOf(marks), openMiddle);
@@ -265,11 +253,11 @@ public class PracticesAcrossWorkspaceService {
                 since,
                 withAStanding.size(),
                 Map.copyOf(figures),
-                CohortPrivacyPolicy.middleHalf(
+                WorkspaceSplits.middleHalf(
                         withAStanding.stream().map(Figures::reviewedWork).toList()),
-                CohortPrivacyPolicy.middleHalf(
+                WorkspaceSplits.middleHalf(
                         withAStanding.stream().map(Figures::goingWell).toList()),
-                CohortPrivacyPolicy.middleHalf(
+                WorkspaceSplits.middleHalf(
                         withAStanding.stream().map(Figures::needingAttention).toList()));
     }
 
@@ -361,19 +349,6 @@ public class PracticesAcrossWorkspaceService {
                         .anyMatch(PracticeGroupStandingDTO::isVerdict))
                 .toList();
         return new Cohort(snapshots, groupStandings, withAStanding);
-    }
-
-    private static Developer developerOf(
-            Cohort cohort, Long developer, List<PracticeGroup> groups, List<List<Practice>> practices) {
-        StandingSnapshot snapshot = cohort.snapshotOf(developer);
-        return new Developer(IntStream.range(0, groups.size())
-                .mapToObj(index -> new Standings(
-                        cohort.groupStandingOf(developer, groups.get(index).getSlug())
-                                .asPracticeStanding(),
-                        practices.get(index).stream()
-                                .map(practice -> standingIn(snapshot, practice.getSlug()))
-                                .toList()))
-                .toList());
     }
 
     /** A developer's standing in a practice; one their snapshot does not list is one nothing reached: not observed. */

@@ -1,4 +1,4 @@
-import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit, WorkspaceTile } from "@/api/types.gen";
+import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit } from "@/api/types.gen";
 import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
 import type { FilterOption } from "@/components/common/FilterToggle";
 import { statusValues } from "@/components/common/status-def";
@@ -80,121 +80,63 @@ export const GROUPS_LOAD_ERROR = "We could not load the practice groups";
 /** Digits always: a count of developers sits beside other figures, never in running prose. */
 const developers = (n: number) => count(n, "developer", "developers", true);
 
-/** A floor the server sends counts the reader too, so the floor less one is the others it stands for. */
-const othersBeyond = (floor: number) => floor - 1;
-
 /**
- * The lines under the tiles, built only from the response so they hold for every reply: no count
- * where the server held the total back, the band's floor, and whether open feedback, which reads
- * no window, has a band of its own. One paragraph for each.
+ * The lines under the tiles, built only from the response so they hold for every reply: how many
+ * developers the band sorts, and that open feedback, which reads no window, has a band of its own.
+ * One paragraph for each.
  */
-export function tilesHint(
-	{
-		minimumDevelopersForMiddleHalf,
-		window,
-		developersWithAStandingInWindow,
-	}: Pick<
-		PracticesAcrossWorkspaceTiles,
-		"minimumDevelopersForMiddleHalf" | "window" | "developersWithAStandingInWindow"
-	>,
-	openFeedback: WorkspaceTile,
-): readonly [string, string] {
-	const sorted =
-		developersWithAStandingInWindow === undefined
-			? "the developers"
-			: `the ${developers(developersWithAStandingInWindow)}`;
-	const floor = developers(minimumDevelopersForMiddleHalf);
-	const others = `${developers(othersBeyond(minimumDevelopersForMiddleHalf))} other than you`;
+export function tilesHint({
+	window,
+	developersWithAStandingInWindow,
+}: Pick<PracticesAcrossWorkspaceTiles, "window" | "developersWithAStandingInWindow">): readonly [
+	string,
+	string,
+] {
+	const open = "Open feedback counts what is open now, for every developer that this page counts.";
+	if (developersWithAStandingInWindow === 0) {
+		return [
+			`No developer in this workspace has a standing ${windowPhrase(window)}, so these figures have no typical range.`,
+			open,
+		];
+	}
 	const band = [
 		"The band is the typical range.",
-		`Hephaestus sorts ${sorted} in this workspace who ${developersWithAStandingInWindow === 1 ? "has" : "have"} a standing ${windowPhrase(window)} by their value.`,
+		`Hephaestus sorts the ${developers(developersWithAStandingInWindow)} in this workspace who ${developersWithAStandingInWindow === 1 ? "has" : "have"} a standing ${windowPhrase(window)} by their value.`,
 		"The band covers the middle half: a quarter of them are below it, and a quarter are above it.",
 		"Your marker shows your value.",
-		`The band shows only when at least ${floor} are counted, so at least ${others}.`,
+		"When only a few developers are counted, the band can show the value of one person.",
 	].join(" ");
-	const open = "Open feedback counts what is open now, for every developer that this page counts.";
-	return [
-		band,
-		openFeedback.middle === undefined
-			? `${open} Its band shows only when this page counts at least ${floor}.`
-			: open,
-	];
+	return [band, open];
 }
 
 /** The line over a table of bars, in the words of `docs/user/practice-profile.mdx` § The bars. */
-export function barsHint(minimumDevelopersPerCount: number, scope: StandingScope): string {
-	const floor = developers(minimumDevelopersPerCount);
-	const others = othersBeyond(minimumDevelopersPerCount);
-	const singledOut = `one to ${count(others, "developer", "developers", false)}`;
+export function barsHint(scope: StandingScope): string {
 	return [
 		`Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it.`,
 		"The You marker shows your part.",
-		`A count shows only when it holds at least ${floor}.`,
-		`So each count stands for at least ${developers(others)} other than you, whoever reads it, and every reader sees the same bars.`,
-		"If a part would hold fewer, the bar shows only its number of developers.",
-		...(scope === "group"
-			? [
-					`If the groups together would single out ${singledOut}, every bar on the page shows only its number.`,
-				]
-			: [
-					"A practice bar is compared with its group’s bar and the group’s other practice bars.",
-					`If that would single out ${singledOut}, it shows only its number.`,
-				]),
+		"Every bar shows all its counts, however small.",
+		"So a small count can let others tell where you stand.",
 	].join(" ");
 }
 
-/**
- * Under the empty track of a split held back whole. It promises nothing about later: more data does
- * not lift every reason the privacy rule holds a split back.
- */
-export const HELD_BACK = "Held back so no one can be singled out";
+/** Under the empty track of a split that counts nobody: no developer has a standing yet. */
+export const NOBODY_YET = "No developer has a standing yet";
 
-/** Under the neutral bar of a split shown only as its total, for every reason the parts are held back. */
-export const SPLIT_HELD_BACK = "Split held back";
-
-/** A split the page may draw, with the counts its shape promises. */
-export type ShownSplit =
-	| { shape: "SPLIT"; parts: WorkspaceSplit["parts"]; developers: number; noneYet: number }
-	| { shape: "TOTAL_ONLY"; developers: number };
-
-/**
- * The wire's split narrowed by its shape. The DTO types every count as optional, so a split
- * missing a count its shape promises is held back rather than drawn with an invented 0.
- */
-export function shownSplit({
-	shape,
-	parts,
-	developers: total,
-	noneYet,
-}: WorkspaceSplit): ShownSplit | undefined {
-	if (shape === "WITHHELD" || total === undefined) {
-		return undefined;
-	}
-	if (shape === "TOTAL_ONLY") {
-		return { shape, developers: total };
-	}
-	return noneYet === undefined ? undefined : { shape, parts, developers: total, noneYet };
-}
-
-/** "24 developers", as the bar prints a shown split's total. */
-export const splitTotalText = (split: ShownSplit): string => developers(split.developers);
+/** "24 developers", as the bar prints a split's total. */
+export const splitTotalText = (split: WorkspaceSplit): string => developers(split.developers);
 
 /**
  * The bar's text alternative: the reference group, every count in the registry's words and the
  * server's order, and the part the You marker is on, so the bar's text says what its legend says.
  */
 export function splitDescription(
-	wire: WorkspaceSplit,
+	split: WorkspaceSplit,
 	yourStanding: PracticeGroupStandingValue | undefined,
 ): string {
-	const split = shownSplit(wire);
-	if (split === undefined) {
-		return `${HELD_BACK}.`;
+	if (split.developers === 0) {
+		return `${NOBODY_YET}.`;
 	}
 	const whole = `${splitTotalText(split)} with a current standing in this workspace`;
-	if (split.shape === "TOTAL_ONLY") {
-		return `${whole}. The split is held back so no one can be singled out.`;
-	}
 	const parts = split.parts.map(
 		(part) => `${part.developers} ${PRACTICE_GROUP_STANDING_DEFS[part.standing].label}`,
 	);

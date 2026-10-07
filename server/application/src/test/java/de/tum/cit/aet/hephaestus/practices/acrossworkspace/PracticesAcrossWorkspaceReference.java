@@ -1,11 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Developer;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Split;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Standings;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.MiddleHalf;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.WorkspaceSplits.Split;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceTilesDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
@@ -34,13 +31,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Practices across the workspace exactly as it was composed before its counts were shared between readers: every
- * read counts the whole workspace for its reader. The golden the shared counts are compared with; test only.
+ * read counts the whole workspace for its reader. The golden the shared counts are compared with; test only. Its
+ * splits and middle halves show whatever they count, as the page's do since the page dropped its smallest count.
  */
 @RequiredArgsConstructor
 class PracticesAcrossWorkspaceReference {
@@ -66,51 +63,43 @@ class PracticesAcrossWorkspaceReference {
         List<List<Practice>> practices = groups.stream()
                 .map(group -> standings.eligiblePracticesByGroup().getOrDefault(group.getSlug(), List.of()))
                 .toList();
-        List<GroupRelease> release = CohortPrivacyPolicy.page(
-                current.withAStanding().stream()
-                        .map(developer -> developerOf(current, developer, groups, practices))
-                        .toList(),
-                practices.stream().map(List::size).toList());
-
         StandingSnapshot yours = current.snapshotOf(members.reader());
         List<WorkspaceGroupSplitDTO> rows = new ArrayList<>();
         for (int groupIndex = 0; groupIndex < groups.size(); groupIndex++) {
             PracticeGroup group = groups.get(groupIndex);
-            GroupRelease groupRelease = release.get(groupIndex);
             List<WorkspacePracticeSplitDTO> practiceSplits = new ArrayList<>();
-            for (int index = 0; index < practices.get(groupIndex).size(); index++) {
-                Practice practice = practices.get(groupIndex).get(index);
-                Split split = groupRelease.practices().get(index);
+            for (Practice practice : practices.get(groupIndex)) {
+                Split split = WorkspaceSplits.split(current.withAStanding().stream()
+                        .map(developer -> standingIn(current.snapshotOf(developer), practice.getSlug()))
+                        .toList());
                 practiceSplits.add(new WorkspacePracticeSplitDTO(
                         practice.getSlug(),
                         practice.getName(),
-                        CohortPrivacyPolicy.marker(
-                                split, current.readerCounted(), standingIn(yours, practice.getSlug())),
+                        current.readerCounted() ? standingIn(yours, practice.getSlug()) : null,
                         WorkspaceSplitDTO.from(split)));
             }
+            Split groupSplit = WorkspaceSplits.split(current.withAStanding().stream()
+                    .map(developer ->
+                            current.groupStandingOf(developer, group.getSlug()).asPracticeStanding())
+                    .toList());
             rows.add(new WorkspaceGroupSplitDTO(
                     group.getSlug(),
                     group.getName(),
                     group.getIcon(),
                     group.getColor(),
-                    CohortPrivacyPolicy.marker(
-                            groupRelease.group(),
-                            current.readerCounted(),
-                            current.groupStandingOf(members.reader(), group.getSlug())),
-                    WorkspaceSplitDTO.from(groupRelease.group()),
+                    current.readerCounted() ? current.groupStandingOf(members.reader(), group.getSlug()) : null,
+                    WorkspaceSplitDTO.from(groupSplit),
                     practiceSplits));
         }
 
         // Open now for everyone, whatever window the tiles read, so the tile never sets a moment beside a span.
         Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, members.read());
         @Nullable Long reader = members.reader();
-        MiddleHalf openMiddle = CohortPrivacyPolicy.middleHalf(members.eligible().stream()
+        MiddleHalf openMiddle = WorkspaceSplits.middleHalf(members.eligible().stream()
                 .map(developer -> openFeedback.getOrDefault(developer, 0))
                 .toList());
         return new PracticesAcrossWorkspaceDTO(
-                CohortPrivacyPolicy.MINIMUM_DEVELOPERS_PER_COUNT,
-                WorkspaceTileDTO.of(reader == null ? 0 : openFeedback.getOrDefault(reader, 0), openMiddle),
-                rows);
+                WorkspaceTileDTO.of(reader == null ? 0 : openFeedback.getOrDefault(reader, 0), openMiddle), rows);
     }
 
     /** The reader's figures over the window beside the middle half of the developers with a standing in it. */
@@ -128,8 +117,7 @@ class PracticesAcrossWorkspaceReference {
                 inWindow.withAStanding().stream().map(inWindow::snapshotOf).toList();
         return new PracticesAcrossWorkspaceTilesDTO(
                 window,
-                CohortPrivacyPolicy.MINIMUM_DEVELOPERS_FOR_MIDDLE_HALF,
-                CohortPrivacyPolicy.count(withAStanding.size()),
+                withAStanding.size(),
                 yours.practices().size(),
                 tile(yours, withAStanding, PracticesAcrossWorkspaceReference::reviewedWork),
                 tile(yours, withAStanding, snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.STRENGTH)),
@@ -202,19 +190,6 @@ class PracticesAcrossWorkspaceReference {
                 members.reader() != null && withAStanding.contains(members.reader()));
     }
 
-    private static Developer developerOf(
-            Cohort cohort, Long developer, List<PracticeGroup> groups, List<List<Practice>> practices) {
-        StandingSnapshot snapshot = cohort.snapshotOf(developer);
-        return new Developer(IntStream.range(0, groups.size())
-                .mapToObj(index -> new Standings(
-                        cohort.groupStandingOf(developer, groups.get(index).getSlug())
-                                .asPracticeStanding(),
-                        practices.get(index).stream()
-                                .map(practice -> standingIn(snapshot, practice.getSlug()))
-                                .toList()))
-                .toList());
-    }
-
     /** A developer's standing in a practice; one their snapshot does not list is one nothing reached: not observed. */
     private static PracticeStandingDTO.Standing standingIn(StandingSnapshot snapshot, String practiceSlug) {
         StandingSnapshot.PracticeStanding practice = snapshot.practices().get(practiceSlug);
@@ -227,7 +202,7 @@ class PracticesAcrossWorkspaceReference {
             StandingSnapshot yours, List<StandingSnapshot> withAStanding, ToIntFunction<StandingSnapshot> figure) {
         return WorkspaceTileDTO.of(
                 figure.applyAsInt(yours),
-                CohortPrivacyPolicy.middleHalf(
+                WorkspaceSplits.middleHalf(
                         withAStanding.stream().map(figure::applyAsInt).toList()));
     }
 
