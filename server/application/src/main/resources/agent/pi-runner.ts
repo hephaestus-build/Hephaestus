@@ -3299,7 +3299,7 @@ function criteriaPathOf(slug: string): string {
 
 function criteriaFileOf(slug: string): string | null {
 	const file = criteriaPathOf(slug);
-	return existsSync(file) ? readFileSync(file, "utf8").trim() : null;
+	return existsSync(file) ? readFileSync(file, "utf8") : null;
 }
 
 /** The leads the practice's precompute script derived, when it ran; empty when it did not. */
