@@ -505,9 +505,24 @@ Server admission refuses a package with repeated practices before recording obse
 After admission, recorded observations stay immutable. Correction uses the existing [invalidation flow](./practice-review-glossary.mdx#invalidated-observations).
 
 Measurement and composition are separate phases.
+Measurement keeps the catalog group turns as scheduling and work-budget scopes.
+Each scope gets one work budget for its practice count, shared across its sessions.
+Each practice in a scope gets a fresh session in the same sandbox, one after another.
+That session receives the task, the brief and the complete criteria and leads of its practice only.
+
+It can record and revise only its practice.
+An item for another practice is refused before any draft changes.
+
+Drafts and coverage stay on disk across sessions, and admission receives every recorded draft once.
+Practices that the budget, the safety line, a stall or an oversized input leave without a result stay not reached.
+The finish scope retries remaining unblocked practices one by one under one shared budget.
+Reported native assistant usage events are accumulated once across sessions.
+The model proxy remains authoritative for request accounting, including calls such as compaction that may not emit those events.
+
 Public composition starts a fresh session.
-Private composition may resume the measurement session.
-An authenticated callback admits observations between them.
+Private composition starts its own fresh session after measurement stops.
+It holds no measuring transcript.
+An authenticated callback admits observations before either composition session.
 Composition can reference only the persisted projection.
 
 An observation states a claim that can be checked against the captured work.
@@ -588,8 +603,9 @@ An accepted proposal ends the composition, including an intentionally quiet revi
 Selection remains transient.
 The stored review and independent server admission retain their existing contract.
 
-The private session retains authorized artifact context and receives bounded observation history,
-feedback history and unread prepared feedback.
+The private session receives the task, the brief, the admitted observations with their qualifications,
+bounded observation history, feedback history and unread prepared feedback.
+It reads with the evidence tools and records only with `report_feedback`.
 A repeated pattern requires evidence from each work item.
 Absence from history proves no absence of behavior.
 Shared practice or location keys alone establish neither repetition nor resolution.
