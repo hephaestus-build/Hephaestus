@@ -387,6 +387,7 @@ if (scenario !== undefined && scenario !== "") {
 		getSessionId: () => "test-session",
 		buildSessionProjection: () => ({ messages: [] }),
 	};
+	const sessionLoaders = new Set<object>();
 	let prompts = 0;
 	let measuredTool: CustomTool | undefined;
 	/** What the runner steered the session with, in order. */
@@ -464,7 +465,17 @@ if (scenario !== undefined && scenario !== "") {
 					};
 				},
 			},
-			async createAgentSession(options: { tools: string[]; customTools: CustomTool[] }) {
+			async createAgentSession(options: {
+				tools: string[];
+				customTools: CustomTool[];
+				resourceLoader: object;
+			}) {
+				assert.equal(
+					sessionLoaders.has(options.resourceLoader),
+					false,
+					"a stopped session must not leave extension bindings on a later session",
+				);
+				sessionLoaders.add(options.resourceLoader);
 				const handlers = new Set<(event: unknown) => void>();
 				let settlementUsageEmitted = false;
 				let queued = 0;
