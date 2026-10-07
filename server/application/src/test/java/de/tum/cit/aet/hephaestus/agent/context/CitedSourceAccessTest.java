@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
@@ -36,6 +37,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.mockito.Mockito;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class CitedSourceAccessTest extends BaseUnitTest {
     private static EvidenceFolderPersonDataCatalog personCopies() {
@@ -341,5 +343,47 @@ class CitedSourceAccessTest extends BaseUnitTest {
         citation.set("sourceReference", mapper.readTree(reference));
         assertThat(access(files).permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isFalse();
+    }
+
+    @Test
+    void shouldAnswerEveryCitationAsAloneWhenOneReadChecksThemAndReadEachSourceOnce() {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
+        var access = access(files);
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of(TestEntities.repository(2L, "acme/api")));
+        when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.of(new WorkspaceMembership()));
+        var citations = List.of(
+                citation("context/diff.patch", "{\"records\":[{\"type\":\"repository\",\"id\":2}]}"),
+                citation("repos/2/src/Main.java", "{\"records\":[{\"type\":\"repository\",\"id\":2}]}"),
+                citation("context/diff.patch", "{\"records\":[{\"type\":\"repository\",\"id\":3}]}"),
+                citation("context/people/42/person.json", "{\"records\":[{\"type\":\"person\",\"person\":42}]}"),
+                citation("context/people/42/person.json", "{\"records\":[{\"type\":\"person\",\"person\":42}]}"),
+                citation(
+                        "context/diff.patch",
+                        "{\"records\":[{\"type\":\"repository\",\"id\":2},{\"type\":\"repository\",\"id\":3}]}"),
+                citation(
+                        "context/people/42/observations.jsonl",
+                        "{\"records\":[{\"type\":\"observation\",\"person\":42,\"id\":\"invalid\"}]}"),
+                mapper.createObjectNode().put("artifactPath", "context/diff.patch"));
+        // Each citation alone, the way every citation was checked before one read shared its checks.
+        List<Boolean> alone = citations.stream()
+                .map(citation -> access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .toList();
+        Mockito.clearInvocations(repositories, preferences, memberships);
+
+        var checks = access.checks(1L, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        List<Boolean> together = citations.stream().map(checks::permits).toList();
+
+        assertThat(together).isEqualTo(alone).containsExactly(true, true, false, true, true, false, false, true);
+        Mockito.verify(repositories, Mockito.times(1)).permittedRepositories(1L);
+        Mockito.verify(preferences, Mockito.times(1)).forDeveloper(1L, 42L);
+        Mockito.verify(memberships, Mockito.times(1)).findByWorkspace_IdAndUser_Id(1L, 42L);
+    }
+
+    private ObjectNode citation(String path, String reference) {
+        var citation = mapper.createObjectNode().put("artifactPath", path);
+        citation.set("sourceReference", mapper.readTree(reference));
+        return citation;
     }
 }

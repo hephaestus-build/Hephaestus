@@ -541,6 +541,55 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         }
     }
 
+    /**
+     * Evidence that cites a source, as every review since frozen workspace folders does, is checked against the
+     * source's owner once per read, not once per citation: six more developers whose every observation cites a
+     * repository add no statement either.
+     */
+    @Test
+    @WithUser
+    @DisplayName("the overview and the tiles check a cited repository once per read, however many observations cite it")
+    void shouldRunTheSameStatementsWhenMoreObservationsCiteARepository() throws InterruptedException {
+        Statistics statistics =
+                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        boolean wasEnabled = statistics.isStatisticsEnabled();
+        boolean wasRunning = taskScheduler.isRunning();
+        try {
+            if (wasRunning) {
+                var paused = new CountDownLatch(1);
+                taskScheduler.stop(paused::countDown);
+                assertThat(paused.await(10, TimeUnit.SECONDS))
+                        .as("scheduled tasks already running finish")
+                        .isTrue();
+            }
+            statistics.setStatisticsEnabled(true);
+            citingRepository(member("across-citing-first"));
+            List<Long> before = statementsPerRead(statistics);
+            for (int index = 0; index < 6; index++) {
+                citingRepository(member("across-citing-" + index));
+            }
+
+            assertThat(statementsPerRead(statistics)).isEqualTo(before);
+        } finally {
+            statistics.setStatisticsEnabled(wasEnabled);
+            if (wasRunning) {
+                taskScheduler.start();
+            }
+        }
+    }
+
+    /** Three reviews of the developer's work whose evidence cites the reviewed repository. */
+    private void citingRepository(User developer) {
+        String evidence = "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":"
+                + "\"context/diff.patch\",\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":1,"
+                + "\"endLine\":1,\"quote\":\"example\",\"quoteRedacted\":false,\"sourceReference\":"
+                + "{\"records\":[{\"type\":\"repository\",\"id\":7}]}}]}";
+        for (Instant at : List.of(OLDEST, MIDDLE, NEWEST)) {
+            AgentJob run = persistPullRequestReview(workspace, nextNumber, at);
+            observe(packaging, run, nextNumber++, developer, MET, null, at, evidence);
+        }
+    }
+
     /** The JDBC statements one overview read and one tiles read prepare, after a read that warms the context. */
     private List<Long> statementsPerRead(Statistics statistics) {
         read();

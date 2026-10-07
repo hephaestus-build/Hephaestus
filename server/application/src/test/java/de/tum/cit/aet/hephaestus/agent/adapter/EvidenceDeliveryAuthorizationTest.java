@@ -48,8 +48,8 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
                         catalogs,
                         mock(
                                 CitedSourceAccess.class,
-                                call -> call.getMethod().getName().equals("permits")
-                                        ? true
+                                call -> call.getMethod().getName().equals("checks")
+                                        ? (CitedSourceAccess.Checks) citation -> true
                                         : Mockito.RETURNS_DEFAULTS.answer(call)))
                 .permits(
                         7L,
@@ -77,8 +77,8 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
                                 catalogs,
                                 mock(
                                         CitedSourceAccess.class,
-                                        call -> call.getMethod().getName().equals("permits")
-                                                ? true
+                                        call -> call.getMethod().getName().equals("checks")
+                                                ? (CitedSourceAccess.Checks) citation -> true
                                                 : Mockito.RETURNS_DEFAULTS.answer(call)))
                         .permits(
                                 7L,
@@ -97,8 +97,8 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
                 catalogs,
                 mock(
                         CitedSourceAccess.class,
-                        call -> call.getMethod().getName().equals("permits")
-                                ? true
+                        call -> call.getMethod().getName().equals("checks")
+                                ? (CitedSourceAccess.Checks) citation -> true
                                 : Mockito.RETURNS_DEFAULTS.answer(call)));
         UUID malformedJobId = UUID.randomUUID();
         when(jobs.findEvidenceContractVersion(malformedJobId, 7L)).thenReturn(Optional.of("1.3.0"));
@@ -136,8 +136,8 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
                 catalogs,
                 mock(
                         CitedSourceAccess.class,
-                        call -> call.getMethod().getName().equals("permits")
-                                ? true
+                        call -> call.getMethod().getName().equals("checks")
+                                ? (CitedSourceAccess.Checks) citation -> true
                                 : Mockito.RETURNS_DEFAULTS.answer(call)));
 
         Observation permittedSource = observation("scm.pull-request.diff");
@@ -197,8 +197,8 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
                                 catalogs,
                                 mock(
                                         CitedSourceAccess.class,
-                                        call -> call.getMethod().getName().equals("permits")
-                                                ? true
+                                        call -> call.getMethod().getName().equals("checks")
+                                                ? (CitedSourceAccess.Checks) citation -> true
                                                 : Mockito.RETURNS_DEFAULTS.answer(call)))
                         .permitsAll(7L, List.of(transientObservation), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .isEmpty();
@@ -219,8 +219,8 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
                 catalogs,
                 mock(
                         CitedSourceAccess.class,
-                        call -> call.getMethod().getName().equals("permits")
-                                ? true
+                        call -> call.getMethod().getName().equals("checks")
+                                ? (CitedSourceAccess.Checks) citation -> true
                                 : Mockito.RETURNS_DEFAULTS.answer(call)));
         assertThat(authorization.permitsAll(7L, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .containsExactly(observation.getId());

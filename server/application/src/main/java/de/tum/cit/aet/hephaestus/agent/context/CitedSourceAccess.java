@@ -8,14 +8,18 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.io.BufferedReader;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.StreamReadFeature;
@@ -174,86 +178,146 @@ public class CitedSourceAccess {
     }
 
     public boolean permits(long workspace, JsonNode citation, SourceUsePurpose purpose) {
-        String artifact = citation.path("artifactPath").asString("");
-        if (artifact.startsWith("inputs/history/") || artifact.equals("context/project_inventory.json")) return false;
-        JsonNode reference = citation.path("sourceReference");
-        String path = citation.path("artifactPath").asString("");
-        if (reference.isMissingNode()) {
-            return !path.equals("context/document.md")
-                    && !path.equals("context/document.json")
-                    && !path.equals("context/conversation_thread.json")
-                    && !path.startsWith("context/chat/")
-                    && !path.startsWith("context/docs/")
-                    && !path.startsWith("context/people/")
-                    && !path.startsWith("context/scm/")
-                    && !path.startsWith("repos/");
+        return checks(workspace, purpose).permits(citation);
+    }
+
+    /**
+     * Citations checked against one workspace and purpose, each answered as {@link #permits} answers it. A record
+     * cited again takes the answer it got the first time, and the workspace's permitted repositories are read once,
+     * so checking every observation of a workspace costs one owner check per distinct source rather than per
+     * citation. Built for one read: a source that changes while it is in use is not seen until the next one.
+     */
+    public Checks checks(long workspace, SourceUsePurpose purpose) {
+        return new RecordChecks(workspace, purpose);
+    }
+
+    /** Citations checked for one read; see {@link #checks}. Not thread-safe. */
+    @FunctionalInterface
+    public interface Checks {
+        boolean permits(JsonNode citation);
+    }
+
+    private final class RecordChecks implements Checks {
+        private final long workspace;
+        private final SourceUsePurpose purpose;
+        private final Map<String, Boolean> recordAnswers = new HashMap<>();
+        private final Map<Long, Boolean> personAnswers = new HashMap<>();
+        private final Map<Long, Boolean> aiAnswers = new HashMap<>();
+        private @Nullable List<Repository> permittedRepositories;
+
+        private RecordChecks(long workspace, SourceUsePurpose purpose) {
+            this.workspace = workspace;
+            this.purpose = purpose;
         }
-        JsonNode records = reference.path("records");
-        if (!records.isArray() || records.isEmpty()) return false;
-        try {
+
+        @Override
+        public boolean permits(JsonNode citation) {
+            String artifact = citation.path("artifactPath").asString("");
+            if (artifact.startsWith("inputs/history/") || artifact.equals("context/project_inventory.json"))
+                return false;
+            JsonNode reference = citation.path("sourceReference");
+            String path = citation.path("artifactPath").asString("");
+            if (reference.isMissingNode()) {
+                return !path.equals("context/document.md")
+                        && !path.equals("context/document.json")
+                        && !path.equals("context/conversation_thread.json")
+                        && !path.startsWith("context/chat/")
+                        && !path.startsWith("context/docs/")
+                        && !path.startsWith("context/people/")
+                        && !path.startsWith("context/scm/")
+                        && !path.startsWith("repos/");
+            }
+            JsonNode records = reference.path("records");
+            if (!records.isArray() || records.isEmpty()) return false;
             for (JsonNode record : records) {
-                if (record.has("person")
-                        && (!preferences
-                                        .forDeveloper(
-                                                workspace, record.path("person").asLong())
-                                        .permitsAi()
-                                || memberships
-                                        .findByWorkspace_IdAndUser_Id(
-                                                workspace, record.path("person").asLong())
-                                        .map(member -> member.isHidden())
-                                        .orElse(true))) return false;
-                boolean permitted =
-                        switch (record.path("type").asString("")) {
-                            case "person" -> true;
-                            case "chat" ->
-                                conversations.isMessageReadable(
-                                        workspace,
-                                        record.path("channel").asString(),
-                                        record.path("message").asString());
-                            case "document" ->
-                                documents
-                                        .documentById(
-                                                workspace, record.path("id").asLong(-1))
-                                        .filter(doc -> !doc.deleted() && doc.bodyMarkdown() != null)
-                                        .isPresent();
-                            case "docs" ->
-                                documents
-                                        .documentsByReference(
-                                                workspace,
-                                                List.of(record.path("id").asString()))
-                                        .stream()
-                                        .anyMatch(doc -> !doc.deleted()
-                                                && doc.bodyMarkdown() != null
-                                                && record.path("id").asString().equals(doc.sourceId())
-                                                && doc.slug()
-                                                        .equals(record.path("slug")
-                                                                .asString())
-                                                && doc.collectionSlug()
-                                                        .equals(record.path("collection")
-                                                                .asString()));
-                            case "repository" ->
-                                repositories.permittedRepositories(workspace).stream()
-                                        .anyMatch(repo -> repo.getId()
-                                                == record.path("id").asLong(-1));
-                            case "observation", "feedback" ->
-                                preferences
-                                                .forDeveloper(
-                                                        workspace,
-                                                        record.path("person").asLong())
-                                                .permitsAi()
-                                        && history.permitsHistoryRecord(
-                                                workspace,
-                                                record.path("type").asString(),
-                                                UUID.fromString(
-                                                        record.path("id").asString()),
-                                                purpose);
-                            default -> false;
-                        };
-                if (!permitted) return false;
+                // A record reads the same wherever it is cited, so its answer is the same too.
+                String key = record.toString();
+                Boolean answer = recordAnswers.get(key);
+                if (answer == null) {
+                    answer = permitsRecord(record);
+                    recordAnswers.put(key, answer);
+                }
+                if (!answer) return false;
             }
             return true;
-        } catch (IllegalArgumentException exception) {
-            return false;
+        }
+
+        /** One record's own check; a record that does not parse is not permitted, nor is the citation naming it. */
+        private boolean permitsRecord(JsonNode record) {
+            try {
+                if (record.has("person") && !permitsPerson(record.path("person").asLong())) return false;
+                return switch (record.path("type").asString("")) {
+                    case "person" -> true;
+                    case "chat" ->
+                        conversations.isMessageReadable(
+                                workspace,
+                                record.path("channel").asString(),
+                                record.path("message").asString());
+                    case "document" ->
+                        documents
+                                .documentById(workspace, record.path("id").asLong(-1))
+                                .filter(doc -> !doc.deleted() && doc.bodyMarkdown() != null)
+                                .isPresent();
+                    case "docs" ->
+                        documents
+                                .documentsByReference(
+                                        workspace, List.of(record.path("id").asString()))
+                                .stream()
+                                .anyMatch(doc -> !doc.deleted()
+                                        && doc.bodyMarkdown() != null
+                                        && record.path("id").asString().equals(doc.sourceId())
+                                        && doc.slug().equals(record.path("slug").asString())
+                                        && doc.collectionSlug()
+                                                .equals(record.path("collection")
+                                                        .asString()));
+                    case "repository" ->
+                        permittedRepositories().stream()
+                                .anyMatch(repo ->
+                                        repo.getId() == record.path("id").asLong(-1));
+                    case "observation", "feedback" ->
+                        permitsAi(record.path("person").asLong())
+                                && history.permitsHistoryRecord(
+                                        workspace,
+                                        record.path("type").asString(),
+                                        UUID.fromString(record.path("id").asString()),
+                                        purpose);
+                    default -> false;
+                };
+            } catch (IllegalArgumentException exception) {
+                return false;
+            }
+        }
+
+        /** Whether the person a record names still lets AI read about them and is a visible member. */
+        private boolean permitsPerson(long person) {
+            Boolean answer = personAnswers.get(person);
+            if (answer == null) {
+                answer = permitsAi(person)
+                        && !memberships
+                                .findByWorkspace_IdAndUser_Id(workspace, person)
+                                .map(member -> member.isHidden())
+                                .orElse(true);
+                personAnswers.put(person, answer);
+            }
+            return answer;
+        }
+
+        private boolean permitsAi(long person) {
+            Boolean answer = aiAnswers.get(person);
+            if (answer == null) {
+                answer = preferences.forDeveloper(workspace, person).permitsAi();
+                aiAnswers.put(person, answer);
+            }
+            return answer;
+        }
+
+        private List<Repository> permittedRepositories() {
+            List<Repository> permitted = permittedRepositories;
+            if (permitted == null) {
+                permitted = repositories.permittedRepositories(workspace);
+                permittedRepositories = permitted;
+            }
+            return permitted;
         }
     }
 

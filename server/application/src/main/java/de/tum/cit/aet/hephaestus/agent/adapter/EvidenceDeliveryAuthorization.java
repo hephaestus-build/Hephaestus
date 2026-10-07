@@ -50,7 +50,11 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
         }
         return jobRepository
                 .findEvidenceContractVersion(jobId, workspaceId)
-                .map(contractVersion -> permits(workspaceId, contractVersion, citations, requestedPurpose))
+                .map(contractVersion -> permits(
+                        contractVersion,
+                        citations,
+                        requestedPurpose,
+                        citedSourceAccess.checks(workspaceId, requestedPurpose)))
                 .orElse(false);
     }
 
@@ -95,6 +99,8 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
                 contractVersions.put(row.getId(), row);
             }
         }
+        // One set of source checks for the whole batch: observations citing the same source share its answer.
+        CitedSourceAccess.Checks sources = citedSourceAccess.checks(workspaceId, requestedPurpose);
         Set<UUID> permitted = new HashSet<>();
         for (Citable entry : citable) {
             var row = contractVersions.get(entry.jobId());
@@ -102,7 +108,7 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
             if (newDelivery && !CitationVerification.isVerified(entry.jobId(), row.getAttempt(), entry.citations())) {
                 continue;
             }
-            if (permits(workspaceId, row.getContractVersion(), entry.citations(), requestedPurpose)) {
+            if (permits(row.getContractVersion(), entry.citations(), requestedPurpose, sources)) {
                 permitted.add(entry.observationId());
             }
         }
@@ -121,7 +127,10 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
     }
 
     private boolean permits(
-            long workspaceId, String contractVersion, JsonNode citations, SourceUsePurpose requestedPurpose) {
+            String contractVersion,
+            JsonNode citations,
+            SourceUsePurpose requestedPurpose,
+            CitedSourceAccess.Checks sources) {
         try {
             SourceContractVersion version = new SourceContractVersion(contractVersion);
             for (JsonNode citation : citations) {
@@ -129,7 +138,7 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
                 if (!sourceKind.isString()
                         || !sourceCatalogs.isSourceUsePermitted(
                                 version, new SourceKind(sourceKind.asString()), requestedPurpose)
-                        || !citedSourceAccess.permits(workspaceId, citation, requestedPurpose)) {
+                        || !sources.permits(citation)) {
                     return false;
                 }
             }
