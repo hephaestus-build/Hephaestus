@@ -426,9 +426,11 @@ public class CommitAuthorEnrichmentService {
 
         int retryAttempt = 0;
         while (retryAttempt <= MAX_RETRY_ATTEMPTS) {
+            boolean pendingPermit = false;
             try {
                 // Acquire circuit breaker permission
                 graphQlClientProvider.acquirePermission();
+                pendingPermit = true;
 
                 // Execute with Mono.defer() for transport retry coverage
                 var client = graphQlClientProvider.forScope(scopeId);
@@ -447,6 +449,8 @@ public class CommitAuthorEnrichmentService {
 
                 // Classify GraphQL errors
                 if (response == null || !response.isValid()) {
+                    pendingPermit = false;
+                    graphQlClientProvider.recordFailure(new IllegalStateException("Invalid GraphQL response"));
                     ClassificationResult classification = graphQlSyncCoordinator.classifyGraphQlErrors(response);
                     if (classification != null) {
                         if (graphQlSyncCoordinator.handleGraphQlClassification(new GraphQlClassificationContext(
@@ -476,13 +480,16 @@ public class CommitAuthorEnrichmentService {
 
                 // Track rate limit
                 graphQlClientProvider.trackRateLimit(scopeId, response);
+                pendingPermit = false;
                 graphQlClientProvider.recordSuccess();
 
                 // Extract results from aliased fields
                 extractLoginsFromResponse(response, batch, shaToEmail, emailToLogin, usersToUpsert);
                 break; // Success — exit retry loop
             } catch (Exception e) {
-                graphQlClientProvider.recordFailure(e);
+                if (pendingPermit) {
+                    graphQlClientProvider.recordFailure(e);
+                }
 
                 ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
                 if (graphQlSyncCoordinator.handleGraphQlClassification(new GraphQlClassificationContext(
