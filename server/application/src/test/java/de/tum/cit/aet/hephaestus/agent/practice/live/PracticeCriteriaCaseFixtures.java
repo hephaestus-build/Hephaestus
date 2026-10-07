@@ -56,6 +56,16 @@ final class PracticeCriteriaCaseFixtures {
         return text.isEmpty() || text.equals("[]") || text.equals("{}") ? "EMPTY" : "NON_EMPTY";
     }
 
+    /** Where a {@code repo/} key of a case lives in the checkout; a base file can only be repository content. */
+    private static Path repositoryFile(Path workspace, String key) throws IOException {
+        if (!key.startsWith("repo/") || key.contains("..")) {
+            throw new IllegalArgumentException("A base file must be a repo/ path: " + key);
+        }
+        Path file = workspace.resolve(SandboxLayout.REPO_MOUNT_RELATIVE + key.substring("repo/".length()));
+        Files.createDirectories(file.getParent());
+        return file;
+    }
+
     static void stage(Path workspace, JsonNode scenario) throws IOException, InterruptedException {
         Path repo = workspace.resolve(SandboxLayout.REPO_MOUNT_RELATIVE);
         Files.deleteIfExists(repo);
@@ -69,9 +79,22 @@ final class PracticeCriteriaCaseFixtures {
         fixtureCommand(workspace, "git", "-C", repo.toString(), "config", "user.name", "Example Developer");
         fixtureCommand(workspace, "git", "-C", repo.toString(), "config", "user.email", "developer@example.org");
         fixtureCommand(workspace, "git", "-C", repo.toString(), "config", "commit.gpgsign", "false");
+        // A case may start from earlier work: its base files are the base commit, and its files are the whole tree
+        // at head, so a base file that the files leave out is removed by the change.
+        JsonNode baseFiles = scenario.path("baseFiles");
+        for (var entry : baseFiles.properties()) {
+            Files.writeString(
+                    repositoryFile(workspace, entry.getKey()), entry.getValue().asString());
+        }
+        fixtureCommand(workspace, "git", "-C", repo.toString(), "add", "--all");
         fixtureCommand(workspace, "git", "-C", repo.toString(), "commit", "--allow-empty", "-m", "Start the fixture");
         String base = fixtureCommand(workspace, "git", "-C", repo.toString(), "rev-parse", "HEAD")
                 .trim();
+        for (var entry : baseFiles.properties()) {
+            if (!scenario.path("files").has(entry.getKey())) {
+                Files.delete(repositoryFile(workspace, entry.getKey()));
+            }
+        }
         var manifest = MAPPER.createObjectNode();
         boolean issue = scenario.path("workType").asString().equals("issue");
         String coreKind = issue ? "scm.issue.core" : "scm.pull-request.core";

@@ -516,7 +516,9 @@
 	},
 	{
 		"id": "issue-link-in-body-without-commit-capture",
-		"omit": ["context/commits.json"],
+		"omit": [
+			"context/commits.json"
+		],
 		"expected": {
 			"links-the-change-to-its-issue": "MET"
 		},
@@ -561,7 +563,9 @@
 	},
 	{
 		"id": "resolved-review-request-without-commit-capture",
-		"omit": ["context/commits.json"],
+		"omit": [
+			"context/commits.json"
+		],
 		"expected": {
 			"engaging-with-inline-review-comments": "MET"
 		},
@@ -901,6 +905,70 @@
 			"repo/Sources/ErrandList.swift": "import SwiftUI\n\nstruct Errand: Identifiable {\n    let id = UUID()\n    let title: String\n    let itemCount: Int\n}\n\nstruct ErrandList: View {\n    let errands: [Errand]\n\n    var body: some View {\n        if errands.isEmpty {\n            ContentUnavailableView(\"No errands\", systemImage: \"checklist\", description: Text(\"Add an errand to plan your trip.\"))\n        } else {\n            List(errands) { errand in\n                LabeledContent(errand.title, value: \"\\(errand.itemCount) items\")\n            }\n        }\n    }\n}\n\n#Preview {\n    ErrandList(errands: [\n        Errand(title: \"Groceries\", itemCount: 12),\n        Errand(title: \"Pharmacy\", itemCount: 1)\n    ])\n}\n"
 		},
 		"reason": "Representative values cover the filled list, but the view's own empty state is never shown; filling one state does not cover the other.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "persisted-feature-removal-without-reason",
+		"expected": {
+			"records-significant-decisions-with-rationale": "NOT_MET"
+		},
+		"baseFiles": {
+			"repo/App/ContentView.swift": "import SwiftUI\n\nstruct ContentView: View {\n    @AppStorage(\"checklistComplete\") private var checklistComplete = false\n\n    var body: some View {\n        VStack {\n            Text(\"Trip planner\")\n            Toggle(\"Checklist complete\", isOn: $checklistComplete)\n        }\n    }\n}\n"
+		},
+		"files": {
+			"context/description.md": "Remove the saved checklist flag and its toggle.\n",
+			"context/metadata.json": "{\"title\":\"Retire the saved checklist\"}",
+			"repo/App/ContentView.swift": "import SwiftUI\n\nstruct ContentView: View {\n    var body: some View {\n        Text(\"Trip planner\")\n    }\n}\n"
+		},
+		"reason": "The changed hunk removes a feature with persisted state without explaining why it is retired; removing its binding does not establish that stored values are erased.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "persisted-feature-removal-with-retirement-reason",
+		"expected": {
+			"records-significant-decisions-with-rationale": "MET"
+		},
+		"baseFiles": {
+			"repo/App/ContentView.swift": "import SwiftUI\n\nstruct ContentView: View {\n    @AppStorage(\"checklistComplete\") private var checklistComplete = false\n\n    var body: some View {\n        VStack {\n            Text(\"Trip planner\")\n            Toggle(\"Checklist complete\", isOn: $checklistComplete)\n        }\n    }\n}\n"
+		},
+		"files": {
+			"context/description.md": "Remove the saved checklist flag and its toggle. Trips now use a per-item packing list, so a second overall completion flag can disagree with that list; retire the redundant checklist feature.\n",
+			"context/metadata.json": "{\"title\":\"Retire the saved checklist\"}",
+			"repo/App/ContentView.swift": "import SwiftUI\n\nstruct ContentView: View {\n    var body: some View {\n        Text(\"Trip planner\")\n    }\n}\n"
+		},
+		"reason": "The description explains why the persisted checklist feature is retired; it does not claim that removing the binding erases its values.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "persisted-feature-removal-with-declared-deletion",
+		"expected": {
+			"records-significant-decisions-with-rationale": "MET"
+		},
+		"baseFiles": {
+			"repo/App/ContentView.swift": "import SwiftUI\n\nstruct ContentView: View {\n    @AppStorage(\"checklistComplete\") private var checklistComplete = false\n\n    var body: some View {\n        VStack {\n            Text(\"Trip planner\")\n            Toggle(\"Checklist complete\", isOn: $checklistComplete)\n        }\n    }\n}\n"
+		},
+		"files": {
+			"context/description.md": "Remove the saved checklist flag and its toggle because the per-item packing list replaces the redundant overall flag. The cleanup task removes the old checklistComplete value to avoid retaining an unused preference.\n",
+			"context/metadata.json": "{\"title\":\"Retire the saved checklist\"}",
+			"repo/App/ContentView.swift": "import SwiftUI\n\nstruct ContentView: View {\n    var body: some View {\n        Text(\"Trip planner\")\n            .task {\n                UserDefaults.standard.removeObject(forKey: \"checklistComplete\")\n            }\n    }\n}\n"
+		},
+		"reason": "The retirement and cleanup are explained. The code declares a deletion path for the exact key, not proof that it has run on a device.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "navigation-only-removal",
+		"expected": {
+			"records-significant-decisions-with-rationale": "NOT_APPLICABLE"
+		},
+		"baseFiles": {
+			"repo/App/ContentView.swift": "import SwiftUI\n\nstruct ContentView: View {\n    var body: some View {\n        TabView {\n            Text(\"Trip planner\")\n                .tabItem { Label(\"Plan\", systemImage: \"map\") }\n            Text(\"About the trip planner\")\n                .tabItem { Label(\"About\", systemImage: \"info.circle\") }\n        }\n    }\n}\n"
+		},
+		"files": {
+			"context/description.md": "Remove the About tab.\n",
+			"context/metadata.json": "{\"title\":\"Remove the About tab\"}",
+			"repo/App/ContentView.swift": "import SwiftUI\n\nstruct ContentView: View {\n    var body: some View {\n        Text(\"Trip planner\")\n    }\n}\n"
+		},
+		"reason": "The changed hunk removes static navigation only, with no persisted feature or other listed significant decision.",
 		"workType": "pull_request"
 	}
 ]
