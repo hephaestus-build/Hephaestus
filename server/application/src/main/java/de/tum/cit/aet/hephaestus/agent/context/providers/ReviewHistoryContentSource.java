@@ -30,6 +30,8 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -272,6 +274,68 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                         .currentness()
                         .get(id)
                 == ReviewClaimCurrentness.CURRENT;
+    }
+
+    /**
+     * {@link #permitsHistoryRecord} for several records of one type at once: the ids it would permit one by one.
+     * Each record is decided by its own row and the observations it is bound to, never by another record of the
+     * batch, so the batch answers each one as it is answered alone.
+     */
+    public Set<UUID> permittedHistoryRecords(
+            long workspaceId, String type, Collection<UUID> ids, SourceUsePurpose purpose) {
+        if (ids.isEmpty()) return Set.of();
+        if (type.equals("observation")) {
+            return authorizeObservations(
+                            workspaceId,
+                            observationRepository.findByIdInAndWorkspaceId(ids, workspaceId),
+                            null,
+                            purpose)
+                    .stream()
+                    .map(Observation::getId)
+                    .collect(Collectors.toSet());
+        }
+        if (!type.equals("feedback")) return Set.of();
+        List<Feedback> rows = feedbackRepository.findPersonHistoryRecords(ids, workspaceId);
+        Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(
+                workspaceId, rows.stream().map(Feedback::getId).toList());
+        List<Feedback> kept =
+                rows.stream().filter(row -> !withdrawn.contains(row.getId())).toList();
+        Map<UUID, ReviewClaimCurrentness> currentness =
+                shownFeedback(workspaceId, kept, List.of(), purpose).currentness();
+        return kept.stream()
+                .map(Feedback::getId)
+                .filter(id -> currentness.get(id) == ReviewClaimCurrentness.CURRENT)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * The citations whose checks decide each record's own check: an observation's own, and those of the
+     * observations a feedback row is bound to. A record outside the workspace has none.
+     */
+    public Map<UUID, List<JsonNode>> historyRecordCitations(long workspaceId, String type, Collection<UUID> ids) {
+        if (ids.isEmpty()) return Map.of();
+        Map<UUID, List<JsonNode>> citations = new HashMap<>();
+        if (type.equals("observation")) {
+            for (Observation row : observationRepository.findByIdInAndWorkspaceId(ids, workspaceId)) {
+                citations.put(row.getId(), citationsOf(row));
+            }
+        } else if (type.equals("feedback")) {
+            for (FeedbackObservationVisibility binding :
+                    feedbackObservationRepository.findForVisibility(workspaceId, ids)) {
+                citations
+                        .computeIfAbsent(binding.getFeedbackId(), ignored -> new ArrayList<>())
+                        .addAll(citationsOf(binding.getObservation()));
+            }
+        }
+        return citations;
+    }
+
+    private static List<JsonNode> citationsOf(Observation observation) {
+        JsonNode evidence = observation.getEvidence();
+        if (evidence == null) return List.of();
+        List<JsonNode> citations = new ArrayList<>();
+        evidence.path("citations").forEach(citations::add);
+        return citations;
     }
 
     private List<Observation> visibleObservations(long workspaceId, Long subjectUserId, @Nullable UUID excludedJobId) {

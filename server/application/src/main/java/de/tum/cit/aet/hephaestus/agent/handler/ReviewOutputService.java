@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.ReviewResultsChangedEvent;
 import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import java.io.BufferedReader;
 import java.io.Reader;
@@ -49,6 +50,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -77,6 +79,7 @@ public class ReviewOutputService {
     private final AutomatedReviewFence fence;
     private final LinkedIssueRepairAdmissionService repairAdmission;
     private final PracticeSignalOptions signalOptions;
+    private final ApplicationEventPublisher events;
 
     public ReviewOutputService(
             PracticeRevisionRepository practiceRevisionRepository,
@@ -89,7 +92,8 @@ public class ReviewOutputService {
             AutomatedReviewFence fence,
             LinkedIssueRepairAdmissionService repairAdmission,
             PracticeSignalOptions signalOptions,
-            CitedSourceAccess citedSourceAccess) {
+            CitedSourceAccess citedSourceAccess,
+            ApplicationEventPublisher events) {
         this.practiceRevisionRepository = practiceRevisionRepository;
         this.observationRepository = observationRepository;
         this.targetResolver = targetResolver;
@@ -101,6 +105,7 @@ public class ReviewOutputService {
         this.repairAdmission = repairAdmission;
         this.signalOptions = signalOptions;
         this.citedSourceAccess = citedSourceAccess;
+        this.events = events;
     }
 
     /** Metadata key for the run's immutable observation origin. */
@@ -432,6 +437,10 @@ public class ReviewOutputService {
                     practiceId,
                     Objects.requireNonNull(previousNegatives.get(practiceId)),
                     observedAt);
+        }
+
+        if (inserted > 0 || !replacedPractices.isEmpty()) {
+            events.publishEvent(new ReviewResultsChangedEvent(workspaceId, false));
         }
 
         log.info(

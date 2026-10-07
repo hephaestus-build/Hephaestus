@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
+import de.tum.cit.aet.hephaestus.workspace.events.WorkspacePrivacyChangedEvent;
 import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermissionsException;
 import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
 import jakarta.persistence.EntityManager;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -55,6 +57,7 @@ public class WorkspaceMembershipService {
     private final WorkspaceAccessService accessService;
     private final HiddenFormerMemberRepository hiddenFormerMemberRepository;
     private final WorkspaceActorSelector actorSelector;
+    private final ApplicationEventPublisher events;
 
     public WorkspaceMembershipService(
             WorkspaceMembershipRepository workspaceMembershipRepository,
@@ -63,7 +66,8 @@ public class WorkspaceMembershipService {
             ConfigAuditPort configAudit,
             WorkspaceAccessService accessService,
             HiddenFormerMemberRepository hiddenFormerMemberRepository,
-            WorkspaceActorSelector actorSelector) {
+            WorkspaceActorSelector actorSelector,
+            ApplicationEventPublisher events) {
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceRepository = workspaceRepository;
         this.entityManager = entityManager;
@@ -71,6 +75,7 @@ public class WorkspaceMembershipService {
         this.accessService = accessService;
         this.hiddenFormerMemberRepository = hiddenFormerMemberRepository;
         this.actorSelector = actorSelector;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -404,6 +409,7 @@ public class WorkspaceMembershipService {
         var before = new WorkspaceAuditSnapshots.RoleSnapshot(
                 membership.getRole() == null ? null : membership.getRole().name(), membership.isHidden());
         membership.setHidden(hidden);
+        events.publishEvent(new WorkspacePrivacyChangedEvent(workspaceId));
         configAudit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_ROLE,
                 userId,

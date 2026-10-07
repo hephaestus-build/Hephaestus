@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 public interface EvidenceAuthorization {
     Set<UUID> permitsForNewDelivery(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose);
@@ -22,4 +23,12 @@ public interface EvidenceAuthorization {
      * @return the permitted observation ids; never null, possibly empty
      */
     Set<UUID> permitsAll(long workspaceId, Collection<Observation> observations, SourceUsePurpose purpose);
+
+    /**
+     * Runs {@code read} as one read of the workspace for {@code purpose}: every authorization inside it shares
+     * its source checks, so a source cited by several of the read's queries is checked once. Changes no answer.
+     */
+    default <T> T asOneRead(long workspaceId, SourceUsePurpose purpose, Supplier<T> read) {
+        return read.get();
+    }
 }

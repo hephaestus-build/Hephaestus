@@ -9,12 +9,14 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.events.WorkspacePrivacyChangedEvent;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
 import java.time.Clock;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +41,7 @@ class WorkspaceOnboardingService {
     private final WorkspaceOnboardingLinks links;
     private final WorkspaceAiAvailability availability;
     private final ConfigAuditPort audit;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -118,6 +121,8 @@ class WorkspaceOnboardingService {
         });
         row.setAiChoice(choice);
         row.setUpdatedAt(clock.instant());
+        // An AI choice holds in every workspace of the account.
+        events.publishEvent(new WorkspacePrivacyChangedEvent(null));
         return choices.save(row);
     }
 

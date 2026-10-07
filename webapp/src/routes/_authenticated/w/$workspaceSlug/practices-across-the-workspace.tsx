@@ -27,6 +27,7 @@ import {
 } from "@/components/practice-profile/practice-profile-search";
 import {
 	ACROSS_THE_WORKSPACE,
+	ACROSS_WORKSPACE_STALE_MS,
 	DEFAULT_WINDOW,
 	WINDOW_VALUES,
 } from "@/components/practices-across-the-workspace/across-workspace-copy";
@@ -64,16 +65,19 @@ function PracticesAcrossTheWorkspace() {
 	const navigate = useNavigate();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const enabled = featureState.practicesEnabled === true;
-	// The overview reads no window, so a new window does not refetch it.
+	// The overview reads no window, so a new window does not refetch it. Both reads start together, and
+	// neither refetches on a refocus while the server would answer with the counts it already sent.
 	const query = useQuery({
 		...getPracticesAcrossWorkspaceOptions({ path: { workspaceSlug } }),
 		enabled,
+		staleTime: ACROSS_WORKSPACE_STALE_MS,
 	});
 	// One request per window: the server checks each window against its privacy rule on its own.
 	const tilesQuery = useQuery({
 		...getPracticesAcrossWorkspaceTilesOptions({ path: { workspaceSlug }, query: { window } }),
 		enabled,
 		placeholderData: keepPreviousData,
+		staleTime: ACROSS_WORKSPACE_STALE_MS,
 	});
 	const stack = parseDetailStack(detail, LEVEL_KINDS);
 	const stackControls = useDetailStack(stack);

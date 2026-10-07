@@ -26,16 +26,21 @@ import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.mockito.Mockito;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -379,6 +384,100 @@ class CitedSourceAccessTest extends BaseUnitTest {
         Mockito.verify(repositories, Mockito.times(1)).permittedRepositories(1L);
         Mockito.verify(preferences, Mockito.times(1)).forDeveloper(1L, 42L);
         Mockito.verify(memberships, Mockito.times(1)).findByWorkspace_IdAndUser_Id(1L, 42L);
+    }
+
+    /**
+     * The golden comparison for history: a record of a developer's history is decided by authorizing the
+     * observation it names, whose own citations may name older history in turn. Checked in batches, one per link
+     * of the longest chain, every citation gets the answer it gets alone, where each record is checked on its own.
+     */
+    @Test
+    void shouldAnswerHistoryCitationsAsAloneWhenOneReadChecksTheirChainsInBatches() {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
+        var access = access(files);
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of(TestEntities.repository(2L, "acme/api")));
+        when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.of(new WorkspaceMembership()));
+        UUID newest = UUID.randomUUID();
+        UUID middle = UUID.randomUUID();
+        UUID oldest = UUID.randomUUID();
+        UUID refused = UUID.randomUUID();
+        UUID onRefused = UUID.randomUUID();
+        UUID onHiddenRepository = UUID.randomUUID();
+        // newest cites middle, which cites oldest; onRefused cites a record its owner refuses.
+        Map<UUID, List<ObjectNode>> cites = Map.of(
+                newest, List.of(history(middle)),
+                middle, List.of(history(oldest), repository(2L)),
+                oldest, List.of(repository(2L)),
+                refused, List.of(repository(2L)),
+                onRefused, List.of(history(refused)),
+                onHiddenRepository, List.of(repository(3L)));
+        // The history source as it works: a record is permitted when its owner keeps it and each citation of the
+        // observation it names is permitted, checked with whatever checks the read has running.
+        Predicate<UUID> permitted = id -> !id.equals(refused)
+                && cites.getOrDefault(id, List.of()).stream()
+                        .allMatch(citation -> access.checks(1L, purpose).permits(citation));
+        when(history.permitsHistoryRecord(
+                        Mockito.eq(1L), Mockito.eq("observation"), Mockito.any(), Mockito.eq(purpose)))
+                .thenAnswer(call -> permitted.test(call.getArgument(2)));
+        when(history.historyRecordCitations(Mockito.eq(1L), Mockito.eq("observation"), Mockito.any()))
+                .thenAnswer(call -> {
+                    Map<UUID, List<JsonNode>> found = new HashMap<>();
+                    for (UUID id : call.<Collection<UUID>>getArgument(2)) {
+                        if (cites.containsKey(id)) found.put(id, List.copyOf(cites.get(id)));
+                    }
+                    return found;
+                });
+        when(history.permittedHistoryRecords(
+                        Mockito.eq(1L), Mockito.eq("observation"), Mockito.any(), Mockito.eq(purpose)))
+                .thenAnswer(call -> {
+                    Collection<UUID> ids = call.getArgument(2);
+                    // The batch authorizes its observations together, as the evidence authorization does.
+                    var checks = access.checks(1L, purpose);
+                    checks.prepare(ids.stream()
+                            .flatMap(id -> cites.getOrDefault(id, List.of()).stream())
+                            .map(JsonNode.class::cast)
+                            .toList());
+                    return ids.stream().filter(permitted).collect(Collectors.toSet());
+                });
+        List<ObjectNode> citations = List.of(
+                history(newest),
+                history(middle),
+                history(onRefused),
+                history(refused),
+                history(onHiddenRepository),
+                citation(
+                        "context/people/42/observations.jsonl",
+                        "{\"records\":[{\"type\":\"observation\",\"person\":42,\"id\":\"" + newest
+                                + "\"},{\"type\":\"observation\",\"person\":42,\"id\":\"" + onRefused
+                                + "\"}]}"));
+        List<Boolean> alone = citations.stream()
+                .map(citation -> access.permits(1L, citation, purpose))
+                .toList();
+        Mockito.clearInvocations(history);
+
+        var checks = access.checks(1L, purpose);
+        checks.prepare(List.copyOf(citations));
+        List<Boolean> together = citations.stream().map(checks::permits).toList();
+
+        assertThat(together).isEqualTo(alone).containsExactly(true, true, false, false, false, false);
+        // Three links in the longest chain, three batches; no record is checked alone.
+        Mockito.verify(history, Mockito.times(3))
+                .permittedHistoryRecords(Mockito.eq(1L), Mockito.eq("observation"), Mockito.any(), Mockito.eq(purpose));
+        Mockito.verify(history, Mockito.never())
+                .permitsHistoryRecord(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    private ObjectNode history(UUID id) {
+        return citation(
+                "context/people/42/observations.jsonl",
+                "{\"records\":[{\"type\":\"observation\",\"person\":42,\"id\":\"" + id + "\"}]}");
+    }
+
+    private ObjectNode repository(long id) {
+        return citation("context/diff.patch", "{\"records\":[{\"type\":\"repository\",\"id\":" + id + "}]}");
     }
 
     private ObjectNode citation(String path, String reference) {

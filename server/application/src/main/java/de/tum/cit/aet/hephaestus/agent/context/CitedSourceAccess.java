@@ -15,10 +15,15 @@ import java.io.BufferedReader;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -188,14 +193,40 @@ public class CitedSourceAccess {
      * citation. Built for one read: a source that changes while it is in use is not seen until the next one.
      */
     public Checks checks(long workspace, SourceUsePurpose purpose) {
+        // A history record is checked by authorizing the observations it names, which checks their citations in
+        // turn: those nested checks join the read that asked, so a source is still checked once per read.
+        RecordChecks active = ACTIVE_CHECKS.get();
+        if (active != null && active.workspace == workspace && active.purpose == purpose) {
+            return active;
+        }
         return new RecordChecks(workspace, purpose);
+    }
+
+    /**
+     * Runs {@code read} with one set of {@link #checks} for the workspace and purpose: each check inside it, nested
+     * or not, takes its answer from the same read.
+     */
+    public <T> T asOneRead(long workspace, SourceUsePurpose purpose, Supplier<T> read) {
+        Checks checks = checks(workspace, purpose);
+        return checks instanceof RecordChecks shared ? shared.withThisRead(read) : read.get();
     }
 
     /** Citations checked for one read; see {@link #checks}. Not thread-safe. */
     @FunctionalInterface
     public interface Checks {
         boolean permits(JsonNode citation);
+
+        /**
+         * Checks every history record the citations name in one batch per kind, before they are asked one by one.
+         * Changes no answer, only how many statements the answers take.
+         */
+        default void prepare(Iterable<JsonNode> citations) {}
     }
+
+    private record HistoryRecord(String type, UUID id) {}
+
+    /** The read whose checks are running on this thread, for the history checks nested in it. */
+    private static final ThreadLocal<@Nullable RecordChecks> ACTIVE_CHECKS = new ThreadLocal<>();
 
     private final class RecordChecks implements Checks {
         private final long workspace;
@@ -203,6 +234,10 @@ public class CitedSourceAccess {
         private final Map<String, Boolean> recordAnswers = new HashMap<>();
         private final Map<Long, Boolean> personAnswers = new HashMap<>();
         private final Map<Long, Boolean> aiAnswers = new HashMap<>();
+        private final Map<String, Boolean> historyAnswers = new HashMap<>();
+        /** History records a batch of {@link #prepare} is checking right now. */
+        private final Set<String> inBatch = new HashSet<>();
+
         private @Nullable List<Repository> permittedRepositories;
 
         private RecordChecks(long workspace, SourceUsePurpose purpose) {
@@ -230,12 +265,13 @@ public class CitedSourceAccess {
             JsonNode records = reference.path("records");
             if (!records.isArray() || records.isEmpty()) return false;
             for (JsonNode record : records) {
-                // A record reads the same wherever it is cited, so its answer is the same too.
+                // A record reads the same wherever it is cited, so its answer is the same too. A history record's
+                // answer is kept by permitsHistory, which also knows the ones whose check is still running.
                 String key = record.toString();
                 Boolean answer = recordAnswers.get(key);
                 if (answer == null) {
                     answer = permitsRecord(record);
-                    recordAnswers.put(key, answer);
+                    if (!isHistory(record)) recordAnswers.put(key, answer);
                 }
                 if (!answer) return false;
             }
@@ -276,16 +312,139 @@ public class CitedSourceAccess {
                                         repo.getId() == record.path("id").asLong(-1));
                     case "observation", "feedback" ->
                         permitsAi(record.path("person").asLong())
-                                && history.permitsHistoryRecord(
-                                        workspace,
+                                && permitsHistory(
                                         record.path("type").asString(),
-                                        UUID.fromString(record.path("id").asString()),
-                                        purpose);
+                                        UUID.fromString(record.path("id").asString()));
                     default -> false;
                 };
             } catch (IllegalArgumentException exception) {
                 return false;
             }
+        }
+
+        /**
+         * Answers every history record the citations name, and every record those records' own checks name in turn,
+         * in as few batches as the longest such chain is long: first the records whose own citations name no
+         * unanswered record, then the ones that only waited on those, and so on. Each batch is checked exactly as
+         * one record alone is, so no answer changes, only how many statements the answers take.
+         */
+        @Override
+        public void prepare(Iterable<JsonNode> citations) {
+            Map<String, HistoryRecord> found = new HashMap<>();
+            Map<String, Set<String>> waitsOn = new LinkedHashMap<>();
+            Set<String> frontier = unansweredHistory(citations, found);
+            while (!frontier.isEmpty()) {
+                Set<String> next = new LinkedHashSet<>();
+                byType(frontier, found).forEach((type, ids) -> {
+                    Map<UUID, List<JsonNode>> cited = history.historyRecordCitations(workspace, type, ids);
+                    for (UUID id : ids) {
+                        Set<String> needed = unansweredHistory(cited.getOrDefault(id, List.of()), found);
+                        waitsOn.put(historyKey(type, id), needed);
+                        next.addAll(needed);
+                    }
+                });
+                next.removeAll(waitsOn.keySet());
+                frontier = next;
+            }
+            while (!waitsOn.isEmpty()) {
+                Set<String> ready = new LinkedHashSet<>();
+                waitsOn.forEach((key, needed) -> {
+                    if (needed.stream().allMatch(historyAnswers::containsKey)) ready.add(key);
+                });
+                // Only records that name each other leave none ready; checked together, each is asked one by one.
+                if (ready.isEmpty()) ready.addAll(waitsOn.keySet());
+                inBatch.addAll(ready);
+                try {
+                    byType(ready, found).forEach((type, ids) -> {
+                        Set<UUID> permitted =
+                                withThisRead(() -> history.permittedHistoryRecords(workspace, type, ids, purpose));
+                        for (UUID id : ids) {
+                            historyAnswers.putIfAbsent(historyKey(type, id), permitted.contains(id));
+                        }
+                    });
+                } finally {
+                    inBatch.removeAll(ready);
+                }
+                waitsOn.keySet().removeAll(ready);
+            }
+        }
+
+        /**
+         * The history records the citations name that a check would reach and that have no answer yet: the ones
+         * whose person passes, since a record whose person fails is refused before its history is asked.
+         */
+        private Set<String> unansweredHistory(Iterable<JsonNode> citations, Map<String, HistoryRecord> found) {
+            Set<String> keys = new LinkedHashSet<>();
+            for (JsonNode citation : citations) {
+                for (JsonNode record : citation.path("sourceReference").path("records")) {
+                    if (!isHistory(record)) continue;
+                    String type = record.path("type").asString("");
+                    UUID id;
+                    try {
+                        id = UUID.fromString(record.path("id").asString());
+                    } catch (IllegalArgumentException exception) {
+                        continue;
+                    }
+                    String key = historyKey(type, id);
+                    long person = record.path("person").asLong();
+                    if (historyAnswers.containsKey(key)
+                            || inBatch.contains(key)
+                            || (record.has("person") && !permitsPerson(person))
+                            || !permitsAi(person)) continue;
+                    found.putIfAbsent(key, new HistoryRecord(type, id));
+                    keys.add(key);
+                }
+            }
+            return keys;
+        }
+
+        private static Map<String, Set<UUID>> byType(Set<String> keys, Map<String, HistoryRecord> found) {
+            Map<String, Set<UUID>> byType = new LinkedHashMap<>();
+            for (String key : keys) {
+                HistoryRecord record = Objects.requireNonNull(found.get(key));
+                byType.computeIfAbsent(record.type(), ignored -> new LinkedHashSet<>())
+                        .add(record.id());
+            }
+            return byType;
+        }
+
+        /**
+         * One history record's own check, answered by {@link #prepare} where it ran. A record asked again while its
+         * own check is still running names itself through its history, and answers no.
+         */
+        private boolean permitsHistory(String type, UUID id) {
+            String key = historyKey(type, id);
+            Boolean answer = historyAnswers.get(key);
+            if (answer == null) {
+                historyAnswers.put(key, false);
+                answer = withThisRead(() -> history.permitsHistoryRecord(workspace, type, id, purpose));
+                historyAnswers.put(key, answer);
+            }
+            return answer;
+        }
+
+        /** Runs a history check with this read active, so the checks nested in it share this read's answers. */
+        private <T> T withThisRead(Supplier<T> check) {
+            RecordChecks previous = ACTIVE_CHECKS.get();
+            ACTIVE_CHECKS.set(this);
+            try {
+                return check.get();
+            } finally {
+                if (previous == null) {
+                    ACTIVE_CHECKS.remove();
+                } else {
+                    ACTIVE_CHECKS.set(previous);
+                }
+            }
+        }
+
+        private static boolean isHistory(JsonNode record) {
+            String type = record.path("type").asString("");
+            return type.equals("observation") || type.equals("feedback");
+        }
+
+        private static String historyKey(String type, UUID id) {
+            return type + ":" + id;
         }
 
         /** Whether the person a record names still lets AI read about them and is a visible member. */

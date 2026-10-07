@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -101,6 +102,12 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
         }
         // One set of source checks for the whole batch: observations citing the same source share its answer.
         CitedSourceAccess.Checks sources = citedSourceAccess.checks(workspaceId, requestedPurpose);
+        // And one batch per kind of history record the batch cites, rather than one check per record.
+        List<JsonNode> cited = new ArrayList<>();
+        for (Citable entry : citable) {
+            if (contractVersions.containsKey(entry.jobId())) entry.citations().forEach(cited::add);
+        }
+        sources.prepare(cited);
         Set<UUID> permitted = new HashSet<>();
         for (Citable entry : citable) {
             var row = contractVersions.get(entry.jobId());
@@ -113,6 +120,11 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
             }
         }
         return permitted;
+    }
+
+    @Override
+    public <T> T asOneRead(long workspaceId, SourceUsePurpose purpose, Supplier<T> read) {
+        return citedSourceAccess.asOneRead(workspaceId, purpose, read);
     }
 
     private record Citable(UUID observationId, UUID jobId, JsonNode citations) {}

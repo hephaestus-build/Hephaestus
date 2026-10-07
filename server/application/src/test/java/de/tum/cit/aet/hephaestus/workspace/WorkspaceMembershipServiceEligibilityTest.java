@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
@@ -16,6 +17,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.context.ApplicationEventPublisher;
 
 /** Who practice review can take as its subject: the one predicate coverage counts, selects and admits with. */
 class WorkspaceMembershipServiceEligibilityTest extends BaseUnitTest {
@@ -50,7 +52,14 @@ class WorkspaceMembershipServiceEligibilityTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         service = new WorkspaceMembershipService(
-                memberships, workspaces, entityManager, configAudit, accessService, hiddenFormerMembers, actorSelector);
+                memberships,
+                workspaces,
+                entityManager,
+                configAudit,
+                accessService,
+                hiddenFormerMembers,
+                actorSelector,
+                mock(ApplicationEventPublisher.class));
     }
 
     @Test

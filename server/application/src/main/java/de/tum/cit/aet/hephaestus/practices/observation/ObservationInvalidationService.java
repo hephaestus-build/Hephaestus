@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import java.time.Clock;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ public class ObservationInvalidationService {
     private final ObservationInvalidationRepository invalidationRepository;
     private final FeedbackRepository feedbackRepository;
     private final FeedbackDispatchRepository dispatchRepository;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     @Transactional
@@ -44,6 +46,7 @@ public class ObservationInvalidationService {
             active.orElseThrow(() ->
                             new ResponseStatusException(HttpStatus.CONFLICT, "This observation is not invalidated."))
                     .restore(accountId, reason.strip(), clock.instant());
+            events.publishEvent(new ReviewResultsChangedEvent(workspaceId, false));
             return;
         }
         if (active.isPresent()) {
@@ -53,5 +56,6 @@ public class ObservationInvalidationService {
                 new ObservationInvalidation(observation, accountId, reason.strip(), clock.instant()));
         feedbackRepository.suppressUndeliveredCiting(
                 workspaceId, observationId, FeedbackSuppressionReason.OBSERVATION_INVALIDATED.name());
+        events.publishEvent(new ReviewResultsChangedEvent(workspaceId, true));
     }
 }

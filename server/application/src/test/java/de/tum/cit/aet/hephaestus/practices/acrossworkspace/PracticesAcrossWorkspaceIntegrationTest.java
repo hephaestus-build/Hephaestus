@@ -29,13 +29,16 @@ import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
+import de.tum.cit.aet.hephaestus.practices.feedback.inapp.InAppFeedbackService;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
+import de.tum.cit.aet.hephaestus.practices.observation.ReviewResultsChangedEvent;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
@@ -46,8 +49,10 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamRepositorySettings;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamRepositorySettingsRepository;
 import jakarta.persistence.EntityManagerFactory;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -55,6 +60,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
@@ -63,9 +69,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * {@code GET /practices/workspace-overview} over a workspace this class seeds: the owner, the reader and twenty six
@@ -120,6 +129,24 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @Autowired
     private PullRequestRepository pullRequestRepository;
 
+    @Autowired
+    private PracticesAcrossWorkspaceCache cache;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+
+    @Autowired
+    private CurrentDeveloperLookup currentDeveloperLookup;
+
+    @Autowired
+    private InAppFeedbackService inAppFeedbackService;
+
+    @Autowired
+    private Clock clock;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     private Workspace workspace;
     private User reader;
     private PracticeGroup packagingGroup;
@@ -131,6 +158,8 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @BeforeEach
     void seedWorkspace() {
+        // Another test's workspace may have had this one's id.
+        cache.invalidateAll();
         User owner = persistUser("across-owner");
         workspace = createWorkspace("across-ws", "Across WS", "across-org", AccountType.ORG, owner);
         packagingGroup = group(workspace, "review-ready-work", "Packaging");
@@ -590,16 +619,162 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         }
     }
 
+    /**
+     * The golden comparison: the counts every reader shares, read off for each reader, show each reader what
+     * counting the whole workspace for that reader alone showed before the counts were shared. Covered are a
+     * counted reader, developers at each standing, a hidden member, a developer the page does not count, a caller
+     * who is no developer, and evidence that cites history, a person and a repository.
+     */
+    @Test
+    @DisplayName("every reader reads in every window what counting the workspace for them alone shows")
+    void shouldShowEveryReaderWhatCountingTheWorkspaceForThemAloneShows() {
+        User hidden = developer("across-dev-4");
+        jdbc.update(
+                "UPDATE workspace_membership SET hidden = true WHERE workspace_id = ? AND user_id = ?",
+                workspace.getId(),
+                hidden.getId());
+        User outsider = persistUser("across-outsider");
+        strength(packaging, outsider, NEWEST);
+        // Evidence that cites the developer's earlier observations and the developer.
+        // across-dev-4 is hidden, so a citation of their history or of them is refused.
+        for (String login : List.of("across-dev-4", "across-dev-5", "across-dev-6", "across-dev-7", "across-dev-8")) {
+            citingHistory(developer(login));
+        }
+        AgentJob run = persistPullRequestReview(workspace, nextNumber, NEWEST);
+        bind(
+                persistInAppFeedback(
+                        run,
+                        reader,
+                        1,
+                        FeedbackDeliveryState.DELIVERED,
+                        InAppFeedbackBody.render("Open", "Open.", "Fix."),
+                        NEWEST),
+                observe(craft, run, nextNumber++, reader, NOT_MET, Severity.MAJOR, NEWEST));
+        var reference = new PracticesAcrossWorkspaceReference(
+                practiceStandingService,
+                practiceGroupStandingService,
+                practiceGroupService,
+                workspaceMembershipService,
+                currentDeveloperLookup,
+                inAppFeedbackService,
+                clock);
+        var context = WorkspaceContext.fromWorkspace(workspace, null, null);
+        var transaction = new TransactionTemplate(transactionManager);
+        transaction.setReadOnly(true);
+        List<@Nullable User> readers = new ArrayList<>(List.of(
+                reader,
+                developer("across-owner"),
+                developer("across-dev-0"),
+                developer("across-dev-1"),
+                developer("across-dev-5"),
+                developer("across-dev-20"),
+                hidden,
+                outsider));
+        readers.add(null);
+
+        for (@Nullable User developer : readers) {
+            String who = developer == null ? "no developer" : developer.getLogin();
+            assertThat(as(developer, () -> acrossWorkspaceService.read(context)))
+                    .as("the overview %s reads", who)
+                    .isEqualTo(as(developer, () -> transaction.execute(status -> reference.read(context))));
+            for (PracticesAcrossWorkspaceWindow window : PracticesAcrossWorkspaceWindow.values()) {
+                assertThat(as(developer, () -> acrossWorkspaceService.readTiles(context, window)))
+                        .as("the %s tiles %s reads", window, who)
+                        .isEqualTo(as(
+                                developer, () -> transaction.execute(status -> reference.readTiles(context, window))));
+            }
+        }
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("new review results are counted again in the background; a hidden member drops the counts at once")
+    void shouldCountAgainWhenReviewResultsOrAMembersPrivacyChange() {
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(28);
+        User late = member("across-late");
+        strength(packaging, late, NEWEST);
+        // Recorded without a review run's admission, so nothing tells the page yet.
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(28);
+
+        // New results keep the counts readable until the workspace is counted again in the background.
+        eventPublisher.publishEvent(new ReviewResultsChangedEvent(workspace.getId(), false));
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(28);
+        cache.recountNow(workspace.getId());
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(29);
+
+        workspaceMembershipService.updateMemberVisibility(workspace.getId(), late.getId(), true);
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(28);
+    }
+
+    /**
+     * Three reviews of the developer's work, each newer one citing the one before through the developer's history,
+     * the newest also citing the developer: a chain the history checks follow back to the oldest review.
+     */
+    private void citingHistory(User developer) {
+        AgentJob oldest = persistPullRequestReview(workspace, nextNumber, OLDEST);
+        UUID first = observe(testing, oldest, nextNumber++, developer, MET, null, OLDEST);
+        AgentJob middle = persistPullRequestReview(workspace, nextNumber, MIDDLE);
+        UUID second = observe(
+                testing, middle, nextNumber++, developer, MET, null, MIDDLE, citingHistory(developer, first, false));
+        AgentJob newest = persistPullRequestReview(workspace, nextNumber, NEWEST);
+        observe(
+                testing,
+                newest,
+                nextNumber++,
+                developer,
+                NOT_MET,
+                Severity.MAJOR,
+                NEWEST,
+                citingHistory(developer, second, true));
+    }
+
+    /** A diff citation, a citation of one of the developer's observations, and of the developer when asked. */
+    private static String citingHistory(User developer, UUID observation, boolean citingThePerson) {
+        String person = "{\"sourceKind\":\"workspace.project-inventory\",\"artifactPath\":\"context/people/"
+                + developer.getId() + "/person.json\",\"path\":\"person.json\",\"startLine\":1,\"endLine\":1,"
+                + "\"quote\":\"x\",\"quoteRedacted\":false,\"sourceReference\":{\"records\":[{\"type\":"
+                + "\"person\",\"person\":" + developer.getId() + "}]}},";
+        return "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":"
+                + "\"context/diff.patch\",\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":1,"
+                + "\"endLine\":1,\"quote\":\"example\",\"quoteRedacted\":false},"
+                + (citingThePerson ? person : "")
+                + "{\"sourceKind\":\"hephaestus.observation-history\",\"artifactPath\":\"context/people/"
+                + developer.getId() + "/observations.jsonl\",\"path\":\"observations.jsonl\",\"startLine\":1,"
+                + "\"endLine\":1,\"quote\":\"x\",\"quoteRedacted\":false,\"sourceReference\":{\"records\":"
+                + "[{\"type\":\"observation\",\"id\":\"" + observation + "\",\"person\":" + developer.getId()
+                + "}]}}]}";
+    }
+
+    /** What {@code read} returns for {@code developer}, or for a caller who is no developer when null. */
+    private <T> T as(@Nullable User developer, Supplier<@Nullable T> read) {
+        if (developer != null) {
+            CurrentScmIdentityHolder.set(developer.getId(), developer.getLogin(), Set.of(developer.getId()));
+        }
+        try {
+            return Objects.requireNonNull(read.get());
+        } finally {
+            CurrentScmIdentityHolder.clear();
+        }
+    }
+
     /** The JDBC statements one overview read and one tiles read prepare, after a read that warms the context. */
     private List<Long> statementsPerRead(Statistics statistics) {
         read();
         tiles("ALL_TIME");
+        // Each read counts the workspace again, as the first reader after new review results does.
+        cache.invalidate(workspace.getId());
         statistics.clear();
         read();
         long overview = statistics.getPrepareStatementCount();
+        cache.invalidate(workspace.getId());
         statistics.clear();
         tiles("ALL_TIME");
-        return List.of(overview, statistics.getPrepareStatementCount());
+        long tiles = statistics.getPrepareStatementCount();
+        // A reader after the first reads the workspace's counts as they stand: only their own figures cost a read.
+        statistics.clear();
+        read();
+        tiles("ALL_TIME");
+        return List.of(overview, tiles, statistics.getPrepareStatementCount());
     }
 
     @Test

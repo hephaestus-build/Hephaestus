@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -80,6 +82,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
                 links,
                 availability,
                 audit,
+                mock(ApplicationEventPublisher.class),
                 Clock.fixed(NOW, ZoneOffset.UTC));
         // The account row is read back by the same method that wrote it, so the mock keeps what it saved.
         lenient().when(choices.save(any())).thenAnswer(invocation -> {
