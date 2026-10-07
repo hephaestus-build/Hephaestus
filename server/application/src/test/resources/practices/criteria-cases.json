@@ -214,6 +214,33 @@
 		"workType": "pull_request"
 	},
 	{
+		"id": "review-checks-and-merge-conditions-handoff",
+		"expected": {
+			"ready-and-traceable-handoff": "MET"
+		},
+		"files": {
+			"context/description.md": "Closes #42\n\nAdds the quiz results screen, including its empty-results state.\n\n## How to review\n\nI have not checked these on a device; please verify them as part of the review.\n\n- [ ] Finish a quiz, open the results screen and check that the score is shown\n- [ ] Open the results screen before any quiz and check that \"No results yet\" is shown\n\nDo not merge until the pipeline passes and a tutor has approved.\n\nSharing results is not part of this change; it follows separately in #43.\n",
+			"repo/App/Results.swift": "import SwiftUI\nstruct Results: View {\n    let score: Int?\n    var body: some View {\n        if let score {\n            Text(\"Score: \\(score)\")\n        } else {\n            Text(\"No results yet\")\n        }\n    }\n}\n"
+		},
+		"reason": "The open items are checks the author asks reviewers to do, the merge conditions follow review, and the sharing work is placed outside this slice; none says the delivered slice is unfinished.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "authored-review-hold-handoff",
+		"expected": {
+			"ready-and-traceable-handoff": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"ready-and-traceable-handoff": "MINOR"
+		},
+		"files": {
+			"context/description.md": "Closes #42\n\nAdds the quiz results screen. Please wait with reviewing until I have pushed the empty-results state.\n",
+			"repo/App/Results.swift": "import SwiftUI\nstruct Results: View {\n    let score: Int\n    var body: some View { Text(\"Score: \\(score)\") }\n}\n"
+		},
+		"reason": "The author asks reviewers to wait for unfinished work within the slice while the pull request asks for review.",
+		"workType": "pull_request"
+	},
+	{
 		"id": "uikit-constant-background",
 		"expected": {
 			"uses-adaptive-colors-for-every-appearance": "NOT_MET"
