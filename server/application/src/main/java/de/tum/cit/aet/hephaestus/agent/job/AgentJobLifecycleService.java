@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -69,11 +70,16 @@ public class AgentJobLifecycleService {
      */
     public AgentJob retryDelivery(Long workspaceId, UUID jobId) {
         int updated = transactionTemplate.execute(status -> {
-            requireJob(workspaceId, jobId);
+            AgentJob job = requireJob(workspaceId, jobId);
             int transitioned = agentJobRepository.transitionDeliveryStatus(
                     jobId, DeliveryStatus.PENDING, Set.of(DeliveryStatus.FAILED));
             if (transitioned == 1) {
-                feedbackDispatchRepository.resetFailedAutomaticPackage(jobId, workspaceId);
+                int reset = feedbackDispatchRepository.resetFailedAutomaticPackage(jobId, workspaceId);
+                if (reset == 0
+                        && FeedbackCompositionResultParser.compositionStatus(job.getOutput())
+                                .failed()) {
+                    throw new AgentJobStateConflictException("Delivery cannot retry feedback that was not composed.");
+                }
             }
             return transitioned;
         });
@@ -94,13 +100,15 @@ public class AgentJobLifecycleService {
         try {
             handler.deliver(job);
             transactionTemplate.executeWithoutResult(tx -> agentJobRepository.updateDeliveryStatus(
-                    jobId, DeliveryStatus.DELIVERED, job.getDeliveryCommentId()));
+                    jobId, completedProcessingStatus(job), job.getDeliveryCommentId()));
             log.info("Delivery retry succeeded: jobId={}", jobId);
             jobTelemetry.transition(
                     job,
                     "agent.job.delivery",
                     AgentJobTelemetry.Phase.DELIVERY,
-                    AgentJobTelemetry.Outcome.DELIVERED,
+                    completedProcessingStatus(job) == DeliveryStatus.FAILED
+                            ? AgentJobTelemetry.Outcome.DELIVERY_FAILED
+                            : AgentJobTelemetry.Outcome.DELIVERED,
                     Duration.between(deliveryStarted, Instant.now()));
         } catch (Exception e) {
             transactionTemplate.executeWithoutResult(tx ->
@@ -229,8 +237,8 @@ public class AgentJobLifecycleService {
      * @param claimedAttempts the post-increment {@code delivery_attempts} this call's CAS just wrote,
      *     which fences its terminal write (see {@link
      *     AgentJobRepository#transitionDeliveryStatusFenced})
-     * @return true if the job is now DELIVERED and this attempt's write landed; false leaves the
-     *     delivery PENDING for a later sweep pass, bounded by the sweeper's attempt cap
+     * @return true if this attempt settled processing; incomplete composition remains FAILED.
+     *     A false return leaves recovery to its existing state and attempt fences.
      */
     boolean recoverStuckDelivery(AgentJob job, short claimedAttempts) {
         JobTypeHandler handler = handlerRegistry.getHandler(job.getJobType());
@@ -259,8 +267,8 @@ public class AgentJobLifecycleService {
 
         if (existing.kind() == ExistingDeliveryLookup.Kind.FOUND) {
             String existingCommentId = existing.commentId();
-            boolean won =
-                    fencedDeliveryWrite(job.getId(), DeliveryStatus.DELIVERED, existingCommentId, claimedAttempts);
+            boolean won = fencedDeliveryWrite(
+                    job.getId(), completedProcessingStatus(job), existingCommentId, claimedAttempts);
             if (won) {
                 log.info(
                         "Delivery recovery found an already-posted comment (crash before recording) — not re-posting: jobId={}, commentId={}",
@@ -276,7 +284,7 @@ public class AgentJobLifecycleService {
         try {
             handler.deliver(job);
             boolean won = fencedDeliveryWrite(
-                    job.getId(), DeliveryStatus.DELIVERED, job.getDeliveryCommentId(), claimedAttempts);
+                    job.getId(), completedProcessingStatus(job), job.getDeliveryCommentId(), claimedAttempts);
             if (won) {
                 log.info("Delivery recovery succeeded: jobId={}", job.getId());
             }
@@ -287,6 +295,13 @@ public class AgentJobLifecycleService {
             log.warn("Delivery recovery attempt failed: jobId={}, error={}", job.getId(), e.getMessage());
             return false;
         }
+    }
+
+    private static DeliveryStatus completedProcessingStatus(AgentJob job) {
+        return FeedbackCompositionResultParser.compositionStatus(job.getOutput())
+                        .failed()
+                ? DeliveryStatus.FAILED
+                : DeliveryStatus.DELIVERED;
     }
 
     /** Logs rather than throws when the fence is lost: a superseded attempt is expected to no-op. */

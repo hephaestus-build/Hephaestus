@@ -36,6 +36,45 @@ class FeedbackCompositionResultParserTest extends BaseUnitTest {
         """;
 
     @Test
+    void compositionStatusDistinguishesLegacyQuietFailureAndMalformedMetadata() {
+        assertThat(FeedbackCompositionResultParser.compositionStatus(null))
+                .isEqualTo(FeedbackCompositionResultParser.CompositionStatus.LEGACY_UNKNOWN);
+        assertThat(FeedbackCompositionResultParser.compositionStatus(objectMapper.readTree("{\"feedback\":{}}")))
+                .isEqualTo(FeedbackCompositionResultParser.CompositionStatus.LEGACY_UNKNOWN);
+        assertThat(FeedbackCompositionResultParser.compositionStatus(
+                        objectMapper.readTree("{\"feedback\":{\"compositionFailures\":[]}}")))
+                .isEqualTo(FeedbackCompositionResultParser.CompositionStatus.NO_RECORDED_FAILURE);
+        for (String reason :
+                List.of("MODEL_ERROR", "RUNTIME_ERROR", "BUDGET", "STALL", "SAFETY", "LOOP", "NO_DECISION")) {
+            var status = FeedbackCompositionResultParser.compositionStatus(objectMapper.readTree(
+                    "{\"feedback\":{\"compositionFailures\":[{\"phase\":\"PRIVATE_FEEDBACK\",\"reason\":\"%s\"}]}}"
+                            .formatted(reason)));
+            assertThat(status).isEqualTo(FeedbackCompositionResultParser.CompositionStatus.INCOMPLETE);
+            assertThat(status.failed()).isTrue();
+            assertThat(status.message()).isEqualTo("Some feedback could not be composed.");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "null",
+                "{}",
+                "[null]",
+                "[1]",
+                "[{\"phase\":\"PRIVATE_FEEDBACK\",\"reason\":\"provider secret\"}]",
+                "[{\"phase\":\"MEASUREMENT\",\"reason\":\"MODEL_ERROR\"}]",
+                "[{\"phase\":\"PUBLIC_REVIEW\",\"reason\":\"LOOP\",\"error\":\"private text\"}]",
+                "[{\"phase\":\"PUBLIC_REVIEW\",\"reason\":\"LOOP\"},{\"phase\":\"PUBLIC_REVIEW\",\"reason\":\"SAFETY\"}]"
+            })
+    void malformedCompositionStatusDoesNotCertifySilence(String failures) {
+        var status = FeedbackCompositionResultParser.compositionStatus(
+                objectMapper.readTree("{\"feedback\":{\"compositionFailures\":%s}}".formatted(failures)));
+        assertThat(status).isEqualTo(FeedbackCompositionResultParser.CompositionStatus.INVALID);
+        assertThat(status.message()).isEqualTo("Feedback composition status could not be read.");
+    }
+
+    @Test
     void shouldIgnoreAnEarlierRunnersFragmentUnitForTheWorkAndKeepItsNextStepAsHistory() {
         JsonNode legacy = output("""
                 { "channel": "IN_CONTEXT", "practiceSlug": "ships-tests-with-the-change",

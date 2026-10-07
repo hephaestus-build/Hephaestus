@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
@@ -1483,6 +1484,10 @@ public class AgentJobExecutor {
                             sandboxResult.exitCode() == 0
                                     ? "The runner did not return a valid result."
                                     : "The container exited with code " + sandboxResult.exitCode() + ".";
+                        case COMPLETED ->
+                            FeedbackCompositionResultParser.compositionStatus(
+                                            objectMapper.valueToTree(agentResult.output()))
+                                    .message();
                         default -> null;
                     };
             int updated = transitionTerminal(jobId, terminalStatus, Instant.now(), errorMessage);
@@ -1592,12 +1597,19 @@ public class AgentJobExecutor {
             Instant deliveryStarted = Instant.now();
             try {
                 handler.deliver(deliverJob);
-                persistDeliveryStatus(jobId, DeliveryStatus.DELIVERED, deliverJob.getDeliveryCommentId());
+                DeliveryStatus processingStatus =
+                        FeedbackCompositionResultParser.compositionStatus(deliverJob.getOutput())
+                                        .failed()
+                                ? DeliveryStatus.FAILED
+                                : DeliveryStatus.DELIVERED;
+                persistDeliveryStatus(jobId, processingStatus, deliverJob.getDeliveryCommentId());
                 jobTelemetry.transition(
                         deliverJob,
                         "agent.job.delivery",
                         AgentJobTelemetry.Phase.DELIVERY,
-                        AgentJobTelemetry.Outcome.DELIVERED,
+                        processingStatus == DeliveryStatus.FAILED
+                                ? AgentJobTelemetry.Outcome.DELIVERY_FAILED
+                                : AgentJobTelemetry.Outcome.DELIVERED,
                         Duration.between(deliveryStarted, Instant.now()));
             } catch (Exception e) {
                 log.warn("Delivery failed for job {} (output saved, job still COMPLETED): {}", jobId, e.getMessage());

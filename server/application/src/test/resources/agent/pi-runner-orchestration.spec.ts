@@ -276,6 +276,7 @@ interface CustomTool {
 const scenario = process.env.PI_ORCHESTRATION_SCENARIO;
 const unavailableContext = process.env.PI_UNAVAILABLE_CONTEXT === "true";
 const counterevidence = process.env.PI_COUNTEREVIDENCE === "true";
+const loopReject = process.env.PI_LOOP_REJECT === "true";
 if (scenario !== undefined && scenario !== "") {
 	const cwd = process.env.PI_RUNNER_CWD;
 	assert.ok(cwd !== undefined && cwd !== "");
@@ -303,6 +304,7 @@ if (scenario !== undefined && scenario !== "") {
 					publicEligible: true,
 				}));
 			}
+			case "compose-partial-error":
 			case "compose-fold": {
 				return [
 					admittedObservation,
@@ -353,6 +355,7 @@ if (scenario !== undefined && scenario !== "") {
 					},
 				];
 			}
+			case "compose-complete-error":
 			case "compose-quiet":
 			case "compose-empty": {
 				return [{ ...admittedObservation, outcome: "MET", severity: null }];
@@ -710,6 +713,30 @@ if (scenario !== undefined && scenario !== "") {
 									options.customTools.map((custom) => custom.name),
 									["select_feedback", "report_review"],
 								);
+								if (scenario === "compose-public-error" || scenario === "compose-recovered-error") {
+									emit({
+										type: "message_end",
+										message: {
+											role: "assistant",
+											stopReason: "error",
+											usage: callUsage(17),
+											content: [],
+										},
+									});
+									if (scenario === "compose-public-error") {
+										return;
+									}
+									emit({ type: "auto_retry_end", success: true });
+									emit({
+										type: "message_end",
+										message: {
+											role: "assistant",
+											stopReason: "toolUse",
+											usage: callUsage(19),
+											content: [],
+										},
+									});
+								}
 								const review = tool("report_review");
 								const selection = tool("select_feedback");
 								if (
@@ -760,6 +787,9 @@ if (scenario !== undefined && scenario !== "") {
 												],
 											},
 										});
+									}
+									if (loopReject) {
+										throw new Error("Expected native loop abort");
 									}
 									return;
 								}
@@ -880,11 +910,17 @@ if (scenario !== undefined && scenario !== "") {
 									record(`reselect-after-review:${await attempt("r-3", said)}`);
 									return;
 								}
-								if (scenario === "compose-empty") {
+								if (scenario === "compose-empty" || scenario === "compose-complete-error") {
 									// Only a routine strength was measured, and nothing on the work earns a comment.
 									record(`empty-select:${await choose("s-e", {})}`);
 									record(`empty-final:${await attempt("r-e", {})}`);
 									record(`empty-terminal:${JSON.stringify(await this.agent.finishTurn())}`);
+									if (scenario === "compose-complete-error") {
+										emit({
+											type: "message_end",
+											message: { role: "assistant", stopReason: "error", content: [] },
+										});
+									}
 									return;
 								}
 								if (scenario === "compose-quiet") {
@@ -956,7 +992,8 @@ if (scenario !== undefined && scenario !== "") {
 								}
 								// Every other composing scenario decides the review's problems by withholding them.
 								const ids =
-									scenario === "compose-fold" && !counterevidence
+									(scenario === "compose-fold" || scenario === "compose-partial-error") &&
+									!counterevidence
 										? ["observation-1", "observation-2"]
 										: ["observation-1"];
 								const withheld = [{ basedOn: ids, reason: "BELOW_BAR" }];
@@ -973,6 +1010,9 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							if (text.includes("## Undecided")) {
+								if (scenario === "compose-no-decision") {
+									return;
+								}
 								// The composer's finishing prompt: the runner asks once more for the practices
 								// with a NOT_MET observation, and a WITHHOLD is a recorded decision.
 								// Sent without basedOn: a WITHHOLD rests on its practice's NOT_MET observations,
@@ -1008,6 +1048,89 @@ if (scenario !== undefined && scenario !== "") {
 									return;
 								}
 								// Private composition has its own session.
+								if (scenario === "compose-private-budget") {
+									for (let call = 0; call < 6; call += 1) {
+										emit({
+											type: "message_end",
+											message: {
+												role: "assistant",
+												stopReason: "toolUse",
+												usage: callUsage(100),
+												content: [],
+											},
+										});
+										emit({ type: "turn_end" });
+									}
+									return;
+								}
+								if (scenario === "compose-private-complete-error") {
+									await tool("report_feedback").execute("complete", {
+										units: [
+											{
+												channel: "IN_APP",
+												practiceSlug: "test-practice",
+												basedOn: ["observation-1"],
+												action: "WITHHOLD",
+												withholdReason: "BELOW_BAR",
+											},
+										],
+									});
+									emit({
+										type: "message_end",
+										message: {
+											role: "assistant",
+											stopReason: "error",
+											usage: callUsage(23),
+											content: [],
+										},
+									});
+									return;
+								}
+								if (scenario === "compose-no-decision") {
+									return;
+								}
+								if (scenario === "compose-partial-error") {
+									await tool("report_feedback").execute("partial", {
+										units: [
+											{
+												channel: "IN_APP",
+												practiceSlug: "test-practice",
+												basedOn: ["observation-1"],
+												action: "WITHHOLD",
+												withholdReason: "BELOW_BAR",
+											},
+										],
+									});
+								}
+								if (scenario === "compose-private-error" || scenario === "compose-partial-error") {
+									emit({
+										type: "message_end",
+										message: {
+											role: "assistant",
+											stopReason: "error",
+											usage: callUsage(23),
+											content: [],
+										},
+									});
+									return;
+								}
+								if (scenario === "compose-runtime-error") {
+									throw new Error("Synthetic settled prompt failure");
+								}
+								if (scenario === "compose-public-error" || scenario === "compose-recovered-error") {
+									await tool("report_feedback").execute("paid", {
+										units: [
+											{
+												channel: "IN_APP",
+												practiceSlug: "test-practice",
+												basedOn: ["observation-1"],
+												action: "WITHHOLD",
+												withholdReason: "BELOW_BAR",
+											},
+										],
+									});
+									return;
+								}
 								if (scenario === "compose-settle-deadline") {
 									// The response ended, but its auto-compaction remains busy until the deadline.
 									compacting = true;
@@ -1897,10 +2020,20 @@ if (scenario !== undefined && scenario !== "") {
 		"refusal-cap",
 		"repeat",
 		"tree-citation",
+		"compose-private-complete-error",
+		"compose-private-budget",
+		"compose-partial-error",
+		"compose-no-decision",
+		"compose-public-error",
+		"compose-private-error",
+		"compose-runtime-error",
+		"compose-recovered-error",
+		"compose-complete-error",
 		"compose",
 		"compose-foreign-provider",
 		"compose-overflow",
 		"compose-silent",
+		"compose-loop-rejection",
 		"compose-loop",
 		"compose-quiet",
 		"compose-empty",
@@ -1916,9 +2049,11 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-null-outcome",
 	]) {
 		const stage =
-			fixture === "compose-context-unavailable" || fixture === "compose-counterevidence"
-				? "compose-fold"
-				: fixture;
+			new Map([
+				["compose-loop-rejection", "compose-loop"],
+				["compose-context-unavailable", "compose-fold"],
+				["compose-counterevidence", "compose-fold"],
+			]).get(fixture) ?? fixture;
 		void test(
 			{
 				"scope-cut-off":
@@ -2211,6 +2346,7 @@ if (scenario !== undefined && scenario !== "") {
 								PI_ORCHESTRATION_SCENARIO: stage,
 								PI_UNAVAILABLE_CONTEXT: String(fixture === "compose-context-unavailable"),
 								PI_COUNTEREVIDENCE: String(fixture === "compose-counterevidence"),
+								PI_LOOP_REJECT: String(fixture === "compose-loop-rejection"),
 								PI_RUNNER_CWD: cwd,
 								PI_CODING_AGENT_DIR: cwd,
 								AGENT_BUDGET_MS: budgetMs,
@@ -2228,6 +2364,7 @@ if (scenario !== undefined && scenario !== "") {
 						.trim()
 						.split("\n")
 						.filter(Boolean);
+					assert.ok(existsSync(nodePath.join(cwd, "out/practice-coverage.json")), child.stderr);
 					const coverage: unknown = JSON.parse(
 						readFileSync(nodePath.join(cwd, "out/practice-coverage.json"), "utf8"),
 					);
@@ -2240,7 +2377,85 @@ if (scenario !== undefined && scenario !== "") {
 								outcome,
 							})),
 						});
+					if (stage.startsWith("compose") && existsSync(nodePath.join(cwd, "out/feedback.json"))) {
+						const payload: unknown = JSON.parse(
+							readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+						);
+						assert.ok(isRecord(payload));
+						if (
+							[
+								"compose-private-budget",
+								"compose-private-complete-error",
+								"compose-partial-error",
+								"compose-no-decision",
+								"compose-public-error",
+								"compose-private-error",
+								"compose-runtime-error",
+								"compose-recovered-error",
+								"compose-complete-error",
+							].includes(stage)
+						) {
+							const failuresByStage: Record<string, { phase: string; reason: string }[]> = {
+								"compose-private-budget": [{ phase: "PRIVATE_FEEDBACK", reason: "BUDGET" }],
+								"compose-public-error": [{ phase: "PUBLIC_REVIEW", reason: "MODEL_ERROR" }],
+								"compose-private-error": [{ phase: "PRIVATE_FEEDBACK", reason: "MODEL_ERROR" }],
+								"compose-partial-error": [{ phase: "PRIVATE_FEEDBACK", reason: "MODEL_ERROR" }],
+								"compose-no-decision": [{ phase: "PRIVATE_FEEDBACK", reason: "NO_DECISION" }],
+								"compose-runtime-error": [{ phase: "PRIVATE_FEEDBACK", reason: "RUNTIME_ERROR" }],
+							};
+							const expected = failuresByStage[stage] ?? [];
+							assert.deepEqual(payload.compositionFailures, expected);
+							assert.equal(payload.admissionDigest, "admitted-digest");
+							assert.equal(child.status, 0, child.stderr);
+							const promptCounts: Record<string, number> = {
+								"compose-complete-error": 2,
+								"compose-no-decision": 4,
+							};
+							assert.equal(
+								events.filter((event) => event.startsWith("prompt:")).length,
+								promptCounts[stage] ?? 3,
+							);
+							if (stage !== "compose-public-error") {
+								assert.ok(payload.review !== null);
+							}
+						}
+						if (["compose-empty", "compose-fold", "compose-quiet"].includes(stage)) {
+							assert.deepEqual(payload.compositionFailures, []);
+						}
+						if (stage === "compose-settle-deadline") {
+							assert.deepEqual(payload.compositionFailures, [
+								{ phase: "PUBLIC_REVIEW", reason: "SAFETY" },
+								{ phase: "PRIVATE_FEEDBACK", reason: "SAFETY" },
+							]);
+						}
+						if (stage === "compose-silent") {
+							assert.deepEqual(payload.compositionFailures, []);
+						}
+						if (stage === "compose-loop") {
+							assert.deepEqual(payload.compositionFailures, [
+								{ phase: "PUBLIC_REVIEW", reason: "NO_DECISION" },
+							]);
+						}
+					}
 					switch (stage) {
+						case "compose-private-budget":
+						case "compose-private-complete-error":
+						case "compose-public-error":
+						case "compose-private-error":
+						case "compose-partial-error":
+						case "compose-no-decision":
+						case "compose-runtime-error":
+						case "compose-recovered-error":
+						case "compose-complete-error": {
+							if (stage === "compose-partial-error") {
+								const payload: unknown = JSON.parse(
+									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+								);
+								assert.ok(isRecord(payload) && Array.isArray(payload.units));
+								assert.equal(payload.units.length, 1);
+							}
+							break;
+						}
 						case "scope-cut-off": {
 							assert.equal(child.status, 0, child.stderr);
 							assert.equal(readObservations(nodePath.join(cwd, "out/result.json")).length, 2);
@@ -3366,6 +3581,11 @@ if (scenario !== undefined && scenario !== "") {
 							break;
 						}
 						case "compose-loop": {
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1", "prompt:2", "prompt:3", "prompt:4", "prompt:5"],
+							);
+							assert.ok(events.includes("review-retry"));
 							assert.equal(child.status, 0, child.stderr);
 							assert.ok(events.includes("abort"), child.stderr);
 							assert.match(
