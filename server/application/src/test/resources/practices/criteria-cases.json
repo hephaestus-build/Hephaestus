@@ -144,6 +144,55 @@
 		"workType": "pull_request"
 	},
 	{
+		"id": "persisted-field-with-continuity-need",
+		"expected": {
+			"records-significant-decisions-with-rationale": "MET"
+		},
+		"files": {
+			"context/description.md": "Store the unsent note draft so it survives an app restart and stays on this device.\n",
+			"repo/schema.sql": "ALTER TABLE notes ADD COLUMN draft TEXT;\n"
+		},
+		"reason": "The recorded need for the stored field is the rationale; no rejected alternatives are required.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "persisted-field-mechanism-only",
+		"expected": {
+			"records-significant-decisions-with-rationale": "NOT_MET"
+		},
+		"files": {
+			"context/description.md": "Added a draft column to notes and saved it with the existing store.\n",
+			"repo/schema.sql": "ALTER TABLE notes ADD COLUMN draft TEXT;\n"
+		},
+		"reason": "Naming the new column and the store restates what changed without the need it serves.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "existing-stack-use-only",
+		"expected": {
+			"records-significant-decisions-with-rationale": "NOT_APPLICABLE"
+		},
+		"files": {
+			"context/description.md": "Show the saved notes in a list.\n",
+			"repo/App/NotesList.swift": "import SwiftUI\nimport SwiftData\nstruct NotesList: View {\n    @Query private var notes: [Note]\n    var body: some View { List(notes) { Text($0.title) } }\n}\n"
+		},
+		"reason": "Reading an existing stored model with the project's own framework changes no persisted model or contract.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "feature-goal-does-not-explain-auth",
+		"expected": {
+			"records-significant-decisions-with-rationale": "NOT_MET"
+		},
+		"files": {
+			"context/description.md": "Let students share quiz results with their team.\n",
+			"repo/Server/ShareRoute.swift": "func share(_ req: Request) throws -> Response {\n    try requireSignedToken(req)\n    return Response(status: .ok)\n}\n",
+			"repo/Server/SignedToken.swift": "func requireSignedToken(_ req: Request) throws {\n    guard req.headers[\"X-Signature\"] != nil else { throw Abort(.unauthorized) }\n}\n"
+		},
+		"reason": "The feature goal does not say why sharing needs a new signed-token check.",
+		"workType": "pull_request"
+	},
+	{
 		"id": "image-scrim",
 		"expected": {
 			"uses-adaptive-colors-for-every-appearance": "MET"
@@ -426,6 +475,36 @@
 			"context/linked_work_items.json": "[{\"number\":12,\"title\":\"Search saved items\",\"state\":\"OPEN\",\"how\":\"closesOnMerge\"}]\n"
 		},
 		"reason": "A provider closing reference settles the link without needing commit history.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "related-reference-for-partial-work",
+		"expected": {
+			"links-the-change-to-its-issue": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Add the date filter to search\", \"body\": \"Related to #12. Adds the date filter; the tag filter follows in a later change.\", \"source_branch\": \"date-filter\", \"state\": \"OPEN\", \"is_merged\": false}\n",
+			"context/description.md": "Related to #12. Adds the date filter; the tag filter follows in a later change.\n",
+			"context/project_inventory.json": "{\"issues\":[{\"number\":12,\"title\":\"Filter search results\",\"state\":\"OPEN\"}]}\n",
+			"context/linked_work_items.json": "{\"workItems\":[{\"number\":12,\"title\":\"Filter search results\",\"state\":\"OPEN\",\"how\":\"mentions\",\"body\":\"Add a date filter and a tag filter to search.\",\"url\":\"https://example.org/team/project/issues/12\",\"labels\":[]}],\"unresolvedReferences\":[],\"truncated\":false}\n",
+			"context/commits.json": "{\"commits\":[]}\n"
+		},
+		"reason": "A plain reference links partial work to its issue; closing the issue is not required.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "product-work-without-issue-reference",
+		"expected": {
+			"links-the-change-to-its-issue": "NOT_MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Add the date filter to search\", \"body\": \"Adds the date filter to search.\", \"source_branch\": \"date-filter\", \"state\": \"OPEN\", \"is_merged\": false}\n",
+			"context/description.md": "Adds the date filter to search.\n",
+			"context/project_inventory.json": "{\"issues\":[{\"number\":12,\"title\":\"Filter search results\",\"state\":\"OPEN\"}]}\n",
+			"context/linked_work_items.json": "{\"workItems\":[],\"unresolvedReferences\":[],\"truncated\":false}\n",
+			"context/commits.json": "{\"commits\":[]}\n"
+		},
+		"reason": "Product work in a project that tracks issues names no issue on any captured surface.",
 		"workType": "pull_request"
 	},
 	{
