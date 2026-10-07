@@ -3372,6 +3372,12 @@ if (scenario !== undefined && scenario !== "") {
 						}
 						case "compose-recover": {
 							assert.equal(child.status, 0, child.stderr);
+							const criteria = readFileSync(
+								nodePath.join(cwd, "catalog/practices/test-practice.md"),
+								"utf8",
+							);
+							const accepted = events.find((event) => event.startsWith("recover-select:")) ?? "";
+							assert.ok(accepted.includes(JSON.stringify(criteria).slice(1, -1)), accepted);
 							assert.match(
 								events.find((event) => event.startsWith("recover-select:")) ?? "",
 								/Accepted the selection/u,
@@ -3392,6 +3398,8 @@ if (scenario !== undefined && scenario !== "") {
 								acceptedSelection: { selected: ["observation-1"], withheld: [] },
 								selectedObservations: [publicRow],
 							});
+							assert.ok(retry.includes(criteria), retry);
+							assert.ok(!retry.includes("### Criteria of `second-practice`"), retry);
 							break;
 						}
 						case "compose-reselect": {
@@ -3419,7 +3427,17 @@ if (scenario !== undefined && scenario !== "") {
 								/review refused, nothing was stored:[\s\S]*speaks about observation-1, which the accepted selection does not select[\s\S]*withheld differs from the accepted selection for observation-1/u,
 							);
 							assert.match(said("reselect-speak"), /Accepted the selection/u);
+							const criteria = readFileSync(
+								nodePath.join(cwd, "catalog/practices/test-practice.md"),
+								"utf8",
+							);
+							assert.ok(
+								said("reselect-speak").includes(JSON.stringify(criteria).slice(1, -1)),
+								said("reselect-speak"),
+							);
 							const refused = readFileSync(nodePath.join(cwd, "refused-standing.txt"), "utf8");
+							assert.ok(refused.includes(criteria), refused);
+							assert.ok(!refused.includes("### Criteria of `second-practice`"), refused);
 							assert.deepEqual(selectedRowsOf(refused), {
 								acceptedSelection: { selected: ["observation-1"], withheld: [] },
 								selectedObservations: [publicRow],

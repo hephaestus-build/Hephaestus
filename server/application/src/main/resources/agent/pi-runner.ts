@@ -2355,7 +2355,7 @@ function buildSelectionTool(
 				const stands =
 					state.selection === null
 						? ""
-						: `\nThe selection that stands:\n${selectionText(state.selection, reviewable)}`;
+						: `\nThe selection that stands:\n${selectionText(state.selection, reviewable, criteriaFileOf)}`;
 				return refusal<SelectFeedbackDetails>(
 					toolCallId,
 					`selection refused, ${standing}:\n${reasons}${stands}`,
@@ -2366,7 +2366,7 @@ function buildSelectionTool(
 				content: [
 					{
 						type: "text",
-						text: `Accepted the selection:\n${selectionText(read.selection, reviewable)}\nNow store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions. A later select_feedback call replaces this selection until the review is final.`,
+						text: `Accepted the selection:\n${selectionText(read.selection, reviewable, criteriaFileOf)}\nNow store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions. A later select_feedback call replaces this selection until the review is final.`,
 					},
 				],
 				details: { accepted: true },
@@ -2466,7 +2466,7 @@ function finishReviewText(
 	const next =
 		selection === null
 			? "Choose with one select_feedback call, then store the final review with one report_review call."
-			: `${selectionText(selection, reviewable)}\nThis selection stands. Store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions, or select again first.`;
+			: `${selectionText(selection, reviewable, criteriaFileOf)}\nThis selection stands. Store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions, or select again first.`;
 	return `${owed}\n${next} A review that says nothing is still one final report_review call. No prose outside the calls.`;
 }
 
