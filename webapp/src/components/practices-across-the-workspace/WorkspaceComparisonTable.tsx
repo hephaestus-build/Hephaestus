@@ -13,8 +13,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell, TableHead } from "@/components/ui/table";
 
-import { HELD_BACK, shownSplit } from "./across-workspace-copy";
-import { HeldBackTrack, WorkspaceSplitBar, WorkspaceSplitBarSkeleton } from "./WorkspaceSplitBar";
+import { NOBODY_YET } from "./across-workspace-copy";
+import { EmptyTrack, WorkspaceSplitBar, WorkspaceSplitBarSkeleton } from "./WorkspaceSplitBar";
 
 /** One practice group or one practice. */
 export interface ComparisonRow {
@@ -46,7 +46,7 @@ export interface WorkspaceComparisonTableProps {
 
 /**
  * Practice groups or practices, each beside its split, in the practice table frame. Every row is
- * listed with no paging, as the Practice profile lists them. When every split is held back, the
+ * listed with no paging, as the Practice profile lists them. When no split counts anybody yet, the
  * reason shows once above the table, not once per row.
  */
 export function WorkspaceComparisonTable({
@@ -58,19 +58,19 @@ export function WorkspaceComparisonTable({
 	empty,
 }: WorkspaceComparisonTableProps) {
 	const rows = state.status === "ready" ? state.rows : [];
-	const allHeldBack = rows.length > 0 && rows.every((row) => shownSplit(row.split) === undefined);
+	const nobodyYet = rows.length > 0 && rows.every((row) => row.split.developers === 0);
 	// Each cell then holds only a hidden track, so the table is described by the one reason.
 	const reasonId = useId();
 	return (
 		<>
-			{allHeldBack && (
+			{nobodyYet && (
 				<p id={reasonId} className="text-sm text-muted-foreground">
-					{HELD_BACK}.
+					{NOBODY_YET}.
 				</p>
 			)}
 			<PracticeTableFrame
 				aria-label={label}
-				aria-describedby={allHeldBack ? reasonId : undefined}
+				aria-describedby={nobodyYet ? reasonId : undefined}
 				columns={3}
 				head={
 					<>
@@ -87,8 +87,8 @@ export function WorkspaceComparisonTable({
 					<PracticeTableRow open={row.key === openKey} link={{ ...rowLink(row), name: row.name }}>
 						<SubjectCell badge={row.subject} className={OPEN_ROW_BAR} />
 						<TableCell className="align-top whitespace-normal">
-							{allHeldBack ? (
-								<HeldBackTrack />
+							{nobodyYet ? (
+								<EmptyTrack />
 							) : (
 								<WorkspaceSplitBar split={row.split} yourStanding={row.yourStanding} />
 							)}

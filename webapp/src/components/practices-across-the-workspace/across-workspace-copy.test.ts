@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { WorkspaceSplit } from "@/api/types.gen";
 
-import { barsHint, shownSplit, splitDescription, tilesHint } from "./across-workspace-copy";
+import { barsHint, splitDescription, tilesHint } from "./across-workspace-copy";
 
 const split = (
 	needsAttention: number,
@@ -10,7 +10,6 @@ const split = (
 	goingWell: number,
 	noneYet: number,
 ): WorkspaceSplit => ({
-	shape: "SPLIT",
 	parts: [
 		{ standing: "DEVELOPING", developers: needsAttention },
 		{ standing: "MIXED", developers: mixedFeedback },
@@ -40,98 +39,52 @@ describe("splitDescription", () => {
 		expect(splitDescription(split(6, 7, 7, 8), undefined)).toMatch(/, 8 none yet\.$/u);
 	});
 
-	it("gives a total-only split its total and reason, and nothing of the reader", () => {
-		expect(splitDescription({ shape: "TOTAL_ONLY", parts: [], developers: 1 }, undefined)).toBe(
-			"1 developer with a current standing in this workspace. The split is held back so no one can be singled out.",
+	it("draws parts of one and none like any other", () => {
+		expect(splitDescription(split(1, 0, 2, 0), "STRENGTH")).toBe(
+			"3 developers with a current standing in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 0 none yet. The You marker is on Going well.",
 		);
 	});
 
-	it("gives a withheld split its reason alone, with no total and no promise about later", () => {
-		expect(splitDescription({ shape: "WITHHELD", parts: [] }, undefined)).toBe(
-			"Held back so no one can be singled out.",
-		);
-	});
-});
-
-describe("shownSplit", () => {
-	const incomplete: [string, WorkspaceSplit][] = [
-		["a split with no total", { ...split(6, 7, 7, 8), developers: undefined }],
-		["a split with no none yet", { ...split(6, 7, 7, 8), noneYet: undefined }],
-		["a total-only split with no total", { shape: "TOTAL_ONLY", parts: [] }],
-	];
-	it.each(incomplete)("holds back %s rather than drawing a 0", (_, wire) => {
-		expect(shownSplit(wire)).toBeUndefined();
-		expect(splitDescription(wire, undefined)).toBe("Held back so no one can be singled out.");
+	it("says that nobody has a standing when the split counts nobody", () => {
+		expect(splitDescription(split(0, 0, 0, 0), undefined)).toBe("No developer has a standing yet.");
 	});
 });
 
 describe("tilesHint", () => {
-	const tiles = {
-		minimumDevelopersForMiddleHalf: 7,
-		window: "DAYS_30",
-		developersWithAStandingInWindow: 41,
-	} as const;
-	const WITH_A_BAND = { yours: 3, middle: { low: 1, high: 4 } };
+	const tiles = { window: "DAYS_30", developersWithAStandingInWindow: 41 } as const;
 
 	it.each([
 		["DAYS_30", "the 41 developers in this workspace who have a standing in the last 30 days by"],
 		["DAYS_90", "the 41 developers in this workspace who have a standing in the last 90 days by"],
 		["ALL_TIME", "the 41 developers in this workspace who have a standing so far by"],
 	] as const)("names the %s window in the toggle's words", (window, phrase) => {
-		expect(tilesHint({ ...tiles, window }, WITH_A_BAND)[0]).toContain(phrase);
-	});
-
-	it("names no count where the server held the total back", () => {
-		const [band] = tilesHint({ minimumDevelopersForMiddleHalf: 7, window: "DAYS_30" }, WITH_A_BAND);
-		expect(band).toContain("sorts the developers in this workspace who have a standing");
+		expect(tilesHint({ ...tiles, window })[0]).toContain(phrase);
 	});
 
 	it("agrees count, noun and verb in the singular", () => {
-		const [band] = tilesHint(
-			{ ...tiles, developersWithAStandingInWindow: 1, minimumDevelopersForMiddleHalf: 2 },
-			WITH_A_BAND,
-		);
+		const [band] = tilesHint({ ...tiles, developersWithAStandingInWindow: 1 });
 		expect(band).toContain("the 1 developer in this workspace who has a standing");
-		expect(band).toContain(
-			"at least 2 developers are counted, so at least 1 developer other than you.",
+	});
+
+	it("says plainly that a band over few developers can show one person's value", () => {
+		expect(tilesHint(tiles)[0]).toMatch(
+			/When only a few developers are counted, the band can show the value of one person\.$/u,
 		);
 	});
 
-	it("says when open feedback shows its band only while it has none", () => {
-		const open =
-			"Open feedback counts what is open now, for every developer that this page counts.";
-		expect(tilesHint(tiles, WITH_A_BAND)[1]).toBe(open);
-		// A band at nought is still a band: the tile says most have none in its place.
-		expect(tilesHint(tiles, { yours: 0, middle: { low: 0, high: 0 } })[1]).toBe(open);
-		expect(tilesHint(tiles, { yours: 3 })[1]).toBe(
-			`${open} Its band shows only when this page counts at least 7 developers.`,
+	it("says why there is no band when nobody is counted", () => {
+		expect(tilesHint({ ...tiles, developersWithAStandingInWindow: 0 })[0]).toBe(
+			"No developer in this workspace has a standing in the last 30 days, so these figures have no typical range.",
 		);
 	});
 });
 
-describe("the disclosure floor", () => {
-	it("prints a bar's floor as the server sends it, and the others as the floor less you", () => {
-		const hint = barsHint(4, "group");
-		expect(hint).toContain("A count shows only when it holds at least 4 developers.");
-		expect(hint).toContain(
-			"So each count stands for at least 3 developers other than you, whoever reads it",
-		);
-	});
-
-	it("prints the typical range's floor as the server sends it", () => {
-		expect(
-			tilesHint({ minimumDevelopersForMiddleHalf: 7, window: "DAYS_30" }, { yours: 1 })[0],
-		).toContain(
-			"The band shows only when at least 7 developers are counted, so at least 6 developers other than you.",
-		);
-	});
-
-	it("gives groups and practices each their own differencing rule at the same floor", () => {
-		expect(barsHint(4, "group")).toMatch(
-			/If the groups together would single out one to three developers, every bar on the page shows only its number\.$/u,
-		);
-		expect(barsHint(4, "practice")).toMatch(
-			/A practice bar is compared with its group’s bar and the group’s other practice bars\. If that would single out one to three developers, it shows only its number\.$/u,
-		);
-	});
+describe("barsHint", () => {
+	it.each(["group", "practice"] as const)(
+		"tells a reader of a %s what a small count can show",
+		(scope) => {
+			expect(barsHint(scope)).toContain(`current standing in the ${scope},`);
+			expect(barsHint(scope)).toMatch(/So a small count can let others tell where you stand\.$/u);
+		},
+	);
 });

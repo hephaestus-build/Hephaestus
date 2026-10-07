@@ -6,16 +6,14 @@ import { withPageBehind } from "@/stories/decorators";
 import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
 import {
 	MANY_PRACTICES,
+	NOBODY,
 	PACKAGING_GROUP,
-	WITHHELD,
 } from "@/stories/practices-across-the-workspace-story-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
 import { ACROSS_THE_WORKSPACE } from "./across-workspace-copy";
 import { WorkspaceGroupLevel } from "./WorkspaceGroupLevel";
-
-const COUNTS = { minimumDevelopersPerCount: 4 } as const;
 
 /**
  * A practice group's practices over Practices across the workspace. The level has no page of its
@@ -27,7 +25,7 @@ const meta = {
 	decorators: [withPageBehind],
 	args: {
 		path: { behind: [{ label: ACROSS_THE_WORKSPACE, depth: 0 }], onClose: fn() },
-		state: { status: "ready", group: PACKAGING_GROUP, ...COUNTS },
+		state: { status: "ready", group: PACKAGING_GROUP },
 		onGoToProfile: fn(),
 		onGoToPractice: fn(),
 	},
@@ -96,32 +94,38 @@ export const Default: Story = {
 			}),
 		);
 		await expect(args.onGoToPractice).toHaveBeenCalledWith("scope-to-one-concern");
-		await expect(table.getAllByText("Split held back")).toHaveLength(2);
-		// The practice-only rule, at the floor from the level's counts.
+		// A practice with small parts draws like any other, the reader marked.
 		await expect(
-			level.getByText(
-				/If that would single out one to three developers, it shows only its number\.$/u,
-			),
+			table.getByRole("img", {
+				name: "28 developers with a current standing in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. The You marker is on none yet.",
+			}),
+		).toBeVisible();
+		await expect(
+			level.getByText(/So a small count can let others tell where you stand\.$/u),
 		).toBeVisible();
 	},
 };
 
-/** Every split held back: the head's bar and the table each say the reason once. */
-export const GroupHeldBack: Story = {
+/** Nobody has a standing yet: the head's bar and the table each say so once. */
+export const NobodyYet: Story = {
 	args: {
 		state: {
 			status: "ready",
 			group: {
 				...PACKAGING_GROUP,
-				split: WITHHELD,
-				practices: PACKAGING_GROUP.practices.map((one) => ({ ...one, split: WITHHELD })),
+				yourStanding: undefined,
+				split: NOBODY,
+				practices: PACKAGING_GROUP.practices.map((one) => ({
+					...one,
+					yourStanding: undefined,
+					split: NOBODY,
+				})),
 			},
-			...COUNTS,
 		},
 	},
 	play: async () => {
 		const level = within(await settledDrawerPanel());
-		await expect(level.getAllByText("Held back so no one can be singled out.")).toHaveLength(2);
+		await expect(level.getAllByText("No developer has a standing yet.")).toHaveLength(2);
 		await expect(
 			level.getByRole("button", {
 				name: "Open in your Practice profile Packaging work for review",
@@ -139,7 +143,6 @@ export const ManyPractices: Story = {
 		state: {
 			status: "ready",
 			group: { ...PACKAGING_GROUP, practices: MANY_PRACTICES },
-			...COUNTS,
 		},
 	},
 	play: async () => {
@@ -181,7 +184,7 @@ export const LoadError: Story = {
 
 export const NoPractices: Story = {
 	args: {
-		state: { status: "ready", group: { ...PACKAGING_GROUP, practices: [] }, ...COUNTS },
+		state: { status: "ready", group: { ...PACKAGING_GROUP, practices: [] } },
 	},
 	play: async () => {
 		const level = within(await settledDrawerPanel());

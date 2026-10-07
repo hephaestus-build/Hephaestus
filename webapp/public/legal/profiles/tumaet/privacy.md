@@ -1,6 +1,6 @@
 Privacy Statement for Hephaestus in accordance with Art. 13 and 14 GDPR.
 
-_Last updated: 2026-10-04._
+_Last updated: 2026-10-07._
 
 The Technical University of Munich (TUM), through the Research Group for Applied Education Technologies (AET), operates Hephaestus at https://hephaestus.build, which is also reachable at https://hephaestus.aet.cit.tum.de. This statement explains what personal data the platform processes, why, on what legal basis, who receives it, how long it is kept, and the rights you have. Personal data is processed under the GDPR, the Bavarian Data Protection Act (BayDSG), the Bavarian Higher Education Innovation Act (BayHIG), and the German Telecommunications Digital Services Data Protection Act (TDDDG).
 
@@ -174,10 +174,12 @@ The controller, recipients and rights contacts in this statement apply when you 
 Within a workspace, members can see Activity, including work and review-request lists and team
 memberships. Activity is never ranked, and it does not check each viewer's source-platform permissions.
 Your Practice profile, practice-page feedback and Heph conversations are private to you through normal
-member access. Workspace admins can read observations, delivery metadata and your dispute explanation,
-but not private practice-page or conversation feedback text. Ratings and other private response notes
-are not shared with them. Feedback posted on GitHub, GitLab or Slack is visible to that destination's
-audience. Outline is a context source, not a feedback-delivery destination.
+member access. Other members see your practice standings only as part of the counts on Practices
+across the workspace. That page names nobody, but it shows every count, also a count of one, so other
+members can sometimes tell your standing. Workspace admins can read observations, delivery metadata
+and your dispute explanation, but not private practice-page or conversation feedback text. Ratings and
+other private response notes are not shared with them. Feedback posted on GitHub, GitLab or Slack is
+visible to that destination's audience. Outline is a context source, not a feedback-delivery destination.
 
 A public workspace exposes its members, teams, repositories and practices without sign-in; Activity,
 practice profiles, feedback and conversations stay non-public. The instance's contributor list is

@@ -4213,27 +4213,19 @@ export type PracticesAcrossWorkspace = {
    */
   groups: Array<WorkspaceGroupSplit>;
   /**
-   * The fewest developers a shown count holds, the reader among them or not
-   */
-  minimumDevelopersPerCount: number;
-  /**
    * The reader's open feedback, counted by the rule the practice profile shows it open by, beside the middle half of every eligible developer's: both open now
    */
   openFeedback: WorkspaceTile;
 };
 
 /**
- * The reader's figures over one window beside the middle half of the developers with a standing in it; each window is checked on its own
+ * The reader's figures over one window beside the middle half of the developers with a standing in it
  */
 export type PracticesAcrossWorkspaceTiles = {
   /**
-   * Eligible developers with a standing in a practice group shown in the window, the developers the tiles compare; absent while too few to show
+   * Eligible developers with a standing in a practice group shown in the window, the developers the tiles compare
    */
-  developersWithAStandingInWindow?: number;
-  /**
-   * The fewest developers a middle half is read over, the reader among them or not; below it a tile shows only the reader's own value
-   */
-  minimumDevelopersForMiddleHalf: number;
+  developersWithAStandingInWindow: number;
   /**
    * The reader's practices going well
    */
@@ -6805,7 +6797,7 @@ export type WorkspaceGroupSplit = {
    */
   split: WorkspaceSplit;
   /**
-   * The reader's current standing in the group, the one their practice profile shows: the part they are marked in. Absent unless the split shows its parts and counts the reader
+   * The reader's current standing in the group, the one their practice profile shows: the part they are marked in. Absent unless the split counts the reader
    */
   yourStanding?: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
 };
@@ -7168,7 +7160,7 @@ export type WorkspacePracticeSplit = {
    */
   split: WorkspaceSplit;
   /**
-   * The reader's current standing in the practice, the one their practice profile shows: the part they are marked in. Absent unless the split shows its parts and counts the reader
+   * The reader's current standing in the practice, the one their practice profile shows: the part they are marked in. Absent unless the split counts the reader
    */
   yourStanding?: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
 };
@@ -7216,25 +7208,21 @@ export type WorkspaceReviewScope = {
 };
 
 /**
- * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict and none yet, set only for SPLIT, and their total, set for SPLIT and TOTAL_ONLY
+ * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict, none yet, and their total
  */
 export type WorkspaceSplit = {
   /**
-   * Every developer the split counts, the parts and none yet together, the reader included when counted; set for SPLIT and TOTAL_ONLY
+   * Every developer the split counts, the parts and none yet together, the reader included when counted
    */
-  developers?: number;
+  developers: number;
   /**
-   * Developers with a standing in a group shown but none here; set only for SPLIT
+   * Developers with a standing in a group shown but none here
    */
-  noneYet?: number;
+  noneYet: number;
   /**
-   * Developers at each verdict, Needs attention, Mixed feedback and Going well in that order; empty unless SPLIT
+   * Developers at each verdict, Needs attention, Mixed feedback and Going well in that order
    */
   parts: Array<WorkspaceSplitPart>;
-  /**
-   * How the split may be shown
-   */
-  shape: 'SPLIT' | 'TOTAL_ONLY' | 'WITHHELD';
 };
 
 /**
@@ -7296,7 +7284,7 @@ export type WorkspaceTeamSettings = {
  */
 export type WorkspaceTile = {
   /**
-   * The workspace's middle half; absent while too few developers are counted
+   * The workspace's middle half; absent while no developer is counted
    */
   middle?: WorkspaceRange;
   /**

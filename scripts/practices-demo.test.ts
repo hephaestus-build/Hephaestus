@@ -12,7 +12,7 @@ import {
 	readerCards,
 } from "./lib/practices-demo.ts";
 
-// These checks cover only the demo's own data. Which standings, held back bars and card states the
+// These checks cover only the demo's own data. Which standings, small bars and card states the
 // demo produces depends on the server's rules, so only the running page confirms them
 // (docs/contributor/local-development.mdx § Seeding the practices demo).
 

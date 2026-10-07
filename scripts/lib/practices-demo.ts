@@ -44,7 +44,7 @@ export type Bucket = "needs" | "mixed" | "well" | "none";
 /**
  * How the 40 developers split in each group: Needs attention, Mixed feedback, Going well, none.
  * A group not listed here has no practice a pull request or issue review can observe, so nobody
- * gets a standing in it and the page withholds its split.
+ * gets a standing in it and its split counts everyone at none yet.
  */
 export const SPLITS: Record<string, [number, number, number, number]> = {
 	"acting-on-review-feedback": [9, 9, 9, 13],
@@ -54,9 +54,9 @@ export const SPLITS: Record<string, [number, number, number, number]> = {
 	"review-ready-work": [9, 9, 10, 12],
 	"decisions-and-documentation": [9, 9, 9, 13],
 	"constructive-code-review": [10, 10, 9, 11],
-	// Two at Needs attention, and the reader there too: three, so the split is held back.
+	// Two at Needs attention, and the reader there too: a part of three.
 	"testing-discipline": [2, 12, 13, 13],
-	// Three with a standing: held back.
+	// Three with a standing: a part of one at each verdict.
 	"issue-traceability-and-lifecycle": [1, 1, 1, 37],
 	"actionable-issue-authoring": [9, 9, 10, 12],
 	"code-craftsmanship": [10, 9, 9, 12],

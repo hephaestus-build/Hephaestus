@@ -32,11 +32,9 @@ public class PracticesAcrossWorkspaceController {
     @Operation(
             operationId = "getPracticesAcrossWorkspace",
             summary = "How the workspace's developers split across practice groups and practices, the reader marked",
-            description = "Counts developers, never names them: every count shown, and the three differences that"
-                    + " ADR 0051 names, hold none or at least "
-                    + CohortPrivacyPolicy.MINIMUM_DEVELOPERS_PER_COUNT
-                    + " developers, whoever reads it (CohortPrivacyPolicy). The splits count every developer's"
-                    + " current standing and take no window.")
+            description = "Counts developers, never names them. Every split shows all its parts, however few"
+                    + " developers they count. The splits count every developer's current standing and take no"
+                    + " window.")
     @ApiResponse(responseCode = "200", description = "Practices across the workspace returned")
     public ResponseEntity<PracticesAcrossWorkspaceDTO> getPracticesAcrossWorkspace(WorkspaceContext context) {
         return ResponseEntity.ok(service.read(context));
@@ -46,9 +44,7 @@ public class PracticesAcrossWorkspaceController {
     @Operation(
             operationId = "getPracticesAcrossWorkspaceTiles",
             summary = "The reader's figures over one window beside the workspace's middle half",
-            description = "A middle half shows only when at least "
-                    + CohortPrivacyPolicy.MINIMUM_DEVELOPERS_FOR_MIDDLE_HALF
-                    + " developers are counted in the window, whoever reads it; each window is checked on its own.")
+            description = "A middle half shows whenever one or more developers are counted in the window.")
     @ApiResponse(responseCode = "200", description = "The tiles for the window returned")
     public ResponseEntity<PracticesAcrossWorkspaceTilesDTO> getPracticesAcrossWorkspaceTiles(
             WorkspaceContext context, @RequestParam PracticesAcrossWorkspaceWindow window) {

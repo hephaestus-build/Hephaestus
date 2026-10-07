@@ -6,6 +6,7 @@ description: See how your work stands across practice groups, which practices we
 
 Use your Practice profile to read feedback, choose a next step, and check the evidence behind your practice standing.
 Other developers cannot see it.
+They see your standings only as part of the counts on [Practices across the workspace](#practices-across-the-workspace).
 [Your data in Hephaestus](./privacy.mdx#ai-processing-and-visibility) lists who else can.
 
 The profile uses practice review results about your own pull requests, merge requests, issues, conversations, and documents.
@@ -214,6 +215,7 @@ The short path above the title shows where you are, from the page to the panel.
 
 Practices across the workspace shows where the developers in your workspace stand in each practice group.
 It counts developers and never names one.
+Each standing comes from AI review of the work and can be wrong, so it is not a grade.
 Your own standings, trends, and next step stay in your Practice profile.
 
 1. In the sidebar, under **Practice profile**, select **Across the workspace**.
@@ -237,17 +239,21 @@ It shows how many developers need attention, get mixed feedback, are going well,
 **You** marks your part.
 Each developer counts with the standing that their Practice profile shows now, so your marker agrees with your profile.
 
-### What the page holds back
+### Small counts
 
-Every count of developers on the page holds at least four developers.
-So each count stands for at least three people besides you, and everyone sees the same bars.
+The page shows every count, however small, and everyone sees the same bars.
+It never names a developer, but a small count can tell other members where you stand:
 
-- A bar shows its parts only when each part holds at least four developers.
-- Otherwise, it shows only its number of developers, with **Split held back** under it.
-- If that number is below four, the bar is a dashed track.
-- A practice bar is compared with its group’s bar and the group’s other practice bars. If that would single out one to three developers, it shows only its number.
-- If the groups together would single out one to three developers, every bar on the page shows only its number.
-- A figure shows its band only when it counts at least seven developers.
+- If everyone in a bar is in one part, each of them has that standing.
+- If you are alone in a part, a member who can tell that it is you knows your standing.
+  A member who shares a part of two with you knows that you have the same standing.
+- A member who compares the page before and after your next review can see your part change.
+- When a figure counts only one or two developers, its band shows their values.
+
+A workspace admin can hide you from the workspace. Then the page does not count you.
+
+Each bar shows every part that holds a developer, also a part of one.
+Before anybody has a standing, each bar is a dashed track with **No developer has a standing yet** under it.
 
 ### Open a group
 

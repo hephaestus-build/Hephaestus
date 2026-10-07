@@ -19,19 +19,13 @@ import {
 } from "@/components/practice-vocabulary/standing-counts";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import {
-	HELD_BACK,
-	shownSplit,
-	SPLIT_HELD_BACK,
-	splitDescription,
-	splitTotalText,
-} from "./across-workspace-copy";
+import { NOBODY_YET, splitDescription, splitTotalText } from "./across-workspace-copy";
 
 export interface WorkspaceSplitBarProps {
 	split: WorkspaceSplit;
 	/**
-	 * The part the You marker is on. The server sends it only on a split that shows its parts and
-	 * counts the reader, so its absence is the unmarked bar.
+	 * The part the You marker is on. The server sends it only on a split that counts the reader, so
+	 * its absence is the unmarked bar.
 	 */
 	yourStanding?: PracticeGroupStandingValue;
 }
@@ -63,10 +57,7 @@ const SPLIT_PARTS: readonly PartDef[] = [
 ];
 
 /** Dashed, so an empty track is never read as a part of none yet. */
-const HELD_BACK_TRACK = cn("h-2 rounded-sm border border-dashed border-current", NEUTRAL_GREY);
-
-/** In no verdict's colour, so a total cannot be read as one part. */
-const TOTAL_ONLY_BAR = cn("h-2 rounded-sm bg-current", NEUTRAL_GREY);
+const EMPTY_TRACK = cn("h-2 rounded-sm border border-dashed border-current", NEUTRAL_GREY);
 
 function YouMarker() {
 	return (
@@ -80,41 +71,19 @@ function YouMarker() {
 /**
  * How the developers with a current standing split across one practice group or practice, as one
  * bar counted in developers. Each part carries its count and its standing's icon under it, so no
- * part rests on colour alone (WCAG 2.2 SC 1.4.1). A split shown only as its total is one neutral
- * bar and marks no one. A split held back whole is a dashed track with its reason. All three take
- * the same width and height, so rows of mixed shapes line up.
+ * part rests on colour alone (WCAG 2.2 SC 1.4.1). A split that counts nobody is a dashed track that
+ * says so, at the same width, so the rows line up.
  */
-export function WorkspaceSplitBar({ split: wire, yourStanding }: WorkspaceSplitBarProps) {
-	const split = shownSplit(wire);
-	if (split === undefined) {
+export function WorkspaceSplitBar({ split, yourStanding }: WorkspaceSplitBarProps) {
+	if (split.developers === 0) {
 		return (
 			<div className="flex w-full min-w-0 flex-col gap-1">
-				<HeldBackTrack />
-				<p className="text-xs text-muted-foreground">{HELD_BACK}.</p>
+				<EmptyTrack />
+				<p className="text-xs text-muted-foreground">{NOBODY_YET}.</p>
 			</div>
 		);
 	}
-	const description = splitDescription(wire, yourStanding);
-	const total = (
-		<p aria-hidden className="text-right text-xs text-muted-foreground tabular-nums">
-			{splitTotalText(split)}
-		</p>
-	);
-	if (split.shape === "TOTAL_ONLY") {
-		return (
-			<div className="flex w-full min-w-0 flex-col gap-1">
-				<div role="img" aria-label={description} className="flex w-full min-w-0 flex-col gap-0.5">
-					{/* The marker's row, empty, so the bar sits where a split's bar sits. */}
-					<span aria-hidden className="h-5" />
-					<span aria-hidden className={cn("w-full", TOTAL_ONLY_BAR)} />
-					<span aria-hidden className="text-xs text-muted-foreground">
-						{SPLIT_HELD_BACK}
-					</span>
-				</div>
-				{total}
-			</div>
-		);
-	}
+	const description = splitDescription(split, yourStanding);
 	const parts = [
 		...split.parts.map((part) => ({
 			def: standingPart(part.standing),
@@ -126,7 +95,8 @@ export function WorkspaceSplitBar({ split: wire, yourStanding }: WorkspaceSplitB
 			count: split.noneYet,
 			isYours: yourStanding !== undefined && !isSettledStanding(yourStanding),
 		},
-	];
+		// `min-w-10` would draw a part of nobody as a coloured block; the text alternative names it.
+	].filter(({ count }) => count > 0);
 	return (
 		<div className="flex w-full min-w-0 flex-col gap-1">
 			<div role="img" aria-label={description} className="flex w-full min-w-0 gap-0.5">
@@ -155,17 +125,19 @@ export function WorkspaceSplitBar({ split: wire, yourStanding }: WorkspaceSplitB
 				})}
 			</div>
 			{/* On its own line, so the counts stay centred under their parts. */}
-			{total}
+			<p aria-hidden className="text-right text-xs text-muted-foreground tabular-nums">
+				{splitTotalText(split)}
+			</p>
 		</div>
 	);
 }
 
 /**
- * The empty track of a split held back whole, at a bar's height and place. A table whose every
- * split is held back draws it alone and says the reason once.
+ * The empty track of a split that counts nobody, at a bar's height and place. A table whose every
+ * split counts nobody draws it alone and says why once.
  */
-export function HeldBackTrack() {
-	return <div aria-hidden className={cn("mt-5 w-full", HELD_BACK_TRACK)} />;
+export function EmptyTrack() {
+	return <div aria-hidden className={cn("mt-5 w-full", EMPTY_TRACK)} />;
 }
 
 /** The bar's lines while it loads: the marker's row, the bar, the counts, then the total. */
@@ -196,7 +168,7 @@ export function LevelSplit({
 }
 
 /**
- * Once above each table of bars. A held-back track says what it is under itself, so the legend
+ * Once above each table of bars. An empty track says what it is under itself, so the legend
  * leaves it out.
  */
 export function SplitLegend() {
@@ -218,10 +190,6 @@ export function SplitLegend() {
 			<li className="inline-flex items-center gap-1 text-mentor">
 				<YouMarker />
 				<span className="text-muted-foreground">marks your part</span>
-			</li>
-			<li className="inline-flex items-center gap-1.5">
-				<span aria-hidden className={cn("w-4", TOTAL_ONLY_BAR)} />
-				{SPLIT_HELD_BACK}
 			</li>
 		</ul>
 	);

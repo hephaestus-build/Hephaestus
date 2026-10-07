@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export interface WorkspaceTileProps {
 	title: string;
 	icon: ReactNode;
-	/** The reader's own value and the middle half of the developers with a standing, when it may show. */
+	/** The reader's own value and the middle half of the developers counted, when anybody is. */
 	figure: WorkspaceTileFigure;
 	/** What the value counts: "so far", "of your 18 practices". */
 	qualifier: string;
@@ -40,7 +40,7 @@ export function WorkspaceTile({
 					<>
 						<p className="text-sm text-muted-foreground">
 							{middle === undefined ? (
-								"Needs more data before the workspace shows here."
+								"No developer is counted here yet."
 							) : (
 								<>
 									Typical range:{" "}
@@ -50,7 +50,7 @@ export function WorkspaceTile({
 								</>
 							)}
 						</p>
-						{/* The axis is always there, so the reader's value reads against it; the band once it may show. */}
+						{/* The axis is always there, so the reader's value reads against it; the band once anybody is counted. */}
 						<RangeBar yours={yours} middle={middle} />
 					</>
 				)}
@@ -71,7 +71,7 @@ function rangeText({ low, high }: WorkspaceRange): string {
 
 /**
  * A track from nought with the reader's value pinned on it, and the middle half as a band on it
- * once the workspace may show.
+ * once anybody is counted.
  */
 function RangeBar({ yours, middle }: { yours: number; middle?: WorkspaceRange }) {
 	const scale = scaleOf(yours, middle?.high ?? 0);

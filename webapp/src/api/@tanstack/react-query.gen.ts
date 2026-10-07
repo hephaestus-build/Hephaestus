@@ -5045,7 +5045,7 @@ export const getPracticesAcrossWorkspaceQueryKey = (options: Options<GetPractice
 /**
  * How the workspace's developers split across practice groups and practices, the reader marked
  *
- * Counts developers, never names them: every count shown, and the three differences that ADR 0051 names, hold none or at least 4 developers, whoever reads it (CohortPrivacyPolicy). The splits count every developer's current standing and take no window.
+ * Counts developers, never names them. Every split shows all its parts, however few developers they count. The splits count every developer's current standing and take no window.
  */
 export const getPracticesAcrossWorkspaceOptions = (options: Options<GetPracticesAcrossWorkspaceData>) => queryOptions<GetPracticesAcrossWorkspaceResponse, DefaultError, GetPracticesAcrossWorkspaceResponse, ReturnType<typeof getPracticesAcrossWorkspaceQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {
@@ -5065,7 +5065,7 @@ export const getPracticesAcrossWorkspaceTilesQueryKey = (options: Options<GetPra
 /**
  * The reader's figures over one window beside the workspace's middle half
  *
- * A middle half shows only when at least 7 developers are counted in the window, whoever reads it; each window is checked on its own.
+ * A middle half shows whenever one or more developers are counted in the window.
  */
 export const getPracticesAcrossWorkspaceTilesOptions = (options: Options<GetPracticesAcrossWorkspaceTilesData>) => queryOptions<GetPracticesAcrossWorkspaceTilesResponse, DefaultError, GetPracticesAcrossWorkspaceTilesResponse, ReturnType<typeof getPracticesAcrossWorkspaceTilesQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {

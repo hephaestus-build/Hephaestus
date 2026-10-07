@@ -49,12 +49,11 @@ export const OneValue: Story = {
 	},
 };
 
-export const NeedsMoreData: Story = {
+/** Nobody is counted, so there is no typical range: only the reader's own pin. */
+export const NobodyCounted: Story = {
 	args: { figure: { yours: 17 } },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByText("Needs more data before the workspace shows here."),
-		).toBeVisible();
+		await expect(canvas.getByText("No developer is counted here yet.")).toBeVisible();
 		// The axis stays, with only the reader's own pin on it.
 		await expect(canvas.getByRole("img", { name: "Your value: 17." })).toBeVisible();
 	},

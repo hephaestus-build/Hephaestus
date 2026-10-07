@@ -55,6 +55,8 @@ Contributors who sign in with their GitHub or LRZ-GitLab account get a personal 
 
 Everyone with a role in the workspace also sees Activity. Activity shows counts and lists of pull/merge requests, reviews, issues and comments that members did in the workspace's repositories. It also shows each member's open work (review requests, assigned issues), with each reviewer's review state. Members see this for themselves and for the workspace. Members appear by name, with no scores or ranks.
 
+Members also see Practices across the workspace (ADR 0051). It counts how many developers are at each practice standing in each practice group and practice. It also shows the middle half of the reviewed work, the practices going well, the practices needing attention and the open feedback of the developers counted. It names nobody and has no smallest count. Thus, a small count can tell the members of a workspace the standing of one developer. Hidden members are not counted. The maintainer reassessed this audience on 2026-10-07 with a low residual risk. The full DPIA confirms it (`dpia-prescreen.md` § 6).
+
 Team memberships sync from GitHub teams and gitlab.lrz.de subgroups. They let members narrow Workspace activity to one team. On GitHub, they show a member the review requests addressed to one of their teams. Activity does not check a viewer's own permissions in the source system. Workspace administrators can hide a member from the workspace view. They can also enable Slack integration for App Home privacy controls, mentor DMs, and explicitly activated monitored channels.
 
 Signed-in contributors can send product feedback. They can answer or decline surveys that instance administrators author. These submissions stay in the instance database. Instance administrators can read them for product improvement. They are not reused for research. Research-purpose surveys are covered under *Legal basis* below.
@@ -697,6 +699,9 @@ Historical captured review inputs are unchanged by reconciliation. Person erasur
 handle those copies.
 
 Hephaestus checks GitLab tokens daily. The tokens can rotate or be replaced. Rotation revokes the old token. Source permission and credential recovery are not rights-request fulfilment.
+
+Other members see standings only in the counts of Practices across the workspace, which can identify
+one developer when a count is small.
 
 Practice profiles and their feedback text are private to the developer. Workspace admins can read
 observations, delivery metadata and dispute explanations, but not practice-page or conversation

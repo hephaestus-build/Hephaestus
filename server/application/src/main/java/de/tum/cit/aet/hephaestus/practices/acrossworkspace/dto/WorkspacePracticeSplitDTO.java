@@ -13,8 +13,7 @@ public record WorkspacePracticeSplitDTO(
         @Nullable
         @Schema(
                 description = "The reader's current standing in the practice, the one their practice profile shows:"
-                        + " the part they are marked in. Absent unless the split shows its parts and counts the"
-                        + " reader")
+                        + " the part they are marked in. Absent unless the split counts the reader")
         Standing yourStanding,
 
         @NonNull @Schema(description = "How the developers with a standing split across the practice")

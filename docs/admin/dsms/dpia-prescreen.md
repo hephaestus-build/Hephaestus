@@ -149,6 +149,35 @@ As a deployment governance requirement, reassess the DPIA and amend it where the
   This includes a new artifact source, source combination, private-conversation use or repository-history use.
   It also includes research/evaluation reuse, retention extension or a developer/admin audience.
 
+### Reassessment: Practices across the workspace without a smallest count
+
+**Date:** 2026-10-07. **Trigger:** a new developer audience. **Change:** ADR 0051, amendment of 2026-10-07.
+**Decided by:** the maintainer, as product owner. **Residual risk:** low.
+
+Other members of a workspace see counts of practice standings with no smallest count.
+A small count can tell them the standing of one developer.
+This reassessment also records the derivation decision of rule 6 in [`artifact-source-governance.md`](./artifact-source-governance.md) for these counts.
+
+The reasons:
+
+- The page shows only a coarse standing per practice group and practice, as counts.
+  It shows no feedback text, no observations, and no work content.
+- The audience is the closed workspace.
+  Its members already see the pull requests that the standing comes from.
+- A standing is not a grade, and a person still assesses the work.
+  Thus, the page makes no automated decision under Art. 22 GDPR.
+- Tutors, as workspace admins, already see individual observations.
+  Thus, the extra exposure is only towards peers.
+  It applies mainly to a bar part of one or two developers.
+  Classmates can guess who they are from visible pull requests.
+- The realistic worst case is mild social discomfort.
+- The page, the user docs, and the privacy notice tell developers about this risk.
+  They say that a small count can let others tell where a developer stands.
+- The page says that a standing comes from AI review and can be wrong.
+  The admin docs say that standings must not be used to grade or assess a person.
+
+The TUM/AET data-protection coordinator confirms this reassessment in the full DPIA, which the current scope needs anyway.
+
 The source-specific decision and test checklist lives in
 [`artifact-source-governance.md`](./artifact-source-governance.md). The controller's decision identifier and date
 must replace the pending status at the top of this file when the determination is recorded.

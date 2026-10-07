@@ -1,6 +1,6 @@
 import { ArrowRightIcon } from "lucide-react";
 
-import type { PracticesAcrossWorkspace, WorkspaceGroupSplit } from "@/api/types.gen";
+import type { WorkspaceGroupSplit } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
@@ -20,10 +20,7 @@ export type WorkspaceGroupLevelState =
 	| { status: "loading" }
 	| { status: "error"; error: unknown; onRetry: () => void }
 	| { status: "missing" }
-	| ({ status: "ready"; group: WorkspaceGroupSplit } & Pick<
-			PracticesAcrossWorkspace,
-			"minimumDevelopersPerCount"
-	  >);
+	| { status: "ready"; group: WorkspaceGroupSplit };
 
 export interface WorkspaceGroupLevelProps {
 	nested?: boolean;
@@ -126,9 +123,7 @@ function GroupPractices({
 			{/* The skeleton holds the hint's place, so nothing moves when it arrives. */}
 			{state.status === "loading" && <Skeleton className="h-10 w-full max-w-2xl" />}
 			{state.status === "ready" && state.group.practices.length > 0 && (
-				<p className="max-w-2xl text-sm text-muted-foreground">
-					{barsHint(state.minimumDevelopersPerCount, "practice")}
-				</p>
+				<p className="max-w-2xl text-sm text-muted-foreground">{barsHint("practice")}</p>
 			)}
 			<SplitLegend />
 			<WorkspaceComparisonTable

@@ -4,8 +4,7 @@ import { expect } from "storybook/test";
 import {
 	ACROSS_WORKSPACE,
 	ACROSS_WORKSPACE_TILES,
-	GATED_TILES,
-	GATED_WORKSPACE,
+	NOBODY_TILES,
 } from "@/stories/practices-across-the-workspace-story-data";
 
 import { WorkspaceTiles } from "./WorkspaceTiles";
@@ -35,13 +34,11 @@ export const Default: Story = {
 	},
 };
 
-/** Too few developers with a standing: the reader's own figures stand, the workspace's say why they do not. */
-export const NeedsMoreData: Story = {
-	args: { tiles: GATED_TILES, openFeedback: GATED_WORKSPACE.openFeedback },
+/** Nobody is counted: the reader's own figures stand, and each tile says why it has no range. */
+export const NobodyCounted: Story = {
+	args: { tiles: NOBODY_TILES, openFeedback: { yours: 0 } },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getAllByText("Needs more data before the workspace shows here."),
-		).toHaveLength(4);
+		await expect(canvas.getAllByText("No developer is counted here yet.")).toHaveLength(4);
 		// Each tile keeps its axis, with only the reader's own pin on it.
 		await expect(canvas.getAllByRole("img", { name: /^Your value: \d+\.$/u })).toHaveLength(4);
 	},

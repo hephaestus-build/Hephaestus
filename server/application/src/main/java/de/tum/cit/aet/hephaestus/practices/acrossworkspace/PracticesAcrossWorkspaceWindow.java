@@ -5,8 +5,7 @@ import java.time.temporal.ChronoUnit;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The span the page's tiles read evidence over. Each window is checked against {@link CohortPrivacyPolicy} on its
- * own; the splits read the current standing and take no window.
+ * The span the page's tiles read evidence over; the splits read the current standing and take no window.
  */
 public enum PracticesAcrossWorkspaceWindow {
     ALL_TIME(null),

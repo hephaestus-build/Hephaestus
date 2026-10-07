@@ -7967,9 +7967,8 @@ paths:
       - Practice review trace
   /workspaces/{workspaceSlug}/practices/workspace-overview:
     get:
-      description: "Counts developers, never names them: every count shown, and the\
-        \ three differences that ADR 0051 names, hold none or at least 4 developers,\
-        \ whoever reads it (CohortPrivacyPolicy). The splits count every developer's\
+      description: "Counts developers, never names them. Every split shows all its\
+        \ parts, however few developers they count. The splits count every developer's\
         \ current standing and take no window."
       operationId: getPracticesAcrossWorkspace
       parameters:
@@ -7993,8 +7992,8 @@ paths:
       - Practices Across The Workspace
   /workspaces/{workspaceSlug}/practices/workspace-overview/tiles:
     get:
-      description: "A middle half shows only when at least 7 developers are counted\
-        \ in the window, whoever reads it; each window is checked on its own."
+      description: A middle half shows whenever one or more developers are counted
+        in the window.
       operationId: getPracticesAcrossWorkspaceTiles
       parameters:
       - description: Workspace slug
@@ -16050,11 +16049,6 @@ components:
             \ catalog order"
           items:
             $ref: "#/components/schemas/WorkspaceGroupSplit"
-        minimumDevelopersPerCount:
-          type: integer
-          format: int32
-          description: "The fewest developers a shown count holds, the reader among\
-            \ them or not"
         openFeedback:
           $ref: "#/components/schemas/WorkspaceTile"
           description: "The reader's open feedback, counted by the rule the practice\
@@ -16062,24 +16056,17 @@ components:
             \ both open now"
       required:
       - groups
-      - minimumDevelopersPerCount
       - openFeedback
     PracticesAcrossWorkspaceTiles:
       type: object
       description: The reader's figures over one window beside the middle half of
-        the developers with a standing in it; each window is checked on its own
+        the developers with a standing in it
       properties:
         developersWithAStandingInWindow:
           type: integer
           format: int32
           description: "Eligible developers with a standing in a practice group shown\
-            \ in the window, the developers the tiles compare; absent while too few\
-            \ to show"
-        minimumDevelopersForMiddleHalf:
-          type: integer
-          format: int32
-          description: "The fewest developers a middle half is read over, the reader\
-            \ among them or not; below it a tile shows only the reader's own value"
+            \ in the window, the developers the tiles compare"
         practicesGoingWell:
           $ref: "#/components/schemas/WorkspaceTile"
           description: The reader's practices going well
@@ -16102,7 +16089,7 @@ components:
           description: "The practices the reader's profile lists, the denominator\
             \ of the practice tiles"
       required:
-      - minimumDevelopersForMiddleHalf
+      - developersWithAStandingInWindow
       - practicesGoingWell
       - practicesNeedingAttention
       - reviewedWork
@@ -20049,7 +20036,7 @@ components:
           type: string
           description: "The reader's current standing in the group, the one their\
             \ practice profile shows: the part they are marked in. Absent unless the\
-            \ split shows its parts and counts the reader"
+            \ split counts the reader"
           enum:
           - DEVELOPING
           - STRENGTH
@@ -20574,7 +20561,7 @@ components:
           type: string
           description: "The reader's current standing in the practice, the one their\
             \ practice profile shows: the part they are marked in. Absent unless the\
-            \ split shows its parts and counts the reader"
+            \ split counts the reader"
           enum:
           - DEVELOPING
           - STRENGTH
@@ -20651,35 +20638,28 @@ components:
     WorkspaceSplit:
       type: object
       description: "How the developers with a standing split across one practice group\
-        \ or one practice, counted in developers: a part per verdict and none yet,\
-        \ set only for SPLIT, and their total, set for SPLIT and TOTAL_ONLY"
+        \ or one practice, counted in developers: a part per verdict, none yet, and\
+        \ their total"
       properties:
         developers:
           type: integer
           format: int32
           description: "Every developer the split counts, the parts and none yet together,\
-            \ the reader included when counted; set for SPLIT and TOTAL_ONLY"
+            \ the reader included when counted"
         noneYet:
           type: integer
           format: int32
-          description: Developers with a standing in a group shown but none here;
-            set only for SPLIT
+          description: Developers with a standing in a group shown but none here
         parts:
           type: array
           description: "Developers at each verdict, Needs attention, Mixed feedback\
-            \ and Going well in that order; empty unless SPLIT"
+            \ and Going well in that order"
           items:
             $ref: "#/components/schemas/WorkspaceSplitPart"
-        shape:
-          type: string
-          description: How the split may be shown
-          enum:
-          - SPLIT
-          - TOTAL_ONLY
-          - WITHHELD
       required:
+      - developers
+      - noneYet
       - parts
-      - shape
     WorkspaceSplitPart:
       type: object
       description: The developers at one verdict in a split
@@ -20750,8 +20730,7 @@ components:
       properties:
         middle:
           $ref: "#/components/schemas/WorkspaceRange"
-          description: The workspace's middle half; absent while too few developers
-            are counted
+          description: The workspace's middle half; absent while no developer is counted
         yours:
           type: integer
           format: int32

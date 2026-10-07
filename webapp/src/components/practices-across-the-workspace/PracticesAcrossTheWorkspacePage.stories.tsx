@@ -5,9 +5,9 @@ import {
 	ACROSS_WORKSPACE,
 	ACROSS_WORKSPACE_TILES,
 	EMPTY_WORKSPACE,
-	GATED_TILES,
-	GATED_WORKSPACE,
 	MANY_GROUPS_WORKSPACE,
+	NOBODY_TILES,
+	NOBODY_WORKSPACE,
 } from "@/stories/practices-across-the-workspace-story-data";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
@@ -39,8 +39,14 @@ const figuresSection = (canvas: {
 
 export const Default: Story = {
 	play: async ({ canvas, args }) => {
-		// The hints carry the response's own numbers: 26 in the window, a floor of 7 for the band
-		// (6 others), and a floor of 4 for a count (3 others).
+		// A standing is an AI reading of the work, never a grade: the page says so before any count.
+		await expect(
+			canvas.getByText(
+				/Each standing comes from AI review of their work and can be wrong, so it is not a grade\./u,
+			),
+		).toBeVisible();
+		// The hints carry the response's own number, 26 in the window, and say plainly that small
+		// counts show too.
 		await expect(
 			canvas.getByText(
 				/Hephaestus sorts the 26 developers in this workspace who have a standing in the last 30 days/u,
@@ -48,11 +54,19 @@ export const Default: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				/The band shows only when at least 7 developers are counted, so at least 6 developers other than you\./u,
+				/When only a few developers are counted, the band can show the value of one person\./u,
 			),
 		).toBeVisible();
 		await expect(
-			canvas.getByText(/A count shows only when it holds at least 4 developers\./u),
+			canvas.getByText(
+				/Every bar shows all its counts, however small\. So a small count can let others tell where you stand\./u,
+			),
+		).toBeVisible();
+		// A group with parts of one, two and none draws like any other.
+		await expect(
+			groupsTable(canvas).getByRole("img", {
+				name: "28 developers with a current standing in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. The You marker is on none yet.",
+			}),
 		).toBeVisible();
 		// Only the tiles read the window: the toggle sits in their section, and the bars name none.
 		await expect(figuresSection(canvas)).toContainElement(
@@ -88,27 +102,23 @@ export const GroupOpen: Story = {
 	},
 };
 
-/** Too few developers with a standing: every range, split and total is held back. */
-export const Withheld: Story = {
+/** Nobody has a standing yet: no tile has a range, and no bar counts anybody. */
+export const NobodyYet: Story = {
 	args: {
-		state: { status: "ready", overview: GATED_WORKSPACE },
-		tiles: { status: "ready", tiles: GATED_TILES },
+		state: { status: "ready", overview: NOBODY_WORKSPACE },
+		tiles: { status: "ready", tiles: NOBODY_TILES },
 	},
 	play: async ({ canvas }) => {
-		// No count of them, where the server held the total back.
-		await expect(canvas.queryByText(/\d+ developers\s+with a standing/u)).toBeNull();
 		await expect(
-			canvas.getByText(/Hephaestus sorts the developers in this workspace who have a standing/u),
+			canvas.getByText(
+				"No developer in this workspace has a standing in the last 30 days, so these figures have no typical range.",
+			),
 		).toBeVisible();
-		// Open feedback has no band either, and its line says when it would.
-		await expect(
-			canvas.getByText(/Its band shows only when this page counts at least 7 developers\.$/u),
-		).toBeVisible();
-		await expect(
-			canvas.getAllByText("Needs more data before the workspace shows here."),
-		).toHaveLength(4);
+		await expect(canvas.getAllByText("No developer is counted here yet.")).toHaveLength(3);
+		// Nobody has open feedback, so that tile says so in place of a band at nought.
+		await expect(canvas.getByText("Most developers here have no open feedback.")).toBeVisible();
 		// Once for the whole table, not once per group.
-		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(1);
+		await expect(canvas.getAllByText("No developer has a standing yet.")).toHaveLength(1);
 	},
 };
 

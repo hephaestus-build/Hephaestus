@@ -918,6 +918,15 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     .toList();
         }
 
+        /** What Practices across the workspace reads for every developer at once. */
+        private List<UUID> acrossWorkspace() {
+            return observationRepository
+                    .findLatestRunsByWorkspaceSince(workspace.getId(), List.of(aboutUser.getId()), Instant.EPOCH)
+                    .stream()
+                    .map(Observation::getId)
+                    .toList();
+        }
+
         @Test
         void shouldLetTheEarlierValidRunSpeakWhenTheNewestRunsOnlyClaimIsInvalidated() {
             UUID older = insertStrength(agentJob.getId(), "Valid earlier claim", olderAt);
@@ -930,6 +939,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(recent()).containsExactly(older);
             assertThat(earlier()).isEmpty();
             assertThat(window()).containsExactly(older);
+            assertThat(acrossWorkspace()).containsExactly(older);
             DeveloperPracticeSummaryProjection summary = observationRepository
                     .findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId())
                     .getFirst();

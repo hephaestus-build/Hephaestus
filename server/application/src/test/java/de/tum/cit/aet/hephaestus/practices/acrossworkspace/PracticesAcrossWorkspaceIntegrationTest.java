@@ -27,7 +27,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Shape;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
@@ -86,8 +85,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
  * {@code GET /practices/workspace-overview} over a workspace this class seeds: the owner, the reader and twenty six
- * developers, every one with a standing. Packaging and Testing split. Issues has too few developers with a standing
- * and Craft too few without one, so both show only their total. Every count asserted is one of these rows.
+ * developers, every one with a standing. Issues has four developers with a verdict, and Craft has three without
+ * one. Every count asserted is one of these rows.
  */
 class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
@@ -189,11 +188,11 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
             if (index >= 13) {
                 standing(testing, developer, index);
             }
-            // Issues: three and the owner with a standing, all Going well, so no split.
+            // Issues: three and the owner with a standing, all Going well.
             if (index < 3) {
                 strength(issues, developer, MIDDLE);
             }
-            // Craft: eight or nine at each standing and three with none, so the split fails on none yet.
+            // Craft: eight or nine at each standing and three with none.
             if (index > 0) {
                 standing(craft, developer, index);
             }
@@ -202,15 +201,11 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Test
     @WithUser
-    @DisplayName("an even group splits with the reader counted; a bare or nearly full one shows its total only")
-    void shouldSplitAndWithholdByTheCountsOfDevelopersWithAStanding() {
-        read().jsonPath("$.minimumDevelopersPerCount")
-                .isEqualTo(4)
-                // The owner, the reader and twenty six developers are eligible, and every one of them was reviewed.
-                .jsonPath("$.groups[0].split.developers")
+    @DisplayName("every group shows all its parts with the reader counted, however few a part holds")
+    void shouldSplitEveryGroupByTheCountsOfDevelopersWithAStanding() {
+        // The owner, the reader and twenty six developers are eligible, and every one of them was reviewed.
+        read().jsonPath("$.groups[0].split.developers")
                 .isEqualTo(28)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
-                .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourStanding")
                 .isEqualTo("STRENGTH")
                 .jsonPath(groupPart("review-ready-work", "DEVELOPING"))
@@ -222,8 +217,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 // The eight developers and the owner without a standing are a fourth part of their own.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.noneYet")
                 .isEqualTo(9)
-                .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
-                .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].yourStanding")
                 .isEqualTo("NOT_OBSERVED")
                 .jsonPath(groupPart("testing-discipline", "STRENGTH"))
@@ -232,29 +225,30 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(15)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.developers")
                 .isEqualTo(28)
-                .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.shape")
-                .isEqualTo("TOTAL_ONLY")
+                // Four developers with a standing, all at Going well.
                 .jsonPath(groupPart("actionable-issues", "STRENGTH"))
-                .doesNotExist()
-                // A split held back still counts every developer with a standing, as the page total does.
+                .isEqualTo(4)
+                .jsonPath(groupPart("actionable-issues", "DEVELOPING"))
+                .isEqualTo(0)
+                .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.noneYet")
+                .isEqualTo(24)
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.developers")
                 .isEqualTo(28)
-                // A split held back marks no one, the reader included.
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].yourStanding")
-                .doesNotExist()
-                // Every standing holds eight or more, but only three are left at none yet, the reader among them.
-                .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.shape")
-                .isEqualTo("TOTAL_ONLY")
+                .isEqualTo("NOT_OBSERVED")
+                // Only three at none yet, the reader among them: shown as they are.
                 .jsonPath(groupPart("code-craftsmanship", "STRENGTH"))
-                .doesNotExist()
+                .isEqualTo(8)
+                .jsonPath(groupPart("code-craftsmanship", "MIXED"))
+                .isEqualTo(9)
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.noneYet")
-                .doesNotExist();
+                .isEqualTo(3)
+                .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].yourStanding")
+                .isEqualTo("NOT_OBSERVED");
         // The reader's own figures, then the middle half of all twenty eight.
         tiles("ALL_TIME")
                 .jsonPath("$.window")
                 .isEqualTo("ALL_TIME")
-                .jsonPath("$.minimumDevelopersForMiddleHalf")
-                .isEqualTo(7)
                 .jsonPath("$.developersWithAStandingInWindow")
                 .isEqualTo(28)
                 .jsonPath("$.reviewedWork.yours")
@@ -286,19 +280,13 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'explain')]"
                         + ".yourStanding")
                 .isEqualTo("STRENGTH")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'explain')]"
-                        + ".split.shape")
-                .isEqualTo("SPLIT")
                 .jsonPath(practicePart("review-ready-work", "explain", "STRENGTH"))
                 .isEqualTo(7)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".split.shape")
-                .isEqualTo("SPLIT")
                 .jsonPath(practicePart("review-ready-work", "small", "DEVELOPING"))
                 .isEqualTo(6)
                 // A group with one practice names it, split as the group is.
-                .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].practices[0].split.shape")
-                .isEqualTo("TOTAL_ONLY");
+                .jsonPath(practicePart("actionable-issues", "issue", "STRENGTH"))
+                .isEqualTo(4);
     }
 
     @Test
@@ -326,33 +314,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .satisfies(group -> assertThat(group.practices())
                         .extracting(WorkspacePracticeSplitDTO::practiceSlug, WorkspacePracticeSplitDTO::yourStanding)
                         .containsExactly(tuple("atomic", null), tuple("explain", null)));
-    }
-
-    @Test
-    @WithUser
-    @DisplayName("a practice whose split falls short of its group's by fewer than three is held back")
-    void shouldHoldBackAPracticeThatFallsShortOfItsGroupByFewerThanThree() {
-        Practice small = persistPractice(workspace, packagingGroup, "small", "Small", null);
-        // The second practice says of seventeen developers what the first says and nothing of the eighteenth or the
-        // reader: on its own a split, but the group less it would count the two it leaves out.
-        for (int index = 0; index < 17; index++) {
-            standing(small, developer("across-dev-" + index), index);
-        }
-
-        read().jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
-                .isEqualTo("SPLIT")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'explain')]"
-                        + ".split.shape")
-                .isEqualTo("SPLIT")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".yourStanding")
-                .doesNotExist()
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".split.shape")
-                .isEqualTo("TOTAL_ONLY")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".split.parts.length()")
-                .isEqualTo(0);
     }
 
     @Test
@@ -414,10 +375,10 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         // The splits still count the owner, whose profile still shows the standing.
         read().jsonPath("$.groups[0].split.developers")
                 .isEqualTo(28)
-                .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
-                .isEqualTo("SPLIT")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
-                .isEqualTo("SPLIT");
+                .jsonPath(groupPart("testing-discipline", "STRENGTH"))
+                .isEqualTo(4)
+                .jsonPath(groupPart("review-ready-work", "STRENGTH"))
+                .isEqualTo(7);
     }
 
     @Test
@@ -430,9 +391,13 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 "UPDATE observation SET observed_at = observed_at - interval '100 days' WHERE workspace_id = ?",
                 workspace.getId());
 
-        tiles("DAYS_90").jsonPath("$.developersWithAStandingInWindow").doesNotExist();
+        tiles("DAYS_90")
+                .jsonPath("$.developersWithAStandingInWindow")
+                .isEqualTo(0)
+                .jsonPath("$.reviewedWork.middle")
+                .doesNotExist();
         tiles("ALL_TIME").jsonPath("$.developersWithAStandingInWindow").isEqualTo(28);
-        read().jsonPath("$.groups[?(@.split.shape != 'WITHHELD')]")
+        read().jsonPath("$.groups[?(@.split.developers != 0)]")
                 .isEmpty()
                 .jsonPath("$.groups[*].yourStanding")
                 .isEmpty();
@@ -464,11 +429,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         }
 
         assertThat(page.groups())
-                .filteredOn(group -> group.split().shape() == Shape.SPLIT)
                 .isNotEmpty()
                 .allSatisfy(group -> assertThat(group.yourStanding()).isEqualTo(profileGroups.get(group.groupSlug())));
         assertThat(page.groups().stream().flatMap(group -> group.practices().stream()))
-                .filteredOn(practice -> practice.split().shape() == Shape.SPLIT)
                 .isNotEmpty()
                 .allSatisfy(practice ->
                         assertThat(practice.yourStanding()).isEqualTo(profilePractices.get(practice.practiceSlug())));
@@ -482,22 +445,38 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Test
     @WithUser
-    @DisplayName("the reader is not one of the three: two others and the reader leave every figure withheld")
-    void shouldWithholdEverythingWhenOnlyTwoOthersHaveAStanding() {
+    @DisplayName("two others and the reader see every split and every band, a part of one included")
+    void shouldShowEverythingWhenOnlyTwoOthersHaveAStanding() {
         jdbc.update("""
                 DELETE FROM observation WHERE workspace_id = ? AND about_user_id IN (
                     SELECT id FROM "user" WHERE login LIKE 'across-%' AND login NOT IN
                     ('across-dev-0', 'across-dev-1'))
                 """, workspace.getId());
 
-        read().jsonPath("$.groups[?(@.split.shape != 'WITHHELD')]").isEmpty();
+        read().jsonPath("$.groups[0].split.developers")
+                .isEqualTo(3)
+                .jsonPath(groupPart("review-ready-work", "DEVELOPING"))
+                .isEqualTo(1)
+                .jsonPath(groupPart("review-ready-work", "MIXED"))
+                .isEqualTo(1)
+                .jsonPath(groupPart("review-ready-work", "STRENGTH"))
+                .isEqualTo(1)
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.noneYet")
+                .isEqualTo(0)
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourStanding")
+                .isEqualTo("STRENGTH");
         tiles("ALL_TIME")
+                .jsonPath("$.developersWithAStandingInWindow")
+                .isEqualTo(3)
                 .jsonPath("$.reviewedWork.yours")
                 .isEqualTo(1)
                 .jsonPath("$.reviewedWork.middle")
-                .doesNotExist()
-                .jsonPath("$.practicesGoingWell.middle")
-                .doesNotExist();
+                .exists()
+                // Each of the three has one practice going well.
+                .jsonPath("$.practicesGoingWell.middle.low")
+                .isEqualTo(1)
+                .jsonPath("$.practicesGoingWell.middle.high")
+                .isEqualTo(1);
     }
 
     @Test
@@ -521,9 +500,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
         read().jsonPath("$.groups[0].split.developers")
                 .isEqualTo(26)
-                // Two of the six at Needs attention are hidden, which leaves four there: still a part of its own.
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
-                .isEqualTo("SPLIT")
+                // Two of the six at Needs attention are hidden, which leaves four there.
                 .jsonPath(groupPart("review-ready-work", "DEVELOPING"))
                 .isEqualTo(4)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.noneYet")
@@ -978,7 +955,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     /** The overview with every reader marker cleared: what must read the same whoever reads it. */
     private static PracticesAcrossWorkspaceDTO withoutMarkers(PracticesAcrossWorkspaceDTO page) {
         return new PracticesAcrossWorkspaceDTO(
-                page.minimumDevelopersPerCount(),
                 page.openFeedback(),
                 page.groups().stream()
                         .map(group -> new WorkspaceGroupSplitDTO(
