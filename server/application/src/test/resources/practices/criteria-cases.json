@@ -740,5 +740,167 @@
 		},
 		"reason": "The authored record confirms one output and explicitly accounts for the others as dropped or deferred; it does not prove execution.",
 		"workType": "issue"
+	},
+	{
+		"id": "outcome-adopted-mapping-under-template-heading",
+		"expected": {
+			"merge-confirms-the-linked-issue-outcome": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Add date and tag filters to search\", \"body\": \"Closes #12\\n\\n## Checklist\\n- [x] Results can be filtered by date\\n- [x] Results can be filtered by tag\\n\", \"source_branch\": \"search-filters\", \"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\"}\n",
+			"context/description.md": "Closes #12\n\n## Checklist\n- [x] Results can be filtered by date\n- [x] Results can be filtered by tag\n",
+			"context/linked_work_items.json": "{\"workItems\":[{\"number\":12,\"title\":\"Filter search results\",\"state\":\"CLOSED\",\"how\":\"closesOnMerge\",\"body\":\"## Acceptance criteria\\n- [ ] Results can be filtered by date\\n- [ ] Results can be filtered by tag\\n\",\"url\":\"https://example.org/team/project/issues/12\",\"labels\":[]}],\"unresolvedReferences\":[],\"truncated\":false}\n",
+			"context/general_comments.json": "[]\n",
+			"repo/Sources/SearchFilter.swift": "import Foundation\n\nstruct SearchFilter {\n    var from: Date?\n    var tag: String?\n\n    func matches(date: Date, tags: [String]) -> Bool {\n        (from.map { date >= $0 } ?? true) && (tag.map(tags.contains) ?? true)\n    }\n}\n"
+		},
+		"reason": "Checked items in the body map each adopted outcome item by content, so the template heading does not discount them. The ticks report the mapping; they do not prove the filters work.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "outcome-generic-checks-only",
+		"expected": {
+			"merge-confirms-the-linked-issue-outcome": "NOT_MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Add date and tag filters to search\", \"body\": \"Closes #12\\n\\n## Checklist\\n- [x] The build passes\\n- [x] Code reviewed\\n- [x] Lint is clean\\n\", \"source_branch\": \"search-filters\", \"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\"}\n",
+			"context/description.md": "Closes #12\n\n## Checklist\n- [x] The build passes\n- [x] Code reviewed\n- [x] Lint is clean\n",
+			"context/linked_work_items.json": "{\"workItems\":[{\"number\":12,\"title\":\"Filter search results\",\"state\":\"CLOSED\",\"how\":\"closesOnMerge\",\"body\":\"## Acceptance criteria\\n- [ ] Results can be filtered by date\\n- [ ] Results can be filtered by tag\\n\",\"url\":\"https://example.org/team/project/issues/12\",\"labels\":[]}],\"unresolvedReferences\":[],\"truncated\":false}\n",
+			"context/general_comments.json": "[]\n",
+			"repo/Sources/SearchFilter.swift": "import Foundation\n\nstruct SearchFilter {\n    var from: Date?\n    var tag: String?\n\n    func matches(date: Date, tags: [String]) -> Bool {\n        (from.map { date >= $0 } ?? true) && (tag.map(tags.contains) ?? true)\n    }\n}\n"
+		},
+		"reason": "Generic process checks name none of the issue's outcome items, and nothing else accounts for them after the merge.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "outcome-partial-adoption-with-deferral",
+		"expected": {
+			"merge-confirms-the-linked-issue-outcome": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Add the date filter to search\", \"body\": \"Part of #12. This change takes the date filter only.\\n\\n- [x] Results can be filtered by date\\n- Deferred: filtering by tag moves to #13.\\n\", \"source_branch\": \"date-filter\", \"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\"}\n",
+			"context/description.md": "Part of #12. This change takes the date filter only.\n\n- [x] Results can be filtered by date\n- Deferred: filtering by tag moves to #13.\n",
+			"context/linked_work_items.json": "{\"workItems\":[{\"number\":12,\"title\":\"Filter search results\",\"state\":\"OPEN\",\"how\":\"mentions\",\"body\":\"## Acceptance criteria\\n- [ ] Results can be filtered by date\\n- [ ] Results can be filtered by tag\\n\",\"url\":\"https://example.org/team/project/issues/12\",\"labels\":[]}],\"unresolvedReferences\":[],\"truncated\":false}\n",
+			"context/general_comments.json": "[]\n",
+			"repo/Sources/SearchFilter.swift": "import Foundation\n\nstruct SearchFilter {\n    var from: Date?\n\n    func matches(date: Date) -> Bool {\n        from.map { date >= $0 } ?? true\n    }\n}\n"
+		},
+		"reason": "The adopted part is checked and the remainder is named as deferred. The issue may stay open, and the issue's own list need not be ticked again.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "outcome-mere-mention",
+		"expected": {
+			"merge-confirms-the-linked-issue-outcome": "NOT_APPLICABLE"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Speed up search indexing\", \"body\": \"Speeds up search indexing. #12 plans filters for the same screen.\\n\", \"source_branch\": \"faster-index\", \"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\"}\n",
+			"context/description.md": "Speeds up search indexing. #12 plans filters for the same screen.\n",
+			"context/linked_work_items.json": "{\"workItems\":[{\"number\":12,\"title\":\"Filter search results\",\"state\":\"OPEN\",\"how\":\"mentions\",\"body\":\"## Acceptance criteria\\n- [ ] Results can be filtered by date\\n- [ ] Results can be filtered by tag\\n\",\"url\":\"https://example.org/team/project/issues/12\",\"labels\":[]}],\"unresolvedReferences\":[],\"truncated\":false}\n",
+			"context/general_comments.json": "[]\n",
+			"repo/Sources/SearchIndex.swift": "import Foundation\n\nstruct SearchIndex {\n    private var entries: [String: Set<Int>] = [:]\n\n    mutating func add(_ id: Int, words: [String]) {\n        for word in words { entries[word, default: []].insert(id) }\n    }\n}\n"
+		},
+		"reason": "A mention does not adopt the issue's outcome, so this change owes no account of its items.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "clean-source-with-labelled-drawing",
+		"expected": {
+			"leaves-the-code-clean-with-intent-revealing-comments": "MET"
+		},
+		"files": {
+			"repo/Sources/BadgeView.swift": "import SwiftUI\n\nstruct BadgeView: View {\n    var body: some View {\n        Image(\"badge\")\n            .accessibilityLabel(\"Plant care badge\")\n    }\n}\n",
+			"repo/Assets/badge.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\">\n  <!-- Outer ring of the badge -->\n  <circle cx=\"12\" cy=\"12\" r=\"10\" fill=\"none\" stroke=\"#2E7D32\" stroke-width=\"2\"/>\n  <!-- Leaf mark in the centre -->\n  <path d=\"M12 6c-3 3-3 9 0 12 3-3 3-9 0-12z\" fill=\"#2E7D32\"/>\n</svg>\n"
+		},
+		"reason": "The drawing's comments label its artwork; code elsewhere in the change does not make them implementation residue. The source itself is clean.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "source-residue-beside-labelled-drawing",
+		"expected": {
+			"leaves-the-code-clean-with-intent-revealing-comments": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"leaves-the-code-clean-with-intent-revealing-comments": "MINOR"
+		},
+		"files": {
+			"repo/Sources/BadgeView.swift": "import SwiftUI\n\nstruct BadgeView: View {\n    var body: some View {\n        // TEMP: old asset loader, remove before merge\n        // let image = LegacyAssets.load(\"badge-old\")\n        Image(\"badge\")\n            .accessibilityLabel(\"Plant care badge\")\n    }\n}\n",
+			"repo/Assets/badge.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\">\n  <!-- Outer ring of the badge -->\n  <circle cx=\"12\" cy=\"12\" r=\"10\" fill=\"none\" stroke=\"#2E7D32\" stroke-width=\"2\"/>\n  <!-- Leaf mark in the centre -->\n  <path d=\"M12 6c-3 3-3 9 0 12 3-3 3-9 0-12z\" fill=\"#2E7D32\"/>\n</svg>\n"
+		},
+		"reason": "The temporary inactive loader in the source is residue on its own; the drawing's labels neither add to it nor excuse it.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "labelled-drawing-only",
+		"expected": {
+			"leaves-the-code-clean-with-intent-revealing-comments": "NOT_APPLICABLE"
+		},
+		"files": {
+			"repo/Assets/badge.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\">\n  <!-- Outer ring of the badge -->\n  <circle cx=\"12\" cy=\"12\" r=\"10\" fill=\"none\" stroke=\"#2E7D32\" stroke-width=\"2\"/>\n  <!-- Leaf mark in the centre -->\n  <path d=\"M12 6c-3 3-3 9 0 12 3-3 3-9 0-12z\" fill=\"#2E7D32\"/>\n</svg>\n"
+		},
+		"reason": "A change that adds only artwork adds no implementation line, even though the drawing is editable text with comments.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "template-markup-residue",
+		"expected": {
+			"leaves-the-code-clean-with-intent-revealing-comments": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"leaves-the-code-clean-with-intent-revealing-comments": "MINOR"
+		},
+		"files": {
+			"repo/templates/profile.html": "<form method=\"post\" action=\"/profile\">\n  <input name=\"display_name\" value=\"{{ user.display_name }}\">\n  <!-- TEMP: old save button, remove before merge -->\n  <!-- <button type=\"button\" onclick=\"legacySave()\">Save</button> -->\n  <button type=\"submit\">Save</button>\n</form>\n"
+		},
+		"reason": "The template implements the profile form, so its temporary commented-out control is implementation residue whatever the file type.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "preview-of-owner-held-representative-values",
+		"expected": {
+			"ships-a-preview-with-each-new-view": "MET"
+		},
+		"files": {
+			"repo/Sources/ErrandBoard.swift": "import SwiftUI\n\nstruct Errand: Identifiable {\n    let id = UUID()\n    let title: String\n    let itemCount: Int\n    var isDone: Bool\n}\n\nstruct ErrandRow: View {\n    let errand: Errand\n\n    var body: some View {\n        HStack {\n            Image(systemName: errand.isDone ? \"checkmark.circle.fill\" : \"circle\")\n            Text(errand.title)\n            Spacer()\n            Text(\"\\(errand.itemCount) items\")\n        }\n    }\n}\n\nstruct ErrandBoard: View {\n    @State private var errands = [\n        Errand(title: \"Groceries\", itemCount: 12, isDone: false),\n        Errand(title: \"Pharmacy\", itemCount: 1, isDone: true),\n        Errand(title: \"Hardware store\", itemCount: 4, isDone: false),\n        Errand(title: \"Post office\", itemCount: 2, isDone: true)\n    ]\n    private let visibleLimit = 3\n\n    var body: some View {\n        List {\n            ForEach(errands.prefix(visibleLimit)) { errand in\n                ErrandRow(errand: errand)\n            }\n            if errands.count > visibleLimit {\n                Text(\"+\\(errands.count - visibleLimit) more\")\n            }\n        }\n    }\n}\n\n#Preview {\n    ErrandBoard()\n}\n"
+		},
+		"reason": "The board holds four known, varied errands in memory and its body passes them to the rows and the overflow line, so the preview shows representative values without receiving them through an initializer. It says nothing about whether the preview runs.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "preview-of-empty-owner-default",
+		"expected": {
+			"ships-a-preview-with-each-new-view": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"ships-a-preview-with-each-new-view": "MINOR"
+		},
+		"files": {
+			"repo/Sources/ErrandBoard.swift": "import SwiftUI\n\nstruct Errand: Identifiable {\n    let id = UUID()\n    let title: String\n    let itemCount: Int\n    var isDone: Bool\n}\n\nstruct ErrandBoard: View {\n    @State private var errands: [Errand] = []\n\n    var body: some View {\n        List(errands) { errand in\n            LabeledContent(errand.title, value: \"\\(errand.itemCount) items\")\n        }\n    }\n}\n\n#Preview {\n    ErrandBoard()\n}\n"
+		},
+		"reason": "The only values the preview reaches are an empty default, so the list's rows are never shown with data.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "preview-of-live-fetch-without-samples",
+		"expected": {
+			"ships-a-preview-with-each-new-view": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"ships-a-preview-with-each-new-view": "MINOR"
+		},
+		"files": {
+			"repo/Sources/ErrandBoard.swift": "import SwiftUI\n\nstruct Errand: Identifiable, Decodable {\n    let id: Int\n    let title: String\n}\n\n@MainActor final class ErrandModel: ObservableObject {\n    @Published var errands: [Errand] = []\n\n    func load() async throws {\n        let url = URL(string: \"https://example.org/errands\")!\n        let (data, _) = try await URLSession.shared.data(from: url)\n        errands = try JSONDecoder().decode([Errand].self, from: data)\n    }\n}\n\nstruct ErrandBoard: View {\n    @StateObject private var model = ErrandModel()\n\n    var body: some View {\n        List(model.errands) { errand in\n            Text(errand.title)\n        }\n        .task { try? await model.load() }\n    }\n}\n\n#Preview {\n    ErrandBoard()\n}\n"
+		},
+		"reason": "The preview reaches only a live fetch and an empty model, so no known sample values establish what the list shows.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "preview-without-the-empty-state",
+		"expected": {
+			"ships-a-preview-with-each-new-view": "NOT_MET"
+		},
+		"files": {
+			"repo/Sources/ErrandList.swift": "import SwiftUI\n\nstruct Errand: Identifiable {\n    let id = UUID()\n    let title: String\n    let itemCount: Int\n}\n\nstruct ErrandList: View {\n    let errands: [Errand]\n\n    var body: some View {\n        if errands.isEmpty {\n            ContentUnavailableView(\"No errands\", systemImage: \"checklist\", description: Text(\"Add an errand to plan your trip.\"))\n        } else {\n            List(errands) { errand in\n                LabeledContent(errand.title, value: \"\\(errand.itemCount) items\")\n            }\n        }\n    }\n}\n\n#Preview {\n    ErrandList(errands: [\n        Errand(title: \"Groceries\", itemCount: 12),\n        Errand(title: \"Pharmacy\", itemCount: 1)\n    ])\n}\n"
+		},
+		"reason": "Representative values cover the filled list, but the view's own empty state is never shown; filling one state does not cover the other.",
+		"workType": "pull_request"
 	}
 ]
