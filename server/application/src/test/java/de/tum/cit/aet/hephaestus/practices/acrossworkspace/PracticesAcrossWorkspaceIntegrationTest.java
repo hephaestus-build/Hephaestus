@@ -5,12 +5,18 @@ import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -36,24 +42,32 @@ import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamRepositorySettings;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamRepositorySettingsRepository;
 import jakarta.persistence.EntityManagerFactory;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.hibernate.SessionFactory;
@@ -62,9 +76,12 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -73,6 +90,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * and Craft too few without one, so both show only their total. Every count asserted is one of these rows.
  */
 class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewIntegrationTest {
+
+    private static final Logger log = LoggerFactory.getLogger(PracticesAcrossWorkspaceIntegrationTest.class);
 
     private static final String URI = "/workspaces/{workspaceSlug}/practices/workspace-overview";
 
@@ -86,6 +105,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private SqlStatementCounter sqlStatements;
 
     @Autowired
     private PracticesAcrossWorkspaceService acrossWorkspaceService;
@@ -120,6 +142,17 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @Autowired
     private PullRequestRepository pullRequestRepository;
 
+    @Autowired
+    private ConnectionRepository connections;
+
+    @Autowired
+    private RepositoryToMonitorRepository monitors;
+
+    @Autowired
+    private ReviewRepositoryPreparer repositoryPreparer;
+
+    private Repository citedRepository;
+    private Connection scmConnection;
     private Workspace workspace;
     private User reader;
     private PracticeGroup packagingGroup;
@@ -139,6 +172,8 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         issues = persistPractice(workspace, group(workspace, "actionable-issues", "Issues"), "issue", "Issue", null);
         craft = persistPractice(workspace, group(workspace, "code-craftsmanship", "Craft"), "craft", "Craft", null);
 
+        scmConnection = connectScm();
+        citedRepository = permittedRepository();
         reader = member("testuser"); // matches @WithUser
         strength(packaging, reader, NEWEST);
         // The owner has a standing too, so every eligible developer has one.
@@ -539,6 +574,300 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 taskScheduler.start();
             }
         }
+    }
+
+    /**
+     * Evidence that cites a source, as every review since frozen workspace folders does, is checked against the
+     * source's owner once per read, not once per citation: six more developers whose every observation cites a
+     * repository add no statement either.
+     */
+    @Test
+    @WithUser
+    @DisplayName("the overview and the tiles check a cited repository once per read, however many observations cite it")
+    void shouldRunTheSameStatementsWhenMoreObservationsCiteARepository() throws InterruptedException {
+        Statistics statistics =
+                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        boolean wasEnabled = statistics.isStatisticsEnabled();
+        boolean wasRunning = taskScheduler.isRunning();
+        try {
+            if (wasRunning) {
+                var paused = new CountDownLatch(1);
+                taskScheduler.stop(paused::countDown);
+                assertThat(paused.await(10, TimeUnit.SECONDS))
+                        .as("scheduled tasks already running finish")
+                        .isTrue();
+            }
+            statistics.setStatisticsEnabled(true);
+            citingRepository(member("across-citing-first"));
+            List<Long> before = statementsPerRead(statistics);
+            for (int index = 0; index < 6; index++) {
+                citingRepository(member("across-citing-" + index));
+            }
+
+            assertThat(statementsPerRead(statistics)).isEqualTo(before);
+        } finally {
+            statistics.setStatisticsEnabled(wasEnabled);
+            if (wasRunning) {
+                taskScheduler.start();
+            }
+        }
+    }
+
+    @Test
+    @WithUser
+    void shouldKeepCourseScaleStatementCountsBoundedWithRepositoryPersonAndHistoryCitations() throws Exception {
+        List<Practice> practices = new ArrayList<>(List.of(packaging, testing, issues, craft));
+        for (int index = practices.size(); index < 40; index++) {
+            practices.add(persistPractice(workspace, packagingGroup, "scale-" + index, "Scale " + index, null));
+        }
+        List<User> developers = new ArrayList<>(List.of(reader, developer("across-owner")));
+        for (int index = 0; index < DEVELOPERS; index++) developers.add(developer("across-dev-" + index));
+        while (developers.size() < 150) developers.add(member("scale-dev-" + developers.size()));
+        Map<Long, UUID> history = new HashMap<>();
+        for (User developer : developers) {
+            AgentJob leaf = persistPullRequestReview(workspace, nextNumber, OLDEST);
+            UUID earlier = observe(packaging, leaf, nextNumber++, developer, MET, null, OLDEST);
+            AgentJob parent = persistPullRequestReview(workspace, nextNumber, MIDDLE);
+            history.put(
+                    developer.getId(),
+                    observe(
+                            packaging,
+                            parent,
+                            nextNumber++,
+                            developer,
+                            MET,
+                            null,
+                            MIDDLE,
+                            citingHistory(developer, earlier, true)));
+        }
+        var rows = new ArrayList<Object[]>();
+        for (int work = 0; work < 4; work++) {
+            for (User developer : developers) {
+                AgentJob job = persistPullRequestReview(workspace, nextNumber++, NEWEST);
+                String evidence = citingHistory(developer, Objects.requireNonNull(history.get(developer.getId())), true)
+                        .replace(
+                                "\"quoteRedacted\":false}",
+                                "\"quoteRedacted\":false,\"sourceReference\":{\"records\":[{\"type\":\"repository\",\"id\":"
+                                        + citedRepository.getId() + "}]}}");
+                for (Practice practice : practices) {
+                    UUID id = UUID.randomUUID();
+                    rows.add(new Object[] {
+                        id,
+                        "scale-" + id,
+                        job.getId(),
+                        workspace.getId(),
+                        practice.getId(),
+                        practice.getCurrentRevision().getId(),
+                        "scm.pull_request",
+                        (long) nextNumber,
+                        developer.getId(),
+                        "Scale observation",
+                        "MET",
+                        evidence,
+                        "Evidence",
+                        Timestamp.from(NEWEST),
+                        "LIVE"
+                    });
+                }
+            }
+        }
+        Statistics statistics =
+                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        boolean enabled = statistics.isStatisticsEnabled();
+        boolean running = taskScheduler.isRunning();
+        try {
+            if (running) {
+                var stopped = new CountDownLatch(1);
+                taskScheduler.stop(stopped::countDown);
+                assertThat(stopped.await(10, TimeUnit.SECONDS)).isTrue();
+            }
+            statistics.setStatisticsEnabled(true);
+            insertScaleRows(rows.subList(0, 6_000));
+            List<Long> smaller = measuredReads(statistics, "6000 observations plus history");
+            insertScaleRows(rows.subList(6_000, rows.size()));
+            assertThat(measuredReads(statistics, "24000 observations plus history"))
+                    .isEqualTo(smaller);
+            try (var requests = Executors.newFixedThreadPool(2)) {
+                sqlStatements.reset();
+                long start = System.nanoTime();
+                CompletableFuture.allOf(
+                                CompletableFuture.runAsync(() -> read(), requests),
+                                CompletableFuture.runAsync(() -> tiles("DAYS_30"), requests))
+                        .get(30, TimeUnit.SECONDS);
+                log.info(
+                        "Course whole page: {} ms, {} JDBC statements",
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start),
+                        sqlStatements.count());
+            }
+        } finally {
+            statistics.setStatisticsEnabled(enabled);
+            if (running) taskScheduler.start();
+        }
+    }
+
+    private void insertScaleRows(List<Object[]> rows) {
+        jdbc.batchUpdate("""
+                INSERT INTO observation (id, occurrence_key, agent_job_id, workspace_id, practice_id,
+                    practice_revision_id, artifact_kind, artifact_id, about_user_id, summary, outcome,
+                    evidence, evidence_rationale, observed_at, origin)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?, ?, ?)
+                """, rows);
+    }
+
+    private List<Long> measuredReads(Statistics statistics, String size) {
+        statistics.clear();
+        sqlStatements.reset();
+        long start = System.nanoTime();
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(150);
+        long overview = sqlStatements.count();
+        log.info(
+                "Course overview: {}, {} ms, {} JDBC statements",
+                size,
+                TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start),
+                overview);
+        List<Long> statements = new ArrayList<>(List.of(overview));
+        for (PracticesAcrossWorkspaceWindow window : PracticesAcrossWorkspaceWindow.values()) {
+            statistics.clear();
+            sqlStatements.reset();
+            start = System.nanoTime();
+            tiles(window.name())
+                    .jsonPath("$.developersWithAStandingInWindow")
+                    .isEqualTo(150)
+                    .jsonPath("$.yourPractices")
+                    .isEqualTo(40);
+            long count = sqlStatements.count();
+            log.info(
+                    "Course tiles {}: {}, {} ms, {} JDBC statements",
+                    window,
+                    size,
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start),
+                    count);
+            statements.add(count);
+        }
+        return statements;
+    }
+
+    @Test
+    @WithUser
+    void shouldRunTheSameStatementsWhenMoreDistinctHistoryRecordsAreCited() throws InterruptedException {
+        Statistics statistics =
+                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        boolean enabled = statistics.isStatisticsEnabled();
+        boolean running = taskScheduler.isRunning();
+        try {
+            if (running) {
+                var stopped = new CountDownLatch(1);
+                taskScheduler.stop(stopped::countDown);
+                assertThat(stopped.await(10, TimeUnit.SECONDS)).isTrue();
+            }
+            statistics.setStatisticsEnabled(true);
+            citingHistory();
+            List<Long> before = statementsPerRead(statistics);
+            for (int index = 0; index < 6; index++) citingHistory();
+            assertThat(statementsPerRead(statistics)).isEqualTo(before);
+        } finally {
+            statistics.setStatisticsEnabled(enabled);
+            if (running) taskScheduler.start();
+        }
+    }
+
+    private void citingHistory() {
+        AgentJob leaf = persistPullRequestReview(workspace, nextNumber, OLDEST);
+        UUID earlier = observe(testing, leaf, nextNumber++, reader, MET, null, OLDEST);
+        AgentJob parent = persistPullRequestReview(workspace, nextNumber, MIDDLE);
+        UUID previous =
+                observe(testing, parent, nextNumber++, reader, MET, null, MIDDLE, citingHistory(reader, earlier, true));
+        AgentJob newest = persistPullRequestReview(workspace, nextNumber, NEWEST);
+        observe(testing, newest, nextNumber++, reader, MET, null, NEWEST, citingHistory(reader, previous, true));
+    }
+
+    private Connection connectScm() {
+        var connection = new Connection(
+                workspace,
+                IntegrationKind.GITHUB,
+                workspace.getAccountLogin(),
+                new ConnectionConfig.GitHubPatConfig(workspace.getAccountLogin(), null, Set.of()));
+        ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);
+        return connections.save(connection);
+    }
+
+    private Repository permittedRepository() {
+        var repository = new Repository();
+        repository.setProvider(ensureGitHubProvider());
+        repository.setNativeId(9_002L);
+        repository.setName("visible");
+        repository.setNameWithOwner("across-org/visible");
+        repository.setHtmlUrl("https://github.com/across-org/visible");
+        repository.setDefaultBranch("main");
+        repository.setCreatedAt(NOW);
+        repository.setUpdatedAt(NOW);
+        repository.setPushedAt(NOW);
+        repository = repositoryRepository.save(repository);
+        var monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(workspace);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitors.save(monitor);
+        assertThat(repositoryPreparer.permittedRepositories(workspace.getId()))
+                .extracting(Repository::getId)
+                .contains(repository.getId());
+        return repository;
+    }
+
+    @Test
+    @WithUser
+    void shouldRecheckRemovedRepositoriesAndRevokedConnectionsOnEachRequest() {
+        User developer = member("across-source-only");
+        citingRepository(developer);
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(29);
+        jdbc.update("UPDATE connection SET state = 'SUSPENDED' WHERE id = ?", scmConnection.getId());
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(28);
+        jdbc.update("UPDATE connection SET state = 'ACTIVE' WHERE id = ?", scmConnection.getId());
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(29);
+        jdbc.update(
+                "DELETE FROM repository_to_monitor WHERE workspace_id = ? AND name_with_owner = ?",
+                workspace.getId(),
+                citedRepository.getNameWithOwner());
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(28);
+    }
+
+    /** Three reviews of the developer's work whose evidence cites the reviewed repository. */
+    private void citingRepository(User developer) {
+        String evidence = "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":"
+                + "\"context/diff.patch\",\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":1,"
+                + "\"endLine\":1,\"quote\":\"example\",\"quoteRedacted\":false,\"sourceReference\":"
+                + "{\"records\":[{\"type\":\"repository\",\"id\":" + citedRepository.getId() + "}]}}]}";
+        for (Instant at : List.of(OLDEST, MIDDLE, NEWEST)) {
+            AgentJob run = persistPullRequestReview(workspace, nextNumber, at);
+            observe(packaging, run, nextNumber++, developer, MET, null, at, evidence);
+        }
+    }
+
+    @Test
+    @WithUser
+    void shouldReadNewResultsAndVisibilityChangesOnTheNextRequest() {
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(28);
+        User late = member("across-late");
+        strength(packaging, late, NEWEST);
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(29);
+        workspaceMembershipService.updateMemberVisibility(workspace.getId(), late.getId(), true);
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(28);
+    }
+
+    /** A diff citation, a citation of one of the developer's observations, and of the developer when asked. */
+    private static String citingHistory(User developer, UUID observation, boolean citingThePerson) {
+        String person = "{\"sourceKind\":\"workspace.project-inventory\",\"artifactPath\":\"context/people/"
+                + developer.getId() + "/person.json\",\"path\":\"person.json\",\"startLine\":1,\"endLine\":1,"
+                + "\"quote\":\"x\",\"quoteRedacted\":false,\"sourceReference\":{\"records\":[{\"type\":"
+                + "\"person\",\"person\":" + developer.getId() + "}]}},";
+        return "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":"
+                + "\"context/diff.patch\",\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":1,"
+                + "\"endLine\":1,\"quote\":\"example\",\"quoteRedacted\":false},"
+                + (citingThePerson ? person : "")
+                + "{\"sourceKind\":\"hephaestus.observation-history\",\"artifactPath\":\"context/people/"
+                + developer.getId() + "/observations.jsonl\",\"path\":\"observations.jsonl\",\"startLine\":1,"
+                + "\"endLine\":1,\"quote\":\"x\",\"quoteRedacted\":false,\"sourceReference\":{\"records\":"
+                + "[{\"type\":\"observation\",\"id\":\"" + observation + "\",\"person\":" + developer.getId()
+                + "}]}}]}";
     }
 
     /** The JDBC statements one overview read and one tiles read prepare, after a read that warms the context. */

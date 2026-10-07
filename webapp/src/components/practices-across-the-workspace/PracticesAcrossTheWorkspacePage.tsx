@@ -1,6 +1,7 @@
 // The palette this page shares with the practice profile is `webapp/AGENTS.md` § Practice surfaces palette.
 
 import { cn } from "cn";
+import { useSpinDelay } from "spin-delay";
 import type { PracticesAcrossWorkspace, PracticesAcrossWorkspaceTiles } from "@/api/types.gen";
 import { STALE } from "@/components/activity/activity-tones";
 import type { PanelState } from "@/components/common/panel-state";
@@ -21,6 +22,8 @@ import {
 	type AcrossWorkspaceWindow,
 	barsHint,
 	GROUPS_LOAD_ERROR,
+	SLOW_LOAD_AFTER_MS,
+	SLOW_LOAD_NOTE,
 	tilesHint,
 	WINDOW_OPTIONS,
 	windowHeading,
@@ -58,12 +61,21 @@ export function PracticesAcrossTheWorkspacePage({
 	const windowTiles = tiles.status === "ready" ? tiles.tiles : undefined;
 	const stale = tiles.status === "ready" && tiles.stale === true;
 	const loading = state.status === "loading" || tiles.status === "loading";
+	// The note waits until the counts take noticeably long, then stays long enough to be read.
+	const slow = useSpinDelay(loading, { delay: SLOW_LOAD_AFTER_MS, minDuration: 500 });
 	return (
 		<PageLayout className="space-y-8">
 			<PageHeader
 				title="Practices across the workspace"
 				description="This page shows where the developers in this workspace stand in each practice group. Your next step is in your Practice profile."
 			/>
+			{/* The live region is there from the start, so the note is announced when it appears. */}
+			<p
+				role="status"
+				className={cn("max-w-3xl text-sm text-muted-foreground", !slow && "sr-only")}
+			>
+				{slow ? SLOW_LOAD_NOTE : null}
+			</p>
 
 			{state.status === "error" ? (
 				// Every region reads the overview, so no control on the page can fix this but Retry.

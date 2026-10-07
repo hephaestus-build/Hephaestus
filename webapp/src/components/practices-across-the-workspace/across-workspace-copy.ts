@@ -57,6 +57,16 @@ export const ACROSS_THE_WORKSPACE = "Across the workspace";
 /** One action from the group's header and from each practice row, so one label. */
 export const OPEN_IN_YOUR_PROFILE = "Open in your Practice profile";
 
+/** Delay before the page explains a slow read. */
+export const SLOW_LOAD_AFTER_MS = 4000;
+
+/** Shown while the counts take longer than {@link SLOW_LOAD_AFTER_MS}. */
+export const SLOW_LOAD_NOTE =
+	"Counting where everyone in the workspace stands takes a moment in a large course. The page fills in when the counts are ready.";
+
+/** Keep completed queries fresh across window changes and brief focus changes. */
+export const ACROSS_WORKSPACE_STALE_MS = 5 * 60 * 1000;
+
 /** The overview failed: the bars and the practice groups' levels have nothing to show. */
 export const GROUPS_LOAD_ERROR = "We could not load the practice groups";
 

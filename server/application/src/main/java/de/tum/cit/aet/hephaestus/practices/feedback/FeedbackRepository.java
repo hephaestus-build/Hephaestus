@@ -326,6 +326,10 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     @Query("SELECT f FROM Feedback f WHERE f.id = :id AND f.workspaceId = :workspaceId AND " + SAID_TO_RECIPIENT)
     Optional<Feedback> findPersonHistoryRecord(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
+    /** {@link #findPersonHistoryRecord} for several ids at once. */
+    @Query("SELECT f FROM Feedback f WHERE f.id IN :ids AND f.workspaceId = :workspaceId AND " + SAID_TO_RECIPIENT)
+    List<Feedback> findPersonHistoryRecords(@Param("ids") Collection<UUID> ids, @Param("workspaceId") long workspaceId);
+
     /** Delivered summary and inline-only feedback for a recipient, newest first. */
     @Query("""
         SELECT f FROM Feedback f

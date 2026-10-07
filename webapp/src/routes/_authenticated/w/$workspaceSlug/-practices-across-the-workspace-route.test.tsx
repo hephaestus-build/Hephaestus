@@ -1,15 +1,18 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { focusManager } from "@tanstack/react-query";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PracticesAcrossWorkspaceTiles } from "@/api/types.gen";
+import { SLOW_LOAD_NOTE } from "@/components/practices-across-the-workspace/across-workspace-copy";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import {
 	ACROSS_WORKSPACE,
 	ACROSS_WORKSPACE_TILES,
 } from "@/stories/practices-across-the-workspace-story-data";
+import { deferred, sleep } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole app shell and its lazy modules.
@@ -210,6 +213,60 @@ describe("Practices across the workspace", () => {
 		expect(screen.queryByRole("table", { name: "All practice groups" })).toBeNull();
 		// The address still names the group, so the level stays open over the failure.
 		expect(router.state.location.search.detail).toStrictEqual(["practice-group:review-ready-work"]);
+	});
+
+	it("starts the overview and the tiles together and reads neither again on a refocus", async () => {
+		const tilesRequested = deferred();
+		server.use(
+			// The overview answers only once the tiles were asked for, which a page reading them one after the
+			// other never does.
+			http.get("*/workspaces/:workspaceSlug/practices/workspace-overview", async () => {
+				await tilesRequested.promise;
+				return HttpResponse.json(ACROSS_WORKSPACE);
+			}),
+			http.get("*/workspaces/:workspaceSlug/practices/workspace-overview/tiles", () => {
+				tilesRequested.resolve();
+				return HttpResponse.json(tilesOf("DAYS_30"));
+			}),
+		);
+		await renderPage();
+		await waitFor(() => {
+			expect(tilesReads()).toHaveLength(1);
+		});
+
+		act(() => {
+			focusManager.setFocused(false);
+			focusManager.setFocused(true);
+		});
+		await sleep(100);
+
+		expect(overviewReads()).toHaveLength(1);
+		expect(tilesReads()).toHaveLength(1);
+		focusManager.setFocused(undefined);
+	});
+
+	it("says why the page is still empty while the counts take long", async () => {
+		const counted = deferred();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practices/workspace-overview", async () => {
+				await counted.promise;
+				return HttpResponse.json(ACROSS_WORKSPACE);
+			}),
+		);
+		renderRouteAtWithRouter(PAGE);
+
+		const note = await screen.findByText(SLOW_LOAD_NOTE, undefined, ROUTE_RENDER_WAIT);
+		expect(note.getAttribute("role")).toBe("status");
+
+		counted.resolve();
+		await screen.findByRole(
+			"button",
+			{ name: "Open group Packaging work for review" },
+			ROUTE_RENDER_WAIT,
+		);
+		await waitFor(() => {
+			expect(screen.queryByText(SLOW_LOAD_NOTE)).toBeNull();
+		});
 	});
 
 	it("keeps the group open when the tiles fail", async () => {

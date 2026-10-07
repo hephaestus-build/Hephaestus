@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
+import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Developer;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService.W
 import de.tum.cit.aet.hephaestus.practices.observation.ReviewedWorkKey;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Clock;
@@ -57,11 +59,17 @@ public class PracticesAcrossWorkspaceService {
     private final WorkspaceMembershipService membershipService;
     private final CurrentDeveloperLookup currentDeveloperLookup;
     private final InAppFeedbackService inAppFeedbackService;
+    private final EvidenceAuthorization evidenceAuthorization;
     private final Clock clock;
 
     /** The splits by the current standing and the open feedback, whatever window the tiles read. */
     @Transactional(readOnly = true)
     public PracticesAcrossWorkspaceDTO read(WorkspaceContext context) {
+        return evidenceAuthorization.asOneRead(
+                context.id(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, () -> readOverview(context));
+    }
+
+    private PracticesAcrossWorkspaceDTO readOverview(WorkspaceContext context) {
         Long workspaceId = context.id();
         Members members = members(workspaceId);
         List<PracticeGroup> groups = practiceGroupService.listGroups(context, true);
@@ -123,6 +131,12 @@ public class PracticesAcrossWorkspaceService {
     /** The reader's figures over the window beside the middle half of the developers with a standing in it. */
     @Transactional(readOnly = true)
     public PracticesAcrossWorkspaceTilesDTO readTiles(WorkspaceContext context, PracticesAcrossWorkspaceWindow window) {
+        return evidenceAuthorization.asOneRead(
+                context.id(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, () -> readWindow(context, window));
+    }
+
+    private PracticesAcrossWorkspaceTilesDTO readWindow(
+            WorkspaceContext context, PracticesAcrossWorkspaceWindow window) {
         Long workspaceId = context.id();
         Members members = members(workspaceId);
         Cohort inWindow = cohort(

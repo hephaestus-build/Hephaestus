@@ -156,8 +156,8 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
                                 catalogs,
                                 mock(
                                         CitedSourceAccess.class,
-                                        call -> call.getMethod().getName().equals("permits")
-                                                ? true
+                                        call -> call.getMethod().getName().equals("checks")
+                                                ? (CitedSourceAccess.Checks) citation -> true
                                                 : Mockito.RETURNS_DEFAULTS.answer(call))),
                         mock(ObservationInvalidationRepository.class)),
                 mock(ConversationConsentGate.class));

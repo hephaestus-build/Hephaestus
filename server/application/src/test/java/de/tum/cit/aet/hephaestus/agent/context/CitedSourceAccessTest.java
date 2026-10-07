@@ -15,27 +15,40 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.mockito.Mockito;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class CitedSourceAccessTest extends BaseUnitTest {
     private static EvidenceFolderPersonDataCatalog personCopies() {
@@ -58,6 +71,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     private final ReviewMemberAiPolicy memberPolicy = mock(ReviewMemberAiPolicy.class);
     private final MemberAiPreferences preferences = mock(MemberAiPreferences.class);
     private final WorkspaceMembershipRepository memberships = mock(WorkspaceMembershipRepository.class);
+    private final PersonProcessingSuppression suppression = mock(PersonProcessingSuppression.class);
 
     private AgentJob job() {
         var workspace = new Workspace();
@@ -71,7 +85,16 @@ class CitedSourceAccessTest extends BaseUnitTest {
 
     private CitedSourceAccess access(JobEvidenceFiles files) {
         return new CitedSourceAccess(
-                conversations, documents, repositories, history, files, mapper, memberPolicy, preferences, memberships);
+                conversations,
+                documents,
+                repositories,
+                history,
+                files,
+                mapper,
+                memberPolicy,
+                preferences,
+                memberships,
+                suppression);
     }
 
     @Test
@@ -262,10 +285,10 @@ class CitedSourceAccessTest extends BaseUnitTest {
         var member = new WorkspaceMembership();
         when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.of(member));
         String type = filename.startsWith("observations") ? "observation" : "feedback";
-        when(history.permitsHistoryRecord(1L, type, recordId, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
-                .thenReturn(true);
-        when(history.permitsHistoryRecord(1L, type, recordId, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
-                .thenReturn(true);
+        when(history.permittedHistoryRecords(1L, type, Set.of(recordId), SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                .thenReturn(Set.of(recordId));
+        when(history.permittedHistoryRecords(1L, type, Set.of(recordId), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .thenReturn(Set.of(recordId));
         try (var prepared = files.prepare(job, new PreparedEvidence(Map.of(path, bytes), null), null)) {
             assertThat(prepared.filesOnDisk()).containsKey(path);
             var citation = mapper.createObjectNode().put("artifactPath", path).put("startLine", 1);
@@ -274,8 +297,9 @@ class CitedSourceAccessTest extends BaseUnitTest {
             assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                     .isTrue();
             if (!filename.equals("person.json")) {
-                when(history.permitsHistoryRecord(1L, type, recordId, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
-                        .thenReturn(false);
+                when(history.permittedHistoryRecords(
+                                1L, type, Set.of(recordId), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                        .thenReturn(Set.of());
                 assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                         .isFalse();
             }
@@ -328,6 +352,12 @@ class CitedSourceAccessTest extends BaseUnitTest {
             strings = {
                 "[]",
                 "{}",
+                "{\"records\":[{\"type\":\"person\"}]}",
+                "{\"records\":[{\"type\":\"person\",\"person\":\"42\"}]}",
+                "{\"records\":[{\"type\":\"repository\",\"id\":\"2\"}]}",
+                "{\"records\":[{\"type\":\"repository\",\"id\":2.5}]}",
+                "{\"records\":[{\"type\":\"chat\",\"channel\":null,\"message\":\"1\"}]}",
+                "{\"records\":[{\"type\":\"observation\",\"id\":\"invalid\"}]}",
                 "{\"records\":[]}",
                 "{\"records\":[{\"type\":\"unknown\"}]}",
                 "{\"records\":[{\"type\":\"observation\",\"person\":42,\"id\":\"invalid\"}]}"
@@ -341,5 +371,265 @@ class CitedSourceAccessTest extends BaseUnitTest {
         citation.set("sourceReference", mapper.readTree(reference));
         assertThat(access(files).permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isFalse();
+    }
+
+    @Test
+    void shouldAnswerEveryCitationAsAloneWhenOneReadChecksThemAndReadEachSourceOnce() {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
+        var access = access(files);
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of(TestEntities.repository(2L, "acme/api")));
+        when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.of(new WorkspaceMembership()));
+        var citations = List.of(
+                citation("context/diff.patch", "{\"records\":[{\"type\":\"repository\",\"id\":2}]}"),
+                citation("repos/2/src/Main.java", "{\"records\":[{\"type\":\"repository\",\"id\":2}]}"),
+                citation("context/diff.patch", "{\"records\":[{\"type\":\"repository\",\"id\":3}]}"),
+                citation("context/people/42/person.json", "{\"records\":[{\"type\":\"person\",\"person\":42}]}"),
+                citation("context/people/42/person.json", "{\"records\":[{\"type\":\"person\",\"person\":42}]}"),
+                citation(
+                        "context/diff.patch",
+                        "{\"records\":[{\"type\":\"repository\",\"id\":2},{\"type\":\"repository\",\"id\":3}]}"),
+                citation(
+                        "context/people/42/observations.jsonl",
+                        "{\"records\":[{\"type\":\"observation\",\"person\":42,\"id\":\"invalid\"}]}"),
+                mapper.createObjectNode().put("artifactPath", "context/diff.patch"));
+        // Each citation alone, the way every citation was checked before one read shared its checks.
+        List<Boolean> alone = citations.stream()
+                .map(citation -> access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .toList();
+        Mockito.clearInvocations(repositories, preferences, memberships);
+
+        var checks = access.checks(1L, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        List<Boolean> together = citations.stream().map(checks::permits).toList();
+
+        assertThat(together).isEqualTo(alone).containsExactly(true, true, false, true, true, false, false, true);
+        Mockito.verify(repositories, Mockito.times(1)).permittedRepositories(1L);
+        Mockito.verify(preferences, Mockito.times(1)).forDeveloper(1L, 42L);
+        Mockito.verify(memberships, Mockito.times(1)).findByWorkspace_IdAndUser_Id(1L, 42L);
+    }
+
+    /**
+     * The golden comparison for history: a record of a developer's history is decided by authorizing the
+     * observation it names, whose own citations may name older history in turn. Checked in batches, one per link
+     * of the longest chain, every citation gets the answer it gets alone, where each record is checked on its own.
+     */
+    @Test
+    void shouldAnswerHistoryCitationsAsAloneWhenOneReadChecksTheirChainsInBatches() {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
+        var access = access(files);
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of(TestEntities.repository(2L, "acme/api")));
+        when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.of(new WorkspaceMembership()));
+        UUID newest = UUID.randomUUID();
+        UUID middle = UUID.randomUUID();
+        UUID oldest = UUID.randomUUID();
+        UUID refused = UUID.randomUUID();
+        UUID onRefused = UUID.randomUUID();
+        UUID onHiddenRepository = UUID.randomUUID();
+        // newest cites middle, which cites oldest; onRefused cites a record its owner refuses.
+        Map<UUID, List<ObjectNode>> cites = Map.of(
+                newest, List.of(history(middle)),
+                middle, List.of(history(oldest), repository(2L)),
+                oldest, List.of(repository(2L)),
+                refused, List.of(repository(2L)),
+                onRefused, List.of(history(refused)),
+                onHiddenRepository, List.of(repository(3L)));
+        // The history source as it works: a record is permitted when its owner keeps it and each citation of the
+        // observation it names is permitted, checked with whatever checks the read has running.
+        Predicate<UUID> permitted = id -> !id.equals(refused)
+                && cites.getOrDefault(id, List.of()).stream()
+                        .allMatch(citation -> access.checks(1L, purpose).permits(citation));
+        when(history.permitsHistoryRecord(
+                        Mockito.eq(1L), Mockito.eq("observation"), Mockito.any(), Mockito.eq(purpose)))
+                .thenAnswer(call -> permitted.test(call.getArgument(2)));
+        when(history.historyRecordCitations(Mockito.eq(1L), Mockito.eq("observation"), Mockito.any()))
+                .thenAnswer(call -> {
+                    Map<UUID, List<JsonNode>> found = new HashMap<>();
+                    for (UUID id : call.<Collection<UUID>>getArgument(2)) {
+                        if (cites.containsKey(id)) found.put(id, List.copyOf(cites.get(id)));
+                    }
+                    return found;
+                });
+        when(history.permittedHistoryRecords(
+                        Mockito.eq(1L), Mockito.eq("observation"), Mockito.any(), Mockito.eq(purpose)))
+                .thenAnswer(call -> {
+                    Collection<UUID> ids = call.getArgument(2);
+                    // The batch authorizes its observations together, as the evidence authorization does.
+                    var checks = access.checks(1L, purpose);
+                    checks.prepare(ids.stream()
+                            .flatMap(id -> cites.getOrDefault(id, List.of()).stream())
+                            .map(JsonNode.class::cast)
+                            .toList());
+                    return ids.stream().filter(permitted).collect(Collectors.toSet());
+                });
+        List<ObjectNode> citations = List.of(
+                history(newest),
+                history(middle),
+                history(onRefused),
+                history(refused),
+                history(onHiddenRepository),
+                citation(
+                        "context/people/42/observations.jsonl",
+                        "{\"records\":[{\"type\":\"observation\",\"person\":42,\"id\":\"" + newest
+                                + "\"},{\"type\":\"observation\",\"person\":42,\"id\":\"" + onRefused
+                                + "\"}]}"));
+        List<Boolean> alone = citations.stream()
+                .map(citation -> access.checks(1L, purpose).permits(citation))
+                .toList();
+        Mockito.clearInvocations(history);
+
+        var checks = access.checks(1L, purpose);
+        checks.prepare(List.copyOf(citations));
+        List<Boolean> together = citations.stream().map(checks::permits).toList();
+
+        assertThat(together).isEqualTo(alone).containsExactly(true, true, false, false, false, false);
+        // Three links in the longest chain, three batches; no record is checked alone.
+        Mockito.verify(history, Mockito.times(3))
+                .permittedHistoryRecords(Mockito.eq(1L), Mockito.eq("observation"), Mockito.any(), Mockito.eq(purpose));
+        Mockito.verify(history, Mockito.never())
+                .permitsHistoryRecord(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    void shouldRecheckRepositoryAccessAfterEachReadIncludingAFailedRead() {
+        var access = access(new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies()));
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of(TestEntities.repository(2L, "acme/api")));
+        assertThatThrownBy(() -> access.asOneRead(1L, purpose, () -> {
+                    assertThat(access.permits(1L, repository(2L), purpose)).isTrue();
+                    throw new IllegalStateException("Read failed");
+                }))
+                .isInstanceOf(IllegalStateException.class);
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of());
+        assertThat(access.asOneRead(1L, purpose, () -> access.permits(1L, repository(2L), purpose)))
+                .isFalse();
+    }
+
+    @Test
+    void shouldKeepNestedWorkspacesPurposesAndThreadsSeparate() throws Exception {
+        var access = access(new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies()));
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of(TestEntities.repository(2L, "acme/api")));
+        when(repositories.permittedRepositories(2L)).thenReturn(List.of());
+        access.asOneRead(1L, purpose, () -> {
+            var outer = access.checks(1L, purpose);
+            assertThat(outer.permits(repository(2L))).isTrue();
+            assertThat(access.asOneRead(2L, purpose, () -> access.permits(2L, repository(2L), purpose)))
+                    .isFalse();
+            assertThat(access.checks(1L, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                    .isNotSameAs(outer);
+            assertThat(access.checks(1L, purpose)).isSameAs(outer);
+            try (var executor = Executors.newSingleThreadExecutor()) {
+                assertThat(executor.submit(() -> access.checks(1L, purpose)).get())
+                        .isNotSameAs(outer);
+                assertThatThrownBy(() -> executor.submit(() -> outer.permits(repository(2L)))
+                                .get())
+                        .hasCauseInstanceOf(IllegalStateException.class);
+            } catch (Exception failure) {
+                throw new IllegalStateException(failure);
+            }
+            return true;
+        });
+    }
+
+    @Test
+    void shouldNotReuseAnAnswerForADifferentReader() {
+        var access = access(new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies()));
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        try {
+            CurrentScmIdentityHolder.set(42L, "first", Set.of(42L));
+            access.asOneRead(1L, purpose, () -> {
+                var first = access.checks(1L, purpose);
+                CurrentScmIdentityHolder.set(43L, "second", Set.of(43L));
+                assertThat(access.checks(1L, purpose)).isNotSameAs(first);
+                assertThatThrownBy(() -> first.permits(repository(2L))).isInstanceOf(IllegalStateException.class);
+                return true;
+            });
+        } finally {
+            CurrentScmIdentityHolder.clear();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MemberAiChoice.class)
+    void shouldApplyEveryAiChoiceWithoutChangingTheDeliveryPurpose(MemberAiChoice choice) {
+        var access = access(new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies()));
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.of(new WorkspaceMembership()));
+        when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(true, choice));
+        var person = citation("context/people/42/person.json", "{\"records\":[{\"type\":\"person\",\"person\":42}]}");
+        assertThat(access.permits(1L, person, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .isEqualTo(choice != MemberAiChoice.NO_AI);
+    }
+
+    @Test
+    void shouldRefuseHiddenOptedOutAndErasedPeopleOnTheNextRead() {
+        var access = access(new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies()));
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        var person = citation("context/people/42/person.json", "{\"records\":[{\"type\":\"person\",\"person\":42}]}");
+        var member = new WorkspaceMembership();
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.of(member));
+        when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+        assertThat(access.permits(1L, person, purpose)).isTrue();
+        member.setHidden(true);
+        assertThat(access.permits(1L, person, purpose)).isFalse();
+        member.setHidden(false);
+        when(preferences.forDeveloper(1L, 42L))
+                .thenReturn(new MemberAiPreferences.Decision(true, MemberAiChoice.NO_AI));
+        assertThat(access.permits(1L, person, purpose)).isFalse();
+        when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+        when(suppression.isUserSuppressed(42L)).thenReturn(true);
+        assertThat(access.permits(1L, person, purpose)).isFalse();
+    }
+
+    @Test
+    void shouldDenyHistoryCyclesAndTheirDependentsWithoutSingleRecordReads() {
+        var access = access(new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies()));
+        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.of(new WorkspaceMembership()));
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        UUID dependent = UUID.randomUUID();
+        when(history.historyRecordCitations(Mockito.eq(1L), Mockito.eq("observation"), Mockito.any()))
+                .thenAnswer(call -> {
+                    Map<UUID, List<JsonNode>> found = new HashMap<>();
+                    for (UUID id : call.<Collection<UUID>>getArgument(2)) {
+                        found.put(id, List.of(history(id.equals(first) ? second : first)));
+                    }
+                    return found;
+                });
+        var checks = access.checks(1L, purpose);
+        checks.prepare(List.of(history(dependent), history(first), history(second)));
+        assertThat(List.of(dependent, first, second).stream().map(id -> checks.permits(history(id))))
+                .containsOnly(false);
+        Mockito.verify(history, Mockito.never())
+                .permitsHistoryRecord(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(history, Mockito.never())
+                .permittedHistoryRecords(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    private ObjectNode history(UUID id) {
+        return citation(
+                "context/people/42/observations.jsonl",
+                "{\"records\":[{\"type\":\"observation\",\"person\":42,\"id\":\"" + id + "\"}]}");
+    }
+
+    private ObjectNode repository(long id) {
+        return citation("context/diff.patch", "{\"records\":[{\"type\":\"repository\",\"id\":" + id + "}]}");
+    }
+
+    private ObjectNode citation(String path, String reference) {
+        var citation = mapper.createObjectNode().put("artifactPath", path);
+        citation.set("sourceReference", mapper.readTree(reference));
+        return citation;
     }
 }
