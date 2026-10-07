@@ -17,6 +17,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
@@ -88,6 +89,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -100,6 +102,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -334,7 +337,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @Test
         @DisplayName("cancelInFlight on a worker with no local jobs cancels nothing (no DB-wide sweep)")
         void cancelInFlightEmptyIsNoOp() {
-            executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL);
+            assertThat(executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL))
+                    .isTrue();
 
             verify(sandboxManager, never()).cancel(any());
             verify(jobRepository, never()).transitionToCancelled(any(), any(), any(), any(), any());
@@ -2709,13 +2713,13 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(1);
             AtomicBoolean settled = new AtomicBoolean();
             doAnswer(inv -> {
-                        Consumer<TransactionStatus> callback = inv.getArgument(0);
-                        callback.accept(mock(TransactionStatus.class));
+                        TransactionCallback<Object> callback = inv.getArgument(0);
+                        Object result = callback.doInTransaction(mock(TransactionStatus.class));
                         settled.set(true);
-                        return null;
+                        return result;
                     })
                     .when(transactionTemplate)
-                    .executeWithoutResult(any());
+                    .execute(any());
             doAnswer(inv -> {
                         assertThat(settled).isTrue();
                         return null;
@@ -2723,7 +2727,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .when(sandboxManager)
                     .cancel(jobId);
 
-            executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL);
+            assertThat(executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL))
+                    .isTrue();
 
             verify(jobRepository)
                     .failAdmittedOwnedBy(
@@ -2775,18 +2780,220 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(jobId), eq("draining-worker"), eq(AGENT_PROPS.maxRetries()), any(), any(), any()))
                     .thenReturn(0);
             when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
-
-            executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL);
-
-            verify(jobRepository)
-                    .transitionToCancelledOwnedBy(
+            when(jobRepository.transitionToCancelledOwnedBy(
                             eq(jobId),
                             any(),
                             any(),
                             eq(AgentJobCancellationReason.DRAIN_GRACEFUL),
                             eq(Set.of(AgentJobStatus.RUNNING)),
-                            eq("draining-worker"));
+                            eq("draining-worker")))
+                    .thenReturn(1);
+
+            assertThat(executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL))
+                    .isTrue();
+
             verify(sandboxManager).cancel(jobId);
+        }
+
+        @Test
+        void shouldNotStopOrBillWhenTheJobIsGoneOrNoLongerOwnedByThisWorker() throws Exception {
+            executor = drainingExecutor();
+            UUID missing = UUID.randomUUID();
+            job.setExecutionStartedAt(Instant.now());
+            addToLocalRunningJobs(executor, jobId);
+            addToLocalRunningJobs(executor, missing);
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(missing)).thenReturn(Optional.empty());
+
+            // Every owner-fenced transition loses: another worker or a cancellation holds the job.
+            assertThat(executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL))
+                    .isTrue();
+
+            verify(jobRepository)
+                    .transitionToCancelledOwnedBy(eq(jobId), any(), any(), any(), any(), eq("draining-worker"));
+            verify(sandboxManager, never()).cancel(any());
+            verify(usageRecorder, never()).recordUnverifiable(any(), any());
+            verify(usageRecorder, never()).record(any(), any());
+        }
+
+        @Test
+        void shouldSettleEveryJobFirstAndStartAllStopsTogetherWhenDrainingTwelveJobs() throws Exception {
+            executor = drainingExecutor();
+            List<UUID> jobIds = Stream.generate(UUID::randomUUID).limit(12).toList();
+            for (UUID id : jobIds) {
+                addToLocalRunningJobs(executor, id);
+            }
+            when(jobRepository.findByIdWithWorkspaceForUpdate(any())).thenReturn(Optional.of(job));
+            when(jobRepository.requeueOrphan(any(), eq("draining-worker"), anyInt(), any(), any(), any()))
+                    .thenReturn(1);
+            AtomicInteger committed = new AtomicInteger();
+            doAnswer(inv -> {
+                        TransactionCallback<Object> callback = inv.getArgument(0);
+                        Object result = callback.doInTransaction(mock(TransactionStatus.class));
+                        committed.incrementAndGet();
+                        return result;
+                    })
+                    .when(transactionTemplate)
+                    .execute(any());
+            CountDownLatch allStopsStarted = new CountDownLatch(jobIds.size());
+            List<Integer> committedAtStop = new CopyOnWriteArrayList<>();
+            doAnswer(inv -> {
+                        committedAtStop.add(committed.get());
+                        allStopsStarted.countDown();
+                        // A stop returns only once every other stop has started: one at a time never gets there.
+                        if (!allStopsStarted.await(10, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("container stops did not run concurrently");
+                        }
+                        return null;
+                    })
+                    .when(sandboxManager)
+                    .cancel(any());
+
+            assertThat(executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL))
+                    .isTrue();
+
+            assertThat(committedAtStop).hasSize(jobIds.size()).containsOnly(jobIds.size());
+            jobIds.forEach(id -> verify(sandboxManager).cancel(id));
+        }
+
+        @Test
+        void shouldStopTheOtherJobsWhenOneSettlementFailsAndReportTheDrainIncomplete() throws Exception {
+            executor = drainingExecutor();
+            UUID failing = UUID.randomUUID();
+            addToLocalRunningJobs(executor, jobId);
+            addToLocalRunningJobs(executor, failing);
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(failing))
+                    .thenThrow(new CannotCreateTransactionException("connection lost"));
+            when(jobRepository.requeueOrphan(eq(jobId), eq("draining-worker"), anyInt(), any(), any(), any()))
+                    .thenReturn(1);
+
+            assertThat(executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL))
+                    .isFalse();
+
+            verify(sandboxManager).cancel(jobId);
+            verify(sandboxManager, never()).cancel(failing);
+        }
+
+        @Test
+        void shouldStopTheOtherContainersWhenOneStopFailsAndReportTheDrainIncomplete() throws Exception {
+            executor = drainingExecutor();
+            List<UUID> jobIds = Stream.generate(UUID::randomUUID).limit(3).toList();
+            for (UUID id : jobIds) {
+                addToLocalRunningJobs(executor, id);
+            }
+            when(jobRepository.findByIdWithWorkspaceForUpdate(any())).thenReturn(Optional.of(job));
+            when(jobRepository.requeueOrphan(any(), eq("draining-worker"), anyInt(), any(), any(), any()))
+                    .thenReturn(1);
+            doThrow(new IllegalStateException("daemon refused"))
+                    .when(sandboxManager)
+                    .cancel(jobIds.getFirst());
+
+            assertThat(executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL))
+                    .isFalse();
+
+            jobIds.forEach(id -> verify(sandboxManager).cancel(id));
+        }
+
+        @Test
+        @Timeout(10)
+        void shouldReturnIncompleteWhenAStopOutlastsTheCleanupDeadlineWithoutChangingTheSettledJobAgain()
+                throws Exception {
+            executor = drainingExecutor();
+            addToLocalRunningJobs(executor, jobId);
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
+            when(jobRepository.requeueOrphan(eq(jobId), eq("draining-worker"), anyInt(), any(), any(), any()))
+                    .thenReturn(1);
+            CountDownLatch release = new CountDownLatch(1);
+            CountDownLatch stopReturned = new CountDownLatch(1);
+            doAnswer(inv -> ignoringInterrupts(release, stopReturned))
+                    .when(sandboxManager)
+                    .cancel(jobId);
+
+            boolean complete;
+            try {
+                complete = executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL, Duration.ofMillis(200));
+            } finally {
+                release.countDown();
+            }
+
+            assertThat(complete).isFalse();
+            assertThat(stopReturned.await(5, TimeUnit.SECONDS)).isTrue();
+            verify(jobRepository).findByIdWithWorkspaceForUpdate(jobId);
+            verify(jobRepository).requeueOrphan(eq(jobId), eq("draining-worker"), anyInt(), any(), any(), any());
+            verifyNoMoreInteractions(jobRepository, usageRecorder);
+        }
+
+        @Test
+        @Timeout(10)
+        void shouldKeepTheInterruptAndReportIncompleteWhenInterruptedDuringContainerStops() throws Exception {
+            AgentJobExecutor draining = drainingExecutor();
+            addToLocalRunningJobs(draining, jobId);
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
+            when(jobRepository.requeueOrphan(eq(jobId), eq("draining-worker"), anyInt(), any(), any(), any()))
+                    .thenReturn(1);
+            CountDownLatch stopStarted = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            CountDownLatch stopReturned = new CountDownLatch(1);
+            doAnswer(inv -> {
+                        stopStarted.countDown();
+                        return ignoringInterrupts(release, stopReturned);
+                    })
+                    .when(sandboxManager)
+                    .cancel(jobId);
+            AtomicBoolean complete = new AtomicBoolean(true);
+            AtomicBoolean interruptKept = new AtomicBoolean();
+
+            Thread drain = Thread.ofPlatform().start(() -> {
+                complete.set(draining.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL, Duration.ofMinutes(1)));
+                interruptKept.set(Thread.currentThread().isInterrupted());
+            });
+            try {
+                assertThat(stopStarted.await(5, TimeUnit.SECONDS)).isTrue();
+                drain.interrupt();
+                drain.join(TimeUnit.SECONDS.toMillis(5));
+            } finally {
+                release.countDown();
+            }
+
+            assertThat(drain.isAlive()).isFalse();
+            assertThat(complete).isFalse();
+            assertThat(interruptKept).isTrue();
+        }
+
+        /** A stop blocked in native I/O: it answers no interrupt and returns only when released. */
+        private static @Nullable Void ignoringInterrupts(CountDownLatch release, CountDownLatch returned) {
+            while (true) {
+                try {
+                    release.await();
+                    returned.countDown();
+                    return null;
+                } catch (InterruptedException ignored) {
+                    // Keep blocking, as the native call would.
+                }
+            }
+        }
+
+        private AgentJobExecutor drainingExecutor() {
+            return new AgentJobExecutor(
+                    AGENT_PROPS,
+                    jobRepository,
+                    memberAiPolicy,
+                    handlerRegistry,
+                    practiceAgent,
+                    workerJwtIssuer,
+                    sandboxManager,
+                    sandboxExecutor,
+                    transactionTemplate,
+                    objectMapper,
+                    meterRegistry,
+                    new PracticeReviewRefusalMetrics(meterRegistry),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
+                    usageRecorder,
+                    llmBudgetService,
+                    NO_LIVE_ADMISSION,
+                    Optional.empty(),
+                    Optional.of(workerProps("draining-worker")));
         }
 
         @SuppressWarnings("unchecked")

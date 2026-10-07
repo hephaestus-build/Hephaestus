@@ -460,6 +460,88 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 .isEqualTo(FeedbackSuppressionReason.ARTIFACT_GONE);
     }
 
+    /**
+     * Closed, merged or changed work withholds only the note on the work. The developer's own page and the mentor
+     * conversation still compose and reach the work's subject, and nobody else.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "scm.issue, CLOSED, ARTIFACT_CLOSED",
+        "scm.issue, SNAPSHOT, ISSUE_SNAPSHOT_CHANGED",
+        "scm.pull_request, CLOSED, ARTIFACT_CLOSED",
+        "scm.pull_request, MERGED, ARTIFACT_MERGED"
+    })
+    void shouldWithholdOnlyTheNoteOnTheWorkWhenTheWorkClosedOrChanged(
+            String artifactKind, String change, FeedbackSuppressionReason onTheWork) {
+        AgentJob job = pullRequestJob();
+        job.setArtifactKind(ArtifactKind.of(artifactKind));
+        PullRequest work = openPullRequest();
+        if ("scm.issue".equals(artifactKind)) {
+            UUID reviewedSnapshot = UUID.randomUUID();
+            var metadata = JsonMapper.builder().build().createObjectNode();
+            metadata.put("issue_id", PULL_REQUEST_ID);
+            metadata.put("issue_number", 17);
+            metadata.put("repository_id", REPOSITORY_ID);
+            metadata.put("repository_full_name", "owner/repo");
+            metadata.put("review_snapshot_id", reviewedSnapshot.toString());
+            job.setMetadata(metadata);
+            Issue issue = new Issue();
+            issue.setId(work.getId());
+            issue.setNumber(work.getNumber());
+            issue.setAuthor(work.getAuthor());
+            issue.setRepository(work.getRepository());
+            issue.setState("CLOSED".equals(change) ? Issue.State.CLOSED : Issue.State.OPEN);
+            issue.setReviewSnapshotId("SNAPSHOT".equals(change) ? UUID.randomUUID() : reviewedSnapshot);
+            when(issueRepository.findByIdWithAuthorAndRepository(PULL_REQUEST_ID))
+                    .thenReturn(Optional.of(issue));
+            when(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, "owner/repo"))
+                    .thenReturn(true);
+            when(coverageService.assess(any(), eq("owner/repo"), eq(null), any(), eq(false)))
+                    .thenReturn(coverage(true));
+        } else {
+            work.setState(Issue.State.valueOf(change));
+            stubPullRequestEvaluation(work, coverage(true));
+        }
+        Practice practice = new Practice();
+        practice.setSlug("review-quality");
+        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
+        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, Set.of("review-quality")))
+                .thenReturn(List.of(practice));
+
+        var artifact = "scm.issue".equals(artifactKind)
+                ? policy().evaluateIssue(job, DeliveryPolicyStage.EGRESS, null, Set.of("review-quality"))
+                        .verdict()
+                : policy().evaluatePullRequest(job, DeliveryPolicyStage.EGRESS, null, Set.of("review-quality"))
+                        .verdict();
+        assertThat(artifact.refusal()).isEqualTo(onTheWork);
+        for (DeliveryPolicySurface surface :
+                List.of(DeliveryPolicySurface.IN_APP, DeliveryPolicySurface.CONVERSATION)) {
+            assertThat(policy().allowsComposition(job, surface))
+                    .as("%s composition", surface)
+                    .isTrue();
+            assertThat(policy().evaluateForRecipient(
+                                    job,
+                                    DeliveryPolicyStage.EGRESS,
+                                    UUID.randomUUID(),
+                                    surface,
+                                    AUTHOR_ID,
+                                    Set.of("review-quality"))
+                            .allowed())
+                    .as("%s delivery to the subject", surface)
+                    .isTrue();
+            assertThat(policy().evaluateForRecipient(
+                                    job,
+                                    DeliveryPolicyStage.EGRESS,
+                                    UUID.randomUUID(),
+                                    surface,
+                                    REVIEWER_ID,
+                                    Set.of("review-quality"))
+                            .refusal())
+                    .as("%s delivery to someone else", surface)
+                    .isEqualTo(FeedbackSuppressionReason.ARTIFACT_GONE);
+        }
+    }
+
     private FeedbackSuppressionReason recordedRefusal() {
         return recordedEvaluation().result().refusal();
     }

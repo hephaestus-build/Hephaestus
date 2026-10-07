@@ -774,17 +774,21 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     }
 
     /**
-     * A reason that withholds only the note on the work wakes the lanes at once; closed, gone or opted-out work
-     * wakes none. Either way the withheld review is on the ledger.
+     * A reason that withholds only the note on the work, including closed, merged or changed work, wakes the lanes
+     * at once; gone work, a refused recipient or work outside coverage wakes none. Either way the withheld review is
+     * on the ledger.
      */
     @ParameterizedTest
     @CsvSource({
         "INSTANCE_SILENCED,true",
         "REPEATS_DELIVERED_NOTE,true",
         "ARTIFACT_MERGED,true",
-        "ARTIFACT_CLOSED,false",
+        "ARTIFACT_CLOSED,true",
+        "ISSUE_SNAPSHOT_CHANGED,true",
+        "REVIEWED_REVISION_CHANGED,true",
         "ARTIFACT_GONE,false",
-        "RECIPIENT_OPTED_OUT,false"
+        "RECIPIENT_OPTED_OUT,false",
+        "OUTSIDE_CURRENT_COVERAGE,false"
     })
     void shouldWakeTheLanesOnlyWhenTheReasonWithholdsJustTheNoteOnTheWork(
             FeedbackSuppressionReason reason, boolean wakes) {
@@ -798,6 +802,21 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         verify(feedbackRepository).save(saved.capture());
         assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
         assertThat(saved.getValue().getSuppressionReason()).isEqualTo(reason);
+        verify(eventPublisher, wakes ? times(1) : never())
+                .publishEvent(any(PracticeFeedbackPreparationRequestedEvent.class));
+    }
+
+    /** A partly placed package wakes the lanes when the rest was withheld only from the work. */
+    @ParameterizedTest
+    @CsvSource({"REVIEWED_REVISION_CHANGED,true", "ARTIFACT_CLOSED,true", "ARTIFACT_GONE,false"})
+    void shouldWakeTheLanesForAWithheldRemainderOnlyWhenTheReasonWithholdsJustTheNoteOnTheWork(
+            FeedbackSuppressionReason reason, boolean wakes) {
+        when(observationRepository.findByAgentJobId(any(), anyLong())).thenReturn(List.of());
+
+        recorder()
+                .recordSuppressedRemainder(
+                        job(), new DeliveryContent("body", List.of(), List.of(), null), reason, List.of("note-1"));
+
         verify(eventPublisher, wakes ? times(1) : never())
                 .publishEvent(any(PracticeFeedbackPreparationRequestedEvent.class));
     }
@@ -896,8 +915,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     @Test
     void recordSuppressedUnit_persistsGateReasonAndBody_bindsObservations_noConversationSignal() {
-        // A closed PR withholds more than the note on the work, so the whole review collapses to ONE suppressed
-        // unit and no lane is woken to re-raise its loci.
+        // A recipient who opted out refuses more than the note on the work, so the whole review collapses to ONE
+        // suppressed unit and no lane is woken to re-raise its loci.
         Observation bad = problem();
         Observation good = strength();
         when(observationRepository.findByAgentJobId(any(), anyLong())).thenReturn(List.of(bad, good));
@@ -906,13 +925,13 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 .recordSuppressedUnit(
                         job(),
                         new DeliveryContent("the withheld advice", List.of(), List.of(), null),
-                        FeedbackSuppressionReason.ARTIFACT_CLOSED);
+                        FeedbackSuppressionReason.RECIPIENT_OPTED_OUT);
 
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository).save(saved.capture());
         Feedback unit = saved.getValue();
         assertThat(unit.getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
-        assertThat(unit.getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.ARTIFACT_CLOSED);
+        assertThat(unit.getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.RECIPIENT_OPTED_OUT);
         assertThat(unit.getBody()).isEqualTo("the withheld advice");
         assertThat(unit.getPosition()).isEqualTo(5000);
         verify(feedbackObservationRepository, times(2)).insertIfAbsent(any(), any(), any(), anyInt());

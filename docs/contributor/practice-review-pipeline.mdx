@@ -644,6 +644,12 @@ The shared writing guide and each channel's prompt define those purposes:
 - `IN_CHAT` prepares `situation`, `capability`, `evidenceSummary` and `inConversationSignal` as private notes,
   not dialogue. A later conversational turn may adapt, defer or discard them.
 
+A work-state refusal stops `IN_CONTEXT` delivery.
+Closed work, changed work, and merged work that the workspace setting excludes get no note on the work.
+`IN_APP` and `IN_CHAT` retain their own evidence and visibility gates.
+Preparation alone does not certify that a unit may be shown.
+Missing work and a recipient who is not the subject of the work refuse every channel.
+
 An issue supports only a summary.
 A pull or merge request may carry a summary, line notes, or line notes without a summary.
 A provider may be unable to place an admitted line note beside the diff.

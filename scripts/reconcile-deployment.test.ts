@@ -682,10 +682,38 @@ async function reconcilerFixture(directory: string) {
 	gitIn(checkout, "config", "user.email", "host@example.invalid");
 	gitIn(checkout, "config", "user.name", "host");
 	gitIn(checkout, "config", "core.autocrlf", "false");
-	gitIn(checkout, "add", ".");
-	gitIn(checkout, "commit", "--quiet", "-m", "release");
+	// Releases a host may already run, then the candidate: v0.9.0 runs the worker with its own grace,
+	// and the candidate no longer declares it, as a rollback to a release before it would not.
+	const appCompose = path.join(checkout, "docker/compose.app.yaml");
+	await mkdir(path.dirname(appCompose), { recursive: true });
+	const commits = new Map<string, string>();
+	for (const [release, services] of [
+		["v0.8.0", { app: {} }],
+		["v0.9.0", { app: {}, "application-worker": { stop_grace_period: "6m" } }],
+		["v1.0.0", { app: {} }],
+	] as const) {
+		await writeFile(appCompose, JSON.stringify({ services }));
+		if (release === "v1.0.0") {
+			await writeFile(
+				path.join(checkout, "scripts/prepare-release-lock.ts"),
+				'throw new Error("candidate release must not verify itself");\n',
+			);
+		} else {
+			await writeFile(
+				path.join(checkout, "scripts/prepare-release-lock.ts"),
+				`import { execFileSync } from "node:child_process";
+import { appendFileSync, writeFileSync } from "node:fs";
+const commit = execFileSync("git", ["rev-parse", process.argv[2] + "^{commit}"], { encoding: "utf8" }).trim();
+appendFileSync(${JSON.stringify(callsFile)}, "trusted verifier\\n");
+writeFileSync(process.argv[3], "HEPHAESTUS_RELEASE_COMMIT=" + commit + "\\nHEPHAESTUS_IMAGE_APP=${image}\\n");\n`,
+			);
+		}
+		gitIn(checkout, "add", ".");
+		gitIn(checkout, "commit", "--quiet", "-m", release);
+		gitIn(checkout, "tag", release);
+		commits.set(release, gitIn(checkout, "rev-parse", "HEAD"));
+	}
 	const releaseCommit = gitIn(checkout, "rev-parse", "HEAD");
-	gitIn(checkout, "tag", "v1.0.0");
 	gitIn(checkout, "checkout", "--quiet", "-b", "deploy-state");
 	await mkdir(path.join(checkout, "channels"));
 	await writeFile(path.join(checkout, "channels/test.json"), JSON.stringify({ release: "v1.0.0" }));
@@ -712,10 +740,19 @@ const result = spawnSync(${JSON.stringify(realGit)}, args, { stdio: "inherit" })
 process.exit(result.status ?? 1);`,
 		cosign: 'process.exit(process.env.FAIL_VERIFICATION === "1" ? 1 : 0);',
 		systemctl: 'if (args[0] === "show") console.log("yes");',
-		docker: `if (args.includes("config")) {
+		// Renders what the given Compose file declares, and stops only a service it declares.
+		docker: `import { existsSync, readFileSync } from "node:fs";
+const file = args[args.indexOf("--file") + 1] ?? "";
+const declared = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")).services : { app: {} };
+if (args.includes("config")) {
 const stack = args[args.indexOf("--project-name") + 1];
 const image = stack === process.env.UNLOCKED_STACK ? "example.invalid/unverified:latest" : ${JSON.stringify(image)};
-console.log(JSON.stringify({ services: { app: { image } } }));
+console.log(JSON.stringify({ services: Object.fromEntries(Object.entries(declared).map(([name, service]) => [name, { ...service, image }])) }));
+}
+if (args.includes("stop")) {
+const service = declared[args.at(-1)];
+if (service === undefined || process.env.FAIL_WORKER_STOP === "1") process.exit(1);
+appendFileSync(${JSON.stringify(callsFile)}, "stopped within " + service.stop_grace_period + "\\n");
 }`,
 	})) {
 		await writeFile(
@@ -748,16 +785,32 @@ await main(${JSON.stringify(units)});\n`,
 		record,
 		metricsFile,
 		calls: async () => readFile(callsFile, "utf8"),
+		/** The source commit a fixture release was tagged at. */
+		commitOf: (release: string): string => {
+			const sourceCommit = commits.get(release);
+			assert.ok(sourceCommit !== undefined, `the fixture has no ${release}`);
+			return sourceCommit;
+		},
+		/** The lock an earlier apply of `release` left behind, naming `commit` as the host kept it. */
+		retainLock: async (release: string, sourceCommit: string) => {
+			await mkdir(path.join(directory, "release-locks"), { recursive: true });
+			await writeFile(
+				path.join(directory, "release-locks", `${release}.env`),
+				`HEPHAESTUS_RELEASE_COMMIT=${sourceCommit}\nHEPHAESTUS_IMAGE_APP=${image}\n`,
+			);
+		},
 		run: ({
 			cli = false,
 			failVerification = false,
 			failWorktreeRemove = false,
+			failWorkerStop = false,
 			unlockedStack,
 			channel = "test",
 		}: {
 			cli?: boolean;
 			failVerification?: boolean;
 			failWorktreeRemove?: boolean;
+			failWorkerStop?: boolean;
 			channel?: string;
 			unlockedStack?: string;
 		} = {}) =>
@@ -776,6 +829,7 @@ await main(${JSON.stringify(units)});\n`,
 						HEPHAESTUS_METRICS_FILE: metricsFile,
 						FAIL_VERIFICATION: failVerification ? "1" : "0",
 						FAIL_WORKTREE_REMOVE: failWorktreeRemove ? "1" : "0",
+						FAIL_WORKER_STOP: failWorkerStop ? "1" : "0",
 						UNLOCKED_STACK: unlockedStack,
 					}),
 				},
@@ -905,6 +959,7 @@ await test(
 			assert.match(calls[0] ?? "", /^cosign verify-blob/u);
 			assert.equal(calls[1], "trusted verifier");
 			const docker = calls.filter((line) => line.startsWith("docker"));
+			// A first install runs no worker yet, so nothing is stopped.
 			assert.equal(docker.length, 7);
 			for (const [index, stack] of ["app", "core", "proxy"].entries()) {
 				assert.match(
@@ -967,7 +1022,168 @@ await test(
 			assert.match(result.stderr, /proxy renders images outside the release lock/u);
 			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), previous);
 			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
-			assert.doesNotMatch(await fixture.calls(), / up |systemctl/u);
+			assert.doesNotMatch(await fixture.calls(), / up | stop |systemctl/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"a worker that cannot be stopped leaves every stack, the applied release and the tooling untouched",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-worker-stop-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const previous = { ...fixture.record, release: "v0.9.0", commit: fixture.commitOf("v0.9.0") };
+			await writeFile(path.join(directory, "applied.json"), JSON.stringify(previous));
+			await fixture.retainLock("v0.9.0", previous.commit);
+			// The first tick adopts the recorded release's tooling, as every startup does.
+			const adopted = fixture.run();
+			assert.equal(adopted.status, 0, adopted.stderr);
+			const adoption = await fixture.calls();
+			const before = adoption.length;
+
+			const result = fixture.run({ failWorkerStop: true });
+
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /docker exited with code 1/u);
+			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), previous);
+			assert.equal(
+				await readlink(path.join(directory, "tooling")),
+				path.join(directory, "releases/v0.9.0"),
+			);
+			const recorded = await fixture.calls();
+			const calls = recorded.slice(before);
+			assert.match(calls, /--project-name app .* stop application-worker$/mu);
+			assert.doesNotMatch(calls, / up /u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"an apply stops the worker the applied release runs, with that release's configuration, lock and grace",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-applied-worker-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const previous = { ...fixture.record, release: "v0.9.0", commit: fixture.commitOf("v0.9.0") };
+			await writeFile(path.join(directory, "applied.json"), JSON.stringify(previous));
+			// The first tick adopts the recorded release's tooling, as every startup does.
+			const adopted = fixture.run();
+			assert.equal(adopted.status, 0, adopted.stderr);
+
+			// Without its lock the running worker cannot be stopped as it was started, so nothing changes.
+			const unlocked = fixture.run();
+			assert.notEqual(unlocked.status, 0);
+			assert.match(unlocked.stderr, /release-locks\/v0\.9\.0\.env/u);
+			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), previous);
+			assert.doesNotMatch(await fixture.calls(), / up | stop /u);
+
+			await fixture.retainLock("v0.9.0", previous.commit);
+			const result = fixture.run();
+			assert.equal(result.status, 0, result.stderr);
+			const record = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(record?.release, "v1.0.0");
+			const prior = path.join(directory, "releases/v0.9.0");
+			const recorded = await fixture.calls();
+			const lines = recorded.split("\n");
+			const stop = lines.findIndex((line) => line.endsWith(" stop application-worker"));
+			// The candidate no longer declares the worker; the stop uses the release that runs it.
+			assert.match(
+				lines[stop] ?? "",
+				new RegExp(
+					`--project-name app .*release-locks/v0\\.9\\.0\\.env --file ${prior}/docker/compose\\.app\\.yaml stop`,
+					"u",
+				),
+			);
+			assert.equal(lines[stop + 1], "stopped within 6m");
+			const lastRender = lines.findLastIndex((line) => line.endsWith(" config --format json"));
+			const firstUp = lines.findIndex((line) => / up /u.test(line));
+			assert.ok(lastRender < stop && stop < firstUp, lines.join("\n"));
+			assert.match(lines[firstUp] ?? "", /--project-name core .* up .* nats-server$/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"an applied release without the worker has nothing to stop",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-no-worker-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const sourceCommit = fixture.commitOf("v0.8.0");
+			await writeFile(
+				path.join(directory, "applied.json"),
+				JSON.stringify({ ...fixture.record, release: "v0.8.0", commit: sourceCommit }),
+			);
+			await fixture.retainLock("v0.8.0", sourceCommit);
+			// The first tick adopts the recorded release's tooling, as every startup does.
+			const adopted = fixture.run();
+			assert.equal(adopted.status, 0, adopted.stderr);
+
+			const result = fixture.run();
+
+			assert.equal(result.status, 0, result.stderr);
+			const record = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(record?.release, "v1.0.0");
+			const calls = await fixture.calls();
+			assert.match(calls, /releases\/v0\.8\.0\/docker\/compose\.app\.yaml config --format json$/mu);
+			assert.doesNotMatch(calls, / stop /u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"an applied release without its source commit, or with a lock for other source, stops and applies nothing",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-worker-custody-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const appliedFile = path.join(directory, "applied.json");
+			// A record from before the commit was kept: its lock cannot vouch for the source that runs.
+			const unbound = { ...fixture.record, release: "v0.9.0" };
+			await writeFile(appliedFile, JSON.stringify(unbound));
+			await fixture.retainLock("v0.9.0", fixture.commitOf("v0.9.0"));
+
+			const missing = fixture.run();
+
+			assert.notEqual(missing.status, 0);
+			assert.match(missing.stderr, /recorded without its source commit/u);
+			assert.deepEqual(await readApplied(appliedFile), unbound);
+			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
+			assert.doesNotMatch(await fixture.calls(), / up | stop |systemctl/u);
+
+			const recorded = { ...unbound, commit: fixture.commitOf("v0.9.0") };
+			await writeFile(appliedFile, JSON.stringify(recorded));
+			await fixture.retainLock("v0.9.0", fixture.commitOf("v0.8.0"));
+			// The first tick adopts the recorded release's tooling, as every startup does.
+			const adopted = fixture.run();
+			assert.equal(adopted.status, 0, adopted.stderr);
+			const adoption = await fixture.calls();
+			const before = adoption.length;
+
+			const mismatched = fixture.run();
+
+			assert.notEqual(mismatched.status, 0);
+			assert.match(mismatched.stderr, /v0\.9\.0 lock does not cover the commit recorded for it/u);
+			assert.deepEqual(await readApplied(appliedFile), recorded);
+			assert.equal(
+				await readlink(path.join(directory, "tooling")),
+				path.join(directory, "releases/v0.9.0"),
+			);
+			const calls = await fixture.calls();
+			assert.doesNotMatch(calls.slice(before), / up | stop /u);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
