@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -23,6 +26,8 @@ import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
+import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
+import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
@@ -138,6 +143,14 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
         // is the production lane.
         PracticeFeedbackDeliveryPolicy openGate = mock(PracticeFeedbackDeliveryPolicy.class);
         when(openGate.allowsComposition(any(), any())).thenReturn(true);
+        when(openGate.evaluateForRecipient(
+                        any(),
+                        eq(DeliveryPolicyStage.COMPOSITION),
+                        isNull(),
+                        eq(DeliveryPolicySurface.IN_APP),
+                        anyLong(),
+                        eq(List.of())))
+                .thenReturn(new PracticeFeedbackDeliveryPolicy.DeliveryDecision(true, null));
         inAppLane = new InAppCompositionListener(
                 agentJobRepository,
                 observationRepository,
