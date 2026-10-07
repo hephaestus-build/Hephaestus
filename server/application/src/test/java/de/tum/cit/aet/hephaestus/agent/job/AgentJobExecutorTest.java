@@ -1223,6 +1223,114 @@ class AgentJobExecutorTest extends BaseUnitTest {
             assertThat(sample.getValue().totalCalls()).isEqualTo(2);
         }
 
+        @ParameterizedTest
+        @MethodSource("unstorableResults")
+        @DisplayName("a result jsonb cannot store fails once, is not kept, and still books its usage")
+        void shouldFailOnceWithoutKeepingAResultJsonbCannotStore(
+                Map<String, Object> result, int exitCode, boolean admitted) {
+            job.setConfigSnapshot(snapshot.withPriceSnapshot(pricedSnapshot()).toJson(objectMapper));
+            stubClaimableJob();
+            JobTypeHandler handler = setupFullExecution(
+                    new SandboxResult(exitCode, Map.of(), "transcript", false, Duration.ofSeconds(5)));
+            when(practiceAgent.parseResult(any())).thenReturn(new AgentResult(exitCode == 0, result));
+            AgentJob fresh = freshJob();
+            var admission = objectMapper
+                    .createObjectNode()
+                    .put(ObservationAdmissionService.DIGEST_METADATA_KEY, admitted ? "accepted" : "");
+            fresh.setMetadata(admission);
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.findById(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.transitionStatus(any(), any(), any(), any(), any()))
+                    .thenReturn(1);
+            when(jobRepository.findLlmUsageById(jobId))
+                    .thenReturn(Optional.of(new AgentJobLlmUsage(2, 100, 50, 0, 0, 0)));
+
+            executor.processJob(jobId);
+
+            verify(jobRepository, times(1))
+                    .transitionStatus(
+                            eq(jobId),
+                            eq(AgentJobStatus.FAILED),
+                            any(),
+                            eq(AgentJobExecutor.UNSTORABLE_RESULT_MESSAGE),
+                            eq(Set.of(AgentJobStatus.RUNNING)));
+            JsonNode stored = requireNonNull(fresh.getOutput());
+            assertThat(stored.has("resultNotStored")).isTrue();
+            assertThat(stored.has("feedback")).isFalse();
+            assertThat(fresh.getDeliveryStatus()).isNull();
+            assertThat(fresh.getMetadata()).isEqualTo(admission);
+            verify(sandboxManager, times(1)).execute(any());
+            verify(handler, never()).deliver(any());
+            ArgumentCaptor<LlmUsageRecorder.LlmUsageSample> sample =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.LlmUsageSample.class);
+            verify(usageRecorder, times(1)).record(eq(99L), sample.capture());
+            assertThat(sample.getValue().totalCalls()).isEqualTo(2);
+        }
+
+        private static Stream<Arguments> unstorableResults() {
+            return Stream.of(
+                    Arguments.of(Map.of("feedback", Map.of("summary", "before\u0000after")), 0, false),
+                    Arguments.of(Map.of("feedback", Map.of("bad\u0000key", "value")), 0, false),
+                    Arguments.of(Map.of("feedback", List.of("lone high \uD83D")), 0, false),
+                    Arguments.of(Map.of("feedback", Map.of("summary", "lone low \uDE00 here")), 0, false),
+                    Arguments.of(
+                            Map.of("rawOutput", "accepted output", "feedback", Map.of("summary", "before\u0000after")),
+                            2,
+                            true));
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "a literal \\u0000 escape stays text",
+                    "paired emoji 😀 and accents é",
+                    "a control character \u0001 and a tab\t",
+                    "nested \\\\u0000 and \\uD800 as text"
+                })
+        @DisplayName("text jsonb can store is kept exactly and completes")
+        void shouldKeepAResultJsonbCanStoreExactly(String text) {
+            job.setConfigSnapshot(snapshot.withPriceSnapshot(pricedSnapshot()).toJson(objectMapper));
+            stubClaimableJob();
+            JobTypeHandler handler = setupFullExecution();
+            Map<String, Object> result = Map.of("feedback", Map.of("summary", text, text, List.of(text)));
+            when(practiceAgent.parseResult(any())).thenReturn(new AgentResult(true, result));
+            AgentJob fresh = freshJob();
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.findById(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.transitionStatus(any(), any(), any(), any(), any()))
+                    .thenReturn(1);
+
+            executor.processJob(jobId);
+
+            verify(jobRepository)
+                    .transitionStatus(
+                            eq(jobId), eq(AgentJobStatus.COMPLETED), any(), any(), eq(Set.of(AgentJobStatus.RUNNING)));
+            assertThat(fresh.getOutput()).isEqualTo(objectMapper.valueToTree(result));
+            verify(handler).deliver(fresh);
+        }
+
+        @Test
+        @DisplayName("a transcript a TEXT column cannot store is replaced whole and the result is still kept")
+        void shouldOmitAnUnstorableTranscriptWholeAndKeepTheResult() {
+            stubClaimableJob();
+            setupFullExecution(new SandboxResult(0, Map.of(), "start\u0000end", false, Duration.ofSeconds(5)));
+            Map<String, Object> result = Map.of("review", "LGTM");
+            when(practiceAgent.parseResult(any())).thenReturn(new AgentResult(true, result));
+            AgentJob fresh = freshJob();
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.findById(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.transitionStatus(any(), any(), any(), any(), any()))
+                    .thenReturn(1);
+
+            executor.processJob(jobId);
+
+            verify(jobRepository)
+                    .transitionStatus(
+                            eq(jobId), eq(AgentJobStatus.COMPLETED), any(), any(), eq(Set.of(AgentJobStatus.RUNNING)));
+            assertThat(fresh.getContainerLogs()).isEqualTo(AgentJobExecutor.UNSTORABLE_TRANSCRIPT);
+            assertThat(fresh.getOutput()).isEqualTo(objectMapper.valueToTree(result));
+        }
+
         @Test
         void shouldNotDeliverOrBillFailedOutputWhenTheTerminalFenceIsLost() {
             stubClaimableJob();

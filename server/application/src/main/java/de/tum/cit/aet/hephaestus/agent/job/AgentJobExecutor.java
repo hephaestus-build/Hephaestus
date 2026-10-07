@@ -53,6 +53,7 @@ import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.Serial;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -1213,7 +1214,9 @@ public class AgentJobExecutor {
                 billTerminatedJob(job, reason + " retry (attempt " + (currentRetryCount + 1) + ")", retryCounts);
             }
             if (transcript != null) {
-                jobRepository.findById(jobId).ifPresent(requeued -> requeued.setContainerLogs(transcript));
+                jobRepository
+                        .findById(jobId)
+                        .ifPresent(requeued -> requeued.setContainerLogs(representableTranscript(transcript)));
             }
             return rows;
         });
@@ -1524,32 +1527,38 @@ public class AgentJobExecutor {
      */
     private @Nullable AgentJobStatus persistTerminalState(
             UUID jobId, AgentResult agentResult, SandboxResult sandboxResult) {
+        JsonNode output = objectMapper.valueToTree(agentResult.output());
+        boolean storable = textRepresentableInJsonb(output);
+        if (!storable) {
+            log.warn("Runner result has text jsonb cannot represent; recording it as not stored: jobId={}", jobId);
+        }
         try {
             return terminalPersistRetries.execute(named(
                     "Terminal persistence for jobId=" + jobId,
-                    () -> persistTerminalStateOnce(jobId, agentResult, sandboxResult)));
+                    () -> persistTerminalStateOnce(jobId, agentResult, sandboxResult, output, storable)));
         } catch (RetryException e) {
             throw new TerminalPersistenceException(e);
         }
     }
 
     private @Nullable AgentJobStatus persistTerminalStateOnce(
-            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult) {
+            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult, JsonNode output, boolean storable) {
         return transactionTemplate.execute(status -> {
             AgentJob locked =
                     jobRepository.findByIdWithWorkspaceForUpdate(jobId).orElse(null);
             if (locked == null) return null;
-            AgentJobStatus terminalStatus = determineTerminalStatus(sandboxResult, agentResult, locked);
+            AgentJobStatus determined = determineTerminalStatus(sandboxResult, agentResult, locked);
+            AgentJobStatus terminalStatus =
+                    !storable && determined == AgentJobStatus.COMPLETED ? AgentJobStatus.FAILED : determined;
+            String failureMessage = sandboxResult.exitCode() == 0
+                    ? "The runner did not return a valid result."
+                    : "The container exited with code " + sandboxResult.exitCode() + ".";
             String errorMessage =
                     switch (terminalStatus) {
                         case TIMED_OUT -> "The container timed out.";
-                        case FAILED ->
-                            sandboxResult.exitCode() == 0
-                                    ? "The runner did not return a valid result."
-                                    : "The container exited with code " + sandboxResult.exitCode() + ".";
+                        case FAILED -> storable ? failureMessage : UNSTORABLE_RESULT_MESSAGE;
                         case COMPLETED ->
-                            FeedbackCompositionResultParser.compositionStatus(
-                                            objectMapper.valueToTree(agentResult.output()))
+                            FeedbackCompositionResultParser.compositionStatus(output)
                                     .message();
                         default -> null;
                     };
@@ -1566,14 +1575,17 @@ public class AgentJobExecutor {
             ConfigSnapshot snapshot = ConfigSnapshot.fromJson(freshJob.getConfigSnapshot(), objectMapper);
             LlmPriceSnapshot price = admittedPrice(snapshot);
 
-            freshJob.setOutput(objectMapper.valueToTree(agentResult.output()));
+            // The whole result or none of it: a claim stripped of the text it rested on would be a different
+            // claim than the runner made.
+            freshJob.setOutput(
+                    storable ? output : objectMapper.createObjectNode().put("resultNotStored", UNSTORABLE_TEXT));
             freshJob.setExitCode(sandboxResult.exitCode());
             // The whole transcript, not its ending. It is the only account of what a review did — which
             // practices it settled, what it was refused and why, where its time went — and a review that
             // is not doing what it should is diagnosed from the part that a tail drops. Collection has
             // already bounded it, and the retention sweep clears it on its own schedule.
             if (sandboxResult.logs() != null && !sandboxResult.logs().isBlank()) {
-                freshJob.setContainerLogs(sandboxResult.logs());
+                freshJob.setContainerLogs(representableTranscript(sandboxResult.logs()));
             }
             if (terminalStatus == AgentJobStatus.COMPLETED) {
                 freshJob.setDeliveryStatus(DeliveryStatus.PENDING);
@@ -1602,6 +1614,45 @@ public class AgentJobExecutor {
             usage.appendTo(usageRecorder, freshJob.getWorkspace().getId(), freshJob, snapshot.upstreamModelId(), price);
             return terminalStatus;
         });
+    }
+
+    static final String UNSTORABLE_RESULT_MESSAGE =
+            "The runner returned a result with text the database cannot store, so the result was not kept.";
+    private static final String UNSTORABLE_TEXT = "The text contains a NUL character or an unpaired surrogate.";
+    static final String UNSTORABLE_TRANSCRIPT =
+            "[The transcript was not kept: it contains a NUL character or an unpaired surrogate.]";
+
+    /**
+     * Whether every string value and object key of this tree is text jsonb can represent: no decoded NUL, and
+     * well-formed UTF-16. The six characters of an escape written as text are ordinary text and pass. Numbers and
+     * other storage limits are not judged here.
+     */
+    private static boolean textRepresentableInJsonb(JsonNode node) {
+        if (node.isString()) return representableText(node.asString());
+        if (node.isObject()) {
+            for (Map.Entry<String, JsonNode> property : node.properties()) {
+                if (!representableText(property.getKey()) || !textRepresentableInJsonb(property.getValue())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (node.isArray()) {
+            for (JsonNode element : node) {
+                if (!textRepresentableInJsonb(element)) return false;
+            }
+        }
+        return true;
+    }
+
+    /** A transcript is kept whole or replaced whole: a TEXT column refuses NUL, and UTF-8 has no lone surrogate. */
+    private static String representableTranscript(String transcript) {
+        return representableText(transcript) ? transcript : UNSTORABLE_TRANSCRIPT;
+    }
+
+    /** A fresh encoder per call, because a {@code CharsetEncoder} is not thread-safe. */
+    private static boolean representableText(String text) {
+        return text.indexOf('\u0000') < 0 && StandardCharsets.UTF_8.newEncoder().canEncode(text);
     }
 
     private static final class TerminalPersistenceException extends RuntimeException {
