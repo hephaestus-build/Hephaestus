@@ -270,7 +270,11 @@ if (scenario !== undefined && scenario !== "") {
 										"The helper path is present in the source; its runtime behavior was not executed.",
 									evidence: {
 										citations: [changeCitation],
-										qualification: { boundary: "Source only; no relaunch result recorded." },
+										search: {
+											consulted: ["scm.pull-request.diff"],
+											lookedFor: "A recorded relaunch result",
+											boundary: "Source only; no relaunch result recorded.",
+										},
 									},
 								}
 							: {}),
