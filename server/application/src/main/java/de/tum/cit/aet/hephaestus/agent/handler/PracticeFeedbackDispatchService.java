@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
-import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchDestination;
@@ -178,10 +177,28 @@ class PracticeFeedbackDispatchService {
         }
 
         if (Boolean.TRUE.equals(transactionTemplate.execute(status -> citesInvalidated(dispatch)))) {
-            return refuseInvalidated(dispatch, job, owner);
+            return refuseAfterReconciling(
+                    dispatch,
+                    job,
+                    owner,
+                    FeedbackSuppressionReason.OBSERVATION_INVALIDATED,
+                    dispatch.getDeliveredExternalRef(),
+                    dispatch.getDeliveredExternalUrl(),
+                    deliveredSignals(dispatch));
         }
         // Past the budget only a write that may already have happened admitted the claim: reconcile, never write.
         if (dispatch.getAttemptCount() >= MAX_ATTEMPTS) {
+            PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
+            if (!decision.allowed() && decision.refusal() == FeedbackSuppressionReason.PUBLIC_SUBJECT_INELIGIBLE) {
+                return refuseAfterReconciling(
+                        dispatch,
+                        job,
+                        owner,
+                        decision.refusal(),
+                        dispatch.getDeliveredExternalRef(),
+                        dispatch.getDeliveredExternalUrl(),
+                        deliveredSignals(dispatch));
+            }
             return reconcileBeyondBudget(dispatch, job, owner);
         }
         return dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE
@@ -212,7 +229,15 @@ class PracticeFeedbackDispatchService {
                     return stateMachine.retry(dispatch, owner, "A prior provider write has not been reconciled");
                 } else {
                     PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
-                    if (!decision.allowed()) return stateMachine.refuse(dispatch, owner, decision.refusal());
+                    if (!decision.allowed())
+                        return refuseAfterReconciling(
+                                dispatch,
+                                job,
+                                owner,
+                                decision.refusal(),
+                                dispatch.getDeliveredExternalRef(),
+                                dispatch.getDeliveredExternalUrl(),
+                                deliveredSignals(dispatch));
                     switch (PracticeFeedbackDeliveryPolicy.reviewedRevision(job, decision)) {
                         case CHANGED -> {
                             return stateMachine.refuse(
@@ -240,8 +265,8 @@ class PracticeFeedbackDispatchService {
             if (!isIssue(job)) {
                 PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                 if (!decision.allowed())
-                    return stateMachine.refuse(
-                            dispatch, owner, decision.refusal(), summaryRef, summaryUrl, inlineSignals);
+                    return refuseAfterReconciling(
+                            dispatch, job, owner, decision.refusal(), summaryRef, summaryUrl, inlineSignals);
                 // An empty package writes nothing inline: it never retires what earlier packages placed.
                 if (!sealed.diffNotes().isEmpty()) {
                     // While no inline write began nothing needs reading back, so a head proven moved is refused
@@ -346,7 +371,15 @@ class PracticeFeedbackDispatchService {
                     return stateMachine.retry(dispatch, owner, "A prior provider write has not been reconciled");
                 } else {
                     PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
-                    if (!decision.allowed()) return stateMachine.refuse(dispatch, owner, decision.refusal());
+                    if (!decision.allowed())
+                        return refuseAfterReconciling(
+                                dispatch,
+                                job,
+                                owner,
+                                decision.refusal(),
+                                dispatch.getDeliveredExternalRef(),
+                                dispatch.getDeliveredExternalUrl(),
+                                deliveredSignals(dispatch));
                     if (!PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(feedback, job, decision)) {
                         return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.APPROVAL_STALE);
                     }
@@ -363,8 +396,8 @@ class PracticeFeedbackDispatchService {
             if (!inlineNotes.isEmpty()) {
                 PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                 if (!decision.allowed()) {
-                    return stateMachine.refuse(
-                            dispatch, owner, decision.refusal(), summaryRef, summaryUrl, inlineSignals);
+                    return refuseAfterReconciling(
+                            dispatch, job, owner, decision.refusal(), summaryRef, summaryUrl, inlineSignals);
                 }
                 // With no inline write begun there is nothing to read back, so a stale approval is refused here.
                 // Otherwise it is refused at each create, after the copies an earlier attempt may have made are read
@@ -458,19 +491,26 @@ class PracticeFeedbackDispatchService {
     }
 
     /**
-     * Withholds a dispatch whose cited observation was invalidated, once every write an earlier attempt started is
+     * Withholds a dispatch once every write an earlier attempt started is
      * accounted for: the summary when its fence was set, inline notes when their own stage may have begun.
      * Only positive evidence settles a started write: an earlier POST may still land after its lease expired, so a
      * lookup that finds nothing proves nothing. The dispatch stays uncertain, claimable past the attempt budget by
      * that same write record, and keeps looking, more slowly once {@link #UNCONFIRMED_WINDOW} has passed since the
      * write began. Nothing is posted here.
      */
-    private Result refuseInvalidated(FeedbackDispatch dispatch, AgentJob job, String owner) {
-        @Nullable String summaryRef = dispatch.getDeliveredExternalRef();
-        @Nullable String summaryUrl = dispatch.getDeliveredExternalUrl();
-        List<DeliveredSignal> signals = deliveredSignals(dispatch);
+    private Result refuseAfterReconciling(
+            FeedbackDispatch dispatch,
+            AgentJob job,
+            String owner,
+            FeedbackSuppressionReason reason,
+            @Nullable String summaryRef,
+            @Nullable String summaryUrl,
+            List<DeliveredSignal> signals) {
+        @Nullable String resolvedSummaryRef = summaryRef;
+        @Nullable String resolvedSummaryUrl = summaryUrl;
+        List<DeliveredSignal> resolvedSignals = signals;
         boolean unconfirmed = false;
-        if (summaryRef == null
+        if (resolvedSummaryRef == null
                 && dispatch.getWriteStarted()
                 && !dispatch.getBody().isBlank()) {
             ExistingDeliveryLookup existing;
@@ -479,8 +519,8 @@ class PracticeFeedbackDispatchService {
             } catch (RuntimeException e) {
                 existing = ExistingDeliveryLookup.unknown();
             }
-            summaryRef = existing.commentId();
-            summaryUrl = existing.commentUrl();
+            resolvedSummaryRef = existing.commentId();
+            resolvedSummaryUrl = existing.commentUrl();
             unconfirmed = existing.kind() != ExistingDeliveryLookup.Kind.FOUND;
         }
         if (dispatch.inlineWriteMayHaveStarted() && !isIssue(job)) {
@@ -489,20 +529,15 @@ class PracticeFeedbackDispatchService {
                     job,
                     InlinePackageScope.recovered(dispatch, sealed.inlineMarker(), feedbackRepository),
                     sealed.diffNotes(),
-                    signals);
-            signals = stateMachine.mergeSignals(signals, lookup.found());
+                    resolvedSignals);
+            resolvedSignals = stateMachine.mergeSignals(resolvedSignals, lookup.found());
             unconfirmed |= lookup.unconfirmed();
         }
         if (!unconfirmed) {
             return stateMachine.refuse(
-                    dispatch,
-                    owner,
-                    FeedbackSuppressionReason.OBSERVATION_INVALIDATED,
-                    summaryRef,
-                    summaryUrl,
-                    signals);
+                    dispatch, owner, reason, resolvedSummaryRef, resolvedSummaryUrl, resolvedSignals);
         }
-        return stateMachine.awaitUnconfirmed(dispatch, owner, summaryRef, summaryUrl, signals);
+        return stateMachine.awaitUnconfirmed(dispatch, owner, resolvedSummaryRef, resolvedSummaryUrl, resolvedSignals);
     }
 
     /**
@@ -560,10 +595,9 @@ class PracticeFeedbackDispatchService {
                 .filter(JsonNode::isString)
                 .map(JsonNode::asString)
                 .collect(Collectors.toUnmodifiableSet());
-        if (isIssue(job)) {
-            return policy.evaluateIssue(job, DeliveryPolicyStage.EGRESS, dispatch.getFeedbackId(), practiceSlugs);
-        }
-        return policy.evaluatePullRequest(job, DeliveryPolicyStage.EGRESS, dispatch.getFeedbackId(), practiceSlugs);
+        List<UUID> cited = Objects.requireNonNull(transactionTemplate.execute(
+                status -> repository.lockCitedObservations(dispatch.getWorkspaceId(), dispatch.getId())));
+        return policy.evaluateAtEgress(job, dispatch.getFeedbackId(), practiceSlugs, Set.copyOf(cited));
     }
 
     private List<DiffNote> inlineNotes(FeedbackDispatch dispatch) {

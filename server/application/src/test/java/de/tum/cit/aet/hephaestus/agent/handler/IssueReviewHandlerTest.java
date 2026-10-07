@@ -110,7 +110,8 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                 feedbackResponseSuppressionFilter,
                 mock(ObservationRepository.class),
                 dispatchService,
-                mock(FeedbackDeliveryService.class));
+                mock(FeedbackDeliveryService.class),
+                mock(PublicReviewEligibility.class));
         lenient()
                 .when(feedbackResponseSuppressionFilter.evaluate(any(), any()))
                 .thenAnswer(invocation ->

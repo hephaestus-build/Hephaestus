@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
 import de.tum.cit.aet.hephaestus.agent.context.StagedArtifactNames;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
+import de.tum.cit.aet.hephaestus.agent.handler.PublicReviewEligibility;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
@@ -85,6 +86,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     private final IssueRepository issueRepository;
     private final StagedArtifactNames artifactNames;
     private final ObjectMapper objectMapper;
+    private final PublicReviewEligibility publicReviewEligibility;
 
     public ReviewHistoryContentSource(
             ObservationRepository observationRepository,
@@ -96,7 +98,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             PullRequestRepository pullRequestRepository,
             IssueRepository issueRepository,
             StagedArtifactNames artifactNames,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PublicReviewEligibility publicReviewEligibility) {
         this.observationRepository = observationRepository;
         this.feedbackRepository = feedbackRepository;
         this.feedbackObservationRepository = feedbackObservationRepository;
@@ -107,6 +110,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         this.issueRepository = issueRepository;
         this.artifactNames = artifactNames;
         this.objectMapper = objectMapper;
+        this.publicReviewEligibility = publicReviewEligibility;
     }
 
     @Override
@@ -617,6 +621,10 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                 putPracticeRevision(support, o.getPracticeRevision());
                 support.put("outcome", o.getOutcome().name());
             }
+            node.put(
+                    "publicEligible",
+                    publicReviewEligibility.permitsPublicHistory(
+                            f, shown.basedOn().getOrDefault(f.getId(), List.of())));
             putBody(node, f, shown.currentness(), withdrawn);
         }
         return root;

@@ -59,6 +59,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     private final FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter;
     private final InContextDeliveryGate inContextDeliveryGate;
     private final ObservationRepository observationRepository;
+    private final PublicReviewEligibility publicReviewEligibility;
 
     PullRequestReviewHandler(
             JsonMapper objectMapper,
@@ -69,7 +70,8 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             FeedbackDeliveryService feedbackService,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             InContextDeliveryGate inContextDeliveryGate,
-            ObservationRepository observationRepository) {
+            ObservationRepository observationRepository,
+            PublicReviewEligibility publicReviewEligibility) {
         this.objectMapper = objectMapper;
         this.preparation = preparation;
         this.resultParser = resultParser;
@@ -79,6 +81,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         this.feedbackResponseSuppressionFilter = feedbackResponseSuppressionFilter;
         this.inContextDeliveryGate = inContextDeliveryGate;
         this.observationRepository = observationRepository;
+        this.publicReviewEligibility = publicReviewEligibility;
     }
 
     @Override
@@ -238,15 +241,21 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 .toList();
         if (scopedObservations.isEmpty()) throw new JobDeliveryException("Admitted observation set is empty");
         if (feedbackService.recoverAutomaticPackageIfPresent(job)) return;
+        Set<UUID> publicIds = publicReviewEligibility.publicObservationIds(job, persisted);
         ComposedReview review = reviewToDeliver(
-                compositionResultParser, job, persisted, FeedbackCompositionInputs.EVENT_REVIEW_CHANNELS);
+                compositionResultParser, job, persisted, publicIds, FeedbackCompositionInputs.EVENT_REVIEW_CHANNELS);
         List<ReviewResultParser.ValidatedObservation> eligible = feedbackResponseSuppressionFilter
                 .evaluate(job, scopedObservations)
                 .deliverable();
         List<ReviewResultParser.ValidatedObservation> proposals = inContextDeliveryGate.awaitingApproval(job, eligible);
         List<ReviewResultParser.ValidatedObservation> loudEnough = inContextDeliveryGate.admitInContext(job, eligible);
         switch (AdmittedDelivery.decide(
-                review, ArtifactKinds.PULL_REQUEST, scopedObservations, subjectsOf(persisted), proposals, loudEnough)) {
+                review,
+                ArtifactKinds.PULL_REQUEST,
+                scopedObservations,
+                subjectsOf(persisted, publicIds),
+                proposals,
+                loudEnough)) {
             case AdmittedDelivery.Proposed proposed -> feedbackService.recordProposal(job, proposed.content());
             case AdmittedDelivery.Automatic automatic ->
                 feedbackService.deliverFeedback(job, automatic.content(), automatic.contributingPracticeSlugs());
@@ -255,21 +264,22 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
     /**
      * The review to deliver on the work. A run owes one unless it is a backfill, its staged channels leave the work
-     * out, or no observation both decided something and may appear on the work; these are read from the run itself,
-     * never from settings that can change after it. An owed review that is missing, malformed, or written under an
+     * out, or no observation both decided something and may appear on the work ({@code publicIds}, so a run about a
+     * reviewer owes none); these are read from the run itself, never from settings that can change after it. An owed review that is missing, malformed, or written under an
      * earlier fragment contract fails delivery without a claim about the work; a valid empty review is silence.
      */
     static ComposedReview reviewToDeliver(
             FeedbackCompositionResultParser parser,
             AgentJob job,
             List<Observation> persisted,
+            Set<UUID> publicIds,
             Set<FeedbackChannel> stagedChannels) {
         // A backfill stages no composition (FeedbackCompositionInputs), so it never owes a review.
         boolean reviewOwed = ReviewOutputService.originOf(job.getMetadata()) != ObservationOrigin.BACKFILL
                 && stagedChannels.contains(FeedbackChannel.IN_CONTEXT)
                 && persisted.stream()
-                        .anyMatch(observation -> observation.getOutcome().isDecided()
-                                && PublicReviewEligibility.admits(observation.getEvidence()));
+                        .anyMatch(observation ->
+                                observation.getOutcome().isDecided() && publicIds.contains(observation.getId()));
         if (!reviewOwed) return ComposedReview.empty();
         if (!parser.writtenWhole(job.getOutput())) {
             throw new JobDeliveryException(
@@ -285,7 +295,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         Set<String> decided = review.decidedObservationIds();
         if (persisted.stream()
                 .anyMatch(observation -> observation.getOutcome() == Outcome.NOT_MET
-                        && PublicReviewEligibility.admits(observation.getEvidence())
+                        && publicIds.contains(observation.getId())
                         && !decided.contains(observation.getId().toString()))) {
             throw new JobDeliveryException(
                     "Public feedback composition left an eligible observation undecided; jobId=" + job.getId());
@@ -293,11 +303,13 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         return review;
     }
 
-    /** The person each observation is about, which decides who a part of the review resting on it reaches. */
-    static Map<UUID, Long> subjectsOf(List<Observation> persisted) {
+    /** The author each publicly eligible observation is about, by its persisted id. */
+    static Map<UUID, Long> subjectsOf(List<Observation> persisted, Set<UUID> publicIds) {
         Map<UUID, Long> subjects = new HashMap<>();
         for (Observation observation : persisted) {
-            subjects.put(observation.getId(), observation.getAboutUserId());
+            if (publicIds.contains(observation.getId())) {
+                subjects.put(observation.getId(), observation.getAboutUserId());
+            }
         }
         return subjects;
     }

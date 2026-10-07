@@ -820,7 +820,7 @@ void test("an issue discussion uses its own core recipient and stored native com
 	assert.equal(history.sources.length, 1);
 });
 
-void test("reviewer history uses the captured target identity and never substitutes the work author", (t) => {
+void test("public discussion keeps the work author as its addressee even when the occasion concerns a reviewer", (t) => {
 	const reviewPath = "context/review_threads.json";
 	const index = discussionIndex("scm.general-review-comments", GENERAL_PATH);
 	const reviewIndex = discussionIndex("scm.review-threads", reviewPath);
@@ -859,10 +859,10 @@ void test("reviewer history uses the captured target identity and never substitu
 	});
 	t.after(() => rmSync(root, { recursive: true, force: true }));
 	const history = buildPublicReviewHistory(root, "context", index, FRAMING);
-	assert.deepEqual(history.recipient, { author: "reviewer", authorId: "12" });
+	assert.deepEqual(history.recipient, { author: "owner", authorId: "11" });
 	assert.deepEqual(
 		history.statements.map((row) => row.eligibleForPriorAdvice),
-		[false, true],
+		[true, false],
 	);
 	for (const unavailable of [
 		discussionIndex("scm.general-review-comments", GENERAL_PATH),
@@ -876,7 +876,10 @@ void test("reviewer history uses the captured target identity and never substitu
 		},
 	]) {
 		const unknown = buildPublicReviewHistory(root, "context", unavailable, FRAMING);
-		assert.deepEqual(unknown.recipient, { author: null, authorId: null });
-		assert.ok(unknown.statements.every((row) => !row.eligibleForPriorAdvice));
+		assert.deepEqual(unknown.recipient, { author: "owner", authorId: "11" });
+		assert.deepEqual(
+			unknown.statements.map((row) => row.eligibleForPriorAdvice),
+			[true, false],
+		);
 	}
 });

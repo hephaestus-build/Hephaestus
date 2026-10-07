@@ -114,6 +114,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
@@ -354,6 +355,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         agentJob.setWorkerId("test-worker");
         agentJob.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         agentJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        agentJob.setArtifactKind(ArtifactKinds.PULL_REQUEST);
         agentJob.setStatus(AgentJobStatus.RUNNING);
         agentJob.setConfigSnapshot(AdmittedReviewJobFixtures.snapshot(
                 workspace,
@@ -524,6 +526,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setWorkerId("test-worker");
         next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        next.setArtifactKind(ArtifactKinds.PULL_REQUEST);
         next.setStatus(AgentJobStatus.QUEUED);
         next.setConfigSnapshot(agentJob.getConfigSnapshot());
         var nextMetadata =
@@ -896,6 +899,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setWorkerId("test-worker");
         next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        next.setArtifactKind(ArtifactKinds.PULL_REQUEST);
         next.setStatus(AgentJobStatus.RUNNING);
         next.setConfigSnapshot(agentJob.getConfigSnapshot());
         JsonNode metadata = agentJob.getMetadata();
@@ -1094,7 +1098,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     review,
                     ArtifactKinds.PULL_REQUEST,
                     admitted,
-                    PullRequestReviewHandler.subjectsOf(rows),
+                    PullRequestReviewHandler.subjectsOf(
+                            rows, rows.stream().map(Observation::getId).collect(Collectors.toSet())),
                     List.of(),
                     admitted);
             if (!(decided instanceof AdmittedDelivery.Automatic automatic)) {

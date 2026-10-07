@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.io.Serial;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -70,6 +71,7 @@ public class ObservationAdmissionService {
     private final JsonMapper mapper;
     private final TransactionTemplate transactions;
     private final JobEvidenceFiles evidenceFiles;
+    private final PublicReviewEligibility publicReviewEligibility;
 
     /** Retries join in-flight verification rather than launching duplicate Git operations. */
     private final ConcurrentHashMap<AdmissionIdentity, Flight> flights = new ConcurrentHashMap<>();
@@ -82,13 +84,15 @@ public class ObservationAdmissionService {
             JobTypeHandlerRegistry handlers,
             JsonMapper mapper,
             PlatformTransactionManager transactionManager,
-            JobEvidenceFiles evidenceFiles) {
+            JobEvidenceFiles evidenceFiles,
+            PublicReviewEligibility publicReviewEligibility) {
         this.jobs = jobs;
         this.observations = observations;
         this.handlers = handlers;
         this.mapper = mapper;
         this.transactions = new TransactionTemplate(transactionManager);
         this.evidenceFiles = evidenceFiles;
+        this.publicReviewEligibility = publicReviewEligibility;
     }
 
     /** Records refusals on the job before rethrowing them. */
@@ -132,7 +136,7 @@ public class ObservationAdmissionService {
             return Objects.requireNonNull(transactions.execute(status -> {
                 AgentJob job = ownedJob(identity);
                 if (!digest.equals(admissionDigest(job))) throw new AdmissionConflictException();
-                return response(digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
+                return response(job, digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
             }));
         }
         PreparedObservations prepared;
@@ -167,7 +171,7 @@ public class ObservationAdmissionService {
                     jobs.discardRetiredArtifactInventory(
                             job.getId(), identity.workspaceId(), identity.attempt(), identity.workerId());
                 }
-                return response(digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
+                return response(job, digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
             }));
         } catch (ObservationsRefusedException refusal) {
             // The publish transaction rolled back before this separate refusal write.
@@ -240,16 +244,17 @@ public class ObservationAdmissionService {
         }
     }
 
-    private ObjectNode response(String digest, List<Observation> admitted) {
+    private ObjectNode response(AgentJob job, String digest, List<Observation> admitted) {
         ObjectNode root = mapper.createObjectNode();
         root.put("schemaVersion", 1);
         root.put("admissionDigest", digest);
         ArrayNode rows = root.putArray("observations");
-        admitted.forEach(o -> rows.add(project(o)));
+        Set<UUID> publicIds = publicReviewEligibility.publicObservationIds(job, admitted);
+        admitted.forEach(o -> rows.add(project(o, publicIds.contains(o.getId()))));
         return root;
     }
 
-    private ObjectNode project(Observation observation) {
+    private ObjectNode project(Observation observation, boolean publicEligible) {
         ObjectNode out = mapper.createObjectNode();
         out.put("id", observation.getId().toString());
         out.put("practiceSlug", observation.getPractice().getSlug());
@@ -298,7 +303,7 @@ public class ObservationAdmissionService {
                 "anchorable",
                 citations.valueStream().anyMatch(c -> c.path("anchorable").asBoolean()));
         // The review on the work is composed from the observations marked here and admitted by the same rule.
-        out.put("publicEligible", PublicReviewEligibility.admits(observation.getEvidence()));
+        out.put("publicEligible", publicEligible);
         return out;
     }
 

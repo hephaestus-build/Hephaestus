@@ -178,8 +178,9 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         job = pinReviewedHead(persistPullRequestReview(workspace, 7, Instant.now()));
         observation = observe(practice, job, 7L, developer, Outcome.NOT_MET, Severity.MAJOR, Instant.now());
         note = noteAbout(observation, 3, "Closes #1 already.");
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(REVIEWED_HEAD)));
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(
+                        invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(REVIEWED_HEAD)));
         when(policy.currentReviewedRevision(any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT);
     }
@@ -576,14 +577,39 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.INLINE_REMAINS);
     }
 
-    /** A retry withheld for another reason never looked for what the failed attempt may have posted. */
+    @Test
+    void shouldRetainTheKnownInlineCopyWhenPublicSubjectRefusalReconcilesTheEarlierWrite() {
+        String key = "review:" + job.getId();
+        provider.failAfterAccept = true;
+        dispatchAutomatic("", List.of(note));
+        provider.failAfterAccept = false;
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.suppressed(
+                        FeedbackSuppressionReason.PUBLIC_SUBJECT_INELIGIBLE));
+
+        var recovered = recover(key);
+        assertThat(recovered.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
+        assertThat(dispatch(key).getInlineWriteStarted()).isTrue();
+        assertThat(dispatchRepository.existsUnconfirmedCiting(workspace.getId(), observation))
+                .isFalse();
+        assertThat(dispatchRepository.existsUnconfirmedCiting(workspace.getId() + 1, observation))
+                .isFalse();
+        feedbackDeliveryService.projectAutomaticPackage(job, dispatch(key));
+
+        invalidate();
+        settleCorrections();
+
+        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.INLINE_REMAINS);
+    }
+
+    /** Other retained suppression reasons do not certify reconciliation of earlier writes. */
     @Test
     void shouldReportUnresolvedWhenAnUnconfirmedWriteWasLaterWithheldForAnotherReason() {
         String key = "review:" + job.getId();
         provider.failAfterAccept = true;
         dispatchAutomatic("", List.of(note));
         provider.failAfterAccept = false;
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.suppressed(
                         FeedbackSuppressionReason.RECIPIENT_OPTED_OUT));
         recover(key);
@@ -594,6 +620,8 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
 
         assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.SUPPRESSED);
         assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.UNRESOLVED);
+        assertThat(dispatchRepository.existsUnconfirmedCiting(workspace.getId(), observation))
+                .isTrue();
     }
 
     @Test

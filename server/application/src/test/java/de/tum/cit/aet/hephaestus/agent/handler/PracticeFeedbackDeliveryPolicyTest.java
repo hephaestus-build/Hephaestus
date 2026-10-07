@@ -69,8 +69,14 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
+    @Mock
+    private PublicReviewEligibility publicEligibility;
+
     @BeforeEach
     void allowMemberAiForUnrelatedScenarios() {
+        lenient()
+                .when(publicEligibility.permitsDelivery(any(), any(), any(), any()))
+                .thenReturn(true);
         lenient().when(memberAiPolicy.permitsReview(anyLong(), any(), any())).thenReturn(true);
         lenient().when(memberAiPolicy.allowsResult(any())).thenReturn(true);
     }
@@ -434,6 +440,26 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
 
         when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(REVIEWER_ID))
                 .thenReturn(true);
+        assertThat(policy().evaluatePullRequest(job).refusal())
+                .isEqualTo(FeedbackSuppressionReason.PUBLIC_SUBJECT_INELIGIBLE);
+        assertThat(policy().evaluateForRecipient(
+                                job,
+                                DeliveryPolicyStage.COMPOSITION,
+                                null,
+                                DeliveryPolicySurface.IN_APP,
+                                REVIEWER_ID,
+                                Set.of())
+                        .allowed())
+                .isTrue();
+        assertThat(policy().evaluateForRecipient(
+                                job,
+                                DeliveryPolicyStage.COMPOSITION,
+                                null,
+                                DeliveryPolicySurface.IN_APP,
+                                AUTHOR_ID,
+                                Set.of())
+                        .allowed())
+                .isFalse();
         Practice practice = new Practice();
         practice.setSlug("review-quality");
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
@@ -690,7 +716,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 approvalRepository,
                 conversationSourceLiveness,
                 memberAiPolicy,
-                documentProjection);
+                documentProjection,
+                publicEligibility);
     }
 
     @ParameterizedTest

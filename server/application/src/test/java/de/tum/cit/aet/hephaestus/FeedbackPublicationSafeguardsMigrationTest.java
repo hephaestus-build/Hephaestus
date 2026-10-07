@@ -56,6 +56,24 @@ class FeedbackPublicationSafeguardsMigrationTest {
     }
 
     @Test
+    void shouldPreserveRecordedReasonsWhenPublicSubjectSuppressionBecomesAvailable() throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("public_subject_suppression_migration");
+        createOldSchema(database);
+        insertOldRows(database);
+        migrate(database);
+        execute(database, "INSERT INTO feedback (suppression_reason) VALUES ('REVIEWED_REVISION_CHANGED')");
+        List<@Nullable String> before = column(database, "SELECT suppression_reason FROM feedback ORDER BY id");
+        assertRejected(database, "INSERT INTO feedback (suppression_reason) VALUES ('PUBLIC_SUBJECT_INELIGIBLE')");
+
+        migrate(database, "db/changelog/1791375013814_changelog.xml");
+
+        assertThat(column(database, "SELECT suppression_reason FROM feedback ORDER BY id"))
+                .containsExactlyElementsOf(before);
+        execute(database, "INSERT INTO feedback (suppression_reason) VALUES ('PUBLIC_SUBJECT_INELIGIBLE')");
+        assertRejected(database, "INSERT INTO feedback (suppression_reason) VALUES ('UNKNOWN_REASON')");
+    }
+
+    @Test
     void shouldHaltBeforeChangingAnythingWhenOneExpectedConstraintIsMissing() throws Exception {
         TestDatabase database =
                 PostgreSQLTestContainer.createDatabase("feedback_publication_safeguards_migration_halt");

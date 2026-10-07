@@ -51,11 +51,11 @@ public final class InAppFeedbackRouter {
         if (!message.isComplete()) {
             return InAppRoutingDecision.INCOMPLETE;
         }
-        // Checked before anything else about the evidence: a message about a practice whose results may
-        // be filed against the wrong person must not be shown to that person, whatever else is true of it.
+        // Checked before anything else about the evidence: a message about a practice whose results cannot
+        // be attributed to a named person must not be shown to that person, whatever else is true of it.
         // MERGER attribution is enforced by PracticeCatalogInjector.subjectNameable at admission.
-        if (subjectRole != ActorRole.AUTHOR && subjectRole != ActorRole.MERGER) {
-            return InAppRoutingDecision.REVIEWER_ATTRIBUTED;
+        if (subjectRole != ActorRole.AUTHOR && subjectRole != ActorRole.MERGER && subjectRole != ActorRole.REVIEWER) {
+            return InAppRoutingDecision.UNATTRIBUTABLE_SUBJECT;
         }
         List<Observation> problems = problemsIn(evidence);
         if (problems.isEmpty()) {

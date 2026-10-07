@@ -503,7 +503,7 @@ export interface CapturedDiscussionSource {
 
 export interface PublicReviewHistory {
 	capturedAt: string | null;
-	/** The captured author or matched reviewer this review is about; unknown when their identity is not shown. */
+	/** The captured work author; unknown when their identity is not shown. */
 	recipient: { author: string | null; authorId: string | null };
 	sources: CapturedDiscussionSource[];
 	statements: CapturedPublicStatement[];
@@ -721,7 +721,6 @@ export function buildPublicReviewHistory(
 	const capturedAt = instantOf(index.capturedAt);
 	const coreKind = CORE_SOURCE.get(folderIndex.artifactKind);
 	let otherWork: string | null = null;
-	let reviewerRecipient = false;
 	if (coreKind !== undefined) {
 		const metadataPath = `${contextRoot}/metadata.json`;
 		const capture = captureOf(index, coreKind, metadataPath);
@@ -729,21 +728,10 @@ export function buildPublicReviewHistory(
 			"omitted" in capture ? capture : readRecord(root, metadataPath, limits.sourceChars);
 		if ("shown" in core) {
 			otherWork = otherWorkOf(core.shown, framing, folderIndex.artifactKind);
-			reviewerRecipient = core.shown.subject_role === "REVIEWER";
-			if (otherWork === null && !reviewerRecipient) {
+			if (otherWork === null) {
 				recipient.author = textOf(core.shown.author);
 				recipient.authorId = idOf(core.shown.author_id);
 			}
-		}
-	}
-	if (otherWork === null && reviewerRecipient) {
-		const reviewPath = `${contextRoot}/review_threads.json`;
-		const reviewCapture = captureOf(index, "scm.review-threads", reviewPath);
-		const reviewSource =
-			"omitted" in reviewCapture ? reviewCapture : readRecord(root, reviewPath, limits.sourceChars);
-		if ("shown" in reviewSource && isRecord(reviewSource.shown.reviewRecipient)) {
-			recipient.author = textOf(reviewSource.shown.reviewRecipient.author);
-			recipient.authorId = idOf(reviewSource.shown.reviewRecipient.authorId);
 		}
 	}
 	const sources: CapturedDiscussionSource[] = [];

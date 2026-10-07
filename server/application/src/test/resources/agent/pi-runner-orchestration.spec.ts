@@ -130,6 +130,7 @@ const STAGED_FEEDBACK_HISTORY = JSON.stringify({
 		{
 			id: "feedback-same-work",
 			channel: "IN_CONTEXT",
+			publicEligible: true,
 			artifact: {
 				kind: "scm.pull_request",
 				url: "https://gitlab.example/group/repo/-/merge_requests/3",
@@ -276,6 +277,7 @@ interface CustomTool {
 const scenario = process.env.PI_ORCHESTRATION_SCENARIO;
 const unavailableContext = process.env.PI_UNAVAILABLE_CONTEXT === "true";
 const counterevidence = process.env.PI_COUNTEREVIDENCE === "true";
+const reviewerOnly = process.env.PI_REVIEWER_ONLY === "true";
 const loopReject = process.env.PI_LOOP_REJECT === "true";
 if (scenario !== undefined && scenario !== "") {
 	const cwd = process.env.PI_RUNNER_CWD;
@@ -307,9 +309,10 @@ if (scenario !== undefined && scenario !== "") {
 			case "compose-partial-error":
 			case "compose-fold": {
 				return [
-					admittedObservation,
+					{ ...admittedObservation, publicEligible: !reviewerOnly },
 					{
 						...admittedObservation,
+						publicEligible: !reviewerOnly,
 						id: "observation-2",
 						practiceSlug: "second-practice",
 						...(counterevidence
@@ -2055,6 +2058,7 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-fold",
 		"compose-context-unavailable",
 		"compose-counterevidence",
+		"compose-reviewer-only",
 		"compose-abstention",
 		"compose-unknown-outcome",
 		"compose-null-outcome",
@@ -2064,6 +2068,7 @@ if (scenario !== undefined && scenario !== "") {
 				["compose-loop-rejection", "compose-loop"],
 				["compose-context-unavailable", "compose-fold"],
 				["compose-counterevidence", "compose-fold"],
+				["compose-reviewer-only", "compose-fold"],
 			]).get(fixture) ?? fixture;
 		void test(
 			{
@@ -2131,6 +2136,8 @@ if (scenario !== undefined && scenario !== "") {
 					"points a repeated accepted selection at the final review, which is then stored without an abort",
 				"compose-invalid-select":
 					"gives an unaccepted selection no authority over the review until a corrected one is accepted",
+				"compose-reviewer-only":
+					"reviewer-only observations start no public writer and remain available to private feedback",
 				"compose-counterevidence":
 					"private counterevidence retains MET source qualifications and coordinates without quoted or verified-runtime claims",
 				"compose-context-unavailable":
@@ -2361,6 +2368,7 @@ if (scenario !== undefined && scenario !== "") {
 								PI_ORCHESTRATION_SCENARIO: stage,
 								PI_UNAVAILABLE_CONTEXT: String(fixture === "compose-context-unavailable"),
 								PI_COUNTEREVIDENCE: String(fixture === "compose-counterevidence"),
+								PI_REVIEWER_ONLY: String(fixture === "compose-reviewer-only"),
 								PI_LOOP_REJECT: String(fixture === "compose-loop-rejection"),
 								PI_RUNNER_CWD: cwd,
 								PI_CODING_AGENT_DIR: cwd,
@@ -2451,6 +2459,34 @@ if (scenario !== undefined && scenario !== "") {
 								{ phase: "PUBLIC_REVIEW", reason: "NO_DECISION" },
 							]);
 						}
+					}
+					if (fixture === "compose-reviewer-only") {
+						assert.equal(child.status, 0, child.stderr);
+						assert.equal(
+							events.filter(
+								(event) =>
+									event.startsWith("create:") &&
+									event.endsWith("tools=select_feedback,report_review"),
+							).length,
+							0,
+						);
+						const feedback: unknown = JSON.parse(
+							readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+						);
+						assert.ok(isRecord(feedback));
+						assert.ok(Array.isArray(feedback.observations));
+						assert.equal(feedback.observations.length, 2);
+						assert.deepEqual(
+							feedback.observations.map((row: unknown) => (isRecord(row) ? row.id : null)),
+							["observation-1", "observation-2"],
+						);
+						assert.ok(Array.isArray(feedback.units) && feedback.units.length > 0);
+						assert.ok(
+							feedback.units.every(
+								(unit: unknown) => isRecord(unit) && unit.channel !== "IN_CONTEXT",
+							),
+						);
+						return;
 					}
 					switch (stage) {
 						case "compose-private-budget":

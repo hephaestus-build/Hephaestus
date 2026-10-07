@@ -645,7 +645,7 @@ A recipient need not read the others.
 The same supported action may appear across channels when it serves each channel's purpose.
 The shared writing guide and each channel's prompt define those purposes:
 
-- `IN_CONTEXT` is public task-level feedback. `report_review` submits the whole final review:
+- `IN_CONTEXT` is public feedback about the author’s work. `report_review` submits the whole final review:
   an optional complete summary, complete line notes, and exact observation-scoped withholding decisions.
   Each body names every admitted decided observation it speaks about in `basedOn`.
   The model writes the prose.
@@ -656,11 +656,27 @@ The shared writing guide and each channel's prompt define those purposes:
 - `IN_CHAT` prepares `situation`, `capability`, `evidenceSummary` and `inConversationSignal` as private notes,
   not dialogue. A later conversational turn may adapt, defer or discard them.
 
+Public eligibility uses the author of the mirrored work and the subject of the observation's recorded practice revision.
+Author observations qualify, as do merger observations when the author merged the work.
+Reviewer observations stay private, including self-review.
+
+The initial public context excludes ineligible observations and ineligible prior public advice.
+If no decided observation qualifies, the public writer does not start.
+The server checks each composed part and checks the persisted package's exact cited support again before any new provider write.
+
+These exclusions can leave a review with no public composition.
+`PUBLIC_SUBJECT_INELIGIBLE` records a saved package refused by the public subject or support check.
+
+Private feedback retains its own recipient, consent, recurrence and visibility checks.
+Suppression on the work does not promise that private feedback will be written.
+
 A work-state refusal stops `IN_CONTEXT` delivery.
 Closed work, changed work, and merged work that the workspace setting excludes get no note on the work.
 `IN_APP` and `IN_CHAT` retain their own evidence and visibility gates.
 Preparation alone does not certify that a unit may be shown.
-Missing work and a recipient who is not the subject of the work refuse every channel.
+
+Missing work refuses every channel.
+Private feedback also requires its recorded recipient to match the review's subject, which can be a reviewer.
 
 An issue supports only a summary.
 A pull or merge request may carry a summary, line notes, or line notes without a summary.

@@ -556,6 +556,7 @@ void test("only what was said on this same work, on the work, is supplied as alr
 		feedback: [
 			{
 				channel: "IN_CONTEXT",
+				publicEligible: true,
 				artifact: {
 					kind: "scm.pull_request",
 					url: "https://gitlab.example/group/repo/-/merge_requests/3",
@@ -574,6 +575,7 @@ void test("only what was said on this same work, on the work, is supplied as alr
 			},
 			{
 				channel: "IN_CONTEXT",
+				publicEligible: true,
 				artifact: {
 					kind: "scm.pull_request",
 					url: "https://gitlab.example/group/repo/-/merge_requests/1",
@@ -606,6 +608,7 @@ void test("own feedback on this work stands as prior advice only when named, cur
 	};
 	const entry = (n: number, overrides: Record<string, unknown> = {}) => ({
 		channel: "IN_CONTEXT",
+		publicEligible: true,
 		artifact,
 		id: historyFeedbackId(n),
 		reviewedRevision: "a".repeat(40),
@@ -681,6 +684,7 @@ void test("own history omits whole oversized or over-budget entries without hidi
 	};
 	const entry = (n: number, body: string) => ({
 		channel: "IN_CONTEXT",
+		publicEligible: true,
 		artifact,
 		id: historyFeedbackId(n),
 		body,
@@ -1307,5 +1311,27 @@ void test("a selection with nothing selected carries no criteria, and an unavail
 	assert.ok(
 		missing.includes("### Criteria of `describe-what-and-why` — not available for this review"),
 		missing,
+	);
+});
+
+void test("public history excludes unqualified legacy and reviewer advice while preserving author advice", () => {
+	const artifact = {
+		kind: "scm.pull_request",
+		url: "https://gitlab.example/group/repo/-/merge_requests/3",
+	};
+	const row = {
+		channel: "IN_CONTEXT",
+		artifact,
+		body: "Prior advice",
+		deliveredAt: "2026-10-05T09:00:00Z",
+		recordedClaimCurrentness: "CURRENT",
+	};
+	const history = {
+		feedback: [row, { ...row, publicEligible: false }, { ...row, publicEligible: true }],
+	};
+	assert.equal(
+		priorPublicFeedback(history, `${artifact.kind}:${artifact.url}`, "2026-10-06T09:00:00Z")
+			.feedback.length,
+		1,
 	);
 });

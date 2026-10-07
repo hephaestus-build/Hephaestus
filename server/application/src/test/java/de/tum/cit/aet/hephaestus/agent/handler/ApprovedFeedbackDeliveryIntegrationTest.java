@@ -512,6 +512,21 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practiceRepository.saveAndFlush(practice);
         AgentJob review = reviewIssue(host);
+        observe(
+                practice,
+                review,
+                ArtifactKinds.ISSUE.value(),
+                Objects.requireNonNull(review.getMetadata()).path("issue_id").asLong(),
+                host.author(),
+                null,
+                Outcome.MET,
+                null,
+                Instant.now(),
+                """
+                {"citations":[{"sourceKind":"scm.issue.core","artifactPath":"context/metadata.json",
+                  "path":"title","startLine":1,"endLine":1,"quote":"Why is the migration split?"}]}
+                """,
+                null);
         var reviewPackage = new DeliveryContent(NOTE, List.of(), List.of(), null);
         Set<String> practices = Set.of(practice.getSlug());
         host.threads().failNextResolution();
@@ -645,6 +660,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
         AgentJob job = new AgentJob();
         job.setWorkspace(workspace);
         job.setJobType(AgentJobType.ISSUE_REVIEW);
+        job.setArtifactKind(ArtifactKinds.ISSUE);
         // Production takes the kind from the workspace connection to the provider that hosts the repository.
         job.setIntegrationKind(hosted.getProvider().getType().kind());
         job.setCompletedAt(now);

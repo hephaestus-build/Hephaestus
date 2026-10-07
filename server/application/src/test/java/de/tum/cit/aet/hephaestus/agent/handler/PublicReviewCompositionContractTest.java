@@ -43,7 +43,11 @@ class PublicReviewCompositionContractTest extends BaseUnitTest {
     void shouldRefuseEmptyPublicCompositionWhenAnEligibleNegativeHasNoDecision() {
         Observation negative = observation(Outcome.NOT_MET, "scm.pull-request.core");
         assertThatThrownBy(() -> PullRequestReviewHandler.reviewToDeliver(
-                        parser, job("{}"), List.of(negative), Set.of(FeedbackChannel.IN_CONTEXT)))
+                        parser,
+                        job("{}"),
+                        List.of(negative),
+                        Set.of(negative.getId()),
+                        Set.of(FeedbackChannel.IN_CONTEXT)))
                 .isInstanceOf(JobDeliveryException.class)
                 .hasMessageContaining("undecided");
     }
@@ -64,7 +68,11 @@ class PublicReviewCompositionContractTest extends BaseUnitTest {
                 .put("outcome", "NOT_MET")
                 .putArray("citations");
         assertThatThrownBy(() -> PullRequestReviewHandler.reviewToDeliver(
-                        parser, job, List.of(said, missing), Set.of(FeedbackChannel.IN_CONTEXT)))
+                        parser,
+                        job,
+                        List.of(said, missing),
+                        Set.of(said.getId(), missing.getId()),
+                        Set.of(FeedbackChannel.IN_CONTEXT)))
                 .isInstanceOf(JobDeliveryException.class)
                 .hasMessageContaining("undecided");
     }
@@ -76,7 +84,11 @@ class PublicReviewCompositionContractTest extends BaseUnitTest {
                 observation(Outcome.NOT_MET, "hephaestus.observation-history"),
                 observation(Outcome.UNDETERMINED, "scm.pull-request.core"));
         assertThat(PullRequestReviewHandler.reviewToDeliver(
-                        parser, job("{}"), observations, Set.of(FeedbackChannel.IN_CONTEXT)))
+                        parser,
+                        job("{}"),
+                        observations,
+                        Set.of(observations.getFirst().getId()),
+                        Set.of(FeedbackChannel.IN_CONTEXT)))
                 .isEqualTo(ComposedReview.empty());
     }
 
@@ -86,6 +98,7 @@ class PublicReviewCompositionContractTest extends BaseUnitTest {
                         parser,
                         job("null"),
                         List.of(observation(Outcome.NOT_MET, "scm.pull-request.core")),
+                        Set.of(),
                         Set.of(FeedbackChannel.IN_APP)))
                 .isEqualTo(ComposedReview.empty());
     }
