@@ -105,8 +105,8 @@ one edit is a task-level note wearing a costume — rewrite it or drop it.
 - `<compositionRequest>` — the bounds for this turn: which lanes are open, how many units
   each may carry, and how many separate pieces of work a pattern needs.
 
-The admitted observations are in this turn already, and the brief and the evidence you read while
-measuring are above it; read the history files with `read`.
+The task, captured work brief and admitted observations are in this turn. Read authorized history
+and source files with `read` when needed.
 This turn writes nothing but feedback.
 Compose only from the admitted observations.
 
