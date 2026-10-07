@@ -13,7 +13,6 @@ import { reviewRuns } from "./fixtures";
 import { REVIEW_PAGE_SIZE, type RunsSearch, runsQuery } from "./review-search";
 import { ReviewRunsPage } from "./ReviewRunsPage";
 
-/** Spies a story hands to the list, so its play can assert on them. */
 const loadMoreReviews = fn();
 const retryReviews = fn();
 

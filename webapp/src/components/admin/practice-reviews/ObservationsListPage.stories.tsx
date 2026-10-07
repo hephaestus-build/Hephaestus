@@ -43,7 +43,6 @@ const PRACTICES: FacetSource = {
 	isError: false,
 };
 
-/** Spies a story hands to the list, so its play can assert on them. */
 const loadMoreObservations = fn();
 
 /**

@@ -26,6 +26,7 @@ export interface InfiniteQueryLike<TPage> {
 	isPending: boolean;
 	isError: boolean;
 	isFetchNextPageError: boolean;
+	isRefetchError: boolean;
 	isFetching: boolean;
 	error: unknown;
 	data: InfiniteData<TPage> | undefined;
@@ -39,14 +40,16 @@ const READY: LoadState = { status: "ready" };
 
 /**
  * One infinite query as a panel's state: loading or failed until its first page is in, then the
- * loaded pages shaped by `settled`. A later page that fails is not the panel's failure — TanStack
- * reports it as the query's error, but what was loaded stays on screen with the failure beside it.
+ * loaded pages shaped by `settled`. Once pages are in, a failed read is not the panel's failure:
+ * TanStack reports it as the query's error, but what was loaded stays on screen. A failed next page
+ * shows its failure beside the rows. A failed refresh, such as a poll, shows the rows it could not
+ * update, and a later refresh asks again.
  */
 export function infiniteListState<TPage, TReady extends object>(
 	query: InfiniteQueryLike<TPage>,
 	settled: (pages: TPage[]) => TReady,
 ): PanelState<TReady & MorePages> {
-	const state = query.isFetchNextPageError ? READY : queryLoadState(query);
+	const state = query.isFetchNextPageError || query.isRefetchError ? READY : queryLoadState(query);
 	if (state.status !== "ready") {
 		return state;
 	}

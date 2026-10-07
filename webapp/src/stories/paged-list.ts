@@ -22,8 +22,7 @@ export function loadedList<TRow>(rows: TRow[], more: Partial<MorePages> = {}): L
 
 /**
  * What the server would answer for a filter, computed from every row a story has: the rows `keep`
- * selects, one page of them loaded, and more to load while any remain. Rows the list counts but has
- * not loaded stay counted.
+ * selects, one page of them loaded, and more to load while any remain.
  */
 export function narrowedList<TRow>(
 	list: PagedListState<TRow>,
@@ -37,7 +36,7 @@ export function narrowedList<TRow>(
 	return {
 		...list,
 		rows: rows.slice(0, pageSize),
-		total: rows.length + (list.total ?? list.rows.length) - list.rows.length,
+		total: rows.length,
 		hasMore: list.hasMore || rows.length > pageSize,
 	};
 }

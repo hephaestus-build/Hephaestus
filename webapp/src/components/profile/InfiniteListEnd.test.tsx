@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { InfiniteListEnd, type InfiniteListEndProps } from "./InfiniteListEnd";
@@ -49,5 +49,17 @@ describe("InfiniteListEnd", () => {
 
 		rerender(end({ isRefreshing: false, onLoadMore }));
 		expect(onLoadMore).toHaveBeenCalledOnce();
+	});
+
+	it("keeps focus at the end of the list when the last page removes the press", () => {
+		vi.stubGlobal("IntersectionObserver", InViewObserver);
+		const { container, rerender } = render(end({ isLoadingMore: true }));
+		const press = screen.getByRole("button", { name: "Loading…" });
+		press.focus();
+
+		rerender(end({ hasMore: false }));
+
+		expect(screen.queryByRole("button")).toBeNull();
+		expect(document.activeElement).toBe(container.firstElementChild);
 	});
 });

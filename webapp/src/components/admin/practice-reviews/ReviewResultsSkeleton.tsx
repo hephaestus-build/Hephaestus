@@ -22,7 +22,8 @@ export function ReviewResultsSkeleton({ label, rows }: ReviewResultsSkeletonProp
 }
 
 /**
- * The next page's rows while they load, at the end of a list. The list's end says "Loading…" on its
+ * The next page's rows while they load, at the end of a list. They sit below the loaded rows, so
+ * their count moves nothing on screen and needs no page size. The list's end says "Loading…" on its
  * button, so these rows only show the shape.
  */
 export function ReviewMoreRowsSkeleton() {

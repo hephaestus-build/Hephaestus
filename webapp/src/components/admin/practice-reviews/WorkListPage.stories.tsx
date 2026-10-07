@@ -13,7 +13,6 @@ import { StatefulPatch } from "@/stories/stateful";
 import { REVIEW_PAGE_SIZE, type WorkSearch, workQuery } from "./review-search";
 import { WorkListPage } from "./WorkListPage";
 
-/** Spies a story hands to the list, so its play can assert on them. */
 const loadMoreWork = fn();
 const retryWork = fn();
 

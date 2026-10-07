@@ -43,37 +43,53 @@ export function InfiniteListEnd({
 		}
 	}, [loadsByItself]);
 
-	if (!hasMore && !failed) {
-		return null;
-	}
 	return (
-		<div ref={end} className="flex flex-col gap-2.5">
-			{isLoadingMore && (
-				<div aria-hidden className="flex flex-col gap-2.5">
-					{loadingRow}
+		// Stays after the last page, so the focus of a press that loaded it has a place to stay.
+		<div tabIndex={-1} data-list-end className="outline-none">
+			{(hasMore || failed) && (
+				<div ref={end} className="flex flex-col gap-2.5">
+					{isLoadingMore && (
+						<div aria-hidden className="flex flex-col gap-2.5">
+							{loadingRow}
+						</div>
+					)}
+					<span className="flex flex-wrap items-center gap-2 text-sm">
+						{failed && (
+							<span role="alert" className="text-muted-foreground">
+								{failedLabel}
+							</span>
+						)}
+						<Button
+							ref={keepFocusAtTheEnd}
+							type="button"
+							variant="link"
+							size="inline"
+							className="w-fit text-sm"
+							onClick={onLoadMore}
+							disabled={isLoadingMore}
+							// The press that started the load keeps focus while the next rows arrive.
+							focusableWhenDisabled
+						>
+							{pressLabel(isLoadingMore, failed, moreLabel)}
+						</Button>
+					</span>
 				</div>
 			)}
-			<span className="flex flex-wrap items-center gap-2 text-sm">
-				{failed && (
-					<span role="alert" className="text-muted-foreground">
-						{failedLabel}
-					</span>
-				)}
-				<Button
-					type="button"
-					variant="link"
-					size="inline"
-					className="w-fit text-sm"
-					onClick={onLoadMore}
-					disabled={isLoadingMore}
-					// The press that started the load keeps focus while the next rows arrive.
-					focusableWhenDisabled
-				>
-					{pressLabel(isLoadingMore, failed, moreLabel)}
-				</Button>
-			</span>
 		</div>
 	);
+}
+
+/**
+ * Gives focus to the end of the list when the press that has it goes, after the last page. React
+ * detaches a ref before it removes the element, so the press still has focus here. Declared outside
+ * the component, so the cleanup runs only when the press goes and not on each render.
+ */
+function keepFocusAtTheEnd(press: HTMLButtonElement | null) {
+	return () => {
+		if (press !== null && press === document.activeElement) {
+			press.closest<HTMLElement>("[data-list-end]")?.focus();
+		}
+	};
 }
 
 function pressLabel(isLoadingMore: boolean, failed: boolean, moreLabel: string): string {
