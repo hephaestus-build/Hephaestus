@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, within } from "storybook/test";
+import { expect, fn, screen, waitFor, within } from "storybook/test";
 
-import type { ListPracticeReviewFeedbackResponse, ReviewFeedback } from "@/api/types.gen";
+import type { ReviewFeedback } from "@/api/types.gen";
 import type { FacetSource } from "@/components/common/FacetMultiSelect";
+import type { PagedListState } from "@/runtime/tanstack-query/infinite-list";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
+import { loadedList, narrowedList } from "@/stories/paged-list";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 
@@ -36,22 +38,14 @@ const PRACTICES: FacetSource = {
 	isError: false,
 };
 
+const loadMoreFeedback = fn();
+
 /**
  * Every row a story has to choose from. It travels in the `feedback` arg because that is the prop
- * the screen reads, and {@link feedbackPage} narrows it to one page before the screen sees it — so
- * an arg set in Controls is a pool to filter, not a page already cut.
+ * the screen reads, and {@link feedbackPage} narrows it to its first page before the screen sees it —
+ * so an arg set in Controls is a pool to filter, not a page already cut.
  */
-function pool(rows: ReviewFeedback[]): ListPracticeReviewFeedbackResponse {
-	return {
-		content: rows,
-		page: {
-			number: 0,
-			size: REVIEW_PAGE_SIZE,
-			totalElements: rows.length,
-			totalPages: Math.max(1, Math.ceil(rows.length / REVIEW_PAGE_SIZE)),
-		},
-	};
-}
+const pool = loadedList<ReviewFeedback>;
 
 /**
  * The route fetches; this screen only draws what it is handed. To keep the facets live in a story
@@ -64,11 +58,12 @@ function pool(rows: ReviewFeedback[]): ListPracticeReviewFeedbackResponse {
  * it reaches the request is pinned by `-lists-route.test.tsx`.
  */
 function feedbackPage(
-	candidates: ReviewFeedback[],
+	list: PagedListState<ReviewFeedback>,
 	search: FeedbackSearch,
-): ListPracticeReviewFeedbackResponse {
+): PagedListState<ReviewFeedback> {
 	const query = feedbackQuery(search, REVIEW_PAGE_SIZE);
-	const rows = candidates.filter(
+	return narrowedList(
+		list,
 		(row) =>
 			(!query.from || row.createdAt >= new Date(query.from)) &&
 			(!query.to || row.createdAt < new Date(query.to)) &&
@@ -76,17 +71,8 @@ function feedbackPage(
 			selects(query.channel, row.channel) &&
 			selects(query.suppressionReason, row.suppressionReason) &&
 			(query.recipientUserId === undefined || row.recipient?.id === query.recipientUserId),
+		query.size,
 	);
-	const number = query.page;
-	return {
-		content: rows.slice(number * REVIEW_PAGE_SIZE, (number + 1) * REVIEW_PAGE_SIZE),
-		page: {
-			number,
-			size: REVIEW_PAGE_SIZE,
-			totalElements: rows.length,
-			totalPages: Math.max(1, Math.ceil(rows.length / REVIEW_PAGE_SIZE)),
-		},
-	};
 }
 
 const meta = {
@@ -98,13 +84,9 @@ const meta = {
 	decorators: [withWidePage, withStandardPage],
 	tags: ["autodocs"],
 	args: {
-		workspaceSlug: "demo",
 		search: { deliveryState: undefined, withheldFamily: undefined, channel: undefined },
 		onSearchChange: fn(),
 		feedback: pool(reviewFeedback),
-		isLoading: false,
-		error: undefined,
-		onRetry: fn(),
 		practices: PRACTICES,
 		people: PEOPLE,
 	},
@@ -120,7 +102,7 @@ const meta = {
 						args.onSearchChange(patch);
 						onSearchChange(patch);
 					}}
-					feedback={args.feedback && feedbackPage(args.feedback.content ?? [], search)}
+					feedback={feedbackPage(args.feedback, search)}
 				/>
 			)}
 		</StatefulPatch>
@@ -233,23 +215,18 @@ export const SortOldestFirst: Story = {
 	},
 };
 
-export const MoreThanOnePage: Story = {
-	// The page is set rather than clicked: pagination is real links, so the page travels through the
-	// router, and Storybook mounts this screen under a single bare route.
-	args: {
-		search: {
-			page: 1,
-			deliveryState: undefined,
-			withheldFamily: undefined,
-			channel: undefined,
-		},
-		feedback: pool(manyFeedback(60)),
-	},
+/**
+ * More feedback than the first page: the count is the server's, and the next page is asked for when
+ * the end of the list scrolls into view.
+ */
+export const LoadsMoreAtTheEnd: Story = {
+	args: { feedback: pool(manyFeedback(60), { onLoadMore: loadMoreFeedback }) },
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
 		await canvas.findByText("60 pieces of feedback.");
-		const current = await canvas.findByRole("link", { name: "Go to page 2" });
-		await expect(current).toHaveAttribute("aria-current", "page");
+		const more = canvas.getByRole("button", { name: "Show more feedback" });
+		more.scrollIntoView();
+		await waitFor(async () => expect(loadMoreFeedback).toHaveBeenCalled());
 	},
 };
 
@@ -270,7 +247,7 @@ export const Mobile: Story = {
  */
 export const LoadFailed: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
-	args: { feedback: undefined, error: { status: 500 } },
+	args: { feedback: { status: "error", error: { status: 500 }, onRetry: fn() } },
 	play: async ({ canvas }) => {
 		await canvas.findByText("We could not load feedback");
 	},
@@ -278,7 +255,7 @@ export const LoadFailed: Story = {
 
 export const Loading: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
-	args: { feedback: undefined, isLoading: true },
+	args: { feedback: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await canvas.findByText("Loading feedback");
 	},

@@ -1,27 +1,34 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, within } from "storybook/test";
+import { expect, fn, screen, waitFor, within } from "storybook/test";
 
-import type { ListTracedArtifactsResponse } from "@/api/types.gen";
-import { tracedArtifactPage, tracedArtifacts } from "@/components/practice-trace/fixtures";
+import type { TracedArtifact } from "@/api/types.gen";
+import { tracedArtifacts } from "@/components/practice-trace/fixtures";
+import type { PagedListState } from "@/runtime/tanstack-query/infinite-list";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
 import { expectSettledVisible } from "@/stories/overlay";
+import { loadedList, narrowedList } from "@/stories/paged-list";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 
 import { REVIEW_PAGE_SIZE, type WorkSearch, workQuery } from "./review-search";
 import { WorkListPage } from "./WorkListPage";
 
+const loadMoreWork = fn();
+const retryWork = fn();
+
 /**
- * The page the endpoint would return for a search, computed from the fixture through `workQuery`,
+ * The work the endpoint would return for a search, computed from the fixture through `workQuery`,
  * the transformation the route sends, so a story cannot prove a filter the screen never asks for.
  */
-function workFor(search: WorkSearch): ListTracedArtifactsResponse {
+function workFor(
+	list: PagedListState<TracedArtifact>,
+	search: WorkSearch,
+): PagedListState<TracedArtifact> {
 	const query = workQuery(search, REVIEW_PAGE_SIZE);
-	return tracedArtifactPage(
-		tracedArtifacts.filter(
-			(work) => query.artifactKind === undefined || work.artifactKind === query.artifactKind,
-		),
-		REVIEW_PAGE_SIZE,
+	return narrowedList(
+		list,
+		(work) => query.artifactKind === undefined || work.artifactKind === query.artifactKind,
+		query.size,
 	);
 }
 
@@ -34,13 +41,9 @@ const meta = {
 	decorators: [withWidePage, withStandardPage],
 	tags: ["autodocs"],
 	args: {
-		workspaceSlug: "demo",
 		search: {},
 		onSearchChange: fn(),
-		work: workFor({}),
-		isLoading: false,
-		error: null,
-		onRetry: fn(),
+		work: loadedList(tracedArtifacts),
 	},
 	// The screen is controlled: with a frozen `search` prop the kind filter reads as dead. The rows
 	// follow the search the same way the route's query would.
@@ -54,7 +57,7 @@ const meta = {
 						patch(next);
 						args.onSearchChange(next);
 					}}
-					work={workFor(search)}
+					work={workFor(args.work, search)}
 				/>
 			)}
 		</StatefulPatch>
@@ -114,9 +117,9 @@ export const Mobile: Story = {
 	},
 };
 
-/** The skeleton draws `REVIEW_PAGE_SIZE` rows, so results replace it without moving the pager. */
+/** The skeleton draws `REVIEW_PAGE_SIZE` rows, so the first page replaces it without a jump. */
 export const Loading: Story = {
-	args: { work: undefined, isLoading: true },
+	args: { work: { status: "loading" } },
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <WorkListPage {...args} />,
 	play: async ({ canvas }) => {
@@ -128,7 +131,7 @@ export const Loading: Story = {
 };
 
 export const NothingRecorded: Story = {
-	args: { work: tracedArtifactPage([], REVIEW_PAGE_SIZE) },
+	args: { work: loadedList([]) },
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <WorkListPage {...args} />,
 	play: async ({ canvas }) => {
@@ -139,7 +142,7 @@ export const NothingRecorded: Story = {
 };
 
 export const NoWorkOfThatKind: Story = {
-	args: { search: { kind: "chat.conversation_thread" }, work: tracedArtifactPage([]) },
+	args: { search: { kind: "chat.conversation_thread" }, work: loadedList([]) },
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <WorkListPage {...args} />,
 	play: async ({ args, canvas, userEvent }) => {
@@ -152,8 +155,11 @@ export const NoWorkOfThatKind: Story = {
 /** A kind the server does not know is a 400, which is not retried: the reader changes the filter. */
 export const LoadFailed: Story = {
 	args: {
-		work: undefined,
-		error: { status: 400, title: "Bad Request", detail: "Unknown artifact kind." },
+		work: {
+			status: "error",
+			error: { status: 400, title: "Bad Request", detail: "Unknown artifact kind." },
+			onRetry: retryWork,
+		},
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <WorkListPage {...args} />,
@@ -165,12 +171,25 @@ export const LoadFailed: Story = {
 };
 
 export const LoadFailedWithoutAnAnswer: Story = {
-	args: { work: undefined, error: new TypeError("Failed to fetch") },
+	args: {
+		work: { status: "error", error: new TypeError("Failed to fetch"), onRetry: retryWork },
+	},
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <WorkListPage {...args} />,
-	play: async ({ args, canvas, userEvent }) => {
+	play: async ({ canvas, userEvent }) => {
 		await canvas.findByText("We could not load the work");
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
-		await expect(args.onRetry).toHaveBeenCalledTimes(1);
+		await expect(retryWork).toHaveBeenCalledTimes(1);
+	},
+};
+
+/** More work than the first page: the next page is asked for when the end scrolls into view. */
+export const LoadsMoreAtTheEnd: Story = {
+	args: { work: loadedList(tracedArtifacts, { hasMore: true, onLoadMore: loadMoreWork }) },
+	parameters: { chromatic: { viewports: [1440] } },
+	play: async ({ canvas }) => {
+		const more = await canvas.findByRole("button", { name: "Show more work" });
+		more.scrollIntoView();
+		await waitFor(async () => expect(loadMoreWork).toHaveBeenCalled());
 	},
 };

@@ -166,6 +166,23 @@ export const MarkdownBody: Story = {
 	},
 };
 
+/** The next step is Markdown too: a test or a command the composer names is code. */
+export const MarkdownNextStep: Story = {
+	args: {
+		card: {
+			...card,
+			state: "open",
+			nextStep: "Add a test to `PagingControllerTest` that fails when the page size is not `20`.",
+		},
+	},
+	play: async ({ canvas }) => {
+		const code = canvas.getByText("PagingControllerTest", { selector: "code" });
+		await expect(code).toBeVisible();
+		// The typography plugin draws a backtick on each side of inline code unless told not to.
+		await expect(getComputedStyle(code, "::before").content).toBe("none");
+	},
+};
+
 /**
  * Two of the three clean pieces of work are in: the strip lists them where their review dates put
  * them, each a strength shown, and the meter is two-thirds full. The label still counts the three

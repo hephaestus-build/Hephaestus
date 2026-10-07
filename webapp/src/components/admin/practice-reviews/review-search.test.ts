@@ -29,7 +29,8 @@ describe("practice review search", () => {
 		// to clear it short of a full reset, so `made-up` goes while every place the toolbar offers stays.
 		expect(feedback.channel).toStrictEqual(["IN_APP", "IN_CHAT"]);
 		expect(feedback.from).toBeUndefined();
-		expect(feedback.page).toBeUndefined();
+		// The lists have no pages, so a `page` in the URL is dropped.
+		expect("page" in feedback).toBe(false);
 		expect(observations).toMatchObject({ outcome: ["MET"], severity: ["MAJOR"] });
 		expect(observations.to).toBeUndefined();
 		expect(feedbackSearchSchema.parse({ to: "2026-07-03" }).to).toBeUndefined();

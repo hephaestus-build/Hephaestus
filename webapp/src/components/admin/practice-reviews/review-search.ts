@@ -22,7 +22,7 @@ import { hasText } from "@/lib/text";
 
 /**
  * Read by the query and by the skeleton that stands in for the results, so a skeleton cannot draw a
- * different number of rows than the page it replaces and shift the pagination when results arrive.
+ * different number of rows than the first page it replaces.
  */
 export const REVIEW_PAGE_SIZE = 25;
 
@@ -66,7 +66,6 @@ export type FeedbackSort = (typeof FEEDBACK_SORTS)[number];
 
 const uuidParam = z.uuid().optional().catch(undefined);
 const positiveId = z.coerce.number().int().positive().optional().catch(undefined);
-const page = z.coerce.number().int().min(0).optional().catch(undefined);
 const day = z.iso.date().optional().catch(undefined);
 /**
  * Every allowlist below is a status registry's own key set, so a URL filter and the dropdown that
@@ -98,7 +97,6 @@ function canonicalDateRange<T extends { from?: string; to?: string }>(search: T)
 export const feedbackSearchSchema = z
 	.object({
 		...scope,
-		page,
 		deliveryState: enumValues(statusValues(DELIVERY_STATE_DEFS)),
 		// The URL carries families, not individual reasons: the family is the question an operator
 		// asks, and `feedbackQuery` expands it to the reasons the API filters on.
@@ -117,7 +115,6 @@ export const feedbackSearchSchema = z
 export const observationsSearchSchema = z
 	.object({
 		...scope,
-		page,
 		groupSlug: multiValue,
 		practiceSlug: multiValue,
 
@@ -140,7 +137,6 @@ export const observationsSearchSchema = z
  */
 export const runsSearchSchema = z
 	.object({
-		page,
 		status: enumValues(statusValues(REVIEW_STATUS_DEFS)),
 		resultProcessing: enumValues(statusValues(RESULT_PROCESSING_DEFS)),
 		from: day,
@@ -154,7 +150,6 @@ export const runsSearchSchema = z
  * the kinds this build knows, where this one is free for the reason `TraceKindFilter` gives.
  */
 export const workSearchSchema = z.object({
-	page,
 	kind: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
 });
 
@@ -206,7 +201,6 @@ function scopeQuery(search: ReviewScopeSearch) {
 export function runsQuery(search: Partial<RunsSearch>, size: number) {
 	return {
 		...dateWindowQuery(search),
-		page: search.page ?? 0,
 		size,
 		status: search.status,
 		resultProcessing: search.resultProcessing,
@@ -214,13 +208,12 @@ export function runsQuery(search: Partial<RunsSearch>, size: number) {
 }
 
 export function workQuery(search: Partial<WorkSearch>, size: number) {
-	return { page: search.page ?? 0, size, artifactKind: search.kind };
+	return { size, artifactKind: search.kind };
 }
 
 export function feedbackQuery(search: Partial<FeedbackSearch>, size: number) {
 	return {
 		...scopeQuery(search),
-		page: search.page ?? 0,
 		size,
 		deliveryState: search.deliveryState,
 		suppressionReason:
@@ -240,7 +233,6 @@ export function feedbackQuery(search: Partial<FeedbackSearch>, size: number) {
 export function observationsQuery(search: Partial<ObservationsSearch>, size: number) {
 	return {
 		...scopeQuery(search),
-		page: search.page ?? 0,
 		size,
 		groupSlug:
 			search.groupSlug !== undefined && search.groupSlug.length > 0 ? search.groupSlug : undefined,

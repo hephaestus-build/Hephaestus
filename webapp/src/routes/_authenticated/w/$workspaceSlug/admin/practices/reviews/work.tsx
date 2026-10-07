@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
-import { listTracedArtifactsOptions } from "@/api/@tanstack/react-query.gen";
+import { listTracedArtifactsInfiniteOptions } from "@/api/@tanstack/react-query.gen";
 import { practiceReviewsHead } from "@/components/admin/practice-reviews/review-levels";
 import {
 	REVIEW_PAGE_SIZE,
@@ -10,8 +10,10 @@ import {
 	workSearchSchema,
 } from "@/components/admin/practice-reviews/review-search";
 import { WorkListPage } from "@/components/admin/practice-reviews/WorkListPage";
-import { useClampedPage } from "@/hooks/use-clamped-page";
-import { pageParam, useSearchState } from "@/lib/search-params";
+import { workRowKey } from "@/components/admin/practice-reviews/WorkRow";
+import { useSearchState } from "@/lib/search-params";
+import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
+import { pagedModelParams } from "@/runtime/tanstack-query/spring-page";
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/admin/practices/reviews/work",
@@ -26,33 +28,21 @@ function WorkRoute() {
 	const search = Route.useSearch();
 	const setSearch = useSearchState();
 	const updateSearch = (patch: Partial<WorkSearch>) => {
-		// Any change but a page's own sends the reader back to page one.
-		void setSearch((previous) => ({ ...previous, ...patch, page: pageParam(patch.page) }), {
-			replace: true,
-		});
+		void setSearch((previous) => ({ ...previous, ...patch }), { replace: true });
 	};
-	const workQueryResult = useQuery({
-		...listTracedArtifactsOptions({
+	const workQueryResult = useInfiniteQuery({
+		...listTracedArtifactsInfiniteOptions({
 			path: { workspaceSlug },
 			query: workQuery(search, REVIEW_PAGE_SIZE),
 		}),
+		...pagedModelParams,
 	});
-
-	useClampedPage(search.page, workQueryResult.data?.page?.totalPages, (page) =>
-		updateSearch({ page }),
-	);
 
 	return (
 		<WorkListPage
-			workspaceSlug={workspaceSlug}
 			search={search}
 			onSearchChange={updateSearch}
-			work={workQueryResult.data}
-			isLoading={workQueryResult.isLoading}
-			error={workQueryResult.error}
-			onRetry={() => {
-				void workQueryResult.refetch();
-			}}
+			work={pagedListState(workQueryResult, workRowKey)}
 		/>
 	);
 }

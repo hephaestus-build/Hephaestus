@@ -20,6 +20,7 @@ Everything is in the turn, and you cannot read files:
   and tools said here. Each statement that may stand as advice this work already received has a `witnessId` and is
   marked `eligibleForPriorAdvice`. A discussion that was not captured is unknown, not silent.
 - Practice context: what each practice is about and its known limits.
+- Once a selection is accepted, the staged criteria of the practices it selected, shown whole when available.
 - Practices looked at and not decided, and practices not reached, by name only.
 
 ## What establishes what
@@ -36,6 +37,10 @@ Everything is in the turn, and you cannot read files:
   asking for the missing reason when that is the gap it recorded. Advice for it is the reader's next useful action on
   its recorded gap. Explaining a decision, a tradeoff or deferred work addresses that gap only when the assessed
   standard asks for that account.
+- A practice's criteria explain the standard its observations were assessed against and the responses that standard
+  accepts. They are reference, not a further concern or a request to assess again. When the standard accepts several
+  responses, such as a change, a reasoned decline or a clarification, advice leaves that choice to the developer;
+  someone's suggestion on the work does not make one particular change required.
 - A `MET` observation supports an optional acknowledgement of the observed choice and the bounded benefit that choice
   itself provides, never a new concern and never a verdict on the whole work. When an acknowledgement would be
   uncertain, leave it out rather than turning it into a concern.

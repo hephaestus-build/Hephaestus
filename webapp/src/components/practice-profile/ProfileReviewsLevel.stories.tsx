@@ -168,7 +168,10 @@ export const LoadingEarlierReviews: Story = {
 	args: { feed: feedOf(profileReviewRuns, { hasMore: true, isLoadingMore: true }) },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByRole("button", { name: "Loading…" })).toBeDisabled();
+		await expect(screen.getByRole("button", { name: "Loading…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

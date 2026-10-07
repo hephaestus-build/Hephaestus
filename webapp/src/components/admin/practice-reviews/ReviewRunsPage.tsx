@@ -1,10 +1,8 @@
-import { Link } from "@tanstack/react-router";
 import { WorkflowIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { ListPracticeReviewsResponse } from "@/api/types.gen";
+import type { ReviewRunSummary } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { TablePagination } from "@/components/common/TablePagination";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -14,39 +12,30 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
+import type { PagedListState } from "@/runtime/tanstack-query/infinite-list";
 
 import { REVIEW_PAGE_SIZE, type RunsSearch } from "./review-search";
+import { ReviewListEnd } from "./ReviewListEnd";
 import { ReviewResultsSkeleton } from "./ReviewResultsSkeleton";
 import { ReviewRowList } from "./ReviewRow";
 import { clearedRunFilters, hasRunFilter, ReviewRunFilters } from "./ReviewRunFilters";
 import { ReviewRunRow } from "./ReviewRunRow";
 
 export interface ReviewRunsPageProps {
-	workspaceSlug: string;
 	search: RunsSearch;
 	onSearchChange: (patch: Partial<RunsSearch>) => void;
-	/** The page of reviews the current search asked for. Absent until the first answer arrives. */
-	reviews: ListPracticeReviewsResponse | undefined;
-	isLoading: boolean;
-	error: unknown;
-	onRetry: () => void;
+	/** The reviews the current search selects, as far as they are loaded. */
+	reviews: PagedListState<ReviewRunSummary>;
 }
 
 /**
- * The list of reviews, given its page of results. It neither fetches nor polls: the route asks for
- * the page the URL names and keeps asking while a review is still running, and this screen only ever
- * sees the answer — which is why a still-running review looks the same here as anywhere else.
+ * The list of reviews, given its loaded pages. It neither fetches nor polls: the route asks for the
+ * next page when the end of the list asks for it and keeps asking while a review is still running,
+ * and this screen only ever sees the answer — which is why a still-running review looks the same
+ * here as anywhere else.
  */
-export function ReviewRunsPage({
-	workspaceSlug,
-	search,
-	onSearchChange,
-	reviews,
-	isLoading,
-	error,
-	onRetry,
-}: ReviewRunsPageProps) {
-	const rows = reviews?.content ?? [];
+export function ReviewRunsPage({ search, onSearchChange, reviews }: ReviewRunsPageProps) {
+	const rows = reviews.status === "ready" ? reviews.rows : [];
 	const hasFilter = hasRunFilter(search);
 	// The toolbar's Reset and the empty state's button are one action, not two copies of it.
 	const reset = () => onSearchChange(clearedRunFilters());
@@ -54,9 +43,15 @@ export function ReviewRunsPage({
 		? "Change or clear the filters to see more."
 		: "Reviews appear when an enabled practice is triggered or a contributor requests one.";
 	let results: ReactNode;
-	if (error != null) {
-		results = <QueryErrorAlert error={error} title="We could not load reviews" onRetry={onRetry} />;
-	} else if (isLoading) {
+	if (reviews.status === "error") {
+		results = (
+			<QueryErrorAlert
+				error={reviews.error}
+				title="We could not load reviews"
+				onRetry={reviews.onRetry}
+			/>
+		);
+	} else if (reviews.status === "loading") {
 		results = <ReviewResultsSkeleton label="Loading reviews" rows={REVIEW_PAGE_SIZE} />;
 	} else if (rows.length === 0) {
 		results = (
@@ -79,11 +74,14 @@ export function ReviewRunsPage({
 		);
 	} else {
 		results = (
-			<ReviewRowList label="Practice reviews, newest first">
-				{rows.map((review) => (
-					<ReviewRunRow key={review.id} review={review} />
-				))}
-			</ReviewRowList>
+			<>
+				<ReviewRowList label="Practice reviews, newest first">
+					{rows.map((review) => (
+						<ReviewRunRow key={review.id} review={review} />
+					))}
+				</ReviewRowList>
+				<ReviewListEnd {...reviews} noun="reviews" />
+			</>
 		);
 	}
 
@@ -93,23 +91,9 @@ export function ReviewRunsPage({
 				search={search}
 				onPatch={onSearchChange}
 				onReset={reset}
-				total={reviews?.page?.totalElements}
+				total={reviews.status === "ready" ? reviews.total : undefined}
 			/>
 			{results}
-			<TablePagination
-				page={reviews?.page?.number ?? search.page ?? 0}
-				totalPages={reviews?.page?.totalPages ?? 0}
-				renderPageLink={(page, props) => (
-					<Link
-						{...props}
-						to="/w/$workspaceSlug/admin/practices/reviews/runs"
-						params={{ workspaceSlug }}
-						// Spread rather than list the filters: page 2 of a filtered list has to stay
-						// filtered, and naming them one by one is what silently dropped the next one.
-						search={{ ...search, page: page === 0 ? undefined : page }}
-					/>
-				)}
-			/>
 		</section>
 	);
 }

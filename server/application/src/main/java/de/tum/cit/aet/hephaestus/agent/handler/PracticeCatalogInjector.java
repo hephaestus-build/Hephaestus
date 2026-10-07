@@ -226,8 +226,8 @@ class PracticeCatalogInjector {
                 throw new JobPreparationException("Practice has no current revision: " + p.getSlug());
             }
             entry.put("revisionId", p.getCurrentRevision().getId());
-            // What the review on the work is told about the practice, from the revision this run measures
-            // against: the review composes from these and the observations, never from the criteria.
+            // What the review on the work is told about the practice up front, from the revision this run measures
+            // against. Its staged criteria reach the review only for the practices an accepted selection names.
             entry.put("whyItMatters", p.getCurrentRevision().getWhyItMatters());
             ArrayNode knownLimitations = entry.putArray("knownLimitations");
             p.getCurrentRevision().getAutomatedReviewPolicy().knownLimitations().stream()
