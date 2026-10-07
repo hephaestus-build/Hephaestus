@@ -173,7 +173,7 @@ export function ObservationLevel({
 
 				{hasText(record.evidenceRationale) && (
 					<Section level={3} title="Why this was raised">
-						{/* The reviewer writes its rationale in Markdown, as the developer's own row shows it. */}
+						{/* Rendered as the developer's own row renders it, so both read the same text. */}
 						<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "text-sm")}>
 							<UntrustedMarkdown>{record.evidenceRationale}</UntrustedMarkdown>
 						</div>

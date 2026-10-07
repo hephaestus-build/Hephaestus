@@ -407,24 +407,6 @@ const cited = (sourceKind: string, path: string, quote: string, line = 1): Evide
 	quoteRedacted: false,
 });
 
-/**
- * A summary comment exactly as Hephaestus posts it on a pull request
- * (`PracticeFeedbackCommentFormatter`): the hidden marker, the composer's text, a rule, and the
- * `<sub>` footer with its two links. The stored body is this text, so every page that shows it
- * must render the HTML the way GitHub does.
- */
-export const POSTED_SUMMARY_COMMENT = [
-	"<!-- hephaestus:practice-review:774b9e9b-2c40-4d6b-9e76-7094dda3a7a2 -->",
-	"The description needs its purpose and coverage. Use the description to name the need behind this change and identify which of the linked item's Done-when points it covers or defers.",
-	"",
-	"The title names the app-problem and user-story task, but the authored description only references issue #3 and gives no reason.",
-	"",
-	"---",
-	"<sub>Practice review &middot; gpt-6-luna. This feedback is AI-generated and can be inaccurate. Answer or dispute it in [Hephaestus](https://hephaestus.example/w/aet/feedback/scm.pull_request/42).</sub>",
-	"<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>",
-	"",
-].join("\n");
-
 /** Match DeliveryComposer formatting, with the preview cut inside the first code fence. */
 const LONG_BODY = [
 	"2 issues to tighten in this change, plus one thing worth keeping.",

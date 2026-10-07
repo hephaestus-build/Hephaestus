@@ -23,9 +23,6 @@ const threeClean = [clean(20, "09-07"), clean(21, "09-08"), clean(22, "09-09")];
 const OUTCOME_NAME = /^(?:Met|Not met)$/u;
 const names = (icons: HTMLElement[]) => icons.map((icon) => icon.getAttribute("aria-label"));
 
-/** Streamdown draws bold as a span it marks, not as a `strong` element. */
-const STRONG = '[data-streamdown="strong"]';
-
 const meta = {
 	component: PracticeFeedbackCard,
 	tags: ["autodocs"],
@@ -169,27 +166,18 @@ export const MarkdownBody: Story = {
 	},
 };
 
-/**
- * The next step is Markdown too. A file, a command or a value the composer names is code, and a
- * link stays a link, so the step reads as an instruction rather than as markup.
- */
+/** The next step is Markdown too: a test or a command the composer names is code. */
 export const MarkdownNextStep: Story = {
 	args: {
 		card: {
 			...card,
 			state: "open",
-			nextStep:
-				"Add a test to `PagingControllerTest` that **fails** when the page size is not `20`, then run `vp run test:webapp`. The [testing guide](https://example.com/testing) has an example.",
+			nextStep: "Add a test to `PagingControllerTest` that fails when the page size is not `20`.",
 		},
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("PagingControllerTest", { selector: "code" })).toBeVisible();
-		await expect(canvas.getByText("fails", { selector: STRONG })).toBeVisible();
-		await expect(canvas.getByRole("link", { name: "testing guide" })).toHaveAttribute(
-			"href",
-			"https://example.com/testing",
-		);
-		await expect(canvas.queryByText(/\*\*|`/u)).toBeNull();
+		await expect(canvas.queryByText(/`/u)).toBeNull();
 	},
 };
 

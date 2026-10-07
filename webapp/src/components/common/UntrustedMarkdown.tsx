@@ -6,30 +6,13 @@ import {
 	type ReactNode,
 	useContext,
 } from "react";
-import { defaultRehypePlugins, Streamdown } from "streamdown";
+import { Streamdown } from "streamdown";
 
 import { MarkdownCode } from "@/components/common/MarkdownCode";
 
 const HTTP_URL = /^https?:\/\//iu;
 
 const plainText = (value: string): ReactNode => value;
-
-/**
- * The HTML a body carries is parsed and then cut down to GitHub's own allowlist, never passed
- * through. A comment Hephaestus posted on a pull request is the composer's Markdown inside an
- * envelope of HTML: a `<!-- hephaestus:practice-review:… -->` marker and a `<sub>` footer. GitHub
- * renders the footer small and hides the marker, so a page showing that body must do the same.
- * Without the parse the renderer escapes each tag, and the reader gets the envelope as literal text.
- *
- * <p>Streamdown's own pair is reused rather than installed again: `rehype-raw` turns the HTML into
- * elements, and `rehype-sanitize` with GitHub's schema keeps only the tags and attributes GitHub
- * keeps. Its schema drops comments, scripts, styles, event handlers and any link that is not
- * http, https or mailto. Streamdown's third default, `harden`, is left out: here it is configured
- * to allow every prefix, and {@link SafeAnchor} below is the stricter link check.
- */
-const GITHUB_HTML_PLUGINS = [defaultRehypePlugins.raw, defaultRehypePlugins.sanitize].filter(
-	(plugin) => plugin !== undefined,
-);
 
 /** Carries {@link UntrustedMarkdownProps.renderText} to the text runs; the default is the words. */
 const RenderTextContext = createContext(plainText);
@@ -73,23 +56,10 @@ function TextRuns({ children }: { children?: ReactNode }): ReactNode {
 	);
 }
 
-/**
- * GitHub's small print, such as the footer under a posted comment. It stays on the base line in
- * the muted tone, so it reads as a note under the text rather than as a lowered run of body text.
- */
-function SmallPrint({ children }: HTMLAttributes<HTMLElement>) {
-	return <small className="text-xs text-muted-foreground">{children}</small>;
-}
-
 const UNTRUSTED_MARKDOWN_COMPONENTS = {
 	a: SafeAnchor,
-	sub: SmallPrint,
 	code: MarkdownCode,
-	// A remote image is a request the reader never asked for; `picture` and `source` are its other
-	// spelling in the allowlist.
 	img: () => null,
-	picture: () => null,
-	source: () => null,
 	h1: DemotedHeading,
 	h2: DemotedHeading,
 	h3: DemotedHeading,
@@ -153,8 +123,7 @@ export interface UntrustedMarkdownProps {
 
 /**
  * Markdown a model wrote, rendered with no HTML passthrough, no remote images and no link the
- * renderer has not checked. Inline HTML renders only as far as GitHub's allowlist reaches, so a
- * body posted on a pull request reads here as it reads there. Shared rather than copied, so the safety decisions are made once: the
+ * renderer has not checked. Shared rather than copied, so the safety decisions are made once: the
  * operator's feedback preview and the developer's own practice pages show the same text, and a
  * hardening applied to one must not be able to miss the other.
  *
@@ -165,10 +134,8 @@ export function UntrustedMarkdown({ children, renderText }: UntrustedMarkdownPro
 	const markdown = (
 		<Streamdown
 			mode="static"
-			rehypePlugins={GITHUB_HTML_PLUGINS}
-			// The HTML has to reach `rehype-raw` to be parsed at all; the sanitizer after it decides
-			// what is left of it.
-			remarkRehypeOptions={{ allowDangerousHtml: true }}
+			rehypePlugins={[]}
+			remarkRehypeOptions={{ allowDangerousHtml: false }}
 			components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
 		>
 			{children}

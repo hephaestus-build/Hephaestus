@@ -368,8 +368,7 @@ export function PracticeFeedbackCard({
 				</span>
 				<div className="flex min-w-0 flex-col gap-1">
 					<span className="text-sm font-semibold">Next step</span>
-					{/* The composer writes the step in the same Markdown as the body: a file or a command it
-					    names comes back as code, not as stray backticks. */}
+					{/* The composer writes the step in Markdown, as it writes the body. */}
 					<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "max-w-3xl text-sm text-foreground")}>
 						<UntrustedMarkdown>{nextStep}</UntrustedMarkdown>
 					</div>
