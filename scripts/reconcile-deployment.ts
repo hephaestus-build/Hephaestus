@@ -687,18 +687,27 @@ async function prepareLock(
 	return { lockEnv, lockFile };
 }
 
+interface RenderedStack {
+	composeArgs: string[];
+	/** The services the release declares for the stack, as Compose rendered them. */
+	services: readonly string[];
+}
+
+const WORKER_SERVICE = "application-worker";
+
 /**
- * The compose arguments of every stack, each rendered and checked against the lock first: a release
+ * The compose arguments of each stack, each rendered and checked against the lock first: a release
  * that renders an unlocked image cannot get one running in the window before the guard refuses it.
  */
 async function verifiedComposeArgs(
 	config: HostConfig,
+	stacks: readonly Stack[],
 	releaseTree: string,
 	lockFile: string,
 	lockEnv: string,
-): Promise<Map<Stack, string[]>> {
-	const composeArgsByStack = new Map<Stack, string[]>();
-	for (const stack of config.stacks) {
+): Promise<Map<Stack, RenderedStack>> {
+	const composeArgsByStack = new Map<Stack, RenderedStack>();
+	for (const stack of stacks) {
 		const composeArgs = [
 			"compose",
 			"--project-name",
@@ -718,31 +727,66 @@ async function verifiedComposeArgs(
 			),
 			`${stack} configuration`,
 		);
-		const images = Object.values(asRecord(rendered.services, `${stack}.services`)).map((service) =>
+		const services = asRecord(rendered.services, `${stack}.services`);
+		const images = Object.values(services).map((service) =>
 			asString(asRecord(service, `${stack} service`).image, `${stack} service image`),
 		);
 		const unlocked = unlockedImages(images, lockEnv);
 		if (unlocked.length > 0) {
 			throw new Error(`${stack} renders images outside the release lock: ${unlocked.join(", ")}`);
 		}
-		composeArgsByStack.set(stack, composeArgs);
+		composeArgsByStack.set(stack, { composeArgs, services: Object.keys(services) });
 	}
 	return composeArgsByStack;
+}
+
+/**
+ * Stops the worker the applied release runs before anything it depends on is replaced, from that
+ * release's own app configuration and lock: `stop` waits up to the stop_grace_period the running
+ * worker was started with, whatever the candidate declares, and the candidate's `up` starts what it
+ * declares. A first install, or an applied release without the worker, has none to stop.
+ */
+async function stopAppliedWorker(
+	config: HostConfig,
+	applied: AppliedState | undefined,
+): Promise<void> {
+	if (!applied || !config.stacks.includes("app")) {
+		return;
+	}
+	// As for its tooling, only the commit the record keeps identifies what runs: a retained lock or tree
+	// cannot tell the accepted source from one a failed re-promotion staged. A worker that may be running
+	// is never skipped silently, so a record without it, or a lock for other source, stops the apply.
+	const commit = appliedCommit(applied);
+	if (commit === undefined) {
+		throw new OperatorActionRequiredError(
+			`${applied.release} was recorded without its source commit, so the worker it runs cannot be ` +
+				"stopped as it was started. Verify the revision this host runs before it applies another release.",
+		);
+	}
+	const lockFile = path.join(locksDirectory(config), `${applied.release}.env`);
+	const lockEnv = await readFile(lockFile, "utf8");
+	if (lockedReleaseCommit(lockEnv) !== commit) {
+		throw new Error(`the ${applied.release} lock does not cover the commit recorded for it`);
+	}
+	const { tree } = await ensureReleaseTree(
+		config.checkout,
+		releasesDirectory(config),
+		applied.release,
+		commit,
+	);
+	const rendered = await verifiedComposeArgs(config, ["app"], tree, lockFile, lockEnv);
+	const app = rendered.get("app");
+	if (app !== undefined && app.services.includes(WORKER_SERVICE)) {
+		await run("docker", [...app.composeArgs, "stop", WORKER_SERVICE], { cwd: tree });
+	}
 }
 
 async function startStacks(
 	config: HostConfig,
 	releaseTree: string,
-	composeArgsByStack: ReadonlyMap<Stack, string[]>,
+	composeArgsByStack: ReadonlyMap<Stack, RenderedStack>,
 ): Promise<void> {
-	// Keep the worker's dependencies available for its existing drain: `stop` waits up to the
-	// service's stop_grace_period, and the `up` below starts it again.
-	const app = composeArgsByStack.get("app");
-	if (app) {
-		await run("docker", [...app, "stop", "application-worker"], { cwd: releaseTree });
-	}
-
-	for (const [stack, composeArgs] of composeArgsByStack) {
+	for (const [stack, { composeArgs }] of composeArgsByStack) {
 		const foundation = FOUNDATION[stack];
 		if (!foundation) {
 			continue;
@@ -761,7 +805,7 @@ async function startStacks(
 		);
 	}
 
-	for (const [, composeArgs] of composeArgsByStack) {
+	for (const [, { composeArgs }] of composeArgsByStack) {
 		await run(
 			"docker",
 			[
@@ -841,7 +885,14 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		releaseCommit,
 		releaseTree,
 	);
-	const composeArgsByStack = await verifiedComposeArgs(config, releaseTree, lockFile, lockEnv);
+	const composeArgsByStack = await verifiedComposeArgs(
+		config,
+		config.stacks,
+		releaseTree,
+		lockFile,
+		lockEnv,
+	);
+	await stopAppliedWorker(config, applied);
 	await startStacks(config, releaseTree, composeArgsByStack);
 
 	const finishedAt = new Date();
