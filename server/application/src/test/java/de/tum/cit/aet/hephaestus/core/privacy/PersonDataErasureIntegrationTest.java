@@ -331,9 +331,11 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         var fixture = externalInspectionFixture("https://privacy-gitlab.example.com/team/repo/-/merge_requests/19");
         var preview = personData.preview(
                 fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null)));
+        // The fixture holds projection ownership while preview and export inspect its provider write.
         jdbc.update("""
                 UPDATE feedback_dispatch SET state='SENT',write_started=TRUE,
                     write_started_at=CURRENT_TIMESTAMP,delivered_external_ref='comment-99',
+                    projection_owner='privacy-preview-fixture',projection_expires_at=CURRENT_TIMESTAMP + INTERVAL '1 day',
                     delivered_external_url='https://privacy-gitlab.example.com/team/repo/-/merge_requests/19#note_99'
                 WHERE id=?
                 """, fixture.dispatchId());
