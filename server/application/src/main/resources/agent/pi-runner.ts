@@ -304,6 +304,7 @@ interface PracticeIndexEntry {
 	name: string;
 	whyItMatters?: string;
 	knownLimitations: string[];
+	revisionId?: number;
 }
 
 /** The task this runner was started for. */
@@ -484,6 +485,12 @@ function readPracticeIndex(): PracticeIndexEntry[] {
 			knownLimitations: jsonArray(practice.knownLimitations).filter(
 				(limitation): limitation is string => typeof limitation === "string",
 			),
+			revisionId:
+				typeof practice.revisionId === "number" &&
+				Number.isSafeInteger(practice.revisionId) &&
+				practice.revisionId > 0
+					? practice.revisionId
+					: undefined,
 		};
 	});
 }
@@ -2463,6 +2470,7 @@ function practiceContext(observations: readonly Record<string, unknown>[]): Revi
 			name: practice.name,
 			...(practice.whyItMatters === undefined ? {} : { whyItMatters: practice.whyItMatters }),
 			knownLimitations: practice.knownLimitations,
+			...(practice.revisionId === undefined ? {} : { revisionId: practice.revisionId }),
 		}));
 }
 

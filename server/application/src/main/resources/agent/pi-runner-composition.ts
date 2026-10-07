@@ -1112,6 +1112,8 @@ export interface ReviewPractice {
 	name: string;
 	whyItMatters?: string;
 	knownLimitations: readonly string[];
+	/** Which revision of the practice was staged: it identifies the standard, not that the standard or the work changed. */
+	revisionId?: number;
 }
 
 /** Everything the review on the work is composed from; nothing else reaches its session. */

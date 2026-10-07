@@ -77,6 +77,13 @@ function selectedRowsOf(text: string): unknown {
 	return JSON.parse(selection);
 }
 
+function reviewPracticesOf(text: string): unknown {
+	const block = /```json\n(?<context>\{\n "practices"[\s\S]*?\n\})\n```/u.exec(text);
+	const context = block?.groups?.context;
+	assert.ok(context !== undefined, text);
+	return JSON.parse(context);
+}
+
 const changeCitation = {
 	sourceKind: "scm.pull-request.diff",
 	artifactPath: "evidence/change.json",
@@ -242,8 +249,12 @@ const undecided = (consulted: string[]) => ({
 });
 
 /** A practice index entry as the server writes it: the sources its evidence requirements name. */
-function practice(slug: string, readsSources = ["scm.pull-request.core", "scm.pull-request.diff"]) {
-	return { slug, group: "code", readsSources };
+function practice(
+	slug: string,
+	readsSources = ["scm.pull-request.core", "scm.pull-request.diff"],
+	revisionId?: unknown,
+) {
+	return { slug, group: "code", readsSources, ...(revisionId === undefined ? {} : { revisionId }) };
 }
 
 function readObservations(path: string) {
@@ -2304,6 +2315,11 @@ if (scenario !== undefined && scenario !== "") {
 						}),
 					);
 					let index = [practice("test-practice")];
+					if (stage === "compose") {
+						index = [practice("test-practice", undefined, 42)];
+					} else if (stage === "compose-foreign-provider") {
+						index = [practice("test-practice", undefined, "42")];
+					}
 					if (
 						stage.startsWith("scope-") ||
 						stage === "finish" ||
@@ -3062,6 +3078,16 @@ for (const observations of [encoded, encoded + '"', captured.arguments.observati
 							assert.match(reviewTurn, /"quote": "\+ insecure\(\);"/u);
 							assert.match(reviewTurn, /An earlier comment on this same change\./u);
 							assert.match(reviewTurn, /"slug": "test-practice"/u);
+							assert.deepEqual(reviewPracticesOf(reviewTurn), {
+								practices: [
+									{
+										slug: "test-practice",
+										name: "test-practice",
+										knownLimitations: [],
+										...(stage === "compose" ? { revisionId: 42 } : {}),
+									},
+								],
+							});
 							assert.doesNotMatch(reviewTurn, /Criteria\./u);
 							assert.ok(!reviewTurn.includes(PRIVATE_HISTORY_SENTENCE), reviewTurn);
 							assert.ok(!reviewTurn.includes("observation-history"), reviewTurn);
@@ -3550,6 +3576,11 @@ for (const observations of [encoded, encoded + '"', captured.arguments.observati
 									/^## (?:The review to write|Undecided|Unfinished)/u.test(prompt),
 								);
 							assert.equal(reviewPrompts.length, 1);
+							const initialReview = reviewPrompts[0];
+							assert.ok(initialReview !== undefined);
+							assert.deepEqual(reviewPracticesOf(initialReview), {
+								practices: [{ slug: "test-practice", name: "test-practice", knownLimitations: [] }],
+							});
 							const feedback: unknown = JSON.parse(
 								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
 							);
