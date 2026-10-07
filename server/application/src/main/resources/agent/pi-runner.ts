@@ -3143,7 +3143,15 @@ async function postPublicHistoryRead(): Promise<unknown> {
 			`public feedback history read was refused: HTTP ${response.status} — ${await answerText(response)}`,
 		);
 	}
-	return response.json();
+	let body: string;
+	try {
+		body = await response.text();
+	} catch (error) {
+		throw new AdmissionUnreachableError(
+			`public feedback history body could not be read: ${errorText(error)}${causeText(error)}`,
+		);
+	}
+	return JSON.parse(body);
 }
 
 /**

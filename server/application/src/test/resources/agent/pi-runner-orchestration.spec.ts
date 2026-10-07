@@ -374,9 +374,26 @@ if (scenario !== undefined && scenario !== "") {
 			}
 		}
 	};
+	let publicHistoryReads = 0;
 	mock.method(globalThis, "fetch", async (input: unknown, init?: RequestInit) => {
 		if (String(input).endsWith("/public-feedback-history")) {
 			const mode = process.env.PI_PUBLIC_HISTORY_MODE;
+			publicHistoryReads += 1;
+			if (mode === "body-transport" || mode === "malformed-json") {
+				record("public-history-read");
+			}
+			if (mode === "body-transport" && publicHistoryReads === 1) {
+				return new Response(
+					new ReadableStream({
+						start(controller) {
+							controller.error(new TypeError("Response body stream interrupted"));
+						},
+					}),
+				);
+			}
+			if (mode === "malformed-json") {
+				return new Response('{"schemaVersion":');
+			}
 			if (mode === "invalid" || mode === "invalid-link") {
 				return Response.json({
 					schemaVersion: 1,
@@ -405,7 +422,7 @@ if (scenario !== undefined && scenario !== "") {
 			if (mode === "refused") {
 				return new Response("Attempt no longer owns the job", { status: 409 });
 			}
-			if (mode === "fresh") {
+			if (mode === "fresh" || mode === "body-transport") {
 				return Response.json({
 					schemaVersion: 1,
 					readAt: "2026-10-07T11:00:00Z",
@@ -2145,6 +2162,8 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-history-invalid",
 		"compose-history-invalid-link",
 		"compose-history-refused",
+		"compose-history-body-transport",
+		"compose-history-malformed-json",
 		"compose-foreign-provider",
 		"compose-overflow",
 		"compose-silent",
@@ -2171,6 +2190,8 @@ if (scenario !== undefined && scenario !== "") {
 				["compose-history-invalid", "compose"],
 				["compose-history-invalid-link", "compose"],
 				["compose-history-refused", "compose"],
+				["compose-history-body-transport", "compose"],
+				["compose-history-malformed-json", "compose"],
 				["compose-context-unavailable", "compose-fold"],
 				["compose-counterevidence", "compose-fold"],
 				["compose-reviewer-only", "compose-fold"],
@@ -2373,7 +2394,8 @@ if (scenario !== undefined && scenario !== "") {
 						nodePath.join(cwd, "evidence/manifest.json"),
 						JSON.stringify({
 							artifactKind: "scm.pull_request",
-							...(fixture === "compose-fresh-history"
+							...(fixture === "compose-fresh-history" ||
+							fixture === "compose-history-body-transport"
 								? { capturedAt: "2026-10-07T09:00:00Z" }
 								: {}),
 							artifacts: [
@@ -2480,6 +2502,8 @@ if (scenario !== undefined && scenario !== "") {
 									["compose-history-invalid", "invalid"],
 									["compose-history-invalid-link", "invalid-link"],
 									["compose-history-refused", "refused"],
+									["compose-history-body-transport", "body-transport"],
+									["compose-history-malformed-json", "malformed-json"],
 								]).get(fixture),
 								PI_COUNTEREVIDENCE: String(fixture === "compose-counterevidence"),
 								PI_REVIEWER_ONLY: String(fixture === "compose-reviewer-only"),
@@ -3138,7 +3162,8 @@ for (const observations of [encoded, encoded + '"', captured.arguments.observati
 							if (
 								fixture === "compose-history-invalid" ||
 								fixture === "compose-history-invalid-link" ||
-								fixture === "compose-history-refused"
+								fixture === "compose-history-refused" ||
+								fixture === "compose-history-malformed-json"
 							) {
 								const payload: unknown = JSON.parse(
 									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
@@ -3162,9 +3187,18 @@ for (const observations of [encoded, encoded + '"', captured.arguments.observati
 									STAGED_FEEDBACK_HISTORY,
 								);
 								assert.equal(payload.admissionDigest, "admitted-digest");
+								if (fixture === "compose-history-malformed-json") {
+									assert.equal(events.filter((event) => event === "public-history-read").length, 1);
+								}
 								break;
 							}
-							if (fixture === "compose-fresh-history") {
+							if (
+								fixture === "compose-fresh-history" ||
+								fixture === "compose-history-body-transport"
+							) {
+								if (fixture === "compose-history-body-transport") {
+									assert.equal(events.filter((event) => event === "public-history-read").length, 2);
+								}
 								const prompt = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
 								assert.ok(prompt.includes("Fresh delivered communication"));
 								assert.ok(!prompt.includes("Delivery with unknown work link"));
@@ -3232,7 +3266,10 @@ for (const observations of [encoded, encoded + '"', captured.arguments.observati
 							assert.match(reviewTurn, /linked_work_items\.json[^\n]*not part of this capture/u);
 							assert.match(reviewTurn, /"id": "observation-1"/u);
 							assert.match(reviewTurn, /"quote": "\+ insecure\(\);"/u);
-							if (fixture !== "compose-fresh-history") {
+							if (
+								fixture !== "compose-fresh-history" &&
+								fixture !== "compose-history-body-transport"
+							) {
 								assert.match(reviewTurn, /An earlier comment on this same change\./u);
 							}
 							assert.match(reviewTurn, /"slug": "test-practice"/u);
