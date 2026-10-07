@@ -65,8 +65,7 @@ function PracticesAcrossTheWorkspace() {
 	const navigate = useNavigate();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const enabled = featureState.practicesEnabled === true;
-	// The overview reads no window, so a new window does not refetch it. Both reads start together, and
-	// neither refetches on a refocus while the server would answer with the counts it already sent.
+	// The overview does not depend on the window. Both queries can start after the feature read.
 	const query = useQuery({
 		...getPracticesAcrossWorkspaceOptions({ path: { workspaceSlug } }),
 		enabled,

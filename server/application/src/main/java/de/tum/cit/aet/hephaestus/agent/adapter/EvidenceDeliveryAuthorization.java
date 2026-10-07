@@ -51,11 +51,11 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
         }
         return jobRepository
                 .findEvidenceContractVersion(jobId, workspaceId)
-                .map(contractVersion -> permits(
-                        contractVersion,
-                        citations,
-                        requestedPurpose,
-                        citedSourceAccess.checks(workspaceId, requestedPurpose)))
+                .map(contractVersion -> {
+                    var sources = citedSourceAccess.checks(workspaceId, requestedPurpose);
+                    sources.prepare(citations);
+                    return permits(contractVersion, citations, requestedPurpose, sources);
+                })
                 .orElse(false);
     }
 

@@ -17,6 +17,10 @@ import org.springframework.context.annotation.Primary;
 
 @TestConfiguration(proxyBeanMethods = false)
 public class SharedTestDoubles {
+    @Bean
+    static SqlStatementCounter sqlStatementCounter() {
+        return new SqlStatementCounter();
+    }
 
     @Bean
     @Primary
