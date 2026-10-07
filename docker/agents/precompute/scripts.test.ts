@@ -330,6 +330,33 @@ void it("issue-reference syntax in templates remains a candidate rather than an 
 	);
 });
 
+void it("readiness precompute leaves every title to the model and keeps checklist and issue facts", async () => {
+	const traceable = await loadScript("ready-and-traceable-handoff");
+	for (const title of [
+		"Add a saved message draft",
+		"Enforce WIP limits on the board",
+		"WIP: add the quiz results screen",
+	]) {
+		const trace = await traceable("unused", new Map(), {
+			source_branch: "plain-branch",
+			title,
+			body: "Closes #42\n\n- [x] Results screen\n- [ ] Empty state\n",
+			pr_number: 1,
+			pr_url: "https://example.invalid/pull/1",
+			repository_full_name: "owner/project",
+			target_branch: "main",
+			commit_sha: "a".repeat(40),
+		});
+		const directions = trace.directions.join("\n");
+		assert.equal(trace.metrics.checklistTicked, 1);
+		assert.equal(trace.metrics.checklistUnticked, 1);
+		assert.equal(trace.metrics.issueMentionSyntaxCandidateCount, 1);
+		assert.match(directions, /1 ticked and 1 unticked checkbox line/u);
+		assert.match(directions, /#42/u);
+		assert.doesNotMatch(directions, /draft-style|Readiness fact/u);
+	}
+});
+
 void it("omits an uncaptured issue inventory count while preserving a captured empty listing", async () => {
 	const run = await loadScript("issue-scoped-to-single-concern");
 	const cases: [string | undefined, number | undefined][] = [
