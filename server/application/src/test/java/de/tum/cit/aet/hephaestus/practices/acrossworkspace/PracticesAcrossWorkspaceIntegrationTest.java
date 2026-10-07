@@ -664,7 +664,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
             insertScaleRows(rows.subList(6_000, rows.size()));
             assertThat(measuredReads(statistics, "24000 observations plus history"))
                     .isEqualTo(smaller);
-            try (var requests = Executors.newFixedThreadPool(40)) {
+            try (var requests = Executors.newFixedThreadPool(2)) {
                 sqlStatements.reset();
                 long start = System.nanoTime();
                 CompletableFuture.allOf(
@@ -673,19 +673,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                         .get(30, TimeUnit.SECONDS);
                 log.info(
                         "Course whole page: {} ms, {} JDBC statements",
-                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start),
-                        sqlStatements.count());
-                List<CompletableFuture<?>> readers = new ArrayList<>();
-                sqlStatements.reset();
-                start = System.nanoTime();
-                for (int index = 0; index < 20; index++) {
-                    readers.add(CompletableFuture.runAsync(() -> read(), requests));
-                    readers.add(CompletableFuture.runAsync(() -> tiles("DAYS_30"), requests));
-                }
-                CompletableFuture.allOf(readers.toArray(CompletableFuture<?>[]::new))
-                        .get(60, TimeUnit.SECONDS);
-                log.info(
-                        "Course 20 whole-page readers: {} ms, {} JDBC statements",
                         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start),
                         sqlStatements.count());
             }

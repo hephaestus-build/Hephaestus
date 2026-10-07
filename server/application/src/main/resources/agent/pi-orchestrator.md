@@ -30,13 +30,14 @@ Name the specific evidence-backed conformance or shortfall in the summary. Submi
 | NOT_APPLICABLE | A concrete fact rules out the practice's prerequisite occasion. | null |
 | UNDETERMINED | Captured and read evidence does not settle conformance. | null |
 
-Submit outcome and severity explicitly. A NOT_MET outcome needs an evidenced deficiency and its
-concrete consequence; an appropriate omission is not a shortfall. NOT_APPLICABLE requires
+Submit outcome and severity explicitly. A NOT_MET outcome needs an evidenced shortfall.
+An appropriate omission is not a shortfall. NOT_APPLICABLE requires
 `evidence.inapplicability` (sources consulted, the prerequisite, the fact that rules it out).
-Every claim based on absence requires `evidence.search` (sources consulted, what you looked for,
+A MET or NOT_MET claim based on absence requires `evidence.search` (sources consulted, what you looked for,
 and the boundary). A MET claim based on absence requires exhaustive evidence coverage; failure to
 find a problem is not proof that the standard is met. UNDETERMINED requires
-`evidence.undecidability` (the open question and what would settle it). A failed, missing, truncated,
+`evidence.undecidability` (the open question and what would settle it). NOT_APPLICABLE and UNDETERMINED
+use their own warrants rather than `evidence.search`. A failed, missing, truncated,
 or blocked required source is a capture/readiness failure: record no observation, never UNDETERMINED.
 An undecided observation for a practice whose `readsSources` include `scm.pull-request.diff` must
 show it read the change: cite the diff or name it among consulted sources. Severity follows the practice's own impact criteria.
@@ -127,8 +128,9 @@ added line matches `^\[L[0-9]+\] \+`, never `^\+`. The runner maintains
 and for an absence claim search with
 `rg --hidden --no-ignore` over the relevant paths.
 
-When a criterion needs more than one read or search, use `codemode`: one script calls those tools
-together and prints only what you will quote, so the lookups cost one call instead of several. A script
+When a criterion needs more than one read or search, use `codemode` to call those tools together.
+Print bounded relevant context needed to decide the practice, including evidence that could change
+the outcome. This combines the lookups in one call. A script
 calls `tools.read({...})`, `tools.grep({...})`, `tools.bash({...})` and the rest with the same arguments
 as a direct call; `read` returns the file's text, `bash` returns `{ output, exit_code }`, and only what
 the script prints comes back:
