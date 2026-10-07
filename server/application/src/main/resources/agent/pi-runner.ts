@@ -105,7 +105,7 @@ import { hasText, isBlank } from "./pi-text.ts";
 import { prepareObservationArguments } from "./pi-tool-arguments.ts";
 import { prepareTurnText } from "./pi-turn-context.ts";
 
-// One session measures and composes. Persisted work/ notes survive context compaction.
+// Staged work notes survive isolated sessions and context compaction.
 
 function parseJson(text: string): unknown {
 	return JSON.parse(text);
@@ -2181,9 +2181,9 @@ function buildFeedbackTool(
 											type: "string",
 											maxLength: FEEDBACK_TEXT_BOUNDS.situation,
 											description:
-												"The concern the observations share, concisely and as it can be observed: factual, specific, the artifacts named. Your words about them, " +
-												"not words for them - third person, never addressed to the developer as 'you', " +
-												"and never a judgement of the person.",
+												"The concern the observations have in common, as it can be observed, stated once rather than " +
+												"listing each artifact again. Your words about it, not words for it - third person, never " +
+												"addressed to the developer as 'you', and never a judgement of the person.",
 										},
 										capability: {
 											type: "string",
@@ -2195,7 +2195,7 @@ function buildFeedbackTool(
 											type: "string",
 											maxLength: FEEDBACK_TEXT_BOUNDS.evidenceSummary,
 											description:
-												"The supporting works and observations, compactly named. " +
+												"Where the concern occurred, compactly: each supporting work and observation located once. " +
 												"Summarise rather than inventing a quote; the original observation evidence is " +
 												"staged separately for the mentor to inspect.",
 										},
@@ -2209,7 +2209,7 @@ function buildFeedbackTool(
 											type: "string",
 											maxLength: FEEDBACK_TEXT_BOUNDS.alreadySaid,
 											description:
-												"Optional. Relevant prior feedback permitted by the existing history rules, and movement the shown evidence supports. Omit when none is shown. A partial or missing history does not establish that nothing was said or that a concern was resolved.",
+												"Optional. Relevant prior communication the shown history records, and movement the shown evidence supports. Omit when none is shown. Partial or missing history leaves coverage unknown: it never proves that nothing was said or that a concern was resolved.",
 										},
 									},
 								},
@@ -2815,9 +2815,8 @@ function normalizeQuotedText(value: string): string {
 
 /** Omit duplicated quotes and verification digests; the full admission record remains on disk. */
 function composerView(observation: AdmittedObservation): Record<string, unknown> {
-	// Feedback is composed from NOT_MET observations; the others are shown by what they found, and
-	// their full record stays in work/composition/observations.json.
-	if (observation.outcome !== "NOT_MET") {
+	// Abstentions cannot support claims. MET counterevidence keeps the same qualifications as NOT_MET.
+	if (observation.outcome !== "NOT_MET" && observation.outcome !== "MET") {
 		const { id, practiceSlug, outcome, summary } = observation;
 		return { id, practiceSlug, outcome, summary };
 	}
@@ -2832,8 +2831,10 @@ function composerView(observation: AdmittedObservation): Record<string, unknown>
 	};
 }
 
+const COMPOSITION_BLOCK_LIMIT = 32_000;
+
 /** A staged file as a titled block of the composition turn, or a pointer to it when it is too large. */
-function shown(label: string, file: string, limit = 32_000): string {
+function shown(label: string, file: string, limit = COMPOSITION_BLOCK_LIMIT): string {
 	if (!existsSync(file)) {
 		return "";
 	}
@@ -2841,6 +2842,104 @@ function shown(label: string, file: string, limit = 32_000): string {
 	return text.length > limit
 		? `### ${label} — too large to show here; read \`${file}\`\n`
 		: `### ${label}\n\`\`\`json\n${text}\n\`\`\`\n`;
+}
+
+/**
+ * The complete staged criteria of each practice with a NOT_MET observation: feedback addresses the standard that was
+ * assessed. The measuring leads and source directives belong to assessment and stay out. Each is shown whole, named
+ * with where to read it when too large, or named as not staged or not readable; never cut.
+ */
+function notMetCriteria(
+	observations: readonly AdmittedObservation[],
+	limit = COMPOSITION_BLOCK_LIMIT,
+): string {
+	return notMetPractices(observations)
+		.map((slug) => {
+			const file = criteriaPathOf(slug);
+			if (!existsSync(file)) {
+				return `### Criteria of \`${slug}\` — not staged for this review; nothing is known about them here\n`;
+			}
+			let text: string;
+			try {
+				text = readFileSync(file, "utf8").trim();
+			} catch {
+				return `### Criteria of \`${slug}\` — \`${file}\` could not be read; nothing is known about them here\n`;
+			}
+			if (text.length === 0) {
+				return `### Criteria of \`${slug}\` — \`${file}\` is empty; no standard is available here\n`;
+			}
+			if (text.length > limit) {
+				return `### Criteria of \`${slug}\` — too large to show here; read \`${file}\`\n`;
+			}
+			const longestRun = Math.max(
+				0,
+				...[...text.matchAll(/`+/gu)].map((backticks) => backticks[0].length),
+			);
+			const fence = "`".repeat(Math.max(3, longestRun + 1));
+			return `### Criteria of \`${slug}\`\n${fence}markdown\n${text}\n${fence}\n`;
+		})
+		.join("\n");
+}
+
+/** The producer owns body eligibility. Keep its facts here and locate only bodies it actually staged. */
+function priorFeedbackFacts(label: string, file: string, key: "feedback" | "prepared"): string {
+	if (!existsSync(file)) {
+		return "";
+	}
+	const pointer = `### ${label} — read \`${file}\` for the recorded history; its contents are not shown here\n`;
+	let history: unknown;
+	try {
+		history = parseJson(readFileSync(file, "utf8"));
+	} catch {
+		return pointer;
+	}
+	if (!isRecord(history) || !Array.isArray(history[key])) {
+		return pointer;
+	}
+	const entries = jsonArray(history[key]);
+	if (
+		entries.some(
+			(entry) => !isRecord(entry) || (entry.body != null && typeof entry.body !== "string"),
+		)
+	) {
+		return pointer;
+	}
+	const projected = entries.map((entry, index) => {
+		if (!isRecord(entry)) {
+			return entry;
+		}
+		const { body, ...facts } = entry;
+		return {
+			...facts,
+			...(typeof body === "string"
+				? { bodyAt: `${file} → ${key}[${index}].body (${body.length} characters)` }
+				: {}),
+		};
+	});
+	const text = JSON.stringify({ ...history, [key]: projected }, null, 1);
+	return text.length > COMPOSITION_BLOCK_LIMIT
+		? pointer
+		: `### ${label} — bodies remain at their \`bodyAt\` in the unchanged file; read them when earlier wording matters\n\`\`\`json\n${text}\n\`\`\`\n`;
+}
+
+/** The accepted public draft is persisted here, but has not passed delivery and is not prior advice. */
+function plannedReviewFacts(): string {
+	const { review } = composedFeedback;
+	if (!review) {
+		return "";
+	}
+	const stored = existsSync(FEEDBACK_PATH);
+	const bodyAt = (field: string) =>
+		stored ? { bodyAt: `${FEEDBACK_PATH} → review.${field}` } : {};
+	const facts = {
+		summary: review.summary ? { basedOn: review.summary.basedOn, ...bodyAt("summary.body") } : null,
+		inline: review.inline.map(({ body: _body, ...note }, index) => ({
+			...note,
+			...bodyAt(`inline[${index}].body`),
+		})),
+		withheld: review.withheld,
+	};
+	return `### The review planned for this work (a draft, not delivered)\nThis accepted draft may still be withheld at delivery. It is not prior communication. Private channels remain independently useful and may make the same supported point. ${stored ? "Read the located bodies if their wording matters." : "Its wording is not available as a staged file here."}\n\`\`\`json\n${JSON.stringify(facts, null, 1)}\n\`\`\`\n`;
 }
 
 function buildCompositionTurn(
@@ -2856,24 +2955,24 @@ function buildCompositionTurn(
 		closed.length > 0 ? ` Closed this turn, so write nothing for them: ${closed.join(", ")}.` : "";
 	const coverageNote = notReachedNote(notReached);
 	const admitted = JSON.stringify({ observations: observations.map(composerView) }, null, 1);
-	const onTheWork = composedFeedback.review
-		? `### The review planned for this work (a draft, not delivered)\nIt was written separately and may not reach the work if a delivery check holds it, so it is not something already said: only the feedback history supports ALREADY_SAID. Each surface is read on its own, so private feedback may make the same point where that helps this person; do not withhold useful private guidance only because the draft exists.\n\`\`\`json\n${JSON.stringify(composedFeedback.review, null, 1)}\n\`\`\`\n`
-		: "";
+	const onTheWork = plannedReviewFacts();
 	const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
 	const context = [
 		shown("The composition request (lanes, caps, placements)", COMPOSITION_REQUEST_PATH),
 		shown("What earlier reviews recorded about this person", `${historyRoot}/observations.json`),
-		shown("What was already said to them", `${historyRoot}/feedback.json`),
-		shown(
+		priorFeedbackFacts("What was already said to them", `${historyRoot}/feedback.json`, "feedback"),
+		priorFeedbackFacts(
 			"What is written for them and still unread (supersession targets)",
 			PREPARED_FEEDBACK_PATH,
+			"prepared",
 		),
 	]
 		.filter((block) => block !== "")
 		.join("\n");
 	return `## This turn
-The review just finished. Its ${observations.length} admitted measurement(s) follow. The NOT_MET ones carry their rationale and their citations by coordinates, the others only what they found; the full record, quoted lines included, is \`work/composition/observations.json\`. The history follows them.
+The review just finished. The criteria its NOT_MET practices were assessed against come first, as staged; its ${observations.length} admitted measurement(s) follow them. The MET and NOT_MET ones carry their rationale and their citations by coordinates, the abstentions only what they recorded; the full record, quoted lines included, is \`work/composition/observations.json\`. The history follows them.
 
+${notMetCriteria(observations)}
 \`\`\`json
 ${admitted}
 \`\`\`
@@ -3173,8 +3272,13 @@ async function settleSession(
 	return idle;
 }
 
+/** Where the practice's criteria are staged for this review. */
+function criteriaPathOf(slug: string): string {
+	return `${nodePath.dirname(INPUT_PATHS.practiceIndex)}/${slug}.md`;
+}
+
 function criteriaFileOf(slug: string): string | null {
-	const file = `${nodePath.dirname(INPUT_PATHS.practiceIndex)}/${slug}.md`;
+	const file = criteriaPathOf(slug);
 	return existsSync(file) ? readFileSync(file, "utf8").trim() : null;
 }
 
