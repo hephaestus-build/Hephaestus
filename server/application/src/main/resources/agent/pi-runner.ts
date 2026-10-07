@@ -745,7 +745,6 @@ const observationSchema = {
 			type: "string",
 			minLength: 1,
 			maxLength: MAX_SUMMARY_CHARS,
-			// documentedShape removes schema bounds, so include this limit in the model-facing description.
 			description:
 				`A short phrase of at most ${MAX_SUMMARY_CHARS} characters identifying the specific behavior whose conformance to the practice standard you assess, such as 'Debug print left in the request handler'. ` +
 				"Never a single word and never the practice's own name; the reasons, titles and quotes go in evidenceRationale. " +
@@ -1504,7 +1503,7 @@ function owedPractices(slugs: readonly string[] = currentTurnSlugs): string[] {
 	return slugs.filter((slug) => !observed.has(slug) && !blockedPractices.has(slug));
 }
 
-/** JSON Schema keywords that refuse; what they say is applied per observation instead. */
+/** JSON Schema keywords that refuse; what they say is applied per unit instead. */
 const RULE_KEYWORDS = new Set([
 	"required",
 	"additionalProperties",
@@ -1518,8 +1517,8 @@ const RULE_KEYWORDS = new Set([
 ]);
 
 /**
- * Pi validates a whole tool call before execution. Keep shape hints here, but validate each item in
- * normalizeAndValidateObservation so one invalid item does not discard the rest of the batch.
+ * Pi validates a whole tool call before execution. For a tool that takes a batch of independent units, keep shape
+ * hints here and let the tool validate each unit, so one invalid unit does not discard the rest of the batch.
  */
 function documentedShape(schema: unknown): unknown {
 	if (Array.isArray(schema)) {
@@ -1529,9 +1528,8 @@ function documentedShape(schema: unknown): unknown {
 		return schema;
 	}
 	const out: Record<string, unknown> = {};
-	// Container types go, so a list may arrive serialized and each item is answered on its own; scalar
-	// types stay, because they tell the model what a value is. The tool still reads a mistyped scalar
-	// itself where it can ("L12" for a line), so the SDK's coercion is not the only reader.
+	// Container types go, so a list may arrive serialized and each unit is answered on its own; scalar
+	// types stay, because they tell the model what a value is.
 	const structural = schema.type === "object" || schema.type === "array";
 	const noted = (note: string) => {
 		const description = typeof out.description === "string" ? out.description : "";
@@ -1579,7 +1577,7 @@ function buildReportObservationTool() {
 			type: "object",
 			required: ["observations"],
 			properties: {
-				observations: { type: "array", items: documentedShape(observationSchema) },
+				observations: { type: "array", items: observationSchema },
 			},
 		},
 		prepareArguments: prepareObservationArguments,
