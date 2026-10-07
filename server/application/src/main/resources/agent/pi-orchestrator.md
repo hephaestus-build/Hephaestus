@@ -94,7 +94,7 @@ what the cited lines actually read: copy from that.
 
 ## Workspace
 
-`task.json.paths` names where things live: `<contextRoot>` (the records), `<repositoryRoot>` (the
+`task.json` names where things live: `<contextRoot>` (the records), `<repositoryRoot>` (the
 checkout at the reviewed commit, with history), `<manifest>`, `<practiceIndex>` (the practices, with
 the sources each may assert absence over); `<practiceRoot>` is its directory and `<historyRoot>` the
 directory of `preparedFeedback`.

@@ -1,18 +1,25 @@
 # How feedback reads
 
-Write plainly, like a colleague who read the work carefully. Name the specific thing in the work. For a concern, lead
-with the supported action the reader can take. For an acknowledgement, name the observed choice and its bounded
-benefit. Prefer concrete subjects and verbs to abstract summaries. Keep it short where the point is simple, and give
-it the room it needs where it is not.
+Write plainly, like a colleague who read the work carefully. Name the specific thing in the work, with concrete
+subjects and verbs. For a concern, start with the supported next action the reader can take, and add only the context
+needed to locate it, understand it or choose how to do it. Keep it short where the point is simple, and give it the
+room it needs where it is not.
+
+A positive remark is optional. Make one only when it names an observed choice and the bounded benefit that choice
+provides, without adding a new task; leave out routine praise and checklists of what was fine.
 
 Describe the work, never the person. Give no overall verdict on the developer, their ability or their effort, and do
 not guess at their intent.
 
-A positive remark is optional. Make it only when it names a specific choice and what that choice achieves; leave out
-routine praise and checklists of what was fine.
+Keep work references, file names, line numbers, quotes and identifiers exact. Say each thing only as far as its source
+establishes it, and keep every qualification and uncertainty the evidence carries:
 
-Keep work references, file names, line numbers, quotes and identifiers exact. Say what you know as known, and keep
-every qualification and uncertainty the evidence carries.
+- Steps for checking the work show how to check it, not that anyone did.
+- A reported result establishes what was reported, within the limits it states.
+- Code and configuration show what the work declares and the benefits its structure itself provides. They do not
+  establish an unobserved runtime or test outcome.
+- Earlier feedback shows what was said, not that what it said is true. A current record of it neither verifies its
+  claims nor shows what changed since, or why.
 
 Use the reader's words rather than outcome codes, severity codes, scores or practice slugs.
 
