@@ -12,6 +12,7 @@ import {
 	REVIEW_LIMITS,
 	type ReviewedObservation,
 	WITHHOLD_REASONS,
+	WRITE_CONTRACT,
 	buildReviewTurn,
 	decidedByReview,
 	notReachedNote,
@@ -1238,7 +1239,7 @@ const ENGAGEMENT_CRITERIA =
 	"## Judge\n- MET: each request has one of those responses.\n- NOT_MET: a request has none.\n\n" +
 	"```swift\n// a staged example stays inside its own fence\n```";
 
-void test("an accepted selection carries the whole staged criteria of the practices it selected, once each", () => {
+void test("an accepted selection carries the whole staged criteria of the practices it selected, once each, before how to write", () => {
 	const reviewable = publicObservations([
 		{
 			id: "unanswered",
@@ -1291,9 +1292,13 @@ void test("an accepted selection carries the whole staged criteria of the practi
 
 	// Exactly the selected practice's criteria, read once, whole and unchanged, alternatives included.
 	assert.deepEqual(read, ["engages-with-review"]);
-	assert.ok(text.includes(`\`\`\`\`markdown\n${ENGAGEMENT_CRITERIA}\n\`\`\`\``), text);
+	const criteria = `\`\`\`\`markdown\n${ENGAGEMENT_CRITERIA}\n\`\`\`\``;
+	assert.ok(text.includes(criteria), text);
 	assert.equal(text.split("### Criteria of `engages-with-review`").length, 2, text);
 	assert.ok(!text.includes("must not travel"), text);
+	// The criteria are reference; the writing contract comes after them, last, right before report_review.
+	assert.ok(text.endsWith(WRITE_CONTRACT), text);
+	assert.ok(text.indexOf(criteria) < text.indexOf(WRITE_CONTRACT), text);
 });
 
 void test("a selection with nothing selected carries no criteria, and an unavailable one says so", () => {

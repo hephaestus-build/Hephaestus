@@ -914,6 +914,32 @@ export const REVIEW_TOOL_DESCRIPTION =
 	"mismatch with the selection refuses the whole review, with every reason, so it can be corrected, or selected " +
 	"again, and sent again.";
 
+/**
+ * How the review is written from an accepted selection. It is the last thing before report_review, after the criteria,
+ * so reference material is followed by the writing task; the composer prompt points here.
+ */
+export const WRITE_CONTRACT =
+	"## Writing the review\n" +
+	"Write from the selected assessments, within their qualifications. A declared affordance supports its bounded " +
+	"benefit, not an unobserved runtime or test outcome. Keep each remedy on its recorded gap and leave unrelated " +
+	"behavior as it is; make another change a prerequisite only when the evidence establishes that dependency. " +
+	"You are not told whether the work is ready, so do not approve it, call it ready or blocked, or set conditions " +
+	"for merging it. Timing the evidence itself warrants is fine: a committed secret is removed and rotated before " +
+	"anyone relies on the history.\n\n" +
+	"Make each point fully once in this review:\n" +
+	"- A line note is one self-contained point about the code at its anchor: that local concern with its action and " +
+	"evidence, or that local acknowledgement. It is read alone, so it says its point completely. Several practices " +
+	"may support it when they describe that one event; it does not collect the review's other points.\n" +
+	"- The summary orients the reader: the priorities and next decisions across the work, and every ask that is not " +
+	"about one place in the code, such as the description, a reply to a reviewer or a work-wide change, unless it " +
+	"forms one point with the code at a line. When a point has no useful line note, the summary carries that point " +
+	"completely. It may name or locate a line note's topic, and then names that note's " +
+	"observations in basedOn, but it does not restate the note's diagnosis, action or acknowledgement.\n" +
+	"- An acknowledgement appears once, in the summary or on its line, and says briefly what the choice provides. It " +
+	"is never required, counted or used to cushion a concern; when nothing calls for action, the summary may describe " +
+	"that bounded result, or the review may say nothing.\n\n" +
+	"One observation may support notes at several places, and also the summary's overview of them.";
+
 /** Preserve admission’s complete rows and qualifications; private and unselected rows are not echoed. */
 export function selectionText(
 	selection: ReviewSelection,
@@ -927,19 +953,15 @@ export function selectionText(
 	const practices = [
 		...new Set(selectedObservations.map((observation) => String(observation.practiceSlug))),
 	];
-	const guidance =
-		"Write from these selected assessments, preserving their evidence qualifications. A declared affordance " +
-		"supports its bounded benefit, not an unobserved runtime or test outcome. Keep the remedy focused on the " +
-		"recorded gap and preserve unrelated behavior. Do not make another change a prerequisite unless the admitted " +
-		"evidence establishes that dependency.";
 	const reference =
-		"The criteria the selected assessments were made against, as staged. They explain the standard and the " +
-		"responses it accepts; the assessments above alone establish what this review raises.";
+		"## Criteria of the selected practices\nReference, whole as staged: each explains the standard its " +
+		"observations were assessed against and the responses it accepts. The selected assessments above alone " +
+		"establish what this review raises.";
 	const criteria =
 		practices.length === 0
 			? ""
-			: `\n\n${reference}\n${practices.map((slug) => criteriaBlock(slug, stagedCriteria(slug))).join("\n")}`;
-	return `\`\`\`json\n${JSON.stringify({ acceptedSelection: selection, selectedObservations }, null, 1)}\n\`\`\`\n${guidance}${criteria}`;
+			: `\n${reference}\n${practices.map((slug) => criteriaBlock(slug, stagedCriteria(slug))).join("\n")}`;
+	return `\`\`\`json\n${JSON.stringify({ acceptedSelection: selection, selectedObservations }, null, 1)}\n\`\`\`${criteria}\n${WRITE_CONTRACT}`;
 }
 
 /** One practice's staged criteria, whole and fenced so their own code blocks cannot close it; never cut or rewritten. */
@@ -1006,8 +1028,8 @@ export function reviewToolParameters(
 				type: "object",
 				required: ["basedOn", "body"],
 				description:
-					"The one comment on the work, complete as the developer will read it. Omit it when nothing on " +
-					"this work earns a comment of its own.",
+					"The one overview comment on the work: priorities, next decisions and points not carried by line " +
+					"notes. Omit it when nothing on this work earns a comment of its own.",
 				properties: {
 					basedOn: idList(
 						decided,
@@ -1025,8 +1047,8 @@ export function reviewToolParameters(
 				type: "array",
 				maxItems: anchorable.length > 0 ? REVIEW_LIMITS.inlineNotes : 0,
 				description:
-					"Notes intended for cited lines of the change, each complete on its own. Each placement can fail " +
-					"independently.",
+					"Notes intended for cited lines of the change, each one self-contained point about the code at " +
+					"its line. Each placement can fail independently.",
 				items: {
 					type: "object",
 					required: ["basedOn", "body", "anchor"],
