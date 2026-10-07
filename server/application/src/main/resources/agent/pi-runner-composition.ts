@@ -77,8 +77,14 @@ export interface ReviewSelection {
 	withheld: SelectionWithheld[];
 }
 
+/**
+ * Two cutoffs, two questions. A statement delivered before this work was captured is advice the work could have
+ * answered; one delivered later, before the review was composed, was still said here, but nothing about the captured
+ * work can respond to it.
+ */
 export interface PriorAdviceWitness {
 	eligibleForPriorAdvice: boolean;
+	eligibleForAlreadySaid: boolean;
 }
 
 /** What the reviewed work is told: one summary, the notes it places on lines, and what it leaves unsaid. */
@@ -592,17 +598,19 @@ export function readSelection(
 					`witnessIds names ${unknown.join(", ")}, which is not a statement shown under what was already said on this work`,
 				);
 			}
+			// Only ALREADY_SAID rests on the communication alone; every other reason says the work received the advice.
+			const flag = reason === "ALREADY_SAID" ? "eligibleForAlreadySaid" : "eligibleForPriorAdvice";
 			const ineligible = witnessIds.filter(
-				(id) => witnesses.has(id) && witnesses.get(id)?.eligibleForPriorAdvice !== true,
+				(id) => witnesses.has(id) && witnesses.get(id)?.[flag] !== true,
 			);
 			if (ineligible.length > 0) {
 				problems.push(
-					`witnessIds names ${ineligible.join(", ")}, which is shown as context but cannot stand as advice this work already received (eligibleForPriorAdvice is false)`,
+					`witnessIds names ${ineligible.join(", ")}, which is shown as context but cannot stand as advice for ${String(reason)} (${flag} is false)`,
 				);
 			}
 			if (reason !== undefined && PRIOR_ADVICE_REASONS.has(reason) && witnessIds.length === 0) {
 				problems.push(
-					`${reason} names in witnessIds where this work already received the advice: the witnessId of a statement marked eligibleForPriorAdvice; without one, raise it or choose another reason`,
+					`${reason} names in witnessIds where this work already received the advice: the witnessId of a statement marked ${flag}; without one, raise it or choose another reason`,
 				);
 			}
 		}
@@ -756,6 +764,7 @@ export interface OwnPriorFeedback {
 	recordedClaimCurrentness: unknown;
 	withdrawn: unknown;
 	eligibleForPriorAdvice: boolean;
+	eligibleForAlreadySaid: boolean;
 }
 
 export interface OwnHistoryOmissions {
@@ -771,11 +780,13 @@ export interface OwnPriorFeedbackView {
 function ownHistoryText(
 	feedback: readonly OwnPriorFeedback[],
 	omissions?: OwnHistoryOmissions,
+	readAt?: string,
 ): string {
+	const asRead = readAt === undefined ? "" : `, as read at ${readAt}`;
 	const shown =
 		feedback.length === 0
-			? "No same-work delivered feedback is shown here.\n"
-			: `What Hephaestus delivered on this work:\n\`\`\`json\n${JSON.stringify({ alreadySaid: feedback }, null, 1)}\n\`\`\`\n`;
+			? `No same-work delivered feedback is shown here${asRead}.\n`
+			: `What Hephaestus delivered on this work${asRead}:\n\`\`\`json\n${JSON.stringify({ alreadySaid: feedback }, null, 1)}\n\`\`\`\n`;
 	const omitted =
 		omissions !== undefined && (omissions.oversizedEntries > 0 || omissions.budgetEntries > 0)
 			? `Prior feedback omitted whole: ${omissions.oversizedEntries} entries exceed the per-entry limit; ${omissions.budgetEntries} exceed the total history limit. Their contents are not shown and cannot be prior-advice witnesses.\n`
@@ -804,6 +815,7 @@ export function priorPublicFeedback(
 	thisWork: string | undefined,
 	capturedAt: string | null,
 	limits: { sourceChars: number; totalChars: number } = SAME_WORK_LIMITS,
+	readAt: string | null = capturedAt,
 ): OwnPriorFeedbackView {
 	const omissions: OwnHistoryOmissions = { oversizedEntries: 0, budgetEntries: 0 };
 	if (thisWork === undefined || !isObject(history) || !Array.isArray(history.feedback)) {
@@ -827,6 +839,12 @@ export function priorPublicFeedback(
 			withdrawn,
 		} = entry;
 		const witnessId = typeof id === "string" && FEEDBACK_ID.test(id) ? `feedback:${id}` : null;
+		const usable =
+			witnessId !== null &&
+			typeof body === "string" &&
+			body.trim() !== "" &&
+			recordedClaimCurrentness === "CURRENT" &&
+			withdrawn !== true;
 		return [
 			{
 				witnessId,
@@ -837,13 +855,8 @@ export function priorPublicFeedback(
 				body,
 				recordedClaimCurrentness,
 				withdrawn,
-				eligibleForPriorAdvice:
-					witnessId !== null &&
-					typeof body === "string" &&
-					body.trim() !== "" &&
-					recordedClaimCurrentness === "CURRENT" &&
-					withdrawn !== true &&
-					deliveredBy(deliveredAt, capturedAt),
+				eligibleForPriorAdvice: usable && deliveredBy(deliveredAt, capturedAt),
+				eligibleForAlreadySaid: usable && deliveredBy(deliveredAt, readAt),
 			},
 		];
 	});
@@ -871,12 +884,15 @@ export function priorAdviceWitnesses(
 		if (statement.witnessId !== null) {
 			witnesses.set(statement.witnessId, {
 				eligibleForPriorAdvice: statement.eligibleForPriorAdvice,
+				eligibleForAlreadySaid: statement.eligibleForAlreadySaid,
 			});
 		}
 	}
 	for (const statement of captured) {
+		// The captured discussion has one cutoff: what it holds was said by the time the work was captured.
 		witnesses.set(statement.witnessId, {
 			eligibleForPriorAdvice: statement.eligibleForPriorAdvice,
+			eligibleForAlreadySaid: statement.eligibleForPriorAdvice,
 		});
 	}
 	return witnesses;
@@ -1097,7 +1113,8 @@ export function selectionToolParameters(
 								: { maxItems: 0, items: { type: "string" } }),
 							description:
 								"For ALREADY_SAID or NO_MATERIAL_CHANGE: the witnessId of each statement under what was " +
-								"already said on this work that gave this advice.",
+								"already said on this work that gave this advice. ALREADY_SAID takes a statement marked " +
+								"eligibleForAlreadySaid; NO_MATERIAL_CHANGE one marked eligibleForPriorAdvice.",
 						},
 					},
 				},
@@ -1127,6 +1144,8 @@ export interface ReviewTurnInput {
 	/** What Hephaestus already said on this same work, from priorPublicFeedback. */
 	alreadySaid: readonly OwnPriorFeedback[];
 	ownHistoryOmissions?: OwnHistoryOmissions;
+	/** When the delivered feedback above was read, just before this composition; absent when it was not read again. */
+	ownHistoryReadAt?: string;
 	/** The bounded captured public discussion of this same work, from buildPublicReviewHistory. */
 	captured: PublicReviewHistory;
 	/** Context on the practices of the decided observations. */
@@ -1139,12 +1158,12 @@ export interface ReviewTurnInput {
 
 /** The one prompt of the review composition: every input inline, because its session can read nothing else. */
 export function buildReviewTurn(input: ReviewTurnInput): string {
-	const own = ownHistoryText(input.alreadySaid, input.ownHistoryOmissions);
+	const own = ownHistoryText(input.alreadySaid, input.ownHistoryOmissions, input.ownHistoryReadAt);
 	const others =
 		input.captured.sources.length === 0 && input.captured.omitted === undefined
 			? "What people and tools said on this work was not part of this capture, so it is unknown.\n"
 			: `Captured public discussion on this work; omitted sources remain unknown:\n\`\`\`json\n${JSON.stringify(input.captured, null, 1)}\n\`\`\`\n`;
-	const said = `${own}${others}A withholding decision that says this work already received the advice names the \`witnessId\` of a statement marked \`eligibleForPriorAdvice\`; any other statement is context only.\n`;
+	const said = `${own}${others}An \`ALREADY_SAID\` decision names the \`witnessId\` of a statement marked \`eligibleForAlreadySaid\`; a \`NO_MATERIAL_CHANGE\` decision one marked \`eligibleForPriorAdvice\`; any other statement is context only. \`eligibleForAlreadySaid\` alone establishes communication by the read time, not that the captured work received or responded to it.\n`;
 	const practices = `\`\`\`json\n${JSON.stringify({ practices: input.practices }, null, 1)}\n\`\`\`\n`;
 	const undecided =
 		input.undecided.length === 0

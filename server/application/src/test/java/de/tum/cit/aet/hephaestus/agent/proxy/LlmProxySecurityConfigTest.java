@@ -178,6 +178,33 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         assertThat(servedAs.get()).isNull();
     }
 
+    @Test
+    void servesPublicHistoryOnlyOnTheGatewayForTheAuthenticatedCurrentAttempt() throws Exception {
+        String path = "/internal/llm/public-feedback-history";
+        AgentJob job = runningJobOnAttempt(1);
+        when(jobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+        when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
+        when(jwtVerifier.verify("dead-attempt")).thenReturn(jobJwt(job, 0));
+        MockHttpServletRequest current = request("POST", path, GATEWAY_PORT);
+        current.addHeader("Authorization", "Bearer current-attempt");
+        assertThat(answerTo(current)).isEqualTo(200);
+        assertThat(servedAs.get())
+                .isNotNull()
+                .extracting(Authentication::getPrincipal)
+                .asInstanceOf(type(ProxyRouting.class))
+                .extracting(ProxyRouting::principalDescription)
+                .isEqualTo("job:" + job.getId());
+        MockHttpServletRequest stale = request("POST", path, GATEWAY_PORT);
+        stale.addHeader("Authorization", "Bearer dead-attempt");
+        assertThat(answerTo(stale)).isEqualTo(401);
+        assertThat(servedAs.get()).isNull();
+        assertThat(answerTo("POST", path, GATEWAY_PORT)).isEqualTo(401);
+        assertThat(answerTo("GET", path, GATEWAY_PORT)).isEqualTo(404);
+        assertThat(answerTo("POST", path, APPLICATION_PORT)).isEqualTo(404);
+        assertThat(answerTo("POST", path, GATEWAY_PORT, new byte[GATEWAY.maxRequestBytes() + 1]))
+                .isEqualTo(413);
+    }
+
     private int answerTo(String method, String path, int localPort) throws Exception {
         return answerTo(request(method, path, localPort));
     }

@@ -571,7 +571,23 @@ interface TurnTrace {
  * ceiling, or a loop guard fired.
  */
 type StopReason = "budget" | "stall" | "safety" | "loop";
-const runnerDebug: { attempts: AttemptDebug[]; turns: TurnTrace[]; usageTotals: UsageTotals } = {
+interface PublicHistoryReceipt {
+	readAt: string;
+	workCapturedAt: string | null;
+	entries: {
+		id: unknown;
+		deliveredAt: unknown;
+		eligibleForAlreadySaid: boolean;
+		eligibleForPriorAdvice: boolean;
+	}[];
+	omissions: { oversizedEntries: number; budgetEntries: number };
+}
+const runnerDebug: {
+	attempts: AttemptDebug[];
+	turns: TurnTrace[];
+	usageTotals: UsageTotals;
+	publicHistory?: PublicHistoryReceipt;
+} = {
 	attempts: [],
 	turns: [],
 	usageTotals,
@@ -1799,6 +1815,7 @@ const REVIEW_COMPOSER_PROMPT_PATH = `${CWD}/review-composer.md`;
 const FEEDBACK_STYLE_PATH = `${CWD}/feedback-style.md`;
 const PREPARED_FEEDBACK_PATH = INPUT_PATHS.preparedFeedback;
 const COMPOSITION_OBSERVATIONS_PATH = `${CWD}/work/composition/observations.json`;
+const PUBLIC_FEEDBACK_HISTORY_PATH = `${CWD}/work/composition/public-feedback-history.json`;
 let compositionAdmitted = false;
 let admissionDigest: string | null = null;
 
@@ -2315,7 +2332,8 @@ function buildSelectionTool(
 	witnesses: ReturnType<typeof priorAdviceWitnesses>,
 	state: PublicReviewState,
 ) {
-	const eligible = [...witnesses].filter(([, witness]) => witness.eligibleForPriorAdvice);
+	// Every witness a decision can name; readSelection checks which reason each one may support.
+	const eligible = [...witnesses].filter(([, witness]) => witness.eligibleForAlreadySaid);
 	return defineTool({
 		name: "select_feedback",
 		exposure: "model-only",
@@ -3102,6 +3120,98 @@ async function admitObservations() {
 		COMPOSITION_OBSERVATIONS_PATH,
 		JSON.stringify({ observations: admittedObservations }, null, 2),
 	);
+}
+
+/** One read of the delivered public history; any refusal or bad answer is final, never an older or empty history. */
+async function postPublicHistoryRead(): Promise<unknown> {
+	let response: Response;
+	try {
+		response = await fetch(`${LLM_PROXY_URL}/public-feedback-history`, {
+			method: "POST",
+			signal: AbortSignal.timeout(
+				Math.max(1, Math.min(60_000, AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS))),
+			),
+			headers: {
+				authorization: `Bearer ${LLM_PROXY_TOKEN}`,
+				...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
+			},
+		});
+	} catch (error) {
+		throw new AdmissionUnreachableError(
+			`public feedback history could not be read: ${errorText(error)}${causeText(error)}`,
+		);
+	}
+	if (isRetryableStatus(response.status)) {
+		throw new AdmissionUnreachableError(
+			`public feedback history read failed: HTTP ${response.status}`,
+		);
+	}
+	if (!response.ok) {
+		throw new Error(
+			`public feedback history read was refused: HTTP ${response.status} — ${await answerText(response)}`,
+		);
+	}
+	let body: string;
+	try {
+		body = await response.text();
+	} catch (error) {
+		throw new AdmissionUnreachableError(
+			`public feedback history body could not be read: ${errorText(error)}${causeText(error)}`,
+		);
+	}
+	return JSON.parse(body);
+}
+
+/**
+ * The delivered feedback on this work as it stands now, which may include feedback delivered after the work was
+ * captured. Kept beside the staged history rather than over it: the staged file is what the review was prepared from.
+ */
+async function readPublicFeedbackHistory(): Promise<{
+	readAt: string;
+	history: { feedback: unknown[] };
+}> {
+	const answer: unknown = await retrying(
+		postPublicHistoryRead,
+		(error) => error instanceof AdmissionUnreachableError,
+		{ attempts: ADMISSION_ATTEMPTS },
+		(attempt, error, delayMs) =>
+			console.error(
+				`[pi-runner] public history read ${attempt}/${ADMISSION_ATTEMPTS} did not arrive (${errorText(error)}); retrying in ${delayMs}ms`,
+			),
+	);
+	const history = isRecord(answer) && isRecord(answer.history) ? answer.history : null;
+	if (
+		!isRecord(answer) ||
+		answer.schemaVersion !== 1 ||
+		typeof answer.readAt !== "string" ||
+		!Number.isFinite(Date.parse(answer.readAt)) ||
+		history === null ||
+		!Array.isArray(history.feedback) ||
+		!history.feedback.every(
+			(entry: unknown) =>
+				isRecord(entry) &&
+				typeof entry.id === "string" &&
+				entry.channel === "IN_CONTEXT" &&
+				entry.publicEligible === true &&
+				(entry.deliveredAt === null ||
+					(typeof entry.deliveredAt === "string" &&
+						Number.isFinite(Date.parse(entry.deliveredAt)))) &&
+				isRecord(entry.artifact) &&
+				typeof entry.artifact.kind === "string" &&
+				(entry.artifact.url === undefined ||
+					entry.artifact.url === null ||
+					typeof entry.artifact.url === "string") &&
+				(entry.recordedClaimCurrentness === "CURRENT" ||
+					entry.recordedClaimCurrentness === "STALE") &&
+				(entry.body === undefined || entry.body === null || typeof entry.body === "string") &&
+				(entry.withdrawn === undefined || typeof entry.withdrawn === "boolean"),
+		)
+	) {
+		throw new Error("public feedback history read returned an invalid contract");
+	}
+	const read = { readAt: answer.readAt, history: { ...history, feedback: history.feedback } };
+	writeFileSync(PUBLIC_FEEDBACK_HISTORY_PATH, JSON.stringify(read, null, 2));
+	return read;
 }
 
 function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measuring: boolean): void {
@@ -4127,10 +4237,16 @@ async function main() {
 			extensionFactories: [],
 		});
 		await reviewLoader.reload();
-		const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
-		const history = existsSync(`${historyRoot}/feedback.json`)
-			? parseJson(readFileSync(`${historyRoot}/feedback.json`, "utf8"))
-			: null;
+		// Read now, not at capture: feedback delivered while this review ran was said here too. A failed read writes no
+		// review rather than one that could repeat what was just delivered.
+		let read: Awaited<ReturnType<typeof readPublicFeedbackHistory>>;
+		try {
+			read = await readPublicFeedbackHistory();
+		} catch (error) {
+			console.error(`[pi-runner] The review on the work was not composed: ${errorText(error)}`);
+			recordCompositionFailure("PUBLIC_REVIEW", safety.expired() ? "SAFETY" : "RUNTIME_ERROR");
+			return;
+		}
 		const framing = {
 			repositoryFullName: taskEnvelope.repositoryFullName,
 			pullRequestNumber: taskEnvelope.pullRequestNumber,
@@ -4141,7 +4257,27 @@ async function main() {
 			folderIndex,
 			framing,
 		);
-		const alreadySaid = priorPublicFeedback(history, THIS_WORK, captured.capturedAt);
+		const alreadySaid = priorPublicFeedback(
+			read.history,
+			THIS_WORK,
+			captured.capturedAt,
+			undefined,
+			read.readAt,
+		);
+		runnerDebug.publicHistory = {
+			readAt: read.readAt,
+			workCapturedAt: captured.capturedAt,
+			entries: alreadySaid.feedback.map(
+				({ id, deliveredAt, eligibleForAlreadySaid, eligibleForPriorAdvice }) => ({
+					id,
+					deliveredAt,
+					eligibleForAlreadySaid,
+					eligibleForPriorAdvice,
+				}),
+			),
+			omissions: alreadySaid.omissions,
+		};
+		persistRunnerDebug();
 		const restable = reviewableById(reviewable);
 		const state: PublicReviewState = { selection: null, final: false };
 		const { session: reviewSession } = await createAgentSession({
@@ -4192,6 +4328,7 @@ async function main() {
 			),
 			alreadySaid: alreadySaid.feedback,
 			ownHistoryOmissions: alreadySaid.omissions,
+			ownHistoryReadAt: read.readAt,
 			captured,
 			practices: practiceContext(reviewable),
 			notReached: notReachedSlugs,

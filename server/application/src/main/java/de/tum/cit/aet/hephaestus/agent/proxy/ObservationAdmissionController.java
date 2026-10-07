@@ -46,22 +46,8 @@ public class ObservationAdmissionController {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Expected schemaVersion 1 and observations array");
         }
-        if (!(authentication.getPrincipal() instanceof ProxyRouting routing)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Agent-job credential required");
-        }
-        UUID jobId = routing.sourceId();
-        if (jobId == null
-                || routing.attempt() == null
-                || routing.attempt().sourceType() != LlmUsageSourceType.AGENT_JOB
-                || routing.workspaceId() == null
-                || routing.attempt().workerId() == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Agent-job credential required");
-        }
-        var identity = new ObservationAdmissionService.AdmissionIdentity(
-                jobId,
-                routing.workspaceId(),
-                routing.attempt().number(),
-                routing.attempt().workerId());
+        var identity = attemptOf(authentication);
+        UUID jobId = identity.jobId();
         // A refusal is 422, never 5xx: the runner repeats only a 5xx or a transport failure, and repeating a
         // decided submission would put the same question again. The reason is already recorded on the job.
         try {
@@ -85,5 +71,40 @@ public class ObservationAdmissionController {
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR, "Observation admission could not be completed", e);
         }
+    }
+
+    @PostMapping("/public-feedback-history")
+    @WorkspaceAgnostic("Authenticated sandbox token carries and constrains workspace route")
+    public ObjectNode publicFeedbackHistory(Authentication authentication) {
+        var identity = attemptOf(authentication);
+        try {
+            return admission.publicFeedbackHistory(identity);
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR, "Public feedback history could not be read", e);
+        } catch (ObservationAdmissionService.PublicHistoryRefusedException e) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, e.getMessage(), e);
+        } catch (ObservationAdmissionService.StaleAttemptException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Review attempt no longer owns this job", e);
+        }
+    }
+
+    private static ObservationAdmissionService.AdmissionIdentity attemptOf(Authentication authentication) {
+        if (!(authentication.getPrincipal() instanceof ProxyRouting routing)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Agent-job credential required");
+        }
+        UUID jobId = routing.sourceId();
+        if (jobId == null
+                || routing.attempt() == null
+                || routing.attempt().sourceType() != LlmUsageSourceType.AGENT_JOB
+                || routing.workspaceId() == null
+                || routing.attempt().workerId() == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Agent-job credential required");
+        }
+        return new ObservationAdmissionService.AdmissionIdentity(
+                jobId,
+                routing.workspaceId(),
+                routing.attempt().number(),
+                routing.attempt().workerId());
     }
 }
