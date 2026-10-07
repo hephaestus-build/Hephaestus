@@ -77,6 +77,13 @@ function selectedRowsOf(text: string): unknown {
 	return JSON.parse(selection);
 }
 
+function reviewPracticesOf(text: string): unknown {
+	const block = /```json\n(?<context>\{\n "practices"[\s\S]*?\n\})\n```/u.exec(text);
+	const context = block?.groups?.context;
+	assert.ok(context !== undefined, text);
+	return JSON.parse(context);
+}
+
 const changeCitation = {
 	sourceKind: "scm.pull-request.diff",
 	artifactPath: "evidence/change.json",
@@ -242,8 +249,12 @@ const undecided = (consulted: string[]) => ({
 });
 
 /** A practice index entry as the server writes it: the sources its evidence requirements name. */
-function practice(slug: string, readsSources = ["scm.pull-request.core", "scm.pull-request.diff"]) {
-	return { slug, group: "code", readsSources };
+function practice(
+	slug: string,
+	readsSources = ["scm.pull-request.core", "scm.pull-request.diff"],
+	revisionId?: unknown,
+) {
+	return { slug, group: "code", readsSources, ...(revisionId === undefined ? {} : { revisionId }) };
 }
 
 function readObservations(path: string) {
@@ -374,7 +385,116 @@ if (scenario !== undefined && scenario !== "") {
 			}
 		}
 	};
-	mock.method(globalThis, "fetch", async (_input: unknown, init?: RequestInit) => {
+	let publicHistoryReads = 0;
+	mock.method(globalThis, "fetch", async (input: unknown, init?: RequestInit) => {
+		if (String(input).endsWith("/public-feedback-history")) {
+			const mode = process.env.PI_PUBLIC_HISTORY_MODE;
+			publicHistoryReads += 1;
+			if (mode === "body-transport" || mode === "malformed-json") {
+				record("public-history-read");
+			}
+			if (mode === "body-transport" && publicHistoryReads === 1) {
+				return new Response(
+					new ReadableStream({
+						start(controller) {
+							controller.error(new TypeError("Response body stream interrupted"));
+						},
+					}),
+				);
+			}
+			if (mode === "malformed-json") {
+				return new Response('{"schemaVersion":');
+			}
+			if (mode === "invalid" || mode === "invalid-link") {
+				return Response.json({
+					schemaVersion: 1,
+					readAt: "2026-10-07T11:00:00Z",
+					history: {
+						feedback: [
+							{
+								id: "00000000-0000-4000-8000-000000000001",
+								channel: "IN_CONTEXT",
+								publicEligible: true,
+								artifact: {
+									kind: "scm.pull_request",
+									url:
+										mode === "invalid-link"
+											? 42
+											: "https://gitlab.example/group/repo/-/merge_requests/3",
+								},
+								deliveredAt: mode === "invalid" ? "invalid" : "2026-10-07T10:00:00Z",
+								recordedClaimCurrentness: "CURRENT",
+								body: "Malformed non-null delivery time",
+							},
+						],
+					},
+				});
+			}
+			if (mode === "refused") {
+				return new Response("Attempt no longer owns the job", { status: 409 });
+			}
+			if (mode === "fresh" || mode === "body-transport") {
+				return Response.json({
+					schemaVersion: 1,
+					readAt: "2026-10-07T11:00:00Z",
+					history: {
+						feedback: [
+							{
+								id: "00000000-0000-4000-8000-000000000001",
+								channel: "IN_CONTEXT",
+								publicEligible: true,
+								artifact: {
+									kind: "scm.pull_request",
+									url: "https://gitlab.example/group/repo/-/merge_requests/3",
+								},
+								deliveredAt: "2026-10-07T10:00:00Z",
+								recordedClaimCurrentness: "CURRENT",
+								body: "Fresh delivered communication",
+							},
+							{
+								id: "00000000-0000-4000-8000-000000000002",
+								channel: "IN_CONTEXT",
+								publicEligible: true,
+								artifact: {
+									kind: "scm.pull_request",
+									url: "https://gitlab.example/group/repo/-/merge_requests/3",
+								},
+								deliveredAt: null,
+								recordedClaimCurrentness: "CURRENT",
+								body: "Delivered with unknown time",
+							},
+							...[{ kind: "scm.pull_request" }, { kind: "scm.pull_request", url: null }].map(
+								(artifact, index) => ({
+									id: `00000000-0000-4000-8000-00000000000${index + 3}`,
+									channel: "IN_CONTEXT",
+									publicEligible: true,
+									artifact,
+									deliveredAt: "2026-10-07T08:00:00Z",
+									recordedClaimCurrentness: "CURRENT",
+									body: "Delivery with unknown work link",
+								}),
+							),
+						],
+					},
+				});
+			}
+			const path = nodePath.join(cwd, "history/feedback.json");
+			const history: unknown = existsSync(path)
+				? JSON.parse(readFileSync(path, "utf8"))
+				: { feedback: [] };
+			assert.ok(isRecord(history) && Array.isArray(history.feedback));
+			return Response.json({
+				schemaVersion: 1,
+				readAt: "2026-10-07T11:00:00Z",
+				history: {
+					...history,
+					feedback: history.feedback.filter(
+						(entry: unknown) =>
+							isRecord(entry) && entry.channel === "IN_CONTEXT" && entry.publicEligible === true,
+					),
+				},
+			});
+		}
 		if (scenario === "draft-revision" || scenario === "compose-abstention") {
 			assert.ok(typeof init?.body === "string");
 			writeFileSync(nodePath.join(cwd, "admission.json"), init.body);
@@ -2049,6 +2169,12 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-recovered-error",
 		"compose-complete-error",
 		"compose",
+		"compose-fresh-history",
+		"compose-history-invalid",
+		"compose-history-invalid-link",
+		"compose-history-refused",
+		"compose-history-body-transport",
+		"compose-history-malformed-json",
 		"compose-foreign-provider",
 		"compose-overflow",
 		"compose-silent",
@@ -2071,6 +2197,12 @@ if (scenario !== undefined && scenario !== "") {
 		const stage =
 			new Map([
 				["compose-loop-rejection", "compose-loop"],
+				["compose-fresh-history", "compose"],
+				["compose-history-invalid", "compose"],
+				["compose-history-invalid-link", "compose"],
+				["compose-history-refused", "compose"],
+				["compose-history-body-transport", "compose"],
+				["compose-history-malformed-json", "compose"],
 				["compose-context-unavailable", "compose-fold"],
 				["compose-counterevidence", "compose-fold"],
 				["compose-reviewer-only", "compose-fold"],
@@ -2273,6 +2405,10 @@ if (scenario !== undefined && scenario !== "") {
 						nodePath.join(cwd, "evidence/manifest.json"),
 						JSON.stringify({
 							artifactKind: "scm.pull_request",
+							...(fixture === "compose-fresh-history" ||
+							fixture === "compose-history-body-transport"
+								? { capturedAt: "2026-10-07T09:00:00Z" }
+								: {}),
 							artifacts: [
 								{ kind: "scm.pull-request.core", artifact: { path: "evidence/metadata.json" } },
 								{ kind: "scm.pull-request.diff", artifact: { path: "evidence/change.json" } },
@@ -2304,6 +2440,11 @@ if (scenario !== undefined && scenario !== "") {
 						}),
 					);
 					let index = [practice("test-practice")];
+					if (stage === "compose") {
+						index = [practice("test-practice", undefined, 42)];
+					} else if (stage === "compose-foreign-provider") {
+						index = [practice("test-practice", undefined, "42")];
+					}
 					if (
 						stage.startsWith("scope-") ||
 						stage === "finish" ||
@@ -2372,6 +2513,14 @@ if (scenario !== undefined && scenario !== "") {
 								...process.env,
 								PI_ORCHESTRATION_SCENARIO: stage,
 								PI_UNAVAILABLE_CONTEXT: String(fixture === "compose-context-unavailable"),
+								PI_PUBLIC_HISTORY_MODE: new Map([
+									["compose-fresh-history", "fresh"],
+									["compose-history-invalid", "invalid"],
+									["compose-history-invalid-link", "invalid-link"],
+									["compose-history-refused", "refused"],
+									["compose-history-body-transport", "body-transport"],
+									["compose-history-malformed-json", "malformed-json"],
+								]).get(fixture),
 								PI_COUNTEREVIDENCE: String(fixture === "compose-counterevidence"),
 								PI_REVIEWER_ONLY: String(fixture === "compose-reviewer-only"),
 								PI_LOOP_REJECT: String(fixture === "compose-loop-rejection"),
@@ -3026,6 +3175,79 @@ for (const observations of [encoded, encoded + '"', captured.arguments.observati
 						case "compose":
 						case "compose-foreign-provider": {
 							assert.equal(child.status, 0, child.stderr);
+							if (
+								fixture === "compose-history-invalid" ||
+								fixture === "compose-history-invalid-link" ||
+								fixture === "compose-history-refused" ||
+								fixture === "compose-history-malformed-json"
+							) {
+								const payload: unknown = JSON.parse(
+									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+								);
+								assert.ok(isRecord(payload));
+								assert.equal(payload.review, null);
+								assert.deepEqual(payload.compositionFailures, [
+									{ phase: "PUBLIC_REVIEW", reason: "RUNTIME_ERROR" },
+								]);
+								assert.ok(
+									events.some((event) => event.startsWith("private-turn history=true")),
+									events.join("\n"),
+								);
+								assert.equal(
+									events.filter((event) => event.includes("tools=select_feedback,report_review"))
+										.length,
+									0,
+								);
+								assert.equal(
+									readFileSync(nodePath.join(cwd, "history/feedback.json"), "utf8"),
+									STAGED_FEEDBACK_HISTORY,
+								);
+								assert.equal(payload.admissionDigest, "admitted-digest");
+								if (fixture === "compose-history-malformed-json") {
+									assert.equal(events.filter((event) => event === "public-history-read").length, 1);
+								}
+								break;
+							}
+							if (
+								fixture === "compose-fresh-history" ||
+								fixture === "compose-history-body-transport"
+							) {
+								if (fixture === "compose-history-body-transport") {
+									assert.equal(events.filter((event) => event === "public-history-read").length, 2);
+								}
+								const prompt = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
+								assert.ok(prompt.includes("Fresh delivered communication"));
+								assert.ok(!prompt.includes("Delivery with unknown work link"));
+								assert.ok(!prompt.includes("An earlier comment on this same change."));
+								const debug: unknown = JSON.parse(
+									readFileSync(nodePath.join(cwd, "out/runner-debug.json"), "utf8"),
+								);
+								assert.ok(isRecord(debug) && isRecord(debug.publicHistory));
+								assert.equal(debug.publicHistory.readAt, "2026-10-07T11:00:00Z");
+								assert.equal(debug.publicHistory.workCapturedAt, "2026-10-07T09:00:00Z");
+								assert.deepEqual(debug.publicHistory.entries, [
+									{
+										id: "00000000-0000-4000-8000-000000000001",
+										deliveredAt: "2026-10-07T10:00:00Z",
+										eligibleForAlreadySaid: true,
+										eligibleForPriorAdvice: false,
+									},
+									{
+										id: "00000000-0000-4000-8000-000000000002",
+										deliveredAt: null,
+										eligibleForAlreadySaid: false,
+										eligibleForPriorAdvice: false,
+									},
+								]);
+								assert.ok(
+									!JSON.stringify(debug.publicHistory).includes("Fresh delivered communication"),
+								);
+								assert.equal(
+									readFileSync(nodePath.join(cwd, "history/feedback.json"), "utf8"),
+									STAGED_FEEDBACK_HISTORY,
+								);
+							}
+
 							// Measurement, then the review on the work in a fresh session, then the private lanes in
 							// a third fresh session.
 							assert.deepEqual(
@@ -3060,8 +3282,23 @@ for (const observations of [encoded, encoded + '"', captured.arguments.observati
 							assert.match(reviewTurn, /linked_work_items\.json[^\n]*not part of this capture/u);
 							assert.match(reviewTurn, /"id": "observation-1"/u);
 							assert.match(reviewTurn, /"quote": "\+ insecure\(\);"/u);
-							assert.match(reviewTurn, /An earlier comment on this same change\./u);
+							if (
+								fixture !== "compose-fresh-history" &&
+								fixture !== "compose-history-body-transport"
+							) {
+								assert.match(reviewTurn, /An earlier comment on this same change\./u);
+							}
 							assert.match(reviewTurn, /"slug": "test-practice"/u);
+							assert.deepEqual(reviewPracticesOf(reviewTurn), {
+								practices: [
+									{
+										slug: "test-practice",
+										name: "test-practice",
+										knownLimitations: [],
+										...(stage === "compose" ? { revisionId: 42 } : {}),
+									},
+								],
+							});
 							assert.doesNotMatch(reviewTurn, /Criteria\./u);
 							assert.ok(!reviewTurn.includes(PRIVATE_HISTORY_SENTENCE), reviewTurn);
 							assert.ok(!reviewTurn.includes("observation-history"), reviewTurn);
@@ -3550,6 +3787,11 @@ for (const observations of [encoded, encoded + '"', captured.arguments.observati
 									/^## (?:The review to write|Undecided|Unfinished)/u.test(prompt),
 								);
 							assert.equal(reviewPrompts.length, 1);
+							const initialReview = reviewPrompts[0];
+							assert.ok(initialReview !== undefined);
+							assert.deepEqual(reviewPracticesOf(initialReview), {
+								practices: [{ slug: "test-practice", name: "test-practice", knownLimitations: [] }],
+							});
 							const feedback: unknown = JSON.parse(
 								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
 							);

@@ -2193,10 +2193,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("a runner that did report usage wins over the proxy accumulators — never both")
+        @DisplayName("a runner report with larger prompt and output totals is retained without adding the proxy")
         void cleanCompletionWithRunnerUsage_prefersTheRunnerReport() {
-            // The runner's report also covers streamed calls the proxy accumulator skips, so it is the
-            // better number when it exists. Falling back must never turn into adding the two together.
             job.setConfigSnapshot(snapshot.withPriceSnapshot(pricedSnapshot()).toJson(objectMapper));
             stubClaimableJob();
             setupFullExecution();

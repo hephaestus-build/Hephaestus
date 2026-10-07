@@ -57,49 +57,64 @@ class TerminalUsageTest extends BaseUnitTest {
         assertThat(usage.provenance()).isEqualTo(UsageProvenance.PROXY);
     }
 
-    // Each source is blind to something the other sees, so the resolved row can match neither. That is
-    // what the provenance column exists to say.
+    // The runner counted cache writes as ordinary input while the proxy separated them. Both prompts total
+    // 71,224 tokens; taking the larger of each bucket would store 116,824.
     @Test
-    @DisplayName("each bucket is taken from whichever source saw more, and the row says it was merged")
-    void bucketsAreTakenIndependently() {
-        LlmUsage runnerUsage = new LlmUsage("m", 100, 4_000, 7, 50, 900, 0.0, 3);
-        AgentJobLlmUsage proxy = new AgentJobLlmUsage(9, 8_000, 200, 11, 20, 0);
-
-        TerminalUsage usage = TerminalUsage.resolve(runnerUsage, proxy);
-
-        assertThat(usage.inputTokens()).isEqualTo(8_000);
-        assertThat(usage.outputTokens()).isEqualTo(4_000);
-        assertThat(usage.reasoningTokens()).isEqualTo(11);
-        assertThat(usage.cacheReadTokens()).isEqualTo(50);
-        assertThat(usage.totalCalls()).isEqualTo(9);
-        assertThat(usage.provenance()).isEqualTo(UsageProvenance.MERGED);
-    }
-
-    @Test
-    @DisplayName("cache writes use the larger observation like every other bucket")
-    void cacheWritesUseTheLargerObservation() {
+    @DisplayName("cache writes the runner counted as input are stored once, from the proxy")
+    void cacheWritesAreNotCountedTwiceWhenTheSourcesClassifyThemDifferently() {
         TerminalUsage usage = TerminalUsage.resolve(
-                new LlmUsage("m", 100, 200, 0, 0, 12_345, 0.0, 2), new AgentJobLlmUsage(9, 8_000, 900, 0, 0, 20_000));
+                new LlmUsage("m", 49_624, 900, 0, 21_600, 0, 0.0, 3),
+                new AgentJobLlmUsage(3, 4_024, 900, 0, 21_600, 45_600));
 
-        assertThat(usage.cacheWriteTokens()).isEqualTo(20_000);
+        assertThat(usage.verifiable()).isTrue();
+        assertThat(usage.provenance()).isEqualTo(UsageProvenance.PROXY);
+        assertThat(usage.inputTokens() + usage.cacheReadTokens() + usage.cacheWriteTokens())
+                .isEqualTo(71_224);
+        assertThat(usage.inputTokens()).isEqualTo(4_024);
+        assertThat(usage.cacheWriteTokens()).isEqualTo(45_600);
     }
 
-    // Neither source double-counts within itself, so no bucket of the maximum can exceed what was really
-    // spent. The property this asserts is the whole safety argument for taking a maximum at all.
     @Test
-    @DisplayName("no bucket is ever billed above the larger of the two records")
-    void neverBillsAboveEitherRecord() {
-        LlmUsage runnerUsage = new LlmUsage("m", 100, 4_000, 7, 50, 900, 0.0, 3);
-        AgentJobLlmUsage proxy = new AgentJobLlmUsage(9, 8_000, 200, 11, 20, 1_000);
+    @DisplayName("a runner whose totals cover the proxy's is stored whole, cache classification included")
+    void aCoveringRunnerReportIsStoredWhole() {
+        TerminalUsage usage = TerminalUsage.resolve(
+                new LlmUsage("m", 5_000, 900, 40, 21_600, 45_600, 0.0, 4),
+                new AgentJobLlmUsage(3, 49_624, 800, 0, 21_600, 0));
 
-        TerminalUsage usage = TerminalUsage.resolve(runnerUsage, proxy);
+        assertThat(usage.verifiable()).isTrue();
+        assertThat(usage.provenance()).isEqualTo(UsageProvenance.RUNNER);
+        assertThat(usage.inputTokens()).isEqualTo(5_000);
+        assertThat(usage.cacheWriteTokens()).isEqualTo(45_600);
+        assertThat(usage.reasoningTokens()).isEqualTo(40);
+        assertThat(usage.totalCalls()).isEqualTo(4);
+    }
 
-        assertThat(usage.inputTokens()).isEqualTo(Math.max(100, 8_000));
-        assertThat(usage.outputTokens()).isEqualTo(Math.max(4_000, 200));
-        assertThat(usage.reasoningTokens()).isEqualTo(Math.max(7, 11));
-        assertThat(usage.cacheReadTokens()).isEqualTo(Math.max(50, 20));
-        assertThat(usage.cacheWriteTokens()).isEqualTo(Math.max(900, 1_000));
-        assertThat(usage.totalCalls()).isEqualTo(Math.max(3, 9));
+    // A larger prompt on one side and a larger output on the other means each recorded something the other
+    // did not. Their aggregates cannot be merged into the spend, so the row admits it is unverifiable.
+    @Test
+    @DisplayName("incomparable totals keep the proxy's numbers whole and are unverifiable")
+    void incomparableTotalsAreUnverifiable() {
+        TerminalUsage usage = TerminalUsage.resolve(
+                new LlmUsage("m", 100, 4_000, 7, 50, 900, 0.0, 3), new AgentJobLlmUsage(9, 8_000, 200, 11, 20, 0));
+
+        assertThat(usage.verifiable()).isFalse();
+        assertThat(usage.provenance()).isEqualTo(UsageProvenance.PROXY);
+        assertThat(usage.inputTokens()).isEqualTo(8_000);
+        assertThat(usage.outputTokens()).isEqualTo(200);
+        assertThat(usage.reasoningTokens()).isEqualTo(11);
+        assertThat(usage.cacheReadTokens()).isEqualTo(20);
+        assertThat(usage.cacheWriteTokens()).isZero();
+        assertThat(usage.totalCalls()).isEqualTo(9);
+    }
+
+    @Test
+    @DisplayName("more runner calls do not make the runner the source when its totals are smaller")
+    void callCountsAreNotCoverage() {
+        TerminalUsage usage = TerminalUsage.resolve(runner(10, 20, 50), new AgentJobLlmUsage(2, 900, 600, 0, 0, 0));
+
+        assertThat(usage.provenance()).isEqualTo(UsageProvenance.PROXY);
+        assertThat(usage.inputTokens()).isEqualTo(900);
+        assertThat(usage.totalCalls()).isEqualTo(50);
     }
 
     @Test
@@ -208,6 +223,26 @@ class TerminalUsageTest extends BaseUnitTest {
             verify(recorder).record(eq(7L), sample.capture());
             assertThat(sample.getValue().sourceId()).isEqualTo(jobId);
             assertThat(sample.getValue().sourceAttempt()).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("incomparable totals take the unverifiable path even with a frozen price")
+        void incomparableTotalsAreNotBilled() {
+            LlmPriceSnapshot price = pricedInstance();
+
+            boolean billed = TerminalUsage.resolve(
+                            new LlmUsage("m", 100, 4_000, 0, 0, 0, 0.0, 3),
+                            new AgentJobLlmUsage(9, 8_000, 200, 0, 0, 0))
+                    .appendTo(recorder, 7L, jobFor(UUID.randomUUID(), 1), "gpt-5", price);
+
+            assertThat(billed).isFalse();
+            ArgumentCaptor<LlmUsageRecorder.LlmUsageSample> sample =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.LlmUsageSample.class);
+            verify(recorder).recordUnverifiable(eq(7L), sample.capture());
+            assertThat(sample.getValue().inputTokens()).isEqualTo(8_000);
+            assertThat(sample.getValue().outputTokens()).isEqualTo(200);
+            assertThat(sample.getValue().price()).isSameAs(price);
+            assertThat(sample.getValue().provenance()).isEqualTo(UsageProvenance.PROXY);
         }
 
         @Test

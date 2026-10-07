@@ -322,6 +322,17 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     List<Feedback> findDeliveredForPersonHistory(
             @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId);
 
+    @Query("SELECT f FROM Feedback f WHERE f.workspaceId = :workspaceId AND f.recipientUserId = :recipientUserId "
+            + "AND f.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_CONTEXT "
+            + "AND f.artifactKind = :artifactKind AND f.artifactId = :artifactId AND "
+            + SAID_TO_RECIPIENT
+            + " ORDER BY f.createdAt DESC, f.id DESC")
+    List<Feedback> findDeliveredForPublicWorkHistory(
+            @Param("workspaceId") long workspaceId,
+            @Param("recipientUserId") long recipientUserId,
+            @Param("artifactKind") ArtifactKind artifactKind,
+            @Param("artifactId") long artifactId);
+
     /** One row of that history, by the id a review cites. */
     @Query("SELECT f FROM Feedback f WHERE f.id = :id AND f.workspaceId = :workspaceId AND " + SAID_TO_RECIPIENT)
     Optional<Feedback> findPersonHistoryRecord(@Param("id") UUID id, @Param("workspaceId") long workspaceId);

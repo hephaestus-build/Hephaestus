@@ -8,6 +8,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .oxfmtrc.json .oxlintrc.jso
 COPY webapp/package.json /repo/webapp/
 COPY docs/package.json /repo/docs/
 COPY patches/ /repo/patches/
+COPY docker/agents/pi/patches/ /repo/docker/agents/pi/patches/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
     pnpm fetch --filter webapp
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \

@@ -1592,9 +1592,8 @@ public class AgentJobExecutor {
             }
 
             var runnerUsage = agentResult.usage();
-            // The runner's own report is preferred (it also covers streamed calls the proxy skips),
-            // but an absent or empty one falls back to what the proxy actually watched go upstream —
-            // otherwise a runner that never wrote usage.json would book real spend as zero.
+            // TerminalUsage retains one coherent observed token vector, including a proxy-only fallback
+            // when the runner never wrote usage.json.
             TerminalUsage usage = TerminalUsage.resolve(runnerUsage, proxyCounts);
 
             // Use the ledger totals: the runner may omit usage details counted by the proxy.
