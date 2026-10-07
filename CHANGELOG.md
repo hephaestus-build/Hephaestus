@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.84.0
+
+### Minor Changes
+
+- Reviews select useful advice before writing complete comments, and withholding advice as already given requires a recorded prior statement.
+
+### Patch Changes
+
+- Practice feedback retains the original support and revision of earlier delivered feedback. Reviews can distinguish captured advice from a developer’s own notes and from words edited after the capture.
+- Recurring practice feedback has a shorter writing guide, with explicit distinctions between listed checks, reported results and earlier advice.
+- Each practice is reviewed in its own model session with its complete criteria, under the review's existing shared work budgets. Recording refuses observations addressed to another practice before changing drafts. Private feedback is composed from admitted observations and authorized context in a fresh session.
+- Practice reviews use the evidence and qualifications recorded in earlier observations, together with the practice revision used.
+- Practice reviews distinguish recorded observations, prior feedback delivery and prepared feedback. Supplied history does not establish a complete chronology of work or communication.
+- Reviews preserve available feedback when composition stops early and show that some feedback could not be composed. Delivery recovery no longer reports incomplete composition as successful delivery.
+- The "Ship a preview with each new view" practice now judges the sample data and states a preview supplies, instead of guessing what stored defaults hold or what the preview shows when it runs.
+- Private feedback receives the applicable practice criteria and recorded qualifications. Earlier feedback remains available in its original records.
+- Practice feedback can acknowledge a useful choice without adding new tasks. Recurring feedback focuses on what the work shows without guessing why it happened.
+- Practice reviews keep recorded posted feedback out of captured pull request and merge request discussion, even if its marker is removed.
+- The work and review lists update as soon as a review you requested starts.
+- Handoff reviews now tell checks a reviewer is asked to do, conditions before merge and planned follow-on work apart from unfinished work in the change itself. A request to wait before reviewing still counts as not ready.
+- Review results keep code quoted in observations exactly as written, including backslashes before Swift string interpolation. A review whose result cannot be read is recorded as failed instead of completed.
+- Practice reviews retain feedback previously published on the work when a newer review replaces it. Guidance that was withdrawn or is no longer current is still withheld.
+
 ## 0.83.1
 
 ### Patch Changes
