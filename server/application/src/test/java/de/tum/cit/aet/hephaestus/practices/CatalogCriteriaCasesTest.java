@@ -54,6 +54,13 @@ class CatalogCriteriaCasesTest extends BaseUnitTest {
                 for (var file : scenario.path("files").properties()) {
                     assertThat(file.getKey()).matches("(?:repo|context)/.+").doesNotContain("..");
                 }
+                // Base files are the repository at the change's base commit, so they hold repository content only.
+                for (var file : scenario.path("baseFiles").properties()) {
+                    assertThat(file.getKey()).matches("repo/.+").doesNotContain("..");
+                    assertThat(file.getValue().isString())
+                            .as("%s base file %s", scenario.path("id"), file.getKey())
+                            .isTrue();
+                }
             }
         }
     }

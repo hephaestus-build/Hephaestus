@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -101,11 +102,57 @@ class PracticeCriteriaCaseStagingIntegrationTest {
                 .doesNotContain(scenario.path("reason").asString());
         var files = mapper.readTree(workspace.resolve("work/change/files.json").toFile())
                 .path("files");
-        var repositoryFiles = scenario.path("files").properties().stream()
-                .filter(entry -> entry.getKey().startsWith("repo/"))
-                .toList();
-        assertThat(files.size()).isEqualTo(repositoryFiles.size());
+        // The change is the difference between the base files and the files: added, changed and removed paths.
         var supplied = scenario.path("files");
+        var baseFiles = scenario.path("baseFiles");
+        var changed = new HashSet<String>();
+        for (var entry : supplied.properties()) {
+            if (entry.getKey().startsWith("repo/") && !entry.getValue().equals(baseFiles.path(entry.getKey()))) {
+                changed.add(entry.getKey().substring("repo/".length()));
+            }
+        }
+        for (var entry : baseFiles.properties()) {
+            if (!supplied.has(entry.getKey())) {
+                changed.add(entry.getKey().substring("repo/".length()));
+            }
+        }
+        var statuses = new HashMap<String, String>();
+        for (var file : files) {
+            statuses.put(file.path("path").asString(), file.path("status").asString());
+        }
+        assertThat(statuses.keySet())
+                .as("changed files in %s", scenario.path("id"))
+                .isEqualTo(changed);
+        // The supplied before-state is committed; a base file the case leaves out is deleted at head.
+        var change = mapper.readTree(workspace.resolve("context/change.json").toFile());
+        Path repo = workspace.resolve(SandboxLayout.REPO_MOUNT_RELATIVE);
+        for (var entry : baseFiles.properties()) {
+            String path = entry.getKey().substring("repo/".length());
+            assertThat(PracticeCriteriaCaseFixtures.fixtureCommand(
+                            workspace,
+                            "git",
+                            "-C",
+                            repo.toString(),
+                            "show",
+                            change.path("base_sha").asString() + ":" + path))
+                    .isEqualTo(entry.getValue().asString());
+            if (!supplied.has(entry.getKey())) {
+                assertThat(repo.resolve(path)).doesNotExist();
+                assertThat(PracticeCriteriaCaseFixtures.fixtureCommand(
+                                workspace,
+                                "git",
+                                "-C",
+                                repo.toString(),
+                                "diff",
+                                "--name-status",
+                                change.path("base_sha").asString(),
+                                change.path("head_sha").asString(),
+                                "--",
+                                path))
+                        .startsWith("D\t");
+                assertThat(statuses.get(path)).as("change status of %s", path).isEqualTo("D");
+            }
+        }
         for (var entry : supplied.properties()) {
             if (entry.getKey().startsWith("context/") && !entry.getKey().equals("context/metadata.json")) {
                 assertThat(workspace.resolve(entry.getKey()))
