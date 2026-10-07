@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -121,6 +123,9 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private FeedbackLedgerRecorder ledger;
 
     private Workspace workspace;
     private String threadKey;
@@ -619,6 +624,141 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
                 .findByIdAndWorkspaceId(id, workspace.getId())
                 .orElseThrow()
                 .getDeliveryState();
+    }
+
+    @Test
+    @DisplayName("a later review's comment is recorded beside an earlier one, which stays delivered and answerable")
+    void shouldKeepAnEarlierDeliveredReviewWhenALaterOnePostsItsOwnComment() {
+        AgentJob broad = reviewJob();
+        UUID tests = observedBy(broad, "NOT_MET", "MAJOR");
+        UUID description = observedBy(broad, "NOT_MET", "MINOR");
+        ledger.recordWithoutConversation(
+                broad,
+                summary("Add a test for the export, and say why it exists.", List.of(tests, description)),
+                ArtifactKinds.ISSUE,
+                List.of(),
+                "comment-broad",
+                null);
+        Feedback earlier = deliveredUnitOf(broad);
+
+        AgentJob narrow = reviewJob();
+        UUID acknowledged = observedBy(narrow, "MET", null);
+        for (int attempt = 0; attempt < 2; attempt++) {
+            ledger.recordWithoutConversation(
+                    narrow,
+                    summary("The new check names the case it covers.", List.of(acknowledged)),
+                    ArtifactKinds.ISSUE,
+                    List.of(),
+                    "comment-narrow",
+                    null);
+        }
+        Feedback later = deliveredUnitOf(narrow);
+
+        AgentJob withheld = reviewJob();
+        UUID suppressed = observedBy(withheld, "NOT_MET", "MINOR");
+        ledger.recordSuppressedUnit(
+                withheld,
+                summary("Withheld before it was posted.", List.of(suppressed)),
+                FeedbackSuppressionReason.RECIPIENT_OPTED_OUT);
+
+        Feedback earlierNow = feedbackRepository
+                .findByIdAndWorkspaceId(earlier.getId(), workspace.getId())
+                .orElseThrow();
+        assertThat(earlierNow.getDeliveryState()).isEqualTo(FeedbackDeliveryState.DELIVERED);
+        assertThat(earlierNow.getReplacesId()).isNull();
+        assertThat(later.getDeliveryState()).isEqualTo(FeedbackDeliveryState.DELIVERED);
+        assertThat(later.getReplacesId()).isNull();
+        assertThat(feedbackRepository
+                        .findByAgentJobIdAndPositionAndWorkspaceId(withheld.getId(), 5000, workspace.getId())
+                        .orElseThrow())
+                .satisfies(unit -> {
+                    assertThat(unit.getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
+                    assertThat(unit.getReplacesId()).isNull();
+                });
+
+        assertThat(feedbackObservationRepository.countForFeedback(workspace.getId(), earlier.getId()))
+                .isEqualTo(2);
+        assertThat(placementRepository.findByFeedbackId(earlier.getId()))
+                .singleElement()
+                .satisfies(
+                        placement -> assertThat(placement.getPostedCommentRef()).isEqualTo("comment-broad"));
+        assertThat(onThread())
+                .filteredOn(unit -> narrow.getId().equals(unit.getAgentJobId()))
+                .extracting(Feedback::getId)
+                .containsExactly(later.getId());
+        assertThat(feedbackObservationRepository.countForFeedback(workspace.getId(), later.getId()))
+                .isEqualTo(1);
+        assertThat(placementRepository.findByFeedbackId(later.getId()))
+                .singleElement()
+                .satisfies(
+                        placement -> assertThat(placement.getPostedCommentRef()).isEqualTo("comment-narrow"));
+
+        assertThat(feedbackObservationRepository.findLatestFeedbackByObservationIds(
+                        workspace.getId(), RECIPIENT, List.of(tests, description, acknowledged), List.of("IN_CONTEXT")))
+                .extracting(
+                        FeedbackObservationRepository.ObservationFeedback::getObservationId,
+                        FeedbackObservationRepository.ObservationFeedback::getFeedbackId,
+                        FeedbackObservationRepository.ObservationFeedback::getBody)
+                .containsExactlyInAnyOrder(
+                        tuple(tests, earlier.getId(), "Add a test for the export, and say why it exists."),
+                        tuple(description, earlier.getId(), "Add a test for the export, and say why it exists."),
+                        tuple(acknowledged, later.getId(), "The new check names the case it covers."));
+    }
+
+    private AgentJob reviewJob() {
+        AgentJob job = new AgentJob();
+        job.setWorkspace(workspace);
+        job.setJobType(AgentJobType.ISSUE_REVIEW);
+        job.setArtifactKind(ArtifactKinds.ISSUE);
+        job.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
+        return agentJobRepository.save(job);
+    }
+
+    private static ReviewResultParser.DeliveryContent summary(String body, List<UUID> observations) {
+        return new ReviewResultParser.DeliveryContent(
+                body,
+                List.of(),
+                List.of(),
+                observations.stream().map(id -> "reviewed-" + id).toList());
+    }
+
+    private Feedback deliveredUnitOf(AgentJob job) {
+        return feedbackRepository
+                .findByAgentJobIdAndPositionAndWorkspaceId(job.getId(), 0, workspace.getId())
+                .orElseThrow();
+    }
+
+    /** One observation {@code job} recorded about the recipient on {@link #WORK}, under a practice of its own. */
+    private UUID observedBy(AgentJob job, String outcome, @Nullable String severity) {
+        Practice practice = new Practice();
+        practice.setWorkspace(workspace);
+        practice.setSlug("reviewed-" + SLUG_SEQUENCE.incrementAndGet());
+        practice.setName("Reviewed practice");
+        practice.setCriteria("Criteria");
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.ISSUE));
+        PracticeTestEvidence.configure(practice, ScmSignals.ISSUE_OPENED);
+        practice = practiceRepository.saveAndFlush(practice);
+        UUID id = UUID.randomUUID();
+        observationRepository.insertIfAbsent(
+                id,
+                "reviewed-" + id,
+                job.getId(),
+                workspace.getId(),
+                practice.getId(),
+                null,
+                ArtifactKinds.ISSUE.value(),
+                WORK,
+                RECIPIENT,
+                "Observation " + id,
+                outcome,
+                severity,
+                null,
+                null,
+                null,
+                Instant.now(),
+                "LIVE");
+        return id;
     }
 
     /** A note recorded as its dispatch records it: a delivered summary comes with its confirmed placement. */

@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository.ProviderPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -266,12 +265,7 @@ public class FeedbackLedgerRecorder {
             Observation subject = subjectOf(assessed.isEmpty() ? observations : assessed, job);
             long recipientUserId = subject.getAboutUserId();
             String feedbackThreadKey = feedbackThreadKeyFor(subject);
-            UUID supersedesId = summaryDelivered
-                    ? feedbackPlacementRepository
-                            .findLatestDeliveredSummary(feedbackThreadKey)
-                            .map(FeedbackPlacement::getFeedbackId)
-                            .orElse(null)
-                    : null;
+            // A new posted comment is a separate delivery; sharing the work does not replace an earlier copy.
             feedback = feedbackRepository.save(Feedback.builder()
                     .agentJobId(job.getId())
                     .workspaceId(workspaceId)
@@ -287,13 +281,9 @@ public class FeedbackLedgerRecorder {
                     .body(summaryDelivered ? delivery.mrNote() : null)
                     .source(FeedbackSource.AGENT)
                     .threadKey(feedbackThreadKey)
-                    .replacesId(supersedesId)
                     .createdAt(now)
                     .deliveredAt(now)
                     .build());
-            if (supersedesId != null) {
-                feedbackRepository.supersedeDelivered(workspaceId, supersedesId);
-            }
         }
         int ordinal = created ? 0 : feedbackObservationRepository.countForFeedback(workspaceId, feedback.getId());
         for (Observation f : assessed) {
@@ -624,10 +614,6 @@ public class FeedbackLedgerRecorder {
             List<Observation> evidence) {
         Observation any = subjectOf(evidence.isEmpty() ? observations : evidence, job);
         String feedbackThreadKey = feedbackThreadKeyFor(any);
-        UUID replacesId = feedbackPlacementRepository
-                .findLatestDeliveredSummary(feedbackThreadKey)
-                .map(FeedbackPlacement::getFeedbackId)
-                .orElse(null);
         Instant now = Instant.now();
         Feedback feedback = feedbackRepository.save(Feedback.builder()
                 .agentJobId(job.getId())
@@ -643,7 +629,6 @@ public class FeedbackLedgerRecorder {
                 .body(delivery.mrNote())
                 .source(FeedbackSource.AGENT)
                 .threadKey(feedbackThreadKey)
-                .replacesId(replacesId)
                 .createdAt(now)
                 .build());
         int ordinal = 0;
