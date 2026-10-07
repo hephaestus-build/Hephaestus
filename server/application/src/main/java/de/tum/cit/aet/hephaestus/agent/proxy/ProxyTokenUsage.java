@@ -35,7 +35,7 @@ public record ProxyTokenUsage(
         } else {
             input = requiredCount(usage, "prompt_tokens");
             output = requiredCount(usage, "completion_tokens");
-            cacheRead = count(usage.path("prompt_tokens_details"), "cached_tokens");
+            cacheRead = chatCacheReadTokens(usage);
             cacheWrite = cacheWriteTokens(usage.path("prompt_tokens_details"));
             reasoning = count(usage.path("completion_tokens_details"), "reasoning_tokens");
         }
@@ -43,6 +43,16 @@ public record ProxyTokenUsage(
             throw new IllegalArgumentException("Cache token details exceed input tokens");
         }
         return new ProxyTokenUsage(input - cacheRead - cacheWrite, output, reasoning, cacheRead, cacheWrite);
+    }
+
+    /** OpenAI-compatible completions retain the native SDK's nested, cache-hit, then top-level precedence. */
+    private static int chatCacheReadTokens(JsonNode usage) {
+        Integer nested = optionalCount(usage.path("prompt_tokens_details"), "cached_tokens");
+        if (nested != null) {
+            return nested;
+        }
+        Integer cacheHit = optionalCount(usage, "prompt_cache_hit_tokens");
+        return cacheHit != null ? cacheHit : count(usage, "cached_tokens");
     }
 
     private static int cacheWriteTokens(JsonNode details) {

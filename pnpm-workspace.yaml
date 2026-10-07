@@ -69,4 +69,5 @@ overrides:
   "undici@>=8.0.0 <8.11.2": 8.11.2
   "uuid@<11.1.1": 11.1.1
 patchedDependencies:
+  "@earendil-works/pi-ai@1.0.0": docker/agents/pi/patches/@earendil-works__pi-ai@1.0.0.patch
   wxt@0.21.4: patches/wxt@0.21.4.patch

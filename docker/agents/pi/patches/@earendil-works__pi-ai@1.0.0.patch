@@ -1,0 +1,161 @@
+diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
+index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae2fa1cf9e 100644
+--- a/dist/api/openai-completions.js
++++ b/dist/api/openai-completions.js
+@@ -14,6 +14,7 @@ import { getDeclaredTools, resolveTranscript, resolveTranscriptTools, } from "..
+ import { appendGrammarToolInputJsonDelta, createGrammarToolInputProperties, getGrammarToolInput, getJsonSchemaToolParameters, resolveGrammarConstrainedSampling, resolveJsonSchemaStrictSampling, } from "./constrained-sampling.js";
+ import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
+ import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.js";
++import { openAITokenUsage } from "./openai-token-usage.js";
+ import { buildBaseOptions, clampThinkingBudgetToAnswerRoom, thinkingBudgetForLevel } from "./simple-options.js";
+ import { transformMessages } from "./transform-messages.js";
+ /**
+@@ -361,7 +362,7 @@ export const stream = (model, context, options) => {
+                     output.responseModel ||= chunk.model;
+                 }
+                 if (chunk.usage) {
+-                    output.usage = parseChunkUsage(chunk.usage, model);
++                    output.usage = parseChunkUsage(chunk.usage, model) ?? output.usage;
+                 }
+                 const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined;
+                 if (!choice)
+@@ -369,7 +370,7 @@ export const stream = (model, context, options) => {
+                 // Fallback: some providers (e.g., Moonshot) return usage
+                 // in choice.usage instead of the standard chunk.usage
+                 if (!chunk.usage && choice.usage) {
+-                    output.usage = parseChunkUsage(choice.usage, model);
++                    output.usage = parseChunkUsage(choice.usage, model) ?? output.usage;
+                 }
+                 if (choice.finish_reason) {
+                     output.rawStopReason = choice.finish_reason;
+@@ -1158,9 +1159,6 @@ function convertTools(tools, compat) {
+     });
+ }
+ function parseChunkUsage(rawUsage, model) {
+-    const promptTokens = rawUsage.prompt_tokens || 0;
+-    const cacheReadTokens = rawUsage.prompt_tokens_details?.cached_tokens ?? rawUsage.prompt_cache_hit_tokens ?? rawUsage.cached_tokens ?? 0;
+-    const cacheWriteTokens = rawUsage.prompt_tokens_details?.cache_write_tokens || 0;
+     // Follow documented OpenAI/OpenRouter semantics: cached_tokens is cache-read
+     // tokens (hits). Providers disagree on placement: OpenAI/OpenRouter use
+     // prompt_tokens_details.cached_tokens, DeepSeek uses prompt_cache_hit_tokens,
+@@ -1172,19 +1170,17 @@ function parseChunkUsage(rawUsage, model) {
+     // Do not subtract writes from cached_tokens, otherwise spec-compliant
+     // providers are under-reported. DS4 mirrors this contract too:
+     // https://github.com/antirez/ds4/pull/29
+-    const input = Math.max(0, promptTokens - cacheReadTokens - cacheWriteTokens);
+-    // OpenAI completion_tokens already includes reasoning_tokens.
+-    const outputTokens = rawUsage.completion_tokens || 0;
+-    const usage = {
+-        input,
+-        output: outputTokens,
+-        cacheRead: cacheReadTokens,
+-        cacheWrite: cacheWriteTokens,
+-        reasoning: rawUsage.completion_tokens_details?.reasoning_tokens || 0,
+-        totalTokens: input + outputTokens + cacheReadTokens + cacheWriteTokens,
+-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+-    };
+-    calculateCost(model, usage);
++    const usage = openAITokenUsage({
++        inclusiveInput: rawUsage.prompt_tokens,
++        // OpenAI completion_tokens already includes reasoning_tokens.
++        output: rawUsage.completion_tokens,
++        cacheRead: rawUsage.prompt_tokens_details?.cached_tokens ?? rawUsage.prompt_cache_hit_tokens ?? rawUsage.cached_tokens,
++        inputDetails: rawUsage.prompt_tokens_details,
++        reasoning: rawUsage.completion_tokens_details?.reasoning_tokens,
++    });
++    if (usage) {
++        calculateCost(model, usage);
++    }
+     return usage;
+ }
+ function mapStopReason(reason) {
+diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
+index f413fe5f2a1abcac39c38bbd4a77b38c349a5918..ff89c5c883c06d734f0a88ff4aaefcd26c484785 100644
+--- a/dist/api/openai-responses-shared.js
++++ b/dist/api/openai-responses-shared.js
+@@ -1,3 +1,4 @@
++import { openAITokenUsage } from "./openai-token-usage.js";
+ import { calculateCost } from "../models.js";
+ import { shortHash } from "../utils/hash.js";
+ import { parseStreamingJson } from "../utils/json-parse.js";
+@@ -437,20 +438,16 @@ export async function processResponsesStream(openaiStream, output, stream, model
+         if (response?.id) {
+             output.responseId = response.id;
+         }
+-        if (response?.usage) {
+-            const inputDetails = response.usage.input_tokens_details;
+-            const cachedTokens = inputDetails?.cached_tokens || 0;
+-            const cacheWriteTokens = inputDetails?.cache_write_tokens || 0;
+-            output.usage = {
+-                // OpenAI includes cached and cache-write tokens in input_tokens, so subtract both.
+-                input: Math.max(0, (response.usage.input_tokens || 0) - cachedTokens - cacheWriteTokens),
+-                output: response.usage.output_tokens || 0,
+-                cacheRead: cachedTokens,
+-                cacheWrite: cacheWriteTokens,
+-                reasoning: response.usage.output_tokens_details?.reasoning_tokens || 0,
+-                totalTokens: response.usage.total_tokens || 0,
+-                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+-            };
++        const usage = response?.usage && openAITokenUsage({
++            // OpenAI includes cached and cache-write tokens in input_tokens.
++            inclusiveInput: response.usage.input_tokens,
++            output: response.usage.output_tokens,
++            cacheRead: response.usage.input_tokens_details?.cached_tokens,
++            inputDetails: response.usage.input_tokens_details,
++            reasoning: response.usage.output_tokens_details?.reasoning_tokens,
++        });
++        if (usage) {
++            output.usage = usage;
+         }
+         calculateCost(model, output.usage);
+         if (options?.applyServiceTierPricing) {
+diff --git adist/api/openai-token-usage.js b/dist/api/openai-token-usage.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..677aeb64a3af465c10abbf6069c01512a7677aa5
+--- /dev/null
++++ b/dist/api/openai-token-usage.js
+@@ -0,0 +1,44 @@
++// Token usage reported by OpenAI-compatible APIs. Returns undefined when the counts are missing, not
++// non-negative 32-bit integers, contradictory, or when cache details exceed the inclusive input total.
++// Callers keep their earlier usage instead: unusable telemetry never becomes recorded spend and never
++// discards the response.
++const MAX_COUNT = 2147483647;
++function count(value) {
++    return Number.isInteger(value) && value >= 0 && value <= MAX_COUNT ? value : undefined;
++}
++function optionalCount(value) {
++    return value == null ? 0 : count(value);
++}
++/** Proxies name cache writes cache_write_tokens or created_cache_tokens; both present must agree. */
++function cacheWriteCount(details) {
++    const standard = details?.cache_write_tokens;
++    const alias = details?.created_cache_tokens;
++    if (standard != null && alias != null) {
++        return count(standard) !== undefined && standard === alias ? standard : undefined;
++    }
++    return optionalCount(standard ?? alias);
++}
++/**
++ * @param inclusiveInput prompt tokens, including cache reads and writes
++ * @param output output tokens, including reasoning
++ */
++export function openAITokenUsage({ inclusiveInput, output, cacheRead, inputDetails, reasoning }) {
++    const prompt = count(inclusiveInput);
++    const out = count(output);
++    const read = optionalCount(cacheRead);
++    const write = cacheWriteCount(inputDetails);
++    const reasoningTokens = optionalCount(reasoning);
++    if (prompt === undefined || out === undefined || read === undefined || write === undefined
++        || reasoningTokens === undefined || read + write > prompt) {
++        return undefined;
++    }
++    return {
++        input: prompt - read - write,
++        output: out,
++        cacheRead: read,
++        cacheWrite: write,
++        reasoning: reasoningTokens,
++        totalTokens: prompt + out,
++        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
++    };
++}

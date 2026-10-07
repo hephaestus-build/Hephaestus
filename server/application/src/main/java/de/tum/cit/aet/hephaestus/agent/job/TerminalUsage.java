@@ -12,8 +12,9 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Reconciles an ending job attempt's runner and proxy observations. Each bucket uses the larger
- * observed value; {@link #provenance()} records whether the result matches either source.
+ * Retains one observed token vector for an ending attempt. Prompt and output totals select the source,
+ * with the proxy winning ties. Incomparable totals remain unverifiable instead of combining buckets.
+ * Aggregate totals do not establish that either source observed every call.
  */
 record TerminalUsage(
         long inputTokens,
@@ -43,30 +44,20 @@ record TerminalUsage(
 
         Buckets runner = fromRunner ? Buckets.of(Objects.requireNonNull(runnerUsage)) : Buckets.NONE;
         Buckets proxy = fromProxy ? Buckets.of(Objects.requireNonNull(proxyCounts)) : Buckets.NONE;
+        boolean proxyCovers = proxy.covers(runner);
+        boolean runnerCovers = !proxyCovers && runner.covers(proxy);
+        Buckets selected = runnerCovers ? runner : proxy;
         return new TerminalUsage(
-                Math.max(runner.input, proxy.input),
-                Math.max(runner.output, proxy.output),
-                Math.max(runner.cacheRead, proxy.cacheRead),
-                Math.max(runner.cacheWrite, proxy.cacheWrite),
-                Math.max(runner.reasoning, proxy.reasoning),
-                // Clamped rather than cast: the call count is an int on the row, and a runner that reports
-                // an absurd figure should bill the ceiling rather than wrap to a negative one.
+                selected.input,
+                selected.output,
+                selected.cacheRead,
+                selected.cacheWrite,
+                selected.reasoning,
+                // Call counts are telemetry, not coverage. Clamped rather than cast: the count is an int on the
+                // row, and an absurd report should store the ceiling rather than wrap to a negative one.
                 (int) Math.min(Integer.MAX_VALUE, Math.max(runner.calls, proxy.calls)),
-                true,
-                provenanceOf(runner, proxy));
-    }
-
-    /**
-     * Which source the billed numbers came from. MERGED is not a rounding of "mostly one of them": it
-     * means the row as stored matches neither source, so anyone reconciling against one of them will
-     * find a discrepancy that is expected rather than a bug.
-     */
-    private static UsageProvenance provenanceOf(Buckets runner, Buckets proxy) {
-        boolean proxyAddsSomething = proxy.exceedsAnyOf(runner);
-        boolean runnerAddsSomething = runner.exceedsAnyOf(proxy);
-        if (proxyAddsSomething && runnerAddsSomething) return UsageProvenance.MERGED;
-        if (proxyAddsSomething) return UsageProvenance.PROXY;
-        return UsageProvenance.RUNNER;
+                proxyCovers || runnerCovers,
+                runnerCovers ? UsageProvenance.RUNNER : UsageProvenance.PROXY);
     }
 
     /** An attempt that ended with nothing to bill — no runner report and no proxy accumulation. */
@@ -153,14 +144,13 @@ record TerminalUsage(
                     Math.max(0, counts.totalCalls()));
         }
 
-        /** True when this source saw more than {@code other} in at least one bucket. */
-        boolean exceedsAnyOf(Buckets other) {
-            return (input > other.input
-                    || output > other.output
-                    || cacheRead > other.cacheRead
-                    || cacheWrite > other.cacheWrite
-                    || reasoning > other.reasoning
-                    || calls > other.calls);
+        long prompt() {
+            return input + cacheRead + cacheWrite;
+        }
+
+        /** True when this source's prompt and output totals are both at least {@code other}'s. */
+        boolean covers(Buckets other) {
+            return prompt() >= other.prompt() && output >= other.output;
         }
     }
 }
