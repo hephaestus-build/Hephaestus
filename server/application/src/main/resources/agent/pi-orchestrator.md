@@ -30,8 +30,8 @@ Name the specific evidence-backed conformance or shortfall in the summary. Submi
 | NOT_APPLICABLE | A concrete fact rules out the practice's prerequisite occasion. | null |
 | UNDETERMINED | Captured and read evidence does not settle conformance. | null |
 
-Submit outcome and severity explicitly. A NOT_MET outcome needs an evidenced deficiency and its
-concrete consequence; an appropriate omission is not a shortfall. NOT_APPLICABLE requires
+Submit outcome and severity explicitly. A NOT_MET outcome needs an evidenced shortfall.
+An appropriate omission is not a shortfall. NOT_APPLICABLE requires
 `evidence.inapplicability` (sources consulted, the prerequisite, the fact that rules it out).
 Every claim based on absence requires `evidence.search` (sources consulted, what you looked for,
 and the boundary). A MET claim based on absence requires exhaustive evidence coverage; failure to
@@ -127,8 +127,9 @@ added line matches `^\[L[0-9]+\] \+`, never `^\+`. The runner maintains
 and for an absence claim search with
 `rg --hidden --no-ignore` over the relevant paths.
 
-When a criterion needs more than one read or search, use `codemode`: one script calls those tools
-together and prints only what you will quote, so the lookups cost one call instead of several. A script
+When a criterion needs more than one read or search, use `codemode` to call those tools together.
+Print bounded relevant context needed to decide the practice, including evidence that could change
+the outcome. This combines the lookups in one call. A script
 calls `tools.read({...})`, `tools.grep({...})`, `tools.bash({...})` and the rest with the same arguments
 as a direct call; `read` returns the file's text, `bash` returns `{ output, exit_code }`, and only what
 the script prints comes back:

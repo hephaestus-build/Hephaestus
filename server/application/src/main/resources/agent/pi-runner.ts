@@ -3362,11 +3362,11 @@ const OBSERVATION_EXAMPLE = (() => {
 	const example = [
 		{
 			practiceSlug: "<the practice's slug>",
-			summary: "Date parser added with tests for empty and malformed input",
+			summary: "Added test asserts that malformed date input is rejected",
 			outcome: "MET",
 			severity: null,
 			evidenceRationale:
-				"The change adds DateParser and, beside it, tests that feed it an empty string and a malformed date.",
+				'The added assertion passes "not-a-date" to DateParser.parse and expects an error.',
 			evidence: {
 				citations: [
 					{
@@ -3376,7 +3376,7 @@ const OBSERVATION_EXAMPLE = (() => {
 						side: "NEW",
 						startLine: 12,
 						endLine: 12,
-						quote: "func testRejectsMalformedDate() {",
+						quote: 'XCTAssertThrowsError(try DateParser.parse("not-a-date"))',
 					},
 				],
 			},
@@ -3409,11 +3409,10 @@ const OBSERVATION_EXAMPLE = (() => {
 		},
 		{
 			practiceSlug: "<the practice's slug>",
-			summary: "No persisted model changes in this change",
+			summary: "No completed merge is recorded",
 			outcome: "NOT_APPLICABLE",
 			severity: null,
-			evidenceRationale:
-				"Every changed file is a view or a test; none declares or migrates a stored type.",
+			evidenceRationale: "The captured provider record states that this work has not merged.",
 			evidence: {
 				citations: [
 					{
@@ -3422,13 +3421,13 @@ const OBSERVATION_EXAMPLE = (() => {
 						path: `${context}/metadata.json`,
 						startLine: 3,
 						endLine: 3,
-						quote: '"title": "Add date parser"',
+						quote: '"is_merged": false',
 					},
 				],
 				inapplicability: {
-					consulted: ["scm.pull-request.diff", "scm.pull-request.core"],
-					subject: "a persisted model or schema",
-					ruledOutBy: "the changed files are views and tests only",
+					consulted: ["scm.pull-request.core"],
+					subject: "work that has merged",
+					ruledOutBy: "the provider records is_merged as false",
 				},
 			},
 		},
@@ -3446,7 +3445,7 @@ ${JSON.stringify({ observations: example }, null, 1)}
  */
 function practiceTurnText(heading: string, slug: string, brief: string): string {
 	return `${openingIfNeeded(brief)}${heading}
-Evaluate this practice: ${slug}. Its criteria follow and decide the outcome. What the brief shows is yours to quote; read more only when the criteria need it, and when they need more than one read or search, run them together in one codemode script that prints only the lines you will quote. Record one observation for this practice — the outcome the criteria and the evidence support, NOT_APPLICABLE and UNDETERMINED included — with report_observation. This session records and revises only this practice.
+Evaluate this practice: ${slug}. Its criteria follow and decide the outcome. What the brief shows is yours to quote; read more when the criteria need evidence beyond it. Record one observation for this practice — the outcome the criteria and the evidence support, NOT_APPLICABLE and UNDETERMINED included — with report_observation. This session records and revises only this practice.
 
 ${criteriaOf([slug])}`;
 }
