@@ -276,18 +276,25 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     class TheBoundsEachFileStates {
 
         @Test
-        void shouldNotAdvertiseAHistoryWindowOrRecordLimit() {
+        void shouldStateItsRecordsAndScopeWithoutAHistoryWindowOrRecordLimit() {
             JsonNode observations = read(captureObservationHistory().files().get("inputs/history/observations.json"));
-            JsonNode feedback = read(captureFeedbackHistory().files().get("inputs/history/feedback.json"));
-            assertThat(observations.propertyNames()).containsExactly("observations");
-            assertThat(feedback.propertyNames()).containsExactly("feedback");
-        }
+            var feedbackCapture = captureFeedbackHistory();
+            JsonNode feedback = read(feedbackCapture.files().get("inputs/history/feedback.json"));
+            JsonNode prepared = read(feedbackCapture.files().get("inputs/history/prepared.json"));
 
-        @Test
-        void preparedFeedbackCarriesTheLimitOnly() {
-            JsonNode prepared = read(captureFeedbackHistory().files().get("inputs/history/prepared.json"));
-
-            assertThat(prepared.propertyNames()).containsExactly("prepared");
+            assertThat(observations.propertyNames()).containsExactly("coverage", "recordRole", "observations");
+            assertThat(feedback.propertyNames()).containsExactly("coverage", "recordRole", "feedback");
+            assertThat(prepared.propertyNames()).containsExactly("coverage", "recordRole", "prepared");
+            assertThat(observations.path("recordRole").asString()).isEqualTo("RECORDED_OBSERVATIONS");
+            assertThat(feedback.path("recordRole").asString()).isEqualTo("RECORDED_DELIVERY");
+            assertThat(prepared.path("recordRole").asString()).isEqualTo("PREPARED_NOT_DELIVERED");
+            for (JsonNode file : List.of(observations, feedback, prepared)) {
+                JsonNode coverage = file.path("coverage");
+                assertThat(coverage.propertyNames()).containsExactly("scope", "workChronology", "communicationHistory");
+                assertThat(coverage.path("scope").asString()).isEqualTo("AUTHORIZED_REVIEW_RECORDS_FOR_SUBJECT");
+                assertThat(coverage.path("workChronology").asString()).isEqualTo("NOT_ESTABLISHED");
+                assertThat(coverage.path("communicationHistory").asString()).isEqualTo("NOT_ESTABLISHED");
+            }
         }
     }
 
@@ -652,11 +659,13 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
             assertThat(said.get("recordedClaimCurrentness").asString()).isEqualTo("STALE");
             assertThat(said.has("body")).isFalse();
+            assertThat(said.has("bodyRole")).isFalse();
             assertThat(said.get("channel").asString()).isEqualTo("IN_CONTEXT");
             assertThat(said.get("deliveredAt").asString()).isNotBlank();
             assertThat(waiting.get("recordedClaimCurrentness").asString()).isEqualTo("STALE");
             assertThat(waiting.get("threadKey").asString()).isEqualTo("in-chat:7:subtasks");
             assertThat(waiting.has("body")).isFalse();
+            assertThat(waiting.has("bodyRole")).isFalse();
             assertThat(captured.contentStates())
                     .containsEntry(ReviewHistoryContentSource.FEEDBACK_HISTORY, SourceContentState.NON_EMPTY);
         }
@@ -706,6 +715,65 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
             assertThat(entry.get("recordedClaimCurrentness").asString()).isEqualTo("CURRENT");
             assertThat(entry.get("withdrawn").asBoolean()).isTrue();
             assertThat(entry.has("body")).isFalse();
+            assertThat(entry.has("bodyRole")).isFalse();
+        }
+
+        @Test
+        void shouldNameWhoseWordsEachStagedBodyHolds() {
+            Instant at = Instant.parse("2026-07-01T09:00:00Z");
+            Feedback onWork = Feedback.builder()
+                    .id(UUID.randomUUID())
+                    .channel(FeedbackChannel.IN_CONTEXT)
+                    .body("Name the failure the catch block hides.")
+                    .deliveredAt(at)
+                    .build();
+            Feedback onPage = Feedback.builder()
+                    .id(UUID.randomUUID())
+                    .channel(FeedbackChannel.IN_APP)
+                    .body("Two issues share one failure path.")
+                    .deliveredAt(at)
+                    .build();
+            Feedback legacy = Feedback.builder()
+                    .id(UUID.randomUUID())
+                    .body("Recorded before its channel was stored.")
+                    .deliveredAt(at)
+                    .build();
+            Feedback unwritten = Feedback.builder()
+                    .id(UUID.randomUUID())
+                    .channel(FeedbackChannel.IN_CONTEXT)
+                    .deliveredAt(at)
+                    .build();
+            Feedback brief = queued("in-chat:7:errors", "Situation: the catch block hides failures.");
+            Feedback card = Feedback.builder()
+                    .id(UUID.randomUUID())
+                    .channel(FeedbackChannel.IN_APP)
+                    .threadKey("in-app:7:errors")
+                    .body("Check the failure path.")
+                    .createdAt(at)
+                    .build();
+            when(feedbackRepository.findDeliveredForPersonHistory(any(), any()))
+                    .thenReturn(List.of(onWork, onPage, legacy, unwritten));
+            when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
+                    .thenReturn(List.of(brief, card));
+
+            var captured = captureFeedbackHistory();
+            JsonNode said =
+                    read(captured.files().get("inputs/history/feedback.json")).get("feedback");
+            JsonNode waiting =
+                    read(captured.files().get("inputs/history/prepared.json")).get("prepared");
+
+            assertThat(said.get(0).get("body").asString()).isEqualTo("Name the failure the catch block hides.");
+            assertThat(said.get(0).get("bodyRole").asString()).isEqualTo("COMPOSED_GUIDANCE");
+            assertThat(said.get(1).get("body").asString()).isEqualTo("Two issues share one failure path.");
+            assertThat(said.get(1).get("bodyRole").asString()).isEqualTo("COMPOSED_GUIDANCE");
+            assertThat(said.get(2).get("body").asString()).isEqualTo("Recorded before its channel was stored.");
+            assertThat(said.get(2).get("bodyRole").asString()).isEqualTo("UNKNOWN");
+            assertThat(said.get(3).get("body").isNull()).isTrue();
+            assertThat(said.get(3).has("bodyRole")).isFalse();
+            assertThat(waiting.get(0).get("body").asString()).isEqualTo("Situation: the catch block hides failures.");
+            assertThat(waiting.get(0).get("bodyRole").asString()).isEqualTo("MENTOR_NOTES");
+            assertThat(waiting.get(1).get("body").asString()).isEqualTo("Check the failure path.");
+            assertThat(waiting.get(1).get("bodyRole").asString()).isEqualTo("COMPOSED_GUIDANCE");
         }
 
         @Test
