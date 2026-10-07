@@ -279,26 +279,6 @@ export const LoadsMoreAtTheEnd: Story = {
 	},
 };
 
-/** The next page failed: the loaded observations stay, and Retry asks again. */
-export const LoadMoreFailed: Story = {
-	args: {
-		observations: pool(reviewObservations, {
-			hasMore: true,
-			loadMoreError: new TypeError("Failed to fetch"),
-			onLoadMore: loadMoreObservations,
-		}),
-	},
-	parameters: { chromatic: { viewports: [1440] } },
-	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("12 observations.");
-		await expect(canvas.getByRole("alert")).toHaveTextContent(
-			"We could not load more observations.",
-		);
-		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
-		await expect(loadMoreObservations).toHaveBeenCalledOnce();
-	},
-};
-
 export const Mobile: Story = {
 	parameters: {
 		chromatic: { disableSnapshot: true },

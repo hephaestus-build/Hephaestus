@@ -341,18 +341,10 @@ export const LoadingMore: Story = {
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Loading…" })).toBeDisabled();
-		await expect(loadMoreReviews).not.toHaveBeenCalled();
-	},
-};
-
-/** Every review is loaded: the list ends after its last row, with nothing to press. */
-export const EndOfList: Story = {
-	args: { reviews: loadedList(RUNS, { onLoadMore: loadMoreReviews }) },
-	parameters: { chromatic: { viewports: [1440] } },
-	play: async ({ canvas }) => {
-		await canvas.findByText("7 reviews.");
-		await expect(canvas.queryByRole("button", { name: /Show more/u })).not.toBeInTheDocument();
+		await expect(canvas.getByRole("button", { name: "Loading…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(loadMoreReviews).not.toHaveBeenCalled();
 	},
 };

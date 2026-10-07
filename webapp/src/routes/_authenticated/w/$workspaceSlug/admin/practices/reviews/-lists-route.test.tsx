@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ReviewRunSummary } from "@/api/types.gen";
 import { reviewRuns } from "@/components/admin/practice-reviews/fixtures";
@@ -63,7 +63,7 @@ function recordRequests() {
 	return { reviewUrls, observationUrls, feedbackUrls, workUrls };
 }
 
-/** Two finished reviews, one per page, so the second page's row shows that it arrived. */
+/** Two finished reviews, so the second page's row shows that it arrived. */
 const [FIRST_PAGE, SECOND_PAGE] = twoCompletedReviews();
 
 function twoCompletedReviews(): [ReviewRunSummary, ReviewRunSummary] {
@@ -74,7 +74,10 @@ function twoCompletedReviews(): [ReviewRunSummary, ReviewRunSummary] {
 	return [first, second];
 }
 
-/** The reviews endpoint with two pages of one review each, every request recorded. */
+/**
+ * The reviews endpoint with two pages, every request recorded. A review started after the first page
+ * loaded pushed that page's row down, so the second page starts with it again.
+ */
 function serveReviewPages(reviewUrls: URL[]) {
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/practices/reviews", ({ request }) => {
@@ -82,14 +85,18 @@ function serveReviewPages(reviewUrls: URL[]) {
 			reviewUrls.push(url);
 			const number = Number(url.searchParams.get("page"));
 			return HttpResponse.json({
-				content: [FIRST_PAGE, SECOND_PAGE].slice(number, number + 1),
-				page: { number, size: 25, totalElements: 2, totalPages: 2 },
+				content: number === 0 ? [FIRST_PAGE] : [FIRST_PAGE, SECOND_PAGE],
+				page: { number, size: 25, totalElements: 3, totalPages: 2 },
 			});
 		}),
 	);
 }
 
 describe("practice review list routes", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
 	/**
 	 * The one wire detail these screens can get wrong silently. The URL spells the ordering `order`,
 	 * because another route already owns the word `sort` in the same search namespace with entirely
@@ -255,7 +262,7 @@ describe("practice review list routes", () => {
 	 * The list loads the next page at its end, under the same filters: a next page that lost a filter
 	 * would append rows that do not match it. The observer never fires here, so the press is what asks.
 	 */
-	it("asks for the next page of reviews under the same filters, and keeps the loaded rows", async () => {
+	it("asks for the next page of reviews under the same filters, and shows each review once", async () => {
 		vi.stubGlobal("IntersectionObserver", ObserverStub);
 		const { reviewUrls } = recordRequests();
 		serveReviewPages(reviewUrls);
@@ -269,7 +276,7 @@ describe("practice review list routes", () => {
 		expect(next?.searchParams.get("page")).toBe("1");
 		expect(next?.searchParams.get("size")).toBe("25");
 		expect(values(next, "status")).toStrictEqual(["COMPLETED"]);
-		screen.getByRole("link", { name: FIRST_PAGE.target.title });
+		expect(screen.getAllByRole("link", { name: FIRST_PAGE.target.title })).toHaveLength(1);
 		// The last page is in, so the list ends without a button.
 		expect(screen.queryByRole("button", { name: "Show more reviews" })).toBeNull();
 	});

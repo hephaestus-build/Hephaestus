@@ -56,7 +56,10 @@ export const LoadMore: Story = {
 export const LoadingMore: Story = {
 	args: { feed: { ...readyFeed, hasMore: true, isLoadingMore: true } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Loading…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Loading…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(onLoadMore).not.toHaveBeenCalled();
 	},
 };

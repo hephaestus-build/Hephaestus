@@ -54,7 +54,7 @@ function ObservationsListRoute() {
 		<ObservationsListPage
 			search={search}
 			onSearchChange={updateSearch}
-			observations={pagedListState(observationsQueryResult)}
+			observations={pagedListState(observationsQueryResult, (observation) => observation.id)}
 			groups={{
 				options: groupFacetOptions(groupsQuery.data),
 				isLoading: groupsQuery.isLoading,

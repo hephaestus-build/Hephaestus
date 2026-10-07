@@ -52,7 +52,7 @@ function FeedbackListRoute() {
 		<FeedbackListPage
 			search={search}
 			onSearchChange={updateSearch}
-			feedback={pagedListState(feedbackQueryResult)}
+			feedback={pagedListState(feedbackQueryResult, (feedback) => feedback.id)}
 			practices={{
 				options: practiceFacetOptions(practicesQuery.data, groupsQuery.data),
 				isLoading: practicesQuery.isLoading,

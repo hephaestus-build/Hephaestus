@@ -23,7 +23,7 @@ import { REVIEW_PAGE_SIZE, type WorkSearch } from "./review-search";
 import { ReviewListEnd } from "./ReviewListEnd";
 import { ReviewResultsSkeleton } from "./ReviewResultsSkeleton";
 import { ReviewRowList } from "./ReviewRow";
-import { WorkRow } from "./WorkRow";
+import { WorkRow, workRowKey } from "./WorkRow";
 
 export interface WorkListPageProps {
 	search: WorkSearch;
@@ -84,7 +84,7 @@ export function WorkListPage({ search, onSearchChange, work }: WorkListPageProps
 			<>
 				<ReviewRowList label="Work, most recent first">
 					{rows.map((row) => (
-						<WorkRow key={`${row.artifactKind}:${row.artifactId}`} work={row} />
+						<WorkRow key={workRowKey(row)} work={row} />
 					))}
 				</ReviewRowList>
 				<ReviewListEnd {...work} noun="work" />

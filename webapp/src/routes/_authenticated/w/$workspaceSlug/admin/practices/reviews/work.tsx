@@ -10,6 +10,7 @@ import {
 	workSearchSchema,
 } from "@/components/admin/practice-reviews/review-search";
 import { WorkListPage } from "@/components/admin/practice-reviews/WorkListPage";
+import { workRowKey } from "@/components/admin/practice-reviews/WorkRow";
 import { useSearchState } from "@/lib/search-params";
 import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
 import { pagedModelParams } from "@/runtime/tanstack-query/spring-page";
@@ -41,7 +42,7 @@ function WorkRoute() {
 		<WorkListPage
 			search={search}
 			onSearchChange={updateSearch}
-			work={pagedListState(workQueryResult)}
+			work={pagedListState(workQueryResult, workRowKey)}
 		/>
 	);
 }

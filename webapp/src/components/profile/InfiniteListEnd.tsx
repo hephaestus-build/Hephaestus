@@ -22,6 +22,7 @@ export interface InfiniteListEndProps extends MorePages {
 export function InfiniteListEnd({
 	hasMore,
 	isLoadingMore,
+	isRefreshing = false,
 	loadMoreError,
 	onLoadMore,
 	moreLabel,
@@ -32,10 +33,10 @@ export function InfiniteListEnd({
 	// Start the next page before the reader reaches the end.
 	const inView = useInView(end, { margin: "0px 0px 240px 0px" });
 	const failed = loadMoreError != null;
-	const loadsByItself = inView && hasMore && !isLoadingMore && !failed;
+	const loadsByItself = inView && hasMore && !isLoadingMore && !isRefreshing && !failed;
 	const loadMore = useEffectEvent(() => onLoadMore());
-	// The effect syncs with the viewport, an external system. It reruns after each page while the end
-	// stays in view, so a short page still fills the viewport.
+	// The effect syncs with the viewport, an external system. It reruns after each page and after each
+	// refresh while the end stays in view, so a short page still fills the viewport.
 	useEffect(() => {
 		if (loadsByItself) {
 			loadMore();
@@ -65,6 +66,8 @@ export function InfiniteListEnd({
 					className="w-fit text-sm"
 					onClick={onLoadMore}
 					disabled={isLoadingMore}
+					// The press that started the load keeps focus while the next rows arrive.
+					focusableWhenDisabled
 				>
 					{pressLabel(isLoadingMore, failed, moreLabel)}
 				</Button>

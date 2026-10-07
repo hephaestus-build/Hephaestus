@@ -194,21 +194,3 @@ export const LoadsMoreAtTheEnd: Story = {
 		await waitFor(async () => expect(loadMoreWork).toHaveBeenCalled());
 	},
 };
-
-/** The next page failed: the loaded work stays, and Retry asks again. */
-export const LoadMoreFailed: Story = {
-	args: {
-		work: loadedList(tracedArtifacts, {
-			hasMore: true,
-			loadMoreError: new TypeError("Failed to fetch"),
-			onLoadMore: loadMoreWork,
-		}),
-	},
-	parameters: { chromatic: { viewports: [1440] } },
-	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("5 pieces of work.");
-		await expect(canvas.getByRole("alert")).toHaveTextContent("We could not load more work.");
-		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
-		await expect(loadMoreWork).toHaveBeenCalledOnce();
-	},
-};

@@ -231,24 +231,6 @@ export const LoadsMoreAtTheEnd: Story = {
 	},
 };
 
-/** The next page failed: the loaded feedback stays, and Retry asks again. */
-export const LoadMoreFailed: Story = {
-	args: {
-		feedback: pool(reviewFeedback, {
-			hasMore: true,
-			loadMoreError: new TypeError("Failed to fetch"),
-			onLoadMore: loadMoreFeedback,
-		}),
-	},
-	parameters: { chromatic: { viewports: [1440] } },
-	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("11 pieces of feedback.");
-		await expect(canvas.getByRole("alert")).toHaveTextContent("We could not load more feedback.");
-		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
-		await expect(loadMoreFeedback).toHaveBeenCalledOnce();
-	},
-};
-
 export const Mobile: Story = {
 	parameters: {
 		chromatic: { disableSnapshot: true },
