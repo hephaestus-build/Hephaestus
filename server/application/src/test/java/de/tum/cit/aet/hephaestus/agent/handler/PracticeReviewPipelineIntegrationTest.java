@@ -744,6 +744,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             AgentJob run = new AgentJob();
             run.setWorkspace(workspace);
             run.setJobType(AgentJobType.ISSUE_REVIEW);
+            run.setArtifactKind(ArtifactKinds.ISSUE);
             run.setPurpose(AgentPurpose.PRACTICE_REVIEW);
             run.setIntegrationKind(IntegrationKind.GITHUB);
             run.setStatus(AgentJobStatus.COMPLETED);
