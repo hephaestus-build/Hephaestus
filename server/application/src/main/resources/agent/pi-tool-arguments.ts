@@ -33,8 +33,8 @@ export function prepareObservationArguments(args: unknown): Record<string, unkno
 	if (!isRecord(args) || Array.isArray(args)) {
 		return {};
 	}
-	const list = container(args.observations, "array");
-	const observations = isRecord(list) && !Array.isArray(list) ? [list] : list;
+	// The outer list is typed: a string or a lone object is left as sent, for the tool to refuse.
+	const { observations } = args;
 	if (!Array.isArray(observations)) {
 		return args;
 	}
