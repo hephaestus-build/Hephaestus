@@ -29,11 +29,11 @@ export const WITHHOLDING_FAMILY_DEFS: StatusDefs<WithholdingFamily> = {
 		description: "The pull request, issue or document had moved past the point of being told.",
 	},
 	POLICY: {
-		label: "A setting held it back",
+		label: "Policy or settings",
 		icon: VolumeOffIcon,
 		badgeVariant: "outline",
 		description:
-			"A setting somebody chose, such as a limit on how much feedback is sent, a practice’s autonomy or silent mode.",
+			"A delivery policy or setting, such as public placement, current review coverage, approval, feedback limits, practice autonomy or silent mode.",
 	},
 	DEVELOPER_CHOICE: {
 		label: "The developer’s choice",
