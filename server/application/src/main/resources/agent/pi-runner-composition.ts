@@ -810,7 +810,7 @@ export function priorPublicFeedback(
 		return { feedback: [], omissions };
 	}
 	const projected = history.feedback.flatMap((entry: unknown): OwnPriorFeedback[] => {
-		if (!isObject(entry) || entry.channel !== "IN_CONTEXT") {
+		if (!isObject(entry) || entry.channel !== "IN_CONTEXT" || entry.publicEligible !== true) {
 			return [];
 		}
 		const artifact = isObject(entry.artifact) ? entry.artifact : {};

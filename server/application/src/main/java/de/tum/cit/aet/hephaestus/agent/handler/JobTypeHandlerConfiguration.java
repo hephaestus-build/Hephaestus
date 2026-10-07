@@ -107,7 +107,8 @@ public class JobTypeHandlerConfiguration {
             ReviewOutputService deliveryService,
             FeedbackDeliveryService feedbackService,
             InContextDeliveryGate inContextDeliveryGate,
-            ObservationRepository observationRepository) {
+            ObservationRepository observationRepository,
+            PublicReviewEligibility publicReviewEligibility) {
         return new PullRequestReviewHandler(
                 objectMapper,
                 preparation,
@@ -117,7 +118,8 @@ public class JobTypeHandlerConfiguration {
                 feedbackService,
                 feedbackResponseSuppressionFilter,
                 inContextDeliveryGate,
-                observationRepository);
+                observationRepository,
+                publicReviewEligibility);
     }
 
     @Bean
@@ -133,7 +135,8 @@ public class JobTypeHandlerConfiguration {
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             ObservationRepository observationRepository,
             PracticeFeedbackDispatchService dispatchService,
-            FeedbackDeliveryService feedbackDeliveryService) {
+            FeedbackDeliveryService feedbackDeliveryService,
+            PublicReviewEligibility publicReviewEligibility) {
         return new IssueReviewHandler(
                 objectMapper,
                 preparation,
@@ -147,7 +150,8 @@ public class JobTypeHandlerConfiguration {
                 feedbackResponseSuppressionFilter,
                 observationRepository,
                 dispatchService,
-                feedbackDeliveryService);
+                feedbackDeliveryService,
+                publicReviewEligibility);
     }
 
     @Bean

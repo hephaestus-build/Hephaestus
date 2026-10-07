@@ -29,11 +29,13 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -44,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -82,8 +85,15 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     private AgentJob job;
     private ObservationAdmissionService.AdmissionIdentity identity;
 
+    @Mock
+    private PublicReviewEligibility publicEligibility;
+
     @BeforeEach
     void setUp() {
+        lenient().when(publicEligibility.publicObservationIds(any(), any())).thenAnswer(invocation -> {
+            Collection<Observation> rows = invocation.getArgument(1);
+            return rows.stream().map(Observation::getId).collect(Collectors.toSet());
+        });
         lenient()
                 .when(transactionManager.getTransaction(any()))
                 .thenAnswer(invocation -> new SimpleTransactionStatus());
@@ -99,7 +109,8 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                 new JobTypeHandlerRegistry(List.copyOf(handlers.values())),
                 mapper,
                 transactionManager,
-                evidenceFiles);
+                evidenceFiles,
+                publicEligibility);
         job = new AgentJob();
         job.setId(UUID.randomUUID());
         job.setStatus(AgentJobStatus.RUNNING);
@@ -430,9 +441,13 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
         when(observations.findByAgentJobId(job.getId(), job.getWorkspace().getId()))
                 .thenReturn(List.of(observation));
 
+        when(publicEligibility.publicObservationIds(job, List.of(observation))).thenReturn(Set.of());
         ObjectNode response = service.admit(identity, mapper.createArrayNode().add("one"));
 
-        assertThat(response.path("observations").get(0).path("id").asString()).isNotBlank();
+        assertThat(response.path("observations").get(0).path("id").asString())
+                .isEqualTo(observation.getId().toString());
+        assertThat(response.path("observations").get(0).path("publicEligible").asBoolean())
+                .isFalse();
         assertThat(response.path("observations").get(0).path("evidence").path("citations"))
                 .hasSize(1);
         assertThat(response.path("observations")

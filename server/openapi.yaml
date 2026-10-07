@@ -7106,6 +7106,7 @@ paths:
             - ARTIFACT_CLOSED
             - ISSUE_SNAPSHOT_CHANGED
             - ARTIFACT_MERGED
+            - PUBLIC_SUBJECT_INELIGIBLE
             - ARTIFACT_DRAFT
             - RECIPIENT_OPTED_OUT
             - EMPTY_AFTER_SANITIZE
@@ -12174,6 +12175,7 @@ components:
           - ARTIFACT_CLOSED
           - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
+          - PUBLIC_SUBJECT_INELIGIBLE
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
           - EMPTY_AFTER_SANITIZE
@@ -15906,6 +15908,7 @@ components:
             - ARTIFACT_CLOSED
             - ISSUE_SNAPSHOT_CHANGED
             - ARTIFACT_MERGED
+            - PUBLIC_SUBJECT_INELIGIBLE
             - ARTIFACT_DRAFT
             - RECIPIENT_OPTED_OUT
             - EMPTY_AFTER_SANITIZE
@@ -16815,6 +16818,7 @@ components:
           - ARTIFACT_CLOSED
           - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
+          - PUBLIC_SUBJECT_INELIGIBLE
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
           - EMPTY_AFTER_SANITIZE
@@ -17002,6 +17006,7 @@ components:
           - ARTIFACT_CLOSED
           - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
+          - PUBLIC_SUBJECT_INELIGIBLE
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
           - EMPTY_AFTER_SANITIZE
@@ -17188,6 +17193,7 @@ components:
           - ARTIFACT_CLOSED
           - ISSUE_SNAPSHOT_CHANGED
           - ARTIFACT_MERGED
+          - PUBLIC_SUBJECT_INELIGIBLE
           - ARTIFACT_DRAFT
           - RECIPIENT_OPTED_OUT
           - EMPTY_AFTER_SANITIZE

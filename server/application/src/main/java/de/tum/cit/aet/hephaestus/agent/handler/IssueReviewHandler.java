@@ -33,6 +33,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +62,7 @@ public class IssueReviewHandler implements JobTypeHandler {
     private final ObservationRepository observationRepository;
     private final PracticeFeedbackDispatchService dispatchService;
     private final FeedbackDeliveryService feedbackDeliveryService;
+    private final PublicReviewEligibility publicReviewEligibility;
 
     IssueReviewHandler(
             JsonMapper objectMapper,
@@ -75,7 +77,8 @@ public class IssueReviewHandler implements JobTypeHandler {
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             ObservationRepository observationRepository,
             PracticeFeedbackDispatchService dispatchService,
-            FeedbackDeliveryService feedbackDeliveryService) {
+            FeedbackDeliveryService feedbackDeliveryService,
+            PublicReviewEligibility publicReviewEligibility) {
         this.objectMapper = objectMapper;
         this.preparation = preparation;
         this.resultParser = resultParser;
@@ -89,6 +92,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         this.observationRepository = observationRepository;
         this.dispatchService = dispatchService;
         this.feedbackDeliveryService = feedbackDeliveryService;
+        this.publicReviewEligibility = publicReviewEligibility;
     }
 
     @Override
@@ -202,8 +206,9 @@ public class IssueReviewHandler implements JobTypeHandler {
                 })
                 .toList();
         if (feedbackDeliveryService.recoverAutomaticPackageIfPresent(job)) return;
+        Set<UUID> publicIds = publicReviewEligibility.publicObservationIds(job, persisted);
         ComposedReview review = PullRequestReviewHandler.reviewToDeliver(
-                compositionResultParser, job, persisted, ISSUE_REVIEW_CHANNELS);
+                compositionResultParser, job, persisted, publicIds, ISSUE_REVIEW_CHANNELS);
         List<ReviewResultParser.ValidatedObservation> eligible =
                 feedbackResponseSuppressionFilter.evaluate(job, observations).deliverable();
         List<ReviewResultParser.ValidatedObservation> loudEnough = inContextDeliveryGate.admitInContext(job, eligible);
@@ -212,7 +217,7 @@ public class IssueReviewHandler implements JobTypeHandler {
                 review,
                 ArtifactKinds.ISSUE,
                 observations,
-                PullRequestReviewHandler.subjectsOf(persisted),
+                PullRequestReviewHandler.subjectsOf(persisted, publicIds),
                 proposals,
                 loudEnough)) {
             case AdmittedDelivery.Proposed proposed -> feedbackLedgerRecorder.recordProposal(job, proposed.content());

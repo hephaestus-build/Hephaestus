@@ -66,12 +66,14 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -115,8 +117,15 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     private TaskEnvelopeWriter taskEnvelopeWriter;
     private PullRequestReviewHandler handler;
 
+    @Mock
+    private PublicReviewEligibility publicEligibility;
+
     @BeforeEach
     void setUp() {
+        lenient().when(publicEligibility.publicObservationIds(any(), any())).thenAnswer(invocation -> {
+            Collection<Observation> rows = invocation.getArgument(1);
+            return rows.stream().map(Observation::getId).collect(Collectors.toSet());
+        });
         resultParser = new ReviewResultParser(objectMapper);
         taskEnvelopeWriter = new TaskEnvelopeWriter(objectMapper);
         var practiceCatalogInjector = new PracticeCatalogInjector(
@@ -143,7 +152,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                         mock(FeedbackLedgerRecorder.class)),
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository, mock(ObservationRepository.class), mock(FeedbackLedgerRecorder.class)),
-                observationRepository);
+                observationRepository,
+                publicEligibility);
     }
 
     @Test

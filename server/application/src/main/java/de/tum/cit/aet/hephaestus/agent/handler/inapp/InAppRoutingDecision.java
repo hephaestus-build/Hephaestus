@@ -36,13 +36,8 @@ public enum InAppRoutingDecision {
      */
     RECENTLY_SURFACED,
 
-    /**
-     * The practice's occasion is about a reviewer or an assignee rather than the author who did or merged
-     * the work, so the observations bound to it may be filed against the wrong person. Refused by name rather than shown: the private
-     * view is the surface that would make the misattribution visible, to the one person it is not about.
-     * Recipient attribution must work end to end before this guard lifts (ADR 0029).
-     */
-    REVIEWER_ATTRIBUTED,
+    /** The practice's subject is not supported by the review's recipient attribution. */
+    UNATTRIBUTABLE_SUBJECT,
 
     /** The composed message arrived without a body or a next step, so there is nothing to deliver. */
     INCOMPLETE,

@@ -70,6 +70,7 @@ public class PracticeFeedbackDeliveryPolicy {
     private final DeliveryPolicyEvaluationRecorder evaluationRecorder;
     private final PracticeRepository practiceRepository;
     private final FeedbackApprovalRepository approvalRepository;
+    private final PublicReviewEligibility publicReviewEligibility;
 
     PracticeFeedbackDeliveryPolicy(
             IssueRepository issueRepository,
@@ -86,10 +87,12 @@ public class PracticeFeedbackDeliveryPolicy {
             FeedbackApprovalRepository approvalRepository,
             ConversationSourceLiveness conversationSourceLiveness,
             ReviewMemberAiPolicy memberAiPolicy,
-            DocumentProjection documentProjection) {
+            DocumentProjection documentProjection,
+            PublicReviewEligibility publicReviewEligibility) {
         this.conversationSourceLiveness = conversationSourceLiveness;
         this.memberAiPolicy = memberAiPolicy;
         this.documentProjection = documentProjection;
+        this.publicReviewEligibility = publicReviewEligibility;
         this.issueRepository = issueRepository;
         this.pullRequestRepository = pullRequestRepository;
         this.reviewTargets = reviewTargets;
@@ -106,12 +109,13 @@ public class PracticeFeedbackDeliveryPolicy {
 
     @Transactional(readOnly = true)
     public Decision<Issue> evaluateIssue(AgentJob job) {
-        return evaluateIssue(job, DeliveryPolicyStage.AUTOMATIC, null, DeliveryPolicySurface.ARTIFACT, Set.of(), null);
+        return evaluateIssue(
+                job, DeliveryPolicyStage.AUTOMATIC, null, DeliveryPolicySurface.ARTIFACT, Set.of(), null, null);
     }
 
     @Transactional(readOnly = true)
     public Decision<Issue> evaluateIssue(AgentJob job, DeliveryPolicyStage stage, @Nullable UUID feedbackId) {
-        return evaluateIssue(job, stage, feedbackId, DeliveryPolicySurface.ARTIFACT, Set.of(), null);
+        return evaluateIssue(job, stage, feedbackId, DeliveryPolicySurface.ARTIFACT, Set.of(), null, null);
     }
 
     @Transactional(readOnly = true)
@@ -120,7 +124,8 @@ public class PracticeFeedbackDeliveryPolicy {
             DeliveryPolicyStage stage,
             @Nullable UUID feedbackId,
             Collection<String> contributingPracticeSlugs) {
-        return evaluateIssue(job, stage, feedbackId, DeliveryPolicySurface.ARTIFACT, contributingPracticeSlugs, null);
+        return evaluateIssue(
+                job, stage, feedbackId, DeliveryPolicySurface.ARTIFACT, contributingPracticeSlugs, null, null);
     }
 
     private Decision<Issue> evaluateIssue(
@@ -129,7 +134,8 @@ public class PracticeFeedbackDeliveryPolicy {
             @Nullable UUID feedbackId,
             DeliveryPolicySurface surface,
             Collection<String> contributingPracticeSlugs,
-            @Nullable Long recipientUserId) {
+            @Nullable Long recipientUserId,
+            @Nullable Set<UUID> citedIds) {
         long workspaceId = requireWorkspaceId(job);
         Workspace workspace = activePracticeWorkspace(workspaceId);
         boolean instanceMayDeliver = !silentModeQuery.isSilentModeEngaged();
@@ -190,17 +196,19 @@ public class PracticeFeedbackDeliveryPolicy {
                 ? FeedbackSuppressionReason.ARTIFACT_GONE
                 : surface != DeliveryPolicySurface.ARTIFACT
                         ? null
-                        : closedWhenQueued || target.getState() == Issue.State.CLOSED
-                                ? FeedbackSuppressionReason.ARTIFACT_CLOSED
-                                : target.getReviewSnapshotId() == null
-                                                || !target.getReviewSnapshotId()
-                                                        .toString()
-                                                        .equals(Objects.requireNonNull(
-                                                                        metadata, "eligible issue has metadata")
-                                                                .path("review_snapshot_id")
-                                                                .asString(""))
-                                        ? FeedbackSuppressionReason.ISSUE_SNAPSHOT_CHANGED
-                                        : null;
+                        : metadata == null
+                                        || !PublicReviewEligibility.isAuthorJob(metadata)
+                                        || !publicSupportsAllowed(job, feedbackId, contributingPracticeSlugs, citedIds)
+                                ? FeedbackSuppressionReason.PUBLIC_SUBJECT_INELIGIBLE
+                                : closedWhenQueued || target.getState() == Issue.State.CLOSED
+                                        ? FeedbackSuppressionReason.ARTIFACT_CLOSED
+                                        : target.getReviewSnapshotId() == null
+                                                        || !target.getReviewSnapshotId()
+                                                                .toString()
+                                                                .equals(metadata.path("review_snapshot_id")
+                                                                        .asString(""))
+                                                ? FeedbackSuppressionReason.ISSUE_SNAPSHOT_CHANGED
+                                                : null;
         String repositoryName = issue == null || issue.getRepository() == null
                 ? null
                 : issue.getRepository().getNameWithOwner();
@@ -230,13 +238,13 @@ public class PracticeFeedbackDeliveryPolicy {
     @Transactional(readOnly = true)
     public Decision<PullRequest> evaluatePullRequest(AgentJob job) {
         return evaluatePullRequest(
-                job, DeliveryPolicyStage.AUTOMATIC, null, DeliveryPolicySurface.ARTIFACT, Set.of(), null);
+                job, DeliveryPolicyStage.AUTOMATIC, null, DeliveryPolicySurface.ARTIFACT, Set.of(), null, null);
     }
 
     @Transactional(readOnly = true)
     public Decision<PullRequest> evaluatePullRequest(
             AgentJob job, DeliveryPolicyStage stage, @Nullable UUID feedbackId) {
-        return evaluatePullRequest(job, stage, feedbackId, DeliveryPolicySurface.ARTIFACT, Set.of(), null);
+        return evaluatePullRequest(job, stage, feedbackId, DeliveryPolicySurface.ARTIFACT, Set.of(), null, null);
     }
 
     @Transactional(readOnly = true)
@@ -246,7 +254,7 @@ public class PracticeFeedbackDeliveryPolicy {
             @Nullable UUID feedbackId,
             Collection<String> contributingPracticeSlugs) {
         return evaluatePullRequest(
-                job, stage, feedbackId, DeliveryPolicySurface.ARTIFACT, contributingPracticeSlugs, null);
+                job, stage, feedbackId, DeliveryPolicySurface.ARTIFACT, contributingPracticeSlugs, null, null);
     }
 
     private Decision<PullRequest> evaluatePullRequest(
@@ -255,7 +263,8 @@ public class PracticeFeedbackDeliveryPolicy {
             @Nullable UUID feedbackId,
             DeliveryPolicySurface surface,
             Collection<String> contributingPracticeSlugs,
-            @Nullable Long recipientUserId) {
+            @Nullable Long recipientUserId,
+            @Nullable Set<UUID> citedIds) {
         long workspaceId = requireWorkspaceId(job);
         Workspace workspace = activePracticeWorkspace(workspaceId);
         boolean instanceMayDeliver = !silentModeQuery.isSilentModeEngaged();
@@ -310,17 +319,25 @@ public class PracticeFeedbackDeliveryPolicy {
                 ? pullRequest
                 : null;
         PracticeReviewSettings settings = workspace.getReviewSettings();
-        // Private preparation retains its own evidence gates. The merged-work setting governs only the public note.
+        // Private preparation retains its own evidence gates. Public placement is only for the author's work.
+        boolean aboutTheAuthor = target != null
+                && metadata != null
+                && PublicReviewEligibility.isAuthorJob(metadata)
+                && Objects.equals(target.reviewSubject().actorId(), subjectUserId);
         FeedbackSuppressionReason artifactRefusal = target == null
                 ? FeedbackSuppressionReason.ARTIFACT_GONE
                 : surface != DeliveryPolicySurface.ARTIFACT
                         ? null
-                        : target.getState() == Issue.State.CLOSED
-                                ? FeedbackSuppressionReason.ARTIFACT_CLOSED
-                                : target.getState() == Issue.State.MERGED
-                                                && !settings.resolveDeliverToMerged(reviewProperties.deliverToMerged())
-                                        ? FeedbackSuppressionReason.ARTIFACT_MERGED
-                                        : null;
+                        : !aboutTheAuthor
+                                        || !publicSupportsAllowed(job, feedbackId, contributingPracticeSlugs, citedIds)
+                                ? FeedbackSuppressionReason.PUBLIC_SUBJECT_INELIGIBLE
+                                : target.getState() == Issue.State.CLOSED
+                                        ? FeedbackSuppressionReason.ARTIFACT_CLOSED
+                                        : target.getState() == Issue.State.MERGED
+                                                        && !settings.resolveDeliverToMerged(
+                                                                reviewProperties.deliverToMerged())
+                                                ? FeedbackSuppressionReason.ARTIFACT_MERGED
+                                                : null;
         String repositoryName = pullRequest == null || pullRequest.getRepository() == null
                 ? null
                 : pullRequest.getRepository().getNameWithOwner();
@@ -349,6 +366,37 @@ public class PracticeFeedbackDeliveryPolicy {
                 : Decision.suppressed(resolution.result().refusal());
     }
 
+    /** The dispatch's own cited identities authorize every remaining public placement, including recovery. */
+    @Transactional(readOnly = true)
+    public Decision<?> evaluateAtEgress(
+            AgentJob job, @Nullable UUID feedbackId, Collection<String> practiceSlugs, Set<UUID> citedIds) {
+        if (ArtifactKinds.ISSUE.equals(job.getArtifactKind())) {
+            return evaluateIssue(
+                    job,
+                    DeliveryPolicyStage.EGRESS,
+                    feedbackId,
+                    DeliveryPolicySurface.ARTIFACT,
+                    practiceSlugs,
+                    null,
+                    citedIds);
+        }
+        return evaluatePullRequest(
+                job,
+                DeliveryPolicyStage.EGRESS,
+                feedbackId,
+                DeliveryPolicySurface.ARTIFACT,
+                practiceSlugs,
+                null,
+                citedIds);
+    }
+
+    private boolean publicSupportsAllowed(
+            AgentJob job, @Nullable UUID feedbackId, Collection<String> practiceSlugs, @Nullable Set<UUID> citedIds) {
+        // Before a package has exact cited identities, this check authorizes only the author job.
+        return (feedbackId == null && citedIds == null)
+                || publicReviewEligibility.permitsDelivery(job, feedbackId, practiceSlugs, citedIds);
+    }
+
     @Transactional(readOnly = true)
     public boolean allowsComposition(AgentJob job, DeliveryPolicySurface surface) {
         if (surface == DeliveryPolicySurface.ARTIFACT) {
@@ -356,11 +404,11 @@ public class PracticeFeedbackDeliveryPolicy {
         }
         JsonNode metadata = job.getMetadata();
         if (metadata != null && metadata.path("issue_id").isIntegralNumber()) {
-            return evaluateIssue(job, DeliveryPolicyStage.COMPOSITION, null, surface, Set.of(), null)
+            return evaluateIssue(job, DeliveryPolicyStage.COMPOSITION, null, surface, Set.of(), null, null)
                     .allowed();
         }
         if (metadata != null && metadata.path("pull_request_id").isIntegralNumber()) {
-            return evaluatePullRequest(job, DeliveryPolicyStage.COMPOSITION, null, surface, Set.of(), null)
+            return evaluatePullRequest(job, DeliveryPolicyStage.COMPOSITION, null, surface, Set.of(), null, null)
                     .allowed();
         }
         Long aboutUserId = integralId(metadata, "about_user_id").orElse(null);
@@ -404,11 +452,11 @@ public class PracticeFeedbackDeliveryPolicy {
                     "ARTIFACT delivery is decided by evaluateIssue/evaluatePullRequest, not by recipient");
         }
         if (ArtifactKinds.ISSUE.equals(job.getArtifactKind())) {
-            return evaluateIssue(job, stage, feedbackId, surface, contributingPracticeSlugs, aboutUserId)
+            return evaluateIssue(job, stage, feedbackId, surface, contributingPracticeSlugs, aboutUserId, null)
                     .verdict();
         }
         if (ArtifactKinds.PULL_REQUEST.equals(job.getArtifactKind())) {
-            return evaluatePullRequest(job, stage, feedbackId, surface, contributingPracticeSlugs, aboutUserId)
+            return evaluatePullRequest(job, stage, feedbackId, surface, contributingPracticeSlugs, aboutUserId, null)
                     .verdict();
         }
         return evaluateRepositorylessWithinTransaction(

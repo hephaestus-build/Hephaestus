@@ -4195,7 +4195,9 @@ async function main() {
 		const text = buildReviewTurn({
 			sameWork: buildSameWorkContext(CWD, taskEnvelope.paths.contextRoot, folderIndex, framing),
 			observations: reviewable,
-			undecided: uncertainOutcomes(admittedObservations),
+			undecided: uncertainOutcomes(
+				admittedObservations.filter((observation) => observation.publicEligible === true),
+			),
 			alreadySaid: alreadySaid.feedback,
 			ownHistoryOmissions: alreadySaid.omissions,
 			captured,

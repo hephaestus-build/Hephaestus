@@ -119,15 +119,15 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
 
     /**
      * Whether a dispatch citing this observation ended withheld or failed without accounting for a write an earlier
-     * attempt may have begun. Only a withholding for an invalidated observation reconciles those first, so it alone
-     * is trusted.
+     * attempt may have begun. Invalidation and public-subject refusals reconcile those first; other retained
+     * suppression reasons do not establish that their earlier writes were accounted for.
      */
     @Query(value = """
         SELECT EXISTS (
             SELECT 1 FROM feedback_dispatch d
             JOIN observation o ON o.id = :observationId AND o.workspace_id = d.workspace_id
             WHERE d.workspace_id = :workspaceId AND d.state IN ('SUPPRESSED', 'FAILED')
-              AND COALESCE(d.suppression_reason, '') <> 'OBSERVATION_INVALIDATED'
+              AND COALESCE(d.suppression_reason, '') NOT IN ('OBSERVATION_INVALIDATED', 'PUBLIC_SUBJECT_INELIGIBLE')
               AND (d.write_started OR
         """ + INLINE_WRITE_MAY_HAVE_STARTED + """
               )

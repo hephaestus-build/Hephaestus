@@ -25,7 +25,7 @@ sealed interface AdmittedDelivery {
      * text, so it waits as a whole. {@link Automatic} otherwise, with the practices its parts rest on.
      *
      * @param recorded every observation the review recorded, in delivery order
-     * @param subjects the person each recorded observation is about, by observation id
+     * @param publicSubjects the person each publicly eligible observation is about, by observation id ({@link PublicReviewEligibility})
      * @param awaitingApproval the observations awaiting approval
      * @param automatic the observations admitted without approval
      */
@@ -33,11 +33,11 @@ sealed interface AdmittedDelivery {
             ComposedReview review,
             ArtifactKind artifact,
             List<ValidatedObservation> recorded,
-            Map<UUID, Long> subjects,
+            Map<UUID, Long> publicSubjects,
             List<ValidatedObservation> awaitingApproval,
             List<ValidatedObservation> automatic) {
         ComposedReviewAdmission.Admission admission =
-                ComposedReviewAdmission.admit(review, artifact, recorded, subjects, automatic, awaitingApproval);
+                ComposedReviewAdmission.admit(review, artifact, recorded, publicSubjects, automatic, awaitingApproval);
         DeliveryContent content = admission.content();
         if (admission.needsApproval() && content != null) {
             return new Proposed(content);

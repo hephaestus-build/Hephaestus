@@ -42,7 +42,7 @@ final class ComposedReviewAdmission {
 
     /**
      * @param recorded every observation the review recorded, stamped with its persisted identities
-     * @param subjects the person each recorded observation is about, by observation id
+     * @param publicSubjects the person each publicly eligible observation is about, by observation id ({@link PublicReviewEligibility})
      * @param automatic the observations admitted to the work without approval
      * @param awaitingApproval the observations admitted to the work only once a reviewer approves
      */
@@ -50,7 +50,7 @@ final class ComposedReviewAdmission {
             ComposedReview review,
             ArtifactKind artifact,
             List<ValidatedObservation> recorded,
-            Map<UUID, Long> subjects,
+            Map<UUID, Long> publicSubjects,
             List<ValidatedObservation> automatic,
             List<ValidatedObservation> awaitingApproval) {
         Map<String, ValidatedObservation> byId = new HashMap<>();
@@ -69,7 +69,7 @@ final class ComposedReviewAdmission {
         if (composedSummary != null) {
             Part part = PullRequestCommentPoster.speaksApproval(composedSummary.body())
                     ? null
-                    : partOf(composedSummary.basedOn(), byId, subjects, automaticIds, approvalIds);
+                    : partOf(composedSummary.basedOn(), byId, publicSubjects, automaticIds, approvalIds);
             if (part != null) {
                 summary = composedSummary.body();
                 summaryContributors = keysOf(part.support());
@@ -88,7 +88,7 @@ final class ComposedReviewAdmission {
             }
             Part part = PullRequestCommentPoster.speaksApproval(note.body())
                     ? null
-                    : partOf(note.basedOn(), byId, subjects, automaticIds, approvalIds);
+                    : partOf(note.basedOn(), byId, publicSubjects, automaticIds, approvalIds);
             if (part == null
                     || part.support().stream()
                             .anyMatch(observation ->
@@ -134,7 +134,8 @@ final class ComposedReviewAdmission {
                             .anyMatch(observation -> observation.outcome() != Outcome.NOT_MET
                                     || observation.occurrenceKey() == null
                                     || observation.occurrenceKey().isBlank()
-                                    || !PublicReviewEligibility.admits(observation.evidence()))) {
+                                    || observation.observationId() == null
+                                    || !publicSubjects.containsKey(observation.observationId()))) {
                 continue;
             }
             for (ValidatedObservation observation : support) {
@@ -159,13 +160,14 @@ final class ComposedReviewAdmission {
 
     /**
      * A part rests on what it names, or it does not go out. An observation that decides nothing — not applicable,
-     * undetermined — cannot carry a claim about the work, and one drawn from the person's history is not a fact about
-     * it ({@link PublicReviewEligibility}), so a part naming either is refused like one the gates held.
+     * undetermined — cannot carry a claim about the work, and one that is not about the work's author or is drawn from
+     * the person's history may not appear on it ({@link PublicReviewEligibility}), so a part naming either is refused
+     * like one the gates held.
      */
     private static @Nullable Part partOf(
             List<String> basedOn,
             Map<String, ValidatedObservation> byId,
-            Map<UUID, Long> subjects,
+            Map<UUID, Long> publicSubjects,
             Set<String> automaticIds,
             Set<String> approvalIds) {
         if (basedOn.isEmpty()) return null;
@@ -177,9 +179,8 @@ final class ComposedReviewAdmission {
             if (observation == null
                     || observation.occurrenceKey() == null
                     || observation.occurrenceKey().isBlank()
-                    || !observation.outcome().isDecided()
-                    || !PublicReviewEligibility.admits(observation.evidence())) return null;
-            Long subject = subjects.get(UUID.fromString(id));
+                    || !observation.outcome().isDecided()) return null;
+            Long subject = publicSubjects.get(UUID.fromString(id));
             if (subject == null) return null;
             about.add(subject);
             if (!automaticIds.contains(id)) {

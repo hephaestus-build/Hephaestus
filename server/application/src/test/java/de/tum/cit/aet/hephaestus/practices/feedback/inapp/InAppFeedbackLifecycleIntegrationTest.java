@@ -65,6 +65,8 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -241,17 +243,15 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
         assertThat(cited(second)).isNotEmpty().doesNotContain(beforeTheWindow);
     }
 
-    /**
-     * An author who merged their own work is the person a MERGER practice is about, so the same lapse on two of
-     * their pieces of work is a card on their page. It cites both, and nothing filed against a colleague or in
-     * another workspace.
-     */
-    @Test
-    @DisplayName("a lapse the author made as merger on two pieces of work is prepared for the author, citing both")
-    void shouldPrepareACardWhenTheAuthorLapsedAsMergerOnTwoPiecesOfWork() {
+    /** A supported reviewer or author-as-merger pattern stays with its actual recipient. */
+    @ParameterizedTest
+    @EnumSource(
+            value = ActorRole.class,
+            names = {"MERGER", "REVIEWER"})
+    void shouldPrepareACardForTheRecordedRecipientWithoutColleagueOrOtherWorkspaceSupport(ActorRole subject) {
         Practice authored =
                 persistPractice(workspace, null, "merges-only-after-approval", "Merge only after approval", null);
-        authored.setSubject(ActorRole.MERGER);
+        authored.setSubject(subject);
         authored.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(authored, 2)));
         Practice merger = practiceRepository.saveAndFlush(authored);
         Instant earlierAt = NOW.minus(Duration.ofDays(3));

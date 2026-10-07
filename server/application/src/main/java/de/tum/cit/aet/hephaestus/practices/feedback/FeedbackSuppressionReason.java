@@ -18,6 +18,11 @@ public enum FeedbackSuppressionReason {
     ARTIFACT_CLOSED,
     ISSUE_SNAPSHOT_CHANGED,
     ARTIFACT_MERGED,
+    /**
+     * Feedback on the work itself speaks only about the work's author. The run was about somebody else, such as a
+     * reviewer, or its subject is not the author of the work, so nothing of it is placed on the work.
+     */
+    PUBLIC_SUBJECT_INELIGIBLE,
     /** @deprecated Read compatibility only; no current policy emits this reason. */
     @Deprecated
     ARTIFACT_DRAFT,

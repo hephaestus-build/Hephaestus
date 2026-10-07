@@ -59,6 +59,8 @@ import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -178,8 +180,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(1);
         lenient().when(repository.finish(any())).thenReturn(1);
         lenient()
-                .when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(REVIEWED_HEAD)));
+                .when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(
+                        invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(REVIEWED_HEAD)));
     }
 
     @Test
@@ -486,7 +489,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(leaseUntil.getValue()).isAfterOrEqualTo(before.plus(PracticeFeedbackDispatchService.LEASE));
         InOrder order = inOrder(channel, policy, repository);
         order.verify(channel).findExistingSummary(any(), eq(new FeedbackContent("body", summaryMarker(job))));
-        order.verify(policy).evaluatePullRequest(any(), any(), any(), any());
+        order.verify(policy).evaluateAtEgress(any(), any(), any(), any());
         order.verify(repository).beginWrite(any(), any(), anyString());
         order.verify(channel).postSummary(any(), eq(new FeedbackContent("body", summaryMarker(job))));
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
@@ -599,7 +602,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     @Test
     void aPauseDropsAutomaticFeedbackTerminally() {
         when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.suppressed(
                         FeedbackSuppressionReason.WORKSPACE_DELIVERY_PAUSED));
 
@@ -624,7 +627,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
         when(channel.findExistingSummary(any(), eq(new FeedbackContent("approved body", approvedMarker(feedback)))))
                 .thenReturn(ExistingSummaryLookup.absent());
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.suppressed(
                         FeedbackSuppressionReason.WORKSPACE_DELIVERY_PAUSED));
 
@@ -770,8 +773,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(withoutInlineNotes(pending)))
                 .thenReturn(Optional.of(withoutInlineNotes(sent)));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(policy.evaluateIssue(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(new Issue()));
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(new Issue()));
         when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
         when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("gid://gitlab/Note/5"));
 
@@ -792,7 +795,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                         argThat(target -> target.subjectExternalId().equals("acme/api#5")),
                         eq(new FeedbackContent("approved body", approvedMarker(feedback))));
         verify(channel, times(1)).postSummary(any(), any());
-        verify(policy, never()).evaluatePullRequest(any(), any(), any(), any());
+        verify(policy).evaluateAtEgress(eq(issueJob), any(), any(), any());
         verify(repository)
                 .finish(argThat(completion -> completion.state().equals(FeedbackDispatchState.SENT.name())
                         && "gid://gitlab/Note/5".equals(completion.externalRef())));
@@ -975,6 +978,94 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "false,missing,false",
+        "false,unknown,false",
+        "false,found,false",
+        "true,missing,false",
+        "true,unknown,false",
+        "true,found,false",
+        "false,unknown,true",
+        "false,found,true",
+        "true,unknown,true",
+        "true,found,true"
+    })
+    void shouldReconcileStartedInlineCopiesBeforeWithholdingPubliclyIneligibleSupport(
+            boolean approved, String lookup, boolean pastBudget) {
+        int attempts = pastBudget ? PracticeFeedbackDispatchService.MAX_ATTEMPTS : 1;
+        Feedback feedback = lineNotesOnlyFeedback("proposal-revision");
+        var firstKey = approved ? "approved:" + feedback.getId() + ":0" : "old-key";
+        var secondKey = approved ? "approved:" + feedback.getId() + ":1" : "second-key";
+        var landed = new InlineFeedbackChannel.DeliveredSignal(
+                firstKey,
+                anchorOf(APPROVED_LINE_NOTES.getFirst()),
+                InlineFeedbackChannel.Disposition.POSTED,
+                "inline-ref-0",
+                null);
+        var unknown = InlineFeedbackChannel.DeliveredSignal.attempted(secondKey, anchorOf(APPROVED_LINE_NOTES.get(1)));
+        FeedbackDispatch recovering;
+        if (approved) {
+            when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L))
+                    .thenReturn(Optional.of(feedback));
+            recovering = lineNotesOnlyDispatch(
+                    feedback.getId(),
+                    FeedbackDispatchState.UNCERTAIN,
+                    attempts,
+                    true,
+                    storedPlacements(landed, unknown));
+        } else {
+            recovering = inlineWriteBegun(
+                    withPackage(
+                            dispatch(job, FeedbackDispatchState.UNCERTAIN, false, attempts, ""),
+                            new ReviewResultParser.DeliveryContent(null, APPROVED_LINE_NOTES, List.of(), null)),
+                    storedPlacements(landed, unknown));
+        }
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.suppressed(
+                        FeedbackSuppressionReason.PUBLIC_SUBJECT_INELIGIBLE));
+        boolean found = lookup.equals("found");
+        var confirmed = new InlineFeedbackChannel.DeliveredSignal(
+                secondKey,
+                unknown.anchor(),
+                InlineFeedbackChannel.Disposition.PRESERVED_EXISTING,
+                "inline-ref-1",
+                null);
+        var inlineChannel = mock(InlineFeedbackChannel.class);
+        when(inlineChannel.kind()).thenReturn(IntegrationKind.GITLAB);
+        when(inlineChannel.findPosted(any(), any(), any()))
+                .thenReturn(found ? List.of(confirmed) : lookup.equals("unknown") ? null : List.of());
+        var formatter = mock(PracticeFeedbackCommentFormatter.class);
+        lenient()
+                .when(formatter.appendInlineFeedbackPrompt(anyString(), eq(job)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        var nativePoster =
+                new DiffNotePoster(new PullRequestCommentPoster(List.of(channel)), formatter, List.of(inlineChannel));
+        when(diffNotePoster.findUnacknowledged(eq(job), any(), eq(APPROVED_LINE_NOTES), any()))
+                .thenAnswer(invocation -> nativePoster.findUnacknowledged(
+                        job, invocation.getArgument(1), invocation.getArgument(2), invocation.getArgument(3)));
+
+        var result = service.recover(recovering, job);
+
+        assertThat(result.status())
+                .isEqualTo(
+                        found
+                                ? PracticeFeedbackDispatchService.Result.Status.SUPPRESSED
+                                : PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        assertThat(result.deliveredSignals())
+                .anySatisfy(signal -> assertThat(signal.externalRef()).isEqualTo(landed.externalRef()));
+        if (found) {
+            assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.PUBLIC_SUBJECT_INELIGIBLE);
+            assertThat(result.deliveredSignals())
+                    .anySatisfy(signal -> assertThat(signal.externalRef()).isEqualTo(confirmed.externalRef()));
+        }
+        verify(inlineChannel).findPosted(any(), any(), any());
+        verify(inlineChannel, never()).postImmutablePackage(any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
+        verify(channel, never()).postSummary(any(), any());
+        verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
+    }
+
     @Test
     void shouldSendApprovedLineNotesClaimedPastTheBudgetOnceEveryNoteIsFound() {
         Feedback feedback = lineNotesOnlyFeedback("proposal-revision");
@@ -1041,8 +1132,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
                 .thenReturn(Optional.of(lineNotesOnlyDispatch(feedback.getId(), FeedbackDispatchState.PENDING, 0)));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(
                         pullRequestAt("9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b")));
 
         var result = service.dispatchApproved(job, feedback);
@@ -1078,8 +1169,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
                 .thenReturn(Optional.of(lineNotesOnlyDispatch(feedback.getId(), FeedbackDispatchState.PENDING, 0)));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(recorded)));
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(recorded)));
         when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any(), any()))
                 .thenReturn(delivered(List.of(
                         lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.POSTED),
@@ -1093,8 +1184,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     @Test
     void shouldNotPostTheSummaryOnceTheChangeMovedPastTheReviewedCommit() {
         when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
 
         var result = dispatchAutomaticReview(job, "body", Set.of("practice"));
 
@@ -1127,8 +1218,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         dispatch = withPackage(dispatch(job, FeedbackDispatchState.PENDING, false, 0, ""), content);
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(new PullRequest()));
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(new PullRequest()));
 
         var result = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
 
@@ -1144,8 +1235,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         dispatch = withPackage(dispatch(job, FeedbackDispatchState.PENDING, false, 0, ""), content);
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
 
         var result = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
 
@@ -1164,8 +1255,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 storedPlacements(unknown));
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
         when(policy.currentReviewedRevision(job, null))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
         var found = new InlineFeedbackChannel.DeliveredSignal(
@@ -1260,8 +1351,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(lineNotesOnlyDispatch(
                         feedback.getId(), FeedbackDispatchState.UNCERTAIN, 1, true, storedPlacements(unknown))));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
         var landed = lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.PRESERVED_EXISTING);
         var refused = InlineFeedbackChannel.DeliveredSignal.notSent(
                 "approved:" + feedback.getId() + ":1", anchorOf(APPROVED_LINE_NOTES.get(1)));

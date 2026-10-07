@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -81,8 +82,43 @@ class AdmittedDeliveryTest extends BaseUnitTest {
             List<ValidatedObservation> recorded,
             List<ValidatedObservation> awaitingApproval,
             List<ValidatedObservation> automatic) {
+        return decide(review, recorded, awaitingApproval, automatic, subjects.keySet());
+    }
+
+    private AdmittedDelivery decide(
+            ComposedReview review,
+            List<ValidatedObservation> recorded,
+            List<ValidatedObservation> awaitingApproval,
+            List<ValidatedObservation> automatic,
+            Set<UUID> publicIds) {
         return AdmittedDelivery.decide(
-                review, ArtifactKinds.PULL_REQUEST, recorded, subjects, awaitingApproval, automatic);
+                review,
+                ArtifactKinds.PULL_REQUEST,
+                recorded,
+                subjects.entrySet().stream()
+                        .filter(entry -> publicIds.contains(entry.getKey()))
+                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
+                awaitingApproval,
+                automatic);
+    }
+
+    @Test
+    void shouldPreserveAnIndependentAuthorPartButRefuseTheWholeBodyOfMixedRoleSupport() {
+        ValidatedObservation author = problem("describe-what-and-why");
+        ValidatedObservation reviewer = problem("review-communication");
+        ComposedReview review = new ComposedReview(
+                new ComposedReview.Summary("Explain the purpose of this change.", List.of(id(author))),
+                List.of(note("This body concerns both the change and its review.", author, reviewer)),
+                List.of());
+        DeliveryContent content = automatic(AdmittedDelivery.decide(
+                review,
+                ArtifactKinds.PULL_REQUEST,
+                List.of(author, reviewer),
+                Map.of(Objects.requireNonNull(author.observationId()), AUTHOR),
+                List.of(),
+                List.of(author, reviewer)));
+        assertThat(content.mrNote()).isEqualTo("Explain the purpose of this change.");
+        assertThat(content.diffNotes()).isEmpty();
     }
 
     private static DeliveryContent automatic(AdmittedDelivery delivery) {
@@ -180,7 +216,8 @@ class AdmittedDeliveryTest extends BaseUnitTest {
                         List.of()),
                 List.of(undecided, fromHistory),
                 List.of(),
-                List.of(undecided, fromHistory));
+                List.of(undecided, fromHistory),
+                Set.of(Objects.requireNonNull(undecided.observationId())));
 
         assertThat(delivery).isEqualTo(new AdmittedDelivery.Automatic(null, Set.of()));
     }
@@ -273,7 +310,10 @@ class AdmittedDeliveryTest extends BaseUnitTest {
                                         ComposedFeedbackUnit.WithholdReason.BELOW_BAR))),
                 List.of(lapse, strength, fromHistory),
                 List.of(),
-                List.of(lapse, strength, fromHistory));
+                List.of(lapse, strength, fromHistory),
+                Set.of(
+                        Objects.requireNonNull(lapse.observationId()),
+                        Objects.requireNonNull(strength.observationId())));
 
         assertThat(delivery).isEqualTo(new AdmittedDelivery.Automatic(null, Set.of()));
     }
