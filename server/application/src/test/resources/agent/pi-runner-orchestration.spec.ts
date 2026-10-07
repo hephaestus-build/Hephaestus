@@ -170,6 +170,15 @@ const scenario = process.env.PI_ORCHESTRATION_SCENARIO;
 if (scenario !== undefined && scenario !== "") {
 	const cwd = process.env.PI_RUNNER_CWD;
 	assert.ok(cwd !== undefined && cwd !== "");
+	if (scenario === "scope-stop-hangs") {
+		const timer = globalThis.setTimeout;
+		mock.method(
+			globalThis,
+			"setTimeout",
+			(callback: (...args: unknown[]) => void, ms?: number, ...args: unknown[]) =>
+				timer(callback, ms === 30_000 ? 10 : ms, ...args),
+		);
+	}
 	let now = 1_000_000;
 	mock.method(Date, "now", () => now);
 	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
@@ -247,6 +256,7 @@ if (scenario !== undefined && scenario !== "") {
 		buildSessionProjection: () => ({ messages: [] }),
 	};
 	let prompts = 0;
+	let measuredTool: CustomTool | undefined;
 	/** What the runner steered the session with, in order. */
 	const steered: string[] = [];
 	let wasCompacted = false;
@@ -289,10 +299,16 @@ if (scenario !== undefined && scenario !== "") {
 					assert.ok(cwd !== undefined && cwd !== "");
 					// The measurement session's loader comes first; the review composition's own follows it.
 					const first = !existsSync(nodePath.join(cwd, "system-prompt.md"));
-					writeFileSync(
-						nodePath.join(cwd, first ? "system-prompt.md" : "review-system-prompt.md"),
-						options.systemPrompt,
+					const privateComposition = options.systemPrompt.includes(
+						"Compose from admitted observations.",
 					);
+					let promptFile = "system-prompt.md";
+					if (!first) {
+						promptFile = privateComposition
+							? "private-system-prompt.md"
+							: "review-system-prompt.md";
+					}
+					writeFileSync(nodePath.join(cwd, promptFile), options.systemPrompt);
 					if (!first) {
 						record(`review-loader extensions=${String(options.extensionFactories?.length)}`);
 					}
@@ -318,6 +334,7 @@ if (scenario !== undefined && scenario !== "") {
 			},
 			async createAgentSession(options: { tools: string[]; customTools: CustomTool[] }) {
 				const handlers = new Set<(event: unknown) => void>();
+				let settlementUsageEmitted = false;
 				let queued = 0;
 				const emit = (event: unknown) => {
 					for (const handler of handlers) {
@@ -325,6 +342,10 @@ if (scenario !== undefined && scenario !== "") {
 					}
 				};
 				record(`create:session tools=${options.tools.join(",")}`);
+				if (scenario === "settle-safety") {
+					now += 20_000;
+					compacting = false;
+				}
 				if (scenario === "session-init") {
 					throw new Error("session initialization failed");
 				}
@@ -357,8 +378,27 @@ if (scenario !== undefined && scenario !== "") {
 						sessionManager: manager,
 						subscribe(handler: (event: unknown) => void) {
 							handlers.add(handler);
-							return () => {
+							return async () => {
 								handlers.delete(handler);
+								if (scenario === "scope-stop-hangs") {
+									const statePath = nodePath.join(cwd, "out/review-state.json");
+									const before = readFileSync(statePath, "utf8");
+									const reply = await tool("report_observation").execute("late", {
+										observations: [
+											{
+												...observation("test-practice", "Late overwrite"),
+												revises: "test-practice",
+											},
+										],
+									});
+									assert.ok(isRecord(reply));
+									assert.ok(isRecord(reply.details));
+									assert.equal(reply.details.inserted, 0);
+									assert.equal(reply.details.revised, 0);
+									assert.equal(reply.details.refused, 0);
+									assert.equal(readFileSync(statePath, "utf8"), before);
+									record("late-record-closed");
+								}
 							};
 						},
 						clearQueue: () => {
@@ -396,6 +436,28 @@ if (scenario !== undefined && scenario !== "") {
 						},
 						abort: async () => {
 							record("abort");
+							if (scenario === "scope-stop-hangs") {
+								return Promise.withResolvers<undefined>().promise;
+							}
+							if (scenario === "scope-stop-failure") {
+								throw new Error("Native session did not settle");
+							}
+							if (
+								scenario === "compose-late-usage" &&
+								options.tools.includes("report_review") &&
+								!settlementUsageEmitted
+							) {
+								settlementUsageEmitted = true;
+								emit({
+									type: "message_end",
+									message: {
+										role: "assistant",
+										stopReason: "stop",
+										usage: callUsage(77),
+										content: [],
+									},
+								});
+							}
 							// The aborted call ends a moment later, and abort() settles once the session is
 							// idle — which a compaction still in flight keeps it from being.
 							setTimeout(() => releasePrompt?.(), 50);
@@ -793,7 +855,11 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (text.includes("## This turn")) {
 								if (scenario === "draft-revision") {
-									const closed = await tool("report_observation").execute("after-admission", {
+									assert.ok(
+										!options.customTools.some((item) => item.name === "report_observation"),
+									);
+									assert.ok(measuredTool);
+									const closed = await measuredTool.execute("after-admission", {
 										observations: [
 											{
 												...observation("test-practice", "Forbidden late replacement"),
@@ -804,7 +870,7 @@ if (scenario !== undefined && scenario !== "") {
 									record(`draft-closed:${JSON.stringify(closed)}`);
 									return;
 								}
-								// The composition turn, in the same session.
+								// Private composition has its own session.
 								if (scenario === "compose-settle-deadline") {
 									// The response ended, but its auto-compaction remains busy until the deadline.
 									compacting = true;
@@ -1006,6 +1072,158 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							const report = tool("report_observation");
+							measuredTool = report;
+							const currentSlug = /### Practice `(?<slug>[^`]+)`/u.exec(text)?.groups?.slug;
+							assert.ok(currentSlug !== undefined && currentSlug !== "");
+							if (scenario === "scope-cut-off") {
+								emit({
+									type: "message_end",
+									message: {
+										role: "assistant",
+										stopReason: "length",
+										usage: callUsage(1),
+										content: [],
+									},
+								});
+							}
+							if (scenario === "scope-recording-guard" && currentSlug === "second-practice") {
+								for (let attempt = 0; attempt < 24; attempt += 1) {
+									emit({
+										type: "tool_execution_start",
+										toolCallId: `invalid-${attempt}`,
+										toolName: "report_observation",
+										args: { invalidShape: attempt },
+									});
+									emit({
+										type: "tool_execution_end",
+										toolCallId: `invalid-${attempt}`,
+										toolName: "report_observation",
+										isError: true,
+										result: { content: [{ type: "text", text: "Invalid native schema" }] },
+									});
+								}
+								return;
+							}
+							if (scenario === "scope-repeat") {
+								emit({
+									type: "message_end",
+									message: {
+										role: "assistant",
+										stopReason: "toolUse",
+										usage: callUsage(100),
+										content: [
+											{
+												type: "toolCall",
+												id: currentSlug,
+												name: "read",
+												arguments: { path: "work/change/diff.patch" },
+											},
+										],
+									},
+								});
+								emit({
+									type: "tool_execution_start",
+									toolCallId: currentSlug,
+									toolName: "read",
+									args: { path: "work/change/diff.patch" },
+								});
+								await report.execute("own", {
+									observations: [observation(currentSlug, `Own ${currentSlug}`)],
+								});
+								return;
+							}
+							if (scenario === "scope-ownership") {
+								const sibling =
+									currentSlug === "test-practice" ? "second-practice" : "test-practice";
+								const before = existsSync(nodePath.join(cwd, "out/review-state.json"))
+									? readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8")
+									: null;
+								for (let attempt = 0; attempt < 9; attempt += 1) {
+									await assert.rejects(
+										report.execute(`inactive-${attempt}`, {
+											observations: [
+												observation(sibling, "Inactive result"),
+												observation(sibling, "Duplicate inactive result"),
+											],
+										}),
+										/without changing any drafts/u,
+									);
+								}
+								await assert.rejects(
+									report.execute("inactive-revision", {
+										observations: [
+											{ ...observation(sibling, "Overwrite sibling"), revises: sibling },
+										],
+									}),
+									/this session/u,
+								);
+								assert.equal(
+									existsSync(nodePath.join(cwd, "out/review-state.json"))
+										? readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8")
+										: null,
+									before,
+								);
+								await report.execute("own", {
+									observations: [observation(currentSlug, `Own ${currentSlug}`)],
+								});
+								return;
+							}
+							if (scenario === "scope-stop-failure" || scenario === "scope-stop-hangs") {
+								emit({
+									type: "message_end",
+									message: {
+										role: "assistant",
+										stopReason: "toolUse",
+										usage: callUsage(55),
+										content: [],
+									},
+								});
+							}
+							if (scenario === "scope-budget") {
+								for (let call = 0; call < 3; call += 1) {
+									emit({
+										type: "message_end",
+										message: {
+											role: "assistant",
+											stopReason: "toolUse",
+											usage: callUsage(100),
+											content: [
+												{
+													type: "toolCall",
+													id: `${currentSlug}-${call}`,
+													name: call === 2 ? "report_observation" : "read",
+													arguments: {},
+												},
+											],
+										},
+									});
+									if (call === 2) {
+										const result = await report.execute(`${currentSlug}-${call}`, {
+											observations: [observation(currentSlug, `Own ${currentSlug}`)],
+										});
+										emit({
+											type: "tool_execution_end",
+											toolCallId: `${currentSlug}-${call}`,
+											toolName: "report_observation",
+											isError: false,
+											result,
+										});
+									}
+									emit({ type: "turn_end" });
+								}
+								return;
+							}
+							if (
+								(scenario === "batch" || scenario === "draft-revision") &&
+								currentSlug === "second-practice"
+							) {
+								await report.execute("own-second", {
+									observations: [
+										observation(currentSlug, "Second practice recorded in its own session"),
+									],
+								});
+								return;
+							}
 							assert.match(report.description, /local review state/u);
 							// The SDK checks a call against this schema all or nothing, so it carries the shape and
 							// the vocabulary and no rule: a rule is applied per observation, by the tool.
@@ -1319,7 +1537,7 @@ if (scenario !== undefined && scenario !== "") {
 												},
 											},
 										},
-									],
+									].filter((item) => item.practiceSlug === currentSlug),
 								});
 								return;
 							}
@@ -1358,11 +1576,14 @@ if (scenario !== undefined && scenario !== "") {
 									);
 								record(`code-undecided:${code}`);
 								await report.execute("code", {
-									observations: [observation("test-practice", "Unsafe authentication call")],
+									observations: [observation(currentSlug, "Unsafe authentication call")],
 								});
 								return;
 							}
 							if (scenario !== "batch") {
+								if (scenario === "finish" && currentSlug === "second-practice") {
+									return;
+								}
 								if (scenario === "finish") {
 									// The message carrying this recording spent 1200 output tokens; the pace is read from it.
 									emit({
@@ -1378,7 +1599,7 @@ if (scenario !== undefined && scenario !== "") {
 									});
 								}
 								const measured = await report.execute("o-1", {
-									observations: [observation("test-practice", "Unsafe authentication call")],
+									observations: [observation(currentSlug, "Unsafe authentication call")],
 								});
 								if (scenario === "finish") {
 									record(`batch:${JSON.stringify(measured)}`);
@@ -1517,6 +1738,14 @@ if (scenario !== undefined && scenario !== "") {
 	await import("../../../main/resources/agent/pi-runner.ts");
 } else {
 	for (const stage of [
+		"scope-cut-off",
+		"scope-recording-guard",
+		"scope-repeat",
+		"scope-ownership",
+		"scope-budget",
+		"scope-stop-failure",
+		"scope-stop-hangs",
+		"compose-late-usage",
 		"setup",
 		"context-unfit",
 		"session-init",
@@ -1553,6 +1782,22 @@ if (scenario !== undefined && scenario !== "") {
 	]) {
 		void test(
 			{
+				"scope-cut-off":
+					"a truncated response in a prior practice does not consume the next session's correction chance",
+				"scope-recording-guard":
+					"a prior practice's stored result does not disable another session's schema-refusal loop guard",
+				"scope-repeat":
+					"identical evidence reads in fresh practice sessions do not become a repeated-call loop",
+				"scope-ownership":
+					"inactive reports and repeated inactive items cannot mutate drafts or spend another practice's refusal allowance",
+				"scope-budget":
+					"fresh practice sessions share one group budget and accumulate nonzero native usage once",
+				"scope-stop-hangs":
+					"a session that never settles fails within the existing deadline and retains drafts and usage without admission",
+				"scope-stop-failure":
+					"a native stop failure preserves drafts and starts no later practice session",
+				"compose-late-usage":
+					"public session settlement remains subscribed for its final native usage event",
 				setup: "does not start a session when setup reaches the safety ceiling",
 				"context-unfit":
 					"leaves essential oversized criteria not reached without creating observations or repeating compaction",
@@ -1576,7 +1821,7 @@ if (scenario !== undefined && scenario !== "") {
 				"replacement-witness": "refuses a replacement that relies on its superseded diff witness",
 				"comment-undecided":
 					"accepts an undecided result without the change only for a practice that does not read it",
-				finish: "asks once more, in the same session, for the practices no turn recorded",
+				finish: "finishes missing practices in fresh sessions under one shared finish budget",
 				"refusal-cap": "stops accepting a practice after eight refused submissions",
 				repeat: "nudges a turn that repeats one call and ends it when the call keeps coming",
 				"tree-citation":
@@ -1773,6 +2018,7 @@ if (scenario !== undefined && scenario !== "") {
 					);
 					let index = [practice("test-practice")];
 					if (
+						stage.startsWith("scope-") ||
 						stage === "finish" ||
 						stage === "batch" ||
 						stage === "draft-revision" ||
@@ -1787,7 +2033,22 @@ if (scenario !== undefined && scenario !== "") {
 					} else if (stage === "comment-undecided") {
 						index = [practice("test-practice"), practice("review-tone", ["scm.pull-request.core"])];
 					}
+					if (stage === "scope-repeat") {
+						index = Array.from({ length: 6 }, (_, i) =>
+							practice(i === 0 ? "test-practice" : `practice-${i}`),
+						);
+						for (const item of index.slice(1)) {
+							writeFileSync(
+								nodePath.join(cwd, `catalog/practices/${item.slug}.md`),
+								`Complete own criterion for ${item.slug}.`,
+							);
+						}
+					}
 					writeFileSync(nodePath.join(cwd, "catalog/practices/index.json"), JSON.stringify(index));
+					writeFileSync(
+						nodePath.join(cwd, "catalog/practices/second-practice.md"),
+						"Complete second criterion. Its own independent question.",
+					);
 					writeFileSync(
 						nodePath.join(cwd, "pi-provider.json"),
 						JSON.stringify({ apiProtocol: "openai-completions", modelId: "test-model" }),
@@ -1851,6 +2112,85 @@ if (scenario !== undefined && scenario !== "") {
 							})),
 						});
 					switch (stage) {
+						case "scope-cut-off": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.equal(readObservations(nodePath.join(cwd, "out/result.json")).length, 2);
+							assert.equal(events.filter((event) => event === "steer").length, 2);
+							assert.doesNotMatch(child.stderr, /2 calls in this session ran into/u);
+							break;
+						}
+						case "scope-recording-guard": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.match(
+								child.stderr,
+								/24 recording calls without a record — aborting this turn/u,
+							);
+							assert.equal(events.filter((event) => event.startsWith("create:")).length, 3);
+							assert.equal(readObservations(nodePath.join(cwd, "out/result.json")).length, 2);
+							break;
+						}
+						case "scope-repeat": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.equal(readObservations(nodePath.join(cwd, "out/result.json")).length, 6);
+							assert.equal(events.filter((event) => event.startsWith("create:")).length, 6);
+							assert.doesNotMatch(child.stderr, /aborting this turn|Finishing/u);
+							assert.match(child.stderr, /calls=6\/12/u);
+							break;
+						}
+						case "scope-ownership":
+						case "scope-budget": {
+							const result = readObservations(nodePath.join(cwd, "out/result.json"));
+							assert.equal(child.status, 0, child.stderr);
+							assert.equal(result.length, 2);
+							assert.equal(events.filter((event) => event.startsWith("create:")).length, 2);
+							assert.ok(events.indexOf("dispose") < events.indexOf("prompt:2"));
+							const first = readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8");
+							const second = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
+							assert.match(first, /# Test practice\nCriteria\./u);
+							assert.doesNotMatch(first, /Complete second criterion/u);
+							assert.match(second, /Complete second criterion\. Its own independent question\./u);
+							assert.doesNotMatch(second, /# Test practice|Own test-practice/u);
+							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
+							if (stage === "scope-budget") {
+								assert.match(
+									child.stderr,
+									/calls=6\/6, outputTokens=600\/24000, stoppedBy=budget/u,
+								);
+								assert.match(child.stderr, /Measured: .*calls=6/u);
+								assert.doesNotMatch(child.stderr, /Finishing/u);
+							}
+							break;
+						}
+						case "scope-stop-hangs":
+						case "scope-stop-failure": {
+							const result = readObservations(nodePath.join(cwd, "out/review-state.json"));
+							assert.equal(child.status, 2, child.stderr);
+							assert.equal(events.filter((event) => event.startsWith("create:")).length, 1);
+							assert.equal(result.length, 1);
+							assert.equal(result[0]?.practiceSlug, "test-practice");
+							assert.match(child.stderr, /Native session did not settle/u);
+							if (stage === "scope-stop-hangs") {
+								assert.ok(events.includes("late-record-closed"));
+							}
+							assert.ok(!existsSync(nodePath.join(cwd, "admission.json")));
+							const usage: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/usage.json"), "utf8"),
+							);
+							assert.ok(isRecord(usage));
+							assert.equal(usage.totalCalls, 1);
+							assert.equal(usage.outputTokens, 55);
+							break;
+						}
+						case "compose-late-usage": {
+							assert.equal(child.status, 0, child.stderr);
+							const usage: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/usage.json"), "utf8"),
+							);
+							assert.ok(isRecord(usage));
+							assert.equal(usage.totalCalls, 1);
+							assert.equal(usage.outputTokens, 77);
+							break;
+						}
 						case "context-unfit": {
 							assert.equal(child.status, 1, child.stderr);
 							assert.equal(events.filter((event) => event === "compact").length, 0);
@@ -1916,13 +2256,14 @@ if (scenario !== undefined && scenario !== "") {
 							assert.match(child.stderr, /a call ran into the output limit — telling the model/u);
 							assert.match(
 								child.stderr,
-								/2 calls in this turn ran into the 16384-token output limit — aborting this turn/u,
+								/2 calls in this session ran into the 16384-token output limit — aborting this turn/u,
 							);
 							// One notice, then the stop; the finishing turn records the practice.
 							const order = events.filter((event) =>
 								["steer", "abort", "prompt:2"].includes(event),
 							);
-							assert.deepEqual(order.slice(0, 3), ["steer", "abort", "prompt:2"]);
+							assert.ok(order.indexOf("steer") < order.indexOf("abort"));
+							assert.ok(events.indexOf("dispose") < events.indexOf("prompt:2"));
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -1971,12 +2312,8 @@ if (scenario !== undefined && scenario !== "") {
 							const order = events.filter((event) =>
 								["prompt:1", "steer", "abort-compaction", "abort", "prompt:2"].includes(event),
 							);
-							assert.deepEqual(order.slice(0, 4), [
-								"prompt:1",
-								"abort-compaction",
-								"abort",
-								"prompt:2",
-							]);
+							assert.ok(order.indexOf("abort-compaction") < order.indexOf("abort"));
+							assert.ok(events.indexOf("dispose") < events.indexOf("prompt:2"));
 							assert.match(events.find((event) => event.startsWith("finish:")) ?? "", /stored/u);
 							assert.match(child.stderr, /no model or tool event for 300s — aborting this turn/u);
 							assert.doesNotMatch(child.stderr, /already processing/u);
@@ -2029,8 +2366,7 @@ if (scenario !== undefined && scenario !== "") {
 							const notes = readFileSync(nodePath.join(cwd, "work/notes/review.md"), "utf8");
 							assert.match(notes, /test-practice: NOT_MET/u);
 							assert.doesNotMatch(notes, /test-practice: MET —/u);
-							// The finishing turn continues the session, which holds the current drafts: it repeats no
-							// record, so the replaced draft cannot reappear in it.
+							// The next practice receives no earlier draft or superseded positive result.
 							const finishing = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
 							assert.doesNotMatch(finishing, /Recorded so far/u);
 							assert.doesNotMatch(finishing, /test-practice: MET —/u);
@@ -2065,10 +2401,10 @@ if (scenario !== undefined && scenario !== "") {
 								assert.ok(system.includes(path), path);
 							}
 							assert.doesNotMatch(system, /`(?:write|edit)`|tools\.(?:write|edit)\(/u);
-							assert.match(system, /up to three observations per call/u);
+							assert.match(system, /Each fresh session names one practice/u);
 							assert.match(
 								readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8"),
-								/up to three observations per call/u,
+								/### Practice `test-practice`/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("resent:")) ?? "",
@@ -2125,7 +2461,7 @@ if (scenario !== undefined && scenario !== "") {
 							const result = readObservations(nodePath.join(cwd, "out/result.json"));
 							assert.equal(result.length, 2);
 							assert.equal(result[0]?.summary, "The login change calls an insecure helper");
-							assert.equal(result[1]?.summary, "Second of two, starting inside the first");
+							assert.equal(result[1]?.summary, "Second practice recorded in its own session");
 							const { evidence } = result[0];
 							assert.ok(isRecord(evidence));
 							assert.ok(Array.isArray(evidence.citations));
@@ -2141,22 +2477,19 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(child.status, 0, child.stderr);
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2"],
+								["prompt:1", "prompt:2", "prompt:3"],
 							);
-							assert.equal(events.filter((event) => event.startsWith("create:")).length, 1);
+							assert.equal(events.filter((event) => event.startsWith("create:")).length, 3);
 							const first = readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8");
-							const second = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
-							// The first turn carries the brief and shows how an observation is written, with this review's own
-							// artifact paths; the finishing turn continues the same session, which still holds both.
+							const second = readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8");
+							// Each fresh session receives the stable brief and its own complete criterion.
 							assert.ok(first.includes("### `evidence/metadata.json`"), first.slice(0, 300));
 							assert.match(
 								first,
 								/## How report_observation takes observations[\s\S]*"artifactPath": "evidence\/change\.json"/u,
 							);
-							assert.doesNotMatch(
-								second,
-								/### `evidence\/metadata\.json`|How report_observation takes|Recorded so far/u,
-							);
+							assert.ok(second.includes("### `evidence/metadata.json`"));
+							assert.doesNotMatch(second, /### Practice `test-practice`|test-practice: NOT_MET/u);
 							// The next turn keeps back what recording costs at the pace the first one showed: 1200
 							// output tokens over the items it wrote, averaged with the prior of 1500.
 							const batch: unknown = JSON.parse(
@@ -2185,7 +2518,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								events.find((event) => event.startsWith("batch:")) ?? "",
-								/"terminate":false/u,
+								/"terminate":true/u,
 							);
 							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
 							break;
@@ -2208,7 +2541,7 @@ if (scenario !== undefined && scenario !== "") {
 								events.join("\n"),
 							);
 							assert.ok(events.includes("abort"), events.join("\n"));
-							// The finishing turn, in the same session, records the practice the loop left unrecorded.
+							// A fresh finishing session records the practice the loop left unrecorded.
 							assert.match(events.find((event) => event.startsWith("finish:")) ?? "", /stored/u);
 							reached({ "test-practice": "EVALUATED" });
 							break;
@@ -2275,7 +2608,7 @@ if (scenario !== undefined && scenario !== "") {
 						case "compose-foreign-provider": {
 							assert.equal(child.status, 0, child.stderr);
 							// Measurement, then the review on the work in a fresh session, then the private lanes in
-							// the measurement session.
+							// a third fresh session.
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
 								["prompt:1", "prompt:2", "prompt:3"],
@@ -2284,7 +2617,7 @@ if (scenario !== undefined && scenario !== "") {
 								events
 									.filter((event) => event.startsWith("create:"))
 									.map((event) => event.endsWith("tools=select_feedback,report_review")),
-								[false, true],
+								[false, true, false],
 							);
 							assert.match(
 								events.find((event) => event.startsWith("review-select:")) ?? "",
@@ -2374,16 +2707,26 @@ if (scenario !== undefined && scenario !== "") {
 								/#1: IN_CHAT is not a lane this run may write for/u,
 							);
 							const second = readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8");
-							// Composition continues the session, which still holds the brief.
-							assert.doesNotMatch(second, /### `evidence\/metadata\.json`/u);
-							assert.match(second, /Compose from admitted observations\./u);
+							// Private composition receives stable context anew, without measurement criteria or tool examples.
+							assert.match(second, /### `evidence\/metadata\.json`/u);
+							assert.doesNotMatch(
+								second,
+								/### Practice `test-practice`|How report_observation takes/u,
+							);
+							assert.equal(
+								readFileSync(nodePath.join(cwd, "private-system-prompt.md"), "utf8"),
+								"Write clear, useful feedback.\n\nCompose from admitted observations.",
+							);
+							assert.doesNotMatch(
+								second,
+								/Compose from admitted observations|How report_observation takes/u,
+							);
 							assert.match(second, /"id": "observation-1"/u);
 							// The quoted lines and the verification records stay on disk, where the composer
 							// can read them if it must; the search it recorded is still shown. (The shared opening
 							// above the composer's turn carries the observation example, quotes and all.)
-							const composerTurn = second.slice(
-								second.indexOf("Compose from admitted observations."),
-							);
+							assert.ok(second.includes("## This turn"));
+							const composerTurn = second.slice(second.indexOf("## This turn"));
 							assert.doesNotMatch(composerTurn, /"quote"/u);
 							assert.doesNotMatch(composerTurn, /"verification"/u);
 							assert.match(second, /"lookedFor": "x"/u);
@@ -2422,7 +2765,7 @@ if (scenario !== undefined && scenario !== "") {
 							// session is compacted before the prompt, and the prompt itself is sent whole.
 							assert.equal(child.status, 0, child.stderr);
 							// The review composition runs in its own fresh session, which holds nothing to compact; the
-							// private composition continues the measurement session and makes room first.
+							// private composition starts fresh and restores the complete authorized opening after compaction.
 							const order = events.filter((event) =>
 								["prompt:1", "prompt:2", "compact", "prompt:3"].includes(event),
 							);
@@ -2432,10 +2775,7 @@ if (scenario !== undefined && scenario !== "") {
 							// ahead of the composer's instructions — without the measuring examples and record, which
 							// the composer does not use.
 							const composition = readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8");
-							assert.match(
-								composition,
-								/### `evidence\/metadata\.json`[\s\S]*Compose from admitted observations\./u,
-							);
+							assert.match(composition, /### `evidence\/metadata\.json`[\s\S]*## This turn/u);
 							assert.doesNotMatch(composition, /## Recorded so far|How report_observation takes/u);
 							break;
 						}
@@ -2699,7 +3039,7 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(child.status, 0, child.stderr);
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2"],
+								["prompt:1", "prompt:2", "prompt:3", "prompt:4"],
 							);
 							// An abstention cannot carry a claim about the work; the strength beside it can.
 							assert.match(

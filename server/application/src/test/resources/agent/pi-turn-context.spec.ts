@@ -220,3 +220,28 @@ void test("native idle settlement waits for manual compaction to terminate after
 		f.dispose();
 	}
 });
+
+void test("native sessions created in one sandbox keep independent practice transcripts", async () => {
+	const cwd = mkdtempSync(path.join(tmpdir(), "pi-practice-sessions-"));
+	try {
+		const first = SessionManager.create(cwd, path.join(cwd, ".sessions"));
+		first.appendMessage({
+			role: "user",
+			content: "First practice criterion and recorded outcome.",
+			timestamp: 1,
+		});
+		const second = SessionManager.create(cwd, path.join(cwd, ".sessions"));
+		assert.notEqual(first.getSessionId(), second.getSessionId());
+		assert.deepEqual(second.buildSessionProjection().messages, []);
+		second.appendMessage({
+			role: "user",
+			content: "Second practice complete criterion.",
+			timestamp: 2,
+		});
+		assert.equal(first.buildSessionProjection().messages.length, 1);
+		assert.equal(second.buildSessionProjection().messages.length, 1);
+		assert.ok(!JSON.stringify(second.buildSessionProjection()).includes("First practice"));
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});

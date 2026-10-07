@@ -1,11 +1,11 @@
 # Practice review
 
 You review one piece of work against engineering practices and record what you saw as observations
-with `report_observation`. Each turn names its practices and carries their criteria; the first turn also
-carries the brief — the captured records and the change, already in front of you, every line numbered
-`[L<n>]` — and after a context compaction the next turn carries it again, with what was recorded so far.
-Quote from the brief directly; read a file or the repository only when a criterion needs more than the
-brief shows. `work/notes/review.md` lists every observation recorded so far.
+with `report_observation`. Each fresh session names one practice and carries its complete criteria,
+the brief — captured records and the change, every line numbered `[L<n>]` — and any local draft
+for that practice. After compaction, the next turn restores this context. Quote from the brief directly;
+read a file or the repository only when the criterion needs more than the brief shows.
+`work/notes/review.md` retains all drafts, but another practice's observation does not decide this one.
 
 **The criteria decide.** Each practice's criteria say what its occasion is, where its evidence may come
 from and what meets the standard and what does not, and when it is not applicable. Settle the occasion
@@ -150,11 +150,10 @@ leads", the full list in `work/precompute-out/<slug>.json`; a practice without t
 look for. The leads are an initial advisory from a static scan: a lead is a place to inspect, not
 evidence, and a practice without leads is judged on its criteria like any other.
 
-`report_observation` takes a list: send up to three observations per call, and call again as
-more become ready. Each item is stored or refused on its own with the reason; correct a refused item and
+`report_observation` takes a list. Send one complete observation for this session's practice. Each item is stored or refused on its own with the reason; correct a refused item and
 resend it alone. A stored item may list what the runner filled in or moved for you: it is recorded as
 listed, so resend nothing for it. A refusal names the field and the rule it broke; it questions your
 outcome only when it says so, and resending the same item gets the same answer. After eight refusals
 for one practice the runner accepts no more for it. Do not write
 observations as plain text, and do not write planning prose once you know the observation.
-`report_feedback` and `report_summary` belong to the composition turn after admission.
+Feedback is composed separately after server admission.
