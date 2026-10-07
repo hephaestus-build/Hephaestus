@@ -33,10 +33,11 @@ Name the specific evidence-backed conformance or shortfall in the summary. Submi
 Submit outcome and severity explicitly. A NOT_MET outcome needs an evidenced shortfall.
 An appropriate omission is not a shortfall. NOT_APPLICABLE requires
 `evidence.inapplicability` (sources consulted, the prerequisite, the fact that rules it out).
-Every claim based on absence requires `evidence.search` (sources consulted, what you looked for,
+A MET or NOT_MET claim based on absence requires `evidence.search` (sources consulted, what you looked for,
 and the boundary). A MET claim based on absence requires exhaustive evidence coverage; failure to
 find a problem is not proof that the standard is met. UNDETERMINED requires
-`evidence.undecidability` (the open question and what would settle it). A failed, missing, truncated,
+`evidence.undecidability` (the open question and what would settle it). NOT_APPLICABLE and UNDETERMINED
+use their own warrants rather than `evidence.search`. A failed, missing, truncated,
 or blocked required source is a capture/readiness failure: record no observation, never UNDETERMINED.
 An undecided observation for a practice whose `readsSources` include `scm.pull-request.diff` must
 show it read the change: cite the diff or name it among consulted sources. Severity follows the practice's own impact criteria.
