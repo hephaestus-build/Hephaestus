@@ -11,11 +11,11 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Enforces the {@link ContentSource} contract (ADR: integration content = EXTRACT+LOAD of raw native
@@ -88,17 +88,34 @@ class ContentSourceContractTest extends BaseUnitTest {
         }
     }
 
-    private static final Pattern SLUG = Pattern.compile("\"slug\"\\s*:\\s*\"([a-z0-9-]+)\"");
+    @Test
+    @DisplayName("catalogue slugs are the practices', never their groups'")
+    void shouldReadPracticeSlugsButNotGroupSlugsWhenParsingTheCatalogue() {
+        JsonNode catalogue = JSON.readTree("""
+                {"groups": [{"slug": "communication", "practices": [{"slug": "ready-and-traceable-handoff"}]}]}
+                """);
+
+        assertThat(practiceSlugs(catalogue)).containsExactly("ready-and-traceable-handoff");
+    }
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private static Set<String> practiceSlugs() throws IOException {
-        Set<String> slugs = new TreeSet<>();
         try (InputStream in = ContentSourceContractTest.class
                 .getClassLoader()
                 .getResourceAsStream("practices/default-catalog.json")) {
-            String cat = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            Matcher m = SLUG.matcher(cat);
-            while (m.find()) {
-                slugs.add(m.group(1));
+            return practiceSlugs(JSON.readTree(in));
+        }
+    }
+
+    private static Set<String> practiceSlugs(JsonNode catalogue) {
+        Set<String> slugs = new TreeSet<>();
+        for (JsonNode group : catalogue.path("groups")) {
+            for (JsonNode practice : group.path("practices")) {
+                JsonNode slug = practice.get("slug");
+                if (slug != null && slug.isString()) {
+                    slugs.add(slug.asString());
+                }
             }
         }
         return slugs;

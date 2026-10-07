@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -201,8 +202,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                     PREPARED_FILE,
                     serialize(preparedPayload(workspaceId, queued, shown.currentness(), withdrawn), PREPARED_FILE));
             completeness.put(FEEDBACK_HISTORY, SourceCompleteness.COMPLETE);
-            // Reported off what has been delivered, not off the queue: the kind is "what was said to this
-            // person", and a full queue with nothing delivered is still an empty record of having spoken.
+            // Prepared feedback does not make the delivered feedback record non-empty.
             contentStates.put(
                     FEEDBACK_HISTORY, delivered.isEmpty() ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
         }
@@ -396,7 +396,35 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         }
         if (currentness == ReviewClaimCurrentness.CURRENT && !isWithdrawn) {
             node.put("body", f.getBody());
+            if (f.getBody() != null) {
+                node.put("bodyRole", bodyRole(f.getChannel()));
+            }
         }
+    }
+
+    /** A conversation unit holds mentor notes, not the mentor's spoken words. */
+    private static String bodyRole(@Nullable FeedbackChannel channel) {
+        if (channel == null) {
+            return "UNKNOWN";
+        }
+        return switch (channel) {
+            case IN_CHAT -> "MENTOR_NOTES";
+            case IN_CONTEXT, IN_APP -> "COMPOSED_GUIDANCE";
+        };
+    }
+
+    /**
+     * A history file's root: what its records are, and that they are the review records this person's history may
+     * supply — not a chronology of their work or of what was communicated to them.
+     */
+    private ObjectNode historyRoot(String recordRole) {
+        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode coverage = root.putObject("coverage");
+        coverage.put("scope", "AUTHORIZED_REVIEW_RECORDS_FOR_SUBJECT");
+        coverage.put("workChronology", "NOT_ESTABLISHED");
+        coverage.put("communicationHistory", "NOT_ESTABLISHED");
+        root.put("recordRole", recordRole);
+        return root;
     }
 
     private static @Nullable UUID sourceJobExcludedFromHistory(AgentJob job) {
@@ -423,7 +451,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      */
     private ObjectNode preparedPayload(
             long workspaceId, List<Feedback> queued, Map<UUID, ReviewClaimCurrentness> shown, Set<UUID> withdrawn) {
-        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode root = historyRoot("PREPARED_NOT_DELIVERED");
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 queued.stream().map(ReviewHistoryContentSource::referenceOf).toList());
@@ -458,7 +486,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     }
 
     private ObjectNode observationsPayload(long workspaceId, List<Observation> observations) {
-        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode root = historyRoot("RECORDED_OBSERVATIONS");
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 observations.stream()
@@ -501,7 +529,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      */
     private ObjectNode feedbackPayload(
             long workspaceId, List<Feedback> delivered, ShownFeedback shown, Set<UUID> withdrawn) {
-        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode root = historyRoot("RECORDED_DELIVERY");
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 delivered.stream().map(ReviewHistoryContentSource::referenceOf).toList());
