@@ -111,6 +111,27 @@ export const Default: Story = {
 	},
 };
 
+/**
+ * The rationale renders as Markdown, as on the developer's own row: a file or a value the review
+ * quotes is code, not text between backticks.
+ */
+export const MarkdownRationale: Story = {
+	args: {
+		observation: ready({
+			...reviewObservationDetail,
+			evidenceRationale:
+				"`CacheService.find` returns 404 for a cache miss and for a caller who may not read the entry. The second case is a `403`.",
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		const code = panel.getByText("CacheService.find", { selector: "code" });
+		await expect(code).toBeVisible();
+		// The typography plugin draws a backtick on each side of inline code unless told not to.
+		await expect(getComputedStyle(code, "::before").content).toBe("none");
+	},
+};
+
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {

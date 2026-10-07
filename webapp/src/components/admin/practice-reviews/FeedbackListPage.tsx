@@ -1,36 +1,27 @@
-import { Link } from "@tanstack/react-router";
-
-import type { ListPracticeReviewFeedbackResponse, ReviewFeedback } from "@/api/types.gen";
+import type { ReviewFeedback } from "@/api/types.gen";
 import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { TablePagination } from "@/components/common/TablePagination";
+import type { PagedListState } from "@/runtime/tanstack-query/infinite-list";
 
 import { clearedFeedbackFilters, FeedbackFilters, hasFeedbackFilter } from "./FeedbackFilters";
 import { FeedbackResults, type FeedbackResultsState } from "./FeedbackResults";
 import type { FeedbackSearch } from "./review-search";
+import { ReviewListEnd } from "./ReviewListEnd";
 import type { ReviewPeople } from "./ReviewPersonFacet";
 
 export interface FeedbackListPageProps {
-	workspaceSlug: string;
 	search: FeedbackSearch;
 	onSearchChange: (patch: Partial<FeedbackSearch>) => void;
-	/** The page of feedback the current `search` selects, or `undefined` while it is unknown. */
-	feedback: ListPracticeReviewFeedbackResponse | undefined;
-	isLoading: boolean;
-	error: unknown;
-	onRetry?: () => void;
+	/** The feedback the current `search` selects, as far as it is loaded. */
+	feedback: PagedListState<ReviewFeedback>;
 	practices: FacetSource;
 	people: ReviewPeople;
 }
 
 function resultsState(
-	isLoading: boolean,
 	rows: ReviewFeedback[],
 	onClearFilters: (() => void) | undefined,
 ): FeedbackResultsState {
-	if (isLoading) {
-		return { status: "loading" };
-	}
 	if (rows.length > 0) {
 		return { status: "ready", feedback: rows };
 	}
@@ -40,17 +31,13 @@ function resultsState(
 }
 
 export function FeedbackListPage({
-	workspaceSlug,
 	search,
 	onSearchChange,
 	feedback,
-	isLoading,
-	error,
-	onRetry,
 	practices,
 	people,
 }: FeedbackListPageProps) {
-	const rows = feedback?.content ?? [];
+	const rows = feedback.status === "ready" ? feedback.rows : [];
 	// Guarded on the filter being set: see `ObservationsListPage`. Unfiltered, row zero is whoever
 	// sorts first, and their name would be shown against a different person's id.
 	const filteredRecipient = search.recipientUserId == null ? undefined : rows[0]?.recipient;
@@ -65,29 +52,24 @@ export function FeedbackListPage({
 				onReset={reset}
 				practices={practices}
 				people={people}
-				total={feedback?.page?.totalElements}
+				total={feedback.status === "ready" ? feedback.total : undefined}
 				scopedWork={rows[0]?.reviewedWork}
 				recipientName={filteredRecipient?.name ?? filteredRecipient?.login}
 			/>
-			{error == null ? (
-				<FeedbackResults state={resultsState(isLoading, rows, hasFilter ? reset : undefined)} />
-			) : (
-				<QueryErrorAlert error={error} title="We could not load feedback" onRetry={onRetry} />
+			{feedback.status === "error" && (
+				<QueryErrorAlert
+					error={feedback.error}
+					title="We could not load feedback"
+					onRetry={feedback.onRetry}
+				/>
 			)}
-			<TablePagination
-				page={feedback?.page?.number ?? search.page ?? 0}
-				totalPages={feedback?.page?.totalPages ?? 0}
-				renderPageLink={(page, props) => (
-					<Link
-						{...props}
-						// Why `from`: `order` in `review-search.ts`.
-						from="/w/$workspaceSlug/admin/practices/reviews/feedback"
-						to="/w/$workspaceSlug/admin/practices/reviews/feedback"
-						params={{ workspaceSlug }}
-						search={(previous) => ({ ...previous, page: page === 0 ? undefined : page })}
-					/>
-				)}
-			/>
+			{feedback.status === "loading" && <FeedbackResults state={{ status: "loading" }} />}
+			{feedback.status === "ready" && (
+				<>
+					<FeedbackResults state={resultsState(rows, hasFilter ? reset : undefined)} />
+					<ReviewListEnd {...feedback} noun="feedback" />
+				</>
+			)}
 		</section>
 	);
 }

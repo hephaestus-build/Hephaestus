@@ -25,6 +25,20 @@ export const slicePageParams = {
 		lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined,
 };
 
+/** Spring's `PagedModel`: one page of rows, with its place among the pages nested under `page`. */
+export interface PagedModel<T> {
+	content?: T[];
+	page?: { number?: number; totalPages?: number; totalElements?: number };
+}
+
+export const pagedModelParams = {
+	initialPageParam: 0,
+	getNextPageParam: <T>(lastPage: PagedModel<T>) => {
+		const next = (lastPage.page?.number ?? 0) + 1;
+		return next < (lastPage.page?.totalPages ?? 0) ? next : undefined;
+	},
+};
+
 /**
  * The generated client assembles its infinite query options behind a `@ts-ignore`, and what comes out
  * picks the `useInfiniteQuery` overload that declares `data` always defined. It is not — every

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor } from "storybook/test";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { Stateful } from "@/stories/stateful";
 
 import { InfiniteListEnd } from "./InfiniteListEnd";
 
@@ -43,7 +44,10 @@ export const LoadsMoreInView: Story = {
 export const LoadingMore: Story = {
 	args: { isLoadingMore: true },
 	play: async ({ args, canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Loading…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Loading…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(args.onLoadMore).not.toHaveBeenCalled();
 	},
 };
@@ -66,6 +70,35 @@ export const Failed: Story = {
 		await expect(canvas.getByRole("alert")).toHaveTextContent("We could not load earlier reviews.");
 		await expect(args.onLoadMore).not.toHaveBeenCalled();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
+		await expect(args.onLoadMore).toHaveBeenCalledOnce();
+	},
+};
+
+/**
+ * A keyboard press that starts the load keeps focus on the button while the rows arrive, so the
+ * reader does not go back to the top of the page.
+ */
+export const KeyboardRetryKeepsFocus: Story = {
+	args: { loadMoreError: new Error("offline") },
+	render: (args) => (
+		<Stateful initial={args}>
+			{(state, setState) => (
+				<InfiniteListEnd
+					{...state}
+					onLoadMore={() => {
+						args.onLoadMore();
+						setState({ ...state, loadMoreError: undefined, isLoadingMore: true });
+					}}
+				/>
+			)}
+		</Stateful>
+	),
+	play: async ({ args, canvas }) => {
+		await userEvent.tab();
+		await expect(canvas.getByRole("button", { name: "Retry" })).toHaveFocus();
+		await userEvent.keyboard("{Enter}");
+		await expect(canvas.getByRole("button", { name: "Loading…" })).toHaveFocus();
+		await userEvent.keyboard("{Enter}");
 		await expect(args.onLoadMore).toHaveBeenCalledOnce();
 	},
 };

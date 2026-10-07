@@ -1,9 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import {
 	listGroupsOptions,
-	listPracticeReviewObservationsOptions,
+	listPracticeReviewObservationsInfiniteOptions,
 	listPracticesOptions,
 } from "@/api/@tanstack/react-query.gen";
 import {
@@ -18,9 +18,10 @@ import {
 	observationsSearchSchema,
 	REVIEW_PAGE_SIZE,
 } from "@/components/admin/practice-reviews/review-search";
-import { useClampedPage } from "@/hooks/use-clamped-page";
 import { useReviewPeople } from "@/hooks/use-review-people";
-import { pageParam, useSearchState } from "@/lib/search-params";
+import { useSearchState } from "@/lib/search-params";
+import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
+import { pagedModelParams } from "@/runtime/tanstack-query/spring-page";
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/admin/practices/reviews/observations",
@@ -35,37 +36,25 @@ function ObservationsListRoute() {
 	const search = Route.useSearch();
 	const setSearch = useSearchState();
 	const updateSearch = (patch: Partial<ObservationsSearch>) => {
-		// Any change but a page's own sends the reader back to page one.
-		void setSearch((previous) => ({ ...previous, ...patch, page: pageParam(patch.page) }), {
-			replace: true,
-		});
+		void setSearch((previous) => ({ ...previous, ...patch }), { replace: true });
 	};
 
-	const observationsQueryResult = useQuery({
-		...listPracticeReviewObservationsOptions({
+	const observationsQueryResult = useInfiniteQuery({
+		...listPracticeReviewObservationsInfiniteOptions({
 			path: { workspaceSlug },
 			query: observationsQuery(search, REVIEW_PAGE_SIZE),
 		}),
+		...pagedModelParams,
 	});
 	const groupsQuery = useQuery({ ...listGroupsOptions({ path: { workspaceSlug } }) });
 	const practicesQuery = useQuery({ ...listPracticesOptions({ path: { workspaceSlug } }) });
 	const people = useReviewPeople(workspaceSlug);
 
-	useClampedPage(search.page, observationsQueryResult.data?.page?.totalPages, (page) =>
-		updateSearch({ page }),
-	);
-
 	return (
 		<ObservationsListPage
-			workspaceSlug={workspaceSlug}
 			search={search}
 			onSearchChange={updateSearch}
-			observations={observationsQueryResult.data}
-			isLoading={observationsQueryResult.isLoading}
-			error={observationsQueryResult.isError ? observationsQueryResult.error : undefined}
-			onRetry={() => {
-				void observationsQueryResult.refetch();
-			}}
+			observations={pagedListState(observationsQueryResult, (observation) => observation.id)}
 			groups={{
 				options: groupFacetOptions(groupsQuery.data),
 				isLoading: groupsQuery.isLoading,

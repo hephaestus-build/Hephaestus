@@ -368,7 +368,10 @@ export function PracticeFeedbackCard({
 				</span>
 				<div className="flex min-w-0 flex-col gap-1">
 					<span className="text-sm font-semibold">Next step</span>
-					<p className="max-w-3xl text-sm">{nextStep}</p>
+					{/* The composer writes the step in Markdown, as it writes the body. */}
+					<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "max-w-3xl text-sm text-foreground")}>
+						<UntrustedMarkdown>{nextStep}</UntrustedMarkdown>
+					</div>
 					<p className="text-xs text-muted-foreground">
 						<FeedbackText segments={condition} onOpenPractice={onOpenPractice} />
 					</p>

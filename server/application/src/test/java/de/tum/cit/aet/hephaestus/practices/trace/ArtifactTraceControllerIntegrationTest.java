@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
@@ -783,6 +784,30 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
 
         @Test
         @WithMentorUser
+        void ordersWorkOfTwoKindsWithOneIdAndTimeTheSameOnEveryPage() {
+            recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.RECORDED, null, null);
+            recordSignal(
+                    workspace,
+                    ScmSignals.ISSUE_OPENED,
+                    SignalState.RECORDED,
+                    null,
+                    null,
+                    READY_AT,
+                    ARTIFACT_ID,
+                    ArtifactKinds.ISSUE);
+
+            for (int page = 0; page < 2; page++) {
+                get(LIST + "?size=1&page={page}", workspace.getWorkspaceSlug(), page)
+                        .expectStatus()
+                        .isOk()
+                        .expectBody()
+                        .jsonPath("$.content[0].artifactKind")
+                        .isEqualTo(page == 0 ? ArtifactKinds.PULL_REQUEST.value() : ArtifactKinds.ISSUE.value());
+            }
+        }
+
+        @Test
+        @WithMentorUser
         void filtersByKind() {
             recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.RECORDED, null, null);
 
@@ -1044,10 +1069,22 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
             @Nullable UUID jobId,
             Instant occurredAt,
             long artifactId) {
+        return recordSignal(ws, signal, state, reason, jobId, occurredAt, artifactId, ArtifactKinds.PULL_REQUEST);
+    }
+
+    private ArtifactSignal recordSignal(
+            Workspace ws,
+            SignalName signal,
+            SignalState state,
+            @Nullable SignalStateReason reason,
+            @Nullable UUID jobId,
+            Instant occurredAt,
+            long artifactId,
+            ArtifactKind artifactKind) {
         ArtifactSignal row = new ArtifactSignal();
         row.setId(UUID.randomUUID());
         row.setWorkspace(ws);
-        row.setArtifactKind(ArtifactKinds.PULL_REQUEST.value());
+        row.setArtifactKind(artifactKind.value());
         row.setArtifactId(artifactId);
         row.setSignalName(signal.value());
         // One row per revision: the ledger is unique on it, so two occurrences of one signal differ here.

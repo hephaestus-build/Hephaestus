@@ -1,9 +1,11 @@
 import type { Meta, StoryContext, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, within } from "storybook/test";
+import { expect, fn, screen, waitFor, within } from "storybook/test";
 
-import type { ListPracticeReviewObservationsResponse, ReviewObservation } from "@/api/types.gen";
+import type { ReviewObservation } from "@/api/types.gen";
 import type { FacetSource } from "@/components/common/FacetMultiSelect";
+import type { PagedListState } from "@/runtime/tanstack-query/infinite-list";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
+import { loadedList, narrowedList } from "@/stories/paged-list";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 
@@ -41,22 +43,14 @@ const PRACTICES: FacetSource = {
 	isError: false,
 };
 
+const loadMoreObservations = fn();
+
 /**
  * Every row a story has to choose from. It travels in the `observations` arg because that is the
- * prop the screen reads, and {@link observationPage} narrows it to one page before the screen sees
- * it — so an arg set in Controls is a pool to filter, not a page already cut.
+ * prop the screen reads, and {@link observationPage} narrows it to its first page before the screen
+ * sees it — so an arg set in Controls is a pool to filter, not a page already cut.
  */
-function pool(rows: ReviewObservation[]): ListPracticeReviewObservationsResponse {
-	return {
-		content: rows,
-		page: {
-			number: 0,
-			size: REVIEW_PAGE_SIZE,
-			totalElements: rows.length,
-			totalPages: Math.max(1, Math.ceil(rows.length / REVIEW_PAGE_SIZE)),
-		},
-	};
-}
+const pool = loadedList<ReviewObservation>;
 
 /**
  * The route fetches; this screen only draws what it is handed. To keep the facets live in a story
@@ -65,11 +59,12 @@ function pool(rows: ReviewObservation[]): ListPracticeReviewObservationsResponse
  * What the *endpoint* names those parameters is a separate contract, pinned by the route test.
  */
 function observationPage(
-	candidates: ReviewObservation[],
+	list: PagedListState<ReviewObservation>,
 	search: ObservationsSearch,
-): ListPracticeReviewObservationsResponse {
+): PagedListState<ReviewObservation> {
 	const query = observationsQuery(search, REVIEW_PAGE_SIZE);
-	const rows = candidates.filter(
+	return narrowedList(
+		list,
 		(row) =>
 			(!query.from || row.observedAt >= new Date(query.from)) &&
 			(!query.to || row.observedAt < new Date(query.to)) &&
@@ -78,17 +73,8 @@ function observationPage(
 			selects(query.severity, row.severity) &&
 			selects(query.origin, row.origin) &&
 			(query.subjectUserId === undefined || row.subject?.id === query.subjectUserId),
+		query.size,
 	);
-	const number = query.page;
-	return {
-		content: rows.slice(number * REVIEW_PAGE_SIZE, (number + 1) * REVIEW_PAGE_SIZE),
-		page: {
-			number,
-			size: REVIEW_PAGE_SIZE,
-			totalElements: rows.length,
-			totalPages: Math.max(1, Math.ceil(rows.length / REVIEW_PAGE_SIZE)),
-		},
-	};
 }
 
 const meta = {
@@ -100,7 +86,6 @@ const meta = {
 	decorators: [withWidePage, withStandardPage],
 	tags: ["autodocs"],
 	args: {
-		workspaceSlug: "demo",
 		search: {
 			outcome: undefined,
 
@@ -109,9 +94,6 @@ const meta = {
 		},
 		onSearchChange: fn(),
 		observations: pool(reviewObservations),
-		isLoading: false,
-		error: undefined,
-		onRetry: fn(),
 		groups: GROUPS,
 		practices: PRACTICES,
 		// The facet needs a label per slug; the hover card on a row's practice name needs the record.
@@ -131,9 +113,7 @@ const meta = {
 						args.onSearchChange(patch);
 						onSearchChange(patch);
 					}}
-					observations={
-						args.observations && observationPage(args.observations.content ?? [], search)
-					}
+					observations={observationPage(args.observations, search)}
 				/>
 			)}
 		</StatefulPatch>
@@ -283,27 +263,18 @@ export const SeverityFacetOpen: Story = {
 	},
 };
 
-export const MoreThanOnePage: Story = {
-	// Pagination is real links so a page can be bookmarked, which means the page travels through the
-	// router rather than `onSearchChange`. Storybook mounts this screen under a single bare route, so
-	// a click would go nowhere and the page has to be set in `args`.
-	args: {
-		search: {
-			page: 1,
-			outcome: undefined,
-
-			severity: undefined,
-			origin: undefined,
-		},
-		observations: pool(manyObservations(64)),
-	},
+/**
+ * More observations than the first page: the count is the server's, and the next page is asked for
+ * when the end of the list scrolls into view.
+ */
+export const LoadsMoreAtTheEnd: Story = {
+	args: { observations: pool(manyObservations(64), { onLoadMore: loadMoreObservations }) },
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
 		await canvas.findByText("64 observations.");
-		const current = await canvas.findByRole("link", { name: "Go to page 2" });
-		await expect(current).toHaveAttribute("aria-current", "page");
-		canvas.getByRole("link", { name: "Go to previous page" });
-		canvas.getByRole("link", { name: "Go to next page" });
+		const more = canvas.getByRole("button", { name: "Show more observations" });
+		more.scrollIntoView();
+		await waitFor(async () => expect(loadMoreObservations).toHaveBeenCalled());
 	},
 };
 
@@ -325,8 +296,7 @@ export const Mobile: Story = {
 export const LoadFailed: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	args: {
-		observations: undefined,
-		error: { status: 500 },
+		observations: { status: "error", error: { status: 500 }, onRetry: fn() },
 	},
 	play: async ({ canvas }) => {
 		await canvas.findByText("We could not load observations");
@@ -335,7 +305,7 @@ export const LoadFailed: Story = {
 
 export const Loading: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
-	args: { observations: undefined, isLoading: true },
+	args: { observations: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await canvas.findByText("Loading observations");
 	},

@@ -16,6 +16,11 @@ export interface WorkRowProps {
 	work: TracedArtifact;
 }
 
+/** A piece of work's key in the list: an id alone repeats across kinds. */
+export function workRowKey(work: Pick<TracedArtifact, "artifactKind" | "artifactId">): string {
+	return `${work.artifactKind}:${work.artifactId}`;
+}
+
 /**
  * One piece of work Hephaestus recorded, and how much of what happened to it started a review. The leading
  * icon says whether anything did; the row opens the work's level, where the timeline says why not.
