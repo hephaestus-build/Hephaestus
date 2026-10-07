@@ -17,11 +17,13 @@ import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.FactorGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.server.ResponseStatusException;
 
 @Tag("unit")
 class PasskeyAssurancePolicyTest {
@@ -69,6 +71,18 @@ class PasskeyAssurancePolicyTest {
                 .build();
         assertThatThrownBy(() -> policy(true, false).requireInstanceAdmin(new JwtAuthenticationToken(jwt), false))
                 .isInstanceOf(PasskeyRequiredException.class);
+    }
+
+    @Test
+    void shouldRejectAnUnresolvableSubjectEvenWhenProtectionIsOptional() {
+        var jwt = Jwt.withTokenValue("oauth")
+                .header("alg", "ES256")
+                .subject("not-an-account")
+                .build();
+        assertThatThrownBy(() -> policy(false, false).requireInstanceAdmin(new JwtAuthenticationToken(jwt), false))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
     }
 
     @Test

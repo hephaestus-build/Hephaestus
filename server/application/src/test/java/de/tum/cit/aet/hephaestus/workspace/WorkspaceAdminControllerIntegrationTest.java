@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.dto.AdminWorkspaceViewDTO;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,11 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  */
 @Tag("integration")
 class WorkspaceAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @BeforeEach
+    void setUpAdminIdentity() {
+        persistUser("admin");
+    }
 
     private static final String ADMIN_TOKEN = "mock-jwt-token-for-admin-user";
     private static final String MENTOR_TOKEN = "mock-jwt-token-for-mentor-user";

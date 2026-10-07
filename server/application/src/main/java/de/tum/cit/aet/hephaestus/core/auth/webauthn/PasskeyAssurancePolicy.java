@@ -12,11 +12,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authorization.AllRequiredFactorsAuthorizationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @ConditionalOnServerRole
@@ -62,7 +64,13 @@ public class PasskeyAssurancePolicy implements AdminPasskeyAccess {
         if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
             throw new PasskeyRequiredException();
         }
-        Account account = accounts.findById(Long.valueOf(jwt.getSubject())).orElseThrow(PasskeyRequiredException::new);
+        Long accountId;
+        try {
+            accountId = Long.valueOf(jwt.getSubject());
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "The token subject is not an account ID.", e);
+        }
+        Account account = accounts.findById(accountId).orElseThrow(PasskeyRequiredException::new);
         boolean needsProof = account.isPasskeyProtectionEnabled()
                 || account.isPasskeyRecoveryRequired()
                 || ((instanceAdmin || account.getAppRole() == Account.AppRole.APP_ADMIN)

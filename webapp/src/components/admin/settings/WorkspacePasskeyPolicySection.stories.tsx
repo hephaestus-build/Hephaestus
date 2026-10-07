@@ -21,7 +21,10 @@ export const InstanceRequired: Story = {
 	args: { instanceRequired: true },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("switch", { name: "Require admin passkeys" })).toBeChecked();
-		await expect(canvas.getByRole("switch", { name: "Require admin passkeys" })).toBeDisabled();
+		await expect(canvas.getByRole("switch", { name: "Require admin passkeys" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 export const Admin: Story = { args: { owner: false } };

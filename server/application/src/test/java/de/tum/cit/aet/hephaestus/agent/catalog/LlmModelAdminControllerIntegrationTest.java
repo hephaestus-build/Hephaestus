@@ -16,12 +16,18 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @BeforeEach
+    void setUpAdminIdentity() {
+        persistUser("admin");
+    }
 
     private static final String ADMIN_TOKEN = "mock-jwt-token-for-admin-user";
     private static final String MENTOR_TOKEN = "mock-jwt-token-for-mentor-user";

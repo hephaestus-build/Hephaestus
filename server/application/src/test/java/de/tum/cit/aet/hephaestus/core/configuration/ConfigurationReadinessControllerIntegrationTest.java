@@ -1,14 +1,20 @@
 package de.tum.cit.aet.hephaestus.core.configuration;
 
-import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
+import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-class ConfigurationReadinessControllerIntegrationTest extends BaseIntegrationTest {
+class ConfigurationReadinessControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @BeforeEach
+    void setUpAdminIdentity() {
+        persistUser("admin");
+    }
 
     @Autowired
     private WebTestClient webTestClient;
