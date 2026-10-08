@@ -2,7 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
@@ -37,6 +40,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,8 +51,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.eclipse.jgit.api.Git;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.mockito.Mockito;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.scheduling.config.ScheduledTask;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.json.JsonMapper;
 
 class JobEvidenceFilesTest extends BaseUnitTest {
@@ -430,6 +439,92 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var out = new ByteArrayOutputStream();
         for (byte[] part : parts) out.writeBytes(part);
         return out.toByteArray();
+    }
+
+    @Test
+    void shouldRemoveExpiredEndedAttemptsOnAWorkerWithoutServerScheduling() {
+        var layout = new FabricLayout(root.toString());
+        var preparing = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
+        String sha = ProvenanceDigest.sha256Hex(bytes);
+        var ended = endedAttempt(preparing, bytes);
+        var running = job();
+        running.setStatus(AgentJobStatus.RUNNING);
+        when(jobs.findByIdAndWorkspaceId(running.getId(), 1L)).thenReturn(Optional.of(running));
+        var later = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies());
+        try (var active = PreparedJobInputsFixtures.prepare(
+                preparing, running, PreparedJobInputsFixtures.filesOnly(Map.of("context/quote", bytes)))) {
+            // The runner publishes no ApplicationReadyEvent, so only the periodic sweep can remove a folder.
+            maintenance(later, personCopies()).run(context -> {
+                assertThat(context).hasNotFailed();
+                await().atMost(Duration.ofSeconds(3))
+                        .untilAsserted(() -> assertThat(read(preparing, ended, "context/quote", sha))
+                                .isEmpty());
+                assertThat(read(preparing, running, "context/quote", sha)).contains(bytes);
+                assertThat(PreparedJobInputsFixtures.files(active)).containsKey("context/quote");
+            });
+        }
+    }
+
+    @Test
+    void shouldScheduleEachMaintenanceTaskOnceWithTheServerRoleAndCancelItOnClose() {
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var tasks = new ArrayList<ScheduledTask>();
+        maintenance(files, personCopies())
+                .withPropertyValues("hephaestus.runtime.server.enabled=true")
+                .run(context -> context.getBeansOfType(ScheduledTaskHolder.class)
+                        .values()
+                        .forEach(holder -> tasks.addAll(holder.getScheduledTasks())));
+        assertThat(tasks)
+                .hasSize(2)
+                .allSatisfy(task -> assertThat(task.nextExecution()).isNull());
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "hephaestus.runtime.worker.enabled=false",
+                "spring.profiles.active=specs",
+                "spring.profiles.active=cds-training"
+            })
+    void shouldNotMaintainEvidenceWithoutTheWorkerRoleOrInBuildOnlyProfiles(String setting) {
+        var layout = new FabricLayout(root.toString());
+        byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
+        var preparing = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var ended = endedAttempt(preparing, bytes);
+        var personCopies = personCopies();
+        var later = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies);
+        maintenance(later, personCopies).withPropertyValues(setting).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values().stream()
+                            .flatMap(holder -> holder.getScheduledTasks().stream()))
+                    .isEmpty();
+        });
+        assertThat(read(preparing, ended, "context/quote", ProvenanceDigest.sha256Hex(bytes)))
+                .contains(bytes);
+        verify(personCopies, never()).removeLocalRequests();
+    }
+
+    private static ApplicationContextRunner maintenance(
+            JobEvidenceFiles files, EvidenceFolderPersonDataCatalog personCopies) {
+        return new ApplicationContextRunner()
+                .withUserConfiguration(JobEvidenceMaintenanceConfiguration.class, ServerSchedulingConfig.class)
+                .withBean(JobEvidenceFiles.class, () -> files)
+                .withBean(EvidenceFolderPersonDataCatalog.class, () -> personCopies)
+                .withPropertyValues(
+                        "hephaestus.runtime.worker.enabled=true", "hephaestus.runtime.server.enabled=false");
+    }
+
+    private AgentJob endedAttempt(JobEvidenceFiles files, byte[] bytes) {
+        var ended = job();
+        ended.setStatus(AgentJobStatus.FAILED);
+        when(jobs.findByIdAndWorkspaceId(ended.getId(), 1L)).thenReturn(Optional.of(ended));
+        PreparedJobInputsFixtures.prepare(
+                        files, ended, PreparedJobInputsFixtures.filesOnly(Map.of("context/quote", bytes)))
+                .close();
+        assertThat(read(files, ended, "context/quote", ProvenanceDigest.sha256Hex(bytes)))
+                .contains(bytes);
+        return ended;
     }
 
     private static AgentJob job() {
