@@ -25,7 +25,7 @@ import {
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "./pi-agent-sandbox.ts";
 import { assessmentCacheExtension } from "./pi-assessment-cache.ts";
-import { CHANGE_ROOT } from "./pi-change.ts";
+import { CHANGE_ROOT, checkedOutCommit, pinnedDiff, readPinnedBlob } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
 import { folderCitationIndex } from "./pi-folder-index.ts";
 import {
@@ -50,7 +50,12 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
-import { buildBrief, buildPublicReviewHistory, buildSameWorkContext } from "./pi-review-brief.ts";
+import {
+	buildBrief,
+	buildPrimarySourceReference,
+	buildPublicReviewHistory,
+	buildSameWorkContext,
+} from "./pi-review-brief.ts";
 import {
 	type Work,
 	deriveWindows,
@@ -4429,8 +4434,27 @@ async function main() {
 		});
 		activeSession = reviewSession;
 		composerTool = "report_review";
+		// Admission's own rows: the projection the review rests on drops the digests a source is checked against.
+		const repository = nodePath.resolve(CWD, taskEnvelope.paths.repositoryRoot);
+		const primarySource = buildPrimarySourceReference(
+			CWD,
+			taskEnvelope.paths.contextRoot,
+			taskEnvelope.paths.repositoryRoot,
+			folderIndex,
+			admittedObservations,
+			{
+				blob: (revision, file, limit) => readPinnedBlob(repository, revision, file, limit),
+				diff: (base, head, limit) => pinnedDiff(repository, base, head, limit),
+				checkedOut: () => checkedOutCommit(repository),
+			},
+		);
 		const text = buildReviewTurn({
-			sameWork: buildSameWorkContext(CWD, taskEnvelope.paths.contextRoot, folderIndex, framing),
+			sameWork: [
+				buildSameWorkContext(CWD, taskEnvelope.paths.contextRoot, folderIndex, framing),
+				primarySource,
+			]
+				.filter((part) => part !== "")
+				.join("\n\n"),
 			observations: reviewable,
 			undecided: uncertainOutcomes(
 				admittedObservations.filter((observation) => observation.publicEligible === true),
