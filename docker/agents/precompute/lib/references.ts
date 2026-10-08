@@ -47,7 +47,18 @@ function matched(pattern: RegExp, text: string): number[] {
 
 /** Raw text, where a comment is still in the string; parsed prose already has it as its own node. */
 function numbers(pattern: RegExp, text: string): number[] {
-	return matched(pattern, text.replace(HTML_COMMENT, ""));
+	return matched(pattern, withoutHtmlComments(text));
+}
+
+/** Keep a boundary so removing a comment cannot join tokens that the author separated. */
+export function withoutHtmlComments(text: string): string {
+	let result = text;
+	let previous;
+	do {
+		previous = result;
+		result = result.replaceAll(HTML_COMMENT, " ");
+	} while (result !== previous);
+	return result;
 }
 
 /** Every `#N` in the text, in order of first appearance. */

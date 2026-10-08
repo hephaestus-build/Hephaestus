@@ -33,7 +33,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param devLoginEnabled passwordless local sign-in; rejected under the production profile and unsafe
  *                        on an internet-exposed deployment
  * @param cookieSecure whether auth and CSRF cookies use Secure and the {@code __Host-} prefix;
- *                     disabling is restricted to non-production HTTP development
+ *                     disabling is restricted to HTTP E2E tests without the production profile
  * @param browserExtensionIds Chrome extension ids allowed to sign in as installed clients; each id
  *                            yields exactly one callback and one CORS origin
  *                            ({@code core.auth.clientsession.InstalledClientRegistry})
@@ -56,6 +56,13 @@ public record AuthProperties(
         @DefaultValue("true") boolean cookieSecure,
         @DefaultValue List<String> browserExtensionIds) {
     public AuthProperties {
+        if (!cookieSecure && !"http".equalsIgnoreCase(issuer.getScheme())) {
+            throw new IllegalArgumentException(
+                    "hephaestus.auth.cookie-secure must be true unless the issuer uses HTTP.");
+        }
+        if (!cookieSecure && cookieName.startsWith("__Host-")) {
+            throw new IllegalArgumentException("hephaestus.auth.cookie-name must not use __Host- without Secure.");
+        }
         loginProviders = loginProviders == null ? Map.of() : loginProviders;
         browserExtensionIds = browserExtensionIds == null
                 ? List.of()

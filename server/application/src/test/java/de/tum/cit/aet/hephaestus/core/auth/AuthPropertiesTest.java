@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties.LoginProviderSeed;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType;
@@ -25,6 +26,35 @@ import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.core.io.ClassPathResource;
 
 class AuthPropertiesTest extends BaseUnitTest {
+
+    @Test
+    void shouldRejectInsecureCookiesWhenTheIssuerUsesHttps() {
+        var source = new MapConfigurationPropertySource(Map.of(
+                "hephaestus.auth.issuer", "https://example.com",
+                "hephaestus.auth.cookie-secure", "false",
+                "hephaestus.auth.cookie-name", "HEPHAESTUS_AT"));
+        assertThatThrownBy(() -> new Binder(source).bindOrCreate("hephaestus.auth", Bindable.of(AuthProperties.class)))
+                .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                .hasStackTraceContaining("cookie-secure must be true");
+    }
+
+    @Test
+    void shouldRejectTheHostPrefixWhenCookiesAreInsecure() {
+        var source = new MapConfigurationPropertySource(Map.of("hephaestus.auth.cookie-secure", "false"));
+        assertThatThrownBy(() -> new Binder(source).bindOrCreate("hephaestus.auth", Bindable.of(AuthProperties.class)))
+                .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                .hasStackTraceContaining("cookie-name must not use __Host-");
+    }
+
+    @Test
+    void shouldAllowUnprefixedInsecureCookiesWhenTheIssuerUsesHttp() {
+        var source = new MapConfigurationPropertySource(
+                Map.of("hephaestus.auth.cookie-secure", "false", "hephaestus.auth.cookie-name", "HEPHAESTUS_AT"));
+        assertThat(new Binder(source)
+                        .bindOrCreate("hephaestus.auth", Bindable.of(AuthProperties.class))
+                        .cookieSecure())
+                .isFalse();
+    }
 
     @Test
     void shouldBindBoundedLowRiskSessionDefaultsWhenNoOverridesAreConfigured() {

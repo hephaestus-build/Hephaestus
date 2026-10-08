@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.mock.env.MockEnvironment;
@@ -77,14 +79,17 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
         assertThat(SecurityConfig.DEV_TRIGGER_MATCHER.matches(notDev)).isFalse();
     }
 
-    @Test
-    void cookieSecureFalseUnderProd_failsClosedAtConstruction() {
-        MockEnvironment prod = new MockEnvironment();
-        prod.setActiveProfiles("prod");
+    @ParameterizedTest
+    @ValueSource(strings = {"prod", "dev", "test", ""})
+    void shouldRejectInsecureCookiesWhenTheE2eProfileIsAbsent(String profile) {
+        MockEnvironment environment = new MockEnvironment();
+        if (!profile.isEmpty()) {
+            environment.setActiveProfiles(profile);
+        }
         assertThatThrownBy(() -> new SecurityConfig(
                         new CorsProperties(List.of("https://example.com")),
                         noClients(),
-                        prod,
+                        environment,
                         false,
                         false,
                         false,
@@ -94,7 +99,23 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
     }
 
     @Test
-    void cookieSecureFalseOutsideProd_constructs() {
+    void shouldRejectInsecureCookiesWhenProdAndE2eProfilesAreBothActive() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("prod", "e2e");
+        assertThatThrownBy(() -> new SecurityConfig(
+                        new CorsProperties(List.of("https://example.com")),
+                        noClients(),
+                        environment,
+                        false,
+                        false,
+                        false,
+                        "HEPHAESTUS_AT"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("cookie-secure");
+    }
+
+    @Test
+    void shouldAllowInsecureCookiesWhenOnlyNonProductionE2eProfilesAreActive() {
         MockEnvironment dev = new MockEnvironment();
         dev.setActiveProfiles("dev", "e2e");
         assertThat(new SecurityConfig(

@@ -26,6 +26,10 @@ The opt-in `e2e` profile enables these local-only capabilities:
 
 `vp run dev:server:e2e` starts Postgres and NATS before activating the profile.
 
+Startup permits `cookie-secure=false` only with `e2e` active and `prod` absent.
+The auth issuer must use HTTP, and the cookie name must not have the `__Host-` prefix.
+All other profiles require Secure cookies.
+
 Do not expose this profile outside a trusted development machine: it enables passwordless app-admin
 login. The setup script accepts only loopback application and database URLs. The application server
 still needs to be reachable from Docker through `host.docker.internal`, so enforce the boundary with
