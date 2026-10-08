@@ -162,6 +162,29 @@ void test("both commit practices read the subjects from the commit record and st
 	}
 });
 
+void test("a terse subject that names its object is not a shape to check, whatever files its commit touched", async () => {
+	const image: ChangedFile = { status: "M", path: "docs/screenshot.png" };
+	const { root, script, contextDir } = await stage("commit-subjects-explain-each-change", [
+		commit("1111111", "Update Readme\n", ["p"], [image]),
+		commit("2222222", "update\n", ["p"], [image]),
+	]);
+	try {
+		const result = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
+		assert.deepEqual(
+			result.hints.map((h) => [h.context, h.flags.bare, h.flags.paths]),
+			[
+				["1111111 Update Readme", false, "docs/screenshot.png"],
+				["2222222 update", true, "docs/screenshot.png"],
+			],
+		);
+		// The criteria judge clarity, so the listed paths are never offered as a test of a subject's accuracy.
+		assert.match(result.directions[1] ?? "", /never measure whether its subject is accurate/u);
+		assert.doesNotMatch(result.directions[1] ?? "", /about the files it touched/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 void test("one authored commit is still a history to judge, and an unread commit record is a collection gap", async () => {
 	for (const slug of ["commit-subjects-explain-each-change", "commits-are-atomic-and-cohesive"]) {
 		const { root, script, contextDir } = await stage(slug, [

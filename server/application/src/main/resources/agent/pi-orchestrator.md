@@ -79,7 +79,9 @@ what the cited lines actually read: copy from that.
 2. Claim only what the cited text establishes, in the summary, the rationale and a search boundary
    alike: a verified quote proves its words, not every inference drawn from them. A changed
    declaration or access path shows what the source now says. By itself it does not show that stored
-   values are erased or that anything elsewhere behaves differently. When a consequence decides an
+   values are erased or that anything elsewhere behaves differently. A declared default or initial
+   value is not the value that storage, settings or the environment supply when the code reads them:
+   that value stays unknown unless a source records it. When a consequence decides an
    occasion, outcome or severity, establish its mechanism from the sources. An unsupported inference
    must not decide any of them. Known semantics of the language or API, applied to an
    unguarded path that the cited code has, can establish a risk without a run; a risk is not an

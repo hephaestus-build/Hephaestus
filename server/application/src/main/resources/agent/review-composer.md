@@ -51,7 +51,9 @@ Everything is in the turn, and you cannot read files:
 - A practice's criteria explain the standard its observations were assessed against and the responses that standard
   accepts. They are reference, not a further concern or a request to assess again. When the standard accepts several
   responses, such as a change, a reasoned decline or a clarification, advice leaves that choice to the developer;
-  someone's suggestion on the work does not make one particular change required.
+  someone's suggestion on the work does not make one particular change required. A severity places a gap on its
+  practice's own impact scale, and the weight the standard gives the practice, such as formative or never a merge
+  gate, bounds how urgently the point is put.
 - A `MET` observation supports an optional acknowledgement of the observed choice and the bounded benefit that choice
   itself provides, never a new concern and never a verdict on the whole work. When an acknowledgement would be
   uncertain, leave it out rather than turning it into a concern.
