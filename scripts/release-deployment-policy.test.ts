@@ -224,6 +224,44 @@ await test("release publication requires native smoke tests for every supported 
 	assert.match(release, /gh release upload "\$TAG_NAME" host-smoke\/\*\.json/u);
 });
 
+await test("release consumers wait for their tools, sandbox check and smoke records", () => {
+	const workflow: unknown = parseDocument(release).toJS();
+	for (const [name, consumer] of [
+		["tag-images", "Generate and enforce release evidence"],
+		["supported-host-smoke", "Smoke-test the blessed install"],
+		["publish-release", "Verify supported-host smoke records"],
+	] as const) {
+		const steps = asArray(at(workflow, ["jobs", name, "steps"], name), name).map((value, index) =>
+			asRecord(value, `${name}.steps[${index}]`),
+		);
+		const join = steps.findIndex((step) => step["wait-all"] === true);
+		const consumes = steps.findIndex((step) => step.name === consumer);
+		assert.ok(join > 0 && consumes > join, `${name} consumes unfinished preparation`);
+		assert.ok(
+			steps.every((step, index) => step.background !== true || index < join),
+			`${name} launches preparation after its join`,
+		);
+		if (name === "tag-images") {
+			const security = steps.findIndex((step) => step.id === "security-tools");
+			const toolsReady = steps.findIndex((step) => step.wait === "security-tools");
+			const database = steps.findIndex(
+				(step) => step.uses === "./.github/actions/download-trivy-db",
+			);
+			const digests = steps.findIndex((step) => step.id === "retag");
+			const sandbox = steps.findIndex((step) => step.name === "Verify Node-only agent-pi sandbox");
+			assert.ok(
+				security !== -1 && toolsReady > security && database > toolsReady && join > database,
+			);
+			assert.ok(digests !== -1 && sandbox > digests && sandbox < join);
+		} else {
+			assert.ok(
+				steps.slice(0, join).every((step) => step.run === undefined),
+				`${name} executes before its preparation is joined`,
+			);
+		}
+	}
+});
+
 await test("the release smoke reaches the installation by the name the installer answers with", () => {
 	// Traefik routes on the hostname the installer answered with, so a rename in the script has to
 	// reach this curl or the ingress check fails for the first time at a release.
