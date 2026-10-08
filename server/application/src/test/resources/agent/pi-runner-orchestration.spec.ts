@@ -1895,6 +1895,17 @@ if (scenario !== undefined && scenario !== "") {
 									report.execute("invalid-range", encoded("insecure();", "[L999]")),
 									/citation does not match/u,
 								);
+								// The declaration names no artifact; recording still refuses one the capture did not stage.
+								await assert.rejects(
+									report.execute(
+										"uncaptured-artifact",
+										observation("test-practice", "Unsafe authentication call", {
+											...changeCitation,
+											artifactPath: "evidence/never-captured.json",
+										}),
+									),
+									/artifact 'evidence\/never-captured\.json' was not staged by 'scm\.pull-request\.diff'/u,
+								);
 								assert.equal(existsSync(nodePath.join(cwd, "out/review-state.json")), false);
 								const reply = await report.execute("valid-transport", encoded("+ insecure();"));
 								assert.ok(isRecord(reply) && isRecord(reply.details));
@@ -2550,6 +2561,13 @@ if (scenario !== undefined && scenario !== "") {
 								...(stage === "tree-citation"
 									? [{ kind: "scm.repository.tree", artifact: { path: "repos/primary/.git/HEAD" } }]
 									: []),
+								// A capture this large must not make the reporter's declaration uncompilable.
+								...(stage === "argument-repairs"
+									? Array.from({ length: 5000 }, (_, index) => ({
+											kind: "scm.pull-request.core",
+											artifact: { path: `evidence/captured/${index}.json` },
+										}))
+									: []),
 							],
 							sources: [
 								{
@@ -3055,6 +3073,7 @@ for (const item of [
   { ...base, evidence: {} },
   { ...base, evidence: { citations: [] } },
   { ...base, evidence: { citations: [without(citation, "artifactPath")] } },
+  { ...base, evidence: { citations: [{ ...citation, artifactPath: "" }] } },
   { ...base, evidence: { citations: [{ ...citation, sourceKind: "hephaestus.observation-history" }] } },
   { ...base, evidence: { citations: [{ ...citation, side: "MIDDLE" }] } },
   { ...base, evidence: { citations: [{ ...citation, startLine: 0 }] } },

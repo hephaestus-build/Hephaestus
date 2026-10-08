@@ -504,7 +504,6 @@ function readPracticeIndex(): PracticeIndexEntry[] {
 const folderIndex = parseJson(readFileSync(INPUT_PATHS.manifest, "utf8"));
 const { availableSourceKinds, artifactSources } = folderCitationIndex(folderIndex);
 const availableSourceKindValues = [...availableSourceKinds].toSorted();
-const stagedArtifactPaths = [...artifactSources.keys()].toSorted();
 const practiceIndex = readPracticeIndex();
 const admittedPractices = new Set(practiceIndex.map((practice) => practice.slug));
 // ABSENT is sound only over sources the practice declares exhaustive.
@@ -696,7 +695,14 @@ const evidenceSchema = {
 				required: ["sourceKind", "artifactPath", "path", "startLine"],
 				properties: {
 					sourceKind: { type: "string", enum: availableSourceKindValues },
-					artifactPath: { type: "string", enum: stagedArtifactPaths },
+					// Membership is checked when the observation is recorded (validateEvidenceSources): a large capture
+					// enumerated here produces a declaration the SDK's schema compiler cannot compile.
+					artifactPath: {
+						type: "string",
+						minLength: 1,
+						description:
+							"The captured artifact the citation reads, exactly as the capture manifest names it.",
+					},
 					path: { type: "string", minLength: 1 },
 					side: {
 						type: "string",
