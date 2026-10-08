@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.85.1
+
+### Patch Changes
+
+- Practice reviews of work with a very large evidence capture can record their observations again. Each citation must still name evidence that the review captured.
+- Deployments no longer walk every file in the repository caches after a successful ownership migration. New or unmigrated caches still receive the required ownership before application services start.
+
 ## 0.85.0
 
 ### Minor Changes
