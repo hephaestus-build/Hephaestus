@@ -1330,7 +1330,16 @@ function stopTurn(reason: StopReason, why: string): void {
 
 /** Refused submissions per practice; a practice past MAX_REFUSALS_PER_PRACTICE accepts no more. */
 const refusals = new Map<string, number>();
+/**
+ * Practices this review asks no more about: past the refusal limit, too large for the context, or ended on their
+ * own again after the one request to record. Without a draft, each stays not reached.
+ */
 const blockedPractices = new Set<string>();
+
+/** Whether the practice was closed by its refused submissions, not by another reason. */
+function refusalLimited(slug: string): boolean {
+	return (refusals.get(slug) ?? 0) >= MAX_REFUSALS_PER_PRACTICE;
+}
 
 function countRefusal(slug: string): void {
 	const count = (refusals.get(slug) ?? 0) + 1;
@@ -1367,7 +1376,9 @@ function record(raw: unknown): Recorded {
 		return {
 			kind: "refused",
 			slug,
-			reason: `${MAX_REFUSALS_PER_PRACTICE} submissions for '${slug}' were refused; no more are accepted for it, so it is not owed any more. Record the other practices.`,
+			reason: refusalLimited(slug)
+				? `${MAX_REFUSALS_PER_PRACTICE} submissions for '${slug}' were refused; no more are accepted for it, so it is not owed any more. Record the other practices.`
+				: `this review asks no more about '${slug}'; no more submissions are accepted for it.`,
 		};
 	}
 	const sent = JSON.stringify(raw);
@@ -1390,12 +1401,17 @@ function record(raw: unknown): Recorded {
 		};
 	}
 	const revises = isRecord(raw) ? raw.revises : undefined;
+	const index = reviewState.observations.findIndex((draft) => draft.practiceSlug === slug);
 	if (isRecord(raw) && Object.hasOwn(raw, "revises") && revises !== slug) {
 		countRefusal(slug);
 		return {
 			kind: "refused",
 			slug,
-			reason: "revises must name this practice's returned draft reference.",
+			// Before a first draft no reference was ever returned, so naming one cannot be the correction.
+			reason:
+				index === -1
+					? `revises must name a recorded draft, and '${slug}' has none yet: omit revises for its first observation.`
+					: `revises must name this practice's draft reference, '${slug}'.`,
 		};
 	}
 	const candidate = isRecord(raw) ? { ...raw } : raw;
@@ -1412,7 +1428,6 @@ function record(raw: unknown): Recorded {
 		return { kind: "refused", slug, reason };
 	}
 	const { observation, notes } = validated;
-	const index = reviewState.observations.findIndex((draft) => draft.practiceSlug === slug);
 	if (index === -1 && revises !== undefined) {
 		notes.push(`no draft '${slug}' existed to revise; stored as its first draft`);
 	}
@@ -1630,6 +1645,9 @@ function buildReportObservationTool() {
 			// it can no longer accept.
 			const remainingPractices = owedPractices();
 			const closed = currentTurnSlugs.filter((slug) => blockedPractices.has(slug));
+			// A practice closed before its first draft is owed nothing and still has no result.
+			const recorded = new Set(reviewState.observations.map((item) => item.practiceSlug));
+			const exhausted = closed.filter((slug) => !recorded.has(slug));
 			const lines = outcomes.map((outcome) => {
 				const head = `${outcome.slug}:`;
 				if (outcome.kind === "stored" || outcome.kind === "revised") {
@@ -1640,13 +1658,22 @@ function buildReportObservationTool() {
 				}
 				return `${head} refused — ${outcome.reason}`;
 			});
-			lines.push(
-				remainingPractices.length > 0
-					? `No recorded result yet for: ${remainingPractices.join(", ")}.`
-					: "Every practice of this turn has a recorded result.",
-			);
-			if (closed.length > 0) {
-				lines.push(`No longer accepted (refusal limit): ${closed.join(", ")}.`);
+			if (remainingPractices.length > 0) {
+				lines.push(`No recorded result yet for: ${remainingPractices.join(", ")}.`);
+			}
+			if (exhausted.length > 0) {
+				lines.push(`No recorded result for: ${exhausted.join(", ")}.`);
+			}
+			if (remainingPractices.length === 0 && exhausted.length === 0) {
+				lines.push("Every practice of this turn has a recorded result.");
+			}
+			const limited = closed.filter(refusalLimited);
+			if (limited.length > 0) {
+				lines.push(`No longer accepted (refusal limit): ${limited.join(", ")}.`);
+			}
+			const closedOtherwise = closed.filter((slug) => !refusalLimited(slug));
+			if (closedOtherwise.length > 0) {
+				lines.push(`No longer accepted: ${closedOtherwise.join(", ")}.`);
 			}
 			const text = lines.join("\n");
 			const details: ReportObservationDetails = {
@@ -1733,6 +1760,19 @@ const PERSIST_DISCIPLINE =
 
 /** What a turn is told once its remaining work only pays for recording what it owes. */
 const RECORD_NUDGE = `This turn has the work left to write its observations and no more. Stop exploring. Record what the inspected evidence supports for this session's practice with report_observation. ${PERSIST_DISCIPLINE}`;
+
+/**
+ * The one request a measuring session gets when it ended on its own with its practice unrecorded. It goes to the
+ * same session, which still holds what it read, and leaves a collection gap unrecorded.
+ */
+function recordOnceMoreText(slug: string): string {
+	return (
+		`## Not recorded\nThis session ended without an observation for ${slug}: text outside a ` +
+		`report_observation call records nothing. Record the outcome its criterion and the evidence you read ` +
+		`support, in one report_observation call. If a required source is missing, truncated or blocked, that ` +
+		`is a collection gap: record nothing.`
+	);
+}
 
 /** Tells the server to retry a review whose admission endpoint was unreachable. */
 const SERVER_UNREACHABLE_EXIT = 75;
@@ -4117,6 +4157,12 @@ async function main() {
 		// Native events may stop a turn while awaited work settles or another session opens.
 		const stoppedBy = () => trace.stoppedBy;
 		const pastSafety = () => safety.expired() || Date.now() >= measureEnd;
+		/** The model, not the runner, a provider error or the safety line, ended the session with its practice owed. */
+		const endedUnrecorded = (slug: string) =>
+			owedPractices([slug]).length > 0 &&
+			stoppedBy() === null &&
+			!pastSafety() &&
+			!trace.modelError;
 		async function promptPractice(session: AgentSession, text: () => string, slug: string) {
 			if (pastSafety()) {
 				return;
@@ -4139,6 +4185,35 @@ async function main() {
 					}
 				},
 			});
+		}
+		/**
+		 * Asks a session that ended on its own with its practice owed to record it, once, in the session that holds
+		 * what it read and within this scope's budget; a fresh session would read it all again. A second ending on
+		 * its own closes the practice.
+		 */
+		async function askOnceMore(session: AgentSession, text: () => string, slug: string) {
+			if (
+				!endedUnrecorded(slug) ||
+				spent({ modelCalls: trace.calls, outputTokens: trace.outputTokens }, trace.budget)
+			) {
+				return;
+			}
+			console.error(
+				`[pi-runner] ${label}: the ${slug} session ended without a recorded result — asking once more`,
+			);
+			if (!(await settleSession(session, label, ABORT_SETTLE_MS))) {
+				throw new Error("the session was still busy when it was asked once more");
+			}
+			// After a compaction the request carries the practice turn again, as any next turn does.
+			const onceMore = () =>
+				`${openingInContext ? "" : `${text()}\n\n`}${recordOnceMoreText(slug)}`;
+			await Promise.race([promptPractice(session, onceMore, slug), safety.elapsed]);
+			if (endedUnrecorded(slug)) {
+				blockedPractices.add(slug);
+				console.error(
+					`[pi-runner] ${label}: the ${slug} session ended again without a recorded result — not reached`,
+				);
+			}
 		}
 		try {
 			for (const [index, slug] of slugs.entries()) {
@@ -4164,6 +4239,7 @@ async function main() {
 					);
 				try {
 					await Promise.race([promptPractice(opened.session, text, slug), safety.elapsed]);
+					await askOnceMore(opened.session, text, slug);
 				} catch (error) {
 					console.error(`[pi-runner] ${label} (${slug}) failed: ${errorText(error)}`);
 				} finally {
