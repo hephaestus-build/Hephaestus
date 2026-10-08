@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.release;
 
 import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.COMMIT;
+import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.ENVIRONMENT;
 import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.IMAGE;
 import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.running;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,6 +21,7 @@ class RunningReleaseTest {
         assertThat(identity.channel()).isEqualTo(ReleaseChannel.RELEASE);
         assertThat(identity.commit()).isEqualTo(COMMIT);
         assertThat(identity.image()).isEqualTo(IMAGE);
+        assertThat(identity.environment()).isEqualTo(ENVIRONMENT);
     }
 
     @Test
@@ -39,7 +41,8 @@ class RunningReleaseTest {
         var environment = new MockEnvironment()
                 .withProperty("hephaestus.runtime.worker.enabled", "false")
                 .withProperty("hephaestus.runtime.webhook.enabled", "false");
-        var running = new RunningRelease("0.0.0-development", new ReleaseProperties("", "", true), environment);
+        var running =
+                new RunningRelease("0.0.0-development", new ReleaseProperties("", "", true, "local"), environment);
         assertThat(running.get().commit()).isNull();
         assertThat(running.get().image()).isNull();
         assertThat(running.get().roles()).containsExactly(RuntimeRole.SERVER);

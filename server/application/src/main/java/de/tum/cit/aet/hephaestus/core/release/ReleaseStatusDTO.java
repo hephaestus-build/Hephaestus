@@ -10,14 +10,16 @@ import org.jspecify.annotations.Nullable;
  * The running release and what the last update check found. Discovery is advisory: nothing here
  * verifies an artifact or performs an upgrade.
  *
- * @param running     the identity this process reports
- * @param status      the verdict an administrator reads first
- * @param lastAttempt when a check was last started, on any outcome
- * @param lastSuccess when a check last completed, which is when {@code latest} was observed
- * @param nextCheck   when the next automatic check is due
- * @param retryUntil  the wait GitHub named on a rate limit; a manual check before it is refused
- * @param failure     why the last attempt did not complete, when {@code status} is {@code FAILED}
- * @param latest      the newest published release as of {@code lastSuccess}
+ * @param running      the identity this process reports
+ * @param status       the verdict an administrator reads first
+ * @param lastAttempt  when a check was last started, on any outcome
+ * @param lastSuccess  when a check last completed, which is when {@code latest} was observed
+ * @param nextCheck    when the next automatic check is due
+ * @param retryUntil   the wait GitHub named on a rate limit; a manual check before it is refused
+ * @param failure      why the last attempt did not complete, when {@code status} is {@code FAILED}
+ * @param latest       the newest published release as of {@code lastSuccess}
+ * @param runningSince when this instance started the running release, absent until it is recorded
+ * @param history      the releases this instance ran, newest first
  */
 public record ReleaseStatusDTO(
         @NonNull RunningReleaseDTO running,
@@ -27,25 +29,52 @@ public record ReleaseStatusDTO(
         @Nullable Instant nextCheck,
         @Nullable Instant retryUntil,
         @Nullable ReleaseCheckFailure failure,
-        @Nullable LatestReleaseDTO latest) {
+        @Nullable LatestReleaseDTO latest,
+        @Nullable Instant runningSince,
+        @NonNull List<ReleaseStartDTO> history) {
 
     /**
      * Deployment-reported identity: the values the verified lock env handed this process, not an
      * observation of the container. {@code commit} and {@code image} are absent outside a lock-driven
      * deployment.
      *
-     * @param version the version the deployment passed as {@code APP_VERSION}
-     * @param channel what kind of build that version names
-     * @param commit  the source commit the lock names
-     * @param image   the digest reference this container was started from
-     * @param roles   the runtime roles this process booted with
+     * @param version     the version the deployment passed as {@code APP_VERSION}
+     * @param channel     what kind of build that version names
+     * @param environment the name the deployment gives this instance
+     * @param commit      the source commit the lock names
+     * @param image       the digest reference this container was started from
+     * @param roles       the runtime roles this process booted with
      */
     public record RunningReleaseDTO(
             @NonNull String version,
             @NonNull ReleaseChannel channel,
+            @NonNull String environment,
             @Nullable String commit,
             @Nullable String image,
             @NonNull List<RuntimeRole> roles) {}
+
+    /**
+     * A release the server role started on this instance.
+     *
+     * @param startedAt when the server role first started this release; a restart does not change it
+     */
+    public record ReleaseStartDTO(
+            @NonNull String version,
+            @NonNull ReleaseChannel channel,
+            @NonNull String environment,
+            @Nullable String commit,
+            @Nullable String image,
+            @NonNull Instant startedAt) {
+        static ReleaseStartDTO from(ReleaseStart entry) {
+            return new ReleaseStartDTO(
+                    entry.getVersion(),
+                    entry.getChannel(),
+                    entry.getEnvironment(),
+                    entry.getCommit(),
+                    entry.getImage(),
+                    entry.getStartedAt());
+        }
+    }
 
     /**
      * A published release. {@code schemaMigrations} is the flag the release workflow publishes for

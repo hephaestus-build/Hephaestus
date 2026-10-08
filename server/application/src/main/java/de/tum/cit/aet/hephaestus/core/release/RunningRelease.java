@@ -34,6 +34,7 @@ public class RunningRelease implements InfoContributor {
         identity = new RunningReleaseDTO(
                 version,
                 channel,
+                properties.environment(),
                 properties.commit().isEmpty() ? null : properties.commit(),
                 properties.image().isEmpty() ? null : properties.image(),
                 RuntimeRole.enabled(environment));

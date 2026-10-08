@@ -47,12 +47,13 @@ x-observability-env: &observability-env
   TRACING_OTLP_ENABLED: ${TRACING_OTLP_ENABLED:-false}
   TRACING_OTLP_ENDPOINT: ${TRACING_OTLP_ENDPOINT:-http://localhost:4318/v1/traces}
 
-# What the verified release lock says this container runs, reported back by every role under
-# `release` in /actuator/info (webhook-server spells the same two lines in compose.core.yaml). The
+# What the verified release lock says this container runs, and where, reported back by every role
+# under `release` in /actuator/info (webhook-server spells the same lines in compose.core.yaml). The
 # version itself travels as APP_VERSION above; an empty value is a deployment without a lock.
 x-release-identity-env: &release-identity-env
   HEPHAESTUS_RELEASE_COMMIT: ${HEPHAESTUS_RELEASE_COMMIT:-}
   HEPHAESTUS_IMAGE_APPLICATION_SERVER: ${HEPHAESTUS_IMAGE_APPLICATION_SERVER}
+  DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-local}
 
 services:
   webapp:
@@ -65,7 +66,7 @@ services:
       # onto /usr/share/nginx/html/legal-overrides for forks. Use "tumaet" only
       # for the canonical AET deployment. See docs/admin/legal-pages.mdx.
       LEGAL_PROFILE: ${LEGAL_PROFILE:-}
-      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT}
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-local}
       SENTRY_DSN: ${SENTRY_DSN}
       TANSTACK_DEVTOOLS_ENABLED: ${TANSTACK_DEVTOOLS_ENABLED:-false}
     ports:

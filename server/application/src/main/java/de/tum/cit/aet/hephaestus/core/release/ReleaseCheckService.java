@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.release.ReleaseCheckClient.Failed;
 import de.tum.cit.aet.hephaestus.core.release.ReleaseCheckClient.Found;
 import de.tum.cit.aet.hephaestus.core.release.ReleaseCheckClient.NotModified;
 import de.tum.cit.aet.hephaestus.core.release.ReleaseStatusDTO.LatestReleaseDTO;
+import de.tum.cit.aet.hephaestus.core.release.ReleaseStatusDTO.ReleaseStartDTO;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.github.resilience4j.core.IntervalFunction;
 import java.time.Clock;
@@ -57,6 +58,7 @@ public class ReleaseCheckService {
     }
 
     private final RunningRelease running;
+    private final ReleaseHistory history;
     private final ReleaseCheckClient client;
     private final Clock clock;
     private final boolean enabled;
@@ -65,8 +67,13 @@ public class ReleaseCheckService {
     private final ReentrantLock checking = new ReentrantLock();
 
     public ReleaseCheckService(
-            RunningRelease running, ReleaseCheckClient client, Clock clock, ReleaseProperties properties) {
+            RunningRelease running,
+            ReleaseHistory history,
+            ReleaseCheckClient client,
+            Clock clock,
+            ReleaseProperties properties) {
         this.running = running;
+        this.history = history;
         this.client = client;
         this.clock = clock;
         this.enabled = properties.checkEnabled();
@@ -79,7 +86,7 @@ public class ReleaseCheckService {
     @Scheduled(initialDelayString = "PT1M", fixedDelayString = "PT1M")
     @WorkspaceAgnostic("Public release metadata is instance-wide; no tenant row is read or written")
     public void poll() {
-        if (due(state.get().nextCheck())) check(false);
+        if (due(state.get().nextCheck())) advance(false);
     }
 
     /**
@@ -87,21 +94,21 @@ public class ReleaseCheckService {
      * waits out a rate-limit window GitHub named.
      */
     public ReleaseStatusDTO check() {
-        return check(true);
+        return status(advance(true));
     }
 
-    private ReleaseStatusDTO check(boolean manual) {
-        if (!applicable()) return status();
+    private State advance(boolean manual) {
+        if (!applicable()) return state.get();
         checking.lock();
         try {
             // Read under the lock: the check that held it may have satisfied this tick or opened a window.
             State current = state.get();
             boolean blocked = manual ? !due(current.retryUntil()) : !due(current.nextCheck());
-            if (blocked) return status(current);
+            if (blocked) return current;
             String etag = current.answer() == null ? null : current.answer().etag();
             State next = apply(current, client.fetchLatest(etag), clock.instant(), manual);
             state.set(next);
-            return status(next);
+            return next;
         } finally {
             checking.unlock();
         }
@@ -155,6 +162,12 @@ public class ReleaseCheckService {
         else if (Version.parse(latest.version()).isGreaterThan(Version.parse(identity.version()))) {
             status = ReleaseCheckStatus.UPDATE_AVAILABLE;
         } else status = ReleaseCheckStatus.CURRENT;
+        var recent = history.recent();
+        Instant runningSince = recent.stream()
+                .filter(start -> ReleaseHistory.describes(start, identity))
+                .findFirst()
+                .map(ReleaseStart::getStartedAt)
+                .orElse(null);
         return new ReleaseStatusDTO(
                 identity,
                 status,
@@ -163,6 +176,8 @@ public class ReleaseCheckService {
                 current.nextCheck(),
                 current.retryUntil(),
                 current.failure(),
-                latest);
+                latest,
+                runningSince,
+                recent.stream().map(ReleaseStartDTO::from).toList());
     }
 }

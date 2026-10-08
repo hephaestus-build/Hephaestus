@@ -71,7 +71,7 @@ async function writeConfigs(): Promise<void> {
 				APPLICATION_CLIENT_URL: origin,
 				APPLICATION_SERVER_URL: `${origin}/api`,
 				XSRF_COOKIE_NAME: "__Host-XSRF-TOKEN",
-				SENTRY_ENVIRONMENT: "local-public-test",
+				DEPLOYMENT_ENVIRONMENT: "local-public-test",
 				SENTRY_DSN: "",
 				LEGAL_PROFILE: "",
 				TANSTACK_DEVTOOLS_ENABLED: "false",

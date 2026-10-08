@@ -136,7 +136,8 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
             "AccountAiChoice", // The account's own AI choice; one answer for every workspace
             "WorkerRegistry", // Fleet-wide worker liveness/capacity registry; not workspace-scoped
-            "InstanceSettings" // Singleton instance-wide operator settings (silent-mode brake)
+            "InstanceSettings", // Singleton instance-wide operator settings (silent-mode brake)
+            "ReleaseStart" // The releases this instance started
             );
 
     @Nested

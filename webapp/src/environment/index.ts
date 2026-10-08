@@ -19,7 +19,7 @@ interface RuntimeEnvVars {
 	APPLICATION_CLIENT_URL?: string;
 	APPLICATION_SERVER_URL?: string;
 	XSRF_COOKIE_NAME?: string;
-	SENTRY_ENVIRONMENT?: string;
+	DEPLOYMENT_ENVIRONMENT?: string;
 	SENTRY_DSN?: string;
 	LEGAL_PROFILE?: string;
 	TANSTACK_DEVTOOLS_ENABLED?: string;
@@ -44,7 +44,7 @@ const defaults: RuntimeEnvVars = {
 	APPLICATION_CLIENT_URL: "http://localhost:4200",
 	APPLICATION_SERVER_URL: "http://localhost:8080",
 	XSRF_COOKIE_NAME: SECURE_XSRF_COOKIE_NAME,
-	SENTRY_ENVIRONMENT: "local",
+	DEPLOYMENT_ENVIRONMENT: "local",
 	SENTRY_DSN: "https://289f1f62feeb4f70a8878dc0101825cd@sentry.ase.in.tum.de/3",
 	LEGAL_PROFILE: "",
 	TANSTACK_DEVTOOLS_ENABLED: "true",
@@ -61,7 +61,7 @@ const DEPLOYMENT_NAMES: Record<string, string> = {
 	preview: "Preview",
 	local: "Local",
 };
-const deploymentEnvironment = env("SENTRY_ENVIRONMENT") || "local";
+const deploymentEnvironment = env("DEPLOYMENT_ENVIRONMENT") || "local";
 
 /**
  * Which pull request this preview is of. Every preview shares the name "Preview", so without this
@@ -107,7 +107,6 @@ const environment = {
 	},
 
 	sentry: {
-		environment: env("SENTRY_ENVIRONMENT"),
 		dsn: env("SENTRY_DSN"),
 	},
 

@@ -14,6 +14,9 @@ class ReleaseAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
     @Autowired
     private WebTestClient client;
 
+    @Autowired
+    private ReleaseHistory history;
+
     @Test
     void shouldRejectAnonymousRequests() {
         client.get()
@@ -79,5 +82,26 @@ class ReleaseAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo("NOT_APPLICABLE")
                 .jsonPath("$.lastAttempt")
                 .doesNotExist();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldReportWhereTheReleaseRunsAndSinceWhen() {
+        history.recordStart();
+        client.get()
+                .uri("/admin/release")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.running.environment")
+                .isEqualTo("local")
+                .jsonPath("$.runningSince")
+                .exists()
+                .jsonPath("$.history[0].version")
+                .isEqualTo("0.0.0-development")
+                .jsonPath("$.history[0].environment")
+                .isEqualTo("local");
     }
 }

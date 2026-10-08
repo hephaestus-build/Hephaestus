@@ -50,6 +50,7 @@ non-digest `agent-pi` reference.
 Compose hands every server, worker and webhook container three lines of `release-lock.env`:
 `IMAGE_TAG` (as `APP_VERSION`), `HEPHAESTUS_RELEASE_COMMIT` and `HEPHAESTUS_IMAGE_APPLICATION_SERVER`.
 Each process reports them, with the runtime roles it booted, under `release` in `/actuator/info`.
+`DEPLOYMENT_ENVIRONMENT` from `.env` adds where the process runs.
 This is deployment metadata from the verified lock, not an observation of the container and not a
 second signature verification. A process without a lock reports the version it was given and no
 commit or image. If a value is present but malformed, the process refuses startup.

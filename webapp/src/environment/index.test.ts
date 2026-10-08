@@ -25,7 +25,7 @@ describe("preview pull request", () => {
 		["pr-2042.hephaestus.example.com", 2042],
 	])("reads the number out of %s, which is the only place it appears", async (host, expected) => {
 		const deployment = await deploymentFor({
-			SENTRY_ENVIRONMENT: "preview",
+			DEPLOYMENT_ENVIRONMENT: "preview",
 			APPLICATION_CLIENT_URL: `https://${host}`,
 		});
 
@@ -34,7 +34,7 @@ describe("preview pull request", () => {
 
 	it("gives a deployment that is not a preview no pull request, whatever it is named", async () => {
 		const deployment = await deploymentFor({
-			SENTRY_ENVIRONMENT: "staging",
+			DEPLOYMENT_ENVIRONMENT: "staging",
 			APPLICATION_CLIENT_URL: "https://pr2042.hephaestus.example.com",
 		});
 
@@ -49,7 +49,7 @@ describe("preview pull request", () => {
 		"",
 	])("leaves the pull request unset for %s", async (clientUrl) => {
 		const deployment = await deploymentFor({
-			SENTRY_ENVIRONMENT: "preview",
+			DEPLOYMENT_ENVIRONMENT: "preview",
 			APPLICATION_CLIENT_URL: clientUrl,
 		});
 
@@ -62,7 +62,7 @@ describe("CSRF cookie name", () => {
 		// The entrypoint writes every key of RuntimeEnvVars into window.__ENV__ whether the container
 		// has it or not, so an unset variable arrives as "", which the `??` default cannot rescue.
 		const environment = await environmentFor({
-			SENTRY_ENVIRONMENT: "production",
+			DEPLOYMENT_ENVIRONMENT: "production",
 			XSRF_COOKIE_NAME: "",
 		});
 
@@ -71,7 +71,7 @@ describe("CSRF cookie name", () => {
 
 	it("keeps a name the deployment does set, which local http E2E needs without the __Host- prefix", async () => {
 		const environment = await environmentFor({
-			SENTRY_ENVIRONMENT: "local",
+			DEPLOYMENT_ENVIRONMENT: "local",
 			XSRF_COOKIE_NAME: "XSRF-TOKEN",
 		});
 

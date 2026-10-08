@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.release.ReleaseProperties;
+import de.tum.cit.aet.hephaestus.core.release.RunningRelease;
 import io.sentry.Hint;
 import io.sentry.Sentry;
 import io.sentry.SentryEvent;
@@ -15,6 +17,10 @@ import org.springframework.mock.env.MockEnvironment;
 
 @Tag("unit")
 class SentryConfigurationTest {
+    private static RunningRelease staging(String version) {
+        return new RunningRelease(version, new ReleaseProperties("", "", true, "staging"), new MockEnvironment());
+    }
+
     @AfterEach
     void closeSentry() {
         Sentry.close();
@@ -24,7 +30,7 @@ class SentryConfigurationTest {
     void initEnforcesThePrivacyContract() {
         var configuration = new SentryConfiguration(
                 new MockEnvironment().withProperty("spring.profiles.active", "test"),
-                "1.2.3",
+                staging("1.2.3"),
                 new SentryProperties("https://public@example.invalid/1"));
 
         configuration.init();
@@ -43,5 +49,19 @@ class SentryConfigurationTest {
         assertThat(scrubbed.getUser()).isNull();
         assertThat(scrubbed.getRequest()).isNull();
         assertThat(scrubbed.getBreadcrumbs()).isNull();
+    }
+
+    @Test
+    void shouldReportTheDeploymentEnvironmentAndRunningVersionWhenInitialized() {
+        // The profile is the same on staging and production, so it must not name the environment.
+        new SentryConfiguration(
+                        new MockEnvironment().withProperty("spring.profiles.active", "prod"),
+                        staging("1.2.3"),
+                        new SentryProperties("https://public@example.invalid/1"))
+                .init();
+
+        var options = Sentry.getCurrentScopes().getOptions();
+        assertThat(options.getEnvironment()).isEqualTo("staging");
+        assertThat(options.getRelease()).isEqualTo("1.2.3");
     }
 }
