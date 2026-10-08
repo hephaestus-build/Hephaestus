@@ -4,21 +4,32 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.jdbc.datasource.DelegatingDataSource;
 
 /** Counts JDBC preparations, including SQL that does not pass through Hibernate. */
 public class SqlStatementCounter implements BeanPostProcessor {
-    private final AtomicLong statements = new AtomicLong();
+    private static final ThreadLocal<Counter> ACTIVE = new ThreadLocal<>();
 
-    public void reset() {
-        statements.set(0);
+    /** Counts only preparations on this thread during the block; child threads are not included. */
+    public <T> Measurement<T> measure(Supplier<T> read) {
+        if (ACTIVE.get() != null) throw new IllegalStateException("SQL measurements cannot be nested");
+        Counter counter = new Counter();
+        ACTIVE.set(counter);
+        try {
+            T value = read.get();
+            return new Measurement<>(value, counter.statements);
+        } finally {
+            ACTIVE.remove();
+        }
     }
 
-    public long count() {
-        return statements.get();
+    public record Measurement<T>(T value, long statements) {}
+
+    private static class Counter {
+        private long statements;
     }
 
     @Override
@@ -26,7 +37,7 @@ public class SqlStatementCounter implements BeanPostProcessor {
         return bean instanceof DataSource source ? new CountingDataSource(source) : bean;
     }
 
-    private class CountingDataSource extends DelegatingDataSource {
+    private static class CountingDataSource extends DelegatingDataSource {
         CountingDataSource(DataSource source) {
             super(source);
         }
@@ -44,7 +55,8 @@ public class SqlStatementCounter implements BeanPostProcessor {
         private Connection count(Connection connection) {
             return (Connection) Proxy.newProxyInstance(
                     Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, (proxy, method, args) -> {
-                        if (method.getName().equals("prepareStatement")) statements.incrementAndGet();
+                        Counter counter = ACTIVE.get();
+                        if (counter != null && method.getName().equals("prepareStatement")) counter.statements++;
                         try {
                             return method.invoke(connection, args);
                         } catch (InvocationTargetException failure) {
