@@ -71,6 +71,7 @@ import {
 	type ComposedFeedbackEnvelope,
 	type ComposedFeedbackUnit,
 	type ComposedReview,
+	PRIOR_ADVICE_REASONS,
 	PRIVATE_CHANNELS,
 	type PreparedFeedbackTarget,
 	type ReviewPractice,
@@ -2138,6 +2139,56 @@ function stagedPreparedTargets(): PreparedFeedbackTarget[] {
 	}
 }
 
+/**
+ * The `channel:practice` pairs the staged delivered feedback can show as already said. The server chose the person
+ * and the records this review may read; a record counts only when it is current, not withdrawn, carries its staged
+ * words and a delivery time, and rests on a NOT_MET observation of the practice. Prepared feedback reached no one, and
+ * a history that cannot be read does not establish prior communication.
+ */
+function stagedDeliveredPractices(): Set<string> {
+	const file = `${nodePath.dirname(PREPARED_FEEDBACK_PATH)}/feedback.json`;
+	try {
+		if (!existsSync(file)) {
+			return new Set();
+		}
+		const history = parseJson(readFileSync(file, "utf8"));
+		if (
+			!isRecord(history) ||
+			history.recordRole !== "RECORDED_DELIVERY" ||
+			!Array.isArray(history.feedback)
+		) {
+			return new Set();
+		}
+		return new Set(
+			history.feedback.flatMap((entry: unknown) => {
+				if (!isRecord(entry)) {
+					return [];
+				}
+				const { channel, recordedClaimCurrentness, withdrawn, body, deliveredAt } = entry;
+				if (
+					(channel !== "IN_APP" && channel !== "IN_CHAT") ||
+					recordedClaimCurrentness !== "CURRENT" ||
+					(withdrawn !== undefined && withdrawn !== false) ||
+					typeof body !== "string" ||
+					body.trim() === "" ||
+					typeof deliveredAt !== "string" ||
+					!Number.isFinite(Date.parse(deliveredAt))
+				) {
+					return [];
+				}
+				return jsonArray(entry.basedOn).flatMap((support) =>
+					isRecord(support) && support.outcome === "NOT_MET"
+						? [`${channel}:${normalizePracticeSlug(support.practiceSlug)}`]
+						: [],
+				);
+			}),
+		);
+	} catch (error) {
+		console.error(`[pi-runner] delivered feedback unreadable for composition: ${errorText(error)}`);
+		return new Set();
+	}
+}
+
 // Inline placement requires a citation inside the current diff.
 function leanObservations(observations: readonly AdmittedObservation[]): LeanObservation[] {
 	return observations.map((observation) => ({
@@ -2194,6 +2245,7 @@ function buildFeedbackTool(
 	request: CompositionRequest,
 	observations: readonly AdmittedObservation[],
 	preparedTargets: PreparedFeedbackTarget[],
+	deliveredPractices: ReadonlySet<string>,
 ) {
 	// The reader resolves supersession against the envelope's copy of this list and drops any unit
 	// naming a thread outside it, so the vocabulary is recorded here, where it is decided.
@@ -2232,7 +2284,7 @@ function buildFeedbackTool(
 				`${unit.channel} holds at most ${bounds.maxUnits} unit(s) and is full: this one does not fit — WITHHOLD it with BELOW_BAR or leave it out. Skipped.`,
 			);
 		}
-		const rejection = validateUnit(unit, observationsById, preparedTargets);
+		const rejection = validateUnit(unit, observationsById, preparedTargets, deliveredPractices);
 		if (rejection !== null) {
 			return skipped(rejection);
 		}
@@ -2924,14 +2976,31 @@ function validateUnit(
 	unit: FeedbackUnit,
 	observationsById: ReadonlyMap<string, AdmittedObservation>,
 	preparedTargets: readonly PreparedFeedbackTarget[],
+	deliveredPractices: ReadonlySet<string>,
 ): string | null {
 	const evidenceError = validateFeedbackEvidence(unit.practiceSlug, unit.basedOn, observationsById);
 	if (evidenceError !== null) {
 		return evidenceError;
 	}
 	if (unit.action === "WITHHOLD") {
-		if (!hasText(unit.withholdReason)) {
+		const reason = unit.withholdReason;
+		if (!hasText(reason)) {
 			return "WITHHOLD needs a withholdReason; skipped.";
+		}
+		// The withholding settles each NOT_MET practice in basedOn (undecidedPrivatePractices), so each needs a record here.
+		const unrecorded = notMetPractices(
+			unit.basedOn.flatMap((id) => {
+				const observation = observationsById.get(id);
+				return observation === undefined ? [] : [observation];
+			}),
+		).filter((slug) => !deliveredPractices.has(`${unit.channel}:${slug}`));
+		if ([...PRIOR_ADVICE_REASONS].some((prior) => prior === reason) && unrecorded.length > 0) {
+			return (
+				`${reason} rests on feedback recorded as delivered on ${unit.channel} for ${unrecorded.join(", ")} in the ` +
+				`delivered-feedback history: current, not withdrawn, with its words, for each NOT_MET practice in basedOn. The captured history does not establish that prerequisite; prepared ` +
+				`feedback and other channels do not count. Decide this lane on its own evidence: the unit it supports, ` +
+				`or WITHHOLD with BELOW_BAR. Skipped.`
+			);
 		}
 		return null;
 	}
@@ -4683,6 +4752,7 @@ async function main() {
 			request,
 			admittedObservations,
 			stagedPreparedTargets(),
+			stagedDeliveredPractices(),
 		);
 		const privateLoader = new DefaultResourceLoader({
 			cwd: CWD,

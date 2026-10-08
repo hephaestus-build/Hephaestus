@@ -776,6 +776,10 @@ Each body remains complete through admission and posting, apart from provider se
 Private feedback retains one unit per `(channel, practiceSlug)`.
 A `SUPERSEDE` action must name an unread thread staged in the prepared targets.
 The server decides whether that target may be replaced.
+
+`report_feedback` refuses private `ALREADY_SAID` or `NO_MATERIAL_CHANGE` withholding unless the staged history establishes prior delivery on the unit's channel for each `NOT_MET` practice that the unit covers.
+The record must be current and not withdrawn, with a body on the same channel.
+It must rest on a `NOT_MET` observation of the same practice.
 The glossary owns [thread keys and supersession](./practice-review-glossary.mdx#thread-key-and-supersession).
 
 A public withholding decision names exact `NOT_MET` observations, never a whole practice or a positive observation.
