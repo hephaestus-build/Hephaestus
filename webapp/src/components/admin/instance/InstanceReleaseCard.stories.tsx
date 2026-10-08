@@ -15,6 +15,7 @@ import {
 const running = {
 	version: "1.2.3",
 	channel: "RELEASE",
+	environment: "production",
 	commit: "a".repeat(40),
 	image: `ghcr.io/hephaestus-build/application-server@sha256:${"b".repeat(64)}`,
 	roles: ["SERVER"],
@@ -36,7 +37,7 @@ function ready(
 ): InstanceReleaseCardState {
 	return {
 		status: "ready",
-		release: { running, status: "NEVER_CHECKED", ...release },
+		release: { running, status: "NEVER_CHECKED", history: [], ...release },
 		check,
 		onCheck,
 	};
@@ -55,6 +56,8 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Not checked yet")).toBeVisible();
+		await expect(canvas.getByText(/running in/iu)).toHaveTextContent("Running in production.");
+		await expect(canvas.queryByRole("button", { name: "Show release history" })).toBeNull();
 		await userEvent.click(canvas.getByRole("button", { name: "Check now" }));
 		await expect(onCheck).toHaveBeenCalledOnce();
 	},
@@ -186,6 +189,7 @@ export const DevelopmentBuild: Story = {
 			running: {
 				version: "0.0.0-development",
 				channel: "DEVELOPMENT",
+				environment: "local",
 				roles: ["SERVER", "WORKER", "WEBHOOK"],
 			},
 		}),
@@ -203,6 +207,37 @@ export const IdentityExpandedOnAPhone: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Show deployment identity" }));
 		await expect(canvas.getByText(running.image)).toBeVisible();
 		await expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
+	},
+};
+
+export const WithHistory: Story = {
+	args: {
+		state: ready({
+			status: "CURRENT",
+			lastSuccess: hoursBefore(2),
+			runningSince: daysBefore(3),
+			history: [
+				{ ...running, startedAt: daysBefore(3) },
+				{ ...running, version: "1.3.0", startedAt: daysBefore(5) },
+				{ ...running, startedAt: daysBefore(20) },
+				{
+					version: "d".repeat(40),
+					channel: "COMMIT",
+					environment: "staging",
+					commit: "d".repeat(40),
+					startedAt: daysBefore(40),
+				},
+			],
+		}),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/running in/iu)).toHaveTextContent(
+			"Running in production, started 3 days ago.",
+		);
+		await userEvent.click(canvas.getByRole("button", { name: "Show release history" }));
+		await expect(canvas.getAllByRole("listitem")).toHaveLength(4);
+		await expect(canvas.getByText("v1.3.0")).toBeVisible();
+		await expect(canvas.getByText("in staging")).toBeVisible();
 	},
 };
 

@@ -4484,6 +4484,21 @@ export type RegisterSlackChannelRequest = {
 };
 
 /**
+ * A release the server role started on this instance.
+ */
+export type ReleaseStart = {
+  channel: 'RELEASE' | 'COMMIT' | 'DEVELOPMENT';
+  commit?: string;
+  environment: string;
+  image?: string;
+  /**
+   * when the server role first started this release; a restart does not change it
+   */
+  startedAt: Date;
+  version: string;
+};
+
+/**
  * The running release and what the last update check found. Discovery is advisory: nothing here
  *  verifies an artifact or performs an upgrade.
  */
@@ -4492,6 +4507,10 @@ export type ReleaseStatus = {
    * why the last attempt did not complete, when <code>status</code> is <code>FAILED</code>
    */
   failure?: 'RATE_LIMITED' | 'UNAVAILABLE' | 'MALFORMED';
+  /**
+   * the releases this instance ran, newest first
+   */
+  history: Array<ReleaseStart>;
   /**
    * when a check was last started, on any outcome
    */
@@ -4516,6 +4535,10 @@ export type ReleaseStatus = {
    * the identity this process reports
    */
   running: RunningRelease;
+  /**
+   * when this instance started the running release, absent unless the newest start is it
+   */
+  runningSince?: Date;
   /**
    * the verdict an administrator reads first
    */
@@ -5352,6 +5375,10 @@ export type RunningRelease = {
    * the source commit the lock names
    */
   commit?: string;
+  /**
+   * the name the deployment gives this instance
+   */
+  environment: string;
   /**
    * the digest reference this container was started from
    */

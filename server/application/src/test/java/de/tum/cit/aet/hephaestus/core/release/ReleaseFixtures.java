@@ -5,10 +5,12 @@ import org.springframework.mock.env.MockEnvironment;
 final class ReleaseFixtures {
     static final String COMMIT = "a".repeat(40);
     static final String IMAGE = "ghcr.io/hephaestus-build/application-server@sha256:" + "b".repeat(64);
+    static final String ENVIRONMENT = "staging";
 
     private ReleaseFixtures() {}
 
     static RunningRelease running(String version) {
-        return new RunningRelease(version, new ReleaseProperties(COMMIT, IMAGE, true), new MockEnvironment());
+        return new RunningRelease(
+                version, new ReleaseProperties(COMMIT, IMAGE, true, ENVIRONMENT), new MockEnvironment());
     }
 }

@@ -112,10 +112,12 @@ services:
           exit 1
         fi
 
+        # A preview records the releases it starts; staging's starts are not its history.
         echo "Dumping staging data from $$SOURCE"
         pg_dump -h "$$SOURCE" -U "$$PREVIEW_SEED_SOURCE_USERNAME" \
           -d "$$PREVIEW_SEED_SOURCE_DATABASE" \
-          --format=custom --no-owner --no-privileges --no-large-objects > /tmp/seed.dump
+          --format=custom --no-owner --no-privileges --no-large-objects \
+          --exclude-table-data=release_start > /tmp/seed.dump
         test -s /tmp/seed.dump
 
         export PGPASSWORD="$$POSTGRES_PASSWORD"
@@ -334,6 +336,7 @@ services:
       MONITORING_SYNC_CRON: "-"
       MONITORING_BACKFILL_ENABLED: "false"
       SENTRY_DSN: ""
+      DEPLOYMENT_ENVIRONMENT: preview
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?Set WEBHOOK_SECRET to at least 32 printable ASCII characters}
       WEBHOOK_ROUTING_SECRET: ${WEBHOOK_ROUTING_SECRET:?Set WEBHOOK_ROUTING_SECRET to at least 32 printable ASCII characters, different from WEBHOOK_SECRET}
       WEBHOOK_EXTERNAL_URL: ""
@@ -388,7 +391,7 @@ services:
       # every request that changes something is refused.
       APPLICATION_SERVER_URL: https://${SERVICE_FQDN_WEBAPP}/api
       TANSTACK_DEVTOOLS_ENABLED: "true"
-      SENTRY_ENVIRONMENT: preview
+      DEPLOYMENT_ENVIRONMENT: preview
       SENTRY_DSN: ""
     depends_on:
       appserver:

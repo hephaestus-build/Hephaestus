@@ -13,6 +13,8 @@ import org.springframework.validation.annotation.Validated;
  * @param commit       the source commit the lock names; empty outside a lock-driven deployment
  * @param image        the digest reference this container was started from; empty likewise
  * @param checkEnabled whether the server role may ask GitHub for the newest published release
+ * @param environment  the name the deployment gives this instance, such as {@code production}; the
+ *                     webapp, error reports and traces use the same name
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.release")
@@ -26,4 +28,12 @@ public record ReleaseProperties(
         @DefaultValue("")
         String image,
 
-        @DefaultValue("true") boolean checkEnabled) {}
+        @DefaultValue("true") boolean checkEnabled,
+
+        // Sentry refuses longer names; lowercase keeps the webapp's production check exact.
+        @Pattern(
+                regexp = "[a-z0-9][a-z0-9._-]{0,63}",
+                message =
+                        "DEPLOYMENT_ENVIRONMENT must be lowercase letters, digits, '.', '_' or '-', at most 64 characters")
+        @DefaultValue("local")
+        String environment) {}

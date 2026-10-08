@@ -251,12 +251,18 @@ export const adminTriageProductFeedbackResponseTransformer = async (data: any): 
   return data;
 };
 
+const releaseStartSchemaResponseTransformer = (data: any) => {
+  data.startedAt = new Date(data.startedAt);
+  return data;
+};
+
 const latestReleaseSchemaResponseTransformer = (data: any) => {
   data.publishedAt = new Date(data.publishedAt);
   return data;
 };
 
 const releaseStatusSchemaResponseTransformer = (data: any) => {
+  data.history = data.history.map((item: any) => releaseStartSchemaResponseTransformer(item));
   if (data.lastAttempt) {
     data.lastAttempt = new Date(data.lastAttempt);
   }
@@ -271,6 +277,9 @@ const releaseStatusSchemaResponseTransformer = (data: any) => {
   }
   if (data.retryUntil) {
     data.retryUntil = new Date(data.retryUntil);
+  }
+  if (data.runningSince) {
+    data.runningSince = new Date(data.runningSince);
   }
   return data;
 };

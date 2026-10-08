@@ -1375,6 +1375,16 @@ erDiagram
         VARCHAR(16) usefulness
     }
 
+    ReleaseStart {
+        BIGINT id PK
+        VARCHAR(16) channel "NOT NULL"
+        VARCHAR(40) commit_sha
+        VARCHAR(64) environment "NOT NULL"
+        VARCHAR(512) image
+        TIMESTAMPTZ started_at "NOT NULL"
+        VARCHAR(128) version "NOT NULL"
+    }
+
     Repository {
         BIGINT id PK
         TIMESTAMPTZ created_at

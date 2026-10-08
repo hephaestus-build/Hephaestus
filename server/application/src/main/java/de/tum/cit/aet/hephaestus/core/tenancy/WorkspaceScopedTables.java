@@ -82,6 +82,8 @@ public class WorkspaceScopedTables {
             "login_provider",
             // Singleton instance-wide operator settings (silent-mode brake); no tenant dimension exists
             "instance_settings",
+            // The releases this instance started; no tenant dimension exists
+            "release_start",
             // Native-account email subscriptions are independent of workspace membership.
             "notification_subscription",
             // Instance LLM-config catalog — app_admin-owned, curated, shared across all workspaces
