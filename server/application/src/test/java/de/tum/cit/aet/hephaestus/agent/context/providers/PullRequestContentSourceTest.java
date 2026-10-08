@@ -39,6 +39,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,6 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -116,6 +118,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         metadata.put("source_branch", "feature/auth-fix");
         metadata.put("target_branch", "main");
         metadata.put("base_ref_oid", BASE);
+        // PullRequestReviewHandler retains the words the pull request had when the job was admitted.
+        metadata.put("title", "Fix authentication bug");
+        metadata.put("body", "This PR fixes the login issue");
         return metadata;
     }
 
@@ -163,6 +168,12 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         @Test
         void supportsPracticeReview() {
             assertThat(provider.supports(request(sampleMetadata()))).isTrue();
+        }
+
+        @Test
+        void shouldLeaveTheMentorsCurrentWorkToItsOwnSourcesWhenAskedForAConversation() {
+            assertThat(provider.supports(new ContextRequest.MentorChatRequest(WORKSPACE_ID, 2L, UUID.randomUUID())))
+                    .isFalse();
         }
     }
 
@@ -230,6 +241,105 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(metadataJson.get("created_at").asString()).isEqualTo("2026-04-09T12:39:13Z");
             assertThat(metadataJson.get("merged_at").asString()).isEqualTo("2026-04-09T14:47:18Z");
             assertThat(metadataJson.has("closed_at")).isFalse();
+        }
+
+        @Test
+        void shouldStageTheAdmittedWordsBesideCurrentStatusWhenTheMirrorChangedSinceAdmission() throws Exception {
+            PullRequest pr = new PullRequest();
+            pr.setTitle("Current title");
+            pr.setBody("CURRENT-BODY-SENTINEL");
+            pr.setState(Issue.State.CLOSED);
+            pr.setMerged(true);
+            pr.setMergedAt(Instant.parse("2026-04-10T09:00:00Z"));
+            pr.setReviewDecision(ReviewDecision.APPROVED);
+            pr.setLastSyncAt(Instant.parse("2026-04-10T10:00:00Z"));
+            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(pr));
+            AgentJob job = jobWith(sampleMetadata());
+            ReflectionTestUtils.setField(job, "createdAt", Instant.parse("2026-04-09T12:00:00Z"));
+
+            var captured = provider.capture(new ContextRequest.PracticeReviewRequest(job), Set.of(CORE));
+
+            JsonNode metadataJson = objectMapper.readTree(captured.files().get("context/metadata.json"));
+            assertThat(metadataJson.get("title").asString()).isEqualTo("Fix authentication bug");
+            assertThat(metadataJson.get("body").asString()).isEqualTo("This PR fixes the login issue");
+            assertThat(new String(
+                            captured.files().get(PullRequestContentSource.DESCRIPTION_FILE), StandardCharsets.UTF_8))
+                    .isEqualTo("This PR fixes the login issue");
+            assertThat(new String(captured.files().get("context/metadata.json"), StandardCharsets.UTF_8))
+                    .doesNotContain("CURRENT-BODY-SENTINEL", "Current title");
+            // Status stays the mirror's at capture, and says so; admission is dated as admission, not as the event.
+            assertThat(metadataJson.get("state").asString()).isEqualTo("CLOSED");
+            assertThat(metadataJson.get("is_merged").asBoolean()).isTrue();
+            assertThat(metadataJson.get("review_decision").asString()).isEqualTo("APPROVED");
+            JsonNode basis = metadataJson.get("basis");
+            assertThat(basis.get("admission_fields").valueStream().map(JsonNode::asString))
+                    .contains("title", "body", "commit_sha")
+                    .doesNotContain("state", "review_decision", "head_checks");
+            assertThat(basis.get("admitted_at").asString()).isEqualTo("2026-04-09T12:00:00Z");
+            assertThat(basis.get("other_fields").asString()).isEqualTo("CAPTURE");
+            assertThat(basis.get("mirror_synced_at").asString()).isEqualTo("2026-04-10T10:00:00Z");
+            assertThat(captured.completeness()).containsEntry(CORE, SourceCompleteness.COMPLETE);
+            // The sync time does not date the admitted words.
+            assertThat(captured.observedAt()).doesNotContainKey(CORE);
+        }
+
+        @ParameterizedTest
+        @CsvSource({"title", "body"})
+        void shouldNameTheRetainedTextAsUnknownRatherThanStageTheCurrentOneWhenTheJobLacksIt(String field)
+                throws Exception {
+            PullRequest pr = new PullRequest();
+            pr.setTitle("Current title");
+            pr.setBody("CURRENT-BODY-SENTINEL");
+            stubGit();
+            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(pr));
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                    .thenReturn(List.of());
+            ObjectNode missing = sampleMetadata();
+            missing.remove(field);
+            ObjectNode malformed = sampleMetadata();
+            malformed.put(field, 7);
+            for (ObjectNode metadata : List.of(missing, malformed)) {
+                var captured = provider.capture(request(metadata), provider.sourceKinds());
+
+                JsonNode metadataJson = objectMapper.readTree(captured.files().get("context/metadata.json"));
+                assertThat(metadataJson.has(field)).isFalse();
+                assertThat(new String(captured.files().get("context/metadata.json"), StandardCharsets.UTF_8))
+                        .doesNotContain("CURRENT-BODY-SENTINEL", "Current title");
+                assertThat(captured.files().containsKey(PullRequestContentSource.DESCRIPTION_FILE))
+                        .isEqualTo(field.equals("title"));
+                assertThat(captured.completeness()).containsEntry(CORE, SourceCompleteness.PARTIAL);
+                assertThat(captured.captureLimitations().get(CORE))
+                        .containsExactly(field.equals("title") ? "RETAINED_TITLE_UNKNOWN" : "RETAINED_BODY_UNKNOWN");
+                // The other sources are captured as before.
+                assertThat(captured.completeness())
+                        .containsEntry(COMMENTS, SourceCompleteness.COMPLETE)
+                        .containsEntry(DIFF, SourceCompleteness.COMPLETE);
+                assertThat(captured.files()).containsKey(PullRequestContentSource.CHANGE_FILE);
+            }
+        }
+
+        @Test
+        void shouldStageAnEmptyDescriptionOnlyWhenTheJobKnowsTheBodyWasAbsent() throws Exception {
+            PullRequest pr = new PullRequest();
+            pr.setBody("CURRENT-BODY-SENTINEL");
+            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(pr));
+            ObjectNode absent = sampleMetadata();
+            absent.putNull("body");
+
+            var captured = provider.capture(request(absent), Set.of(CORE));
+
+            JsonNode metadataJson = objectMapper.readTree(captured.files().get("context/metadata.json"));
+            assertThat(metadataJson.get("body").isNull()).isTrue();
+            assertThat(captured.files().get(PullRequestContentSource.DESCRIPTION_FILE))
+                    .isEmpty();
+            assertThat(captured.completeness()).containsEntry(CORE, SourceCompleteness.COMPLETE);
+            assertThat(captured.captureLimitations()).doesNotContainKey(CORE);
+
+            ObjectNode empty = sampleMetadata();
+            empty.put("body", "");
+            JsonNode emptyJson = objectMapper.readTree(
+                    provider.capture(request(empty), Set.of(CORE)).files().get("context/metadata.json"));
+            assertThat(emptyJson.get("body").asString()).isEmpty();
         }
 
         @Test

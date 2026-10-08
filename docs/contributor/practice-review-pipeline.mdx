@@ -449,6 +449,16 @@ A pull-request capture pins `base_sha` and `head_sha` in `inputs/context/change.
 The sandbox derives the patch, statistics and changed-file list with `git` under `work/change/`.
 Commit messages and file changes are staged as captured input so admission can verify their citations.
 
+A pull-request capture stages the title and description that the job retained at admission, beside the head that the job names.
+It never uses the current mirror text in their place.
+If the job does not carry one of them as text, capture leaves that field unknown and reports the core source as `PARTIAL`.
+A body that the job records as absent stages an empty description file.
+
+The state, draft, merge, approval, check, label and other status fields are the mirror at capture time.
+The `basis` object in `metadata.json` names the admission fields, the admission time, and the mirror sync time.
+Admission time is when the job was accepted, not when the provider event occurred.
+Capture does not reconstruct status at admission, and it does not recover an earlier head or range.
+
 Practice-specific precompute scripts run on these inputs inside the sandbox.
 The server also reads the change to evaluate declared practice subjects and verify citations.
 The [workspace ABI](./agent/workspace-abi.mdx) owns the file layout.
