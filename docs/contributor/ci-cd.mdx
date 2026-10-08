@@ -56,7 +56,8 @@ It can capture evidence only for images that its run published.
 | Quality → Clean install                                                 | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path                                                          | `vp install`                                                             |
 | Build → App Server: Package                                             | `./gradlew :application:bootJar :application:testClasses`. Uploads the classes and JARs once                                                                                              | —                                                                        |
 | Build → App Server: Generated artifacts                                 | `generate:api` diff against the packaged JAR. `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff                                                              | `vp run generate:api`, `db:check-drift`, `db:generate-erd-docs`          |
-| Build → App Server: Database                                            | Gradle `databaseTest` task against PostgreSQL. The PostgreSQL 18 backup-restore drill                                                                                                     | `vp run test:postgres-restore`                                           |
+| Build → App Server: Database                                            | Gradle `databaseTest` task against PostgreSQL                                                                                                                                             | —                                                                        |
+| Build → App Server: PostgreSQL drill                                    | `test:postgres-restore` and `test:postgres-pitr`, one job each, beside `databaseTest`                                                                                                     | `vp run test:postgres-restore`, `test:postgres-pitr`                     |
 | Build → Webapp: E2E                                                     | Playwright against the packaged JAR                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
 | Build → Extension: E2E                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                           | `vp run test:extension:e2e`                                              |
 | Build → App Server image                                                | `pack build` from the packaged JAR, signed, attested and policy-scanned                                                                                                                   | —                                                                        |
@@ -803,6 +804,13 @@ If no such default-branch commit exists, the run builds every image itself. `det
   PR's branch, build both architectures. Pull requests and merge groups build only changed images and alias the rest.
   The Version PR's branch builds them all. `detect-changes` decides both once, as `single-arch` and `all-images`, and hands them to
   every image build in the run.
+- The affected `Build` gates and `Test` suites use native `background: true` setup steps.
+  Each job overlaps its toolchain or JDK, Gradle caches, restored server, and PostgreSQL image as needed.
+  The browser jobs install Playwright in the background after the toolchain that it runs on.
+  One `wait-all: true` step joins them. The job's one Gradle invocation or suite starts after all setup
+  steps finish. A setup failure fails the job at the join.
+- `Security` starts from `Detect changes`. Only `Pinned upstream images` reads the advisory
+  snapshot, so only it waits for `Image advisory database`.
 - Quality legs run independently. The image matrix in `reusable-docker-build.yml` uses
   `fail-fast: true`.
 - Pull-request runs cancel superseded runs. `release.yml` never cancels. The same-repository
@@ -821,6 +829,30 @@ If no such default-branch commit exists, the run builds every image itself. `det
   GitHub's native `queue: max` can retain more pending runs, but the required Actionlint parser
   [does not yet support it](https://github.com/rhysd/actionlint/issues/657). Adopt it when a supported
   validator release is available. Do not suppress workflow syntax checks or add a custom queue.
+
+## Workflow validation
+
+The required `Actionlint` check runs two validators in one job.
+
+1. `scripts/check-workflows.ts` loads GitHub's workflow parser and language service.
+   It validates every workflow and composite action: schema, expressions, contexts, `needs`,
+   step references, and the native `background`, `wait`, `wait-all`, `cancel` and `parallel` steps.
+   A warning fails the check.
+   It compares each local `./` action step with the inputs that the action declares.
+   It gives the `steps` context the outputs that a local action declares.
+   It reads a workflow, an action or a local reusable workflow only inside this repository,
+   through links as well.
+   It runs ShellCheck at warning severity on the `bash` and `sh` scripts of composite actions and of
+   workflows that use native steps. It runs Pyflakes on their `python` scripts.
+   It does not check PowerShell.
+2. Actionlint checks the workflows that use no native steps, because it cannot read native steps.
+   It keeps its own ShellCheck and its metadata for popular remote actions.
+
+For a workflow that uses native steps, the first validator also reads the `action.yml` of each
+public action pinned to a commit from `raw.githubusercontent.com`, without credentials.
+It checks that action's inputs and outputs, and fails when the file is unavailable.
+Thus, this check needs network access. Nothing it reads is stored in the repository.
+`vp run test:tooling` runs the validator's own tests.
 
 ## Monitoring CI
 

@@ -1054,7 +1054,7 @@ void describe("CI contract", () => {
 		assert.match(packaging, /:application:testClasses/u);
 		assert.equal((packageJob.match(/actions\/upload-artifact@/gu) ?? []).length, 1);
 		assert.match(packageJob, /overwrite: true/u);
-		for (const name of ["server-api", "server-database"]) {
+		for (const name of ["server-api", "server-database", "postgres-drill"]) {
 			const consumer = job(build, name);
 			assert.doesNotMatch(consumer, /needs:/u);
 			assert.match(consumer, /uses: \.\/\.github\/actions\/restore-server-build/u);
@@ -1066,6 +1066,58 @@ void describe("CI contract", () => {
 		}
 		assert.match(job(build, "server-database"), /:application:databaseTest -PpackagedServer=true/u);
 		assert.match(job(build, "server-api"), /HEPHAESTUS_APPLICATION_JAR/u);
+		// Background steps prepare each consumer and run no command, and one `wait-all` holds them, so
+		// the job's single Gradle invocation or suite starts only after every export is held.
+		for (const [file, names] of [
+			[
+				".github/workflows/ci-build.yml",
+				["server-api", "server-database", "postgres-drill", "webapp-e2e", "extension-e2e"],
+			],
+			[".github/workflows/ci-tests.yml", ["server-verification", "server-integration"]],
+		] as const) {
+			const workflow = parseDocument(await readFile(file, "utf8"));
+			for (const name of names) {
+				const steps = workflow.getIn(["jobs", name, "steps"]);
+				assert.ok(isSeq(steps));
+				const join = steps.items.findIndex((item) => isMap(item) && item.get("wait-all") === true);
+				assert.ok(join > 0, `${name} joins its preparation with wait-all`);
+				const prepared = steps.items.filter(
+					(item): item is YAMLMap => isMap(item) && item.get("background") === true,
+				);
+				assert.ok(prepared.length > 1, `${name} has nothing to overlap`);
+				assert.ok(
+					prepared.every((item) => steps.items.indexOf(item) < join && !item.has("run")),
+					`${name} runs a command in the background or after its join`,
+				);
+				const earlier = steps.items.slice(0, join);
+				assert.ok(
+					earlier.every((item) => isMap(item) && !item.has("run")),
+					`${name} runs a command before its preparation is held`,
+				);
+				const uses = prepared.map((item) => String(item.get("uses")));
+				if (uses.includes("./.github/actions/setup-browsers")) {
+					assert.ok(
+						earlier.some(
+							(item) =>
+								isMap(item) &&
+								item.get("uses") === "./.github/actions/setup-toolchain" &&
+								item.get("background") !== true,
+						),
+						`${name} installs browsers before the toolchain they run on`,
+					);
+				}
+				if (file.endsWith("ci-build.yml")) {
+					assert.ok(
+						uses.some(
+							(action) =>
+								action === "./.github/actions/restore-server-build" ||
+								action.startsWith("actions/download-artifact@"),
+						),
+						`${name} does not hold the packaged server before its consumer`,
+					);
+				}
+			}
+		}
 		for (const name of ["webapp-e2e", "extension-e2e"]) {
 			const e2e = job(build, name);
 			assert.doesNotMatch(e2e, /needs:/u);
@@ -1275,10 +1327,18 @@ void describe("CI contract", () => {
 			job(source, "detect-changes"),
 			/version-bump: \$\{\{ steps\.version_bump\.outputs\.changed \}\}/u,
 		);
-		for (const name of ["workflow-lint", "zizmor", "Quality", "Security", "Test", "Compose"]) {
+		for (const name of [
+			"workflow-lint",
+			"zizmor",
+			"Quality",
+			"upstream-images",
+			"Security",
+			"Test",
+			"Compose",
+		]) {
 			assert.match(
 				job(source, name),
-				name === "Security"
+				name === "upstream-images"
 					? /needs: \[detect-changes, vulnerability-database\]/u
 					: /needs: \[detect-changes\]/u,
 			);
@@ -1937,7 +1997,7 @@ void describe("CI contract", () => {
 		// scanned on the pull request that changes them — which is the pull request a Renovate digest
 		// bump opens — and again in the weekly rescan, where a finding routes to the tracking issue.
 		assert.match(
-			await readFile(".github/workflows/ci-security-scan.yml", "utf8"),
+			job(await readFile(".github/workflows/cicd.yml", "utf8"), "upstream-images"),
 			/run: node scripts\/scan-upstream-images\.ts reports\n/u,
 		);
 		assert.match(

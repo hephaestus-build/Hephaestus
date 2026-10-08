@@ -12,6 +12,8 @@ const requiredJobs = [
 	"App Server: Package",
 	"Build / App Server: Generated artifacts",
 	"Build / App Server: Database",
+	"Build / App Server: PostgreSQL drill (backup-restore)",
+	"Build / App Server: PostgreSQL drill (pitr)",
 	"Build / Webapp: E2E",
 	"App Server image / Build linux/amd64 Docker Image",
 	"Test / App Server: Unit and architecture",

@@ -157,6 +157,12 @@ importers:
       '@actions/expressions':
         specifier: 0.3.61
         version: 0.3.61
+      '@actions/languageservice':
+        specifier: 0.3.61
+        version: 0.3.61
+      '@actions/workflow-parser':
+        specifier: 0.3.61
+        version: 0.3.61
       '@changesets/cli':
         specifier: 3.0.2
         version: 3.0.2
@@ -271,6 +277,9 @@ importers:
       vite-plus:
         specifier: 0.3.2
         version: 0.3.2(@types/node@24.13.3)(@vitest/browser-playwright@4.1.11)(@vitest/coverage-v8@4.1.11)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.0.1)(msw@2.14.6(@types/node@24.13.3)(typescript@7.0.2))(terser@5.51.0)(typescript@7.0.2)(yaml@2.9.0)
+      vscode-languageserver-textdocument:
+        specifier: 1.0.12
+        version: 1.0.12
       ws:
         specifier: 8.21.3
         version: 8.21.3
@@ -718,6 +727,14 @@ packages:
 
   '@actions/expressions@0.3.61':
     resolution: {integrity: sha512-Ig+tXELvTjlqxQAWBQnLNn2dPpNraLMdSnT+vDzDPmJtbNUhIAH/Z9kVT8pZ8UtJi9vUGs8hwHE8JFJmbOnLEA==}
+    engines: {node: '>= 20'}
+
+  '@actions/languageservice@0.3.61':
+    resolution: {integrity: sha512-PoBYhLZ3JG74ZBTAwvrs/V6JdpscCpXv8rprc4yzEQN7Z0FMEso0rewdmMUqwUxYKe7nq6J4RPp+ZVCRL82Zfg==}
+    engines: {node: '>= 20'}
+
+  '@actions/workflow-parser@0.3.61':
+    resolution: {integrity: sha512-NBjJrbwwrEN3LSN0NAISLpCWQLcPSBjmAIkLXHgjGX8Yql4PiD33ifSAvr9sIMU9uIs8wZiGUnvo9yPIMIfKdg==}
     engines: {node: '>= 20'}
 
   '@adobe/css-tools@4.5.0':
@@ -6987,6 +7004,10 @@ packages:
       typescript:
         optional: true
 
+  cronstrue@2.59.0:
+    resolution: {integrity: sha512-YKGmAy84hKH+hHIIER07VCAHf9u0Ldelx1uU6EBxsRPDXIA1m5fsKmJfyC3xBhw6cVC/1i83VdbL4PvepTrt8A==}
+    hasBin: true
+
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
@@ -12095,6 +12116,15 @@ packages:
       jsdom:
         optional: true
 
+  vscode-languageserver-textdocument@1.0.12:
+    resolution: {integrity: sha512-cxWNPesCnQCcMPeenjKKsOCKQZ/L6Tv19DTRIGuLWe32lyzWhihGVJ/rcckZXJxfdKCFvRLS3fpBIsV/ZGX4zA==}
+
+  vscode-languageserver-types@3.18.4:
+    resolution: {integrity: sha512-nQsacoiijvl0fRf2q28uFDrAVwRhdCa3QveiF7/CX0r18mLR5FU/1WskSsCKOjmEbtteKUnY8x8Yzxop+k0zwg==}
+
+  vscode-uri@3.2.0:
+    resolution: {integrity: sha512-m2gXo3bn0G1kT9InzMf07fTbqMbGtyckj3bH5ktLO+1Ssv+yiATZ4dhwaQv9UZWxJh6E9IFGnQyjgWVDWVBDrg==}
+
   w3c-xmlserializer@5.0.0:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
     engines: {node: '>=18'}
@@ -12436,6 +12466,21 @@ snapshots:
       many-keys-map: 3.0.3
 
   '@actions/expressions@0.3.61': {}
+
+  '@actions/languageservice@0.3.61':
+    dependencies:
+      '@actions/expressions': 0.3.61
+      '@actions/workflow-parser': 0.3.61
+      vscode-languageserver-textdocument: 1.0.12
+      vscode-languageserver-types: 3.18.4
+      vscode-uri: 3.2.0
+      yaml: 2.9.0
+
+  '@actions/workflow-parser@0.3.61':
+    dependencies:
+      '@actions/expressions': 0.3.61
+      cronstrue: 2.59.0
+      yaml: 2.9.0
 
   '@adobe/css-tools@4.5.0': {}
 
@@ -19547,6 +19592,8 @@ snapshots:
     optionalDependencies:
       typescript: 7.0.2
 
+  cronstrue@2.59.0: {}
+
   cross-spawn@7.0.6:
     dependencies:
       path-key: 3.1.1
@@ -25523,6 +25570,12 @@ snapshots:
       jsdom: 30.0.1
     transitivePeerDependencies:
       - msw
+
+  vscode-languageserver-textdocument@1.0.12: {}
+
+  vscode-languageserver-types@3.18.4: {}
+
+  vscode-uri@3.2.0: {}
 
   w3c-xmlserializer@5.0.0:
     dependencies:

@@ -390,6 +390,8 @@ jobs:
             ci-config:
               - '.github/workflows/**'
               - '.github/actions/**'
+              - 'scripts/check-workflows.ts'
+              - 'scripts/lib/actions-language.ts'
             quality-config:
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-quality-gates.yml'
@@ -437,7 +439,7 @@ jobs:
               - 'scripts/lib/image-scan.ts'
               - 'scripts/lib/json.ts'
               - 'scripts/lib/process.ts'
-              - '.github/workflows/ci-security-scan.yml'
+              - '.github/workflows/cicd.yml'
             docker-config:
               - '.github/workflows/ci-docker-build.yml'
               - '.github/workflows/reusable-docker-build.yml'
@@ -503,10 +505,23 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      # GitHub's own parser validates every workflow and action, and the scripts of those Actionlint
+      # cannot read. docs/contributor/ci-cd.mdx § Workflow validation says which check owns what.
+      - name: Validate workflows with GitHub's parser
+        id: native
+        run: node scripts/check-workflows.ts
+
+      # Without file arguments Actionlint reads every workflow, so an empty list must skip it.
       - uses: reviewdog/action-actionlint@d290e336d5a743810aef4404f757dc862276d2ae # v1.73.4
+        if: steps.native.outputs.compatible != ''
         env:
           SHELLCHECK_OPTS: --severity=warning
         with:
+          actionlint_flags: ${{ steps.native.outputs.compatible }}
           fail_level: error
           filter_mode: nofilter
           reporter: github-check
@@ -728,11 +743,60 @@ jobs:
       extension_e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.extension-e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
 
-  Security:
-    uses: ./.github/workflows/ci-security-scan.yml
+  # Upstream images ship by digest without a repository build. Scan changed digests here so their
+  # vulnerabilities are checked before release evidence is generated. Only this scan reads the
+  # advisory snapshot, so Security starts without waiting for it.
+  upstream-images:
+    name: "Pinned upstream images"
     needs: [detect-changes, vulnerability-database]
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
+      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
+      needs.detect-changes.outputs.should_skip != 'true' && (
+        needs.detect-changes.outputs.release-images == 'true' ||
+        needs.detect-changes.outputs.unfiltered == 'true'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+
+      - uses: ./.github/actions/setup-release-security-tools
+        with:
+          install-syft: "false"
+
+      # A blocking gate inherits Trivy's database availability as a hard dependency, so the
+      # retries and the mirror fallback live in one action rather than in each caller.
+      - uses: ./.github/actions/download-trivy-db
+        with:
+          database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
+
+      - name: Enforce the release vulnerability policy on the pinned digests
+        run: node scripts/scan-upstream-images.ts reports
+
+      # The gate's exit status alone cannot say which digest carries which finding.
+      - name: Upload the vulnerability policy results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vulnerability-policy-upstream
+          path: reports
+          if-no-files-found: warn
+          retention-days: 7
+
+  Security:
+    uses: ./.github/workflows/ci-security-scan.yml
+    needs: [detect-changes]
+    if: |
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.any-code == 'true' ||
@@ -744,9 +808,7 @@ jobs:
       contents: read
       security-events: write
     with:
-      database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
-      release_images_changed: ${{ (needs.detect-changes.outputs.release-images == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
 
   Test:
     uses: ./.github/workflows/ci-tests.yml
@@ -963,6 +1025,7 @@ jobs:
         server-package,
         application-server-image,
         Build,
+        upstream-images,
         Security,
         Test,
         Changesets,
@@ -1029,6 +1092,7 @@ jobs:
           echo "Package:        ${{ needs.server-package.result }}"
           echo "Server image:   ${{ needs.application-server-image.result }}"
           echo "Build:          ${{ needs.Build.result }}"
+          echo "Upstream:       ${{ needs.upstream-images.result }}"
           echo "Security:       ${{ needs.Security.result }}"
           echo "Test:           ${{ needs.Test.result }}"
           echo "Changesets:     ${{ needs.Changesets.result }}"
