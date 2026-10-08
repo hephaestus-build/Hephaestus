@@ -2061,10 +2061,46 @@ void describe("CI contract", () => {
 	void test("the CI gate publishes its own job's status, not the evaluation's verdict", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const publisher = namedStep(workflow, ["jobs", "all-ci-passed"], "Create commit status");
+		const dependencies = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
+		assert.ok(isSeq(dependencies));
+		const complete = Object.fromEntries(
+			dependencies.items.map((item) => {
+				assert.ok(isScalar(item) && typeof item.value === "string");
+				const completion = { result: "success" };
+				return [item.value, completion] as const;
+			}),
+		);
+		const [failedDependency, cancelledDependency] = Object.keys(complete);
+		assert.ok(isSet(failedDependency) && isSet(cancelledDependency));
+		const condition = asString(publisher.get("if"), "commit status condition");
+		const expression = /^\$\{\{(?<body>[\s\S]+)\}\}$/u.exec(condition)?.groups?.body;
+		assert.ok(isSet(expression));
+		const parsed = new Parser(
+			new Lexer(expression).lex().tokens,
+			["needs"],
+			[{ name: "cancelled", minArgs: 0, maxArgs: 0 }],
+		).parse();
 		// GitHub fills `job.status`, so this pins the wiring and runs the script against each value.
 		assert.equal(publisher.getIn(["env", "JOB_STATUS"]), `\${{ job.status }}`);
 		const script = String(stepInputs(publisher).get("script"));
-		const published = async (jobStatus: string | undefined) => {
+		const published = async (
+			jobStatus: string | undefined,
+			results = complete,
+			cancelled = false,
+		) => {
+			const context: unknown = JSON.parse(JSON.stringify({ needs: results }), data.reviver);
+			assert.ok(context instanceof data.Dictionary);
+			const functions = new Map([
+				[
+					"cancelled",
+					{
+						name: "cancelled",
+						minArgs: 0,
+						maxArgs: 0,
+						call: () => new data.BooleanData(cancelled),
+					},
+				],
+			]);
 			const calls: unknown[] = [];
 			const sandbox = {
 				context: { payload: {}, sha: "a".repeat(40), repo: { owner: "owner", repo: "repo" } },
@@ -2080,8 +2116,13 @@ void describe("CI contract", () => {
 				process: { env: jobStatus === undefined ? {} : { JOB_STATUS: jobStatus } },
 				done: Promise.resolve(),
 			};
-			runInNewContext(`done = (async () => {\n${script}\n})();`, sandbox);
-			await sandbox.done;
+			if (new Evaluator(parsed, context, functions).evaluate().coerceString() === "true") {
+				runInNewContext(`done = (async () => {\n${script}\n})();`, sandbox);
+				await sandbox.done;
+			}
+			if (calls.length === 0) {
+				return null;
+			}
 			assert.equal(calls.length, 1);
 			const payload = asRecord(calls[0], "commit status");
 			assert.equal(payload.sha, "a".repeat(40));
@@ -2097,6 +2138,29 @@ void describe("CI contract", () => {
 				`job status ${String(unknown)} is no success`,
 			);
 		}
+		assert.equal(
+			await published("success", { ...complete, [cancelledDependency]: { result: "skipped" } }),
+			"success",
+		);
+		assert.equal(
+			await published("failure", { ...complete, [failedDependency]: { result: "failure" } }),
+			"failure",
+		);
+		for (const name of Object.keys(complete)) {
+			assert.equal(
+				await published("failure", { ...complete, [name]: { result: "cancelled" } }),
+				null,
+			);
+		}
+		assert.equal(
+			await published("failure", {
+				...complete,
+				[failedDependency]: { result: "failure" },
+				[cancelledDependency]: { result: "cancelled" },
+			}),
+			null,
+		);
+		assert.equal(await published("failure", complete, true), null);
 	});
 
 	void test("merge groups require release evidence when their aggregate tree changes the version", async (context) => {
