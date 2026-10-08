@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -20,6 +21,7 @@ class SqlStatementCounterTest extends BaseUnitTest {
     private DataSource counted() throws SQLException {
         DataSource source = mock(DataSource.class);
         when(source.getConnection()).thenReturn(connection);
+        when(connection.prepareStatement("SELECT 1")).thenReturn(mock(PreparedStatement.class));
         return (DataSource) counter.postProcessAfterInitialization(source, "dataSource");
     }
 
@@ -84,16 +86,16 @@ class SqlStatementCounterTest extends BaseUnitTest {
     @Test
     void shouldPreserveTheJdbcFailureWhenPreparationFails() throws SQLException {
         var failure = new SQLException("preparation failed");
-        when(connection.prepareStatement("SELECT 1")).thenThrow(failure);
         try (Connection jdbc = counted().getConnection()) {
+            when(connection.prepareStatement("SELECT 1")).thenThrow(failure);
             assertThatThrownBy(() -> jdbc.prepareStatement("SELECT 1")).isSameAs(failure);
         }
         assertThat(counter.measure(() -> "next").statements()).isZero();
     }
 
     private static void prepare(Connection jdbc) {
-        try {
-            jdbc.prepareStatement("SELECT 1");
+        try (var statement = jdbc.prepareStatement("SELECT 1")) {
+            assertThat(statement).isNotNull();
         } catch (SQLException failure) {
             throw new IllegalStateException(failure);
         }
