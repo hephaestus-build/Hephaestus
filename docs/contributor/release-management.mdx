@@ -10,8 +10,8 @@ description: Deliberate releases with changesets — Version PR, curated changel
 **Release ≠ deploy.** Development is trunk-based: all work merges to `main` (squash merge, no
 `develop` branch) and every merge builds deployable images. A **release** is a deliberate act:
 cutting a version of Hephaestus for self-hosters, with a tag, curated release notes, and versioned
-Docker images. Our own instances ride the release cut — staging deploys automatically, production
-after approval. We manage releases with [changesets](https://github.com/changesets/changesets).
+Docker images. Staging follows `main`. Production moves to a release only through an approved
+promotion. We manage releases with [changesets](https://github.com/changesets/changesets).
 
 The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy) defines what a released version number promises.
 
@@ -38,8 +38,8 @@ sequenceDiagram
     R->>R: Upgrade seeded data from the previous stable release
     R->>R: Qualify supported hosts
     R->>R: Promote X.Y.Z / X.Y / latest image tags
-    R->>R: Publish release and deploy staging
-    Note over R: Production still requires approval
+    R->>R: Publish the release
+    Note over R: Production moves only through an approved promotion
 ```
 
 1. **Every PR that changes shipped code carries a changeset.** `Verify changesets` fails the PR
@@ -77,7 +77,8 @@ sequenceDiagram
 4. **Merging the Version PR cuts the release.** The workflow resolves release image digests, then runs the evidence gate.
    Only then does it create the draft at the merge commit and attach evidence.
    After seeded-upgrade and supported-host gates also pass, it promotes CI-built images to `X.Y.Z`, `X.Y`, and `latest`.
-   It publishes the release, deploys staging, and requests production approval.
+   Then it publishes the release.
+   Publication deploys nothing. See [Deploys](#deploys).
 
 ### When a release fails
 
@@ -293,6 +294,45 @@ The host applies it on its next reconcile.
 [CI/CD](./ci-cd.mdx#environments) lists the environments.
 Verify staging before production promotion.
 Hotfixes use the normal process: PR → changeset → merge → merge the Version PR.
+
+### Deployment history
+
+Each promotion that moves an environment records one GitHub deployment of the release or commit that its channel names.
+`scripts/record-deployment.ts` records it before the channel is published.
+Thus, a promotion that fails still leaves its record.
+A freeze moves nothing, so it records no deployment.
+If GitHub refuses the record, the promotion continues, and its run shows the error.
+The signed channel, not the record, decides what a host runs.
+
+| Field         | Value                                                                             |
+| ------------- | --------------------------------------------------------------------------------- |
+| `ref`, `sha`  | The promoted release tag and its commit, or the promoted commit                   |
+| `environment` | `Staging` or `Production`. Only `Production` is a production environment          |
+| `payload`     | `release` or `commit`, `allow_rollback`, `refresh_database_image`, `requested_by` |
+| `log_url`     | The promotion run                                                                 |
+
+`requested_by` is the account that started the promotion.
+For continuous staging, it is `github-actions[bot]`.
+
+The final state claims only what the workflow observed:
+
+- `success`: the public webapp reports the promoted version. Host metrics report the other services.
+- `failure`: the channel is published, but the public webapp did not report the version in time.
+- `error`: the workflow did not confirm that it published the channel.
+
+In Staging, a success makes the previous successful deployment `inactive`.
+GitHub does not do this in a production environment, so the Production history keeps every success.
+
+A deployment records what was promoted to an environment, and when.
+The `deploy-state` history records what each host was told.
+Each channel commit names the action and links the run that signed it.
+
+To list the promotions to production:
+
+```bash
+gh api --paginate 'repos/hephaestus-build/Hephaestus/deployments?environment=Production' \
+  --jq '.[] | [.created_at, .ref, .sha, .payload.requested_by] | @tsv'
+```
 
 ## Version management
 

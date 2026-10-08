@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { resolvePromotion, type PromotionSources } from "./resolve-promotion.ts";
+import { promotionHeadline, resolvePromotion, type PromotionSources } from "./resolve-promotion.ts";
 
 const commit = "a".repeat(40);
 const images = { HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/o/webapp@sha256:${"1".repeat(64)}` };
@@ -128,5 +128,28 @@ await test("only a commit channel can be asked to take the database image it nam
 			{ ...sources, isDraft: async () => false },
 		),
 		/applies to a commit, not to a release/u,
+	);
+});
+
+await test("the deploy-state headline names a hold, a rollback and a database refresh", () => {
+	const file = "channels/staging.json";
+	assert.equal(
+		promotionHeadline(file, { release: "v1.2.3", allowRollback: false, freeze: false }),
+		"chore(deploy): channels/staging.json -> v1.2.3",
+	);
+	// A hold ignores the release it names, so the headline does not claim a move to it.
+	assert.equal(
+		promotionHeadline(file, { release: "v1.2.3", allowRollback: true, freeze: true }),
+		"chore(deploy): freeze channels/staging.json",
+	);
+	assert.equal(
+		promotionHeadline(file, {
+			release: commit,
+			images,
+			allowRollback: true,
+			freeze: false,
+			refreshDatabaseImage: true,
+		}),
+		`chore(deploy): channels/staging.json -> ${commit} (rollback allowed, database image refreshed)`,
 	);
 });

@@ -78,11 +78,16 @@ jobs:
     timeout-minutes: 20
     environment:
       name: ${{ inputs.environment }}
-      # APP_HOSTNAME is environment-scoped, so resolve it after the job starts.
-      url: ${{ steps.release.outputs.environment_url }}
+      # Required reviewers still gate the job; scripts/record-deployment.ts says why.
+      deployment: false
     permissions:
       contents: write
+      deployments: write
       id-token: write
+    env:
+      # The deployment record and the channel commit both name who asked and link this run.
+      REQUESTED_BY: ${{ github.triggering_actor }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
     steps:
       # Tooling comes from the dispatched workflow ref, not from the deployment target.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -123,6 +128,17 @@ jobs:
           HOSTNAME: ${{ vars.APP_HOSTNAME }}
         run: node scripts/resolve-promotion.ts
 
+      # The signed channel is the authority, so the record must never stop a deploy or a rollback.
+      - name: Record the deployment
+        id: deployment
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL_FILE: deploy-state/${{ steps.release.outputs.channel }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          ENVIRONMENT_URL: ${{ steps.release.outputs.environment_url }}
+        run: node scripts/record-deployment.ts start
+
       - name: Sign the channel
         working-directory: deploy-state
         env:
@@ -134,12 +150,12 @@ jobs:
         working-directory: deploy-state
         env:
           GH_TOKEN: ${{ github.token }}
-          CHANNEL_FILE: ${{ steps.release.outputs.channel }}
-          RELEASE: ${{ steps.release.outputs.release }}
+          HEADLINE: ${{ steps.release.outputs.headline }}
         run: |
           node ../scripts/commit-via-api.ts \
             --branch deploy-state \
-            --message "chore(deploy): ${CHANNEL_FILE} -> ${RELEASE}" \
+            --message "$HEADLINE" \
+            --body "Requested by ${REQUESTED_BY} in ${RUN_URL}" \
             -- channels
 
       - name: Verify the public webapp version
@@ -164,6 +180,18 @@ jobs:
           done
           echo "::error::Public webapp at ${HOSTNAME} did not report ${EXPECTED} within 15 minutes"
           exit 1
+
+      - name: Finish the deployment record
+        if: ${{ always() && steps.deployment.outputs.id != '' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+          PUBLISHED: ${{ steps.publish-channel.outcome }}
+          OBSERVED: ${{ steps.webapp-version.outcome }}
+          VERSION: ${{ steps.release.outputs.version }}
+          ENVIRONMENT_URL: ${{ steps.release.outputs.environment_url }}
+        run: node scripts/record-deployment.ts finish
 
       - name: Report promotion verification scope
         if: ${{ always() && steps.publish-channel.outcome == 'success' }}

@@ -89,22 +89,48 @@ await test("verification identity is the release's own: run context now, the map
 	// assertions above pin it to the release's own repository.
 });
 
+const promotionWorkflow: unknown = parseDocument(promotion).toJS();
+const promoteSteps = asArray(
+	at(promotionWorkflow, ["jobs", "promote", "steps"], "promote.yml"),
+	"promote steps",
+).map((step, index) => asRecord(step, `promote step ${index}`));
+
+/** One field of a named `promote` step, such as `if` or `env.RELEASE`. */
+function promoteStep(name: string, path: readonly string[]): unknown {
+	const step = promoteSteps.find((candidate) => candidate.name === name);
+	assert.ok(step, `promote.yml must keep the step '${name}'`);
+	return at(step, path, name);
+}
+
+const resolved = (output: string) => `\${{ steps.release.outputs.${output} }}`;
+
 await test("every promotion decision is taken by the script that owns it", () => {
 	// Each decision below is proven by its own spec; what no spec can see is the workflow that
 	// stops calling it, or a step reading a channel file the resolver did not write.
 	assert.match(promotion, /^ +run: node scripts\/resolve-promotion\.ts$/mu);
-	for (const consumer of ["Sign the channel", "Publish the channel"]) {
-		assert.match(
-			promotion,
-			new RegExp(
-				`name: ${consumer}\\n(?: +.*\\n)*? +CHANNEL_FILE: \\$\\{\\{ steps\\.release\\.outputs\\.channel \\}\\}`,
-				"u",
-			),
-			`${consumer} must sign and publish the file the resolver wrote`,
-		);
-	}
+	assert.equal(promoteStep("Sign the channel", ["env", "CHANNEL_FILE"]), resolved("channel"));
+	assert.equal(
+		promoteStep("Record the deployment", ["env", "CHANNEL_FILE"]),
+		`deploy-state/${resolved("channel")}`,
+	);
 	// Rollback must support releases predating immutable tags; the signed lock binds their digests.
 	assert.doesNotMatch(resolver, /isImmutable/u);
+});
+
+await test("a promotion records one deployment, never blocks on it, and always closes it", () => {
+	assert.equal(
+		at(promotionWorkflow, ["jobs", "promote", "environment", "deployment"], "promote.yml"),
+		false,
+	);
+	const order = promoteSteps.map(({ name }) => name);
+	assert.ok(order.indexOf("Record the deployment") < order.indexOf("Sign the channel"));
+	assert.equal(promoteStep("Record the deployment", ["continue-on-error"]), true);
+	const finish = "Finish the deployment record";
+	assert.equal(
+		promoteStep(finish, ["if"]),
+		`\${{ always() && steps.deployment.outputs.id != '' }}`,
+	);
+	assert.equal(promoteStep(finish, ["continue-on-error"]), true);
 });
 
 function referenced(expression: string, pattern: RegExp): string[] {
