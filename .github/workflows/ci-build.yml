@@ -53,13 +53,23 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
+        background: true
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
+        background: true
       - uses: ./.github/actions/restore-server-build
         id: server
+        background: true
         with:
           artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
+      - uses: ./.github/actions/postgres-image
+        background: true
+        with:
+          base-sha: ${{ inputs.postgres_base_sha }}
+          image-changed: ${{ inputs.postgres_image_changed }}
+          tag: hephaestus-postgres:ci
+      - wait-all: true
       - name: OpenAPI specification and client
         id: openapi
         continue-on-error: true
@@ -75,12 +85,6 @@ jobs:
             echo "| API specs sync | :x: Out of sync | \`vp run generate:api\` |" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
-      - uses: ./.github/actions/postgres-image
-        if: always()
-        with:
-          base-sha: ${{ inputs.postgres_base_sha }}
-          image-changed: ${{ inputs.postgres_image_changed }}
-          tag: hephaestus-postgres:ci
       - name: Migration chain, schema drift and ERD
         id: schema
         continue-on-error: true
@@ -142,17 +146,22 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
+        background: true
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
+        background: true
       - uses: ./.github/actions/restore-server-build
+        background: true
         with:
           artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
       - uses: ./.github/actions/postgres-image
+        background: true
         with:
           base-sha: ${{ inputs.postgres_base_sha }}
           image-changed: ${{ inputs.postgres_image_changed }}
           tag: hephaestus-postgres:ci
+      - wait-all: true
       - name: Run database contract tests
         run: |
           docker run -d --name postgres-db \
@@ -166,10 +175,6 @@ jobs:
           export SPRING_DATASOURCE_PASSWORD="root"
           (cd server && ./gradlew :application:databaseTest -PpackagedServer=true)
 
-      - name: Run the PostgreSQL backup-restore drill
-        run: node scripts/postgres-backup-restore-test.ts --target-image hephaestus-postgres:ci
-      - name: Prove encrypted WAL point-in-time restore
-        run: node scripts/postgres-pitr-test.ts --target-image hephaestus-postgres:ci
       - name: Upload test results
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
@@ -192,6 +197,45 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+  # Each drill runs Gradle against its own named containers, so it takes its own checkout rather
+  # than queueing behind databaseTest's Gradle invocation.
+  postgres-drill:
+    name: "App Server: PostgreSQL drill (${{ matrix.drill }})"
+    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        drill: [backup-restore, pitr]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        background: true
+        with:
+          install: "frozen"
+      - uses: ./.github/actions/setup-caches
+        background: true
+      - uses: ./.github/actions/restore-server-build
+        background: true
+        with:
+          artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
+      - uses: ./.github/actions/postgres-image
+        background: true
+        with:
+          base-sha: ${{ inputs.postgres_base_sha }}
+          image-changed: ${{ inputs.postgres_image_changed }}
+          tag: hephaestus-postgres:ci
+      - wait-all: true
+      - name: Run the PostgreSQL ${{ matrix.drill }} drill
+        env:
+          DRILL: ${{ matrix.drill }}
+        run: node "scripts/postgres-$DRILL-test.ts" --target-image hephaestus-postgres:ci
+
   webapp-e2e:
     name: "Webapp: E2E"
     if: inputs.should_skip != 'true' && inputs.e2e_changed == 'true'
@@ -208,22 +252,28 @@ jobs:
           install: "frozen"
       # This job runs the packaged JAR, never Gradle; it needs no wrapper validation or build cache.
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        background: true
         with:
           distribution: "temurin"
           java-version-file: .java-version
           cache-jdk: false
+      # The browser install runs node and vp, so it starts after the toolchain.
       - uses: ./.github/actions/setup-browsers
+        background: true
       - name: Download the packaged server
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        background: true
         with:
           name: ${{ env.SERVER_BUILD_ARTIFACT }}
           path: server
       # `server/compose.yaml` resolves the database by the `dev` tag, so that is the name it needs.
       - uses: ./.github/actions/postgres-image
+        background: true
         with:
           base-sha: ${{ inputs.postgres_base_sha }}
           image-changed: ${{ inputs.postgres_image_changed }}
           tag: ghcr.io/hephaestus-build/postgres:dev
+      - wait-all: true
       - name: Run end-to-end tests against the built server
         run: |
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
@@ -288,22 +338,28 @@ jobs:
           install: "frozen"
       # This job runs the packaged JAR, never Gradle; it needs no wrapper validation or build cache.
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        background: true
         with:
           distribution: "temurin"
           java-version-file: .java-version
           cache-jdk: false
+      # The browser install runs node and vp, so it starts after the toolchain.
       - uses: ./.github/actions/setup-browsers
+        background: true
       - name: Download the packaged server
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        background: true
         with:
           name: ${{ env.SERVER_BUILD_ARTIFACT }}
           path: server
       # `server/compose.yaml` resolves the database by the `dev` tag, so that is the name it needs.
       - uses: ./.github/actions/postgres-image
+        background: true
         with:
           base-sha: ${{ inputs.postgres_base_sha }}
           image-changed: ${{ inputs.postgres_image_changed }}
           tag: ghcr.io/hephaestus-build/postgres:dev
+      - wait-all: true
       # `test:extension:e2e` builds the `e2e` bundle, then runs every Playwright project: the
       # fixture-provider pages, and the real-server project, which fails rather than skips when the
       # server below does not answer.

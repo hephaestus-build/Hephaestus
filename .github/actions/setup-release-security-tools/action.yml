@@ -28,7 +28,7 @@ runs:
         TRIVY_VERSION: 0.74.0
       run: |
         set -euo pipefail
-        curl_args=(-fsSL --proto =https --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 300 --connect-timeout 15 --max-time 120)
+        curl_args=(-fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 300 --connect-timeout 15 --max-time 120)
         if [ "$INSTALL_SYFT" = true ]; then
           syft_archive="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
           syft_base="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}"

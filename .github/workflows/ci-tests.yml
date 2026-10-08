@@ -31,9 +31,12 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
+        background: true
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
+        background: true
+      - wait-all: true
       - name: Verify test tier and shard discovery
         run: vp run test:server:selection
       - name: Run unit and architecture tests with coverage floors
@@ -78,9 +81,12 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
+        background: true
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
+        background: true
+      - wait-all: true
       - name: Run integration tests
         env:
           HEPHAESTUS_INTEGRATION_SHARD: ${{ matrix.shard }}

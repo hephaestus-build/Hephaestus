@@ -72,9 +72,16 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 		);
 	}
 	assert.ok(!runs("vulnerability-database", { publishable: "true", previews: "true" }));
-	const fork = { publishable: "false", "all-images": "true", "any-code": "true" };
+	const fork = {
+		publishable: "false",
+		"all-images": "true",
+		"any-code": "true",
+		"release-images": "true",
+	};
 	for (const result of ["skipped", "failure", "cancelled"]) {
-		for (const job of ["Docker", "application-server-image", "Security"]) {
+		// Security reads no advisory snapshot, so it does not wait for one.
+		assert.ok(runs("Security", fork, { "vulnerability-database": result }), `Security: ${result}`);
+		for (const job of ["Docker", "application-server-image", "upstream-images"]) {
 			assert.equal(
 				runs(job, fork, { "vulnerability-database": result }),
 				result === "skipped",
@@ -110,18 +117,32 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 });
 
 void test("every CI image scan receives the producer's immutable artifact ID across reusable workflows", async () => {
-	for (const job of ["application-server-image", "Docker", "Security"]) {
-		assert.equal(
-			main.getIn(["jobs", job, "with", "database-artifact"]),
-			`\${{ needs.vulnerability-database.outputs.artifact-id }}`,
-		);
+	for (const job of ["application-server-image", "Docker", "upstream-images"]) {
+		if (job !== "upstream-images") {
+			assert.equal(
+				main.getIn(["jobs", job, "with", "database-artifact"]),
+				`\${{ needs.vulnerability-database.outputs.artifact-id }}`,
+			);
+		}
 		const needs = main.getIn(["jobs", job, "needs"]);
 		assert.ok(isSeq(needs));
 		assert.ok(
 			needs.items.some((item) => isScalar(item) && item.value === "vulnerability-database"),
 		);
 	}
-	for (const name of ["ci-docker-build.yml", "reusable-docker-build.yml", "ci-security-scan.yml"]) {
+	for (const job of ["upstream-images", "Release-preflight"]) {
+		const steps = main.getIn(["jobs", job, "steps"]);
+		assert.ok(isSeq(steps));
+		const restore = steps.items.find(
+			(step) => isMap(step) && step.get("uses") === "./.github/actions/download-trivy-db",
+		);
+		assert.ok(isMap(restore));
+		assert.equal(
+			restore.getIn(["with", "database-artifact"]),
+			`\${{ needs.vulnerability-database.outputs.artifact-id }}`,
+		);
+	}
+	for (const name of ["ci-docker-build.yml", "reusable-docker-build.yml"]) {
 		const workflow = parseDocument(await readFile(`.github/workflows/${name}`, "utf8"));
 		assert.equal(
 			workflow.getIn(["on", "workflow_call", "inputs", "database-artifact", "required"]),
@@ -139,8 +160,7 @@ void test("every CI image scan receives the producer's immutable artifact ID acr
 				);
 			}
 		} else {
-			const job = name === "reusable-docker-build.yml" ? "scan" : "upstream-images";
-			const steps = workflow.getIn(["jobs", job, "steps"]);
+			const steps = workflow.getIn(["jobs", "scan", "steps"]);
 			assert.ok(isSeq(steps));
 			const restore = steps.items.find(
 				(step) => isMap(step) && step.get("uses") === "./.github/actions/download-trivy-db",
@@ -158,10 +178,6 @@ void test("every CI image scan receives the producer's immutable artifact ID acr
 		(step) => isMap(step) && step.get("uses") === "./.github/actions/download-trivy-db",
 	);
 	assert.ok(isMap(restore));
-	assert.equal(
-		restore.getIn(["with", "database-artifact"]),
-		`\${{ needs.vulnerability-database.outputs.artifact-id }}`,
-	);
 	assert.equal(restore.getIn(["with", "max-age-hours"]), "48");
 	assert.equal(restore.getIn(["with", "java-db"]), "true");
 });
