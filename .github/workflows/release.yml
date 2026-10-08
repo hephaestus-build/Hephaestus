@@ -142,10 +142,10 @@ jobs:
       - uses: ./.github/actions/setup-release-security-tools
 
       # The database the whole evidence bundle is scanned against: recorded into the bundle, and
-      # refused if it is over a day old, so a stale mirror cannot be signed as a fresh scan.
+      # refused beyond the freshness limit, so a stale mirror cannot be signed as a fresh scan.
       - uses: ./.github/actions/download-trivy-db
         with:
-          max-age-hours: "24"
+          max-age-hours: "48"
           java-db: "true"
           metadata-path: evidence/trivy-db.json
 

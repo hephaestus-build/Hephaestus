@@ -2015,7 +2015,7 @@ void describe("CI contract", () => {
 		// The preflight verifies twice, the second time without --write-validation, so the validation
 		// documents are re-derived and compared exactly as the release re-derives them.
 		assert.match(preflight, /node scripts\/verify-release-evidence\.ts evidence\n/u);
-		assert.match(preflight, /max-age-hours: "24"/u);
+		assert.match(preflight, /max-age-hours: "48"/u);
 		assert.match(preflight, /if: .*needs\.detect-changes\.outputs\.release-preflight == 'true'/u);
 		assert.match(cicd, /^ {6}release-preflight:$/mu);
 		assertNeeds(cicd, "all-ci-passed", "Release-preflight");
@@ -2520,7 +2520,7 @@ void describe("CI contract", () => {
 			const source = await readFile(file, "utf8");
 			assert.match(
 				source,
-				/uses: \.\/\.github\/actions\/download-trivy-db\n\s+with:\n\s+max-age-hours: "24"/u,
+				/uses: \.\/\.github\/actions\/download-trivy-db\n\s+with:\n\s+max-age-hours: "48"/u,
 				`${file} must refuse a stale Trivy database`,
 			);
 		}

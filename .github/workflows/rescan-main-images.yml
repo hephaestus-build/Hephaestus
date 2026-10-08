@@ -45,7 +45,7 @@ jobs:
 
       - uses: ./.github/actions/download-trivy-db
         with:
-          max-age-hours: "24"
+          max-age-hours: "48"
           metadata-path: reports/trivy-db.json
 
       - name: Scan the images built from main
