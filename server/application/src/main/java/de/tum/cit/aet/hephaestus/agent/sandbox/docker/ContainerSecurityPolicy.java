@@ -108,6 +108,19 @@ public class ContainerSecurityPolicy {
 
     /** Build container labels for lifecycle management and reconciliation. */
     public Map<String, String> buildLabels(UUID jobId) {
-        return Map.of(SandboxLabels.OWNER, properties.owner(), SandboxLabels.JOB_ID, jobId.toString());
+        return buildLabels(jobId, null);
+    }
+
+    /** The same labels, with the attempt they belong to when the request carries one. */
+    public Map<String, String> buildLabels(UUID jobId, @Nullable Integer attempt) {
+        return attempt == null
+                ? Map.of(SandboxLabels.OWNER, properties.owner(), SandboxLabels.JOB_ID, jobId.toString())
+                : Map.of(
+                        SandboxLabels.OWNER,
+                        properties.owner(),
+                        SandboxLabels.JOB_ID,
+                        jobId.toString(),
+                        SandboxLabels.JOB_ATTEMPT,
+                        attempt.toString());
     }
 }

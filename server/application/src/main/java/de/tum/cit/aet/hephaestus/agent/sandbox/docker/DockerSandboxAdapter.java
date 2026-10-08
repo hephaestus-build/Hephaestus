@@ -168,7 +168,13 @@ public class DockerSandboxAdapter implements SandboxManager {
 
             boolean allowInternet =
                     spec.networkPolicy() != null && spec.networkPolicy().internetAccess();
-            Map<String, String> labels = securityPolicy.buildLabels(jobId);
+            Integer claimedAttempt = spec.attempt();
+            Map<String, String> labels = claimedAttempt == null
+                    ? securityPolicy.buildLabels(jobId)
+                    : securityPolicy.buildLabels(jobId, claimedAttempt);
+            if (claimedAttempt != null && claimedAttempt > 0) {
+                removeSupersededAttempts(jobId, claimedAttempt, labels.get(SandboxLabels.OWNER));
+            }
             networkId = networkManager.createJobNetwork(jobId, allowInternet, labels);
 
             // Null when the app-server runs on the host rather than in Docker.
@@ -454,6 +460,30 @@ public class DockerSandboxAdapter implements SandboxManager {
                         + logs.substring(logs.length() - MAX_LOG_EVENT_CHARS)
                 : logs;
         log.warn("Container logs before cleanup:\n{}", truncated);
+    }
+
+    /**
+     * Removes this job's containers from attempts the claim has superseded, so the job network they hold can be
+     * recreated. Only a container with this installation's owner, this job and a lower recorded attempt is removed;
+     * anything else stays, and the network guard refuses it as before. A failed removal fails this attempt.
+     */
+    private void removeSupersededAttempts(UUID jobId, int attempt, @Nullable String owner) {
+        for (DockerOperations.ContainerInfo container : containerManager.listManagedContainers()) {
+            Map<String, String> labels = container.labels();
+            String recorded = labels.get(SandboxLabels.JOB_ATTEMPT);
+            if (owner == null
+                    || !owner.equals(labels.get(SandboxLabels.OWNER))
+                    || !jobId.toString().equals(labels.get(SandboxLabels.JOB_ID))
+                    || labels.containsKey(SandboxLabels.SESSION_ID)
+                    || SandboxLabels.KIND_INTERACTIVE.equals(labels.get(SandboxLabels.KIND))
+                    || recorded == null
+                    || !recorded.matches("[0-9]{1,10}")
+                    || Long.parseLong(recorded) >= attempt) {
+                continue;
+            }
+            log.info("Removing superseded sandbox container: containerId={}, attempt={}", container.id(), recorded);
+            containerManager.forceRemove(container.id());
+        }
     }
 
     private void checkCancelled(AtomicBoolean flag, UUID jobId) {

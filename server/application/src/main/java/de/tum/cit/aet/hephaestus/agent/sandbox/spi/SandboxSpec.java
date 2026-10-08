@@ -24,6 +24,7 @@ import org.jspecify.annotations.Nullable;
  * @param inputFiles files to inject into /workspace (relative path → content)
  * @param inputFilesOnDisk inputs staged by host path and streamed into the container, never read into this process
  * @param outputPath container path to collect results from after execution
+ * @param attempt the claimed job's attempt count; null when the caller holds no claim on the job
  */
 public record SandboxSpec(
         UUID jobId,
@@ -36,7 +37,8 @@ public record SandboxSpec(
         Map<String, byte[]> inputFiles,
         Map<String, Path> inputFilesOnDisk,
         List<EvidenceDirectory> inputDirectories,
-        String outputPath) {
+        String outputPath,
+        @Nullable Integer attempt) {
     /** For runs whose inputs are all held in memory. */
     public SandboxSpec(
             UUID jobId,
@@ -98,6 +100,38 @@ public record SandboxSpec(
             @Nullable Map<String, Path> inputFilesOnDisk,
             List<EvidenceDirectory> inputDirectories,
             String outputPath) {
+        this(
+                jobId,
+                image,
+                command,
+                environment,
+                networkPolicy,
+                resourceLimits,
+                securityProfile,
+                inputFiles,
+                inputFilesOnDisk,
+                inputDirectories,
+                outputPath,
+                null);
+    }
+
+    public SandboxSpec(
+            UUID jobId,
+            String image,
+            @Nullable List<String> command,
+            @Nullable Map<String, String> environment,
+            @Nullable NetworkPolicy networkPolicy,
+            ResourceLimits resourceLimits,
+            @Nullable SecurityProfile securityProfile,
+            @Nullable Map<String, byte[]> inputFiles,
+            @Nullable Map<String, Path> inputFilesOnDisk,
+            List<EvidenceDirectory> inputDirectories,
+            String outputPath,
+            @Nullable Integer attempt) {
+        if (attempt != null && attempt < 0) {
+            throw new IllegalArgumentException("attempt must not be negative");
+        }
+        this.attempt = attempt;
         this.jobId = Objects.requireNonNull(jobId, "jobId must not be null");
         this.image = Objects.requireNonNull(image, "image must not be null");
         this.resourceLimits = Objects.requireNonNull(resourceLimits, "resourceLimits must not be null");

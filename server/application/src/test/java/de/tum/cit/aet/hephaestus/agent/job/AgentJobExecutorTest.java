@@ -424,6 +424,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
         @Test
         void shouldTransitionToRunningOnSuccessfulClaim() {
+            job.setRetryCount(2);
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
                     .thenReturn(Optional.of(job));
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
@@ -446,6 +447,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             verify(workerJwtIssuer).issueForJobUntil(eq(jobId), eq(99L), anyInt(), tokenExpiry.capture());
             ArgumentCaptor<SandboxSpec> sandboxSpec = ArgumentCaptor.forClass(SandboxSpec.class);
             verify(sandboxManager).execute(sandboxSpec.capture());
+            assertThat(sandboxSpec.getValue().attempt()).isEqualTo(2);
             long deadline = Long.parseLong(sandboxSpec.getValue().environment().get("SANDBOX_WORK_DEADLINE_MS"));
             assertThat(tokenExpiry.getValue())
                     .isEqualTo(Instant.ofEpochMilli(deadline).plus(SandboxLayout.RESULT_UPLOAD_GRACE));

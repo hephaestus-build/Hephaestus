@@ -5,6 +5,9 @@ public final class SandboxLabels {
 
     public static final String OWNER = "hephaestus.sandbox-owner";
     public static final String JOB_ID = "hephaestus.job-id";
+    /** The claimed job's attempt count; absent when the request held no claim. */
+    public static final String JOB_ATTEMPT = "hephaestus.job-attempt";
+
     public static final String KIND = "hephaestus.kind";
 
     public static final String KIND_ATTEMPT_WORKSPACE = "attempt-workspace";
