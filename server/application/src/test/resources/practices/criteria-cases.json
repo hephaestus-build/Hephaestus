@@ -970,5 +970,33 @@
 		},
 		"reason": "The changed hunk removes static navigation only, with no persisted feature or other listed significant decision.",
 		"workType": "pull_request"
+	},
+	{
+		"id": "terse-subjects-naming-their-objects",
+		"expected": {
+			"commit-subjects-explain-each-change": "MET"
+		},
+		"files": {
+			"context/commits.json": "{\"commits\":[{\"sha\":\"1111111111111111111111111111111111111111\",\"message\":\"Add the settings screen\\n\",\"parents\":[\"0000000000000000000000000000000000000000\"],\"files\":[{\"status\":\"A\",\"path\":\"App/SettingsView.swift\",\"additions\":9,\"deletions\":0}]},{\"sha\":\"2222222222222222222222222222222222222222\",\"message\":\"Update Readme\\n\",\"parents\":[\"1111111111111111111111111111111111111111\"],\"files\":[{\"status\":\"M\",\"path\":\"docs/screenshot.svg\",\"additions\":1,\"deletions\":1}]}]}\n",
+			"repo/App/SettingsView.swift": "import SwiftUI\n\nstruct SettingsView: View {\n    var body: some View {\n        Form {\n            Text(\"Settings\")\n        }\n    }\n}\n",
+			"repo/docs/screenshot.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"><rect width=\"10\" height=\"10\" fill=\"gray\"/></svg>\n"
+		},
+		"reason": "Each terse subject names an action and its object. The standard judges subject clarity independently of whether the changed paths match that object.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "one-objectless-subject-among-clear-ones",
+		"expected": {
+			"commit-subjects-explain-each-change": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"commit-subjects-explain-each-change": "INFO"
+		},
+		"files": {
+			"context/commits.json": "{\"commits\":[{\"sha\":\"1111111111111111111111111111111111111111\",\"message\":\"Add the settings screen\\n\",\"parents\":[\"0000000000000000000000000000000000000000\"],\"files\":[{\"status\":\"A\",\"path\":\"App/SettingsView.swift\",\"additions\":9,\"deletions\":0}]},{\"sha\":\"2222222222222222222222222222222222222222\",\"message\":\"Show the app version in settings\\n\",\"parents\":[\"1111111111111111111111111111111111111111\"],\"files\":[{\"status\":\"M\",\"path\":\"App/SettingsView.swift\",\"additions\":1,\"deletions\":0}]},{\"sha\":\"3333333333333333333333333333333333333333\",\"message\":\"update\\n\",\"parents\":[\"2222222222222222222222222222222222222222\"],\"files\":[{\"status\":\"M\",\"path\":\"App/SettingsView.swift\",\"additions\":1,\"deletions\":1}]}]}\n",
+			"repo/App/SettingsView.swift": "import SwiftUI\n\nstruct SettingsView: View {\n    var body: some View {\n        Form {\n            Text(\"Settings\")\n            Text(\"Version 1.0\")\n        }\n    }\n}\n"
+		},
+		"reason": "One subject names nothing it changed in an otherwise clear history: a lone straggler.",
+		"workType": "pull_request"
 	}
 ]
