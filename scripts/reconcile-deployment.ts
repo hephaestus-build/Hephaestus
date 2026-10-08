@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
 	lstat,
 	mkdir,
@@ -70,7 +71,10 @@ export interface Channel {
 
 export interface AppliedState {
 	release: string;
+	/** The last accepted deploy-state commit, which every environment's promotion moves. */
 	channelCommit: string;
+	/** The `requestIdentity` of the request last applied; absent in records written earlier. */
+	channelIdentity?: string;
 	appliedAt: string;
 	/** The release's source commit as the signed lock named it; absent in records written earlier. */
 	commit?: string;
@@ -86,6 +90,7 @@ export type Decision =
 export const RELEASE_TAG = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u;
 const CHANNEL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const COMMIT_SHA = /^[0-9a-f]{40}$/u;
+const SHA256_HEX = /^[0-9a-f]{64}$/u;
 const IMAGE_KEY = /^HEPHAESTUS_IMAGE_[A-Z0-9_]+$/u;
 const IMAGE_DIGEST = /^[^\s@]+@sha256:[0-9a-f]{64}$/u;
 
@@ -210,10 +215,43 @@ function compareReleases(left: string, right: string): number {
 	return 0;
 }
 
+/**
+ * The signed request a channel file and its signature bundle make together, as a SHA-256 of the two
+ * as length-prefixed fields, so no other split of the same bytes names the same request. A promotion
+ * signs anew every time, so promoting the same target again is a new request.
+ */
+export function requestIdentity(channelJson: string, signature: string): string {
+	const hash = createHash("sha256");
+	for (const field of [channelJson, signature]) {
+		const bytes = Buffer.from(field, "utf8");
+		hash.update(`${bytes.length}:`);
+		hash.update(bytes);
+	}
+	return hash.digest("hex");
+}
+
+/**
+ * Whether the channel's request is the one `applied` records. Promoting another environment moves the
+ * channel commit too, so only this channel's own request says whether anything was asked. A record
+ * written before requests were kept has only the commit it accepted, and an unfrozen channel at that
+ * commit is the request it applied.
+ */
+function isAppliedRequest(
+	applied: AppliedState,
+	channelCommit: string,
+	channelIdentity: string,
+): boolean {
+	return applied.channelIdentity === undefined
+		? applied.channelCommit === channelCommit
+		: applied.channelIdentity === channelIdentity;
+}
+
 export function decide(
 	channel: Channel,
 	applied: AppliedState | undefined,
 	channelCommit: string,
+	/** The `requestIdentity` of the channel this environment reads at `channelCommit`. */
+	channelIdentity: string,
 	advances: boolean,
 	/** Whether what the channel asks for is behind what is already running. */
 	targetPrecedesApplied = false,
@@ -227,9 +265,12 @@ export function decide(
 	if (channel.freeze === true) {
 		return { action: "noop", reason: "channel is frozen" };
 	}
-	// A new channel commit naming the release already applied is a re-promotion, and re-applying is
-	// how a host that was hand-patched during an incident converges again.
-	if (applied?.release === channel.release && applied.channelCommit === channelCommit) {
+	// A new request naming the release already applied is a re-promotion, and re-applying is how a
+	// host that was hand-patched during an incident converges.
+	if (
+		applied?.release === channel.release &&
+		isAppliedRequest(applied, channelCommit, channelIdentity)
+	) {
 		return { action: "noop", reason: `already running ${channel.release}` };
 	}
 	// Two builds of the default branch can finish out of order, and the later-finishing older build
@@ -441,6 +482,9 @@ export async function readApplied(file: string): Promise<AppliedState | undefine
 		const applied = {
 			release: asString(record.release, "applied.release"),
 			channelCommit: asString(record.channelCommit, "applied.channelCommit"),
+			...(record.channelIdentity === undefined
+				? {}
+				: { channelIdentity: asString(record.channelIdentity, "applied.channelIdentity") }),
 			appliedAt: asString(record.appliedAt, "applied.appliedAt"),
 			...(record.commit === undefined ? {} : { commit: asString(record.commit, "applied.commit") }),
 			...(record.previous === undefined
@@ -452,6 +496,9 @@ export async function readApplied(file: string): Promise<AppliedState | undefine
 		}
 		if (!isCommit(applied.channelCommit)) {
 			throw new Error("applied.channelCommit must be a Git commit");
+		}
+		if (applied.channelIdentity !== undefined && !SHA256_HEX.test(applied.channelIdentity)) {
+			throw new Error("applied.channelIdentity must be a SHA-256 digest");
 		}
 		if (applied.commit !== undefined && !COMMIT_SHA.test(applied.commit)) {
 			throw new Error("applied.commit must be a Git commit");
@@ -531,7 +578,7 @@ async function adoptedAppliedTooling(
 /** The channel at the tip of deploy-state, parsed only after cosign accepted its signature. */
 async function fetchSignedChannel(
 	config: HostConfig,
-): Promise<{ channel: Channel; channelCommit: string }> {
+): Promise<{ channel: Channel; channelCommit: string; channelIdentity: string }> {
 	await run(
 		"git",
 		["fetch", "--quiet", "origin", "+refs/heads/deploy-state:refs/remotes/origin/deploy-state"],
@@ -577,7 +624,11 @@ async function fetchSignedChannel(
 		"https://token.actions.githubusercontent.com",
 		path.join(scratch, "channel.json"),
 	]);
-	return { channel: parseChannel(parseJson(channelJson)), channelCommit };
+	return {
+		channel: parseChannel(parseJson(channelJson)),
+		channelCommit,
+		channelIdentity: requestIdentity(channelJson, signature),
+	};
 }
 
 /**
@@ -618,17 +669,25 @@ async function targetIsBehindApplied(
 	);
 }
 
+/**
+ * Moves the accepted channel commit forward. What runs, since when, and what to roll back to are facts
+ * of the last apply, so they stay; `channelIdentity` is the request that runs.
+ */
 async function recordUnchanged(
 	config: HostConfig,
 	appliedFile: string,
 	applied: AppliedState | undefined,
 	channelCommit: string,
+	channelIdentity: string | undefined,
 	startedAt: Date,
 ): Promise<void> {
-	if (applied && applied.channelCommit !== channelCommit) {
+	if (
+		applied &&
+		(applied.channelCommit !== channelCommit || applied.channelIdentity !== channelIdentity)
+	) {
 		await writeAtomic(
 			appliedFile,
-			`${JSON.stringify({ ...applied, channelCommit }, null, "\t")}\n`,
+			`${JSON.stringify({ ...applied, channelCommit, channelIdentity }, null, "\t")}\n`,
 		);
 	}
 	if (isSet(config.metricsFile) && applied) {
@@ -833,7 +892,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		return;
 	}
 
-	const { channel, channelCommit } = await fetchSignedChannel(config);
+	const { channel, channelCommit, channelIdentity } = await fetchSignedChannel(config);
 	const advances =
 		applied && channelCommit !== applied.channelCommit
 			? await succeeds(
@@ -848,6 +907,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		channel,
 		applied,
 		channelCommit,
+		channelIdentity,
 		advances,
 		await targetIsBehindApplied(config, channel, applied),
 	);
@@ -857,7 +917,16 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	}
 	if (decision.action === "noop") {
 		console.log(`No change: ${decision.reason}`);
-		await recordUnchanged(config, appliedFile, applied, channelCommit, startedAt);
+		// Unfrozen, a no-op means this request is the one that runs, which a record from before requests
+		// were kept learns here. A hold applies nothing, so it never becomes the request that runs.
+		await recordUnchanged(
+			config,
+			appliedFile,
+			applied,
+			channelCommit,
+			channel.freeze === true ? applied?.channelIdentity : channelIdentity,
+			startedAt,
+		);
 		return;
 	}
 
@@ -900,7 +969,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	const previous = applied?.release === decision.release ? applied.previous : applied?.release;
 	await writeAtomic(
 		appliedFile,
-		`${JSON.stringify({ release: decision.release, channelCommit, appliedAt: finishedAt.toISOString(), commit: releaseCommit, previous }, null, "\t")}\n`,
+		`${JSON.stringify({ release: decision.release, channelCommit, channelIdentity, appliedAt: finishedAt.toISOString(), commit: releaseCommit, previous }, null, "\t")}\n`,
 	);
 	if (isSet(config.metricsFile)) {
 		await writeAtomic(

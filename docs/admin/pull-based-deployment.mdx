@@ -20,6 +20,22 @@ The host rejects a new channel commit that does not descend from its last accept
 It also rejects lower release versions and older commits unless `allowRollback` is set. These checks
 do not order manual transitions between releases and commits. Choose those targets deliberately.
 
+Each environment acts only on its own signed request: its channel file and signature bundle together.
+A promotion of another environment also adds a commit to `deploy-state`.
+If the host already applied its own unchanged request, it verifies the signature again.
+It records the new commit as accepted.
+It restarts nothing.
+
+If its own request is not applied yet, for example after a failed apply, the host tries it again.
+Each promotion signs again, so a promotion of the target that already runs applies again.
+
+`applied.json` records the last-applied request as `channelIdentity`.
+A hold never becomes the applied request.
+A record without `channelIdentity` was written by an earlier release.
+For such a record, only its accepted commit counts as the applied request.
+The first unchanged run records the identity.
+If another environment was promoted first, the host applies its own request once more.
+
 ## The channel
 
 ```json
@@ -271,7 +287,8 @@ The database stays available during the stop.
 The `app` stack's normal `up` starts the worker of the new release, if that release has one.
 
 There is nothing to stop on a first install, or when the applied release has no `application-worker` service.
-A host without the `app` stack skips the stop, and an unchanged channel never stops the worker.
+A host without the `app` stack skips the stop.
+When the host already applied its own request and that request is unchanged, the worker does not stop, even if another environment is promoted.
 If the stop fails, the reconciler applies no stack and records no release.
 The next tick tries again.
 
