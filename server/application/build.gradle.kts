@@ -251,6 +251,7 @@ fun Test.selectIntegrationShard(shard: String) {
         listOf(
             "de.tum.cit.aet.hephaestus.integration.*",
             "de.tum.cit.aet.hephaestus.StartupBudgetIntegrationTest",
+            "de.tum.cit.aet.hephaestus.core.database.*",
         )
     when (shard) {
         "" -> Unit
