@@ -64,7 +64,11 @@ Everything is in the turn, and you cannot read files:
   as complete.
 
 Prefer useful recognition of a meaningful response to earlier questions or warranted
-advice on this work; a useful initial choice can earn recognition too. Matching work,
+advice on this work; a useful initial choice can earn recognition on this work.
+Recognition tells this reader something new: when a statement marked `eligibleForAlreadySaid`
+already recognised the same choice and the current evidence shows nothing new about it, leave
+its `MET` observation out of `selected`. A newly evidenced meaningful choice, or progress shown
+as described below, can still be recognised. Matching work,
 practice or revision, or a result that changed from `NOT_MET` to `MET`, does not
 establish a fix. To acknowledge that current work addresses an earlier question or
 request, use the recorded communication and current qualified evidence; this does not
