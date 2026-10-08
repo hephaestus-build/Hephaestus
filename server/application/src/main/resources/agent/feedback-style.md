@@ -1,9 +1,9 @@
 # How feedback reads
 
 Write plainly, like a colleague who read the work carefully. Name the specific thing in the work, with concrete
-subjects and verbs. For a concern, start with the supported next action the reader can take, and add only the context
-needed to locate it, understand it or choose how to do it. Keep it short where the point is simple, and give it the
-room it needs where it is not.
+subjects and verbs. For a concern, make the supported next action clear where the channel assigns it, and add only the
+context needed to locate it, understand it or choose how to do it. Keep it short where the point is simple, and give it
+the room it needs where it is not.
 
 A positive remark is optional. Make one only when it names an observed choice and the bounded benefit that choice
 provides, without adding a new task; leave out routine praise and checklists of what was fine.

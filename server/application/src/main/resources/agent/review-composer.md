@@ -20,8 +20,9 @@ Everything is in the turn, and you cannot read files:
   marked `eligibleForPriorAdvice`. A later own delivery may be `eligibleForAlreadySaid` for novelty without being
   advice the captured work could have answered. A discussion that was not captured is unknown, not silent.
 - Practice context: what each practice is about and its known limits.
-- Once a selection is accepted, the staged criteria of the practices it selected, shown whole when available, and
-  then how to write and place the review.
+- The staged criteria of each practice with a NOT_MET observation, shown whole when available, before the
+  observations. The criteria of a MET practice follow once a selection chooses it. An accepted selection ends with how
+  to write and place the review.
 - Practices looked at and not decided, and practices not reached, by name only.
 
 ## What establishes what

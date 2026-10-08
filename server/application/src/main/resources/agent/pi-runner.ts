@@ -2271,13 +2271,13 @@ function buildFeedbackTool(
 									type: "string",
 									maxLength: FEEDBACK_TEXT_BOUNDS.body,
 									description:
-										"IN_APP only: explain the cross-artifact work pattern grounded in current observations; never quote a line or claim change over time from the pre-run history. Markdown, read verbatim.",
+										"IN_APP only: the evidenced pattern across the work and why it matters; the future way of working belongs to nextStep. Grounded in current observations; never quote a line or claim change over time from the pre-run history. Markdown, read verbatim.",
 								},
 								nextStep: {
 									type: "string",
 									maxLength: FEEDBACK_TEXT_BOUNDS.nextStep,
 									description:
-										"IN_APP only: one repeatable way of working for the next piece of work. Name the missing decision, not a heading/template unless the practice requires one; never provide paste-ready prose.",
+										"IN_APP only: the one repeatable way of working for the next piece of work; the body does not state it. Name the missing decision, not a heading/template unless the practice requires one; never provide paste-ready prose.",
 								},
 								notes: {
 									type: "object",
@@ -2386,10 +2386,14 @@ interface SelectFeedbackDetails {
 	accepted: boolean;
 }
 
-/** Once final, both tools refuse every call: one response can carry several calls after the final one. */
+/**
+ * Once final, both tools refuse every call: one response can carry several calls after the final one.
+ * A restored reference reaches a subsequent model decision, not another tool call in the same batch.
+ */
 interface PublicReviewState {
 	selection: ReviewSelection | null;
 	final: boolean;
+	reviewContext: "LOST" | "RESTORING" | "HELD";
 }
 
 function reviewableById(
@@ -2418,6 +2422,7 @@ function buildSelectionTool(
 	reviewable: readonly Record<string, unknown>[],
 	witnesses: ReturnType<typeof priorAdviceWitnesses>,
 	state: PublicReviewState,
+	reviewTurn: () => string,
 ) {
 	// Every witness a decision can name; readSelection checks which reason each one may support.
 	const eligible = [...witnesses].filter(([, witness]) => witness.eligibleForAlreadySaid);
@@ -2441,6 +2446,10 @@ function buildSelectionTool(
 				return refusal<SelectFeedbackDetails>(toolCallId, REVIEW_FINAL);
 			}
 			const read = readSelection(params, restable, witnesses);
+			const restored = state.reviewContext === "LOST" ? `\n${reviewTurn()}\n` : "";
+			if (state.reviewContext === "LOST") {
+				state.reviewContext = "RESTORING";
+			}
 			if ("errors" in read) {
 				const standing =
 					state.selection === null
@@ -2453,7 +2462,7 @@ function buildSelectionTool(
 						: `\nThe selection that stands:\n${selectionText(state.selection, reviewable, criteriaFileOf)}`;
 				return refusal<SelectFeedbackDetails>(
 					toolCallId,
-					`selection refused, ${standing}:\n${reasons}${stands}`,
+					`selection refused, ${standing}:\n${reasons}${restored}${stands}`,
 				);
 			}
 			state.selection = read.selection;
@@ -2461,7 +2470,7 @@ function buildSelectionTool(
 				content: [
 					{
 						type: "text",
-						text: `Accepted the selection:\n${selectionText(read.selection, reviewable, criteriaFileOf)}\nNow store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions. A later select_feedback call replaces this selection until the review is final.`,
+						text: `Accepted the selection:${restored}\n${selectionText(read.selection, reviewable, criteriaFileOf)}\nNow store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions. A later select_feedback call replaces this selection until the review is final.`,
 					},
 				],
 				details: { accepted: true },
@@ -2474,7 +2483,9 @@ function buildSelectionTool(
 function buildReviewTool(
 	lineNotes: boolean,
 	restable: ReadonlyMap<string, ReviewedObservation>,
+	reviewable: readonly Record<string, unknown>[],
 	state: PublicReviewState,
+	reviewTurn: () => string,
 ) {
 	return defineTool({
 		name: "report_review",
@@ -2496,6 +2507,14 @@ function buildReviewTool(
 				return refusal<ReportReviewDetails>(
 					toolCallId,
 					"review refused, nothing was stored: no selection is accepted yet. Choose with one select_feedback call first, then send the whole review.",
+				);
+			}
+			if (state.reviewContext !== "HELD") {
+				const restored = state.reviewContext === "LOST" ? `\n${reviewTurn()}\n` : "";
+				state.reviewContext = "RESTORING";
+				return refusal<ReportReviewDetails>(
+					toolCallId,
+					`review refused, nothing was stored: the session's context was compacted. Use the restored review reference in the next model turn before storing the review.${restored}\nThe selection that stands:\n${selectionText(state.selection, reviewable, criteriaFileOf)}\nSend the whole review again, or select again first.`,
 				);
 			}
 			const read = readReview(params, restable, lineNotes);
@@ -4366,7 +4385,7 @@ async function main() {
 		};
 		persistRunnerDebug();
 		const restable = reviewableById(reviewable);
-		const state: PublicReviewState = { selection: null, final: false };
+		const state: PublicReviewState = { selection: null, final: false, reviewContext: "LOST" };
 		const { session: reviewSession } = await createAgentSession({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
@@ -4377,8 +4396,9 @@ async function main() {
 					reviewable,
 					priorAdviceWitnesses(alreadySaid.feedback, captured.statements),
 					state,
+					() => text,
 				),
-				buildReviewTool(lineNotes, restable, state),
+				buildReviewTool(lineNotes, restable, reviewable, state, () => text),
 			],
 			sessionManager: SessionManager.inMemory(),
 			settingsManager,
@@ -4399,10 +4419,12 @@ async function main() {
 			return decision ?? undefined;
 		};
 		const unsubscribeReview = subscribeSession(reviewSession);
-		let reviewContextHeld = false;
 		const unsubscribeContext = reviewSession.subscribe((event) => {
 			if (event.type === "compaction_end" && !event.aborted && !hasText(event.errorMessage)) {
-				reviewContextHeld = false;
+				state.reviewContext = "LOST";
+			} else if (event.type === "turn_start" && state.reviewContext === "RESTORING") {
+				// Pi begins the next model turn after the current tool batch has ended.
+				state.reviewContext = "HELD";
 			}
 		});
 		activeSession = reviewSession;
@@ -4420,6 +4442,7 @@ async function main() {
 			practices: practiceContext(reviewable),
 			notReached: notReachedSlugs,
 			lineNotes,
+			stagedCriteria: criteriaFileOf,
 		});
 		// The composition owes one final review, whatever it decides: an all-MET review is final only when sent.
 		const owed = () => (state.final ? 0 : Math.max(1, undecidedByReview(reviewable).length));
@@ -4447,7 +4470,7 @@ async function main() {
 							preflightResult: (disposition) => {
 								if (disposition === "started") {
 									started = true;
-									reviewContextHeld = true;
+									state.reviewContext = "HELD";
 								}
 							},
 						});
@@ -4490,7 +4513,7 @@ async function main() {
 							const prepared = await prepareTurnText(
 								reviewSession,
 								() =>
-									`${reviewContextHeld ? "" : `${text}\n\n`}${finishReviewText(left, state.selection, reviewable)}`,
+									`${state.reviewContext === "HELD" ? "" : `${text}\n\n`}${finishReviewText(left, state.selection, reviewable)}`,
 							);
 							if (safety.expired()) {
 								return;
@@ -4501,7 +4524,7 @@ async function main() {
 							await reviewSession.prompt(prepared, {
 								preflightResult: (disposition) => {
 									if (disposition === "started") {
-										reviewContextHeld = true;
+										state.reviewContext = "HELD";
 									}
 								},
 							});

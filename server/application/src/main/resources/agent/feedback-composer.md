@@ -120,7 +120,8 @@ Each unit carries `channel`, `practiceSlug`, `basedOn`, `action`, and the words.
 no confidence.
 
 - `IN_APP` takes `title`, `body`, and `nextStep`. The `title` names the concern in a few words. The `body` is read
-  verbatim. The `nextStep` is one thing to do in future work, not a checklist.
+  verbatim: it explains the evidenced pattern across the work and why it matters. The `nextStep` alone carries the
+  one thing to do in future work, not a checklist. The `body` does not state it as well.
 - `IN_CHAT` takes `title` and `notes: { situation, capability, evidenceSummary, inConversationSignal, alreadySaid }`
   and no `body`. Each field has its own use. They may share context where one needs it, but none retells another.
   - `situation` — the common observable concern and its shape across the work, in the third person. It is not a

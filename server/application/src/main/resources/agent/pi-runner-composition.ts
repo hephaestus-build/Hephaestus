@@ -944,7 +944,34 @@ export const WRITE_CONTRACT =
 	"that bounded result, or the review may say nothing.\n\n" +
 	"One observation may support notes at several places, and also the summary's overview of them.";
 
-/** Preserve admission’s complete rows and qualifications; private and unselected rows are not echoed. */
+/** The practices of the public NOT_MET observations, each once: every one is decided against its whole standard. */
+function notMetPractices(reviewable: readonly Record<string, unknown>[]): string[] {
+	return [
+		...new Set(
+			reviewable
+				.filter(
+					(observation) => observation.publicEligible === true && observation.outcome === "NOT_MET",
+				)
+				.map((observation) => String(observation.practiceSlug)),
+		),
+	];
+}
+
+/** The whole staged criteria of every practice with a public NOT_MET observation; empty when there is none. */
+export function notMetCriteriaReference(
+	reviewable: readonly Record<string, unknown>[],
+	stagedCriteria: (practiceSlug: string) => string | null,
+): string {
+	const practices = notMetPractices(reviewable);
+	return practices.length === 0
+		? ""
+		: `### Criteria of the practices with a NOT_MET observation\nReference, whole as staged: each explains the standard its observations were assessed against and the responses it accepts. Decide each NOT_MET observation against it, whether you select or withhold it; it raises no further concern. The criteria of a MET practice follow once a selection chooses it.\n${practices.map((slug) => stagedBlock(slug, stagedCriteria)).join("\n")}`;
+}
+
+/**
+ * Preserve admission’s complete rows and qualifications; private and unselected rows are not echoed. The NOT_MET
+ * criteria are carried by the review turn; a selected MET practice's appear here first.
+ */
 export function selectionText(
 	selection: ReviewSelection,
 	reviewable: readonly Record<string, unknown>[],
@@ -954,18 +981,33 @@ export function selectionText(
 	const selectedObservations = reviewable.filter(
 		(observation) => observation.publicEligible === true && chosen.has(String(observation.id)),
 	);
-	const practices = [
+	const notMet = notMetPractices(reviewable);
+	const deferred = [
 		...new Set(selectedObservations.map((observation) => String(observation.practiceSlug))),
-	];
-	const reference =
-		"## Criteria of the selected practices\nReference, whole as staged: each explains the standard its " +
-		"observations were assessed against and the responses it accepts. The selected observations above are the " +
-		"recorded grounds this review may use. Their whole standard qualifies whether and how each may be communicated.";
+	].filter((slug) => !notMet.includes(slug));
+	const earlier =
+		notMet.length > 0
+			? "\nThe whole criteria of the practices with a NOT_MET observation were shown earlier in this session."
+			: "";
 	const criteria =
-		practices.length === 0
+		deferred.length === 0
 			? ""
-			: `\n${reference}\n${practices.map((slug) => criteriaBlock(slug, stagedCriteria(slug))).join("\n")}`;
-	return `\`\`\`json\n${JSON.stringify({ acceptedSelection: selection, selectedObservations }, null, 1)}\n\`\`\`${criteria}\n${WRITE_CONTRACT}`;
+			: `### Criteria of the selected MET practices\nReference, whole as staged: each explains the standard its observations were assessed against. The selected observations above are the recorded grounds this review may use. Their whole standard qualifies whether and how each may be communicated.\n${deferred.map((slug) => stagedBlock(slug, stagedCriteria)).join("\n")}`;
+	return `\`\`\`json\n${JSON.stringify({ acceptedSelection: selection, selectedObservations }, null, 1)}\n\`\`\`${earlier}${criteria.length > 0 ? `\n${criteria}` : ""}\n${WRITE_CONTRACT}`;
+}
+
+/** One practice's staged criteria read once; a read that fails is named as unread, never guessed at. */
+function stagedBlock(
+	slug: string,
+	stagedCriteria: (practiceSlug: string) => string | null,
+): string {
+	let criteria: string | null;
+	try {
+		criteria = stagedCriteria(slug);
+	} catch {
+		return `### Criteria of \`${slug}\` — could not be read; nothing is known about them here\n`;
+	}
+	return criteriaBlock(slug, criteria);
 }
 
 /** One practice's staged criteria, whole and fenced so their own code blocks cannot close it; never cut or rewritten. */
@@ -1180,6 +1222,8 @@ export interface ReviewTurnInput {
 	notReached: readonly string[];
 	/** Whether this work has lines a note can be placed on. */
 	lineNotes: boolean;
+	/** One practice's staged criteria, whole; null when none were staged. */
+	stagedCriteria: (practiceSlug: string) => string | null;
 }
 
 /** The one prompt of the review composition: every input inline, because its session can read nothing else. */
@@ -1212,12 +1256,13 @@ export function buildReviewTurn(input: ReviewTurnInput): string {
 				)
 			: [],
 	}));
+	const reference = notMetCriteriaReference(input.observations, input.stagedCriteria);
 	return `## The review to write
-The measurement of this work is finished. Below is the captured record of the work this review is about, then everything the review may rest on: the decided observations of this work, what was already said on this same work, and context on the practices they were measured against.
+The measurement of this work is finished. Below is the captured record of the work this review is about, the whole criteria of each practice with a NOT_MET observation, then everything the review may rest on: the decided observations of this work, what was already said on this same work, and context on the practices they were measured against.
 
 ### The reviewed work, as captured
 ${input.sameWork}
-
+${reference.length > 0 ? `\n${reference}` : ""}
 ### Decided observations of this work
 \`\`\`json
 ${JSON.stringify({ observations: input.observations }, null, 1)}
