@@ -298,6 +298,7 @@ interface CustomTool {
 const scenario = process.env.PI_ORCHESTRATION_SCENARIO;
 const unavailableContext = process.env.PI_UNAVAILABLE_CONTEXT === "true";
 const counterevidence = process.env.PI_COUNTEREVIDENCE === "true";
+const reviewCompacted = process.env.PI_REVIEW_COMPACTED === "true";
 const reviewerOnly = process.env.PI_REVIEWER_ONLY === "true";
 const loopReject = process.env.PI_LOOP_REJECT === "true";
 if (scenario !== undefined && scenario !== "") {
@@ -1063,6 +1064,58 @@ if (scenario !== undefined && scenario !== "") {
 								if (scenario === "compose-recover") {
 									// A selection is accepted and the response ends without the final review.
 									record(`recover-select:${await choose("s-r", { selected: ["observation-1"] })}`);
+									return;
+								}
+								if (scenario === "compose-qualify" && reviewCompacted) {
+									// The session compacts after the review turn, and again after the selection.
+									const compacted = () =>
+										emit({
+											type: "compaction_end",
+											reason: "threshold",
+											result: undefined,
+											aborted: false,
+										});
+									compacted();
+									const decision = {
+										selected: ["observation-2"],
+										withheld: [{ basedOn: ["observation-1"], reason: "BELOW_BAR" }],
+									};
+									const restored = await selection.execute("s-c", decision);
+									assert.ok(isRecord(restored) && Array.isArray(restored.content));
+									writeFileSync(
+										nodePath.join(cwd, "compacted-selected.txt"),
+										restored.content
+											.filter(isRecord)
+											.map((part) => part.text)
+											.join("\n"),
+									);
+									const said = {
+										summary: {
+											body: "Moving the check into its own helper keeps every caller on the same path.",
+											basedOn: ["observation-2"],
+										},
+										withheld: decision.withheld,
+									};
+									writeFileSync(
+										nodePath.join(cwd, "same-batch-refused.txt"),
+										await attempt("r-batch", said),
+									);
+									emit({ type: "turn_start" });
+									compacted();
+									try {
+										await review.execute("r-c1", said);
+									} catch (error) {
+										writeFileSync(
+											nodePath.join(cwd, "compacted-refused.txt"),
+											error instanceof Error ? error.message : String(error),
+										);
+									}
+									writeFileSync(
+										nodePath.join(cwd, "restore-batch-refused.txt"),
+										await attempt("r-c2", said),
+									);
+									emit({ type: "turn_start" });
+									record(`compacted-stored:${await attempt("r-c3", said)}`);
 									return;
 								}
 								if (scenario === "compose-qualify") {
@@ -2202,6 +2255,7 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-empty",
 		"compose-reselect",
 		"compose-qualify",
+		"compose-compacted",
 		"compose-recover",
 		"compose-repeat-select",
 		"compose-invalid-select",
@@ -2225,6 +2279,7 @@ if (scenario !== undefined && scenario !== "") {
 				["compose-support-refused", "compose-support"],
 				["compose-support-refused-only", "compose-support"],
 				["compose-loop-rejection", "compose-loop"],
+				["compose-compacted", "compose-qualify"],
 				["compose-fresh-history", "compose"],
 				["compose-history-invalid", "compose"],
 				["compose-history-invalid-link", "compose"],
@@ -2301,6 +2356,8 @@ if (scenario !== undefined && scenario !== "") {
 					"keeps a missing criterion explicit without changing the recording contract",
 				"compose-qualify":
 					"reselects a mixed public review while preserving canonical observations and its supported concern",
+				"compose-compacted":
+					"restores the review's standards after a compaction before a review written without them is stored",
 				"compose-reselect":
 					"stores only a final review that matches the selection accepted last, and nothing after it",
 				"compose-recover":
@@ -2603,7 +2660,10 @@ if (scenario !== undefined && scenario !== "") {
 									["compose-history-body-transport", "body-transport"],
 									["compose-history-malformed-json", "malformed-json"],
 								]).get(fixture),
-								PI_COUNTEREVIDENCE: String(fixture === "compose-counterevidence"),
+								PI_COUNTEREVIDENCE: String(
+									fixture === "compose-counterevidence" || fixture === "compose-compacted",
+								),
+								PI_REVIEW_COMPACTED: String(fixture === "compose-compacted"),
 								PI_REVIEWER_ONLY: String(fixture === "compose-reviewer-only"),
 								PI_LOOP_REJECT: String(fixture === "compose-loop-rejection"),
 								PI_RUNNER_CWD: cwd,
@@ -3535,7 +3595,13 @@ assert.notEqual(outgoing.function.strict, true);`,
 									},
 								],
 							});
-							assert.doesNotMatch(reviewTurn, /Criteria\./u);
+							// The NOT_MET practice's standard comes whole, once, after the work and before the observations.
+							const standard = reviewTurn.indexOf("```markdown\n# Test practice\nCriteria.\n```");
+							assert.ok(
+								record < standard && standard < reviewTurn.indexOf('"id": "observation-1"'),
+								reviewTurn,
+							);
+							assert.equal(reviewTurn.split("# Test practice\nCriteria.").length, 2, reviewTurn);
 							assert.ok(!reviewTurn.includes(PRIVATE_HISTORY_SENTENCE), reviewTurn);
 							assert.ok(!reviewTurn.includes("observation-history"), reviewTurn);
 							assert.ok(!reviewTurn.includes("Review the practice."), reviewTurn);
@@ -3917,14 +3983,40 @@ assert.notEqual(outgoing.function.strict, true);`,
 							assert.match(criteria, /^ {4}let reply[\s\S]*reasoned decline[\s\S]* {2}\n\n$/u);
 							const staged = `markdown\n${criteria}\n`;
 							const accepted = events.find((event) => event.startsWith("recover-select:")) ?? "";
-							assert.ok(accepted.includes(JSON.stringify(staged).slice(1, -1)), accepted);
-							assert.match(
-								events.find((event) => event.startsWith("recover-select:")) ?? "",
-								/Accepted the selection/u,
-							);
+							assert.match(accepted, /Accepted the selection/u);
 							assert.ok(events.includes("review-retry"), events.join("\n"));
+							const prompts = events
+								.filter((event) => event.startsWith("prompt:"))
+								.map((event) =>
+									readFileSync(
+										nodePath.join(cwd, `prompt-${event.slice("prompt:".length)}.md`),
+										"utf8",
+									),
+								);
+							// The review turn carries the NOT_MET standard whole, before the rows it is decided on; the
+							// session still holds it, so neither the accepted selection nor the retry repeats it.
+							const turn = prompts.find((prompt) => prompt.startsWith("## The review to write"));
+							assert.ok(turn !== undefined, events.join("\n"));
+							assert.ok(turn.includes(staged), turn);
+							assert.ok(turn.indexOf(staged) < turn.indexOf('"observations": ['), turn);
+							assert.ok(!accepted.includes(JSON.stringify(staged).slice(1, -1)), accepted);
 							// The retry holds only what is owed and the selection that stands, with its admitted row.
-							const retry = events
+							const retry = prompts.find((prompt) => prompt.startsWith("## Undecided"));
+							assert.ok(retry !== undefined, events.join("\n"));
+							assert.deepEqual(selectedRowsOf(retry), {
+								acceptedSelection: { selected: ["observation-1"], withheld: [] },
+								selectedObservations: [publicRow],
+							});
+							assert.ok(!retry.includes("### Criteria of `second-practice`"), retry);
+							break;
+						}
+						case "compose-qualify": {
+							assert.equal(child.status, 0, child.stderr);
+							const standards = ["test-practice", "second-practice"].map(
+								(slug) =>
+									`markdown\n${readFileSync(nodePath.join(cwd, `catalog/practices/${slug}.md`), "utf8")}\n`,
+							);
+							const reviewTurn = events
 								.filter((event) => event.startsWith("prompt:"))
 								.map((event) =>
 									readFileSync(
@@ -3932,18 +4024,70 @@ assert.notEqual(outgoing.function.strict, true);`,
 										"utf8",
 									),
 								)
-								.find((prompt) => prompt.startsWith("## Undecided"));
-							assert.ok(retry !== undefined, events.join("\n"));
-							assert.deepEqual(selectedRowsOf(retry), {
-								acceptedSelection: { selected: ["observation-1"], withheld: [] },
-								selectedObservations: [publicRow],
-							});
-							assert.ok(retry.includes(staged), retry);
-							assert.ok(!retry.includes("### Criteria of `second-practice`"), retry);
-							break;
-						}
-						case "compose-qualify": {
-							assert.equal(child.status, 0, child.stderr);
+								.find((prompt) => prompt.startsWith("## The review to write"));
+							assert.ok(reviewTurn !== undefined, events.join("\n"));
+							if (fixture === "compose-compacted") {
+								const [notMet = "", met = ""] = standards;
+								// Only the NOT_MET standard comes with the review turn; the MET one waits for a selection.
+								assert.ok(reviewTurn.includes(notMet), reviewTurn);
+								assert.ok(!reviewTurn.includes(met), reviewTurn);
+								const decision = {
+									selected: ["observation-2"],
+									withheld: [{ basedOn: ["observation-1"], reason: "BELOW_BAR" }],
+								};
+								// After a compaction the accepted selection carries the withheld NOT_MET standard again and
+								// the selected MET one.
+								const selected = readFileSync(nodePath.join(cwd, "compacted-selected.txt"), "utf8");
+								assert.match(selected, /Accepted the selection/u);
+								const selectedRows = selectedRowsOf(selected);
+								assert.ok(isRecord(selectedRows));
+								assert.deepEqual(selectedRows.acceptedSelection, decision);
+								assert.ok(selected.includes(notMet) && selected.includes(met), selected);
+								assert.ok(selected.includes(reviewTurn), selected);
+								assert.match(
+									readFileSync(nodePath.join(cwd, "same-batch-refused.txt"), "utf8"),
+									/review refused/u,
+								);
+								// A review sent after another compaction is refused with both standards and the selection
+								// that stands; the same review sent again is stored.
+								const refused = readFileSync(nodePath.join(cwd, "compacted-refused.txt"), "utf8");
+								assert.match(
+									refused,
+									/review refused, nothing was stored: the session's context was compacted/u,
+								);
+								assert.ok(refused.includes(notMet) && refused.includes(met), refused);
+								assert.ok(refused.includes(reviewTurn), refused);
+								assert.match(
+									readFileSync(nodePath.join(cwd, "restore-batch-refused.txt"), "utf8"),
+									/review refused/u,
+								);
+								const refusedRows = selectedRowsOf(refused);
+								assert.ok(isRecord(refusedRows));
+								assert.deepEqual(refusedRows.acceptedSelection, decision);
+								assert.match(
+									events.find((event) => event.startsWith("compacted-stored:")) ?? "",
+									/Stored the review: a summary resting on 1 observation\(s\)/u,
+								);
+								const stored: unknown = JSON.parse(
+									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+								);
+								assert.ok(isRecord(stored));
+								assert.deepEqual(stored.review, {
+									summary: {
+										body: "Moving the check into its own helper keeps every caller on the same path.",
+										basedOn: ["observation-2"],
+									},
+									inline: [],
+									withheld: decision.withheld,
+								});
+								reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
+								break;
+							}
+							// Both practices have a NOT_MET observation: the review turn carries both standards whole,
+							// and a selection made while the session holds them does not repeat them.
+							for (const standard of standards) {
+								assert.ok(reviewTurn.includes(standard), reviewTurn);
+							}
 							const initial = readFileSync(nodePath.join(cwd, "qualification-initial.txt"), "utf8");
 							const replacement = readFileSync(
 								nodePath.join(cwd, "qualification-reselected.txt"),
@@ -3954,12 +4098,8 @@ assert.notEqual(outgoing.function.strict, true);`,
 								acceptedSelection: { selected: ["observation-1", "observation-2"], withheld: [] },
 								selectedObservations: [publicRow, second],
 							});
-							for (const slug of ["test-practice", "second-practice"]) {
-								const criteria = readFileSync(
-									nodePath.join(cwd, `catalog/practices/${slug}.md`),
-									"utf8",
-								);
-								assert.ok(initial.includes(`markdown\n${criteria}\n`), initial);
+							for (const standard of standards) {
+								assert.ok(!initial.includes(standard), initial);
 							}
 							assert.deepEqual(selectedRowsOf(replacement), {
 								acceptedSelection: {
@@ -4014,12 +4154,24 @@ assert.notEqual(outgoing.function.strict, true);`,
 							);
 							assert.match(criteria, /^ {4}let reply[\s\S]*reasoned decline[\s\S]* {2}\n\n$/u);
 							const staged = `markdown\n${criteria}\n`;
+							// The staged bytes reach the review turn whole; selections the session answers while it still
+							// holds them do not repeat them.
+							const reviewTurn = events
+								.filter((event) => event.startsWith("prompt:"))
+								.map((event) =>
+									readFileSync(
+										nodePath.join(cwd, `prompt-${event.slice("prompt:".length)}.md`),
+										"utf8",
+									),
+								)
+								.find((prompt) => prompt.startsWith("## The review to write"));
+							assert.ok(reviewTurn?.includes(staged) === true, reviewTurn);
 							assert.ok(
-								said("reselect-speak").includes(JSON.stringify(staged).slice(1, -1)),
+								!said("reselect-speak").includes(JSON.stringify(staged).slice(1, -1)),
 								said("reselect-speak"),
 							);
 							const refused = readFileSync(nodePath.join(cwd, "refused-standing.txt"), "utf8");
-							assert.ok(refused.includes(staged), refused);
+							assert.ok(!refused.includes(staged), refused);
 							assert.ok(!refused.includes("### Criteria of `second-practice`"), refused);
 							assert.deepEqual(selectedRowsOf(refused), {
 								acceptedSelection: { selected: ["observation-1"], withheld: [] },

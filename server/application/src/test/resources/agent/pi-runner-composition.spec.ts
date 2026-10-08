@@ -27,6 +27,7 @@ import {
 	sameLinesNote,
 	selectionMismatch,
 	selectionText,
+	notMetCriteriaReference,
 	selectionToolParameters,
 	uncertainOutcomes,
 	undeliverableUnits,
@@ -413,10 +414,21 @@ void test("the review composition sees only what admission marked eligible, and 
 			anchorable: false,
 		},
 	]);
+	const read: string[] = [];
+	const describeCriteria = "## The standard\nThe description says why the change is made.\n";
 	const turn = buildReviewTurn({
 		sameWork:
 			"A scm.pull_request, captured at 2026-10-01T10:00:00Z. Its title: Add the login screen.",
-		observations: shown,
+		observations: [
+			...shown,
+			{
+				id: "named",
+				practiceSlug: "names-the-screen",
+				outcome: "MET",
+				publicEligible: true,
+				citations: [],
+			},
+		],
 		undecided: uncertainOutcomes([
 			...admitted,
 			{
@@ -444,12 +456,22 @@ void test("the review composition sees only what admission marked eligible, and 
 		],
 		notReached: ["keeps-tests-honest"],
 		lineNotes: true,
+		stagedCriteria: (slug) => {
+			read.push(slug);
+			return describeCriteria;
+		},
 	});
 	assert.ok(!turn.includes(PRIVATE_SENTENCE), turn);
 	assert.ok(!turn.includes("from-history"), turn);
 	// The work is named before anything the review may rest on.
 	const record = turn.indexOf("Add the login screen.");
 	assert.ok(record !== -1 && record < turn.indexOf('"id": "current"'), turn);
+	// The whole standard of the NOT_MET practice comes before the observations and the choice; a MET practice's
+	// criteria, and a private practice's, are not read here.
+	assert.deepEqual(read, ["describe-what-and-why"]);
+	const standard = turn.indexOf(`\`\`\`markdown\n${describeCriteria}\n\`\`\``);
+	assert.ok(record < standard && standard < turn.indexOf('"id": "current"'), turn);
+	assert.ok(standard < turn.indexOf("First choose what the review speaks about"), turn);
 	assert.match(turn, /"id": "current"/u);
 	assert.match(turn, /"name": "Describe what changed and why"/u);
 	assert.match(turn, /"whyItMatters": "A reviewer needs the reason before the diff\."/u);
@@ -507,6 +529,7 @@ void test("the public turn carries captured discussion once, with its locator an
 		practices: [],
 		notReached: [],
 		lineNotes: false,
+		stagedCriteria: () => null,
 	});
 	assert.equal(turn.split('"path": "context/comments.json"').length - 1, 1);
 	assert.equal(turn.split("Please describe how to try the screen.").length - 1, 1);
@@ -522,6 +545,7 @@ void test("the public turn carries captured discussion once, with its locator an
 		practices: [],
 		notReached: [],
 		lineNotes: false,
+		stagedCriteria: () => null,
 	});
 	assert.ok(withoutBodies.includes(omitted));
 });
@@ -736,6 +760,7 @@ void test("own history omits whole oversized or over-budget entries without hidi
 		practices: [],
 		notReached: [],
 		lineNotes: false,
+		stagedCriteria: () => null,
 	};
 	const turn = buildReviewTurn({ ...input, ownHistoryOmissions: view.omissions });
 	const own = turn
@@ -1273,32 +1298,45 @@ void test("an accepted selection carries the whole staged criteria of the practi
 			citations: [],
 		},
 	]);
-	const read: string[] = [];
+	let read: string[] = [];
 	const staged = (slug: string) => {
 		read.push(slug);
-		return slug === "engages-with-review"
-			? ENGAGEMENT_CRITERIA
-			: `Criteria of ${slug} must not travel.`;
+		return slug === "engages-with-review" ? ENGAGEMENT_CRITERIA : `Whole criteria of ${slug}.`;
+	};
+	const selection = {
+		selected: ["unanswered", "unanswered-again"],
+		withheld: [{ basedOn: ["held"], reason: "BELOW_BAR" as const }],
 	};
 
-	const text = selectionText(
+	// Every NOT_MET practice's criterion is available before selection, once and whole; a MET practice stays unread.
+	const restored = notMetCriteriaReference(reviewable, staged);
+	assert.deepEqual(read, ["engages-with-review", "describe-what-and-why"]);
+	const criteria = `\`\`\`\`markdown\n${ENGAGEMENT_CRITERIA}\n\`\`\`\``;
+	assert.ok(restored.includes(criteria), restored);
+	assert.equal(restored.split("### Criteria of `engages-with-review`").length, 2, restored);
+	assert.ok(restored.includes("Whole criteria of describe-what-and-why."), restored);
+	// While the session still holds them, they are not repeated.
+	read = [];
+	const held = selectionText(selection, reviewable, staged);
+	assert.deepEqual(read, []);
+	assert.ok(!held.includes("### Criteria of"), held);
+	assert.ok(held.endsWith(WRITE_CONTRACT), held);
+
+	// A selected MET practice's criteria arrive with the selection, their only place.
+	const acknowledged = selectionText(
 		{
-			selected: ["unanswered", "unanswered-again"],
-			withheld: [{ basedOn: ["held"], reason: "BELOW_BAR" }],
+			selected: ["routine"],
+			withheld: [{ basedOn: ["unanswered", "unanswered-again", "held"], reason: "BELOW_BAR" }],
 		},
 		reviewable,
 		staged,
 	);
-
-	// Exactly the selected practice's criteria, read once, whole and unchanged, alternatives included.
-	assert.deepEqual(read, ["engages-with-review"]);
-	const criteria = `\`\`\`\`markdown\n${ENGAGEMENT_CRITERIA}\n\`\`\`\``;
-	assert.ok(text.includes(criteria), text);
-	assert.equal(text.split("### Criteria of `engages-with-review`").length, 2, text);
-	assert.ok(!text.includes("must not travel"), text);
-	// The criteria are reference; the writing contract comes after them, last, right before report_review.
-	assert.ok(text.endsWith(WRITE_CONTRACT), text);
-	assert.ok(text.indexOf(criteria) < text.indexOf(WRITE_CONTRACT), text);
+	assert.deepEqual(read, ["ships-a-preview"]);
+	assert.ok(acknowledged.includes("Whole criteria of ships-a-preview."), acknowledged);
+	assert.ok(
+		acknowledged.indexOf("Whole criteria") < acknowledged.indexOf(WRITE_CONTRACT),
+		acknowledged,
+	);
 });
 
 void test("a selection with nothing selected carries no criteria, and an unavailable one says so", () => {
@@ -1321,10 +1359,19 @@ void test("a selection with nothing selected carries no criteria, and an unavail
 	);
 	assert.ok(!quiet.includes("### Criteria of"), quiet);
 
-	const missing = selectionText({ selected: ["held"], withheld: [] }, reviewable, () => null);
+	const missing = notMetCriteriaReference(reviewable, () => null);
 	assert.ok(
 		missing.includes("### Criteria of `describe-what-and-why` — not available for this review"),
 		missing,
+	);
+	const empty = notMetCriteriaReference(reviewable, () => "");
+	assert.ok(empty.includes("### Criteria of `describe-what-and-why` — staged empty"), empty);
+	const unreadable = notMetCriteriaReference(reviewable, () => {
+		throw new Error("EACCES");
+	});
+	assert.ok(
+		unreadable.includes("### Criteria of `describe-what-and-why` — could not be read"),
+		unreadable,
 	);
 });
 
@@ -1424,6 +1471,7 @@ void test("a delivery after work capture informs novelty without becoming advice
 		practices: [],
 		notReached: [],
 		lineNotes: false,
+		stagedCriteria: () => null,
 	});
 	assert.ok(turn.includes('"eligibleForAlreadySaid": true'));
 	assert.ok(!turn.includes("was delivered after this work was captured"));
