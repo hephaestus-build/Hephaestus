@@ -3507,7 +3507,7 @@ function precomputeSectionOf(slug: string): string {
 		: "";
 }
 
-/** The criteria of the turn's practices and their precomputed leads, inlined: the turn carries what it asks about. */
+/** The criteria of the turn's practices, inlined exactly as staged: the turn carries what it asks about. */
 function criteriaOf(slugs: readonly string[]): string {
 	return slugs
 		.map((slug) => {
@@ -3517,27 +3517,27 @@ function criteriaOf(slugs: readonly string[]): string {
 				exhaustive.length > 0
 					? `Exhaustive sources (an absence claim must have searched all of them): ${exhaustive.join(", ")}.\n\n`
 					: "";
-			return `### Practice \`${slug}\`\n${scope}${criteria}${precomputeSectionOf(slug)}`;
+			return `### Practice \`${slug}\`\n${scope}${criteria}`;
 		})
 		.join("\n\n");
 }
 
 /**
- * Whether the task, the brief and the example are still in the current session's context. A fresh session
- * holds none of them, so its first turn carries them; a compaction summarizes them away, so the turn after
+ * Whether the task, the brief and the measuring illustrations are still in the current session's context. A fresh
+ * session holds none of them, so its first turn carries them; a compaction summarizes them away, so the turn after
  * it carries them again, and the model quotes the exact text rather than a summary of it.
  */
 let openingInContext = false;
 
-/** The shared user context, before any practice-specific task or recorded draft. */
+/** The shared user context, before any practice-specific criterion, task or recorded draft. */
 function assessmentOpening(brief: string): string {
-	return `${prompt}\n\n${brief}\n\n${OBSERVATION_EXAMPLE}\n\n`;
+	return `${prompt}\n\n${brief}\n\n`;
 }
 
 /**
- * The task, the brief and the example, when the context no longer holds them; nothing otherwise. A measuring
- * session sees only its own practice's draft: other practices' results are not its context. The composer
- * records no observation, so it gets the task and the brief alone.
+ * The task and the brief, when the context no longer holds them; nothing otherwise. A measuring session sees only
+ * its own practice's draft: other practices' results are not its context. The composer records no observation, so
+ * it gets the task and the brief alone.
  */
 function openingIfNeeded(brief: string, composing = false): string {
 	if (openingInContext) {
@@ -3547,7 +3547,7 @@ function openingIfNeeded(brief: string, composing = false): string {
 		currentTurnSlugs.includes(observation.practiceSlug),
 	);
 	return composing
-		? `${prompt}\n\n${brief}\n\n`
+		? assessmentOpening(brief)
 		: `${assessmentOpening(brief)}${
 				ownDrafts ? `## Recorded so far\n${recordedSoFar(currentTurnSlugs)}\n\n` : ""
 			}`;
@@ -3640,14 +3640,17 @@ ${example
 })();
 
 /**
- * A turn of practices, after the opening when the context does not hold it. Its work budget is not stated:
- * told its call budget up front, an open model read less and missed more not-met practices.
+ * A turn of one practice, after the opening when the context does not hold it: its whole criterion first, then
+ * the generic illustrations when the context does not hold them, the precomputed leads, and the task. Its work
+ * budget is not stated: told its call budget up front, an open model read less and missed more not-met practices.
  */
 function practiceTurnText(heading: string, slug: string, brief: string): string {
+	const illustrations = openingInContext ? "" : `\n\n${OBSERVATION_EXAMPLE}`;
 	return `${openingIfNeeded(brief)}${heading}
-Evaluate this practice: ${slug}. Its criteria follow and decide the outcome. What the brief shows is yours to quote; read more when the criteria need evidence beyond it. Record one observation for this practice — the outcome the criteria and the evidence support, NOT_APPLICABLE and UNDETERMINED included — with report_observation. This session records and revises only this practice.
 
-${criteriaOf([slug])}`;
+${criteriaOf([slug])}${illustrations}${precomputeSectionOf(slug)}
+
+Record one observation for ${slug} with report_observation: the outcome its criterion above decides through its Occasion, Judge and Defer, as the evidence supports it, NOT_APPLICABLE and UNDETERMINED included. What the brief shows is yours to quote; read more when the criterion needs evidence beyond it. This session records and revises only this practice.`;
 }
 
 /** The practices with an admitted NOT_MET observation: what the composer has a decision to record on. */

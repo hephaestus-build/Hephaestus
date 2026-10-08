@@ -735,7 +735,11 @@ if (scenario !== undefined && scenario !== "") {
 						},
 						getContextUsage: () => ({
 							tokens:
-								scenario === "compose-overflow" && !wasCompacted && prompts >= 2 ? 120_000 : 1000,
+								((scenario === "compose-overflow" && prompts >= 2) ||
+									scenario === "measure-context-compact") &&
+								!wasCompacted
+									? 120_000
+									: 1000,
 							contextWindow: 128_000,
 							percent: 0,
 						}),
@@ -2146,6 +2150,8 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-late-usage",
 		"setup",
 		"context-unfit",
+		"measure-context-compact",
+		"measure-context-missing",
 		"session-init",
 		"work-budget",
 		"cut-off",
@@ -2289,6 +2295,10 @@ if (scenario !== undefined && scenario !== "") {
 				"compose-quiet": "skips a WITHHOLD on a practice with nothing to withhold and asks no more",
 				"compose-empty":
 					"ends the review composition on an intentionally empty final review of positive results",
+				"measure-context-compact":
+					"restores the exact criterion before illustrations and leads when native turn preparation compacts",
+				"measure-context-missing":
+					"keeps a missing criterion explicit without changing the recording contract",
 				"compose-qualify":
 					"reselects a mixed public review while preserving canonical observations and its supported concern",
 				"compose-reselect":
@@ -2386,7 +2396,10 @@ if (scenario !== undefined && scenario !== "") {
 						"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,0 +10,1 @@\n[L10] + insecure();\n",
 					);
 					let practiceCriteria = "# Test practice\nCriteria.";
-					if (stage === "context-unfit") {
+					if (stage === "measure-context-compact") {
+						practiceCriteria =
+							"    let answer = qualified(work)\n\n# Standard\nBounded criterion.  \n\n## Occasion\nOnly captured work.\n\n## Judge\nQualify the outcome.\n\n## Defer\nUnknown remains unknown.  \n\n";
+					} else if (stage === "context-unfit") {
 						practiceCriteria = "Essential criteria. ".repeat(30_000);
 					} else if (stage === "compose-reselect" || stage === "compose-recover") {
 						// Leading indentation is a Markdown code block; trimming it would change the standard.
@@ -2394,7 +2407,12 @@ if (scenario !== undefined && scenario !== "") {
 							"    let reply = answer(request)\n\n# Engages with review\n" +
 							"A review request is answered by a fix, a reasoned decline, or a clarification.  \n\n";
 					}
-					writeFileSync(nodePath.join(cwd, "catalog/practices/test-practice.md"), practiceCriteria);
+					if (stage !== "measure-context-missing") {
+						writeFileSync(
+							nodePath.join(cwd, "catalog/practices/test-practice.md"),
+							practiceCriteria,
+						);
+					}
 					// What the practice's precompute script derived, as the precompute runner writes it.
 					mkdirSync(nodePath.join(cwd, "work/precompute-out"), { recursive: true });
 					writeFileSync(
@@ -3077,6 +3095,30 @@ assert.notEqual(outgoing.function.strict, true);`,
 							reached({ "test-practice": "EVALUATED", "review-tone": "EVALUATED" });
 							break;
 						}
+						case "measure-context-compact":
+						case "measure-context-missing": {
+							assert.equal(child.status, 0, child.stderr);
+							const turn = readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8");
+							const criterion =
+								stage === "measure-context-missing" ? "(criteria file missing)" : practiceCriteria;
+							const criterionAt = turn.indexOf(criterion);
+							const illustrationsAt = turn.indexOf("## How report_observation takes observations");
+							const leadsAt = turn.indexOf("#### Precomputed leads");
+							const recordAt = turn.lastIndexOf("Record one observation for test-practice");
+							assert.ok(criterionAt !== -1 && turn.includes("### `evidence/metadata.json`"), turn);
+							assert.ok(criterionAt > turn.indexOf("### `evidence/metadata.json`"), turn);
+							assert.ok(illustrationsAt > criterionAt + criterion.length, turn);
+							assert.ok(leadsAt > illustrationsAt && recordAt > leadsAt, turn);
+							assert.equal(turn.split("## How report_observation takes observations").length, 2);
+							assert.ok(!turn.includes("Complete second criterion"));
+							assert.deepEqual(
+								events.filter((event) => event === "compact"),
+								stage === "measure-context-compact" ? ["compact"] : [],
+							);
+							assert.equal(readObservations(nodePath.join(cwd, "out/result.json")).length, 1);
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
 						case "batch": {
 							assert.equal(child.status, 0, child.stderr);
 							const system = readFileSync(nodePath.join(cwd, "system-prompt.md"), "utf8");
@@ -3122,9 +3164,27 @@ assert.notEqual(outgoing.function.strict, true);`,
 								events.includes("exposure:report_observation=model-only"),
 								events.join("\n"),
 							);
+							const first = readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8");
+							const second = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
+							assert.ok(first.indexOf("## Turn") > 0 && second.indexOf("## Turn") > 0);
+							assert.equal(
+								first.slice(0, first.indexOf("## Turn")),
+								second.slice(0, second.indexOf("## Turn")),
+							);
+							assert.ok(
+								first.indexOf(practiceCriteria) <
+									first.indexOf("## How report_observation takes observations"),
+							);
+							assert.ok(
+								first.indexOf("## How report_observation takes observations") <
+									first.indexOf("#### Precomputed leads"),
+							);
+							for (const turn of [first, second]) {
+								assert.equal(turn.split("## How report_observation takes observations").length, 2);
+							}
 							assert.match(
-								readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8"),
-								/### Practice `test-practice`\n[\s\S]*# Test practice\nCriteria\.\n\n#### Precomputed leads for `test-practice` — starting points to check against the criteria, not verdicts\n- `src\/Auth\.java` \[L10\] — insecure call/u,
+								first,
+								/#### Precomputed leads for `test-practice` — starting points to check against the criteria, not verdicts\n- `src\/Auth\.java` \[L10\] — insecure call/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("corrected-kind:")) ?? "",
