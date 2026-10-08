@@ -2,33 +2,34 @@
 id: ci-cd
 sidebar_position: 4
 title: CI/CD Architecture
-description: Trunk-based CI/CD through the merge queue. Releases deploy to staging automatically and to production after approval.
+description: Trunk-based CI/CD through the merge queue. Staging follows main, and production runs releases after approval.
 ---
 
 # CI/CD Architecture
 
 Hephaestus uses trunk-based delivery through GitHub's merge queue. Pull requests provide early
-feedback, merge groups validate projected `main`, and pushes to `main` produce release images. Releases
-with signed image locks deploy automatically to staging. Production requires approval.
+feedback, merge groups validate projected `main`, and pushes to `main` produce release images.
+Staging follows each successful build of `main`. Production runs a release only after an approved promotion.
 
 ## Architecture overview
 
 ```mermaid
 flowchart TD
     accTitle: Pull request delivery pipeline
-    accDescr: Pull-request and merge-group validation protect main; final-SHA images become signed releases that deploy to staging before production approval.
+    accDescr: Pull-request and merge-group validation protect main. Staging follows each main build. Final-SHA images become signed releases that production runs after an approved promotion.
     PR[Pull request] --> PRCI[Pull-request validation]
     PRCI --> Queue[Merge queue]
     Queue --> MG[Projected-main validation]
     MG --> Main[Merge to main]
     Main --> Images[Build and attest images for final commit]
+    Images --> Staging[Staging follows the commit]
     Main --> VP[Maintain Version PR]
     VP --> VPCI[Validate the version commit and preflight its release evidence]
     VPCI -->|Maintainer merges| ReleaseCI[Revalidate the merged version commit]
     ReleaseCI --> Evidence[Build evidence and sign image lock]
     Evidence --> Verify{Verify evidence and image lock}
-    Verify -->|Pass| Staging[Deploy to staging]
-    Staging -->|Approve| Prod[Deploy to production]
+    Verify -->|Pass| Release[Publish the release]
+    Release -->|Approved promotion| Prod[Production runs the release]
 ```
 
 ## Release flow
@@ -415,18 +416,21 @@ change its score.
 | Environment       | Eligibility                                 | Deploys on                        | Approval          |
 | ----------------- | ------------------------------------------- | --------------------------------- | ----------------- |
 | Preview (Coolify) | same-repository PR with the `preview` label | every push. Never waits for tests | none              |
-| Staging           | every published release                     | release publication               | none              |
-| Production        | the same release after staging              | release publication               | required reviewer |
+| Staging           | every commit of `main`                      | successful CI/CD on `main`        | none              |
+| Production        | a published release                         | manual promotion                  | required reviewer |
 
 ### GitHub environment setup
 
 1. **Settings → Environments → New environment**
-2. Create `Staging` (no rules)
-3. Create `Production` with **Required reviewers**
+2. Create `Staging`. Limit its deployment branches to protected branches.
+3. Create `Production` with **Required reviewers**. Limit its deployment branches to protected branches.
+4. Do not add a custom deployment protection rule.
+   `promote.yml` records its own deployment and sets `deployment: false`.
+   A custom rule needs the record that this setting stops, so the job would fail.
 
 A deploy starts `app`, then `core`, then `proxy`.
 The application server runs the Liquibase migration that the webhook runtime in `core` reads.
-The edge starts last, against complete routers. Both deploy paths use this order — the push workflow and the pull reconciler.
+The edge starts last, against complete routers. The pull reconciler applies this order.
 
 The `proxy` stack publishes :80 and :443. If the host already has an edge, set `DEPLOY_EDGE_PROXY=false`.
 This omits `proxy` from both render and deploy. Anything else, including an unset variable, deploys all
@@ -570,7 +574,7 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `version-pr.yml`                      | Successful CI/CD completion for the current main tip                          | Maintains the accumulating Version PR (changesets) and selects its CI validation path, release evidence preflight included                                                                                                       |
 | `release.yml`                         | Successful CI/CD push on `main`                                               | Publishes the release and promotes the moving series and latest image tags                                                                                                                                                       |
 | `release-upgrade.yml`                 | Called by `release.yml`, weekly                                               | Boots the previous stable release with seeded data, then the candidate against the same database                                                                                                                                 |
-| `promote.yml`                         | Manual dispatch, or automatically for staging                                 | Signs the channel a host follows. Hosts pull and apply it themselves                                                                                                                                                             |
+| `promote.yml`                         | Manual dispatch, or automatically for staging                                 | Records the GitHub deployment of the promoted source and signs the channel a host follows. Hosts pull and apply it themselves                                                                                                    |
 
 ### Commits a workflow makes
 

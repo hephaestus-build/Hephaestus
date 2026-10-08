@@ -15,7 +15,7 @@ export interface WorkTreeChanges {
 export interface CommitInput {
 	readonly branch: { readonly repositoryNameWithOwner: string; readonly branchName: string };
 	readonly expectedHeadOid: string;
-	readonly message: { readonly headline: string };
+	readonly message: { readonly headline: string; readonly body?: string };
 	readonly fileChanges: {
 		readonly additions: readonly { readonly path: string; readonly contents: string }[];
 		readonly deletions: readonly { readonly path: string }[];
@@ -27,6 +27,7 @@ export interface CommitTarget {
 	readonly branch: string;
 	readonly expectedHeadOid: string;
 	readonly headline: string;
+	readonly body?: string;
 }
 
 /** Stages the selected work-tree paths; automation callers use disposable checkouts. */
@@ -73,7 +74,7 @@ export function commitInput(
 	return {
 		branch: { repositoryNameWithOwner: target.repository, branchName: target.branch },
 		expectedHeadOid: target.expectedHeadOid,
-		message: { headline: target.headline },
+		message: { headline: target.headline, body: target.body },
 		fileChanges: {
 			additions: [...contents].map(([path, bytes]) => ({
 				path,
@@ -131,6 +132,7 @@ if (import.meta.main) {
 		options: {
 			branch: { type: "string" },
 			message: { type: "string" },
+			body: { type: "string" },
 			"expected-head": { type: "string" },
 		},
 		allowPositionals: true,
@@ -143,6 +145,7 @@ if (import.meta.main) {
 		repository: requiredEnv(process.env, "GITHUB_REPOSITORY"),
 		branch,
 		headline: message,
+		body: values.body,
 		expectedHeadOid: values["expected-head"] ?? (await currentHead()),
 	};
 	const changes = await stageChanges(positionals);

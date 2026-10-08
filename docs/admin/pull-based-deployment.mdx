@@ -242,6 +242,7 @@ Do not change the checkout underneath a tick.
 | Move a following host onto the commit's database image | Promote the commit with **refresh-database-image**                       |
 | Prevent new reconciliation runs                        | Use the timer-disable command below                                      |
 | See what a host runs                                   | Use the applied-record command below                                     |
+| See what was promoted to an environment, and when      | Open the environment's deployment history on GitHub                      |
 | Keep a release worktree while you work in it           | Lock it. See [What it keeps on disk](#what-it-keeps-on-disk)             |
 
 Timer-disable command:
@@ -405,7 +406,15 @@ recorded yet, and a promotion of the release it runs ends that.
 A promotion without **freeze** waits for the public webapp to report the requested version. This
 checks the webapp version, not the readiness of every service. Use host metrics and logs for the
 Compose result. A promotion with **freeze** records the hold without waiting for a version change.
-Skipped automatic promotions do not start an environment deployment.
+
+A promotion without **freeze** also records a GitHub deployment of the release or commit that it promotes.
+The record names who requested the promotion.
+Its final state tells whether the public webapp reported the version.
+Its time is when the promotion ran, not when a host applied it.
+
+Host metrics remain the record of what each host runs.
+A hold and a skipped automatic promotion record no deployment.
+[Release Management § Deployment history](/contributor/release-management#deployment-history) lists the recorded fields.
 
 The promotion job summary explicitly names this boundary, including when a version check fails or a hold skips it.
 It does not fetch host metrics.

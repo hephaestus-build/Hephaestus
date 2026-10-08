@@ -7,7 +7,7 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { readInventory, resolveAndVerify, resolveImages } from "./commit-image-lock.ts";
-import { requiredEnv } from "./lib/env.ts";
+import { isSet, requiredEnv } from "./lib/env.ts";
 import { compareStatus } from "./lib/github.ts";
 import { output } from "./lib/process.ts";
 import { isCommit, RELEASE_TAG, serializeChannel, type Channel } from "./reconcile-deployment.ts";
@@ -74,6 +74,24 @@ export async function resolvePromotion(
 	return { channel: { release, allowRollback, freeze }, version: release.slice(1) };
 }
 
+/** What a promotion allows beyond moving to its target, as both of its records name it. */
+export function promotionQualifiers(channel: Channel): string[] {
+	return [
+		channel.allowRollback === true ? "rollback allowed" : undefined,
+		channel.refreshDatabaseImage === true ? "database image refresh requested" : undefined,
+	].filter(isSet);
+}
+
+/** The `deploy-state` commit headline: what a host will do, not only which file changed. */
+export function promotionHeadline(file: string, channel: Channel): string {
+	if (channel.freeze === true) {
+		return `chore(deploy): freeze ${file}`;
+	}
+	const qualifiers = promotionQualifiers(channel);
+	const target = `chore(deploy): ${file} -> ${channel.release}`;
+	return qualifiers.length === 0 ? target : `${target} (${qualifiers.join(", ")})`;
+}
+
 function optional(name: string): string | undefined {
 	const value = process.env[name];
 	// A dispatch input left blank arrives as an empty string.
@@ -124,6 +142,12 @@ if (import.meta.main) {
 	await writeFile(path.join("deploy-state", file), serializeChannel(channel));
 	await appendFile(
 		requiredEnv(process.env, "GITHUB_OUTPUT"),
-		`environment_url=https://${hostname}\nchannel=${file}\nrelease=${channel.release}\nversion=${version}\n`,
+		[
+			`environment_url=https://${hostname}`,
+			`channel=${file}`,
+			`version=${version}`,
+			`headline=${promotionHeadline(file, channel)}`,
+			"",
+		].join("\n"),
 	);
 }

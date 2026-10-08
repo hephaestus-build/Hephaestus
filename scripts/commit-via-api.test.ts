@@ -96,6 +96,7 @@ await test("builds the mutation input, with file contents base64-encoded", () =>
 			branch: "deploy-state",
 			expectedHeadOid: "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
 			headline: "chore(deploy): channels/staging.json -> v1.2.3",
+			body: "Requested by octocat in https://github.com/o/r/actions/runs/1/attempts/1",
 		},
 		new Map([["channels/staging.json", Buffer.from('{"release":"v1.2.3"}\n')]]),
 		["channels/retired.json"],
@@ -107,7 +108,10 @@ await test("builds the mutation input, with file contents base64-encoded", () =>
 			branchName: "deploy-state",
 		},
 		expectedHeadOid: "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
-		message: { headline: "chore(deploy): channels/staging.json -> v1.2.3" },
+		message: {
+			headline: "chore(deploy): channels/staging.json -> v1.2.3",
+			body: "Requested by octocat in https://github.com/o/r/actions/runs/1/attempts/1",
+		},
 		fileChanges: {
 			additions: [{ path: "channels/staging.json", contents: "eyJyZWxlYXNlIjoidjEuMi4zIn0K" }],
 			deletions: [{ path: "channels/retired.json" }],
