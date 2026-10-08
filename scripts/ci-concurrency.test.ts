@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
-import { isSeq, parseDocument } from "yaml";
+import { isScalar, isSeq, parseDocument } from "yaml";
 
 import { asRecord, readJsonFile } from "./lib/json.ts";
 
@@ -11,7 +11,16 @@ const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf
 const repository = "hephaestus-build/Hephaestus";
 
 function context(event: string, branch = "changeset-release/main", owner = repository) {
+	const prerequisites = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
+	assert.ok(isSeq(prerequisites));
+	const needs = Object.fromEntries(
+		prerequisites.items.map((item) => {
+			assert.ok(isScalar(item) && typeof item.value === "string");
+			return [item.value, { result: "success" }];
+		}),
+	);
 	return {
+		needs,
 		github: {
 			workflow: "CI/CD",
 			repository,
@@ -43,7 +52,7 @@ function evaluate(template: unknown, value: ReturnType<typeof context>, cancelle
 		]);
 		const parsed = new Parser(
 			new Lexer(expression).lex().tokens,
-			["github"],
+			["github", "needs"],
 			[...functions.values()],
 		).parse();
 		return new Evaluator(parsed, dictionary, functions).evaluate().coerceString();
