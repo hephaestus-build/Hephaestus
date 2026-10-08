@@ -47,11 +47,46 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
         """, nativeQuery = true)
     List<DeliveredIssueCommentRow> findDeliveredIssueComments(@Param("issueId") long issueId);
 
+    /**
+     * {@link #findDeliveredIssueComments} for every issue of one repository that the workspace monitors and still
+     * holds, in one read. The scope limits which issues are asked about, not which workspace's delivery counts.
+     */
+    @Query(value = """
+        WITH work AS (
+            SELECT i.id FROM issue i
+             WHERE i.repository_id = :repositoryId AND i.deleted_at IS NULL
+               AND i.issue_type IS DISTINCT FROM 'PULL_REQUEST'
+               AND EXISTS (SELECT 1 FROM repository_to_monitor m JOIN repository r ON r.name_with_owner = m.name_with_owner
+                           WHERE m.workspace_id = :workspaceId AND r.id = i.repository_id)
+        )
+        SELECT w.id AS "issueId", p.posted_comment_ref AS "externalRef", p.posted_comment_url AS "url"
+          FROM work w JOIN feedback f ON f.artifact_kind = 'scm.issue' AND f.artifact_id = w.id
+          JOIN feedback_placement p ON p.feedback_id = f.id
+         WHERE p.placement_type = 'SUMMARY' AND p.posted_comment_ref IS NOT NULL
+        UNION
+        SELECT w.id AS "issueId", d.delivered_external_ref AS "externalRef", d.delivered_external_url AS "url"
+          FROM work w
+          JOIN agent_job j ON j.artifact_kind = 'scm.issue' AND j.metadata ->> 'issue_id' = CAST(w.id AS text)
+          JOIN feedback_dispatch d ON d.agent_job_id = j.id AND d.workspace_id = j.workspace_id
+         WHERE d.delivered_external_ref IS NOT NULL
+        UNION
+        SELECT w.id AS "issueId", j.delivery_comment_id AS "externalRef", NULL AS "url"
+          FROM work w
+          JOIN agent_job j ON j.artifact_kind = 'scm.issue' AND j.metadata ->> 'issue_id' = CAST(w.id AS text)
+         WHERE j.delivery_comment_id IS NOT NULL
+        """, nativeQuery = true)
+    List<RepositoryDeliveredIssueCommentRow> findDeliveredIssueCommentsOfRepository(
+            @Param("workspaceId") long workspaceId, @Param("repositoryId") long repositoryId);
+
     interface DeliveredIssueCommentRow {
         String getExternalRef();
 
         @Nullable
         String getUrl();
+    }
+
+    interface RepositoryDeliveredIssueCommentRow extends DeliveredIssueCommentRow {
+        Long getIssueId();
     }
 
     /**

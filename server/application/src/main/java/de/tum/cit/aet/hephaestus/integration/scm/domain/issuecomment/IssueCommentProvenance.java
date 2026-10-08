@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredIssueCommentLookup;
 import java.net.URI;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -21,8 +24,21 @@ public class IssueCommentProvenance {
     }
 
     public Set<Long> deliveredIds(long issueId) {
+        return nativeIds(deliveries.findForIssue(issueId));
+    }
+
+    /** {@link #deliveredIds} for every issue of a repository the workspace monitors, read at once. */
+    public Map<Long, Set<Long>> deliveredIdsByIssue(long workspaceId, long repositoryId) {
+        Map<Long, Set<Long>> ids = new HashMap<>();
+        deliveries
+                .findForRepository(workspaceId, repositoryId)
+                .forEach((issue, found) -> ids.put(issue, nativeIds(found)));
+        return Map.copyOf(ids);
+    }
+
+    private static Set<Long> nativeIds(List<DeliveredIssueCommentLookup.DeliveredComment> found) {
         Set<Long> ids = new HashSet<>();
-        for (var delivery : deliveries.findForIssue(issueId)) {
+        for (var delivery : found) {
             String ref = delivery.externalRef();
             addNumeric(ids, ref.startsWith(GITLAB_NOTE) ? ref.substring(GITLAB_NOTE.length()) : ref);
             // GitHub returns an opaque GraphQL id; its recorded permalink carries the native comment id.

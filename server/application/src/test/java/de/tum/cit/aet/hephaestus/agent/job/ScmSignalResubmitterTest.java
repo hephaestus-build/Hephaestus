@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredIssueCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -85,7 +87,8 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
                 issueRepository,
                 gate,
                 signalRecorder,
-                new IssueEvidenceRevision(issueCommentRepository, new IssueCommentProvenance(issueId -> List.of())));
+                new IssueEvidenceRevision(
+                        issueCommentRepository, new IssueCommentProvenance(mock(DeliveredIssueCommentLookup.class))));
     }
 
     private Workspace workspace;
