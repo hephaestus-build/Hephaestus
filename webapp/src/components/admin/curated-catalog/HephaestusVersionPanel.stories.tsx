@@ -8,6 +8,7 @@ import {
 	mockPracticeDefinitionOptions,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
+import { bundledGuidance } from "@/stories/practice-guidance-story-mock-data";
 import { expectNoOverflowingElement } from "@/stories/reflow";
 
 import { HephaestusVersionPanel } from "./HephaestusVersionPanel";
@@ -168,5 +169,19 @@ export const NarrowViewport: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvasElement }) => {
 		await expectNoOverflowingElement(canvasElement);
+	},
+};
+
+/** The default's visual shows as its picture, never as markup; its guide as the Markdown it ships. */
+export const DefaultWithVisualAndGuide: Story = {
+	args: {
+		status: status({ state: "EDITED_HERE" }),
+		shipped: { ...shipped, visual: bundledGuidance.visual, guide: bundledGuidance.guide },
+	},
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "View Hephaestus default" }));
+		await expect(canvas.getByRole("img", { name: bundledGuidance.visual.alt })).toBeVisible();
+		await expect(canvas.getByText(/^## How to do it/u)).toBeVisible();
+		await expect(canvas.queryByText(/<svg/u)).not.toBeInTheDocument();
 	},
 };

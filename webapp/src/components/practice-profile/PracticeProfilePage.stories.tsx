@@ -69,7 +69,8 @@ export const Default: Story = {
 		);
 		// The paragraph names two things and counts the rest, which unfolds in place.
 		await expect(canvas.getByRole("button", { name: /^Show the/u })).toBeVisible();
-		// A card's practice pill opens the level on its observations; "Learn more" on its About tab.
+		// A card's practice pill and its "Learn more" both open the practice's level, where its
+		// introduction leads.
 		const [card] = canvas.getAllByRole("article");
 		if (!card) {
 			throw new Error("The Newest tab shows a card");
@@ -81,10 +82,8 @@ export const Default: Story = {
 		await userEvent.click(
 			within(card).getByRole("button", { name: "Learn more about this practice" }),
 		);
-		await expect(args.onOpenPractice).toHaveBeenLastCalledWith(
-			"scope-one-reviewable-change",
-			"about",
-		);
+		await expect(args.onOpenPractice).toHaveBeenCalledTimes(2);
+		await expect(args.onOpenPractice).toHaveBeenLastCalledWith("scope-one-reviewable-change");
 		// The card's group name opens the group the page knows by that slug.
 		await userEvent.click(within(card).getByRole("button", { name: "Packaging work for review" }));
 		await expect(args.onOpenGroup).toHaveBeenLastCalledWith(groups[0]);

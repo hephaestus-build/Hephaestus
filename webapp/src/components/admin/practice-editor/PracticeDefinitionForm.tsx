@@ -10,6 +10,8 @@ import type {
 	UpdatePracticeRequest,
 	PracticeDefinitionOptions,
 	PracticeEvidenceOutcome,
+	PracticeGuide,
+	PracticeVisual,
 	PracticeWorkTypeDefinitionOptions,
 } from "@/api/types.gen";
 import {
@@ -19,9 +21,23 @@ import {
 } from "@/components/admin/practice-editor/constants";
 import { canAttemptAutomatedReview } from "@/components/admin/practice-editor/evidence-presentation";
 import {
+	FIGURE_PLACEHOLDER,
+	hasFigurePlaceholder,
+	hasGuide,
+	hasVisual,
+	MAX_SVG_SIZE,
+	NO_GUIDE,
+	NO_VISUAL,
+	svgProblem,
+} from "@/components/admin/practice-editor/practice-guidance-draft";
+import {
 	gatePresentation,
 	parseGate,
 } from "@/components/admin/practice-editor/practice-precondition";
+import {
+	PracticeGuideEditor,
+	type PracticeGuideView,
+} from "@/components/admin/practice-editor/PracticeGuideEditor";
 import {
 	PracticeMentoringSupportEditor,
 	practicePolicyError,
@@ -33,6 +49,7 @@ import {
 	withoutEvidence,
 	withRecommendedEvidence,
 } from "@/components/admin/practice-editor/PracticeReviewSettingsEditor";
+import { PracticeVisualEditor } from "@/components/admin/practice-editor/PracticeVisualEditor";
 import {
 	artifactKindOfSignals,
 	type ReviewSettingsProblem,
@@ -106,6 +123,8 @@ export interface PracticeDefinitionValue {
 	criteria: string;
 	whyItMatters?: string;
 	whatGoodLooksLike?: string;
+	visual?: PracticeVisual;
+	guide?: PracticeGuide;
 	precomputeScript?: string;
 	automatedReviewPolicy: PracticeAutomatedReviewPolicy;
 	deliveryBehavior?: PracticeDeliveryBehavior;
@@ -164,6 +183,8 @@ interface FormState {
 	criteria: string;
 	whyItMatters: string;
 	whatGoodLooksLike: string;
+	visual: PracticeVisual;
+	guide: PracticeGuide;
 	precomputeScript: string;
 	automatedReviewPolicy: PracticeAutomatedReviewPolicy;
 	deliveryBehavior: PracticeDeliveryBehavior;
@@ -201,6 +222,8 @@ function blankState(fallback: PracticeWorkTypeDefinitionOptions | undefined): Fo
 		criteria: "",
 		whyItMatters: "",
 		whatGoodLooksLike: "",
+		visual: NO_VISUAL,
+		guide: NO_GUIDE,
 		precomputeScript: "",
 		automatedReviewPolicy: fallback?.recommendedPolicy ?? EMPTY_POLICY,
 		deliveryBehavior: { summaryOnly: false },
@@ -222,6 +245,8 @@ function stateOf(
 		criteria: initialData.criteria,
 		whyItMatters: initialData.whyItMatters ?? "",
 		whatGoodLooksLike: initialData.whatGoodLooksLike ?? "",
+		visual: initialData.visual ?? NO_VISUAL,
+		guide: initialData.guide ?? NO_GUIDE,
 		precomputeScript: initialData.precomputeScript ?? "",
 		automatedReviewPolicy: initialData.automatedReviewPolicy,
 		deliveryBehavior: { summaryOnly: false, ...initialData.deliveryBehavior },
@@ -260,6 +285,9 @@ interface FormErrors {
 	gate?: string;
 	subject?: string;
 	delivery?: string;
+	visualSvg?: string;
+	visualAlt?: string;
+	guide?: string;
 	/**
 	 * One list, in the order the fields appear, so the summary reads down the form and the first
 	 * entry is also the field to focus. The summary and the focus target both come from it, so they
@@ -275,6 +303,7 @@ function formErrors(
 	mode: PracticeDefinitionFormProps["mode"],
 	selectedWorkType: PracticeWorkTypeDefinitionOptions | undefined,
 	revealSlug: () => void,
+	revealGuide: () => void,
 	deliveryId: string,
 ): FormErrors {
 	const nameTooShort = form.name.trim().length < 3;
@@ -292,6 +321,12 @@ function formErrors(
 		hasText(preferredSlug) && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(preferredSlug)
 			? "Use lowercase letters, numbers and single hyphens."
 			: undefined;
+	const visualSvg = visualSvgError(form.visual);
+	const visualAlt =
+		hasVisual(form.visual) && !hasText(form.visual.alt.trim())
+			? "Describe what the visual shows."
+			: undefined;
+	const guide = guideError(form.guide);
 	const summary = [
 		nameTooShort && {
 			fieldId: "practice-name",
@@ -301,6 +336,9 @@ function formErrors(
 			fieldId: "practice-criteria",
 			message: "Enter at least 3 characters in What to look for.",
 		},
+		hasText(visualSvg) && { fieldId: "practice-visual-svg", message: visualSvg },
+		hasText(visualAlt) && { fieldId: "practice-visual-alt", message: visualAlt },
+		hasText(guide) && { fieldId: "practice-guide-markdown", message: guide, reveal: revealGuide },
 		policy && {
 			fieldId: practicePolicyErrorTarget(form.automatedReviewPolicy),
 			message: policy,
@@ -329,8 +367,40 @@ function formErrors(
 		gate: gateError,
 		subject: subjectError,
 		delivery: deliveryError,
+		visualSvg,
+		visualAlt,
+		guide,
 		summary,
 	};
+}
+
+function visualSvgError(visual: PracticeVisual): string | undefined {
+	if (!hasVisual(visual)) {
+		return undefined;
+	}
+	switch (svgProblem(visual.svg)) {
+		case "not-svg": {
+			return "Enter SVG markup with an <svg> root element.";
+		}
+		case "too-large": {
+			return `Use an SVG of ${MAX_SVG_SIZE} or less. Simplify the drawing.`;
+		}
+		case undefined: {
+			return undefined;
+		}
+	}
+}
+
+function guideError(guide: PracticeGuide): string | undefined {
+	if (!hasGuide(guide)) {
+		return undefined;
+	}
+	if (!hasText(guide.markdown.trim())) {
+		return "Write the guide, or remove it.";
+	}
+	return hasFigurePlaceholder(guide.markdown)
+		? `Replace “${FIGURE_PLACEHOLDER}” with what the figure shows.`
+		: undefined;
 }
 
 function submitLabel(mode: PracticeDefinitionFormProps["mode"], isPending: boolean): string {
@@ -405,6 +475,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	// focuses it again.
 	const [refusals, setRefusals] = useState(0);
 	const [showAdvanced, setShowAdvanced] = useState(() => Boolean(initialData?.precomputeScript));
+	const [guideView, setGuideView] = useState<PracticeGuideView>("write");
 	const workTypes = orderedWorkTypes(definitionOptions);
 	const groupItems = [
 		{ value: NO_GROUP, label: "Unassigned" },
@@ -516,7 +587,14 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		});
 	};
 
-	const errors = formErrors(form, mode, selectedWorkType, () => setShowAdvanced(true), deliveryId);
+	const errors = formErrors(
+		form,
+		mode,
+		selectedWorkType,
+		() => setShowAdvanced(true),
+		() => setGuideView("write"),
+		deliveryId,
+	);
 	const valid = errors.summary.length === 0;
 	const shownErrors = refusals > 0 ? errors : NO_ERRORS;
 
@@ -545,6 +623,12 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 			...(form.whatGoodLooksLike.trim()
 				? { whatGoodLooksLike: form.whatGoodLooksLike.trim() }
 				: {}),
+			// The markup and the Markdown go back as loaded: trimming them would turn an unrelated save
+			// into a change of the visual or the guide.
+			...(hasVisual(form.visual)
+				? { visual: { svg: form.visual.svg, alt: form.visual.alt.trim() } }
+				: {}),
+			...(hasGuide(form.guide) ? { guide: form.guide } : {}),
 			...(canRunMentoring && form.precomputeScript.trim()
 				? { precomputeScript: form.precomputeScript.trim() }
 				: {}),
@@ -706,6 +790,19 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									Give one concrete example a developer can act on.
 								</FieldDescription>
 							</Field>
+							<PracticeVisualEditor
+								value={form.visual}
+								onChange={(visual) => setForm((previous) => ({ ...previous, visual }))}
+								svgError={shownErrors.visualSvg}
+								altError={shownErrors.visualAlt}
+							/>
+							<PracticeGuideEditor
+								value={form.guide}
+								onChange={(guide) => setForm((previous) => ({ ...previous, guide }))}
+								view={guideView}
+								onViewChange={setGuideView}
+								error={shownErrors.guide}
+							/>
 						</section>
 
 						<Separator />

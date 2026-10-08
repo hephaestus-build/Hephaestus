@@ -389,6 +389,33 @@ Do not present a standard as an experiment or a convention as a proven outcome.
 6. Add or update focused automated-review tests, including required-source skipping and valid-empty evidence.
 7. Review the admin presentation and a representative piece of delivered feedback.
 
+### Bundled visuals and guides
+
+A bundled practice can have a practice visual and a practice guide.
+Their files live in one folder for each practice, beside the catalog:
+
+| File | Holds |
+| --- | --- |
+| `practices/guidance/<slug>/visual.svg` | The visual |
+| `practices/guidance/<slug>/guide.md` | The guide |
+| `practices/guidance/<slug>/figures/<name>.svg` | One figure of the guide |
+
+The catalog entry names the files:
+
+```json
+"visual": {
+  "file": "practices/guidance/<slug>/visual.svg",
+  "alt": "What the picture shows and what it means."
+},
+"guide": "practices/guidance/<slug>/guide.md"
+```
+
+The loader reads each figure that the guide shows with `![description](figures/<name>.svg)`.
+A file outside the folder of its own slug, a missing file, or markup that the server refuses stops the catalog load.
+A changed visual or guide follows the [release behavior](#release-behavior) of every other definition field.
+
+[Practice visuals and guides](./practice-visuals.md) is the style guide.
+
 ### Precompute scripts
 
 A precompute script extracts candidates inside the review container.

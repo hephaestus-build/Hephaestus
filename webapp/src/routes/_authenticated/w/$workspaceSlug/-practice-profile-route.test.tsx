@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
 	InAppFeedback,
 	ObservationDetail,
+	PracticeGuidance,
 	PracticeSignal,
 	PracticeTraceEntry,
 	ProfileReviewRun,
@@ -18,6 +19,7 @@ import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { clearUserView } from "@/runtime/user-view/session";
 import { detailObservation, detailRun } from "@/stories/practice-detail-story-mock-data";
+import { bundledGuidance } from "@/stories/practice-guidance-story-mock-data";
 import {
 	groups,
 	groupStandings,
@@ -94,6 +96,10 @@ beforeEach(() => {
 		// observation in full, so opening one asks for nothing more.
 		http.get("*/workspaces/:workspaceSlug/practice-groups/:groupSlug/review-runs", () =>
 			HttpResponse.json({ content: [run], hasNext: false, page: 0, size: 10 }),
+		),
+		// The practice's picture and guide, a request of its own; none here unless a case adds it.
+		http.get("*/workspaces/:workspaceSlug/practices/:practiceSlug/guidance", ({ params }) =>
+			HttpResponse.json({ practiceSlug: params.practiceSlug }),
 		),
 		http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs", () =>
 			HttpResponse.json({ content: profileReviewRuns, hasNext: false, page: 0, size: 10 }),
@@ -673,16 +679,27 @@ describe("practice profile route", () => {
 		// The page under the open drawer is hidden from the accessibility tree, so the level's own
 		// heading is what says the route has rendered.
 		const { router } = renderRouteAtWithRouter(
-			`${PAGE}?detail=${encodeURIComponent(JSON.stringify([group, practiceEntry]))}&practiceTab=about`,
+			`${PAGE}?detail=${encodeURIComponent(JSON.stringify([group, practiceEntry]))}&practiceTab=feedback`,
 		);
 		await screen.findByRole("heading", { name: practice.name }, ROUTE_RENDER_WAIT);
 		const search = () => router.state.location.search;
-		expect(search().practiceTab).toBe("about");
+		expect(search().practiceTab).toBe("feedback");
 
 		fireEvent.click(screen.getByRole("button", { name: "Back" }));
 
 		await waitFor(() => expect(search().detail).toStrictEqual([group]));
 		expect(router.state.location.searchStr).not.toContain("practiceTab");
+	});
+
+	it("opens a practice tab it does not know on the observations, and drops it from the URL", async () => {
+		const { router } = renderRouteAtWithRouter(
+			`${PAGE}?detail=${encodeURIComponent(JSON.stringify([group, practiceEntry]))}&practiceTab=about`,
+		);
+		await screen.findByRole("heading", { name: practice.name }, ROUTE_RENDER_WAIT);
+
+		const observations = await screen.findByRole("tab", { name: /^Observations/u }, SETTLE_WAIT);
+		expect(observations.getAttribute("aria-selected")).toBe("true");
+		await waitFor(() => expect(router.state.location.searchStr).not.toContain("practiceTab"));
 	});
 
 	it("keeps the URL silent on the default feedback tab and spells every other one", async () => {
@@ -741,6 +758,63 @@ const feedback: Wire<InAppFeedback> = {
 	cleanWork: [],
 	evidence: [],
 };
+
+/** The practice's own picture and guide, as the server returns them for the open practice. */
+const guidance = {
+	...bundledGuidance,
+	practiceSlug: practice.slug,
+} satisfies PracticeGuidance;
+
+const PRACTICE_PAGE = `${PAGE}?detail=${encodeURIComponent(JSON.stringify([group, practiceEntry]))}`;
+
+/**
+ * The introduction over the practice level: its picture and guide are a request of their own,
+ * asked for only once a practice is open, and the reader's choice to hide it outlives the visit.
+ */
+describe("practice introduction", () => {
+	let guidanceAsked: unknown[] = [];
+
+	beforeEach(() => {
+		guidanceAsked = [];
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practices/:practiceSlug/guidance", ({ params }) => {
+				guidanceAsked.push(params.practiceSlug);
+				return HttpResponse.json(guidance);
+			}),
+		);
+	});
+	afterEach(() => localStorage.clear());
+
+	it("asks for the picture and guide only for the practice that is open", async () => {
+		const router = await renderProfile();
+		expect(guidanceAsked).toStrictEqual([]);
+
+		await openPractice(router);
+
+		const intro = await screen.findByRole("region", { name: "Introduction" }, SETTLE_WAIT);
+		await within(intro).findByRole("img", { name: guidance.visual.alt }, SETTLE_WAIT);
+		expect(guidanceAsked).toStrictEqual([practice.slug]);
+	});
+
+	it("remembers that the reader hid the introduction of this practice on the next visit", async () => {
+		renderRouteAtWithRouter(PRACTICE_PAGE);
+		const intro = await screen.findByRole("region", { name: "Introduction" }, ROUTE_RENDER_WAIT);
+		await within(intro).findByRole("img", { name: guidance.visual.alt }, SETTLE_WAIT);
+
+		fireEvent.click(within(intro).getByRole("button", { name: "Hide introduction" }));
+		await within(intro).findByRole("button", { name: "Show introduction" });
+		expect(within(intro).queryByRole("img")).toBeNull();
+		cleanup();
+
+		renderRouteAtWithRouter(PRACTICE_PAGE);
+		const again = await screen.findByRole("region", { name: "Introduction" }, ROUTE_RENDER_WAIT);
+		const show = within(again).getByRole("button", { name: "Show introduction" });
+		expect(within(again).queryByRole("img")).toBeNull();
+
+		fireEvent.click(show);
+		await within(again).findByRole("img", { name: guidance.visual.alt }, SETTLE_WAIT);
+	});
+});
 
 /**
  * A user view is an administrator reading the developer's page: everything the developer would

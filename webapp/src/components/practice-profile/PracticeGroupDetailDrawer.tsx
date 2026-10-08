@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import type { PracticeGroup, PracticeGroupStanding } from "@/api/types.gen";
 import { type LoadState, loadProps } from "@/components/common/panel-state";
@@ -77,6 +77,8 @@ export interface PracticeGroupDetailDrawerProps {
 	ratingProps?: (feedbackId: string) => FeedbackRatingProps;
 	/** The practice level's tab, from the route's search params; the route owns the navigation. */
 	practiceTab: PracticeTab;
+	/** The open practice's introduction, which the route renders with its picture and guide. */
+	practiceIntro?: ReactElement;
 	/** How many rows the practice level's feed draws while its first page loads. */
 	skeletonRows: number;
 	/** The two review levels; the drawer adds where each sits and which review is open. */
@@ -111,6 +113,7 @@ export function PracticeGroupDetailDrawer({
 	groupOverview,
 	ratingProps,
 	practiceTab,
+	practiceIntro,
 	skeletonRows,
 	reviewRuns,
 	onSelectionChange,
@@ -184,6 +187,7 @@ export function PracticeGroupDetailDrawer({
 								nested={level.nested}
 								path={pathAt(level.depth)}
 								practice={detail.practice}
+								intro={practiceIntro}
 								feed={detail.feed}
 								feedbackCards={feedbackCards}
 								ratingProps={ratingProps}

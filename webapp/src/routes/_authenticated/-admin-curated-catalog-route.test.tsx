@@ -771,4 +771,66 @@ describe("instance catalog routes", () => {
 			expect(requestBody?.signals).toStrictEqual([...expectedSignals]);
 		},
 	);
+
+	describe("the visual and the guide", () => {
+		const visual = {
+			svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320"><rect class="pv-fill-accent" width="10" height="10"/></svg>',
+			alt: "One small square.",
+		};
+		const guide = {
+			markdown: "## How to do it\n\n![The order of the split](figures/split.svg)",
+			figures: { split: visual.svg },
+		};
+
+		function serveGuidedPractice() {
+			mockCatalog();
+			const sent: CuratedPracticeRequest[] = [];
+			server.use(
+				http.get("*/admin/practice-catalog/practices/:slug", () =>
+					HttpResponse.json({
+						slug: "describe-what-and-why",
+						definition: { ...practiceDefinition, visual, guide },
+						status: status(),
+					}),
+				),
+				http.put<PathParams, CuratedPracticeRequest>(
+					"*/admin/practice-catalog/practices/:slug",
+					async ({ request }) => {
+						sent.push(await request.json());
+						return HttpResponse.json({
+							slug: "describe-what-and-why",
+							definition: practiceDefinition,
+							status: status({ etag: "tag-2" }),
+						});
+					},
+				),
+			);
+			renderRouteAt("/admin/catalog?detail=practice-edit:describe-what-and-why");
+			return sent;
+		}
+
+		// The instance save replaces the whole definition, so leaving them out would delete them.
+		it("sends both again on an unrelated edit", async () => {
+			const sent = serveGuidedPractice();
+			const name = await screen.findByRole("textbox", { name: /Name/u }, ROUTE_RENDER_WAIT);
+			fireEvent.change(name, { target: { value: "Say what changed, and why" } });
+			fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+			await waitFor(() => expect(sent).toHaveLength(1));
+			expect(sent[0]?.visual).toStrictEqual(visual);
+			expect(sent[0]?.guide).toStrictEqual(guide);
+		});
+
+		it("leaves out what the admin removed", async () => {
+			const sent = serveGuidedPractice();
+			await screen.findByRole("button", { name: "Remove visual" }, ROUTE_RENDER_WAIT);
+			fireEvent.click(screen.getByRole("button", { name: "Remove visual" }));
+			fireEvent.click(screen.getByRole("button", { name: "Remove guide" }));
+			fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+			await waitFor(() => expect(sent).toHaveLength(1));
+			expect(sent[0]).not.toHaveProperty("visual");
+			expect(sent[0]).not.toHaveProperty("guide");
+		});
+	});
 });

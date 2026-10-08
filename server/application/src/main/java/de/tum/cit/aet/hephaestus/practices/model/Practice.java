@@ -8,7 +8,9 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -211,6 +213,16 @@ public class Practice {
     @Column(name = "what_good_looks_like", columnDefinition = "TEXT")
     @ToString.Exclude
     private @Nullable String whatGoodLooksLike;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "visual", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable PracticeVisual visual;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "guide", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable PracticeGuide guide;
 
     /**
      * Optional Node/TypeScript static-analysis script that runs before the AI agent and produces structured

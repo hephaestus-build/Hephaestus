@@ -83,7 +83,9 @@ class PracticeDefinitionMergeTest extends BaseUnitTest {
                 BASE.whyItMatters(),
                 BASE.whatGoodLooksLike(),
                 BASE.groupSlug(),
-                new PracticeDeliveryBehavior(true, "related", null));
+                new PracticeDeliveryBehavior(true, "related", null),
+                null,
+                null);
 
         assertThat(PracticeDefinitionMerge.changes(BASE, BASE, offered))
                 .containsExactly(new PracticeDefinitionMerge.FieldChange(

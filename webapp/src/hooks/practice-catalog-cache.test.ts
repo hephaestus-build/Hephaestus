@@ -153,6 +153,12 @@ describe("practice catalog cache updates", () => {
 			selectPracticePatch({ ...updated, whyItMatters: undefined }, { clear: ["WHY_IT_MATTERS"] }),
 		).toStrictEqual({ whyItMatters: undefined });
 		expect(
+			selectPracticePatch(
+				{ ...updated, visual: undefined, guide: undefined },
+				{ clear: ["VISUAL", "GUIDE"] },
+			),
+		).toStrictEqual({ visual: undefined, guide: undefined });
+		expect(
 			selectPracticePatch(updated, {
 				automatedReviewPolicy: updated.automatedReviewPolicy,
 			}),

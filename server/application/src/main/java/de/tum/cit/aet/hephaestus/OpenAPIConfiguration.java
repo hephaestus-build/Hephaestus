@@ -108,6 +108,8 @@ public class OpenAPIConfiguration {
             // create one. It has no DTO suffix because it is the domain type the API deliberately exposes.
             "PracticeDefinition",
             "PracticeDeliveryBehavior",
+            "PracticeVisual",
+            "PracticeGuide",
             "PracticeDefinitionField",
             "PracticeReleaseChoice",
             "AdoptedBaseSource",

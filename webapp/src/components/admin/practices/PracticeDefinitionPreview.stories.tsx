@@ -9,6 +9,7 @@ import {
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { realPracticeDefinition } from "@/mocks/fixtures/practice-catalog";
+import { bundledGuidance, bundledPractice } from "@/stories/practice-guidance-story-mock-data";
 import { expectNoOverflowingElement } from "@/stories/reflow";
 import { precedes } from "@/test/dom";
 
@@ -167,5 +168,24 @@ export const NarrowViewport: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvasElement }) => {
 		await expectNoOverflowingElement(canvasElement);
+	},
+};
+
+/** With a visual, what good looks like captions the picture instead of standing under a heading. */
+export const WithVisualAndGuide: Story = {
+	args: {
+		definition: {
+			...definition,
+			...bundledPractice,
+			visual: bundledGuidance.visual,
+			guide: bundledGuidance.guide,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("figure", { name: bundledPractice.whatGoodLooksLike }),
+		).toBeVisible();
+		await expect(canvas.queryByRole("heading", { name: "What good looks like" })).toBeNull();
+		await expect(canvas.getByRole("button", { name: "Read more" })).toBeVisible();
 	},
 };

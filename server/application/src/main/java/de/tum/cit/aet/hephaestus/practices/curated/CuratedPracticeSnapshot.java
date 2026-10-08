@@ -32,6 +32,8 @@ record CuratedPracticeSnapshot(
         String automatedReviewPolicySha256,
         @Nullable String whyItMatters,
         @Nullable String whatGoodLooksLike,
+        @Nullable String visualSha256,
+        @Nullable String guideSha256,
         @Nullable String groupSlug,
         @Nullable String shippedDigest,
         PracticeDeliveryBehavior deliveryBehavior)
@@ -55,6 +57,8 @@ record CuratedPracticeSnapshot(
                 PracticeAutomatedReviewPolicyDigest.digest(definition.automatedReviewPolicy()),
                 definition.whyItMatters(),
                 definition.whatGoodLooksLike(),
+                definition.visual() == null ? null : definition.visual().digest(),
+                definition.guide() == null ? null : definition.guide().digest(),
                 definition.groupSlug(),
                 entry.shipped() == null ? null : entry.shipped().digest(entry.slug()),
                 definition.deliveryBehavior());

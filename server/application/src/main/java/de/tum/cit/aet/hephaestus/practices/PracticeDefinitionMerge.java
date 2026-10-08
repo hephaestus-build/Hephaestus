@@ -65,7 +65,10 @@ public final class PracticeDefinitionMerge {
                 source(PracticeDefinitionField.GROUP_SLUG, current, offered, choices)
                         .groupSlug(),
                 source(PracticeDefinitionField.DELIVERY_BEHAVIOR, current, offered, choices)
-                        .deliveryBehavior());
+                        .deliveryBehavior(),
+                source(PracticeDefinitionField.VISUAL, current, offered, choices)
+                        .visual(),
+                source(PracticeDefinitionField.GUIDE, current, offered, choices).guide());
     }
 
     private static PracticeDefinition source(
@@ -91,6 +94,8 @@ public final class PracticeDefinitionMerge {
             case WHAT_GOOD_LOOKS_LIKE -> definition.whatGoodLooksLike();
             case GROUP_SLUG -> definition.groupSlug();
             case DELIVERY_BEHAVIOR -> definition.deliveryBehavior();
+            case VISUAL -> definition.visual();
+            case GUIDE -> definition.guide();
         };
     }
 }

@@ -15,4 +15,6 @@ public enum PracticeDefinitionField {
     WHAT_GOOD_LOOKS_LIKE,
     GROUP_SLUG,
     DELIVERY_BEHAVIOR,
+    VISUAL,
+    GUIDE,
 }

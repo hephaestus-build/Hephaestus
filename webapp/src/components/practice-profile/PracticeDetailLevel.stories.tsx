@@ -4,6 +4,7 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 import type { DetailStackEntry } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { PracticeIntro } from "@/components/practice-guidance/PracticeIntro";
 import type { ReviewRunFeedState } from "@/components/profile/review-runs";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
 import { withPageBehind } from "@/stories/decorators";
@@ -19,9 +20,11 @@ import {
 	unwrittenAbout,
 } from "@/stories/practice-detail-story-mock-data";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
+import { bundledGuidance } from "@/stories/practice-guidance-story-mock-data";
 import { packagingGroup } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
-import { StatefulPatch } from "@/stories/stateful";
+import { Stateful, StatefulPatch } from "@/stories/stateful";
+import { precedes } from "@/test/dom";
 
 import {
 	DEFAULT_PRACTICE_TAB,
@@ -46,6 +49,23 @@ interface LevelState {
 	stack: DetailStackEntry<PracticeProfileDetailLevelKind>[];
 	tab: PracticeTab;
 }
+
+/**
+ * The introduction as the route renders it over the tabs, with whether it is hidden held here
+ * where the route keeps it in the browser. Its own states are `PracticeIntro`'s stories.
+ */
+const storyIntro = (
+	<Stateful initial={false}>
+		{(hidden, setHidden) => (
+			<PracticeIntro
+				practice={focusedChanges}
+				guidance={{ status: "ready", visual: bundledGuidance.visual, guide: bundledGuidance.guide }}
+				hidden={hidden}
+				onHiddenChange={setHidden}
+			/>
+		)}
+	</Stateful>
+);
 
 /** The level with the ratings held in story state, where the route keeps them on the server. */
 function RatedLevel(props: PracticeDetailLevelProps) {
@@ -72,6 +92,7 @@ const meta = {
 			onClose: fn(),
 		},
 		practice: focusedChanges,
+		intro: storyIntro,
 		feed: readyFeed,
 		feedbackCards: ALL_FEEDBACK_CARDS,
 		observations: { onRespond: fn() },
@@ -87,6 +108,8 @@ const meta = {
 		feed: { control: false },
 		// The close is the drawer stack's, which the render holds; only the crumbs come from here.
 		path: { control: false },
+		// An element the route renders.
+		intro: { control: false },
 	},
 	render: (args) => (
 		<StatefulPatch<LevelState>
@@ -150,13 +173,24 @@ if (!olderObservation) {
 }
 
 /**
- * Arrives on the observations with the newest open to why it was noted, the evidence, the next
- * step and its response controls; every earlier row is a line the reader can open. Nothing was
- * loaded to open it.
+ * Opens on the practice's introduction — why it matters, the picture captioned with what good
+ * looks like, and the guide behind "Read more" — over the tabs. The observations come first, under
+ * where the reader stands, with the newest open to why it was noted, the evidence, the next step
+ * and its response controls; every earlier row is a line the reader can open. Nothing was loaded
+ * to open it.
  */
 export const Default: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		const intro = screen.getByRole("region", { name: "Introduction" });
+		await expect(precedes(intro, screen.getByRole("tablist", { name: "Practice" }))).toBe(true);
+		// Where the reader stands leads the observations it rests on.
+		await expect(
+			precedes(
+				screen.getByRole("region", { name: "Where you stand" }),
+				screen.getByRole("heading", { name: "Observations" }),
+			),
+		).toBe(true);
 		// Below the top, dismissing returns to the group behind, so the control says Back.
 		await expect(screen.getByRole("button", { name: "Back" })).toBeVisible();
 		// The feed holds every run there is, so the tab can say how many observations it opens on.
@@ -222,12 +256,12 @@ export const RequestedReviewClean: Story = {
 
 /**
  * The practice's one open card and the cards the work resolved, under a heading of the
- * Observations tab's rank; a rating opens the comment band, and a card's "Learn more about this
- * practice" moves to the neighbouring tab.
+ * Observations tab's rank; a rating opens the comment band. The practice's own words open the
+ * level, so no card offers to learn more about it.
  */
 export const FeedbackTab: Story = {
 	args: { tab: "feedback", practice: describedPractice },
-	play: async ({ args }) => {
+	play: async () => {
 		await expectSettledVisible(await screen.findByRole("heading", { level: 2, name: "Feedback" }));
 		await expect(screen.getByRole("heading", { level: 3, name: "Current feedback" })).toBeVisible();
 		await expect(screen.getByRole("tab", { name: "Feedback 2" })).toHaveAttribute(
@@ -250,12 +284,9 @@ export const FeedbackTab: Story = {
 		await expect(
 			screen.getByRole("textbox", { name: "What worked about this feedback?" }),
 		).toBeVisible();
-
-		await userEvent.click(
-			within(open).getByRole("button", { name: "Learn more about this practice" }),
-		);
-		await expect(args.onTabChange).toHaveBeenCalledWith("about");
-		await expect(screen.getByText("Where you stand")).toBeVisible();
+		await expect(
+			screen.queryByRole("button", { name: "Learn more about this practice" }),
+		).not.toBeInTheDocument();
 	},
 };
 
@@ -322,11 +353,10 @@ export const FeedbackOnTheWorkOnly: Story = {
 };
 
 /**
- * Where the reader stands, in the registry's words and what each rests on, boxed under its label;
- * then the catalog's words.
+ * Where the reader stands, in the registry's words and what each rests on, boxed under its label at
+ * the top of the observations.
  */
-export const AboutTab: Story = {
-	args: { tab: "about" },
+export const Standing: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Where you stand"));
 		const standingLine = screen.getByText(
@@ -339,8 +369,6 @@ export const AboutTab: Story = {
 		await expect(trendLine).toBeVisible();
 		// The two lines share one box under the label.
 		await expect(standingLine.parentElement).toBe(trendLine.parentElement);
-		await expect(screen.getByText("Why it matters")).toBeVisible();
-		await expect(screen.getByText("What good looks like")).toBeVisible();
 	},
 };
 
@@ -361,11 +389,10 @@ export const MoreToLoad: Story = {
 
 /**
  * A practice no review has settled: the badge and the trend both say so in words about this one
- * practice, and the About tab claims no basis and no direction.
+ * practice, and where the reader stands claims no basis and no direction.
  */
 export const NotObserved: Story = {
 	args: {
-		tab: "about",
 		practice: {
 			...focusedChanges,
 			standing: "NOT_OBSERVED",

@@ -7,7 +7,9 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -89,7 +91,13 @@ public record CreatePracticeRequestDTO(
         @Nullable
         String groupSlug,
 
-        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior)
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior,
+
+        @Schema(description = "Developer-facing picture of the practice; guidance, never review rules") @Nullable
+        PracticeVisual visual,
+
+        @Schema(description = "Read more text and its figures; guidance, never review rules") @Nullable
+        PracticeGuide guide)
         implements ClosedPracticeInput {
     public CreatePracticeRequestDTO(
             @Nullable String slug,
@@ -119,6 +127,8 @@ public record CreatePracticeRequestDTO(
                 whyItMatters,
                 whatGoodLooksLike,
                 groupSlug,
+                null,
+                null,
                 null);
     }
 }

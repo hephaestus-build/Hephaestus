@@ -91,5 +91,6 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0049](0049-browser-extension-report-in-the-page.md) | The browser extension shows its report in the page and confirms changes in its own window | Accepted |
 | [0050](0050-one-practice-standard-one-outcome.md) | One practice standard, one outcome | Accepted |
 | [0051](0051-practices-across-the-workspace-counts-developers.md) | Practices across the workspace counts developers and never names one | Proposed. Builds on [0045](0045-activity-counts-work-and-never-ranks-people.md) and [0047](0047-the-practice-profile-has-one-reader.md). |
+| [0052](0052-practice-visuals-and-guides.md) | Practice visuals and guides are themeable inline SVG and Markdown | Accepted |
 
 Template: [0000-template.md](0000-template.md).

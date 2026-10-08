@@ -8,7 +8,9 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -87,6 +89,14 @@ public class CuratedPracticeOverride {
     @Column(name = "what_good_looks_like", columnDefinition = "TEXT")
     private @Nullable String whatGoodLooksLike;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "visual", columnDefinition = "jsonb")
+    private @Nullable PracticeVisual visual;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "guide", columnDefinition = "jsonb")
+    private @Nullable PracticeGuide guide;
+
     @Column(name = "group_slug", length = 64)
     private @Nullable String groupSlug;
 
@@ -146,7 +156,9 @@ public class CuratedPracticeOverride {
                 whyItMatters,
                 whatGoodLooksLike,
                 groupSlug,
-                deliveryBehavior == null ? PracticeDeliveryBehavior.DEFAULT : deliveryBehavior);
+                deliveryBehavior == null ? PracticeDeliveryBehavior.DEFAULT : deliveryBehavior,
+                visual,
+                guide);
     }
 
     public void write(PracticeDefinition definition, @Nullable String acceptedBundledDigest, Instant now) {
@@ -163,6 +175,8 @@ public class CuratedPracticeOverride {
         this.deliveryBehavior = definition.deliveryBehavior();
         this.whyItMatters = definition.whyItMatters();
         this.whatGoodLooksLike = definition.whatGoodLooksLike();
+        this.visual = definition.visual();
+        this.guide = definition.guide();
         this.groupSlug = definition.groupSlug();
         this.acceptedBundledDigest = acceptedBundledDigest;
         this.updatedAt = Objects.requireNonNull(now, "now");
@@ -191,6 +205,8 @@ public class CuratedPracticeOverride {
         this.deliveryBehavior = null;
         this.whyItMatters = null;
         this.whatGoodLooksLike = null;
+        this.visual = null;
+        this.guide = null;
         this.groupSlug = null;
         this.acceptedBundledDigest = null;
         this.adoptedBase = null;

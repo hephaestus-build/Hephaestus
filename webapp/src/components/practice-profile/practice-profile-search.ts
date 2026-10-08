@@ -116,10 +116,10 @@ export const ALL_PRACTICE_GROUPS_LEVEL: DetailStackEntry<PracticeProfileDetailLe
 };
 
 /**
- * The practice level's tabs: what the reviews found, the feedback written from it, and the
- * catalog's words on the practice. The choice is the `practiceTab` search param.
+ * The practice level's tabs: what the reviews found and the feedback written from it. The catalog's
+ * words on the practice open the level above them. The choice is the `practiceTab` search param.
  */
-export const PRACTICE_TABS = ["observations", "feedback", "about"] as const;
+export const PRACTICE_TABS = ["observations", "feedback"] as const;
 
 export type PracticeTab = (typeof PRACTICE_TABS)[number];
 

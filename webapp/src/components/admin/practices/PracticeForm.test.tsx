@@ -22,7 +22,7 @@ const gate = {
 	anyOf: [{ changedPathMatches: ["**/*.swift"] }],
 };
 
-function practice(reviewFields: PracticeReviewFields): Practice {
+function practice(reviewFields: PracticeReviewFields, guidance: Partial<Practice> = {}): Practice {
 	return {
 		id: 1,
 		slug: "review-swift",
@@ -37,12 +37,14 @@ function practice(reviewFields: PracticeReviewFields): Practice {
 		createdAt: new Date("2026-01-01"),
 		updatedAt: new Date("2026-01-01"),
 		displayOrder: 0,
+		...guidance,
 	};
 }
 
 async function renderPractice(
 	reviewFields: PracticeReviewFields,
 	onSubmit: (slug: string, request: UpdatePracticeRequest, group: string | null) => void,
+	guidance: Partial<Practice> = {},
 ) {
 	return renderWithRouter(
 		<PracticeForm
@@ -50,7 +52,7 @@ async function renderPractice(
 			workspaceSlug="team"
 			groups={[]}
 			definitionOptions={mockPracticeDefinitionOptions}
-			initialData={practice(reviewFields)}
+			initialData={practice(reviewFields, guidance)}
 			isPending={false}
 			cancel={<Link to="/">Cancel</Link>}
 			onSubmit={onSubmit}
@@ -175,8 +177,40 @@ describe("workspace practice scope", () => {
 			expect.objectContaining({
 				definitionChanges: ["PRECONDITION"],
 				precondition: undefined,
-				clear: ["PRECONDITION", "PRECOMPUTE_SCRIPT", "WHY_IT_MATTERS", "WHAT_GOOD_LOOKS_LIKE"],
+				clear: [
+					"PRECONDITION",
+					"PRECOMPUTE_SCRIPT",
+					"WHY_IT_MATTERS",
+					"WHAT_GOOD_LOOKS_LIKE",
+					"VISUAL",
+					"GUIDE",
+				],
 			}),
+			null,
+		);
+	});
+});
+
+describe("the visual and the guide of a workspace practice", () => {
+	it("sends both unchanged on an unrelated save", async () => {
+		const visual = {
+			svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320"><rect class="pv-fill-accent" width="10" height="10"/></svg>',
+			alt: "One small square.",
+		};
+		const guide = {
+			markdown: "## How to do it\n\n![The order of the split](figures/split.svg)",
+			figures: { split: visual.svg },
+		};
+		const onSubmit = vi.fn();
+		await renderPractice(mockPullRequestReviewFields, onSubmit, { visual, guide });
+		fireEvent.change(screen.getByRole("textbox", { name: /Name/u }), {
+			target: { value: "Review Swift code" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		expect(onSubmit).toHaveBeenCalledWith(
+			"review-swift",
+			expect.objectContaining({ visual, guide }),
 			null,
 		);
 	});

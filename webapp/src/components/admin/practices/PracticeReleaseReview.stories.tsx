@@ -3,6 +3,7 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { PracticeDefinition, PracticeReleaseProposal } from "@/api/types.gen";
 import { mockPullRequestReviewFields, mockPullRequestPolicy } from "@/mocks/fixtures/practice";
+import { bundledGuidance, unthemedVisual } from "@/stories/practice-guidance-story-mock-data";
 
 import { PracticeReleaseReview } from "./PracticeReleaseReview";
 
@@ -112,4 +113,38 @@ export const RecordedVersionBase: Story = {
 
 export const Submitting: Story = {
 	args: { pending: true },
+};
+
+/**
+ * A visual or guide reads as the developer would see it, not as markup: each version's picture with
+ * its description, and each guide's text with its figures.
+ */
+export const GuidanceUpdate: Story = {
+	args: {
+		proposal: {
+			...proposal,
+			current: { ...base, visual: unthemedVisual },
+			offered: { ...base, visual: bundledGuidance.visual, guide: bundledGuidance.guide },
+			fields: [
+				{ field: "VISUAL", offeredChanged: true, conflict: true },
+				{ field: "GUIDE", offeredChanged: true, conflict: false },
+			],
+		},
+	},
+	play: async ({ args }) => {
+		await expect(screen.getByRole("img", { name: unthemedVisual.alt })).toBeVisible();
+		await expect(screen.getByRole("img", { name: bundledGuidance.visual.alt })).toBeVisible();
+		await expect(screen.getByText(/^## How to do it/u)).toBeVisible();
+		await expect(screen.getByText("figures/split-order.svg")).toBeVisible();
+		await expect(screen.queryByText(/<svg/u)).not.toBeInTheDocument();
+
+		await userEvent.click(
+			within(screen.getByRole("radiogroup", { name: "Use a version for Visual" })).getByRole(
+				"radio",
+				{ name: "Current" },
+			),
+		);
+		await userEvent.click(screen.getByRole("button", { name: "Accept selected fields" }));
+		await expect(args.onAccept).toHaveBeenCalledWith({ VISUAL: "CURRENT", GUIDE: "OFFERED" });
+	},
 };

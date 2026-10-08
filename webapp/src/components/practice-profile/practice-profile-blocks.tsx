@@ -58,11 +58,6 @@ export function NoSuchGroup() {
 	);
 }
 
-/** A practice or a group the catalog has no words for. */
-export function NoDescription() {
-	return <p className="text-sm text-muted-foreground">No description yet.</p>;
-}
-
 export interface LabelledBlockProps {
 	label: string;
 	/** `h3` inside a section that has its own heading. */

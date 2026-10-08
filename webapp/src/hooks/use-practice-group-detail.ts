@@ -1,7 +1,12 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
-import { listPracticeGroupReviewRunsInfiniteOptions } from "@/api/@tanstack/react-query.gen";
+import {
+	getPracticeGuidanceOptions,
+	listPracticeGroupReviewRunsInfiniteOptions,
+} from "@/api/@tanstack/react-query.gen";
 import type { PracticeStanding } from "@/api/types.gen";
+import { panelState } from "@/components/common/panel-state";
+import type { PracticeGuidanceState } from "@/components/practice-guidance/PracticeIntro";
 import {
 	EMPTY_REVIEW_RUN_FEED,
 	type ReviewRunFeedState,
@@ -37,6 +42,8 @@ export interface PracticeGroupDetail {
 	/** The open practice, whether or not a group level is open under it. */
 	practice?: PracticeStanding;
 	feed: ReviewRunFeedState;
+	/** The open practice's picture and "Read more" guide; loading while no practice is open. */
+	guidance: PracticeGuidanceState;
 	/** Absent when this reader may not respond, which leaves no response controls. */
 	respond?: FeedbackResponseWrite["respond"];
 	pendingResponses: FeedbackResponseWrite["pendingResponses"];
@@ -44,10 +51,10 @@ export interface PracticeGroupDetail {
 
 /**
  * The open detail levels' data: the group level's practices, read off the standings the page
- * already holds, and the practice level's review-run feed and the responses written on it. The
- * feed carries every observation in full, so opening one loads nothing. The query is gated on
- * its level actually being open, so a closed drawer costs nothing and the group level never
- * fetches the feed it does not show.
+ * already holds, and the practice level's picture and guide, its review-run feed and the responses
+ * written on it. The feed carries every observation in full, so opening one loads nothing. Each
+ * query is gated on its level actually being open, so a closed drawer costs nothing and the group
+ * level never fetches what it does not show.
  */
 export function usePracticeGroupDetail({
 	workspaceSlug,
@@ -71,6 +78,14 @@ export function usePracticeGroupDetail({
 		...slicePageParams,
 		enabled: practiceOpen,
 	});
+	// Its own request, so the words the standing carries show while the picture is on its way. It
+	// keeps the app's staleTime: the server answers a refetch of an unchanged guidance with a 304.
+	const guidanceQuery = useQuery({
+		...getPracticeGuidanceOptions({
+			path: { workspaceSlug, practiceSlug: practiceSlug ?? "" },
+		}),
+		enabled: practiceSlug !== undefined,
+	});
 	const { respond, pendingResponses } = useFeedbackResponseWrite(
 		workspaceSlug,
 		() => feedGroupSlug,
@@ -86,6 +101,11 @@ export function usePracticeGroupDetail({
 		practices,
 		practice,
 		feed,
+		guidance: panelState(guidanceQuery, (data) => ({
+			status: "ready" as const,
+			visual: data.visual,
+			guide: data.guide,
+		})),
 		respond,
 		pendingResponses,
 	};

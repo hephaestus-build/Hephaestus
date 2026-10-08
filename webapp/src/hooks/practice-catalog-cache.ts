@@ -129,6 +129,8 @@ export function selectPracticePatch(
 		...("whyItMatters" in request || clear.has("WHY_IT_MATTERS")
 			? { whyItMatters: practice.whyItMatters }
 			: {}),
+		...("visual" in request || clear.has("VISUAL") ? { visual: practice.visual } : {}),
+		...("guide" in request || clear.has("GUIDE") ? { guide: practice.guide } : {}),
 		...("group" in request
 			? { groupSlug: practice.groupSlug, displayOrder: practice.displayOrder }
 			: {}),

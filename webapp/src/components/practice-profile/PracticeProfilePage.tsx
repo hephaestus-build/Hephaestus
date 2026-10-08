@@ -24,7 +24,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import type { ComposedOverview } from "./compose-overview";
 import { newestFirst } from "./practice-feedback-cards";
 import { FeedbackEmpty, type FeedbackEmptyProps } from "./practice-profile-blocks";
-import { FEEDBACK_TABS, type FeedbackTab, type PracticeTab } from "./practice-profile-search";
+import { FEEDBACK_TABS, type FeedbackTab } from "./practice-profile-search";
 import { PracticeFeedbackOverview } from "./PracticeFeedbackOverview";
 import { PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
 
@@ -46,11 +46,11 @@ export interface PracticeProfilePageProps {
 	ratingProps?: (feedbackId: string) => FeedbackRatingProps;
 	onOpenGroup?: (group: PracticeGroup) => void;
 	/**
-	 * Opens a practice's detail level from the feedback overview or a feedback card, on the tab
-	 * asked for: a card's "Learn more about this practice" opens the catalog's words on it, and a
-	 * practice named in the text the observations, the level's default.
+	 * Opens a practice's detail level from the feedback overview or a feedback card. The level
+	 * opens on the catalog's words on the practice, so a card's "Learn more about this practice"
+	 * and a practice named in the text land in the same place.
 	 */
-	onOpenPractice?: (practiceSlug: string, tab?: PracticeTab) => void;
+	onOpenPractice?: (practiceSlug: string) => void;
 	/** The tab over the feedback cards, from the route's `feedback` search param. */
 	feedbackTab: FeedbackTab;
 	onFeedbackTabChange?: (tab: FeedbackTab) => void;
@@ -230,7 +230,7 @@ export function PracticeProfilePage({
 									ref={card.feedbackId === pendingFeedbackId ? landOnCard : undefined}
 									card={card}
 									{...ratingProps?.(card.feedbackId)}
-									onLearnMore={onOpenPractice && (() => onOpenPractice(card.practiceSlug, "about"))}
+									onLearnMore={onOpenPractice && (() => onOpenPractice(card.practiceSlug))}
 									onOpenPractice={onOpenPractice}
 									onOpenGroup={onOpenGroup && openGroupBySlug}
 								/>

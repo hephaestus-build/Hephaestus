@@ -1,0 +1,37 @@
+name: Practice guidance links
+
+# The links in a bundled guide's Sources rot without any change here, so a weekly run catches what
+# a pull request cannot. scripts/practice-guidance.test.ts owns the offline rules for these files.
+on:
+  pull_request:
+    paths:
+      - "server/application/src/main/resources/practices/guidance/**"
+      - ".github/workflows/practice-guidance-links.yml"
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  links:
+    name: Guide links
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Only web links. A figure that does not exist already fails the catalog load.
+      - name: Check external links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --no-progress --scheme https --scheme http
+            'server/application/src/main/resources/practices/guidance/**/*.md'

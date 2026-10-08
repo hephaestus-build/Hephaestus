@@ -339,7 +339,12 @@ public class PracticeService {
                 request.group() == null
                         ? beforeDefinition.groupSlug()
                         : request.group().groupSlug(),
-                request.deliveryBehavior() == null ? beforeDefinition.deliveryBehavior() : request.deliveryBehavior());
+                request.deliveryBehavior() == null ? beforeDefinition.deliveryBehavior() : request.deliveryBehavior(),
+                patch(
+                        beforeDefinition.visual(),
+                        request.visual(),
+                        fieldsToClear.contains(ClearablePracticeField.VISUAL)),
+                patch(beforeDefinition.guide(), request.guide(), fieldsToClear.contains(ClearablePracticeField.GUIDE)));
 
         DefinitionChange.requireExplicit(beforeDefinition, afterDefinition, request.definitionChanges());
         if (afterDefinition.equals(beforeDefinition)) {
@@ -477,7 +482,9 @@ public class PracticeService {
                 request.whyItMatters(),
                 request.whatGoodLooksLike(),
                 request.groupSlug(),
-                request.deliveryBehavior() == null ? PracticeDeliveryBehavior.DEFAULT : request.deliveryBehavior());
+                request.deliveryBehavior() == null ? PracticeDeliveryBehavior.DEFAULT : request.deliveryBehavior(),
+                request.visual(),
+                request.guide());
     }
 
     private static <T> T required(@Nullable T value, String field) {
@@ -500,9 +507,11 @@ public class PracticeService {
         practice.setDeliveryBehavior(definition.deliveryBehavior());
         practice.setWhyItMatters(definition.whyItMatters());
         practice.setWhatGoodLooksLike(definition.whatGoodLooksLike());
+        practice.setVisual(definition.visual());
+        practice.setGuide(definition.guide());
     }
 
-    private static @Nullable String patch(@Nullable String current, @Nullable String replacement, boolean clear) {
+    private static <T> @Nullable T patch(@Nullable T current, @Nullable T replacement, boolean clear) {
         return replacement != null ? replacement : clear ? null : current;
     }
 }

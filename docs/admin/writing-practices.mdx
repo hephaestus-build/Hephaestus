@@ -32,6 +32,9 @@ The fields have different purposes:
 - **What good looks like** gives a realistic example.
   If an example introduces a requirement, also state it in **What to look for**.
   Explanatory guidance does not change review criteria.
+- **Visual** and **Guide** are optional.
+  They add a picture and a longer explanation for the developer.
+  [Add a visual and a guide](#add-a-visual-and-a-guide) explains them.
 
 **Person this practice judges** is the relation to the reviewed work, not the person who wrote the criteria.
 Available relations depend on the kind of work.
@@ -177,6 +180,160 @@ These settings do not change observation outcomes or authorize automatic sending
 1. If feedback must stay in the summary rather than on a changed line, select summary-only delivery.
 2. Use the identifier of an existing practice, not its display name.
 3. Before you save, check the preview's **How feedback is delivered** section.
+
+## Add a visual and a guide
+
+A practice can have two optional fields for the developer:
+
+- **Visual** is one SVG picture and its description.
+  The developer's practice panel shows it between **Why it matters** and **What good looks like**.
+- **Guide** is a longer explanation in Markdown, with up to 4 SVG figures.
+  The panel shows it behind **Read more**.
+
+Both fields are developer guidance.
+They do not change how the practice is reviewed.
+Heph receives the descriptions and the text of the guide, but not the pictures.
+Thus, a description must give the full meaning of its picture.
+
+Add a visual only when it shows the idea better than a sentence.
+The size of a change and an order of steps are examples.
+
+Both fields work like the other fields of a definition.
+Each change creates a revision, and a release can offer each field separately.
+[Practice Catalog](./practice-catalog) explains customizations and **Restore Hephaestus default**.
+
+### Add a visual
+
+1. Open the practice in the practice editor.
+2. In **Visual**, select **Upload SVG** and choose an SVG file.
+   You can also paste the markup into **SVG markup**.
+3. In **Description \***, say what the picture shows and what it means.
+4. Check the **Light theme** and **Dark theme** previews.
+5. Save the practice.
+
+To remove the visual, select **Remove** in **Visual**.
+Then save the practice.
+
+### Add a guide
+
+1. In **Guide**, write the text in **Guide text** in Markdown.
+2. To add a figure, put the cursor where the figure must show.
+3. Select **Add figure** and choose an SVG file.
+   The editor adds the line `![Describe the figure](figures/<name>.svg)` at the cursor.
+4. Replace "Describe the figure" with what the figure shows and what it means.
+5. Select **Preview** to check the text and the figures.
+6. Save the practice.
+
+To remove a figure, select **Remove** beside the figure.
+The editor also removes the lines that show the figure.
+To remove the guide, select **Remove guide**.
+Then save the practice.
+
+A link in a guide opens in a new tab.
+The guides of the Hephaestus defaults use four headings: **How to do it**, **When it does not apply**, **Common mistakes**, and **Sources**.
+Your guide can use other headings.
+
+### What Hephaestus accepts
+
+The server checks the visual, the guide, and each figure when you save.
+If it refuses the save, its message names the element, the attribute, or the limit.
+The webapp cleans the markup again before it shows the picture.
+
+| Rule               | Limit                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Root element       | `<svg xmlns="http://www.w3.org/2000/svg" viewBox="…">`                                                                                                       |
+| File size          | 64 KB or less for each SVG                                                                                                                                   |
+| Elements           | `svg`, `g`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, `text`, `tspan`, `title`, `desc`                                             |
+| Attributes         | Geometry and presentation only. The list follows this table.                                                                                                 |
+| Attribute values   | Letters, digits, spaces, and the characters `#` `.` `,` `%` `+` `(` `)` `/` `-` `_`. Thus, a value cannot contain a `url(...)` reference, a quote, or an escape. |
+| Not accepted       | Ids, the `style` attribute and element, links, a DOCTYPE, scripts, images, CDATA sections, processing instructions, and comments that contain `<` or `>`     |
+| Visual description | 1 to 300 characters                                                                                                                                          |
+| Guide text         | Markdown with no HTML, 12,000 characters or fewer                                                                                                            |
+| Links in a guide   | Web addresses that start with `https://` or `http://`                                                                                                        |
+| Figures            | 4 or fewer for each guide. A figure name has lowercase letters, digits, and single hyphens.                                                                  |
+| Images in a guide  | Only the guide's own figures, as `![description](figures/<name>.svg)`. The text shows each figure, with a description.                                       |
+
+The accepted attributes are:
+`viewBox`, `width`, `height`, `preserveAspectRatio`, `version`, `x`, `y`, `x1`, `y1`, `x2`, `y2`, `cx`, `cy`, `r`, `rx`, `ry`, `d`, `points`, `dx`, `dy`, `transform`, `class`, `fill`, `fill-rule`, `fill-opacity`, `clip-rule`, `stroke`, `stroke-width`, `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit`, `stroke-dasharray`, `stroke-dashoffset`, `stroke-opacity`, `opacity`, `font-size`, `font-weight`, `font-style`, `text-anchor`, `dominant-baseline`, `letter-spacing`, `vector-effect`, `role`, `aria-hidden`, `focusable`, and `xml:space`.
+
+Most drawing tools add ids, styles, or gradients.
+Remove them before you upload the file.
+Without ids, a picture cannot use markers, gradients, masks, filters, or clip paths.
+Draw an arrowhead as a small filled triangle.
+
+### Colors in light and dark mode
+
+A `pv-*` class gives a shape a color of the app theme.
+The color changes with the theme.
+Thus, one file works in the light theme and in the dark theme.
+
+| Class                 | Color                                     |
+| --------------------- | ----------------------------------------- |
+| `pv-fill-ink`         | Fill with the main text color             |
+| `pv-fill-muted`       | Fill with the secondary text color        |
+| `pv-fill-surface`     | Fill with the panel background            |
+| `pv-fill-accent`      | Fill with the accent color                |
+| `pv-fill-accent-soft` | Fill with the accent color at 15% opacity |
+| `pv-stroke-ink`       | Stroke with the main text color           |
+| `pv-stroke-muted`     | Stroke with the secondary text color      |
+| `pv-stroke-line`      | Stroke with the border color              |
+| `pv-stroke-accent`    | Stroke with the accent color              |
+
+Set `fill="none"` on a shape that has only a stroke.
+
+A visual with no `pv-*` class keeps its own colors.
+The panel shows it on a light surface in both themes.
+Thus, a visual from any drawing tool works without the classes.
+
+### Start from the template
+
+The [starter template](/practice-visual-template.svg) uses only accepted markup and `pv-*` classes, with a viewBox of `0 0 640 320`.
+It shows a contrast of "Not yet" and "Good", with placeholder labels.
+
+1. Save a copy of the template.
+2. Open the copy in a text editor or a drawing tool.
+3. Replace each placeholder label.
+4. Move, add, or delete shapes.
+5. Upload the result in **Visual**.
+
+### Draw a visual with an AI assistant
+
+You can ask an AI assistant to draw a visual.
+
+1. Copy the prompt below.
+2. Replace each value in angle brackets.
+3. Send the prompt to the AI assistant.
+4. Make sure that the picture adds no requirement to the practice criteria.
+5. Upload the SVG in **Visual**.
+6. Enter the description.
+
+```text
+Draw one SVG picture for a software engineering practice. Follow every rule below.
+
+Practice: <name of the practice>
+Why it matters: <text of Why it matters>
+What good looks like: <text of What good looks like>
+The one idea that the picture must show: <one sentence>
+Layout: <one of: "Not yet" on the left and "Good" on the right | a cause and its effect, left to right | numbered steps, left to right>
+
+Rules for the file:
+- Start with <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320">. Do not set width or height.
+- Use only these elements: svg, g, path, rect, circle, ellipse, line, polyline, polygon, text, tspan, title, desc.
+- Use only these attributes: x, y, width, height, rx, ry, cx, cy, r, x1, y1, x2, y2, d, points, dx, dy, transform, class, fill, stroke, stroke-width, stroke-linecap, stroke-linejoin, stroke-dasharray, opacity, font-size, font-weight, text-anchor.
+- Do not use id, style, href, url(...), gradients, filters, markers, masks, images, scripts, or a DOCTYPE.
+- Color every shape and every text with one of these classes, not with a color value: pv-fill-ink, pv-fill-muted, pv-fill-surface, pv-fill-accent, pv-fill-accent-soft, pv-stroke-ink, pv-stroke-muted, pv-stroke-line, pv-stroke-accent.
+- Use fill="none" on a shape that has only a stroke.
+- Do not set a font family. Use font-size 15 or more. Use font-size 18 to 20 and font-weight 600 for titles.
+- Use 12 words of text or fewer. Label every difference with text. Do not show a difference with color alone.
+- Draw lines of code and files as rounded bars. Draw a change or an issue as a card. Draw a limit as a dashed line.
+- Draw an arrow as one line path and one small filled triangle path.
+- Do not draw people, mascots, logos, emoji, or decoration. Do not animate.
+- Do not show a number or a limit that the practice text does not state.
+- Keep the file smaller than 64 KB.
+
+Then write one description of 300 characters or fewer. Say what the picture shows and what it means.
+Return only the SVG markup and the description.
+```
 
 ## Challenge the draft before adopting it
 

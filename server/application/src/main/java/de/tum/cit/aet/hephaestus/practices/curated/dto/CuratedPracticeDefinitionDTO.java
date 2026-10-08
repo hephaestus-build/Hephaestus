@@ -8,7 +8,9 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewValidation;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
@@ -42,7 +44,9 @@ public record CuratedPracticeDefinitionDTO(
         @Nullable String whyItMatters,
         @Nullable String whatGoodLooksLike,
         @Nullable String groupSlug,
-        @NonNull PracticeDeliveryBehavior deliveryBehavior) {
+        @NonNull PracticeDeliveryBehavior deliveryBehavior,
+        @Nullable PracticeVisual visual,
+        @Nullable PracticeGuide guide) {
     public static CuratedPracticeDefinitionDTO from(String practiceSlug, PracticeDefinition definition) {
         return new CuratedPracticeDefinitionDTO(
                 definition.name(),
@@ -59,6 +63,8 @@ public record CuratedPracticeDefinitionDTO(
                 definition.whyItMatters(),
                 definition.whatGoodLooksLike(),
                 definition.groupSlug(),
-                definition.deliveryBehavior());
+                definition.deliveryBehavior(),
+                definition.visual(),
+                definition.guide());
     }
 }

@@ -374,7 +374,9 @@ public class CuratedCatalogService {
                 definition.whyItMatters(),
                 definition.whatGoodLooksLike(),
                 groupSlug,
-                definition.deliveryBehavior());
+                definition.deliveryBehavior(),
+                definition.visual(),
+                definition.guide());
         CuratedPracticeOverride override = practiceOverride(slug, now);
         override.writeLocalChange(moved, entry.shipped(), now);
         practiceOverrides.save(override);

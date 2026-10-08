@@ -5,6 +5,10 @@ import { PracticeEvidenceSummary } from "@/components/admin/practice-editor/Prac
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { Section } from "@/components/layout/Section";
 import {
+	PracticeFigure,
+	PracticeGuideDisclosure,
+} from "@/components/practice-guidance/practice-guidance-blocks";
+import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
@@ -38,13 +42,19 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 				<p className="max-w-2xl text-lg leading-relaxed text-pretty">{definition.whyItMatters}</p>
 			)}
 
-			{hasText(definition.whatGoodLooksLike) && (
+			{definition.visual && (
+				<PracticeFigure visual={definition.visual} caption={definition.whatGoodLooksLike} />
+			)}
+
+			{!definition.visual && hasText(definition.whatGoodLooksLike) && (
 				<Section size="sm" level={3} title="What good looks like">
 					<p className="max-w-2xl text-pretty text-muted-foreground">
 						{definition.whatGoodLooksLike}
 					</p>
 				</Section>
 			)}
+
+			{definition.guide && <PracticeGuideDisclosure guide={definition.guide} />}
 
 			<Separator />
 

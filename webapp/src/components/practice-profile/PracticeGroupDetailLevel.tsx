@@ -2,12 +2,6 @@ import { ClipboardCheckIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import type { PracticeGroup, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
-import {
-	PracticeTabsList,
-	PracticeTabsRail,
-	PracticeTabsSkeleton,
-	PracticeTabsTrigger,
-} from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
@@ -40,10 +34,9 @@ import { DrawerBody } from "@/components/ui/drawer";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell } from "@/components/ui/table";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
 
-import { LabelledBlock, NoDescription, NoSuchGroup } from "./practice-profile-blocks";
+import { NoSuchGroup } from "./practice-profile-blocks";
 
 export interface PracticeGroupDetailLevelProps extends Partial<
 	Pick<HephFeedbackCardProps, "holdingUp" | "holdingUpNote" | "reviewedWork">
@@ -74,20 +67,6 @@ export interface PracticeGroupDetailLevelProps extends Partial<
 const practiceCountLabel = (n: number) => `${count(n, "practice", "practices")} in this group`;
 
 /**
- * The group level's tabs: the practices it reviews and the catalog's words on the group. A tab is
- * a view of the level, not a place, so the choice is the level's own state and not the URL's —
- * the practice level's `practiceTab` is the URL's because a feedback card links into one.
- */
-const GROUP_TABS = ["practices", "about"] as const;
-
-type GroupTab = (typeof GROUP_TABS)[number];
-
-const TAB_LABELS: Record<GroupTab, string> = {
-	practices: "Practices",
-	about: "About this group",
-};
-
-/**
  * A practice row's shape while the practices load: the badge and chip, the pill and its sentence,
  * the link.
  */
@@ -116,9 +95,9 @@ const NO_WORK: NonNullable<PracticeGroupDetailLevelProps["reviewedWork"]> = [];
 const NO_SENTENCES: NonNullable<PracticeGroupDetailLevelProps["practiceSentences"]> = {};
 
 /**
- * One practice group as the profile's first detail level: where the reader stands in it, Heph's
- * word on what holds and the next step, and in two tabs the practices it reviews and what the
- * group is about. What the reviews found stays one level deeper, on the practice.
+ * One practice group as the profile's first detail level, in one column: the catalog's words on
+ * the group, Heph's word on what holds and the next step, where the reader stands in it, and the
+ * practices it reviews. What the reviews found stays one level deeper, on the practice.
  */
 export function PracticeGroupDetailLevel({
 	nested,
@@ -139,10 +118,8 @@ export function PracticeGroupDetailLevel({
 }: PracticeGroupDetailLevelProps) {
 	const practiceCount = practices?.length ?? 0;
 	const counts = countPracticeStandings(practices ?? []);
-	// The table's sort and the tab are this level's alone: neither is a place a reader returns to
-	// by URL.
+	// The table's sort is this level's alone: it is not a place a reader returns to by URL.
 	const [sort, setSort] = useState(DEFAULT_PRACTICE_GROUP_SORT);
-	const [tab, setTab] = useState<GroupTab>("practices");
 	// One table for both states: while loading it draws its rows' shape, so the level does not
 	// jump when they land.
 	const practicesTable = (
@@ -194,10 +171,9 @@ export function PracticeGroupDetailLevel({
 	let body: ReactNode;
 	if (isLoading) {
 		body = (
-			// Heph's card, the tabs and the practices table, as they will be laid out.
+			// Heph's card and the practices table, as they will be laid out.
 			<>
 				<HephFeedbackCardSkeleton />
-				<PracticeTabsSkeleton tabs={2} />
 				{practicesTable}
 			</>
 		);
@@ -216,6 +192,9 @@ export function PracticeGroupDetailLevel({
 	} else if (group) {
 		body = (
 			<>
+				{hasText(group.description) && (
+					<p className="max-w-2xl text-base text-pretty">{group.description}</p>
+				)}
 				<HephFeedbackCard
 					holdingUp={holdingUp}
 					holdingUpNote={holdingUpNote}
@@ -239,57 +218,20 @@ export function PracticeGroupDetailLevel({
 							: []
 					}
 				/>
-				<Tabs
-					value={tab}
-					onValueChange={(next) => {
-						const chosen = GROUP_TABS.find((candidate) => candidate === next);
-						if (chosen) {
-							setTab(chosen);
-						}
-					}}
-					className="gap-4"
+				<WhereYouStand
+					standing={standing?.standing ?? "NOT_OBSERVED"}
+					basis={formatGroupStandingBasis(counts)}
+					direction={standing?.direction}
+					support={standing?.trendSupport}
+					scope="group"
+				/>
+				<Section
+					size="lg"
+					title="Practices in this group"
+					description="Each practice with its standing and trend. Open one for the work behind it."
 				>
-					<PracticeTabsRail>
-						<PracticeTabsList aria-label="Practice group">
-							{GROUP_TABS.map((candidate) => (
-								<PracticeTabsTrigger
-									key={candidate}
-									value={candidate}
-									count={candidate === "practices" ? practiceCount : undefined}
-								>
-									{TAB_LABELS[candidate]}
-								</PracticeTabsTrigger>
-							))}
-						</PracticeTabsList>
-					</PracticeTabsRail>
-					<TabsContent value="practices" className="min-w-0">
-						<Section
-							size="lg"
-							title="Practices in this group"
-							description="Each practice with its standing and trend. Open one for the work behind it."
-						>
-							{practicesTable}
-						</Section>
-					</TabsContent>
-					<TabsContent value="about" className="min-w-0">
-						<div className="flex flex-col gap-6">
-							<WhereYouStand
-								standing={standing?.standing ?? "NOT_OBSERVED"}
-								basis={formatGroupStandingBasis(counts)}
-								direction={standing?.direction}
-								support={standing?.trendSupport}
-								scope="group"
-							/>
-							<LabelledBlock label="About this group" className="flex flex-col gap-1.5">
-								{hasText(group.description) ? (
-									<p className="max-w-2xl text-sm">{group.description}</p>
-								) : (
-									<NoDescription />
-								)}
-							</LabelledBlock>
-						</div>
-					</TabsContent>
-				</Tabs>
+					{practicesTable}
+				</Section>
 			</>
 		);
 	} else {

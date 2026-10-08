@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PlacePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDefinitionOptionsDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeGuidanceDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.ReorderPracticesRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.ReviewedPracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeAutonomyRequestDTO;
@@ -32,9 +33,11 @@ import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -129,6 +132,35 @@ public class PracticeCatalogController {
             WorkspaceContext workspaceContext, @PathVariable String practiceSlug) {
         Practice practice = practiceService.getPractice(workspaceContext, practiceSlug);
         return ResponseEntity.ok(presenter.present(workspaceContext.id(), practice));
+    }
+
+    @GetMapping("/{practiceSlug}/guidance")
+    @Operation(
+            summary = "Read one practice's visual and Read more guide",
+            description = "Returns the visual and the Read more guide that the practice panel shows. Any workspace "
+                    + "member can read them. Carries an ETag, so an unchanged visual and guide answer 304.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Guidance returned",
+            content = @Content(schema = @Schema(implementation = PracticeGuidanceDTO.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Practice not found",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @PreAuthorize("@workspaceSecure.isMember()")
+    public ResponseEntity<PracticeGuidanceDTO> getPracticeGuidance(
+            WorkspaceContext workspaceContext, @PathVariable String practiceSlug) {
+        PracticeGuidanceDTO guidance =
+                PracticeGuidanceDTO.from(practiceService.getPractice(workspaceContext, practiceSlug));
+        // Weak: the tag follows the guidance, not the bytes of its JSON (RFC 9110 8.8.1). Spring answers a matching
+        // If-None-Match with 304 and these same headers.
+        return ResponseEntity.ok()
+                .eTag("W/\"" + guidance.entityTag() + "\"")
+                .cacheControl(CacheControl.noCache().cachePrivate())
+                .body(guidance);
     }
 
     @PostMapping
