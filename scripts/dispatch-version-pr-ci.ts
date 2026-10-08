@@ -24,8 +24,8 @@ export interface WorkflowRun {
 export type Disposition = "covered" | "awaiting-approval" | "dispatch";
 
 /**
- * The Version PR needs its native pull-request lane. Waiting for that approval avoids a
- * competing dispatch in the same concurrency group; actual failures still need an explicit rerun.
+ * An authentic same-head pull-request run awaiting approval owns that invocation. Waiting avoids
+ * a competing dispatch in the same concurrency group; actual failures still need an explicit rerun.
  */
 export function disposition(
 	headSha: string,

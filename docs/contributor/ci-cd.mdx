@@ -169,15 +169,15 @@ Missing base/version data fails detection rather than silently skipping release 
 
 A cancelled run does not suppress the Version PR’s CI dispatch, and neither does an approval-blocked dispatched run.
 If the pull request's own run for the same head awaits approval, nothing is dispatched.
-The Version PR requires its pull request lane's checks.
 The two triggers share a concurrency lane, so approval can cancel an active dispatch.
 Approve the pull request's run instead.
 Actual validation failures require an explicit rerun.
 
 The Version PR is maintained after CI/CD succeeds for the current tip of `main`. Failed or
-overtaken main runs do not update it. It carries checks like any other pull request. Its updates use `GITHUB_TOKEN`, which starts no workflow run.
-Thus, `version-pr.yml` dispatches CI/CD on the Version PR's branch.
-`workflow_dispatch` is one of the two events that token can start.
+overtaken main runs do not update it. It carries checks like any other pull request.
+Its updates use `GITHUB_TOKEN`. GitHub creates approval-required workflow runs for
+[`pull_request` opened, synchronize and reopened events triggered by that token](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow).
+When no native pull-request run exists, `version-pr.yml` retains `workflow_dispatch` as its fallback.
 
 The dispatched run reports `CI Status Gate` on the branch head, which is the pull request's head commit.
 Thus, validation precedes the merge that cuts a release.
