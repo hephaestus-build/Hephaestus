@@ -243,6 +243,37 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepDeliveredFeedbackWithTheActualSubjectWhenAuthorAndReviewerHaveHistory() {
+        long reviewerId = AUTHOR_ID + 1;
+        Feedback author = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
+        Feedback reviewer = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
+        when(feedbackRepository.findDeliveredForPersonHistory(WORKSPACE_ID, AUTHOR_ID))
+                .thenReturn(List.of(author));
+        when(feedbackRepository.findDeliveredForPersonHistory(WORKSPACE_ID, reviewerId))
+                .thenReturn(List.of(reviewer));
+        var request = prRequest();
+        ObjectNode metadata = (ObjectNode) Objects.requireNonNull(request.job().getMetadata());
+        metadata.put("subject_role", "AUTHOR");
+        metadata.put("about_user_id", reviewerId);
+        JsonNode authorHistory = read(provider.capture(request, Set.of(ReviewHistoryContentSource.FEEDBACK_HISTORY))
+                        .files()
+                        .get("inputs/history/feedback.json"))
+                .path("feedback");
+        assertThat(authorHistory).hasSize(1);
+        assertThat(authorHistory.get(0).path("id").asString())
+                .isEqualTo(author.getId().toString());
+
+        metadata.put("subject_role", "REVIEWER");
+        JsonNode reviewerHistory = read(provider.capture(request, Set.of(ReviewHistoryContentSource.FEEDBACK_HISTORY))
+                        .files()
+                        .get("inputs/history/feedback.json"))
+                .path("feedback");
+        assertThat(reviewerHistory).hasSize(1);
+        assertThat(reviewerHistory.get(0).path("id").asString())
+                .isEqualTo(reviewer.getId().toString());
+    }
+
+    @Test
     void aMissingOrInvalidReviewerSubjectIsUnavailableRatherThanAuthorHistory() {
         var request = prRequest();
         ObjectNode metadata = (ObjectNode) Objects.requireNonNull(request.job().getMetadata());

@@ -217,6 +217,71 @@ const STAGED_FEEDBACK_HISTORY = JSON.stringify({
 	],
 });
 
+/** A delivered record as the server stages it, on one channel, resting on one recorded NOT_MET observation. */
+const deliveredRecord = (id: string, channel: string, practiceSlug: string, overrides = {}) => ({
+	id,
+	channel,
+	artifact: {
+		kind: "scm.pull_request",
+		url: "https://gitlab.example/group/repo/-/merge_requests/1",
+	},
+	deliveredAt: "2026-08-01T10:00:00Z",
+	reviewedRevision: null,
+	basedOn: [{ id: `earlier-${id}`, practiceSlug, practiceRevision: null, outcome: "NOT_MET" }],
+	publicEligible: false,
+	recordedClaimCurrentness: "CURRENT",
+	bodyRole: channel === "IN_CHAT" ? "MENTOR_NOTES" : "COMPOSED_GUIDANCE",
+	body: `Earlier ${channel} feedback about ${practiceSlug}.`,
+	...overrides,
+});
+
+/**
+ * One delivered IN_APP card about test-practice and nothing delivered on IN_CHAT about it; second-practice has
+ * current IN_CHAT notes, and on IN_APP only a stale, a withdrawn and an undated record.
+ */
+const ALREADY_SAID_HISTORY = JSON.stringify({
+	coverage: HISTORY_COVERAGE,
+	recordRole: "RECORDED_DELIVERY",
+	feedback: [
+		deliveredRecord("app-test", "IN_APP", "test-practice"),
+		deliveredRecord("context-test", "IN_CONTEXT", "test-practice"),
+		deliveredRecord("chat-second", "IN_CHAT", "second-practice"),
+		deliveredRecord("chat-other", "IN_CHAT", "other-practice"),
+		deliveredRecord("chat-test-malformed", "IN_CHAT", "test-practice", { withdrawn: "false" }),
+		deliveredRecord("chat-test-met", "IN_CHAT", "test-practice", {
+			basedOn: [{ id: "earlier-met", practiceSlug: "test-practice", outcome: "MET" }],
+		}),
+		deliveredRecord("app-second-stale", "IN_APP", "second-practice", {
+			recordedClaimCurrentness: "STALE",
+			bodyRole: undefined,
+			body: undefined,
+		}),
+		deliveredRecord("app-second-withdrawn", "IN_APP", "second-practice", {
+			withdrawn: true,
+			bodyRole: undefined,
+			body: undefined,
+		}),
+		deliveredRecord("app-second-undated", "IN_APP", "second-practice", { deliveredAt: null }),
+	],
+});
+
+/** Prepared IN_CHAT notes about test-practice: queued, never delivered. */
+const ALREADY_SAID_PREPARED = JSON.stringify({
+	coverage: HISTORY_COVERAGE,
+	recordRole: "PREPARED_NOT_DELIVERED",
+	prepared: [
+		{
+			threadKey: "queued-test",
+			practiceSlug: "test-practice",
+			channel: "IN_CHAT",
+			preparedAt: "2026-09-01T10:00:00Z",
+			recordedClaimCurrentness: "CURRENT",
+			bodyRole: "MENTOR_NOTES",
+			body: "Prepared mentor notes about test-practice.",
+		},
+	],
+});
+
 /** The review composition's whole summary, as the composer wrote it, paragraphs and all. */
 const REVIEW_SUMMARY =
 	"The login change calls `insecure()` on the path every sign-in takes.\n\n" +
@@ -295,6 +360,14 @@ interface CustomTool {
 	execute: (id: string, input: unknown) => Promise<unknown>;
 }
 
+const withhold = (channel: string, practiceSlug: string, withholdReason: string) => ({
+	channel,
+	practiceSlug,
+	basedOn: [practiceSlug === "test-practice" ? "observation-1" : "observation-2"],
+	action: "WITHHOLD",
+	withholdReason,
+});
+
 const scenario = process.env.PI_ORCHESTRATION_SCENARIO;
 const unavailableContext = process.env.PI_UNAVAILABLE_CONTEXT === "true";
 const counterevidence = process.env.PI_COUNTEREVIDENCE === "true";
@@ -330,7 +403,8 @@ if (scenario !== undefined && scenario !== "") {
 			}
 			case "compose-partial-error":
 			case "compose-qualify":
-			case "compose-fold": {
+			case "compose-fold":
+			case "compose-already-said": {
 				return [
 					{ ...admittedObservation, publicEligible: !reviewerOnly },
 					{
@@ -1280,7 +1354,9 @@ if (scenario !== undefined && scenario !== "") {
 								}
 								// Every other composing scenario decides the review's problems by withholding them.
 								const ids =
-									(scenario === "compose-fold" || scenario === "compose-partial-error") &&
+									(scenario === "compose-fold" ||
+										scenario === "compose-partial-error" ||
+										scenario === "compose-already-said") &&
 									!counterevidence
 										? ["observation-1", "observation-2"]
 										: ["observation-1"];
@@ -1467,6 +1543,30 @@ if (scenario !== undefined && scenario !== "") {
 									compacting = true;
 									return;
 								}
+								if (scenario === "compose-already-said") {
+									// A withholding that names earlier feedback needs a delivered record on its own channel
+									// about its own practice; a refused one is stored nowhere and the lane can still be decided.
+									const feedback = tool("report_feedback");
+
+									const first = await feedback.execute("said", {
+										units: [
+											withhold("IN_APP", "test-practice", "ALREADY_SAID"),
+											withhold("IN_CHAT", "test-practice", "ALREADY_SAID"),
+											withhold("IN_CHAT", "second-practice", "NO_MATERIAL_CHANGE"),
+											withhold("IN_APP", "second-practice", "ALREADY_SAID"),
+										],
+									});
+									record(`said-first:${JSON.stringify(first)}`);
+									const second = await feedback.execute("said-again", {
+										units: [
+											withhold("IN_CHAT", "test-practice", "NO_MATERIAL_CHANGE"),
+											withhold("IN_CHAT", "test-practice", "BELOW_BAR"),
+											withhold("IN_APP", "second-practice", "BELOW_BAR"),
+										],
+									});
+									record(`said-second:${JSON.stringify(second)}`);
+									return;
+								}
 								if (scenario === "compose-fold") {
 									// Two practices saw one event: one private unit names the practice that best names it
 									// and folds the other's observation into basedOn, which decides both.
@@ -1477,7 +1577,7 @@ if (scenario !== undefined && scenario !== "") {
 												practiceSlug: "test-practice",
 												basedOn: ["observation-1", "observation-2"],
 												action: "WITHHOLD",
-												withholdReason: "ALREADY_SAID",
+												withholdReason: "BELOW_BAR",
 											},
 										],
 									});
@@ -2347,6 +2447,7 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-repeat-select",
 		"compose-invalid-select",
 		"compose-fold",
+		"compose-already-said",
 		"compose-context-unavailable",
 		"compose-counterevidence",
 		"compose-reviewer-only",
@@ -2466,6 +2567,8 @@ if (scenario !== undefined && scenario !== "") {
 					"keeps missing and empty standards and unknown history explicit without inventing their contents",
 				"compose-fold":
 					"counts a NOT_MET practice folded into another practice's unit as decided and asks no more",
+				"compose-already-said":
+					"withholds as already said only on the channel and practice that captured delivered feedback records",
 				"compose-abstention":
 					"composes from admitted NOT_APPLICABLE and UNDETERMINED observations without basing feedback on them",
 				"compose-unknown-outcome":
@@ -2500,6 +2603,11 @@ if (scenario !== undefined && scenario !== "") {
 					}
 					if (fixture === "compose-context-unavailable") {
 						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
+					}
+					if (stage === "compose-already-said") {
+						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
+						writeFileSync(nodePath.join(cwd, "history/feedback.json"), ALREADY_SAID_HISTORY);
+						writeFileSync(nodePath.join(cwd, "history/prepared.json"), ALREADY_SAID_PREPARED);
 					}
 					if (stage === "compose-support") {
 						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
@@ -2576,7 +2684,7 @@ if (scenario !== undefined && scenario !== "") {
 								channels: {
 									IN_APP: { enabled: true, maxUnits: 1 },
 									IN_CONTEXT: { enabled: true, maxUnits: 1 },
-									...(stage === "compose-support"
+									...(stage === "compose-support" || stage === "compose-already-said"
 										? {
 												IN_CHAT: {
 													enabled: fixture !== "compose-support-refused-only",
@@ -2685,6 +2793,7 @@ if (scenario !== undefined && scenario !== "") {
 						stage === "batch" ||
 						stage === "draft-revision" ||
 						stage === "compose-fold" ||
+						stage === "compose-already-said" ||
 						stage === "compose-qualify" ||
 						stage === "compose-abstention"
 					) {
@@ -4382,6 +4491,48 @@ assert.notEqual(outgoing.function.strict, true);`,
 								inline: [],
 								withheld: [],
 							});
+							break;
+						}
+						case "compose-already-said": {
+							assert.equal(child.status, 0, child.stderr);
+							const first = events.find((event) => event.startsWith("said-first:")) ?? "";
+							assert.match(first, /#1: stored a IN_APP unit for test-practice \(WITHHOLD\)/u);
+							// Prepared notes, the IN_APP card, the public review, other practices and a MET record all
+							// leave IN_CHAT test-practice without a delivered record.
+							assert.match(
+								first,
+								/#2: ALREADY_SAID rests on feedback recorded as delivered on IN_CHAT for test-practice/u,
+							);
+							assert.match(first, /#3: stored a IN_CHAT unit for second-practice \(WITHHOLD\)/u);
+							// Stale, withdrawn and undated records do not count.
+							assert.match(
+								first,
+								/#4: ALREADY_SAID rests on feedback recorded as delivered on IN_APP for second-practice/u,
+							);
+							const second = events.find((event) => event.startsWith("said-second:")) ?? "";
+							assert.match(
+								second,
+								/#1: NO_MATERIAL_CHANGE rests on feedback recorded as delivered on IN_CHAT for test-practice/u,
+							);
+							assert.match(second, /#2: stored a IN_CHAT unit for test-practice \(WITHHOLD\)/u);
+							assert.match(second, /#3: stored a IN_APP unit for second-practice \(WITHHOLD\)/u);
+							const payload: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(payload) && Array.isArray(payload.units));
+							assert.deepEqual(
+								payload.units.map((unit: unknown) => {
+									assert.ok(isRecord(unit));
+									return `${String(unit.channel)}:${String(unit.practiceSlug)}:${String(unit.withholdReason)}`;
+								}),
+								[
+									"IN_APP:test-practice:ALREADY_SAID",
+									"IN_CHAT:second-practice:NO_MATERIAL_CHANGE",
+									"IN_CHAT:test-practice:BELOW_BAR",
+									"IN_APP:second-practice:BELOW_BAR",
+								],
+							);
+							assert.deepEqual(payload.compositionFailures, []);
 							break;
 						}
 						case "compose-fold": {
