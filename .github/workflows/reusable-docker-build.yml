@@ -321,7 +321,7 @@ jobs:
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
             --certificate-github-workflow-repository "${{ github.repository }}" \
             > /dev/null
-          gh attestation verify "oci://$IMAGE_REF" --owner "${{ github.repository_owner }}"
+          gh attestation verify "oci://$IMAGE_REF" --bundle-from-oci --owner "${{ github.repository_owner }}"
 
       - name: Upload digest
         if: ${{ inputs.publish && !inputs.single-arch }}
@@ -438,7 +438,7 @@ jobs:
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
             --certificate-github-workflow-repository "${{ github.repository }}" \
             > /dev/null
-          gh attestation verify "oci://$IMAGE_REF" --owner "${{ github.repository_owner }}"
+          gh attestation verify "oci://$IMAGE_REF" --bundle-from-oci --owner "${{ github.repository_owner }}"
 
   scan:
     name: Scan ${{ matrix.platform }} Image

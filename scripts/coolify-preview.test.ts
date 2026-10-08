@@ -447,6 +447,9 @@ void describe("published image provenance", () => {
 					return { status: 0, stderr: "", stdout: `sha256:${"c".repeat(64)}\n` };
 				}
 				assert.ok(arguments_.includes("owner/repo/.github/workflows/reusable-docker-build.yml"));
+				if (command === "gh") {
+					assert.ok(arguments_.includes("--bundle-from-oci"));
+				}
 				return { status: 0, stderr: "", stdout: "" };
 			},
 		};

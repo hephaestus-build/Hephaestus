@@ -83,6 +83,7 @@ export async function resolveAndVerify(repository: string, commit: string): Prom
 			"attestation",
 			"verify",
 			`oci://${repository}@${digest}`,
+			"--bundle-from-oci",
 			"--repo",
 			ghRepository,
 			"--signer-workflow",
