@@ -12,13 +12,13 @@ import { parse as parseJsonc } from "jsonc-parser";
 import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
 
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
-import { versionBranch } from "./dispatch-version-pr-ci.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { exitStatus } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { planRelease, releaseOutputs } from "./plan-release.ts";
+import { versionBranch } from "./report-ci-latency.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
 import { planSubjects } from "./scan-main-images.ts";
 import { PLATFORMS, planUpstreamSubjects } from "./scan-upstream-images.ts";
@@ -2114,21 +2114,49 @@ void describe("CI contract", () => {
 		]);
 	});
 
-	void test("gives the Version PR the CI its merge triggers a release on", async () => {
-		const source = await readFile(".github/workflows/version-pr.yml", "utf8");
-		// A GITHUB_TOKEN push starts no workflow run, which is why the Version PR carried no checks
-		// and merged through a ruleset bypass. workflow_dispatch is one of the two documented
-		// exceptions, so the same token runs the same CI/CD on the same branch — with the release
-		// evidence preflight on, because that commit is the one whose merge cuts a release.
-		assert.match(source, /run: node scripts\/dispatch-version-pr-ci\.ts/u);
-		assert.match(source, /^ {6}actions: write/mu);
-		const dispatcher = await readFile("scripts/dispatch-version-pr-ci.ts", "utf8");
-		assert.match(dispatcher, /"release-preflight=true"/u);
-		assert.match(dispatcher, /export const CI_WORKFLOW = "cicd\.yml";/u);
+	void test("leaves the Version PR's CI to its own pull_request event and a deliberate dispatch", async () => {
+		const versioning = parseDocument(await readFile(".github/workflows/version-pr.yml", "utf8"));
+		const maintainer = ["jobs", "version-pr"];
+		// Only a successful same-repository push to main, still the branch tip, maintains the PR.
+		const trigger = String(versioning.getIn([...maintainer, "if"]));
+		for (const guard of [
+			"github.event.workflow_run.conclusion == 'success'",
+			"github.event.workflow_run.event == 'push'",
+			"github.event.workflow_run.head_repository.full_name == github.repository",
+		]) {
+			assert.ok(trigger.includes(guard), guard);
+		}
+		const maintain = namedStep(versioning, maintainer, "Maintain Version PR");
+		assert.equal(maintain.get("if"), "steps.current.outputs.validated == 'true'");
+		assert.match(String(maintain.get("uses")), /^changesets\/action@[0-9a-f]{40}$/u);
+		assert.equal(maintain.getIn(["with", "github-token"]), `\${{ secrets.GITHUB_TOKEN }}`);
+		// The pull request's own run validates it; maintenance cannot start a second, competing one.
+		const permissions = versioning.getIn([...maintainer, "permissions"]);
+		assert.ok(isMap(permissions));
+		assert.deepEqual(permissions.toJSON(), { contents: "write", "pull-requests": "write" });
+		const steps = versioning.getIn([...maintainer, "steps"]);
+		assert.ok(isSeq(steps));
+		for (const maintenanceStep of steps.items) {
+			assert.ok(isMap(maintenanceStep));
+			const run = maintenanceStep.get("run");
+			if (run !== undefined) {
+				assert.ok(typeof run === "string");
+				assert.doesNotMatch(run, /workflow run|dispatch/u);
+			}
+		}
+
+		// What remains: the pull_request event, and the manual dispatch an operator runs to recover.
+		const cicd = await readFile(".github/workflows/cicd.yml", "utf8");
+		const ci = parseDocument(cicd);
+		assert.ok(ci.hasIn(["on", "pull_request"]));
+		assert.equal(
+			ci.getIn(["on", "workflow_dispatch", "inputs", "release-preflight", "type"]),
+			"boolean",
+		);
 		// A dispatched run carries no pull_request payload, so the gate's status has to fall back to
 		// the dispatched ref's head — which is exactly the Version PR's head commit.
 		assert.match(
-			job(await readFile(".github/workflows/cicd.yml", "utf8"), "all-ci-passed"),
+			job(cicd, "all-ci-passed"),
 			/const sha = context\.payload\.pull_request\?\.head\?\.sha \|\| context\.sha;/u,
 		);
 	});

@@ -1,12 +1,20 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 
-import { versionBranch } from "./dispatch-version-pr-ci.ts";
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 import { median, percentile } from "./lib/statistics.ts";
 import { summarizeCiTimings } from "./report-ci-timings.ts";
 
 const WINDOW_DAYS = 28;
+
+/** The branch changesets maintains the Version PR on, from its configured base branch. */
+export function versionBranch(config: unknown): string {
+	const baseBranch = asString(asRecord(config, "changeset config").baseBranch, "baseBranch");
+	if (!baseBranch) {
+		throw new Error("changeset config declares no baseBranch");
+	}
+	return `changeset-release/${baseBranch}`;
+}
 
 export function selectLatencyRuns(value: unknown, releaseBranch: string, now: number) {
 	return asArray(asRecord(value, "runs response").workflow_runs, "workflow_runs")

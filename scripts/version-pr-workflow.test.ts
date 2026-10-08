@@ -43,7 +43,7 @@ void test("Version PR maintenance follows trusted successful main CI without can
 		`\${{ github.event.workflow_run.head_sha }}`,
 	);
 	const work = steps.items.slice(2);
-	assert.equal(work.length, 3);
+	assert.equal(work.length, 2);
 	for (const step of work) {
 		assert.ok(isMap(step));
 		assert.equal(step.get("if"), "steps.current.outputs.validated == 'true'");

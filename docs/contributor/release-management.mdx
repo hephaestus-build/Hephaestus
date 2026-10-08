@@ -30,7 +30,7 @@ sequenceDiagram
     PR->>M: Merge (squash) — verify-changesets enforces the changeset
     M->>VP: changesets action folds pending changesets into the accumulating Version PR
     Note over VP: CHANGELOG.md + version bump preview
-    VP->>VP: CI/CD, dispatched onto the branch, with the release evidence preflight
+    VP->>VP: Pull-request CI/CD, approved if GitHub asks, with the release evidence preflight
     VP->>M: Maintainer merges when the release is ready
     M->>R: Plan vX.Y.Z and assemble its notes
     R->>R: Generate and verify digest-bound evidence
@@ -48,22 +48,16 @@ sequenceDiagram
    Its title is `chore(release): version packages`.
    It previews the version bump, `CHANGELOG.md` section, and `MIGRATION.md` section.
    The migration section uses `.migration/` fragments at the `### Next release` anchor.
-   Updates use `GITHUB_TOKEN`, whose pushes start no workflow run.
-   Thus, the same workflow dispatches CI/CD onto the Version PR branch.
-   `workflow_dispatch` is one of the two events that token can start.
-   Each Version PR head commit gets one such run.
-   `scripts/dispatch-version-pr-ci.ts` checks whether the head already has one.
-   A missed dispatch recovers on the next successful current-main CI completion.
-   An unchanged head costs nothing.
+   Updates use `GITHUB_TOKEN`.
+   The pull request's own CI/CD run validates its updated head, with approval when GitHub requests it.
+   [The Version PR trigger contract](./ci-cd.mdx#merge-policy) owns approval, reruns and manual recovery.
    Failed main runs do not update the Version PR.
    A successful rerun or later successful tip resumes maintenance.
    Overtaken completions stop before versioning, so release validation does not start beside the same commit's main validation.
 
    Every CI/CD run on that branch includes the **release evidence preflight** below, regardless of its start event.
    `CI Status Gate` fails unless the same run's preflight succeeds.
-   More than one run can report the gate for a Version PR head.
-   A dispatch and approved `pull_request` run both did this for v0.75.1.
-   Either satisfies the ruleset.
+   More than one run can report the gate for a Version PR head, and either satisfies the ruleset.
    Thus, a green gate proves preflight success only if no run can pass without it.
 
    Every run on that branch publishes the whole release image set on both architectures.
