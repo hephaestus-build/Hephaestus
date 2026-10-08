@@ -107,7 +107,6 @@ const environment = {
 	},
 
 	sentry: {
-		environment: env("SENTRY_ENVIRONMENT"),
 		dsn: env("SENTRY_DSN"),
 	},
 

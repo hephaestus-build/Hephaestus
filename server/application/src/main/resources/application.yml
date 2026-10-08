@@ -186,6 +186,9 @@ management:
             otlp:
                 enabled: ${TRACING_OTLP_ENABLED:false}
     opentelemetry:
+        # Boot derives service.name and service.namespace, but not the version a span came from.
+        resource-attributes:
+            "[service.version]": ${spring.application.version}
         tracing:
             export:
                 otlp:
@@ -857,6 +860,7 @@ hephaestus:
 
     sentry:
         dsn: ${SENTRY_DSN:}
+        environment: ${SENTRY_ENVIRONMENT:local}
 
 # Protects against cascading failures when GitHub API is unavailable; defaults in ResilienceConfig.java.
 resilience4j:

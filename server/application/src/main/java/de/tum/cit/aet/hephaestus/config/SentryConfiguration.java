@@ -54,7 +54,7 @@ public class SentryConfiguration {
                     event.setBreadcrumbs(null);
                     return event;
                 });
-                options.setEnvironment(getEnvironment());
+                options.setEnvironment(sentryProperties.environment());
                 options.setRelease(hephaestusVersion);
                 // Links a Sentry event to its JSON log lines; the tag survives the beforeSend scrub,
                 // which removes only user, request, and breadcrumb context.
@@ -71,16 +71,6 @@ public class SentryConfiguration {
             log.info("Initialized Sentry");
         } catch (Exception ex) {
             log.error("Failed to initialize Sentry", ex);
-        }
-    }
-
-    private String getEnvironment() {
-        if (environment.matchesProfiles("test")) {
-            return "test";
-        } else if (environment.matchesProfiles("prod")) {
-            return "prod";
-        } else {
-            return "local";
         }
     }
 }

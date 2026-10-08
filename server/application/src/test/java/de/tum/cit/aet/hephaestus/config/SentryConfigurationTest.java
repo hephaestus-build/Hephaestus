@@ -25,7 +25,7 @@ class SentryConfigurationTest {
         var configuration = new SentryConfiguration(
                 new MockEnvironment().withProperty("spring.profiles.active", "test"),
                 "1.2.3",
-                new SentryProperties("https://public@example.invalid/1"));
+                new SentryProperties("https://public@example.invalid/1", "staging"));
 
         configuration.init();
 
@@ -43,5 +43,19 @@ class SentryConfigurationTest {
         assertThat(scrubbed.getUser()).isNull();
         assertThat(scrubbed.getRequest()).isNull();
         assertThat(scrubbed.getBreadcrumbs()).isNull();
+    }
+
+    @Test
+    void shouldReportTheDeploymentEnvironmentAndRunningVersionWhenInitialized() {
+        // The profile is the same on staging and production, so it must not name the environment.
+        new SentryConfiguration(
+                        new MockEnvironment().withProperty("spring.profiles.active", "prod"),
+                        "1.2.3",
+                        new SentryProperties("https://public@example.invalid/1", "staging"))
+                .init();
+
+        var options = Sentry.getCurrentScopes().getOptions();
+        assertThat(options.getEnvironment()).isEqualTo("staging");
+        assertThat(options.getRelease()).isEqualTo("1.2.3");
     }
 }

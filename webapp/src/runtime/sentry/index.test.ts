@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DATA_COLLECTION, stripRequestUserAndBreadcrumbs } from "./index";
 
@@ -40,4 +40,19 @@ describe("unsubscribe privacy", () => {
 			).toBeNull();
 		},
 	);
+});
+
+describe("the environment an error report names", () => {
+	afterEach(() => {
+		delete window.__ENV__;
+	});
+
+	it("is the deployment's, and local when the deployment leaves it unset", async () => {
+		vi.resetModules();
+		// The entrypoint writes an unset variable as "".
+		window.__ENV__ = { SENTRY_ENVIRONMENT: "" };
+		const { sentryEnvironment } = await import("./config");
+
+		expect(sentryEnvironment).toBe("local");
+	});
 });

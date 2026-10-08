@@ -330,6 +330,17 @@ Concrete IDs or URLs in `uri` tags indicate a tagging defect.
 2. Fix a tagging defect before considering a larger budget.
 3. Do not turn off the bound.
 
+## Error tracking
+
+Set `SENTRY_DSN` to send errors to Sentry.
+Leave it blank to send nothing.
+
+Set `SENTRY_ENVIRONMENT` to the name of the deployment, such as `production` or `staging`.
+The webapp and every server role report it as the Sentry environment.
+When it is unset, they report `local`.
+On a host with one environment file per stack, set it in each file.
+Each event carries the running version as its release: `1.2.3` for a release, or the full commit for a host that follows commits.
+
 ## Exporting OpenTelemetry traces
 
 Hephaestus uses Spring Boot's OpenTelemetry starter and the OTLP HTTP exporter. Export is disabled
@@ -343,6 +354,7 @@ roles whose spans you want to collect:
 | `TRACING_SAMPLING_PROBABILITY` | `0.0`                             | Fraction of new traces sampled. Use `1.0` for a dedicated evaluation instance. |
 
 The supported Compose stack forwards these settings to server, worker and webhook containers.
+Each span carries the running version as the `service.version` resource attribute.
 For authenticated collectors, configure Spring Boot's
 `management.opentelemetry.tracing.export.otlp.headers` through protected deployment configuration.
 Do not put collector credentials in a URL. OTLP log and metric export stay disabled: enabling traces does not

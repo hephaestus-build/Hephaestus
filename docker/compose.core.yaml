@@ -94,6 +94,7 @@ services:
       # supplies it (an unset var fails the boot at placeholder resolution).
       APPLICATION_HOST_URL: https://${APP_HOSTNAME}
       SENTRY_DSN: ${SENTRY_DSN}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-local}
       # forward-headers=native (application-prod.yml) → ProxyTrustGuard fails the boot unless pinned.
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-}
       # AgentImagePinGuard loads in any prod pod; set false for non-release deploys that skip the pin.
