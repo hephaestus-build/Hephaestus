@@ -631,6 +631,14 @@ Only allowlisted fields are shown: title, description, links, numbers, state, dr
 Each linked work item shows the same kinds of fields and how it is linked.
 A field the record does not state is listed as not in the capture, never defaulted.
 
+A description the record states as empty or `null` is shown as no description.
+A missing or malformed description is shown as unknown, never as no description.
+
+When the producer states the record's basis, the record shows it.
+The basis names the shown fields retained when the review was admitted, with their admission time.
+It also names when the mirror was last synchronized for the other fields.
+A malformed basis part is left unstated, and no time is inferred for it.
+
 A record is shown whole, or named as not shown with the reason.
 Reasons are source state, an unrecorded file, empty, too large, unreadable, or naming other work.
 The record supplies captured intent, identity and state for orientation.

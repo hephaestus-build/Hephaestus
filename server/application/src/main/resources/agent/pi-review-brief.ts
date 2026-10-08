@@ -399,6 +399,44 @@ function otherWorkOf(
 	return null;
 }
 
+function datedOf(value: unknown): string | undefined {
+	return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : undefined;
+}
+
+/**
+ * When each part of the record was read, as its producer states it: the named fields as retained when the review was
+ * admitted, the others as the capture read them. Only fields this block shows may be named; a malformed part stays
+ * unstated, and no time is inferred.
+ */
+function basisOf(value: unknown, shown: ReadonlySet<string>): Record<string, unknown> | undefined {
+	if (!isRecord(value)) {
+		return undefined;
+	}
+	const named: unknown[] = Array.isArray(value.admission_fields) ? value.admission_fields : [];
+	const admissionFields = named.every((field): field is string => typeof field === "string")
+		? named.filter((field) => shown.has(field))
+		: [];
+	const admittedAt = datedOf(value.admitted_at);
+	const mirrorSyncedAt = datedOf(value.mirror_synced_at);
+	const basis = {
+		...(admissionFields.length > 0 ? { admission_fields: admissionFields } : {}),
+		...(admittedAt === undefined ? {} : { admitted_at: admittedAt }),
+		...(value.other_fields === "CAPTURE" ? { other_fields: "CAPTURE" } : {}),
+		...(mirrorSyncedAt === undefined ? {} : { mirror_synced_at: mirrorSyncedAt }),
+	};
+	return Object.keys(basis).length > 0 ? basis : undefined;
+}
+
+/** A null or empty description is one the record states is absent; anything else that is not text is unknown. */
+function descriptionOf(body: unknown): string {
+	if (body === null || body === "") {
+		return "The record states no description.";
+	}
+	return typeof body === "string"
+		? `Its description, as written:\n${fenced(body, "markdown")}`
+		: "The capture does not state the description: it is unknown, not empty.";
+}
+
 function recordBlock(
 	label: string,
 	kind: string,
@@ -412,21 +450,29 @@ function recordBlock(
 	if (otherWork !== null) {
 		return { omitted: otherWork };
 	}
-	const { known, notInCapture } = project(record, RECORD_FIELDS.get(artifactKind) ?? {});
-	const body = typeof record.body === "string" ? record.body : null;
+	const fields = RECORD_FIELDS.get(artifactKind) ?? {};
+	const { known, notInCapture } = project(record, fields);
+	const shown = new Set(Object.keys(known));
+	if (typeof record.body === "string" || record.body === null) {
+		shown.add("body");
+	}
+	const basis = basisOf(record.basis, shown);
 	const parts = [
 		`#### \`${label}\` (${kind})`,
 		fenced(
 			JSON.stringify(
-				{ capture: captureDetails(completeness, limitations), ...known, notInCapture },
+				{
+					capture: captureDetails(completeness, limitations),
+					...(basis === undefined ? {} : { basis }),
+					...known,
+					notInCapture,
+				},
 				null,
 				1,
 			),
 			"json",
 		),
-		body === null
-			? "The record states no description."
-			: `Its description, as written:\n${fenced(body, "markdown")}`,
+		descriptionOf(record.body),
 	];
 	return { block: parts.join("\n") };
 }
