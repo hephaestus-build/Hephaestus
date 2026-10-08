@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
@@ -47,6 +49,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.eclipse.jgit.api.Git;
 import org.junit.jupiter.api.Test;
@@ -525,6 +530,150 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         assertThat(read(files, ended, "context/quote", ProvenanceDigest.sha256Hex(bytes)))
                 .contains(bytes);
         return ended;
+    }
+
+    @Test
+    void shouldLeaveAnAttemptWhoseJobLeaseIsHeldUntilTheHolderReleasesIt() {
+        var layout = new FabricLayout(root.toString());
+        byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
+        String sha = ProvenanceDigest.sha256Hex(bytes);
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var ended = endedAttempt(files, bytes);
+        var later = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies());
+        var holder =
+                EvidenceFolderLease.tryAcquire(layout.root(), 1L, ended.getId()).orElseThrow();
+        try (holder) {
+            later.cleanAfterRestart();
+            later.cleanEndedAttempts();
+            assertThat(read(files, ended, "context/quote", sha)).contains(bytes);
+            verify(jobs, never()).discardRetiredArtifactInventory(ended.getId(), 1L, 0, "worker");
+        }
+        later.cleanEndedAttempts();
+        assertThat(read(files, ended, "context/quote", sha)).isEmpty();
+        verify(jobs).discardRetiredArtifactInventory(ended.getId(), 1L, 0, "worker");
+    }
+
+    @Test
+    void shouldLeaveAnAttemptToTheSweepThatOwnsItWhenAnotherSweepOverlaps() throws Exception {
+        var layout = new FabricLayout(root.toString());
+        byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
+        String sha = ProvenanceDigest.sha256Hex(bytes);
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var ended = endedAttempt(files, bytes);
+        var entered = new CountDownLatch(1);
+        var proceed = new CountDownLatch(1);
+        var first = new AtomicBoolean(true);
+        // The startup sweep stops in its ownership query, which it makes while it holds the job's lease.
+        when(jobs.findByIdAndWorkspaceId(ended.getId(), 1L)).thenAnswer(query -> {
+            if (first.getAndSet(false)) {
+                entered.countDown();
+                assertThat(proceed.await(10, TimeUnit.SECONDS)).isTrue();
+            }
+            return Optional.of(ended);
+        });
+        var periodic = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies());
+        try (var pool = Executors.newSingleThreadExecutor()) {
+            var startup = pool.submit(() -> {
+                files.cleanAfterRestart();
+                return null;
+            });
+            assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+            periodic.cleanEndedAttempts();
+            assertThat(read(files, ended, "context/quote", sha)).contains(bytes);
+            verify(jobs, never()).discardRetiredArtifactInventory(ended.getId(), 1L, 0, "worker");
+            proceed.countDown();
+            startup.get(10, TimeUnit.SECONDS);
+        }
+        assertThat(read(files, ended, "context/quote", sha)).isEmpty();
+        periodic.cleanEndedAttempts();
+        verify(jobs, times(1)).discardRetiredArtifactInventory(ended.getId(), 1L, 0, "worker");
+    }
+
+    @Test
+    void shouldRemoveAnAdmittedAttemptWhileItsRuntimeStillHoldsTheJobLease() {
+        var layout = new FabricLayout(root.toString());
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var job = job();
+        job.setStatus(AgentJobStatus.RUNNING);
+        when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
+        byte[] bytes = "verified quote".getBytes(StandardCharsets.UTF_8);
+        String sha = ProvenanceDigest.sha256Hex(bytes);
+        var identity = new AdmissionIdentity(job.getId(), 1L, 0, "worker");
+        var later = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies());
+        var prepared = PreparedJobInputsFixtures.prepare(
+                files, job, PreparedJobInputsFixtures.filesOnly(Map.of("context/quote", bytes)));
+        // The runtime's capture lease, held until its inputs are released after the composition.
+        var runtime =
+                EvidenceFolderLease.tryAcquire(layout.root(), 1L, job.getId()).orElseThrow();
+        try (runtime) {
+            job.setMetadata(new JsonMapper()
+                    .createObjectNode()
+                    .put(ObservationAdmissionService.DIGEST_METADATA_KEY, "verified"));
+            // Before the capture shares its lease, admission cannot remove through it.
+            files.discardAdmittedAttempt(identity);
+            assertThat(read(files, job, "context/quote", sha)).contains(bytes);
+            runtime.shareWithRemovals();
+            // A sweep or an erasure needs the lease exclusively and does not borrow a shared one.
+            later.cleanEndedAttempts();
+            assertThat(EvidenceFolderLease.tryAcquire(layout.root(), 1L, job.getId()))
+                    .isEmpty();
+            assertThat(read(files, job, "context/quote", sha)).contains(bytes);
+            files.discardAdmittedAttempt(identity);
+            assertThat(read(files, job, "context/quote", sha)).isEmpty();
+            assertThat(EvidenceFolderLease.tryAcquire(layout.root(), 1L, job.getId()))
+                    .isEmpty();
+            prepared.close();
+        }
+        later.cleanEndedAttempts();
+        files.discardAdmittedAttempt(identity);
+        assertThat(read(files, job, "context/quote", sha)).isEmpty();
+        verify(jobs, never()).discardRetiredArtifactInventory(job.getId(), 1L, 0, "worker");
+    }
+
+    @Test
+    void shouldRemoveAnAdmittedAttemptOnceWhenAdmissionOverlapsItsRetirement() throws Exception {
+        var layout = new FabricLayout(root.toString());
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies());
+        var job = job();
+        job.setStatus(AgentJobStatus.RUNNING);
+        byte[] bytes = "verified quote".getBytes(StandardCharsets.UTF_8);
+        String sha = ProvenanceDigest.sha256Hex(bytes);
+        var prepared = PreparedJobInputsFixtures.prepare(
+                files, job, PreparedJobInputsFixtures.filesOnly(Map.of("context/quote", bytes)));
+        job.setMetadata(
+                new JsonMapper().createObjectNode().put(ObservationAdmissionService.DIGEST_METADATA_KEY, "verified"));
+        var entered = new CountDownLatch(1);
+        var proceed = new CountDownLatch(1);
+        var first = new AtomicBoolean(true);
+        // Retirement stops in its ownership query, which it makes under the runtime lease's monitor.
+        when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenAnswer(query -> {
+            if (first.getAndSet(false)) {
+                entered.countDown();
+                assertThat(proceed.await(10, TimeUnit.SECONDS)).isTrue();
+            }
+            return Optional.of(job);
+        });
+        var runtime =
+                EvidenceFolderLease.tryAcquire(layout.root(), 1L, job.getId()).orElseThrow();
+        try (runtime) {
+            runtime.shareWithRemovals();
+            var retiring = new Thread(prepared::close);
+            retiring.start();
+            assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+            var identity = new AdmissionIdentity(job.getId(), 1L, 0, "worker");
+            var admitting = new Thread(() -> files.discardAdmittedAttempt(identity));
+            admitting.start();
+            await().atMost(Duration.ofSeconds(5)).until(() -> admitting.getState() == Thread.State.BLOCKED);
+            assertThat(read(files, job, "context/quote", sha)).contains(bytes);
+            proceed.countDown();
+            retiring.join(10_000);
+            admitting.join(10_000);
+            assertThat(retiring.isAlive()).isFalse();
+            assertThat(admitting.isAlive()).isFalse();
+        }
+        assertThat(read(files, job, "context/quote", sha)).isEmpty();
+        assertThat(layout.jobsRoot().resolve("1").resolve(job.getId().toString()))
+                .isEmptyDirectory();
     }
 
     private static AgentJob job() {

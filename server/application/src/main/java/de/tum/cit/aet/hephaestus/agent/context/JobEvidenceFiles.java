@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
@@ -164,7 +165,7 @@ public class JobEvidenceFiles {
             var closed = new AtomicBoolean();
             cleanups.add(() -> {
                 if (closed.compareAndSet(false, true)) {
-                    retire(root);
+                    retire(job, root);
                 }
             });
             cleanups.add(personCopies.finishCapture(job));
@@ -341,14 +342,17 @@ public class JobEvidenceFiles {
                 .replaceWith(UNDECODABLE);
     }
 
-    private void retire(Path root) throws IOException {
-        if (!Files.exists(root)) return;
-        var job = recordedJob(root);
-        if (job.isPresent() && admitted(job.get()) && matches(root, job.get())) {
-            deleteAttempt(root);
-        } else {
-            markEnded(root);
-        }
+    /** Under the runtime's own lease, one removal at a time with admission; an exclusive owner otherwise retires it. */
+    private void retire(AgentJob owner, Path root) throws IOException {
+        EvidenceFolderLease.removeAsOwner(layout.root(), owner.getWorkspace().getId(), owner.getId(), () -> {
+            if (!Files.exists(root)) return;
+            var job = recordedJob(root);
+            if (job.isPresent() && admitted(job.get()) && matches(root, job.get())) {
+                deleteAttempt(root);
+            } else {
+                markEnded(root);
+            }
+        });
     }
 
     /** Admission has committed; recheck ownership before removing the verified bytes. */
@@ -360,7 +364,11 @@ public class JobEvidenceFiles {
             if (!ObservationAdmissionService.isAdmitted(job)
                     || job.getRetryCount() != identity.attempt()
                     || !identity.workerId().equals(job.getWorkerId())) return;
-            deleteAttempt(directory(job));
+            // Removed now under the runtime's shared lease, or a new exclusive one. A sweep or an erasure that
+            // holds the job exclusively removes admitted bytes itself.
+            Path root = directory(job);
+            EvidenceFolderLease.removeAsOwner(
+                    layout.root(), identity.workspaceId(), identity.jobId(), () -> deleteAttempt(root));
         } catch (IOException | RuntimeException exception) {
             // Admission is durable. The scheduled cleaner retries a failed local removal.
             log.warn("Could not remove admitted attempt {}", identity.jobId(), exception);
@@ -393,7 +401,20 @@ public class JobEvidenceFiles {
                     });
             for (Path root : roots) {
                 if (!root.getFileName().toString().matches("[0-9]+-[0-9a-f]{64}")) continue;
+                // A capture holds this lease until its inputs are released, after retiring its own folder; erasure
+                // and the other sweep take it too. Whoever holds it owns the job's folders, and a later pass retries.
+                Optional<EvidenceFolderLease> acquired;
                 try {
+                    acquired = leaseJob(root);
+                } catch (RuntimeException exception) {
+                    log.warn("Could not clean attempt folder {}", root, exception);
+                    continue;
+                }
+                if (acquired.isEmpty()) continue;
+                var lease = acquired.get();
+                try (lease) {
+                    // The holder before this one may have removed it; only a removal of our own is reported.
+                    if (!present(root)) continue;
                     var job = recordedJob(root);
                     if (job.isPresent() && matches(root, job.get())) {
                         if (admitted(job.get())) {
@@ -421,6 +442,32 @@ public class JobEvidenceFiles {
             }
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
+        }
+    }
+
+    private Optional<EvidenceFolderLease> leaseJob(Path root) {
+        Path jobDirectory = Objects.requireNonNull(root.getParent());
+        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
+        return EvidenceFolderLease.tryAcquire(
+                layout.root(),
+                Long.parseLong(
+                        Objects.requireNonNull(workspaceDirectory.getFileName()).toString()),
+                UUID.fromString(
+                        Objects.requireNonNull(jobDirectory.getFileName()).toString()));
+    }
+
+    /** Whether anything of the attempt remains: its folder, its ended marker or a staging folder. */
+    private static boolean present(Path root) throws IOException {
+        if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)
+                || Files.exists(root.resolveSibling(root.getFileName() + ".ended"), LinkOption.NOFOLLOW_LINKS)) {
+            return true;
+        }
+        try (var siblings = Files.list(root.getParent())) {
+            return siblings.anyMatch(
+                    path -> path.getFileName().toString().startsWith("." + root.getFileName() + ".preparing-"));
+        } catch (NoSuchFileException jobRemoved) {
+            // Erasure removes the whole job folder; nothing of this attempt is left.
+            return false;
         }
     }
 
