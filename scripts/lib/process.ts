@@ -70,15 +70,19 @@ export async function succeeds(
 export async function output(
 	command: string,
 	args: string[],
-	options: RunOptions = {},
+	options: RunOptions & { input?: string } = {},
 ): Promise<string> {
-	const { stdout } = await execFileAsync(command, args, {
+	const pending = execFileAsync(command, args, {
 		cwd: options.cwd,
 		env: { ...process.env, ...options.env },
 		signal: options.signal,
 		encoding: "utf8",
 		maxBuffer: CAPTURE_LIMIT_BYTES,
 	});
+	if (options.input !== undefined) {
+		pending.child.stdin?.end(options.input);
+	}
+	const { stdout } = await pending;
 	return stdout;
 }
 
