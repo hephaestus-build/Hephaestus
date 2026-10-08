@@ -141,21 +141,28 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         Map<String, byte[]> files = new HashMap<>();
         Map<SourceKind, SourceCompleteness> completeness = new HashMap<>();
         Map<SourceKind, String> identities = new HashMap<>();
-        Map<SourceKind, Instant> observedAt = new HashMap<>();
         Map<SourceKind, SourceContentState> contentStates = new HashMap<>();
+        Map<SourceKind, List<String>> limitations = new HashMap<>();
 
         if (readsClone(selectedKinds)) {
             ensureRepositoryAvailable(new RepositoryKey(job.getWorkspace().getId(), repositoryId));
         }
         if (selectedKinds.contains(CORE)) {
-            storeMetadata(files, pullRequest, metadata);
-            files.put(
-                    DESCRIPTION_FILE,
-                    (pullRequest.getBody() == null ? "" : pullRequest.getBody()).getBytes(StandardCharsets.UTF_8));
-            completeness.put(CORE, SourceCompleteness.COMPLETE);
-            if (pullRequest.getLastSyncAt() != null) {
-                observedAt.put(CORE, pullRequest.getLastSyncAt());
+            ObjectNode staged = buildPullRequestMetadata(pullRequest, metadata, job.getCreatedAt());
+            storeMetadata(files, staged);
+            // The words the job was admitted with. A body known to be absent stages an empty description; a body the
+            // job does not carry as text stays unknown, so no description is staged rather than the current one.
+            JsonNode body = staged.get("body");
+            if (body != null) {
+                files.put(DESCRIPTION_FILE, (body.isNull() ? "" : body.asString()).getBytes(StandardCharsets.UTF_8));
             }
+            List<String> unknown = new ArrayList<>();
+            if (!staged.has("title")) unknown.add("RETAINED_TITLE_UNKNOWN");
+            if (body == null) unknown.add("RETAINED_BODY_UNKNOWN");
+            completeness.put(CORE, unknown.isEmpty() ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL);
+            if (!unknown.isEmpty()) limitations.put(CORE, unknown);
+            // No observedAt: the record mixes words retained at admission with status as last synced, and
+            // the sync time would date the words to a moment they were not read. metadata.json dates each part.
         }
         if (selectedKinds.contains(COMMENTS)) {
             CommentCapture comments = loadComments(job.getWorkspace().getId(), pullRequestId);
@@ -179,7 +186,17 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
                                 : SourceContentState.NON_EMPTY);
             }
         }
-        return new EvidenceContribution(files, completeness, identities, observedAt, Map.of(), contentStates);
+        return new EvidenceContribution(
+                files,
+                completeness,
+                identities,
+                Map.of(),
+                Map.of(),
+                contentStates,
+                Map.of(),
+                Map.of(),
+                null,
+                limitations);
     }
 
     private static boolean readsClone(Set<SourceKind> selectedKinds) {
@@ -197,12 +214,11 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
     }
 
-    private void storeMetadata(Map<String, byte[]> files, PullRequest pullRequest, JsonNode metadata) {
-        ObjectNode pullRequestMetadata = buildPullRequestMetadata(pullRequest, metadata);
+    private void storeMetadata(Map<String, byte[]> files, JsonNode content) {
         try {
             files.put(
                     OUTPUT_PREFIX + "metadata.json",
-                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(pullRequestMetadata));
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(content));
         } catch (JacksonException e) {
             throw new JobPreparationException("Failed to serialize pull request metadata", e);
         }
@@ -230,8 +246,29 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
     }
 
-    private ObjectNode buildPullRequestMetadata(PullRequest pullRequest, JsonNode jobMetadata) {
+    /** The fields copied from the job as it was admitted; every other field is the mirror at capture. */
+    private static final List<String> ADMISSION_FIELDS = List.of(
+            "pr_number",
+            "pr_url",
+            "repository_full_name",
+            "source_branch",
+            "target_branch",
+            "commit_sha",
+            "subject_role",
+            "title",
+            "body");
+
+    private ObjectNode buildPullRequestMetadata(
+            PullRequest pullRequest, JsonNode jobMetadata, @Nullable Instant admittedAt) {
         ObjectNode result = objectMapper.createObjectNode();
+        // Which time each part describes. Admission is when the job was accepted, not when the provider event
+        // happened; the mirror sync time dates the status fields only. No status is reconstructed for admission.
+        ObjectNode basis = result.putObject("basis");
+        ArrayNode admitted = basis.putArray("admission_fields");
+        ADMISSION_FIELDS.forEach(admitted::add);
+        putInstant(basis, "admitted_at", admittedAt);
+        basis.put("other_fields", "CAPTURE");
+        putInstant(basis, "mirror_synced_at", pullRequest.getLastSyncAt());
         result.put("pr_number", requireInt(jobMetadata, "pr_number"));
         result.put("pr_url", requireText(jobMetadata, "pr_url"));
         result.put("repository_full_name", requireText(jobMetadata, "repository_full_name"));
@@ -242,8 +279,15 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
                 "subject_role",
                 "REVIEWER".equals(MetaJson.optString(jobMetadata, "subject_role")) ? "REVIEWER" : "AUTHOR");
 
-        result.put("title", pullRequest.getTitle());
-        result.put("body", pullRequest.getBody());
+        // Absent key: the job does not carry the text, which is unknown, never the current text instead.
+        JsonNode title = jobMetadata.get("title");
+        if (title != null && title.isString()) {
+            result.put("title", title.asString());
+        }
+        JsonNode body = jobMetadata.get("body");
+        if (body != null && (body.isString() || body.isNull())) {
+            result.put("body", body.isNull() ? null : body.asString());
+        }
         if (pullRequest.getState() != null) {
             result.put("state", pullRequest.getState().name());
         }
