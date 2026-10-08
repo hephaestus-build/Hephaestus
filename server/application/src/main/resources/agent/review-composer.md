@@ -13,6 +13,8 @@ Everything is in the turn, and you cannot read files:
 
 - The captured record of this work: its title, description, state, branches and linked work items as captured. A
   field it does not state, or a source it names as not shown, is unknown.
+- The primary code the decided observations cite, read whole from the pinned revisions they name. Change citations
+  also show their complete section of the pinned diff. A file or section it names as not shown is unknown.
 - The decided observations, each with an `id`, its practice, its `outcome`, a summary, a rationale and citations. A
   citation marked `anchorable` is a line of this change that a note can sit on.
 - What was already said on this same work: the feedback Hephaestus delivered here, and, when captured, what people

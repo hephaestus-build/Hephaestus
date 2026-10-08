@@ -147,14 +147,18 @@ export function parseNameStatus(
 const RENAMES = "--find-renames=50%";
 const MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
 
-function git(repository: string, args: [string, ...string[]]): Buffer {
+function git(
+	repository: string,
+	args: [string, ...string[]],
+	maxBuffer = MAX_OUTPUT_BYTES,
+): Buffer {
 	// A path is printed as its bytes, not as git's quoted-octal rendering: the path a citation names is
 	// the path the checkout has, and the server verifies it against the same bytes.
 	const child = spawnSync(
 		"git",
 		["-C", repository, "--no-pager", "-c", "core.quotePath=false", ...args],
 		{
-			maxBuffer: MAX_OUTPUT_BYTES,
+			maxBuffer,
 			env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
 		},
 	);
@@ -167,6 +171,152 @@ function git(repository: string, args: [string, ...string[]]): Buffer {
 		throw new Error(`git ${args[0]} failed (${ending}): ${child.stderr.toString("utf8").trim()}`);
 	}
 	return child.stdout;
+}
+
+/** What a pinned revision holds at a path, read from Git objects and never from the working tree. */
+export type PinnedBlob =
+	| { kind: "regular"; bytes: Buffer }
+	| { kind: "tooLarge"; size: number }
+	| { kind: "absent" | "nonregular" | "unsafe" | "unreadable" };
+
+/** A relative path a citation may name: no traversal, `.git`, backslash or control character in any segment. */
+export function safeRepositoryPath(file: string): boolean {
+	return (
+		file !== "" &&
+		!/[\\\p{Cc}]/u.test(file) &&
+		file
+			.split("/")
+			.every(
+				(part) => part !== "" && part !== "." && part !== ".." && part.toLowerCase() !== ".git",
+			)
+	);
+}
+
+/**
+ * The regular file at `file` in `revision`, read whole only when Git's recorded size is within `limit`. A link, a
+ * submodule or a directory is named as not a regular file; its target is never followed.
+ */
+export function readPinnedBlob(
+	repository: string,
+	revision: string,
+	file: string,
+	limit: number,
+): PinnedBlob {
+	if (!isSha(revision) || !safeRepositoryPath(file)) {
+		return { kind: "unsafe" };
+	}
+	let entry: RegExpExecArray | null;
+	try {
+		const listing = git(repository, [
+			"--literal-pathspecs",
+			"ls-tree",
+			"-l",
+			"-z",
+			"--full-tree",
+			revision,
+			"--",
+			file,
+		]).toString("utf8");
+		entry =
+			listing
+				.split("\0")
+				.map((record) =>
+					/^(?<mode>\d{6}) (?<type>\w+) (?<id>[0-9a-f]+) +(?<size>\S+)\t(?<path>.*)$/su.exec(
+						record,
+					),
+				)
+				.find((match) => match?.groups?.path === file) ?? null;
+	} catch {
+		return { kind: "unreadable" };
+	}
+	const groups = entry?.groups;
+	if (groups === undefined) {
+		return { kind: "absent" };
+	}
+	if (groups.type !== "blob" || (groups.mode !== "100644" && groups.mode !== "100755")) {
+		return { kind: "nonregular" };
+	}
+	const size = Number(groups.size);
+	if (!Number.isSafeInteger(size)) {
+		return { kind: "unreadable" };
+	}
+	if (size > limit) {
+		return { kind: "tooLarge", size };
+	}
+	try {
+		return { kind: "regular", bytes: git(repository, ["cat-file", "blob", groups.id ?? ""]) };
+	} catch {
+		return { kind: "unreadable" };
+	}
+}
+
+/** The pinned change as Git prints it, annotated and divided by file, or why it cannot be shown. */
+export type PinnedDiff =
+	| {
+			kind: "available";
+			files: ReturnType<typeof parseNameStatus>;
+			text: string;
+			sections: Map<string, [number, number]>;
+	  }
+	| { kind: "tooLarge" | "unreadable" | "invalidText" };
+
+/**
+ * The complete diff of the pinned range from Git itself, by the same command and coordinates as the derived change
+ * view and never from that view's files. Output over `limit` bytes is refused whole, never cut; text that is not
+ * valid UTF-8 is refused rather than replaced.
+ */
+export function pinnedDiff(
+	repository: string,
+	base: string,
+	head: string,
+	limit: number,
+): PinnedDiff {
+	if (!isSha(base) || !isSha(head)) {
+		return { kind: "unreadable" };
+	}
+	const range = [base, head];
+	let patch: Buffer;
+	let listing: Buffer;
+	try {
+		patch = git(repository, ["diff", "--no-color", "--no-ext-diff", RENAMES, ...range], limit);
+		listing = git(
+			repository,
+			["diff", "--no-color", "--name-status", "-z", RENAMES, ...range],
+			limit,
+		);
+	} catch (error) {
+		return {
+			kind:
+				error instanceof Error && "code" in error && error.code === "ENOBUFS"
+					? "tooLarge"
+					: "unreadable",
+		};
+	}
+	let annotated: Buffer;
+	try {
+		annotated = annotateDiff(patch);
+	} catch {
+		return { kind: "unreadable" };
+	}
+	let text: string;
+	try {
+		text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(annotated);
+	} catch {
+		return { kind: "invalidText" };
+	}
+	return { kind: "available", files: parseNameStatus(listing), text, sections: diffSections(text) };
+}
+
+/** The commit the checkout has checked out, or null when it cannot be read. */
+export function checkedOutCommit(repository: string): string | null {
+	try {
+		const head = git(repository, ["rev-parse", "--verify", "HEAD^{commit}"])
+			.toString("utf8")
+			.trim();
+		return isSha(head) ? head : null;
+	} catch {
+		return null;
+	}
 }
 
 /** Where a hosting provider keeps the form a description is opened with, relative to the checkout. */

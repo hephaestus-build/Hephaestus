@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import test from "node:test";
 
 import {
+	diffSections,
+	type PinnedBlob,
+	type PinnedDiff,
+} from "../../../main/resources/agent/pi-change.ts";
+import {
 	buildBrief,
+	buildPrimarySourceReference,
 	buildPublicReviewHistory,
 	buildSameWorkContext,
 } from "../../../main/resources/agent/pi-review-brief.ts";
@@ -13,6 +20,402 @@ import {
 const paths = { contextRoot: "context", repositoryRoot: "repos/reviewed" };
 
 const FRAMING = { repositoryFullName: "group/repo", pullRequestNumber: 7 };
+
+const BASE = "b".repeat(40);
+const HEAD = "a".repeat(40);
+const EARLIER = "c".repeat(40);
+const LOADER = `struct Item: Decodable {\n    let id: Int\n    let name: String\n}\n\nfunc load(_ data: Data) -> [Item] {\n    do {\n        return try JSONDecoder().decode([Item].self, from: data)\n    } catch {\n        print("decode failed: \\(error)")\n        return []\n    }\n}\n`;
+const LOADER_SECTION =
+	'diff --git a/App/Loader.swift b/App/Loader.swift\n--- a/App/Loader.swift\n+++ b/App/Loader.swift\n@@ -9,1 +9,2 @@\n[L9]     } catch {\n[L10] +        print("decode failed: \\(error)")';
+
+const LEGACY_SECTION =
+	"diff --git a/App/Legacy.swift b/App/Legacy.swift\ndeleted file mode 100644\n--- a/App/Legacy.swift\n+++ /dev/null\n@@ -1,1 +0,0 @@\n[L1] -func legacy() {}";
+const UNCITED_SECTION =
+	'diff --git a/App/Secret.swift b/App/Secret.swift\n--- a/App/Secret.swift\n+++ b/App/Secret.swift\n@@ -1,1 +1,1 @@\n[L1] -let token = "old"\n[L1] +let token = "UNCITED-SENTINEL"';
+const PINNED_TEXT = `${LOADER_SECTION}\n${LEGACY_SECTION}\n${UNCITED_SECTION}\n`;
+const PINNED_DIFF: PinnedDiff = {
+	kind: "available",
+	files: [
+		{ status: "M", path: "App/Loader.swift" },
+		{ status: "D", path: "App/Legacy.swift" },
+		{ status: "M", path: "App/Secret.swift" },
+	],
+	text: PINNED_TEXT,
+	sections: diffSections(PINNED_TEXT),
+};
+
+/**
+ * A captured pull request whose primary checkout and pinned change are recorded. Its derived change view is stale on
+ * purpose: the reference reads the pinned diff from Git, so nothing of the view may reach it.
+ */
+function primaryCapture(t: { after: (cleanup: () => void) => void }) {
+	const root = mkdtempSync(nodePath.join(tmpdir(), "pi-primary-"));
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	mkdirSync(nodePath.join(root, "context"), { recursive: true });
+	mkdirSync(nodePath.join(root, "work/change"), { recursive: true });
+	writeFileSync(
+		nodePath.join(root, "context/change.json"),
+		JSON.stringify({ base_sha: BASE, head_sha: HEAD }),
+	);
+	writeFileSync(
+		nodePath.join(root, "work/change/files.json"),
+		JSON.stringify({ files: [{ status: "M", path: "App/Loader.swift", diffPatchLines: [1, 2] }] }),
+	);
+	writeFileSync(
+		nodePath.join(root, "work/change/diff.patch"),
+		"diff --git a/App/Loader.swift b/App/Loader.swift\n[L1] +STALE-SENTINEL\n",
+	);
+	const tree = "repos/reviewed/.git/HEAD";
+	const refs = "repos/reviewed/.git/hephaestus-captured-refs";
+	const index = {
+		artifactKind: "scm.pull_request",
+		sources: [
+			{
+				kind: "scm.repository.tree",
+				state: {
+					availability: "AVAILABLE",
+					completeness: "PARTIAL",
+					limitations: ["Submodules are not captured."],
+					facts: { immutableIdentity: `${HEAD}:${"d".repeat(40)}` },
+				},
+				artifacts: [{ path: tree }, { path: refs }],
+			},
+			{
+				kind: "scm.pull-request.diff",
+				state: { availability: "AVAILABLE", facts: { immutableIdentity: `${BASE}:${HEAD}` } },
+				artifacts: [{ path: "context/change.json" }],
+			},
+		],
+		artifacts: [
+			{ kind: "scm.repository.tree", artifact: { path: tree } },
+			{ kind: "scm.repository.tree", artifact: { path: refs } },
+			{ kind: "scm.pull-request.diff", artifact: { path: "context/change.json" } },
+		],
+	};
+	return { root, index };
+}
+
+const sha = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
+
+/** A verified code citation as admission returns it. */
+function cited(
+	sourceKind: string,
+	path: string,
+	revision: string,
+	text: string | Buffer,
+	extra: Record<string, unknown> = {},
+) {
+	return {
+		index: 0,
+		sourceKind,
+		artifactPath:
+			sourceKind === "scm.repository.tree" ? "repos/reviewed/.git/HEAD" : "context/change.json",
+		path,
+		revision,
+		startLine: 1,
+		quote: "x",
+		verification: { status: "VERIFIED", scope: "EXACT_LOCATION", artifactSha256: sha(text) },
+		...extra,
+	};
+}
+
+const decided = (citations: unknown[]) => ({
+	id: "o",
+	outcome: "NOT_MET",
+	publicEligible: true,
+	citations,
+});
+
+/** A reader over fixed blobs and one pinned diff that remembers every blob and range it was asked for. */
+function blobs(
+	files: Record<string, PinnedBlob>,
+	checkedOut = HEAD,
+	diff: PinnedDiff = PINNED_DIFF,
+) {
+	const asked: string[] = [];
+	return {
+		asked,
+		reader: {
+			blob: (revision: string, path: string) => {
+				asked.push(`${revision}:${path}`);
+				return files[`${revision}:${path}`] ?? { kind: "absent" as const };
+			},
+			diff: (base: string, head: string) => {
+				asked.push(`diff ${base}..${head}`);
+				return diff;
+			},
+			checkedOut: () => checkedOut,
+		},
+	};
+}
+
+void test("cited primary code arrives whole, once per file and revision, with its complete change section", (t) => {
+	const { root, index } = primaryCapture(t);
+	const model = "struct Item {}\n";
+	const legacy = "func legacy() {}\n";
+	const read = blobs({
+		[`${HEAD}:App/Loader.swift`]: { kind: "regular", bytes: Buffer.from(LOADER) },
+		[`${EARLIER}:App/Model.swift`]: { kind: "regular", bytes: Buffer.from(model) },
+		[`${BASE}:App/Legacy.swift`]: { kind: "regular", bytes: Buffer.from(legacy) },
+	});
+	const reference = buildPrimarySourceReference(
+		root,
+		"context",
+		"repos/reviewed",
+		index,
+		[
+			{
+				id: "concern",
+				outcome: "NOT_MET",
+				publicEligible: true,
+				citations: [
+					cited("scm.pull-request.diff", "App/Loader.swift", HEAD, LOADER, { side: "NEW" }),
+				],
+			},
+			{
+				id: "strength",
+				outcome: "MET",
+				publicEligible: true,
+				citations: [
+					cited("scm.pull-request.diff", "App/Loader.swift", HEAD, LOADER, { side: "NEW" }),
+					cited("scm.repository.tree", "App/Model.swift", EARLIER, model),
+					cited("scm.pull-request.diff", "App/Legacy.swift", BASE, legacy, { side: "OLD" }),
+				],
+			},
+		],
+		read.reader,
+	);
+	// The whole declaration and catch, numbered, and the unchanged decode line beside the added one in the change.
+	assert.ok(reference.includes("[L2]     let id: Int"), reference);
+	assert.ok(
+		reference.includes(String.raw`[L10]         print("decode failed: \(error)")`),
+		reference,
+	);
+	assert.equal(reference.split("[L8]         return try JSONDecoder()").length, 2, reference);
+	assert.equal(reference.split(LOADER_SECTION).length, 2, reference);
+	assert.equal(reference.split(LEGACY_SECTION).length, 2, reference);
+	// Only the cited files' sections of the pinned diff; the stale derived view and uncited code never appear.
+	assert.ok(!reference.includes("UNCITED-SENTINEL"), reference);
+	assert.ok(!reference.includes("STALE-SENTINEL"), reference);
+	// An explicit repository revision is read as cited; a removed file only from the base; the diff once.
+	assert.deepEqual(read.asked, [
+		`${HEAD}:App/Loader.swift`,
+		`diff ${BASE}..${HEAD}`,
+		`${EARLIER}:App/Model.swift`,
+		`${BASE}:App/Legacy.swift`,
+	]);
+	assert.ok(
+		reference.includes(`\`App/Model.swift\` at \`${EARLIER}\`, the repository revision`),
+		reference,
+	);
+	assert.ok(reference.includes(`\`App/Legacy.swift\` at \`${BASE}\`, the OLD side`), reference);
+	// A permitted file of a partial capture stays shown and qualified; an unstated completeness is not complete.
+	assert.ok(reference.includes("PARTIAL: Submodules are not captured."), reference);
+	assert.ok(
+		reference.includes("`scm.pull-request.diff` capture is of unknown completeness"),
+		reference,
+	);
+});
+
+void test("private, auxiliary, undecided or unverifiable citations never expose source", (t) => {
+	const { root, index } = primaryCapture(t);
+	const text = "let x = 1\n";
+	const image = Buffer.from([0x89, 0x00, 0x01]);
+	const read = blobs({
+		[`${HEAD}:Changed.swift`]: { kind: "regular", bytes: Buffer.from("let x = 2\n") },
+		[`${HEAD}:Image.png`]: { kind: "regular", bytes: image },
+		[`${HEAD}:Link.swift`]: { kind: "nonregular" },
+		[`${HEAD}:Huge.swift`]: { kind: "tooLarge", size: 40_000 },
+		[`${HEAD}:Private.swift`]: { kind: "regular", bytes: Buffer.from(text) },
+	});
+	const reference = buildPrimarySourceReference(
+		root,
+		"context",
+		"repos/reviewed",
+		index,
+		[
+			{
+				...decided([cited("scm.repository.tree", "Private.swift", HEAD, text)]),
+				publicEligible: false,
+			},
+			{
+				...decided([cited("scm.repository.tree", "Private.swift", HEAD, text)]),
+				outcome: "UNDETERMINED",
+			},
+			decided([
+				cited("scm.repository.tree", "Private.swift", HEAD, text, {
+					artifactPath: "repos/other/.git/HEAD",
+				}),
+				{
+					...cited("scm.repository.tree", "Private.swift", HEAD, text),
+					verification: { status: "UNVERIFIED" },
+				},
+				cited("scm.repository.tree", "Changed.swift", HEAD, text),
+				cited("scm.repository.tree", "Image.png", HEAD, image),
+				cited("scm.repository.tree", "Link.swift", HEAD, text),
+				cited("scm.repository.tree", "Huge.swift", HEAD, text),
+				cited("scm.repository.tree", "Missing.swift", HEAD, text),
+				cited("scm.pull-request.diff", "App/Loader.swift", EARLIER, text, { side: "NEW" }),
+			]),
+		],
+		read.reader,
+	);
+	assert.ok(!read.asked.includes(`${HEAD}:Private.swift`), read.asked.join("\n"));
+	assert.ok(!reference.includes("let x"), reference);
+	for (const reason of [
+		`\`Changed.swift\` at \`${HEAD}\`: its bytes differ from the ones admission verified`,
+		`\`Link.swift\` at \`${HEAD}\`: not a regular file`,
+		`\`Huge.swift\` at \`${HEAD}\`: too large to show here (40 KB)`,
+		`\`Missing.swift\` at \`${HEAD}\`: no such file at this revision`,
+		`\`App/Loader.swift\` at \`${EARLIER}\`: names a revision outside the pinned change`,
+	]) {
+		assert.ok(reference.includes(reason), `${reason}\n${reference}`);
+	}
+	assert.ok(reference.includes(`\`Image.png\` at \`${HEAD}\`: binary`), reference);
+
+	// A checkout that is not the captured revision vouches for nothing it holds.
+	const moved = blobs(
+		{ [`${HEAD}:Private.swift`]: { kind: "regular", bytes: Buffer.from(text) } },
+		EARLIER,
+	);
+	const unpinned = buildPrimarySourceReference(
+		root,
+		"context",
+		"repos/reviewed",
+		index,
+		[decided([cited("scm.repository.tree", "Private.swift", HEAD, text)])],
+		moved.reader,
+	);
+	assert.deepEqual(moved.asked, []);
+	assert.match(unpinned, /`Private\.swift` at `a+`: the checkout is not the captured revision/u);
+
+	// Code of the change is read from the checkout, so a change citation also needs the checkout's capture.
+	const withoutTree = {
+		...index,
+		sources: index.sources.filter((source) => source.kind !== "scm.repository.tree"),
+	};
+	const untracked = blobs({
+		[`${HEAD}:App/Loader.swift`]: { kind: "regular", bytes: Buffer.from(LOADER) },
+	});
+	const treeless = buildPrimarySourceReference(
+		root,
+		"context",
+		"repos/reviewed",
+		withoutTree,
+		[decided([cited("scm.pull-request.diff", "App/Loader.swift", HEAD, LOADER, { side: "NEW" })])],
+		untracked.reader,
+	);
+	assert.deepEqual(untracked.asked, []);
+	assert.match(treeless, /`App\/Loader\.swift` at `a+`: not part of this capture/u);
+});
+
+void test("text is shown only as valid UTF-8 and a rejected citation does not hide a verified one", (t) => {
+	const { root, index } = primaryCapture(t);
+	const recovered = "let recovered = true\n";
+	const invalid = Buffer.from([0x6c, 0x65, 0x74, 0x20, 0xff, 0x0a]);
+	const marked = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("let marked = 1\n")]);
+	const read = blobs(
+		{
+			[`${HEAD}:Recovered.swift`]: { kind: "regular", bytes: Buffer.from(recovered) },
+			[`${HEAD}:Invalid.swift`]: { kind: "regular", bytes: invalid },
+			[`${HEAD}:Marked.swift`]: { kind: "regular", bytes: marked },
+			[`${HEAD}:App/Loader.swift`]: { kind: "regular", bytes: Buffer.from(LOADER) },
+		},
+		HEAD,
+		{ kind: "tooLarge" },
+	);
+	const reference = buildPrimarySourceReference(
+		root,
+		"context",
+		"repos/reviewed",
+		index,
+		[
+			{
+				id: "o",
+				outcome: "NOT_MET",
+				publicEligible: true,
+				citations: [
+					cited("scm.repository.tree", "Recovered.swift", HEAD, "something else\n"),
+					cited("scm.repository.tree", "Recovered.swift", HEAD, recovered),
+					cited("scm.repository.tree", "Invalid.swift", HEAD, invalid),
+					cited("scm.repository.tree", "Marked.swift", HEAD, marked),
+					cited("scm.pull-request.diff", "App/Loader.swift", HEAD, LOADER, { side: "NEW" }),
+				],
+			},
+		],
+		read.reader,
+	);
+	assert.ok(reference.includes(`\`Recovered.swift\` at \`${HEAD}\`: its bytes differ`), reference);
+	assert.equal(reference.split("[L1] let recovered = true").length, 2, reference);
+	assert.ok(
+		reference.includes(`\`Invalid.swift\` at \`${HEAD}\`: not valid UTF-8 text`),
+		reference,
+	);
+	assert.ok(!reference.includes("�"), reference);
+	assert.ok(reference.includes("[L1] ﻿let marked = 1"), reference);
+	// A change over its bound is named whole: the file stands, and nothing says the change is empty.
+	assert.ok(reference.includes("[L2]     let id: Int"), reference);
+	assert.match(
+		reference,
+		/the change to `App\/Loader\.swift` from `b+` to `a+`: the whole change exceeds the bound/u,
+	);
+});
+
+void test("a regular new file cannot expose an excluded counterpart through its diff", (t) => {
+	const { root, index } = primaryCapture(t);
+	const code = "let visible = true\n";
+	const file = "App/Visible.swift";
+	for (const [oldPath, mode, reason] of [
+		[file, "old mode 120000\nnew mode 100644\n", "a link or submodule"],
+		[String.raw`App/old\name.swift`, "", "a path on one side of this change"],
+	] as const) {
+		const section = `diff --git a/${oldPath} b/${file}\n${mode}--- a/${oldPath}\n+++ b/${file}\n@@ -1,1 +1,1 @@\n[L1] -EXCLUDED-COUNTERPART-SENTINEL\n[L1] +let visible = true\n`;
+		const diff: PinnedDiff = {
+			kind: "available",
+			files: [{ status: "R", path: file, oldPath }],
+			text: section,
+			sections: diffSections(section),
+		};
+		const read = blobs(
+			{ [`${HEAD}:${file}`]: { kind: "regular", bytes: Buffer.from(code) } },
+			HEAD,
+			diff,
+		);
+		const observations = [
+			{
+				id: "o",
+				outcome: "NOT_MET",
+				publicEligible: true,
+				citations: [cited("scm.pull-request.diff", file, HEAD, code, { side: "NEW" })],
+			},
+		];
+		const reference = buildPrimarySourceReference(
+			root,
+			"context",
+			"repos/reviewed",
+			index,
+			observations,
+			read.reader,
+		);
+		assert.ok(reference.includes("[L1] let visible = true"), reference);
+		assert.ok(reference.includes(reason), reference);
+		assert.ok(!reference.includes("EXCLUDED-COUNTERPART-SENTINEL"), reference);
+		assert.ok(!reference.includes("diff --git"), reference);
+		const bounded = buildPrimarySourceReference(
+			root,
+			"context",
+			"repos/reviewed",
+			index,
+			observations,
+			read.reader,
+			{ filePerChars: 24_000, diffChars: 64_000, totalChars: 600 },
+		);
+		assert.ok(bounded.length <= 600, bounded);
+		assert.ok(!bounded.includes("[L1] let visible = true"), bounded);
+		assert.ok(!bounded.includes("EXCLUDED-COUNTERPART-SENTINEL"), bounded);
+		assert.ok(bounded.includes("omitted") || bounded.includes("exceed"), bounded);
+	}
+});
 
 /** A pull request capture index whose core and linked-work sources are in the given states. */
 function pullRequestIndex(

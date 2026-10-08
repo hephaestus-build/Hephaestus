@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,8 +8,11 @@ import test from "node:test";
 import {
 	annotateDiff,
 	authoredDescription,
+	checkedOutCommit,
 	parseNameStatus,
+	pinnedDiff,
 	readChange,
+	readPinnedBlob,
 	renderAuthoredDescription,
 	writeChangeView,
 } from "../../../main/resources/agent/pi-change.ts";
@@ -133,6 +136,75 @@ function repositoryWithChange() {
 	const head = git(repo, "rev-parse", "HEAD");
 	return { root, repo, base, head };
 }
+
+void test("a pinned file is read from the revision named, never from the checkout or through a link", (t) => {
+	const { root, repo, base, head } = repositoryWithChange();
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	symlinkSync("/etc/hostname", path.join(repo, "outside.ts"));
+	writeFileSync(path.join(repo, "lib.ts"), "export const changedAfterCapture = true;\n");
+	git(repo, "add", "outside.ts");
+	git(repo, "commit", "-q", "-m", "Link outside");
+	const linked = git(repo, "rev-parse", "HEAD");
+	const read = (revision: string, file: string, limit = 1000) =>
+		readPinnedBlob(repo, revision, file, limit);
+
+	// The renamed file's old side exists only at the base; the working tree's edit is not what was reviewed.
+	assert.deepEqual(read(base, "app.ts"), {
+		kind: "regular",
+		bytes: Buffer.from("export const a = 1;\nexport const b = 2;\nexport const c = 3;\n"),
+	});
+	assert.deepEqual(read(head, "app.ts"), { kind: "absent" });
+	assert.deepEqual(read(head, "lib.ts"), {
+		kind: "regular",
+		bytes: Buffer.from("export const a = 1;\nexport const b = 20;\nexport const c = 3;\n"),
+	});
+	assert.deepEqual(read(head, "lib.ts", 10), { kind: "tooLarge", size: 61 });
+	assert.deepEqual(read(linked, "outside.ts"), { kind: "nonregular" });
+	assert.deepEqual(read(head, ".gitlab"), { kind: "nonregular" });
+	for (const unsafe of [
+		"",
+		"/etc/hostname",
+		"../app.ts",
+		"a/../app.ts",
+		".git/config",
+		String.raw`a\b`,
+		"a//b",
+		"a\nb",
+	]) {
+		assert.deepEqual(read(head, unsafe), { kind: "unsafe" }, JSON.stringify(unsafe));
+	}
+	assert.deepEqual(read("HEAD", "lib.ts"), { kind: "unsafe" });
+	assert.deepEqual(read("f".repeat(40), "lib.ts"), { kind: "unreadable" });
+	assert.equal(checkedOutCommit(repo), linked);
+});
+
+void test("the pinned change comes from Git whole, as the change view derives it, or is refused whole", (t) => {
+	const { root, repo, base, head } = repositoryWithChange();
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	writeChangeView(root, repo, { base, head });
+	const derived = readFileSync(path.join(root, "work/change/diff.patch"), "utf8");
+	// A later edit of the derived view changes nothing the pinned diff says.
+	writeFileSync(path.join(root, "work/change/diff.patch"), "STALE-SENTINEL\n");
+
+	const pinned = pinnedDiff(repo, base, head, 64_000);
+	assert.ok(pinned.kind === "available", pinned.kind);
+	assert.equal(pinned.text, derived);
+	assert.deepEqual(
+		pinned.files.find((file) => file.path === "lib.ts"),
+		{ status: "R", path: "lib.ts", oldPath: "app.ts" },
+	);
+	assert.ok(pinned.sections.has("a/app.ts b/lib.ts"));
+	assert.ok(!pinned.text.includes("STALE-SENTINEL"));
+
+	assert.deepEqual(pinnedDiff(repo, base, head, 10), { kind: "tooLarge" });
+	assert.deepEqual(pinnedDiff(repo, "HEAD", head, 64_000), { kind: "unreadable" });
+	writeFileSync(path.join(repo, "latin1.txt"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
+	git(repo, "add", "latin1.txt");
+	git(repo, "commit", "-q", "-m", "Latin-1 text");
+	assert.deepEqual(pinnedDiff(repo, head, git(repo, "rev-parse", "HEAD"), 64_000), {
+		kind: "invalidText",
+	});
+});
 
 void test("annotates every hunk line with its source coordinate and leaves headers alone", () => {
 	const patch = Buffer.from(
