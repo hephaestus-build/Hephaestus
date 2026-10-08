@@ -1,0 +1,53 @@
+---
+title: Passkeys
+description: Protect admin access with a passkey and recover access if you lose a device.
+---
+
+# Passkeys
+
+A passkey lets your device confirm that it is you.
+Hephaestus still uses your connected sign-in provider to identify your account.
+A passkey adds protection before you use admin access.
+
+Your instance or workspace can require passkeys for administration.
+You cannot turn off a required policy through your personal settings.
+You can still use your ordinary member access without admin verification.
+
+## Add a passkey
+
+1. Sign in and open **User settings**.
+2. Find **Passkeys** and enter a name for your device.
+3. Select **Register passkey** and follow your browser's instructions.
+4. Select **Verify passkey** and follow the verification prompt.
+5. Add a second passkey on another device.
+6. Select **Replace recovery codes** and store the codes in a safe place outside the browser.
+
+Your device can use its screen lock, fingerprint, or face recognition to confirm access.
+Hephaestus does not receive that biometric data.
+Use a current browser over a secure connection.
+
+## Confirm admin access
+
+Select **Verify passkey** in **User settings** when Hephaestus asks you to confirm access.
+Then return to the admin page and repeat your action.
+Hephaestus does not repeat a refused action automatically.
+Sensitive changes need a recent verification.
+
+Personal protection applies even when your instance makes passkeys optional.
+Turning off personal protection does not remove an instance or workspace requirement.
+Verify a passkey before you change personal protection or recovery codes.
+You must keep at least one registered passkey.
+
+## Recover access
+
+If you lose your passkeys, sign in through your usual provider and open **Recover passkeys** in **User settings**.
+Enter a recovery code and select **Start recovery**.
+Recovery removes the old passkeys and signs out your other sessions.
+It does not restore admin access.
+Register and verify a replacement passkey, add another passkey, and replace your recovery codes.
+
+Each recovery code works once.
+Recovery also invalidates the remaining codes.
+Replacing the codes makes all earlier codes invalid.
+If you have no passkey or recovery code, contact your instance operator.
+A workspace admin cannot reset your passkeys.

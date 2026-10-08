@@ -171,6 +171,9 @@ public class HephaestusJwtIssuer {
             // rotation: a silent refresh must not make a session look freshly signed in.
             claims.claim("auth_time", constraints.authTime().getEpochSecond());
         }
+        if (constraints.passkeyTime() != null) {
+            claims.claim("passkey_time", constraints.passkeyTime().getEpochSecond());
+        }
         if (constraints.sessionId() != null) {
             claims.claim("sid", constraints.sessionId().toString());
         }

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.UserViewAccess;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.RecentSignInPolicy;
+import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyAssurancePolicy;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import java.nio.charset.StandardCharsets;
@@ -33,9 +34,11 @@ public class UserViewAccessService implements UserViewAccess {
     private final AuthEventLogger audit;
     private final ObjectMapper mapper;
     private final RecentSignInPolicy recentSignIn;
+    private final PasskeyAssurancePolicy passkeys;
 
     @Override
     public void requireRecentSignIn(@Nullable Authentication authentication, long actingAccountId) {
+        passkeys.requireInstanceAdmin(authentication, true);
         recentSignIn.require(authentication, AuthEvent.EventType.USER_VIEW, actingAccountId);
     }
 

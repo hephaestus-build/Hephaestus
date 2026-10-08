@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.feature.FeatureFlag;
 import de.tum.cit.aet.hephaestus.feature.FeatureFlagService;
@@ -105,6 +106,7 @@ class WorkspaceRegistryControllerTest {
 
     private WorkspaceRegistryController controller(WorkspaceProperties.CreationPolicy policy) {
         return new WorkspaceRegistryController(
+                mock(AdminPasskeyAccess.class),
                 workspaceService,
                 workspaceQueryService,
                 featureFlagService,

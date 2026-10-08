@@ -32,13 +32,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
     @Autowired
     private ReviewBackfillRunRepository runRepository;
 
-    /**
-     * Authenticated the way production is: a numeric JWT {@code sub}, which is what
-     * {@code SecurityUtils.getCurrentAccountId()} reads (ADR 0017). {@code @WithAdminUser}'s token
-     * carries a non-numeric subject, and a campaign refuses to be created without an account to
-     * attribute the spend to — so a test using it would prove the refusal rather than the feature.
-     */
-    private static final String ADMIN_ACCOUNT_TOKEN = "mock-jwt-sub-1";
+    private static final String ADMIN_ACCOUNT_TOKEN = "mock-jwt-token-for-admin-user";
 
     private static final Instant TO = Instant.parse("2026-08-07T00:00:00Z");
     private static final Instant FROM = TO.minus(Duration.ofDays(30));

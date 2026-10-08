@@ -20,6 +20,9 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
         TIMESTAMPTZ deleted_at
         BIGINT version "NOT NULL"
+        BOOLEAN passkey_protection_enabled "NOT NULL"
+        BOOLEAN passkey_recovery_required "NOT NULL"
+        VARCHAR(64) passkey_user_handle UK
     }
 
     AccountAiChoice {
@@ -1008,6 +1011,26 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
     }
 
+    PasskeyChallenge {
+        UUID id PK
+        TIMESTAMPTZ expires_at "NOT NULL"
+        TEXT options_json "NOT NULL"
+        VARCHAR(16) purpose "NOT NULL"
+        UUID token_id "NOT NULL"
+        BIGINT account_id FK "NOT NULL"
+    }
+
+    PasskeyCredential {
+        VARCHAR(2048) id PK
+        TEXT record_json "NOT NULL"
+        BIGINT account_id FK "NOT NULL"
+    }
+
+    PasskeyRecoveryCode {
+        VARCHAR(64) hash PK
+        BIGINT account_id FK "NOT NULL"
+    }
+
     PersonDataRequest {
         UUID id PK
         BIGINT administrator_account_id FK
@@ -1651,6 +1674,7 @@ erDiagram
         VARCHAR(16) practice_delivery_status "NOT NULL"
         BIGINT practice_rollout_revision "NOT NULL"
         BIGINT practice_config_version "NOT NULL"
+        BOOLEAN admin_passkey_required "NOT NULL"
     }
 
     WorkspaceAgentBinding {
@@ -1886,6 +1910,9 @@ erDiagram
     Workspace ||--o{ OutlineDocument : has
     Connection ||--o{ OutlineDocumentEvent : has
     Workspace ||--o{ OutlineDocumentEvent : has
+    Account ||--o{ PasskeyChallenge : has
+    Account ||--o{ PasskeyCredential : has
+    Account ||--o{ PasskeyRecoveryCode : has
     Account ||--o{ PersonDataRequest : has
     PersonDataRequest ||--o{ PersonSuppression : references
     IdentityProvider ||--o{ PersonSuppression : references

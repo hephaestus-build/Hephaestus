@@ -13,13 +13,14 @@ import org.jspecify.annotations.Nullable;
 public record TokenConstraints(
         @Nullable Instant sessionExpiresAt,
         @Nullable Instant authTime,
-        @Nullable UUID sessionId) {
+        @Nullable UUID sessionId,
+        @Nullable Instant passkeyTime) {
     public static TokenConstraints session(@Nullable Instant sessionExpiresAt, @Nullable Instant authTime) {
-        return new TokenConstraints(sessionExpiresAt, authTime, null);
+        return new TokenConstraints(sessionExpiresAt, authTime, null, null);
     }
 
     /** An installed-client session: the browser-session deadlines plus the {@code sid} its refresh secret rotates. */
     public static TokenConstraints clientSession(UUID sessionId, Instant sessionExpiresAt, Instant authTime) {
-        return new TokenConstraints(sessionExpiresAt, authTime, sessionId);
+        return new TokenConstraints(sessionExpiresAt, authTime, sessionId, null);
     }
 }

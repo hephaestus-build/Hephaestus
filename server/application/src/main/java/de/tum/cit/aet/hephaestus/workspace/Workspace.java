@@ -31,6 +31,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.ColumnDefault;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -88,6 +89,10 @@ import org.jspecify.annotations.Nullable;
 @NoArgsConstructor
 @ToString
 public class Workspace {
+
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private boolean adminPasskeyRequired;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

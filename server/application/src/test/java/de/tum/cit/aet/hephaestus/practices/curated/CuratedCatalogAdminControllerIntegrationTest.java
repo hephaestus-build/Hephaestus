@@ -59,6 +59,11 @@ import tools.jackson.databind.node.ObjectNode;
 @Tag("integration")
 class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
+    @BeforeEach
+    void setUpAdminIdentity() {
+        persistUser("admin");
+    }
+
     private static final String ADMIN_TOKEN = "mock-jwt-token-for-admin-user";
     private static final String MENTOR_TOKEN = "mock-jwt-token-for-mentor-user";
     private static final String CATALOG = "/admin/practice-catalog";

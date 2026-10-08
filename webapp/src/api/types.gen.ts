@@ -3273,6 +3273,35 @@ export type ParticipationCounts = {
   responded: number;
 };
 
+export type PasskeyCredential = {
+  createdAt?: Date;
+  id: string;
+  label: string;
+  lastUsedAt?: Date;
+};
+
+export type PasskeyOptions = {
+  challengeId: string;
+  optionsJson: string;
+};
+
+export type PasskeyProtectionRequest = {
+  enabled: boolean;
+};
+
+export type PasskeyRecoveryCodes = {
+  codes: Array<string>;
+};
+
+export type PasskeyStatus = {
+  credentials: Array<PasskeyCredential>;
+  instanceAdminRequired: boolean;
+  protectionEnabled: boolean;
+  recoveryRequired: boolean;
+  verified: boolean;
+  workspaceAdminRequired: boolean;
+};
+
 export type PersonDataProvider = {
   id: number;
   serverUrl: string;
@@ -4455,6 +4484,10 @@ export type RateLimitSnapshot = {
   throttledUntil?: Date;
 };
 
+export type RecoverPasskeyRequest = {
+  code: string;
+};
+
 /**
  * Register an Outline collection for mirroring (lands ENABLED + PENDING)
  */
@@ -4463,6 +4496,12 @@ export type RegisterOutlineCollectionRequest = {
    * Outline collection id (UUID)
    */
   collectionId: string;
+};
+
+export type RegisterPasskeyRequest = {
+  challengeId: string;
+  credentialJson: string;
+  label: string;
 };
 
 /**
@@ -6497,6 +6536,10 @@ export type UpdateWorkspaceLlmModelRequest = {
   reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
 };
 
+export type UpdateWorkspacePasskeyPolicy = {
+  required: boolean;
+};
+
 /**
  * Request to update workspace public visibility setting
  */
@@ -6583,6 +6626,11 @@ export type UserViewUser = {
   login: string;
   name?: string;
   userId: number;
+};
+
+export type VerifyPasskeyRequest = {
+  challengeId: string;
+  credentialJson: string;
 };
 
 /**
@@ -7143,6 +7191,11 @@ export type WorkspaceOnboardingSettings = {
   revision: number;
 };
 
+export type WorkspacePasskeyPolicy = {
+  instanceRequired: boolean;
+  required: boolean;
+};
+
 /**
  * One practice of a group: how the developers with a standing split, and where the reader is
  */
@@ -7319,7 +7372,7 @@ export type AdminListAuthEventsData = {
     size?: number;
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: Date;
     to?: Date;
@@ -7342,7 +7395,7 @@ export type AdminExportAuthEventsData = {
   query?: {
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: Date;
     to?: Date;
@@ -9504,6 +9557,142 @@ export type UpdateNotificationPreferencesResponses = {
 
 export type UpdateNotificationPreferencesResponse = UpdateNotificationPreferencesResponses[keyof UpdateNotificationPreferencesResponses];
 
+export type GetPasskeyStatusData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/passkeys';
+};
+
+export type GetPasskeyStatusResponses = {
+  /**
+   * OK
+   */
+  200: PasskeyStatus;
+};
+
+export type GetPasskeyStatusResponse = GetPasskeyStatusResponses[keyof GetPasskeyStatusResponses];
+
+export type RegisterPasskeyData = {
+  body: RegisterPasskeyRequest;
+  path?: never;
+  query?: never;
+  url: '/user/passkeys';
+};
+
+export type RegisterPasskeyResponses = {
+  /**
+   * OK
+   */
+  200: unknown;
+};
+
+export type UpdatePasskeyProtectionData = {
+  body: PasskeyProtectionRequest;
+  path?: never;
+  query?: never;
+  url: '/user/passkeys/protection';
+};
+
+export type UpdatePasskeyProtectionResponses = {
+  /**
+   * OK
+   */
+  200: unknown;
+};
+
+export type RecoverPasskeysData = {
+  body: RecoverPasskeyRequest;
+  path?: never;
+  query?: never;
+  url: '/user/passkeys/recovery';
+};
+
+export type RecoverPasskeysResponses = {
+  /**
+   * OK
+   */
+  200: unknown;
+};
+
+export type CreatePasskeyRecoveryCodesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/passkeys/recovery-codes';
+};
+
+export type CreatePasskeyRecoveryCodesResponses = {
+  /**
+   * OK
+   */
+  200: PasskeyRecoveryCodes;
+};
+
+export type CreatePasskeyRecoveryCodesResponse = CreatePasskeyRecoveryCodesResponses[keyof CreatePasskeyRecoveryCodesResponses];
+
+export type GetPasskeyRegistrationOptionsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/passkeys/registration-options';
+};
+
+export type GetPasskeyRegistrationOptionsResponses = {
+  /**
+   * OK
+   */
+  200: PasskeyOptions;
+};
+
+export type GetPasskeyRegistrationOptionsResponse = GetPasskeyRegistrationOptionsResponses[keyof GetPasskeyRegistrationOptionsResponses];
+
+export type VerifyPasskeyData = {
+  body: VerifyPasskeyRequest;
+  path?: never;
+  query?: never;
+  url: '/user/passkeys/verification';
+};
+
+export type VerifyPasskeyResponses = {
+  /**
+   * OK
+   */
+  200: unknown;
+};
+
+export type GetPasskeyVerificationOptionsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/user/passkeys/verification-options';
+};
+
+export type GetPasskeyVerificationOptionsResponses = {
+  /**
+   * OK
+   */
+  200: PasskeyOptions;
+};
+
+export type GetPasskeyVerificationOptionsResponse = GetPasskeyVerificationOptionsResponses[keyof GetPasskeyVerificationOptionsResponses];
+
+export type RemovePasskeyData = {
+  body?: never;
+  path: {
+    credentialId: string;
+  };
+  query?: never;
+  url: '/user/passkeys/{credentialId}';
+};
+
+export type RemovePasskeyResponses = {
+  /**
+   * OK
+   */
+  200: unknown;
+};
+
 export type RevokeOtherSessionsData = {
   body?: never;
   path?: never;
@@ -11517,6 +11706,48 @@ export type UpdateOutlineCollectionStateResponses = {
 };
 
 export type UpdateOutlineCollectionStateResponse = UpdateOutlineCollectionStateResponses[keyof UpdateOutlineCollectionStateResponses];
+
+export type GetWorkspacePasskeyPolicyData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/passkey-policy';
+};
+
+export type GetWorkspacePasskeyPolicyResponses = {
+  /**
+   * OK
+   */
+  200: WorkspacePasskeyPolicy;
+};
+
+export type GetWorkspacePasskeyPolicyResponse = GetWorkspacePasskeyPolicyResponses[keyof GetWorkspacePasskeyPolicyResponses];
+
+export type UpdateWorkspacePasskeyPolicyData = {
+  body: UpdateWorkspacePasskeyPolicy;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/passkey-policy';
+};
+
+export type UpdateWorkspacePasskeyPolicyResponses = {
+  /**
+   * OK
+   */
+  200: WorkspacePasskeyPolicy;
+};
+
+export type UpdateWorkspacePasskeyPolicyResponse = UpdateWorkspacePasskeyPolicyResponses[keyof UpdateWorkspacePasskeyPolicyResponses];
 
 export type ListAdoptablePracticesData = {
   body?: never;

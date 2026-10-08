@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { UserRoundCog } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -30,6 +32,7 @@ import {
 } from "./SlackPreferencesSection";
 
 export interface SettingsPageProps {
+	passkeys?: ReactNode;
 	emailPreferencesProps: EmailPreferencesSectionProps;
 	practiceFeedbackProps: PracticeFeedbackSectionProps;
 	researchProps: ResearchParticipationSectionProps;
@@ -46,6 +49,7 @@ export interface SettingsPageProps {
 }
 
 export function SettingsPage({
+	passkeys,
 	emailPreferencesProps,
 	practiceFeedbackProps,
 	researchProps,
@@ -127,6 +131,12 @@ export function SettingsPage({
 
 				<Separator />
 				<LinkedAccountsSection {...linkedRest} isLoading={isLoading || linkedLoading} />
+				{passkeys !== undefined && (
+					<>
+						<Separator />
+						{passkeys}
+					</>
+				)}
 
 				{showSlackPreferencesSection && (
 					<>

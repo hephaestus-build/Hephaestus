@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.web;
 
+import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthAuditService;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -23,7 +24,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -38,7 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/admin/audit")
 @Tag(name = "Admin", description = "Instance-admin account management")
-@PreAuthorize("hasAuthority('app_admin')")
+@RequireInstanceAdmin
 public class AuthAuditController {
 
     /** Hard cap on page size so a malicious/typo'd {@code size} can't scan a whole partition. */

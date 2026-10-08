@@ -212,6 +212,8 @@ paths:
             enum:
             - USER_VIEW
             - LOGIN
+            - PASSKEY_CHANGED
+            - PASSKEY_VERIFIED
             - LOGIN_FAILED
             - LOGOUT
             - TOKEN_REFRESH
@@ -299,6 +301,8 @@ paths:
             enum:
             - USER_VIEW
             - LOGIN
+            - PASSKEY_CHANGED
+            - PASSKEY_VERIFIED
             - LOGIN_FAILED
             - LOGOUT
             - TOKEN_REFRESH
@@ -2800,6 +2804,132 @@ paths:
       summary: Update your email subscriptions
       tags:
       - notification-preferences
+  /user/passkeys:
+    get:
+      operationId: getPasskeyStatus
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyStatus"
+          description: OK
+      summary: Get passkey settings
+      tags:
+      - Passkeys
+    post:
+      operationId: registerPasskey
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPasskeyRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+      summary: Register a passkey
+      tags:
+      - Passkeys
+  /user/passkeys/protection:
+    patch:
+      operationId: updatePasskeyProtection
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyProtectionRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+      summary: Update personal admin protection
+      tags:
+      - Passkeys
+  /user/passkeys/recovery:
+    post:
+      operationId: recoverPasskeys
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecoverPasskeyRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+      summary: Start restricted passkey recovery
+      tags:
+      - Passkeys
+  /user/passkeys/recovery-codes:
+    post:
+      operationId: createPasskeyRecoveryCodes
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyRecoveryCodes"
+          description: OK
+      summary: Replace passkey recovery codes
+      tags:
+      - Passkeys
+  /user/passkeys/registration-options:
+    post:
+      operationId: getPasskeyRegistrationOptions
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyOptions"
+          description: OK
+      summary: Start passkey enrollment
+      tags:
+      - Passkeys
+  /user/passkeys/verification:
+    post:
+      operationId: verifyPasskey
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyPasskeyRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+      summary: Verify a passkey for this browser session
+      tags:
+      - Passkeys
+  /user/passkeys/verification-options:
+    post:
+      operationId: getPasskeyVerificationOptions
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyOptions"
+          description: OK
+      summary: Start passkey verification
+      tags:
+      - Passkeys
+  /user/passkeys/{credentialId}:
+    delete:
+      operationId: removePasskey
+      parameters:
+      - in: path
+        name: credentialId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+      summary: Remove a passkey
+      tags:
+      - Passkeys
   /user/sessions:
     delete:
       operationId: revokeOtherSessions
@@ -5179,6 +5309,53 @@ paths:
         resume)
       tags:
       - Outline collections
+  /workspaces/{workspaceSlug}/passkey-policy:
+    get:
+      operationId: getWorkspacePasskeyPolicy
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspacePasskeyPolicy"
+          description: OK
+      summary: Get workspace admin passkey policy
+      tags:
+      - workspace-passkey-policy
+    patch:
+      operationId: updateWorkspacePasskeyPolicy
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWorkspacePasskeyPolicy"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspacePasskeyPolicy"
+          description: OK
+      summary: Update workspace admin passkey policy
+      tags:
+      - workspace-passkey-policy
   /workspaces/{workspaceSlug}/practice-catalog/adoption:
     get:
       operationId: listAdoptablePractices
@@ -14571,6 +14748,73 @@ components:
       - declined
       - invited
       - responded
+    PasskeyCredential:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+        label:
+          type: string
+        lastUsedAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - label
+    PasskeyOptions:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        optionsJson:
+          type: string
+      required:
+      - challengeId
+      - optionsJson
+    PasskeyProtectionRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+      required:
+      - enabled
+    PasskeyRecoveryCodes:
+      type: object
+      properties:
+        codes:
+          type: array
+          items:
+            type: string
+      required:
+      - codes
+    PasskeyStatus:
+      type: object
+      properties:
+        credentials:
+          type: array
+          items:
+            $ref: "#/components/schemas/PasskeyCredential"
+        instanceAdminRequired:
+          type: boolean
+        protectionEnabled:
+          type: boolean
+        recoveryRequired:
+          type: boolean
+        verified:
+          type: boolean
+        workspaceAdminRequired:
+          type: boolean
+      required:
+      - credentials
+      - instanceAdminRequired
+      - protectionEnabled
+      - recoveryRequired
+      - verified
+      - workspaceAdminRequired
     PersonDataProvider:
       type: object
       properties:
@@ -16439,6 +16683,15 @@ components:
             null if the vendor never told us to back off
       required:
       - observedAt
+    RecoverPasskeyRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 256
+          minLength: 0
+      required:
+      - code
     RegisterOutlineCollectionRequest:
       type: object
       description: Register an Outline collection for mirroring (lands ENABLED + PENDING)
@@ -16450,6 +16703,24 @@ components:
           minLength: 0
       required:
       - collectionId
+    RegisterPasskeyRequest:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        credentialJson:
+          type: string
+          maxLength: 65536
+          minLength: 0
+        label:
+          type: string
+          maxLength: 100
+          minLength: 0
+      required:
+      - challengeId
+      - credentialJson
+      - label
     RegisterSlackChannelRequest:
       type: object
       description: Allow-list a Slack channel (lands in PENDING)
@@ -19621,6 +19892,13 @@ components:
           - HIGH
           - XHIGH
           - MAX
+    UpdateWorkspacePasskeyPolicy:
+      type: object
+      properties:
+        required:
+          type: boolean
+      required:
+      - required
     UpdateWorkspacePublicVisibilityRequest:
       type: object
       description: Request to update workspace public visibility setting
@@ -19738,6 +20016,19 @@ components:
       required:
       - login
       - userId
+    VerifyPasskeyRequest:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        credentialJson:
+          type: string
+          maxLength: 65536
+          minLength: 0
+      required:
+      - challengeId
+      - credentialJson
     WorkItem:
       type: object
       description: A pull request or issue
@@ -20549,6 +20840,16 @@ components:
       - enabled
       - requiredConnectionIds
       - revision
+    WorkspacePasskeyPolicy:
+      type: object
+      properties:
+        instanceRequired:
+          type: boolean
+        required:
+          type: boolean
+      required:
+      - instanceRequired
+      - required
     WorkspacePracticeSplit:
       type: object
       description: "One practice of a group: how the developers with a standing split,\

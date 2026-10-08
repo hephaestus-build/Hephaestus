@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
+import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -22,7 +23,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,7 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Instance Settings", description = "Instance-wide operator settings")
 @RecentSignInExempt(
         reason = "silent mode is the instance emergency brake; a sign-in prompt would delay stopping delivery")
-@PreAuthorize("hasAuthority('app_admin')")
+@RequireInstanceAdmin
 public class InstanceSettingsAdminController {
 
     private final InstanceSettingsService instanceSettingsService;

@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyAssurancePolicy;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,6 +18,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,10 +39,13 @@ import org.springframework.web.server.ResponseStatusException;
 public class AccountWebController {
 
     private final AccountService accountService;
+    private final PasskeyAssurancePolicy passkeys;
     private final GitProviderRegistry gitProviderRegistry;
 
-    public AccountWebController(AccountService accountService, GitProviderRegistry gitProviderRegistry) {
+    public AccountWebController(
+            AccountService accountService, GitProviderRegistry gitProviderRegistry, PasskeyAssurancePolicy passkeys) {
         this.accountService = accountService;
+        this.passkeys = passkeys;
         this.gitProviderRegistry = gitProviderRegistry;
     }
 
@@ -122,6 +127,7 @@ public class AccountWebController {
         @ApiResponse(responseCode = "409", description = "Cannot unlink the account's only remaining sign-in method"),
     })
     public ResponseEntity<Void> unlinkIdentity(@PathVariable Long id) {
+        passkeys.requirePersonal(SecurityContextHolder.getContext().getAuthentication());
         accountService.unlinkIdentity(CurrentAccount.requireId(), id);
         return ResponseEntity.noContent().build();
     }

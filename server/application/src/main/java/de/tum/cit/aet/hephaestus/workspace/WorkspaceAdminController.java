@@ -1,12 +1,12 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.workspace.dto.AdminWorkspaceViewDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/admin/workspaces")
 @Tag(name = "Admin", description = "Instance-admin account management")
-@PreAuthorize("hasAuthority('app_admin')")
+@RequireInstanceAdmin
 @WorkspaceAgnostic("Instance-admin cross-tenant overview; authorized by app_admin, not workspace context")
 public class WorkspaceAdminController {
 

@@ -26,9 +26,15 @@ public record ExportBundle(
         @Nullable Preferences preferences,
         List<AuthEvent> authEvents,
         AccountAiChoiceExport.@Nullable Choice aiChoice,
-        NotificationPreferencesExportQuery.@Nullable Preferences notificationPreferences) {
+        NotificationPreferencesExportQuery.@Nullable Preferences notificationPreferences,
+        List<Passkey> passkeys) {
     /** Current export schema version. Bump on any breaking shape change. */
-    public static final String SCHEMA_VERSION = "1.0";
+    public static final String SCHEMA_VERSION = "1.1";
+
+    public record Passkey(
+            String label,
+            @Nullable Instant createdAt,
+            @Nullable Instant lastUsedAt) {}
 
     public record Profile(
             Long id,
@@ -38,7 +44,8 @@ public record ExportBundle(
             // subject "provided" under GDPR Art. 20(1) — out of portability scope. (Admin views surface it
             // elsewhere.) `status` is kept: it is the subject's own account-lifecycle state.
             String status,
-            Instant createdAt) {}
+            Instant createdAt,
+            boolean passkeyProtectionEnabled) {}
 
     public record Identity(
             String provider,

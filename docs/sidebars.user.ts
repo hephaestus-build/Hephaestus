@@ -19,6 +19,7 @@ const sidebars: SidebarsConfig = {
 				"ai-mentor",
 				"workspace",
 				"user-settings",
+				"passkeys",
 				"browser-extension",
 				"browser-extension-privacy",
 				"product-feedback",

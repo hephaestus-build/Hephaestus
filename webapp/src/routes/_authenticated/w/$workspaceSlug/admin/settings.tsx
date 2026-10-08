@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Settings2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useWorkspacePasskeySettings } from "@/hooks/use-workspace-passkey-settings";
 
+import { WorkspacePasskeyPolicySection } from "@/components/admin/settings/WorkspacePasskeyPolicySection";
 import { WorkspaceSettingsPage } from "@/components/admin/settings/WorkspaceSettingsPage";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -21,6 +23,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/set
 function AdminSettings() {
 	const { workspaceSlug, isLoading: isWorkspaceLoading } = useActiveWorkspaceSlug();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
+	const passkeys = useWorkspacePasskeySettings({ workspaceSlug: Route.useParams().workspaceSlug });
 
 	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
 		return <NoWorkspace />;
@@ -42,6 +45,7 @@ function AdminSettings() {
 	} else {
 		settings = (
 			<WorkspaceSettingsPage
+				security={<WorkspacePasskeyPolicySection {...passkeys} />}
 				workspaceSlug={workspaceSlug}
 				practicesEnabled={featureState.practicesEnabled}
 			/>

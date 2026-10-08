@@ -66,10 +66,15 @@ public class RecentSignInPolicy {
                                 factor -> factor.authorizationCodeAuthority().validDuration(maxAge))
                         .build();
         manager.setClock(clock);
-        this.recentSignIn = manager;
+        AllRequiredFactorsAuthorizationManager<Object> passkey =
+                AllRequiredFactorsAuthorizationManager.<Object>builder()
+                        .requireFactor(factor -> factor.webauthnAuthority().validDuration(maxAge))
+                        .build();
+        passkey.setClock(clock);
+        this.recentSignIn = AllRequiredFactorsAuthorizationManager.anyOf(manager, passkey);
     }
 
-    /** Whether {@code authentication} carries an authorization-code factor younger than the window. */
+    /** Whether {@code authentication} carries a sign-in or passkey factor younger than the window. */
     public boolean isRecent(@Nullable Authentication authentication) {
         AuthorizationResult result = recentSignIn.authorize(() -> authentication, NO_SUBJECT);
         return result != null && result.isGranted();

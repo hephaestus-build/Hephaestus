@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceElevationAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
@@ -46,6 +47,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.stereotype.Component;
+import org.springframework.web.ErrorResponseException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -75,6 +77,7 @@ public class WorkspaceContextFilter implements Filter {
     private final ObjectMapper objectMapper;
     private final WorkspaceElevationAudit elevationAudit;
     private final WorkspaceActorSelector actorSelector;
+    private final AdminPasskeyAccess passkeyAccess;
 
     public WorkspaceContextFilter(
             WorkspaceRepository workspaceRepository,
@@ -86,7 +89,8 @@ public class WorkspaceContextFilter implements Filter {
             ConnectionService connectionService,
             ObjectMapper objectMapper,
             WorkspaceElevationAudit elevationAudit,
-            WorkspaceActorSelector actorSelector) {
+            WorkspaceActorSelector actorSelector,
+            AdminPasskeyAccess passkeyAccess) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.currentAccountUsers = currentAccountUsers;
@@ -97,6 +101,7 @@ public class WorkspaceContextFilter implements Filter {
         this.objectMapper = objectMapper;
         this.elevationAudit = elevationAudit;
         this.actorSelector = actorSelector;
+        this.passkeyAccess = passkeyAccess;
     }
 
     @Override
@@ -174,6 +179,14 @@ public class WorkspaceContextFilter implements Filter {
 
             // Instance admins may enter without membership, but elevation never grants ownership.
             if (roles.isEmpty() && SecurityUtils.isSuperAdmin()) {
+                try {
+                    passkeyAccess.requireWorkspaceAdmin(workspace.isAdminPasskeyRequired(), true, !isReadRequest);
+                } catch (ErrorResponseException challenge) {
+                    httpResponse.setStatus(challenge.getStatusCode().value());
+                    httpResponse.setContentType("application/problem+json");
+                    objectMapper.writeValue(httpResponse.getWriter(), challenge.getBody());
+                    return;
+                }
                 log.info(
                         "Granted workspace access via instance-admin elevation: accountId={}, workspaceSlug={}",
                         SecurityUtils.getCurrentAccountId().orElse(null),

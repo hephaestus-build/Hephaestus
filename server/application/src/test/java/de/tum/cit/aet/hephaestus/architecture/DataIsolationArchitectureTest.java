@@ -127,6 +127,9 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "IdentityLink", // Federated-login association; user-scoped
             "AccountFeature", // Per-account feature opt-ins
             "AuthEvent", // Append-only auth audit; references workspace optionally, not scoped by it
+            "PasskeyCredential", // Account-bound credential; spans workspaces
+            "PasskeyChallenge", // Account and browser-session challenge; spans workspaces
+            "PasskeyRecoveryCode", // Account recovery-code hash; spans workspaces
             "IssuedJwt", // JWT revocation list; account-scoped
             "ClientSession", // Installed-client session (refresh family); account-scoped like IssuedJwt
             "ClientSignInHandoff", // Single-use installed-client sign-in code; precedes any workspace choice
@@ -142,7 +145,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
     @Nested
     class EntityWorkspaceRelationshipTests {
 
-        /**
+        /*
          * Every entity that contains business data must be traceable to a workspace either
          * directly (workspace field) or through relationships (repository.organization.workspaceId).
          */
@@ -202,12 +205,12 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
 
-        /**
+        /*
          * Targeted tenancy proof for the Slack integration tables.
          *
-         * <p>The four {@code slack_*}/{@code mentor_slack_thread} entities are workspace-scoped by a direct
-         * {@code workspace_id} scalar column (no FK chain); each must resolve to a real {@code workspaceId}
-         * field so {@code WorkspaceScopedTables} classifies it scoped and the {@code StatementInspector}
+         * The four slack_* / mentor_slack_thread entities are workspace-scoped by a direct
+         * workspace_id scalar column (no FK chain); each must resolve to a real workspaceId
+         * field so WorkspaceScopedTables classifies it scoped and the StatementInspector
          * rides a tenancy predicate on every query.
          */
         @Test

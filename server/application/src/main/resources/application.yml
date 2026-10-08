@@ -276,6 +276,11 @@ hephaestus:
         audience: ${HEPHAESTUS_AUTH_AUDIENCE:hephaestus-spa}
         access-ttl: ${HEPHAESTUS_AUTH_ACCESS_TTL:24h}
         step-up-max-age: ${HEPHAESTUS_AUTH_STEP_UP_MAX_AGE:5m}
+        passkeys:
+            instance-admin-required: ${HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED:false}
+            workspace-admin-required: ${HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED:false}
+            rp-id: ${HEPHAESTUS_AUTH_PASSKEYS_RP_ID:}
+            allowed-origins: ${HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS:http://localhost:${WEBAPP_PORT:4200}}
         # Passwordless local sign-in, which the practices demo seed uses. The prod profile refuses it.
         dev-login-enabled: ${HEPHAESTUS_AUTH_DEV_LOGIN_ENABLED:false}
         cookie-name: ${HEPHAESTUS_AUTH_COOKIE_NAME:__Host-HEPHAESTUS_AT}

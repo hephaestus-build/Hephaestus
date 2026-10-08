@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.assertj.core.api.InstanceOfAssertFactories;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -34,6 +35,11 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @BeforeEach
+    void setUpAdminIdentity() {
+        persistUser("admin");
+    }
 
     @Autowired
     private WebTestClient webTestClient;

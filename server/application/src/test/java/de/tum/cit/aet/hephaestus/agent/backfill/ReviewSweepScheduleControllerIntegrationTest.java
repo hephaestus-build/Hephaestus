@@ -30,12 +30,7 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
 
     private static final String SCHEDULES = "/workspaces/{slug}/practices/sweep-schedules";
 
-    /**
-     * A numeric JWT {@code sub}, which is what {@code SecurityUtils.getCurrentAccountId()} reads —
-     * {@code @WithAdminUser}'s token carries a non-numeric one, and a schedule needs an account to
-     * attribute the spend to.
-     */
-    private static final String ADMIN_ACCOUNT_TOKEN = "mock-jwt-sub-1";
+    private static final String ADMIN_ACCOUNT_TOKEN = "mock-jwt-token-for-admin-user";
 
     @Autowired
     private WebTestClient webTestClient;

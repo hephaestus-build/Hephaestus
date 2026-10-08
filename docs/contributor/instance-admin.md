@@ -98,8 +98,9 @@ It does not stop an attacker who can control the browser through XSS, a compromi
 That attacker can complete confirmation too.
 
 It is **not a second factor**.
-Hephaestus holds no local credential, so an existing GitHub or GitLab session can satisfy it without a challenge.
-MFA remains the identity provider's responsibility (ADR 0017).
+An existing GitHub or GitLab session can satisfy OAuth without a new authenticator challenge.
+Protected admin access also requires local passkey verification.
+See [Admin passkeys](/admin/passkeys) for the policy and recovery procedure.
 It does not stop a malicious administrator authorized for the action.
 The audit trail serves that purpose.
 

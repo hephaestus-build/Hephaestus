@@ -28,6 +28,20 @@ public class WorkspaceSettingsService {
     private final ConnectionService connectionService;
     private final Clock clock;
 
+    @Transactional
+    public void updatePasskeyPolicy(Long workspaceId, boolean required) {
+        Workspace workspace = requireWorkspace(workspaceId);
+        boolean previous = workspace.isAdminPasskeyRequired();
+        workspace.setAdminPasskeyRequired(required);
+        workspaceRepository.save(workspace);
+        configAudit.record(ConfigAuditEntry.updated(
+                ConfigAuditEntityType.WORKSPACE_FEATURES,
+                workspaceId,
+                workspaceId,
+                new WorkspaceAuditSnapshots.PasskeyPolicySnapshot(previous),
+                new WorkspaceAuditSnapshots.PasskeyPolicySnapshot(required)));
+    }
+
     /**
      * Update the personal access token for a workspace. Rotates the bearer credential on
      * whichever SCM Connection (GitHub PAT or GitLab) is currently active — the caller

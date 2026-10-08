@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
@@ -34,7 +35,6 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,7 +48,7 @@ import tools.jackson.databind.ObjectMapper;
 @RestController
 @ConditionalOnServerRole
 @RequestMapping("/admin/person-data")
-@PreAuthorize("hasAuthority('app_admin')")
+@RequireInstanceAdmin
 @WorkspaceAgnostic("Verified instance-admin access and erasure requests cover all stores and workspaces")
 @Tag(name = "Person Data", description = "Instance-administrator access and erasure requests")
 @RequiredArgsConstructor

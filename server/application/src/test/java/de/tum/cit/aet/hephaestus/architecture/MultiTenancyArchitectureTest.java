@@ -13,6 +13,7 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.lang.reflect.Method;
@@ -80,14 +81,16 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
      * design. Exact match, not {@code contains}: a composite like
      * {@code hasAnyAuthority('app_admin','workspace_member')} mentions app_admin but is reachable by a
      * workspace member, and a substring test would hand it this exemption. Anything composite has to
-     * justify itself some other way. {@code InstanceAdminGateExemptionTest} pins this.
+     * justify itself some other way. {@link RequireInstanceAdmin} composes the same exact gate.
+     * {@code InstanceAdminGateExemptionTest} pins this.
      */
     static final String INSTANCE_ADMIN_GATE = "hasAuthority('app_admin')";
 
     static boolean isInstanceAdminGated(HasAnnotations<?> element) {
-        return element.tryGetAnnotationOfType(PreAuthorize.class)
-                .map(a -> INSTANCE_ADMIN_GATE.equals(a.value().trim()))
-                .orElse(false);
+        return element.isAnnotatedWith(RequireInstanceAdmin.class)
+                || element.tryGetAnnotationOfType(PreAuthorize.class)
+                        .map(a -> INSTANCE_ADMIN_GATE.equals(a.value().trim()))
+                        .orElse(false);
     }
 
     static final Set<String> WORKSPACE_AGNOSTIC_SCHEDULERS = Set.of();
@@ -539,6 +542,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         // in AuthLoginEventMetrics and carry no workspace by design.
                                         "InteractiveAuthenticationSuccessEvent",
                                         "AbstractAuthenticationFailureEvent",
+                                        // Passkey outcomes identify an account, not a workspace.
+                                        "PasskeySuccess",
+                                        "PasskeyFailure",
                                         // Carries workspaceId + collectionId. An in-module after-commit hop: the
                                         // Outline collection resume must not kick its async sync until the ENABLED
                                         // write is committed, or the sync reads PAUSED and no-ops.

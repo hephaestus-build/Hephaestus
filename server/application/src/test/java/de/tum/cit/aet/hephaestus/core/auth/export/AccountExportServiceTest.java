@@ -26,6 +26,9 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery.W
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
+import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyCredential;
+import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyCredentialRepository;
+import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyJson;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -33,10 +36,14 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.web.webauthn.api.Bytes;
+import org.springframework.security.web.webauthn.api.ImmutableCredentialRecord;
+import org.springframework.security.web.webauthn.api.ImmutablePublicKeyCose;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
@@ -68,6 +75,7 @@ class AccountExportServiceTest extends BaseUnitTest {
         account.setAppRole(Account.AppRole.USER);
         account.setStatus(Account.Status.ACTIVE);
         account.setCreatedAt(clock.instant());
+        account.setPasskeyProtectionEnabled(participating);
 
         IdentityLink link = new IdentityLink();
         link.setProviderId(55L);
@@ -86,6 +94,27 @@ class AccountExportServiceTest extends BaseUnitTest {
         when(preferencesQuery.preferencesForAccount(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountPreferencesQuery.PreferencesView(!participating, false)));
 
+        var passkeyJson = new PasskeyJson();
+        var passkeys = mock(PasskeyCredentialRepository.class);
+        var credential = ImmutableCredentialRecord.builder()
+                .credentialId(Bytes.random())
+                .userEntityUserId(Bytes.random())
+                .publicKey(new ImmutablePublicKeyCose(new byte[] {-1, -2, -3}))
+                .signatureCount(7)
+                .uvInitialized(true)
+                .transports(Set.of())
+                .attestationObject(Bytes.random())
+                .attestationClientDataJSON(Bytes.random())
+                .created(clock.instant().minusSeconds(3600))
+                .lastUsed(clock.instant().minusSeconds(60))
+                .label("Personal security key")
+                .build();
+        when(passkeys.findByAccountId(ACCOUNT_ID))
+                .thenReturn(List.of(new PasskeyCredential(
+                        credential.getCredentialId().toBase64UrlString(),
+                        account,
+                        passkeyJson.writeCredential(credential))));
+
         ExportBundleAssembler assembler = new ExportBundleAssembler(
                 accountService,
                 featureRepo,
@@ -96,13 +125,19 @@ class AccountExportServiceTest extends BaseUnitTest {
                 clock,
                 accountId -> new AccountAiChoiceExport.Choice("NO_AI", clock.instant()),
                 accountId -> new NotificationPreferencesExportQuery.Preferences(false, false, false, false, false),
-                research);
+                research,
+                passkeys,
+                passkeyJson);
 
         ExportBundle bundle = assembler.assemble(ACCOUNT_ID);
 
         assertThat(bundle.schemaVersion()).isEqualTo(ExportBundle.SCHEMA_VERSION);
         assertThat(bundle.account().id()).isEqualTo(ACCOUNT_ID);
         assertThat(bundle.account().primaryEmail()).isEqualTo("ada@example.com");
+        assertThat(bundle.account().passkeyProtectionEnabled()).isEqualTo(participating);
+        assertThat(bundle.passkeys())
+                .containsExactly(new ExportBundle.Passkey(
+                        "Personal security key", credential.getCreated(), credential.getLastUsed()));
         assertThat(bundle.identities()).singleElement().satisfies(i -> {
             assertThat(i.provider()).isEqualTo("GITLAB");
             assertThat(i.usernameAtSignup()).isEqualTo("ada");
@@ -122,6 +157,15 @@ class AccountExportServiceTest extends BaseUnitTest {
 
         String json = new ObjectMapper().writeValueAsString(bundle);
         assertThat(json).contains("\"ada@example.com\"", "tum-ase", "notification_access");
+        assertThat(json)
+                .doesNotContain(
+                        "credentialId",
+                        "publicKey",
+                        "attestationObject",
+                        "userEntityUserId",
+                        "signatureCount",
+                        credential.getCredentialId().toBase64UrlString(),
+                        credential.getUserEntityUserId().toBase64UrlString());
         assertThat(json.toLowerCase(Locale.ROOT))
                 .as("export bundle must never disclose tokens / credentials / signing keys")
                 .doesNotContain("access_token")
