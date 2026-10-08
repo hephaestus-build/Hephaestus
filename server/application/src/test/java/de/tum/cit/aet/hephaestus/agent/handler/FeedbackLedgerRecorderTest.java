@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -324,6 +325,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository).save(saved.capture());
         assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.DELIVERED);
+        assertThat(saved.getValue().getReviewedRevision()).isNull();
     }
 
     @Test
@@ -585,9 +587,13 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         var observation = problem();
         when(observationRepository.findByAgentJobId(any(), anyLong())).thenReturn(List.of(observation));
         var recorder = recorder();
+        AgentJob job = job();
+        var metadata = JsonMapper.builder().build().createObjectNode();
+        metadata.put("commit_sha", " ");
+        job.setMetadata(metadata);
 
         recorder.record(
-                job(),
+                job,
                 new DeliveryContent("body", List.of(), List.of(), null),
                 ArtifactKinds.PULL_REQUEST,
                 List.of(),
@@ -602,6 +608,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 .findFirst()
                 .orElseThrow();
         assertThat(delivered.getReplacesId()).isNull();
+        assertThat(delivered.getReviewedRevision()).isNull();
     }
 
     @Test
@@ -667,10 +674,14 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 InlineFeedbackChannel.Disposition.POSTED,
                 "note-1",
                 "disc-1");
+        AgentJob job = job();
+        var metadata = JsonMapper.builder().build().createObjectNode();
+        metadata.put("commit_sha", "abc123");
+        job.setMetadata(metadata);
 
         recorder()
                 .record(
-                        job(),
+                        job,
                         new DeliveryContent(null, List.of(note), List.of(), null),
                         ArtifactKinds.PULL_REQUEST,
                         List.of(signal),
@@ -680,6 +691,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         var savedFeedback = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository).save(savedFeedback.capture());
         assertThat(savedFeedback.getValue().getBody()).isNull();
+        assertThat(savedFeedback.getValue().getReviewedRevision()).isEqualTo("abc123");
         assertThat(savedFeedback.getValue().getReplacesId()).isNull();
         verify(feedbackRepository, never()).supersedeDelivered(any(), any());
 
@@ -1046,20 +1058,42 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         when(observationRepository.findByAgentJobId(any(), anyLong())).thenReturn(List.of(observation));
         AgentJob job = job();
         job.setDeliveryCommentId("stale-job-ref");
+        var metadata = JsonMapper.builder().build().createObjectNode();
+        metadata.put("commit_sha", "abc123");
+        job.setMetadata(metadata);
 
-        recorder()
-                .record(
-                        job,
-                        new DeliveryContent("body", List.of(), List.of(), null),
-                        ArtifactKinds.PULL_REQUEST,
-                        List.of(),
-                        "dispatch-ref",
-                        null);
+        var recorder = recorder();
+        recorder.record(
+                job,
+                new DeliveryContent("body", List.of(), List.of(), null),
+                ArtifactKinds.PULL_REQUEST,
+                List.of(),
+                "dispatch-ref",
+                null);
 
+        var saved = ArgumentCaptor.forClass(Feedback.class);
+        verify(feedbackRepository).save(saved.capture());
+        assertThat(saved.getValue().getBody()).isEqualTo("body");
+        assertThat(saved.getValue().getReviewedRevision()).isEqualTo("abc123");
         var placement = ArgumentCaptor.forClass(ProviderPlacement.class);
         verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(placement.capture());
         assertThat(placement.getValue().placementType()).isEqualTo(PlacementType.SUMMARY.name());
         assertThat(placement.getValue().postedCommentRef()).isEqualTo("dispatch-ref");
+
+        when(feedbackRepository.findByAgentJobIdAndPositionAndWorkspaceId(
+                        job.getId(), 0, job.getWorkspace().getId()))
+                .thenReturn(Optional.of(saved.getValue()));
+        metadata.put("commit_sha", "later-revision");
+        recorder.record(
+                job,
+                new DeliveryContent("body", List.of(), List.of(), null),
+                ArtifactKinds.PULL_REQUEST,
+                List.of(),
+                "dispatch-ref",
+                null);
+
+        verify(feedbackRepository).save(any());
+        assertThat(saved.getValue().getReviewedRevision()).isEqualTo("abc123");
     }
 
     /** A review with no summary and one line note written from the given observations. */

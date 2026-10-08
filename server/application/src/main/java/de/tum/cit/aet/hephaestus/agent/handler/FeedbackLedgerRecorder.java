@@ -279,6 +279,7 @@ public class FeedbackLedgerRecorder {
                     .position(IN_CONTEXT_UNIT_ORDINAL)
                     .deliveryState(FeedbackDeliveryState.DELIVERED)
                     .body(summaryDelivered ? delivery.mrNote() : null)
+                    .reviewedRevision(reviewedRevision(job))
                     .source(FeedbackSource.AGENT)
                     .threadKey(feedbackThreadKey)
                     .createdAt(now)
