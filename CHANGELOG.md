@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.86.0
+
+### Minor Changes
+
+- Instance administrators now see where the instance runs and which releases it ran. The **Release** card on the overview names the deployment environment and says when the instance started the running release. **Show release history** lists the last ten releases that the instance started, so an upgrade or a rollback is visible after the fact. Error reports and exported traces carry the same environment and version, and staging errors no longer show as `prod`.
+
+  **Operators:** rename `SENTRY_ENVIRONMENT` to `DEPLOYMENT_ENVIRONMENT` in each environment file. If you send errors to Sentry, update alerts and saved searches that filter on `prod`.
+
+### Patch Changes
+
+- Practice reviews no longer fault a short commit subject that names what it changed because the commit also touched other files. Reviews treat a value that the code reads from storage or settings as unknown, not as its declared default. Feedback on the work no longer presents a formative practice as something to settle before merging.
+- A practice review that stops without recording its observation is asked once more, in the same session and within the same budget, to record it from the evidence it already read. If it stops again, the practice stays not reached. A practice that reaches the refusal limit is no longer reported as recorded.
+- Queued push, description and linked-work reviews can be replaced by a newer review that covers the same author’s practices on current work. The older review names the replacement and links to its progress. Ready, merge and reviewer reviews retain their own occasions.
+- Reviews no longer reuse a diff base from an earlier revision when a provider changes the head without supplying its base. Providers that supply the review’s diff range must provide a paired base before code is captured.
+- A pull-based host that already applied its environment's promotion no longer restarts its stacks or stops its worker when another environment is promoted. It still retries its own promotion until it applies, and a new promotion of the release it already runs still applies again.
+- Worker containers now retry pending person-erasure and workspace-purge requests for the review evidence they hold, including when the server role runs separately. They also periodically remove ended-attempt evidence after the existing one-hour retention period.
+
 ## 0.85.1
 
 ### Patch Changes
