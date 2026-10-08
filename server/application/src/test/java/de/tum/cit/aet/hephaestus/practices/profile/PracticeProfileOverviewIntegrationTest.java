@@ -5,6 +5,7 @@ import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
@@ -18,19 +19,20 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
+import de.tum.cit.aet.hephaestus.practices.profile.dto.PracticeProfileOverviewDTO;
+import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
-import jakarta.persistence.EntityManagerFactory;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
-import org.hibernate.SessionFactory;
-import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,7 +61,10 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     private PracticeGroupRepository groupRepository;
 
     @Autowired
-    private EntityManagerFactory entityManagerFactory;
+    private SqlReadMeasurement reads;
+
+    @Autowired
+    private PracticeProfileOverviewService overviewService;
 
     @Autowired
     private BundledPracticeCatalogLoader catalog;
@@ -379,35 +384,36 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
                 .isEmpty();
     }
 
-    /** Feedback resolved before the look-back adds no query and no loaded entity to the overview's read. */
+    /** Feedback resolved before the look-back adds no statement or entity to the overview's read. */
     @Test
     @WithUser
     @DisplayName("feedback resolved before the look-back adds nothing to what the overview reads")
     void shouldReadNoMoreWhenFeedbackWasResolvedBeforeTheLookBack() {
-        Statistics statistics =
-                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
-        boolean wasEnabled = statistics.isStatisticsEnabled();
-        statistics.setStatisticsEnabled(true);
+        var before = measuredOverview();
+        assertThat(before.cost().statements()).isPositive();
+        assertThat(before.cost().entities()).isPositive();
+
+        Instant longAgo = NOW.minus(Duration.ofDays(PracticeStandingService.LOOKBACK_DAYS + 30));
+        for (int number = 100; number < 103; number++) {
+            Feedback resolved = describingFeedbackPreparedAt(number, longAgo.plusSeconds(number));
+            markAddressed(resolved, developer, longAgo.plus(Duration.ofDays(1)).plusSeconds(number));
+        }
+
+        var after = measuredOverview();
+        assertThat(after.cost()).isEqualTo(before.cost());
+        assertThat(after.value())
+                .usingRecursiveComparison()
+                .ignoringFields("window.until")
+                .isEqualTo(before.value());
+    }
+
+    private SqlReadMeasurement.Read<PracticeProfileOverviewDTO> measuredOverview() {
+        CurrentScmIdentityHolder.set(developer.getId(), developer.getLogin(), Set.of(developer.getId()));
         try {
-            readOverview();
-            statistics.clear();
-            readOverview();
-            long queriesWithoutHistory = statistics.getQueryExecutionCount();
-            long rowsWithoutHistory = statistics.getEntityLoadCount();
-
-            Instant longAgo = NOW.minus(Duration.ofDays(PracticeStandingService.LOOKBACK_DAYS + 30));
-            for (int number = 100; number < 103; number++) {
-                Feedback resolved = describingFeedbackPreparedAt(number, longAgo.plusSeconds(number));
-                markAddressed(
-                        resolved, developer, longAgo.plus(Duration.ofDays(1)).plusSeconds(number));
-            }
-
-            statistics.clear();
-            readOverview();
-            assertThat(statistics.getQueryExecutionCount()).isEqualTo(queriesWithoutHistory);
-            assertThat(statistics.getEntityLoadCount()).isEqualTo(rowsWithoutHistory);
+            return reads.measure(
+                    () -> overviewService.getOverview(WorkspaceContext.fromWorkspace(workspace, null, null)));
         } finally {
-            statistics.setStatisticsEnabled(wasEnabled);
+            CurrentScmIdentityHolder.clear();
         }
     }
 

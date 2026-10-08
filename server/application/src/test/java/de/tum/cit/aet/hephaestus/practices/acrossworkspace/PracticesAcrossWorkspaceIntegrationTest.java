@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceTilesDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
@@ -41,7 +42,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
-import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
+import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
@@ -53,7 +54,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamRepositorySettings;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamRepositorySettingsRepository;
-import jakarta.persistence.EntityManagerFactory;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -65,12 +65,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import org.hibernate.SessionFactory;
-import org.hibernate.stat.Statistics;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -79,7 +77,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -106,7 +103,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     private JdbcTemplate jdbc;
 
     @Autowired
-    private SqlStatementCounter sqlStatements;
+    private SqlReadMeasurement reads;
 
     @Autowired
     private PracticesAcrossWorkspaceService acrossWorkspaceService;
@@ -121,9 +118,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     private PracticeGroupService practiceGroupService;
 
     @Autowired
-    private EntityManagerFactory entityManagerFactory;
-
-    @Autowired
     private IdentityLinkRepository identityLinkRepository;
 
     @Autowired
@@ -131,9 +125,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private TeamRepository teamRepository;
-
-    @Autowired
-    private ThreadPoolTaskScheduler taskScheduler;
 
     @Autowired
     private WorkspaceTeamRepositorySettingsRepository settingsRepository;
@@ -522,35 +513,15 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @Test
     @WithUser
     @DisplayName("the overview and the tiles run as many statements for six more developers as without them")
-    void shouldRunTheSameStatementsWhenTheWorkspaceCountsMoreDevelopers() throws InterruptedException {
-        Statistics statistics =
-                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
-        boolean wasEnabled = statistics.isStatisticsEnabled();
-        // The statement count spans the whole session factory, so a scheduled task would be counted with the reads.
-        boolean wasRunning = taskScheduler.isRunning();
-        try {
-            if (wasRunning) {
-                var paused = new CountDownLatch(1);
-                taskScheduler.stop(paused::countDown);
-                assertThat(paused.await(10, TimeUnit.SECONDS))
-                        .as("scheduled tasks already running finish")
-                        .isTrue();
-            }
-            statistics.setStatisticsEnabled(true);
-            List<Long> before = statementsPerRead(statistics);
-            for (int index = 0; index < 6; index++) {
-                User developer = member("across-more-" + index);
-                standing(packaging, developer, index);
-                standing(craft, developer, index);
-            }
-
-            assertThat(statementsPerRead(statistics)).isEqualTo(before);
-        } finally {
-            statistics.setStatisticsEnabled(wasEnabled);
-            if (wasRunning) {
-                taskScheduler.start();
-            }
+    void shouldRunTheSameStatementsWhenTheWorkspaceCountsMoreDevelopers() {
+        List<Long> before = statementsPerRead();
+        for (int index = 0; index < 6; index++) {
+            User developer = member("across-more-" + index);
+            standing(packaging, developer, index);
+            standing(craft, developer, index);
         }
+
+        assertThat(statementsPerRead()).isEqualTo(before);
     }
 
     /**
@@ -561,33 +532,14 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @Test
     @WithUser
     @DisplayName("the overview and the tiles check a cited repository once per read, however many observations cite it")
-    void shouldRunTheSameStatementsWhenMoreObservationsCiteARepository() throws InterruptedException {
-        Statistics statistics =
-                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
-        boolean wasEnabled = statistics.isStatisticsEnabled();
-        boolean wasRunning = taskScheduler.isRunning();
-        try {
-            if (wasRunning) {
-                var paused = new CountDownLatch(1);
-                taskScheduler.stop(paused::countDown);
-                assertThat(paused.await(10, TimeUnit.SECONDS))
-                        .as("scheduled tasks already running finish")
-                        .isTrue();
-            }
-            statistics.setStatisticsEnabled(true);
-            citingRepository(member("across-citing-first"));
-            List<Long> before = statementsPerRead(statistics);
-            for (int index = 0; index < 6; index++) {
-                citingRepository(member("across-citing-" + index));
-            }
-
-            assertThat(statementsPerRead(statistics)).isEqualTo(before);
-        } finally {
-            statistics.setStatisticsEnabled(wasEnabled);
-            if (wasRunning) {
-                taskScheduler.start();
-            }
+    void shouldRunTheSameStatementsWhenMoreObservationsCiteARepository() {
+        citingRepository(member("across-citing-first"));
+        List<Long> before = statementsPerRead();
+        for (int index = 0; index < 6; index++) {
+            citingRepository(member("across-citing-" + index));
         }
+
+        assertThat(statementsPerRead()).isEqualTo(before);
     }
 
     @Test
@@ -648,37 +600,24 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 }
             }
         }
-        Statistics statistics =
-                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
-        boolean enabled = statistics.isStatisticsEnabled();
-        boolean running = taskScheduler.isRunning();
-        try {
-            if (running) {
-                var stopped = new CountDownLatch(1);
-                taskScheduler.stop(stopped::countDown);
-                assertThat(stopped.await(10, TimeUnit.SECONDS)).isTrue();
-            }
-            statistics.setStatisticsEnabled(true);
-            insertScaleRows(rows.subList(0, 6_000));
-            List<Long> smaller = measuredReads(statistics, "6000 observations plus history");
-            insertScaleRows(rows.subList(6_000, rows.size()));
-            assertThat(measuredReads(statistics, "24000 observations plus history"))
-                    .isEqualTo(smaller);
-            try (var requests = Executors.newFixedThreadPool(2)) {
-                sqlStatements.reset();
-                long start = System.nanoTime();
-                CompletableFuture.allOf(
-                                CompletableFuture.runAsync(() -> read(), requests),
-                                CompletableFuture.runAsync(() -> tiles("DAYS_30"), requests))
-                        .get(30, TimeUnit.SECONDS);
-                log.info(
-                        "Course whole page: {} ms, {} JDBC statements",
-                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start),
-                        sqlStatements.count());
-            }
-        } finally {
-            statistics.setStatisticsEnabled(enabled);
-            if (running) taskScheduler.start();
+        insertScaleRows(rows.subList(0, 6_000));
+        List<Long> smaller = measuredReads("6000 observations plus history");
+        insertScaleRows(rows.subList(6_000, rows.size()));
+        assertThat(measuredReads("24000 observations plus history")).isEqualTo(smaller);
+        try (var requests = Executors.newFixedThreadPool(2)) {
+            long start = System.nanoTime();
+            var overview = CompletableFuture.supplyAsync(
+                    () -> measuredOverview().cost().statements(), requests);
+            var tiles = CompletableFuture.supplyAsync(
+                    () -> measuredTiles(PracticesAcrossWorkspaceWindow.DAYS_30)
+                            .cost()
+                            .statements(),
+                    requests);
+            CompletableFuture.allOf(overview, tiles).get(30, TimeUnit.SECONDS);
+            log.info(
+                    "Concurrent course reads: {} ms, {} JDBC statements",
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start),
+                    overview.join() + tiles.join());
         }
     }
 
@@ -691,61 +630,39 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 """, rows);
     }
 
-    private List<Long> measuredReads(Statistics statistics, String size) {
-        statistics.clear();
-        sqlStatements.reset();
+    private List<Long> measuredReads(String size) {
         long start = System.nanoTime();
-        read().jsonPath("$.groups[0].split.developers").isEqualTo(150);
-        long overview = sqlStatements.count();
+        var overview = measuredOverview();
+        assertThat(overview.value().groups().getFirst().split().developers()).isEqualTo(150);
         log.info(
                 "Course overview: {}, {} ms, {} JDBC statements",
                 size,
                 TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start),
-                overview);
-        List<Long> statements = new ArrayList<>(List.of(overview));
+                overview.cost().statements());
+        List<Long> statements = new ArrayList<>(List.of(overview.cost().statements()));
         for (PracticesAcrossWorkspaceWindow window : PracticesAcrossWorkspaceWindow.values()) {
-            statistics.clear();
-            sqlStatements.reset();
             start = System.nanoTime();
-            tiles(window.name())
-                    .jsonPath("$.developersWithAStandingInWindow")
-                    .isEqualTo(150)
-                    .jsonPath("$.yourPractices")
-                    .isEqualTo(40);
-            long count = sqlStatements.count();
+            var tiles = measuredTiles(window);
+            assertThat(tiles.value().developersWithAStandingInWindow()).isEqualTo(150);
+            assertThat(tiles.value().yourPractices()).isEqualTo(40);
             log.info(
                     "Course tiles {}: {}, {} ms, {} JDBC statements",
                     window,
                     size,
                     TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start),
-                    count);
-            statements.add(count);
+                    tiles.cost().statements());
+            statements.add(tiles.cost().statements());
         }
         return statements;
     }
 
     @Test
     @WithUser
-    void shouldRunTheSameStatementsWhenMoreDistinctHistoryRecordsAreCited() throws InterruptedException {
-        Statistics statistics =
-                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
-        boolean enabled = statistics.isStatisticsEnabled();
-        boolean running = taskScheduler.isRunning();
-        try {
-            if (running) {
-                var stopped = new CountDownLatch(1);
-                taskScheduler.stop(stopped::countDown);
-                assertThat(stopped.await(10, TimeUnit.SECONDS)).isTrue();
-            }
-            statistics.setStatisticsEnabled(true);
-            citingHistory();
-            List<Long> before = statementsPerRead(statistics);
-            for (int index = 0; index < 6; index++) citingHistory();
-            assertThat(statementsPerRead(statistics)).isEqualTo(before);
-        } finally {
-            statistics.setStatisticsEnabled(enabled);
-            if (running) taskScheduler.start();
-        }
+    void shouldRunTheSameStatementsWhenMoreDistinctHistoryRecordsAreCited() {
+        citingHistory();
+        List<Long> before = statementsPerRead();
+        for (int index = 0; index < 6; index++) citingHistory();
+        assertThat(statementsPerRead()).isEqualTo(before);
     }
 
     private void citingHistory() {
@@ -847,16 +764,33 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 + "}]}}]}";
     }
 
-    /** The JDBC statements one overview read and one tiles read prepare, after a read that warms the context. */
-    private List<Long> statementsPerRead(Statistics statistics) {
-        read();
-        tiles("ALL_TIME");
-        statistics.clear();
-        read();
-        long overview = statistics.getPrepareStatementCount();
-        statistics.clear();
-        tiles("ALL_TIME");
-        return List.of(overview, statistics.getPrepareStatementCount());
+    private List<Long> statementsPerRead() {
+        long overview = measuredOverview().cost().statements();
+        long tiles =
+                measuredTiles(PracticesAcrossWorkspaceWindow.ALL_TIME).cost().statements();
+        assertThat(overview).isPositive();
+        assertThat(tiles).isPositive();
+        return List.of(overview, tiles);
+    }
+
+    private SqlReadMeasurement.Read<PracticesAcrossWorkspaceDTO> measuredOverview() {
+        return measuredAsReader(
+                () -> acrossWorkspaceService.read(WorkspaceContext.fromWorkspace(workspace, null, null)));
+    }
+
+    private SqlReadMeasurement.Read<PracticesAcrossWorkspaceTilesDTO> measuredTiles(
+            PracticesAcrossWorkspaceWindow window) {
+        return measuredAsReader(
+                () -> acrossWorkspaceService.readTiles(WorkspaceContext.fromWorkspace(workspace, null, null), window));
+    }
+
+    private <T> SqlReadMeasurement.Read<T> measuredAsReader(Supplier<T> read) {
+        CurrentScmIdentityHolder.set(reader.getId(), reader.getLogin(), Set.of(reader.getId()));
+        try {
+            return reads.measure(read);
+        } finally {
+            CurrentScmIdentityHolder.clear();
+        }
     }
 
     @Test
