@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.handler.inapp;
 
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeFeedbackDeliveryPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
@@ -25,10 +24,10 @@ import org.springframework.stereotype.Component;
 /**
  * The evidence a new IN_APP card about one practice may stand on: the window from the previous card's cutoff, the
  * bounded recent read, and the delivery-purpose visibility. {@link InAppFeedbackRouter#problemsIn} picks the citable
- * occurrences from it. Selection only: routing and preparation decide whether a card is written.
+ * occurrences from it. Selection only: routing and preparation decide whether a card is written. Worker admission and
+ * server preparation read the same selection, so it exists in every runtime role.
  */
 @Component
-@ConditionalOnServerRole
 public class InAppSupportReader {
 
     private static final int MAX_EVIDENCE_PER_PRACTICE = 50;

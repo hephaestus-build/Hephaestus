@@ -26,13 +26,16 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -59,6 +62,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import tools.jackson.databind.JsonNode;
@@ -162,6 +166,46 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                 .isNotBlank()
                 .isEqualTo(response.path("admissionDigest").asString());
         verify(prepared, times(1)).record(job);
+    }
+
+    @Test
+    void shouldReadSupportInAWorkerOnlyContextAndKeepTheAdmissionWhenNoReaderExists() {
+        var worker = new ApplicationContextRunner()
+                .withPropertyValues("hephaestus.runtime.server.enabled=false", "hephaestus.runtime.worker.enabled=true")
+                .withBean(ObservationRepository.class, () -> observations)
+                .withBean(ObservationVisibilityPolicy.class, () -> mock(ObservationVisibilityPolicy.class))
+                .withBean(PreviousInAppFeedback.class, () -> mock(PreviousInAppFeedback.class))
+                .withBean(PracticeFeedbackDeliveryPolicy.class, () -> mock(PracticeFeedbackDeliveryPolicy.class))
+                .withBean(Clock.class, Clock::systemUTC);
+        worker.withUserConfiguration(InAppSupportReader.class)
+                .run(context -> assertThat(admitWith(context.getBeanProvider(InAppSupportReader.class))
+                                .path(ObservationAdmissionService.IN_APP_SUPPORT_KEY)
+                                .path("state")
+                                .asString())
+                        .isEqualTo("COMPLETE"));
+        worker.run(context -> assertThat(admitWith(context.getBeanProvider(InAppSupportReader.class))
+                        .path(ObservationAdmissionService.IN_APP_SUPPORT_KEY)
+                        .path("state")
+                        .asString())
+                .isEqualTo("UNAVAILABLE"));
+        assertThat(Objects.requireNonNull(job.getMetadata())
+                        .path(ObservationAdmissionService.DIGEST_METADATA_KEY)
+                        .asString())
+                .isNotBlank();
+    }
+
+    private ObjectNode admitWith(ObjectProvider<InAppSupportReader> readers) {
+        return new ObservationAdmissionService(
+                        jobs,
+                        observations,
+                        new JobTypeHandlerRegistry(List.copyOf(handlers.values())),
+                        mapper,
+                        transactionManager,
+                        evidenceFiles,
+                        publicEligibility,
+                        reviewHistory,
+                        readers)
+                .admit(identity, mapper.createArrayNode());
     }
 
     @Test
