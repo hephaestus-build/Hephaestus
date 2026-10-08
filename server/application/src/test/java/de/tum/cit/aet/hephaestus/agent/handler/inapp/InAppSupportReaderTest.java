@@ -35,6 +35,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.data.domain.PageRequest;
 
 class InAppSupportReaderTest extends BaseUnitTest {
@@ -104,6 +105,41 @@ class InAppSupportReaderTest extends BaseUnitTest {
                     .extracting(InAppSupportContext.Occurrence::artifactId)
                     .containsExactlyInAnyOrder(14L, 12L, 11L);
         });
+    }
+
+    @Test
+    void shouldSelectSupportThroughTheReaderAWorkerOnlyContextRegisters() {
+        Observation current = negative(14L, NOW);
+        allowRecipient();
+        when(previous.find(WORKSPACE, RECIPIENT, "handles-errors", NOW)).thenReturn(Optional.empty());
+        when(observations.findRecentForSubjectAndPractice(
+                        eq(WORKSPACE), eq(RECIPIENT), eq("handles-errors"), any(), any()))
+                .thenReturn(List.of(current));
+        when(visibility.permitsForNewDelivery(
+                        eq(WORKSPACE), anyList(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
+                .thenReturn(Set.of(current.getId()));
+
+        new ApplicationContextRunner()
+                .withPropertyValues("hephaestus.runtime.server.enabled=false", "hephaestus.runtime.worker.enabled=true")
+                .withBean(ObservationRepository.class, () -> observations)
+                .withBean(ObservationVisibilityPolicy.class, () -> visibility)
+                .withBean(PreviousInAppFeedback.class, () -> previous)
+                .withBean(PracticeFeedbackDeliveryPolicy.class, () -> policy)
+                .withBean(Clock.class, () -> Clock.fixed(NOW, ZoneOffset.UTC))
+                .withUserConfiguration(InAppSupportReader.class)
+                .run(context -> {
+                    InAppSupportReader registered =
+                            context.getBeanProvider(InAppSupportReader.class).getIfAvailable();
+                    assertThat(registered).isNotNull();
+                    InAppSupportContext support = registered.snapshot(job, List.of(current));
+
+                    assertThat(support.state()).isEqualTo(InAppSupportContext.State.COMPLETE);
+                    assertThat(support.practices())
+                            .singleElement()
+                            .satisfies(selected -> assertThat(selected.occurrences())
+                                    .extracting(InAppSupportContext.Occurrence::observationId)
+                                    .containsExactly(current.getId()));
+                });
     }
 
     @Test
