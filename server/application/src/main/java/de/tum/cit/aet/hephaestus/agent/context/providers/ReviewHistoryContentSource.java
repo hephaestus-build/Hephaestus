@@ -203,7 +203,10 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                     workspaceId, shown.currentness().keySet());
             feedbackCount = delivered.size();
             files.put(
-                    FEEDBACK_FILE, serialize(feedbackPayload(workspaceId, delivered, shown, withdrawn), FEEDBACK_FILE));
+                    FEEDBACK_FILE,
+                    serialize(
+                            feedbackPayload(workspaceId, delivered, shown, withdrawn, Words.CURRENT_CLAIMS),
+                            FEEDBACK_FILE));
             preparedCount = queued.size();
             files.put(
                     PREPARED_FILE,
@@ -251,8 +254,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                     .toList();
             Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(
                     workspaceId, shown.currentness().keySet());
-            var items =
-                    feedbackPayload(workspaceId, permitted, shown, withdrawn).path("feedback");
+            var items = feedbackPayload(workspaceId, permitted, shown, withdrawn, Words.CURRENT_CLAIMS)
+                    .path("feedback");
             for (int i = 0; i < permitted.size(); i++) {
                 ObjectNode record = (ObjectNode) items.get(i);
                 record.put("synced_at", permitted.get(i).getCreatedAt().toString());
@@ -368,7 +371,11 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                 .toList();
     }
 
-    /** Public composition uses the history projection without ever projecting another work or a private body. */
+    /**
+     * Public composition uses the history projection without ever projecting another work or a private body. It keeps
+     * the words of a stale row as what was delivered here, still labelled stale: they record that communication, not a
+     * claim about the work as it is.
+     */
     @Transactional(readOnly = true)
     public ObjectNode publicSameWorkFeedback(long workspaceId, long authorId, ArtifactKind kind, long artifactId) {
         List<Feedback> sameWork =
@@ -381,13 +388,13 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                 .toList();
         Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(
                 workspaceId, permitted.stream().map(Feedback::getId).collect(Collectors.toSet()));
-        return feedbackPayload(workspaceId, permitted, shown, withdrawn);
+        return feedbackPayload(workspaceId, permitted, shown, withdrawn, Words.DELIVERED_COMMUNICATION);
     }
 
     /**
      * The feedback this review may read, as the developer's own surfaces decide it: every observation it is
-     * bound to may be shown. A row whose evidence is no longer current keeps its record but not its words, which
-     * describe work as it was and are not evidence about the work as it is.
+     * bound to may be shown. A row whose evidence is no longer current is labelled stale: its words describe work as
+     * it was and are not evidence about the work as it is.
      */
     private ShownFeedback shownFeedback(long workspaceId, List<Feedback> delivered, List<Feedback> queued) {
         return shownFeedback(workspaceId, delivered, queued, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
@@ -467,19 +474,30 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         return new StagedArtifactNames.Reference(feedback.getArtifactKind(), feedback.getArtifactId());
     }
 
+    /** Which stored words a projection carries. */
+    private enum Words {
+        /** Only the words of a row whose evidence is still current. */
+        CURRENT_CLAIMS,
+        /** The words of every shown row, current or stale, as the record of what was delivered. */
+        DELIVERED_COMMUNICATION
+    }
+
     /**
-     * The words of a row whose evidence is still current; a stale row is staged without them. So is a row a
-     * workspace admin withdrew: its evidence may be sound while its words are not, so only the fact is staged.
+     * The words of a row whose evidence is still current; a stale row is staged without them unless the projection
+     * records delivered communication. A row a workspace admin withdrew never carries them: its evidence may be sound
+     * while its words are not, so only the fact is staged.
      */
     private static void putBody(
-            ObjectNode node, Feedback f, Map<UUID, ReviewClaimCurrentness> shown, Set<UUID> withdrawn) {
+            ObjectNode node, Feedback f, Map<UUID, ReviewClaimCurrentness> shown, Set<UUID> withdrawn, Words words) {
         ReviewClaimCurrentness currentness = Objects.requireNonNull(shown.get(f.getId()));
         node.put("recordedClaimCurrentness", currentness.name());
         boolean isWithdrawn = withdrawn.contains(f.getId());
         if (isWithdrawn) {
             node.put("withdrawn", true);
         }
-        if (currentness == ReviewClaimCurrentness.CURRENT && !isWithdrawn) {
+        if (!isWithdrawn
+                && (currentness == ReviewClaimCurrentness.CURRENT
+                        || (currentness == ReviewClaimCurrentness.STALE && words == Words.DELIVERED_COMMUNICATION))) {
             node.put("body", f.getBody());
             if (f.getBody() != null) {
                 node.put("bodyRole", bodyRole(f.getChannel()));
@@ -565,7 +583,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             // situation, coaching goal, evidence summary and success signal, and the turn itself is still written live.
             // Null when the run that queued it composed nothing,
             // which leaves only the fact that something is queued.
-            putBody(node, f, shown, withdrawn);
+            putBody(node, f, shown, withdrawn, Words.CURRENT_CLAIMS);
         }
         return root;
     }
@@ -613,7 +631,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      * keeps these without its body; the ids are trace handles, not evidence.
      */
     private ObjectNode feedbackPayload(
-            long workspaceId, List<Feedback> delivered, ShownFeedback shown, Set<UUID> withdrawn) {
+            long workspaceId, List<Feedback> delivered, ShownFeedback shown, Set<UUID> withdrawn, Words words) {
         ObjectNode root = historyRoot("RECORDED_DELIVERY");
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
@@ -642,7 +660,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                     "publicEligible",
                     publicReviewEligibility.permitsPublicHistory(
                             f, shown.basedOn().getOrDefault(f.getId(), List.of())));
-            putBody(node, f, shown.currentness(), withdrawn);
+            putBody(node, f, shown.currentness(), withdrawn, words);
         }
         return root;
     }

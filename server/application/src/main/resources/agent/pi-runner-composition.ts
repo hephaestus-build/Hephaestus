@@ -839,11 +839,12 @@ export function priorPublicFeedback(
 			withdrawn,
 		} = entry;
 		const witnessId = typeof id === "string" && FEEDBACK_ID.test(id) ? `feedback:${id}` : null;
-		const usable =
+		// Stale words still record what was said here, so they can show novelty; only current ones stand as advice.
+		const recorded =
 			witnessId !== null &&
 			typeof body === "string" &&
 			body.trim() !== "" &&
-			recordedClaimCurrentness === "CURRENT" &&
+			(recordedClaimCurrentness === "CURRENT" || recordedClaimCurrentness === "STALE") &&
 			withdrawn !== true;
 		return [
 			{
@@ -855,8 +856,11 @@ export function priorPublicFeedback(
 				body,
 				recordedClaimCurrentness,
 				withdrawn,
-				eligibleForPriorAdvice: usable && deliveredBy(deliveredAt, capturedAt),
-				eligibleForAlreadySaid: usable && deliveredBy(deliveredAt, readAt),
+				eligibleForPriorAdvice:
+					recorded &&
+					recordedClaimCurrentness === "CURRENT" &&
+					deliveredBy(deliveredAt, capturedAt),
+				eligibleForAlreadySaid: recorded && deliveredBy(deliveredAt, readAt),
 			},
 		];
 	});
