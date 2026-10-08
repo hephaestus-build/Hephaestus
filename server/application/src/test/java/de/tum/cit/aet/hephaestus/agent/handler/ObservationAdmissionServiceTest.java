@@ -17,6 +17,8 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppSupportContext;
+import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppSupportReader;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
@@ -56,6 +58,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import tools.jackson.databind.JsonNode;
@@ -87,6 +90,12 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     @Mock
     private ReviewHistoryContentSource reviewHistory;
 
+    @Mock
+    private InAppSupportReader supportReader;
+
+    @Mock
+    private ObjectProvider<InAppSupportReader> supportReaders;
+
     private ObservationAdmissionService service;
     private AgentJob job;
     private ObservationAdmissionService.AdmissionIdentity identity;
@@ -117,7 +126,9 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                 transactionManager,
                 evidenceFiles,
                 publicEligibility,
-                reviewHistory);
+                reviewHistory,
+                supportReaders);
+        lenient().when(supportReaders.getIfAvailable()).thenReturn(supportReader);
         job = new AgentJob();
         job.setId(UUID.randomUUID());
         job.setStatus(AgentJobStatus.RUNNING);
@@ -133,6 +144,58 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                 .when(observations.findByAgentJobId(
                         job.getId(), job.getWorkspace().getId()))
                 .thenReturn(List.of());
+    }
+
+    @Test
+    void shouldKeepTheAdmissionAndReportSupportUnavailableWhenTheSupportReadFails() {
+        when(supportReader.snapshot(eq(job), any())).thenThrow(new IllegalStateException("read failed"));
+
+        ObjectNode response = service.admit(identity, mapper.createArrayNode());
+
+        assertThat(response.path(ObservationAdmissionService.IN_APP_SUPPORT_KEY)
+                        .path("state")
+                        .asString())
+                .isEqualTo("UNAVAILABLE");
+        assertThat(Objects.requireNonNull(job.getMetadata())
+                        .path(ObservationAdmissionService.DIGEST_METADATA_KEY)
+                        .asString())
+                .isNotBlank()
+                .isEqualTo(response.path("admissionDigest").asString());
+        verify(prepared, times(1)).record(job);
+    }
+
+    @Test
+    void shouldCarryTheSupportReadOfTheOwningAttemptForTheAdmittedRows() {
+        var support = new InAppSupportContext(
+                InAppSupportContext.State.COMPLETE,
+                "2026-10-08T10:00:00Z",
+                null,
+                List.of(new InAppSupportContext.PracticeSupport("handles-errors", List.of())));
+        when(supportReader.snapshot(job, List.of())).thenReturn(support);
+
+        ObjectNode response = service.admit(identity, mapper.createArrayNode());
+
+        assertThat(response.path(ObservationAdmissionService.IN_APP_SUPPORT_KEY))
+                .isEqualTo(mapper.valueToTree(support));
+        assertThat(response.path("observations").isArray()).isTrue();
+    }
+
+    @Test
+    void shouldReportTheLostAttemptInsteadOfSupportWhenOwnershipChangesAfterAdmission() {
+        doAnswer(invocation -> {
+                    job.setWorkerId("worker-2");
+                    return null;
+                })
+                .when(prepared)
+                .record(job);
+
+        assertThatThrownBy(() -> service.admit(identity, mapper.createArrayNode()))
+                .isInstanceOf(ObservationAdmissionService.StaleAttemptException.class);
+        assertThat(Objects.requireNonNull(job.getMetadata())
+                        .path(ObservationAdmissionService.DIGEST_METADATA_KEY)
+                        .asString())
+                .isNotBlank();
+        verifyNoInteractions(supportReader);
     }
 
     @Test

@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPrep
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.config.FeedbackLaneExecutor;
-import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
@@ -19,22 +18,19 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -54,39 +50,34 @@ public class InAppCompositionListener {
 
     private static final Logger log = LoggerFactory.getLogger(InAppCompositionListener.class);
 
-    private static final int MAX_EVIDENCE_PER_PRACTICE = 50;
-
     private final AgentJobRepository agentJobRepository;
     private final ObservationRepository observationRepository;
     private final FeedbackRepository feedbackRepository;
-    private final ObservationVisibilityPolicy visibilityPolicy;
     private final WorkspaceReviewDefaultsProvider workspaceDefaults;
     private final FeedbackCompositionResultParser resultParser;
     private final InAppFeedbackPreparer preparer;
     private final PracticeFeedbackDeliveryPolicy deliveryPolicy;
-    private final PreviousInAppFeedback previousInAppFeedback;
+    private final @Nullable InAppSupportReader supportReader;
     private final Clock clock;
 
     public InAppCompositionListener(
             AgentJobRepository agentJobRepository,
             ObservationRepository observationRepository,
             FeedbackRepository feedbackRepository,
-            ObservationVisibilityPolicy visibilityPolicy,
+            ObjectProvider<InAppSupportReader> supportReaders,
             WorkspaceReviewDefaultsProvider workspaceDefaults,
             FeedbackCompositionResultParser resultParser,
             InAppFeedbackPreparer preparer,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
-            PreviousInAppFeedback previousInAppFeedback,
             Clock clock) {
         this.agentJobRepository = agentJobRepository;
         this.observationRepository = observationRepository;
         this.feedbackRepository = feedbackRepository;
-        this.visibilityPolicy = visibilityPolicy;
         this.workspaceDefaults = workspaceDefaults;
         this.resultParser = resultParser;
         this.preparer = preparer;
         this.deliveryPolicy = deliveryPolicy;
-        this.previousInAppFeedback = previousInAppFeedback;
+        this.supportReader = supportReaders.getIfAvailable();
         this.clock = clock;
     }
 
@@ -180,20 +171,18 @@ public class InAppCompositionListener {
             Long recipientUserId,
             List<ComposedInAppMessage> messages,
             int positionBase) {
+        var reader = supportReader;
+        if (reader == null) return 0;
         PracticeAutonomy workspaceDefault =
                 workspaceDefaults.forWorkspace(workspaceId).defaultAutonomy();
         Instant now = clock.instant();
-        Instant windowStart = now.minus(Duration.ofDays(InAppFeedbackRouter.PATTERN_WINDOW_DAYS));
         List<InAppFeedbackPreparer.RoutedMessage> routed = new ArrayList<>(messages.size());
         for (ComposedInAppMessage message : messages) {
-            // A new card about a practice starts where the previous card about it left off: work that resolved
-            // the last card, or that the developer answered it over, or that the last card already cited
-            // while it stays open, is never cited again. An open previous card is what the new one replaces.
-            Optional<PreviousInAppFeedback.Previous> previous =
-                    previousInAppFeedback.find(workspaceId, recipientUserId, message.practiceSlug(), now);
-            Instant since =
-                    previous.map(card -> card.nextEvidenceSince(windowStart)).orElse(windowStart);
-            List<Observation> evidence = visibleEvidence(workspaceId, recipientUserId, message.practiceSlug(), since);
+            // An open previous card is what the new one replaces.
+            InAppSupportReader.Selection selection =
+                    reader.select(workspaceId, recipientUserId, message.practiceSlug(), now);
+            Optional<PreviousInAppFeedback.Previous> previous = selection.previous();
+            List<Observation> evidence = selection.evidence();
             InAppRoutingDecision decision = InAppFeedbackRouter.route(
                     message,
                     evidence,
@@ -214,25 +203,12 @@ public class InAppCompositionListener {
             routed.add(new InAppFeedbackPreparer.RoutedMessage(
                     message,
                     decision,
-                    InAppFeedbackRouter.problemsIn(evidence),
+                    selection.supports(),
                     previous.filter(PreviousInAppFeedback.Previous::isOpen)
                             .map(PreviousInAppFeedback.Previous::id)
                             .orElse(null)));
         }
         return preparer.prepare(agentJobId, workspaceId, recipientUserId, List.copyOf(routed), positionBase);
-    }
-
-    /** Filters evidence before preparation; read paths must recheck eligibility. */
-    private List<Observation> visibleEvidence(
-            Long workspaceId, Long recipientUserId, String practiceSlug, Instant since) {
-        List<Observation> candidates = observationRepository.findRecentForSubjectAndPractice(
-                workspaceId, recipientUserId, practiceSlug, since, PageRequest.of(0, MAX_EVIDENCE_PER_PRACTICE));
-        if (candidates.isEmpty()) {
-            return List.of();
-        }
-        Set<UUID> visible = visibilityPolicy.permitsForNewDelivery(
-                workspaceId, candidates, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        return candidates.stream().filter(o -> visible.contains(o.getId())).toList();
     }
 
     // Project autonomy to avoid depending on initialized entity associations.

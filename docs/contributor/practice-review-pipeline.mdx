@@ -685,6 +685,13 @@ Closed work, changed work, and merged work that the workspace setting excludes g
 `IN_APP` and `IN_CHAT` retain their own evidence and visibility gates.
 Preparation alone does not certify that a unit may be shown.
 
+After admission commits, private composition receives a dated `IN_APP` support read from the same owner that selects a card's evidence.
+It applies the previous-card cutoff, bounded history, current claims and delivery-purpose visibility.
+The broader authorized history remains available for `IN_CHAT`.
+An unavailable or malformed support read closes only `IN_APP`.
+A recipient-policy refusal closes it without a composition failure.
+Card preparation checks the evidence and delivery gates again.
+
 Missing work refuses every channel.
 Private feedback also requires its recorded recipient to match the review's subject, which can be a reviewer.
 
