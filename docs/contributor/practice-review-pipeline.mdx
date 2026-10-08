@@ -588,7 +588,8 @@ Reasons are source state, an unrecorded file, empty, too large, unreadable, or n
 The record supplies captured intent, identity and state for orientation.
 Only admitted observations authorize assessments and concerns.
 
-Then the session receives eligible current-work observations, prior public feedback and captured discussion on the same work.
+The first turn carries the complete staged criteria of each practice with an eligible `NOT_MET` observation before the observations.
+It then carries eligible current-work observations, prior public feedback and captured discussion on the same work.
 It also receives each owning practice revision's name, purpose and known limitations.
 Delivered feedback retains its identity, reviewed revision and original observation support.
 Public history keeps a stale delivery's stored words as a record of what was delivered, not of a current claim or the provider's current text.
@@ -617,12 +618,18 @@ The model still judges whether the advice repeats, whether circumstances changed
 A refused selection leaves the last accepted selection intact.
 An accepted replacement revises it.
 
-An accepted selection returns the complete staged criteria of its selected practices when available, alongside their admitted observations.
+An accepted selection returns its admitted observations and the complete staged criteria of selected `MET` practices when available.
+The `NOT_MET` criteria already supplied in the first turn are not repeated.
 The criteria explain the recorded standard and its accepted responses and establish no additional concern.
 The admitted observations stay unchanged, but their outcomes are candidate claims, not certified conclusions.
+
 When the captured evidence does not support a selected concern under its standard, the session selects again and withholds it as `BELOW_BAR`.
 `review-composer.md` owns that rule.
-Writing guidance follows the criteria, so the handoff ends with the composition task rather than reference material.
+Writing guidance ends the selection handoff.
+
+After a completed compaction, the selection or recording tool restores the complete original review turn.
+A final proposal is refused until the next model turn can use that restored context.
+Another tool call in the same batch cannot finalize it.
 
 `report_review` proposes the complete summary and line notes against the accepted selection.
 It must account for exactly the selected observations and repeat the accepted withholding decisions.
