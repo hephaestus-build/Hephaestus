@@ -955,8 +955,8 @@ export function selectionText(
 	];
 	const reference =
 		"## Criteria of the selected practices\nReference, whole as staged: each explains the standard its " +
-		"observations were assessed against and the responses it accepts. The selected assessments above alone " +
-		"establish what this review raises.";
+		"observations were assessed against and the responses it accepts. The selected observations above are the " +
+		"recorded grounds this review may use. Their whole standard qualifies whether and how each may be communicated.";
 	const criteria =
 		practices.length === 0
 			? ""
