@@ -52,5 +52,6 @@ Independent of this reporting channel, the project runs:
 - **Dependency & secret scanning in CI**: Trivy filesystem scan and TruffleHog ([`ci-security-scan.yml`](.github/workflows/ci-security-scan.yml))
 - **Static analysis**: compiler checks and repository-specific Semgrep rules; these do not provide comprehensive interprocedural security analysis
 - **Native alerts**: GitHub secret scanning and Dependabot dependency alerts
+- **Mend Bolt**: the app is still installed from the former organization of this repository. Its scan stopped at a commit from February 2025. [`.whitesource`](.whitesource) turns off its issues. Use the scanners above for dependency risk.
 
 A machine-readable [`security.txt`](https://hephaestus.build/.well-known/security.txt) ([RFC 9116](https://www.rfc-editor.org/info/rfc9116/)) points to this policy.
