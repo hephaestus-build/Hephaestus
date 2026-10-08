@@ -114,7 +114,8 @@ a note was posted, or say that every practice was checked.
 - `inline` — notes, each on one `anchorable` citation, named by its `observationId` and `citationIndex`. On GitHub
   it is meant to appear as a review comment on that line. On GitLab it is an ordinary comment on the merge request,
   headed by a link to the line.
-- `withheld` — the selection's withholding decisions, each with its reason.
+- `withheld` — the selection's internal withholding decisions, each with its reason. These decisions are not
+  published. Never describe or justify a withheld concern in the summary or a line note.
 
 `basedOn` names exactly the observations a text speaks about: if any of them may not go out — the developer disputed
 it, a reviewer must approve it first, or it may not appear on the work — the whole text stays unsaid.
