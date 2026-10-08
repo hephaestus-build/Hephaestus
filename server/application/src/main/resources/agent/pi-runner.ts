@@ -639,15 +639,12 @@ const inapplicabilitySchema = {
 		subject: {
 			type: "string",
 			minLength: 1,
-			description:
-				"What this practice looks for, e.g. error handling around outbound network calls.",
+			description: "The subject this practice's criteria judge.",
 		},
 		ruledOutBy: {
 			type: "string",
 			minLength: 1,
-			description:
-				"The fact about THIS work that means the subject cannot occur in it, e.g. the change touches " +
-				"only Markdown documentation and makes no network calls.",
+			description: "The fact about THIS work that rules out that subject.",
 		},
 	},
 } as const;
@@ -774,8 +771,10 @@ const observationSchema: ToolDefinition["parameters"] = {
 			type: "string",
 			minLength: 1,
 			description:
-				"A concise explanation of how the cited evidence warrants this outcome. Describe evidence, " +
-				"not advice, intent, confidence, or hidden chain-of-thought.",
+				"A concise explanation a developer can read: the source facts that decide whether this work holds " +
+				"this criterion's subject and occasion, then, when it does, how the cited evidence meets or falls " +
+				"short of what this criterion judges, leaving to other practices what it assigns to them. Describe " +
+				"evidence, not advice, intent, confidence, or hidden chain-of-thought.",
 		},
 	},
 } as const;
