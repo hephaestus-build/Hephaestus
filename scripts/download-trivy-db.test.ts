@@ -98,6 +98,8 @@ void test(
 			{ id: "", java: "false", age: 1, file: true, success: false },
 			{ id: "0", java: "false", age: 1, file: true, success: false },
 			{ id: "123,456", java: "false", age: 1, file: true, success: false },
+			{ id: "123", java: "false", age: 25, file: true, success: true, maxAge: 48 },
+			{ id: "123", java: "false", age: 49, file: true, success: false, maxAge: 48 },
 		]) {
 			await writeFile(log, "");
 			const output = path.join(directory, "output");
@@ -122,7 +124,7 @@ void test(
 						TRIVY_CACHE_DIR: directory,
 						DATABASE_ARTIFACT: scenario.id,
 						JAVA_DB: scenario.java,
-						MAX_AGE_HOURS: "24",
+						MAX_AGE_HOURS: String(scenario.maxAge ?? 24),
 						METADATA_PATH: "",
 						GITHUB_OUTPUT: output,
 						SCAN_LOG: log,

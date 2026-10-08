@@ -905,7 +905,7 @@ jobs:
       # The same freshness bound the release applies: a stale mirror must not be read as a clean scan.
       - uses: ./.github/actions/download-trivy-db
         with:
-          max-age-hours: "24"
+          max-age-hours: "48"
           database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
           java-db: "true"
 

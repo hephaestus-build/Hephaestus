@@ -162,7 +162,7 @@ void test("every CI image scan receives the producer's immutable artifact ID acr
 		restore.getIn(["with", "database-artifact"]),
 		`\${{ needs.vulnerability-database.outputs.artifact-id }}`,
 	);
-	assert.equal(restore.getIn(["with", "max-age-hours"]), "24");
+	assert.equal(restore.getIn(["with", "max-age-hours"]), "48");
 	assert.equal(restore.getIn(["with", "java-db"]), "true");
 });
 

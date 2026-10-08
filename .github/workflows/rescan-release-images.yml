@@ -48,7 +48,7 @@ jobs:
           node scripts/verify-release-evidence.ts release-evidence
       - uses: ./.github/actions/download-trivy-db
         with:
-          max-age-hours: "24"
+          max-age-hours: "48"
           metadata-path: reports/trivy-db.json
       - name: Rescan immutable subjects
         env:
