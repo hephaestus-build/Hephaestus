@@ -318,6 +318,7 @@ if (scenario !== undefined && scenario !== "") {
 				}));
 			}
 			case "compose-partial-error":
+			case "compose-qualify":
 			case "compose-fold": {
 				return [
 					{ ...admittedObservation, publicEligible: !reviewerOnly },
@@ -1000,6 +1001,41 @@ if (scenario !== undefined && scenario !== "") {
 								if (scenario === "compose-recover") {
 									// A selection is accepted and the response ends without the final review.
 									record(`recover-select:${await choose("s-r", { selected: ["observation-1"] })}`);
+									return;
+								}
+								if (scenario === "compose-qualify") {
+									const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
+									const initial = await selection.execute("s-q1", {
+										selected: ["observation-1", "observation-2"],
+									});
+									assert.ok(isRecord(initial) && Array.isArray(initial.content));
+									const initialText = initial.content
+										.filter(isRecord)
+										.map((part) => part.text)
+										.join("\n");
+									writeFileSync(nodePath.join(cwd, "qualification-initial.txt"), initialText);
+									const replacement = await selection.execute("s-q2", {
+										selected: ["observation-1"],
+										withheld: [{ basedOn: ["observation-2"], reason: "BELOW_BAR" }],
+									});
+									assert.ok(isRecord(replacement) && Array.isArray(replacement.content));
+									const replacementText = replacement.content
+										.filter(isRecord)
+										.map((part) => part.text)
+										.join("\n");
+									writeFileSync(
+										nodePath.join(cwd, "qualification-reselected.txt"),
+										replacementText,
+									);
+									await review.execute("r-q", {
+										summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+										withheld: [{ basedOn: ["observation-2"], reason: "BELOW_BAR" }],
+									});
+									assert.equal(
+										readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
+										before,
+									);
+									record("qualification:canonical-unchanged");
 									return;
 								}
 								if (scenario === "compose-reselect") {
@@ -2159,6 +2195,7 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-quiet",
 		"compose-empty",
 		"compose-reselect",
+		"compose-qualify",
 		"compose-recover",
 		"compose-repeat-select",
 		"compose-invalid-select",
@@ -2241,6 +2278,8 @@ if (scenario !== undefined && scenario !== "") {
 				"compose-quiet": "skips a WITHHOLD on a practice with nothing to withhold and asks no more",
 				"compose-empty":
 					"ends the review composition on an intentionally empty final review of positive results",
+				"compose-qualify":
+					"reselects a mixed public review while preserving canonical observations and its supported concern",
 				"compose-reselect":
 					"stores only a final review that matches the selection accepted last, and nothing after it",
 				"compose-recover":
@@ -2427,6 +2466,7 @@ if (scenario !== undefined && scenario !== "") {
 						stage === "batch" ||
 						stage === "draft-revision" ||
 						stage === "compose-fold" ||
+						stage === "compose-qualify" ||
 						stage === "compose-abstention"
 					) {
 						index = [
@@ -3744,6 +3784,47 @@ assert.notEqual(outgoing.function.strict, true);`,
 							});
 							assert.ok(retry.includes(staged), retry);
 							assert.ok(!retry.includes("### Criteria of `second-practice`"), retry);
+							break;
+						}
+						case "compose-qualify": {
+							assert.equal(child.status, 0, child.stderr);
+							const initial = readFileSync(nodePath.join(cwd, "qualification-initial.txt"), "utf8");
+							const replacement = readFileSync(
+								nodePath.join(cwd, "qualification-reselected.txt"),
+								"utf8",
+							);
+							const second = { ...publicRow, id: "observation-2", practiceSlug: "second-practice" };
+							assert.deepEqual(selectedRowsOf(initial), {
+								acceptedSelection: { selected: ["observation-1", "observation-2"], withheld: [] },
+								selectedObservations: [publicRow, second],
+							});
+							for (const slug of ["test-practice", "second-practice"]) {
+								const criteria = readFileSync(
+									nodePath.join(cwd, `catalog/practices/${slug}.md`),
+									"utf8",
+								);
+								assert.ok(initial.includes(`markdown\n${criteria}\n`), initial);
+							}
+							assert.deepEqual(selectedRowsOf(replacement), {
+								acceptedSelection: {
+									selected: ["observation-1"],
+									withheld: [{ basedOn: ["observation-2"], reason: "BELOW_BAR" }],
+								},
+								selectedObservations: [publicRow],
+							});
+							assert.ok(!replacement.includes("### Criteria of `second-practice`"), replacement);
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback));
+							assert.equal(feedback.admissionDigest, "admitted-digest");
+							assert.deepEqual(feedback.review, {
+								summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+								inline: [],
+								withheld: [{ basedOn: ["observation-2"], reason: "BELOW_BAR" }],
+							});
+							assert.ok(events.includes("qualification:canonical-unchanged"), events.join("\n"));
+							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
 							break;
 						}
 						case "compose-reselect": {
