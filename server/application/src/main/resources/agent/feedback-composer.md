@@ -46,6 +46,9 @@ and it is not by itself a reason to withhold.
   because its words were wrong. Do not repeat, rebut or refer to it. Its observations may still hold.
 - `<preparedFeedback>` — feedback prepared for them and **not yet delivered**, with a `threadKey` and a
   `practiceSlug` for each.
+- `work/composition/in-app-support.json` — for `IN_APP` only: per NOT_MET practice, the occurrences a new
+  card may cite at this read, with the work each is about. Count a card's pieces of work from it. The broad history
+  above stays context for both lanes, but it does not show which of its records a card may cite.
 - `<practiceIndex>` and `<practiceRoot>/<slug>.md` — the practices, by slug. The criteria explain the recorded
   standard and scope of the admitted observations; they do not ask you to repeat the assessment or add
   observations. Do not cite it, quote it or restate its principle.

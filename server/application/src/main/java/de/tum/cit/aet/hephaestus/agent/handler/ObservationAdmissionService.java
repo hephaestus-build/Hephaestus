@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppSupportContext;
+import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppSupportReader;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
@@ -21,6 +23,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -34,6 +39,11 @@ import tools.jackson.databind.node.ObjectNode;
 
 @Service
 public class ObservationAdmissionService {
+
+    private static final Logger log = LoggerFactory.getLogger(ObservationAdmissionService.class);
+
+    /** The response key of the IN_APP support read after admission; see {@link InAppSupportContext}. */
+    public static final String IN_APP_SUPPORT_KEY = "inAppSupport";
 
     public static final String DIGEST_METADATA_KEY = "observation_admission_digest";
 
@@ -75,6 +85,7 @@ public class ObservationAdmissionService {
     private final JobEvidenceFiles evidenceFiles;
     private final PublicReviewEligibility publicReviewEligibility;
     private final ReviewHistoryContentSource reviewHistory;
+    private final ObjectProvider<InAppSupportReader> inAppSupportReader;
 
     /** Retries join in-flight verification rather than launching duplicate Git operations. */
     private final ConcurrentHashMap<AdmissionIdentity, Flight> flights = new ConcurrentHashMap<>();
@@ -89,7 +100,8 @@ public class ObservationAdmissionService {
             PlatformTransactionManager transactionManager,
             JobEvidenceFiles evidenceFiles,
             PublicReviewEligibility publicReviewEligibility,
-            ReviewHistoryContentSource reviewHistory) {
+            ReviewHistoryContentSource reviewHistory,
+            ObjectProvider<InAppSupportReader> inAppSupportReader) {
         this.jobs = jobs;
         this.observations = observations;
         this.handlers = handlers;
@@ -98,6 +110,7 @@ public class ObservationAdmissionService {
         this.evidenceFiles = evidenceFiles;
         this.publicReviewEligibility = publicReviewEligibility;
         this.reviewHistory = reviewHistory;
+        this.inAppSupportReader = inAppSupportReader;
     }
 
     /** Records refusals on the job before rethrowing them. */
@@ -113,6 +126,9 @@ public class ObservationAdmissionService {
         try {
             ObjectNode admitted = admitOnce(identity, submitted, digest);
             evidenceFiles.discardAdmittedAttempt(identity);
+            // Read once the admission has committed, so a failed read cannot undo it. A joined request shares
+            // this dated read; a later retry of the same submission reads again.
+            admitted.set(IN_APP_SUPPORT_KEY, mapper.valueToTree(inAppSupport(identity)));
             mine.outcome().complete(admitted);
             return admitted;
         } catch (RuntimeException exception) {
@@ -120,6 +136,30 @@ public class ObservationAdmissionService {
             throw exception;
         } finally {
             flights.remove(identity, mine);
+        }
+    }
+
+    /**
+     * The IN_APP support of the admitted run, for its owning attempt. A lost attempt stays a lost attempt; any other
+     * failure leaves the support unavailable and the admission as committed.
+     */
+    private InAppSupportContext inAppSupport(AdmissionIdentity identity) {
+        try {
+            return Objects.requireNonNull(transactions.execute(status -> {
+                AgentJob job = ownedJob(identity);
+                InAppSupportReader reader = inAppSupportReader.getIfAvailable();
+                return reader == null
+                        ? InAppSupportContext.unavailable(Instant.now())
+                        : reader.snapshot(job, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
+            }));
+        } catch (StaleAttemptException lost) {
+            throw lost;
+        } catch (RuntimeException e) {
+            log.warn(
+                    "IN_APP support could not be read after admission: jobId={}, error={}",
+                    identity.jobId(),
+                    e.getClass().getSimpleName());
+            return InAppSupportContext.unavailable(Instant.now());
         }
     }
 

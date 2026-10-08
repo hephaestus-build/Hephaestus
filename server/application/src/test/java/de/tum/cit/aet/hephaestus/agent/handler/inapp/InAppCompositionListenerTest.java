@@ -40,12 +40,14 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 class InAppCompositionListenerTest extends BaseUnitTest {
     private static final long WORKSPACE_ID = 9L;
@@ -65,12 +67,15 @@ class InAppCompositionListenerTest extends BaseUnitTest {
             jobs,
             observations,
             feedback,
-            visibility,
+            new StaticListableBeanFactory(Map.of(
+                            "supportReader",
+                            new InAppSupportReader(
+                                    observations, visibility, previous, policy, Clock.fixed(NOW, ZoneOffset.UTC))))
+                    .getBeanProvider(InAppSupportReader.class),
             defaults,
             parser,
             preparer,
             policy,
-            previous,
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     @ParameterizedTest

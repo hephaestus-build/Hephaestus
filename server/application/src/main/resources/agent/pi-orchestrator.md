@@ -158,10 +158,11 @@ leads", the full list in `work/precompute-out/<slug>.json`; a practice without t
 look for. The leads are an initial advisory from a static scan: a lead is a place to inspect, not
 evidence, and a practice without leads is judged on its criteria like any other.
 
-`report_observation` takes a list. Send one complete observation for this session's practice. Each item is stored or refused on its own with the reason; correct a refused item and
-resend it alone. A stored item may list what the runner filled in or moved for you: it is recorded as
-listed, so resend nothing for it. A refusal names the field and the rule it broke; it questions your
-outcome only when it says so, and resending the same item gets the same answer. After eight refusals
-for one practice the runner accepts no more for it. Do not write
+`report_observation` takes one complete observation for this session's practice as its arguments, not
+a list or a JSON-encoded string. It is stored or refused with the reason; correct a refused observation
+and send it again whole. A stored observation may list what the runner filled in or moved for you: it is
+recorded as listed, so resend nothing for it. A refusal names the field and the rule it broke; it
+questions your outcome only when it says so, and resending the same observation gets the same answer.
+After eight refusals for one practice the runner accepts no more for it. Do not write
 observations as plain text, and do not write planning prose once you know the observation.
 Feedback is composed separately after server admission.

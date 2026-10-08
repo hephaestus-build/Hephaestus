@@ -18,6 +18,16 @@ import { isRecord } from "../../../main/resources/agent/pi-observation-normalize
 // The runner reads /workspace and the environment at module scope, so each scenario is a child
 // process: this file re-enters itself with the SDK mocked and drives one review through it.
 
+const supportOccurrence = (artifactKind: string, artifactId: number) => ({
+	observationId: `support-${artifactKind}-${artifactId}`,
+	artifactKind,
+	artifactId,
+	outcome: "NOT_MET",
+	origin: "LIVE",
+	summary: "A selected negative occurrence",
+	observedAt: "2026-10-07T08:00:00Z",
+});
+
 const admittedObservation = {
 	outcome: "NOT_MET",
 	id: "observation-1",
@@ -318,6 +328,7 @@ if (scenario !== undefined && scenario !== "") {
 				}));
 			}
 			case "compose-partial-error":
+			case "compose-qualify":
 			case "compose-fold": {
 				return [
 					{ ...admittedObservation, publicEligible: !reviewerOnly },
@@ -499,10 +510,63 @@ if (scenario !== undefined && scenario !== "") {
 			assert.ok(typeof init?.body === "string");
 			writeFileSync(nodePath.join(cwd, "admission.json"), init.body);
 		}
+		const rows = admitted();
+		const supportMode = process.env.PI_IN_APP_SUPPORT_MODE;
+
+		let selected: ReturnType<typeof supportOccurrence>[] = [];
+		if (
+			scenario === "compose" ||
+			scenario === "compose-foreign-provider" ||
+			supportMode === "selected"
+		) {
+			selected = [supportOccurrence("scm.pull_request", 3), supportOccurrence("scm.issue", 3)];
+		} else if (supportMode === "duplicate") {
+			selected = [
+				supportOccurrence("scm.pull_request", 3),
+				supportOccurrence("scm.pull_request", 3),
+			];
+		}
+
+		const complete = {
+			state: "COMPLETE",
+			readAt: "2026-10-07T10:00:00Z",
+			practices: [
+				...new Set(
+					rows
+						.filter((row) => isRecord(row) && row.outcome === "NOT_MET")
+						.map((row) => {
+							assert.ok(isRecord(row));
+							return row.practiceSlug;
+						}),
+				),
+			].map((practiceSlug) => ({ practiceSlug, occurrences: selected })),
+		};
+		let support: unknown = complete;
+		if (supportMode === "missing") {
+			support = undefined;
+		} else if (supportMode === "unavailable") {
+			support = { state: "UNAVAILABLE", readAt: complete.readAt };
+		} else if (supportMode === "refused" || supportMode === "refused-only") {
+			support = { state: "REFUSED", readAt: complete.readAt };
+		} else if (supportMode === "malformed") {
+			support = { ...complete, practices: [] };
+		} else if (supportMode === "invalid-optional") {
+			support = {
+				...complete,
+				practices: [
+					{
+						practiceSlug: "test-practice",
+						occurrences: [{ ...supportOccurrence("scm.issue", 1), practiceRevisionId: "unknown" }],
+					},
+				],
+			};
+		}
+
 		return Response.json({
 			schemaVersion: 1,
 			admissionDigest: "admitted-digest",
-			observations: admitted(),
+			observations: rows,
+			inAppSupport: support,
 		});
 	});
 	const manager = {
@@ -650,12 +714,8 @@ if (scenario !== undefined && scenario !== "") {
 									const statePath = nodePath.join(cwd, "out/review-state.json");
 									const before = readFileSync(statePath, "utf8");
 									const reply = await tool("report_observation").execute("late", {
-										observations: [
-											{
-												...observation("test-practice", "Late overwrite"),
-												revises: "test-practice",
-											},
-										],
+										...observation("test-practice", "Late overwrite"),
+										revises: "test-practice",
 									});
 									assert.ok(isRecord(reply));
 									assert.ok(isRecord(reply.details));
@@ -809,11 +869,10 @@ if (scenario !== undefined && scenario !== "") {
 										},
 									});
 									if (recording) {
-										const reply = await tool("report_observation").execute("w-6", {
-											observations: [
-												observation("test-practice", "Recorded in the call that spent the budget"),
-											],
-										});
+										const reply = await tool("report_observation").execute(
+											"w-6",
+											observation("test-practice", "Recorded in the call that spent the budget"),
+										);
 										record(`recorded:${JSON.stringify(reply)}`);
 										emit({
 											type: "tool_execution_end",
@@ -1006,6 +1065,41 @@ if (scenario !== undefined && scenario !== "") {
 									record(`recover-select:${await choose("s-r", { selected: ["observation-1"] })}`);
 									return;
 								}
+								if (scenario === "compose-qualify") {
+									const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
+									const initial = await selection.execute("s-q1", {
+										selected: ["observation-1", "observation-2"],
+									});
+									assert.ok(isRecord(initial) && Array.isArray(initial.content));
+									const initialText = initial.content
+										.filter(isRecord)
+										.map((part) => part.text)
+										.join("\n");
+									writeFileSync(nodePath.join(cwd, "qualification-initial.txt"), initialText);
+									const replacement = await selection.execute("s-q2", {
+										selected: ["observation-1"],
+										withheld: [{ basedOn: ["observation-2"], reason: "BELOW_BAR" }],
+									});
+									assert.ok(isRecord(replacement) && Array.isArray(replacement.content));
+									const replacementText = replacement.content
+										.filter(isRecord)
+										.map((part) => part.text)
+										.join("\n");
+									writeFileSync(
+										nodePath.join(cwd, "qualification-reselected.txt"),
+										replacementText,
+									);
+									await review.execute("r-q", {
+										summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+										withheld: [{ basedOn: ["observation-2"], reason: "BELOW_BAR" }],
+									});
+									assert.equal(
+										readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
+										before,
+									);
+									record("qualification:canonical-unchanged");
+									return;
+								}
 								if (scenario === "compose-reselect") {
 									// The composer writes before choosing, chooses wrongly, then rightly, writes a review
 									// that does not match its choice, chooses again and writes the review that does.
@@ -1169,18 +1263,61 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							if (text.includes("## This turn")) {
+								if (scenario === "compose-support") {
+									const feedback = tool("report_feedback");
+									const reply = await feedback.execute("support", {
+										units: [
+											{
+												channel: "IN_APP",
+												practiceSlug: "test-practice",
+												basedOn: ["observation-1"],
+												action: "NEW",
+												title: "A repeated problem",
+												body: "The recurring problem",
+												nextStep: "Check the boundary",
+											},
+											{
+												channel: "IN_CHAT",
+												practiceSlug: "test-practice",
+												basedOn: ["observation-1"],
+												action: "NEW",
+												title: "Discuss the boundary",
+												notes: {
+													situation: "Current problem",
+													capability: "Check the boundary",
+													evidenceSummary: "The admitted occurrence",
+													inConversationSignal: "A boundary discussion",
+												},
+											},
+										],
+									});
+									record(`support-units:${JSON.stringify(reply)}`);
+									if (
+										process.env.PI_IN_APP_SUPPORT_MODE === "empty" ||
+										process.env.PI_IN_APP_SUPPORT_MODE === "duplicate"
+									) {
+										await feedback.execute("below", {
+											units: [
+												{
+													channel: "IN_APP",
+													practiceSlug: "test-practice",
+													basedOn: ["observation-1"],
+													action: "WITHHOLD",
+													withholdReason: "BELOW_BAR",
+												},
+											],
+										});
+									}
+									return;
+								}
 								if (scenario === "draft-revision") {
 									assert.ok(
 										!options.customTools.some((item) => item.name === "report_observation"),
 									);
 									assert.ok(measuredTool);
 									const closed = await measuredTool.execute("after-admission", {
-										observations: [
-											{
-												...observation("test-practice", "Forbidden late replacement"),
-												revises: "test-practice",
-											},
-										],
+										...observation("test-practice", "Forbidden late replacement"),
+										revises: "test-practice",
 									});
 									record(`draft-closed:${JSON.stringify(closed)}`);
 									return;
@@ -1332,85 +1469,15 @@ if (scenario !== undefined && scenario !== "") {
 								}
 								assert.match(schema, /One of: IN_APP\./u);
 								assert.match(schema, /Required: channel, practiceSlug, basedOn, action\./u);
-								// One occurrence is not a pattern: with no history, the card is refused, and a
-								// call that stored nothing is an error the session must correct.
-								const alone = await feedback
-									.execute("f-0", { units: [card] })
+								const historical = await feedback
+									.execute("historical", {
+										units: [{ ...card, basedOn: ["support-scm.issue-3"] }],
+									})
 									.then(() => "accepted")
 									.catch((error: unknown) =>
 										error instanceof Error ? error.message : String(error),
 									);
-								record(`feedback-alone:${alone}`);
-								mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
-								// An earlier review of this same merge request is the same piece of work, not a second.
-								writeFileSync(
-									nodePath.join(cwd, "history/observations.json"),
-									JSON.stringify({
-										observations: [
-											{
-												practiceSlug: "test-practice",
-												outcome: "NOT_MET",
-												artifact: {
-													kind: "scm.pull_request",
-													container: "group/repo",
-													number: 3,
-													url: "https://gitlab.example/group/repo/-/merge_requests/3",
-													title: "This change, reviewed before",
-												},
-											},
-										],
-									}),
-								);
-								const sameWork = await feedback
-									.execute("f-s", { units: [card] })
-									.then(() => "accepted")
-									.catch((error: unknown) =>
-										error instanceof Error ? error.message : String(error),
-									);
-								record(`feedback-same-work:${sameWork}`);
-								writeFileSync(
-									nodePath.join(cwd, "history/observations.json"),
-									JSON.stringify({
-										observations: [
-											{
-												practiceSlug: "test-practice",
-												outcome: "NOT_MET",
-												artifact: { kind: "scm.issue", number: 7, title: "Unresolved work" },
-											},
-										],
-									}),
-								);
-								const unresolved = await feedback
-									.execute("f-u", { units: [card] })
-									.then(() => "accepted")
-									.catch((error: unknown) =>
-										error instanceof Error ? error.message : String(error),
-									);
-								record(`feedback-unresolved:${unresolved}`);
-								writeFileSync(
-									nodePath.join(cwd, "history/observations.json"),
-									JSON.stringify({
-										observations: [
-											{
-												practiceSlug: "test-practice",
-												outcome: "NOT_MET",
-												artifact: {
-													kind:
-														scenario === "compose-foreign-provider"
-															? "scm.pull_request"
-															: "scm.issue",
-													container: "group/repo",
-													number: 3,
-													url:
-														scenario === "compose-foreign-provider"
-															? "https://github.com/group/repo/pull/3"
-															: "https://gitlab.example/group/repo/-/issues/3",
-													title: "Earlier work",
-												},
-											},
-										],
-									}),
-								);
+								record(`feedback-historical:${historical}`);
 								// Trying to break it: every unit but the first is wrong in its own way, and each
 								// is answered on its own while the first is stored.
 								const reply = await feedback.execute("f-1", {
@@ -1459,9 +1526,10 @@ if (scenario !== undefined && scenario !== "") {
 									scenario === "stall" || scenario === "repeat" || scenario === "cut-off"
 										? "test-practice"
 										: "second-practice";
-								const reply = await tool("report_observation").execute("o-3", {
-									observations: [observation(unfinished, "Recorded on the finishing turn")],
-								});
+								const reply = await tool("report_observation").execute(
+									"o-3",
+									observation(unfinished, "Recorded on the finishing turn"),
+								);
 								record(`finish:${JSON.stringify(reply)}`);
 								return;
 							}
@@ -1521,9 +1589,7 @@ if (scenario !== undefined && scenario !== "") {
 									toolName: "read",
 									args: { path: "work/change/diff.patch" },
 								});
-								await report.execute("own", {
-									observations: [observation(currentSlug, `Own ${currentSlug}`)],
-								});
+								await report.execute("own", observation(currentSlug, `Own ${currentSlug}`));
 								return;
 							}
 							if (scenario === "scope-ownership") {
@@ -1532,22 +1598,17 @@ if (scenario !== undefined && scenario !== "") {
 								const before = existsSync(nodePath.join(cwd, "out/review-state.json"))
 									? readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8")
 									: null;
+								// More attempts than the refusal limit: an item outside the session spends none of it.
 								for (let attempt = 0; attempt < 9; attempt += 1) {
 									await assert.rejects(
-										report.execute(`inactive-${attempt}`, {
-											observations: [
-												observation(sibling, "Inactive result"),
-												observation(sibling, "Duplicate inactive result"),
-											],
-										}),
-										/without changing any drafts/u,
+										report.execute(`inactive-${attempt}`, observation(sibling, "Inactive result")),
+										/this session/u,
 									);
 								}
 								await assert.rejects(
 									report.execute("inactive-revision", {
-										observations: [
-											{ ...observation(sibling, "Overwrite sibling"), revises: sibling },
-										],
+										...observation(sibling, "Overwrite sibling"),
+										revises: sibling,
 									}),
 									/this session/u,
 								);
@@ -1557,9 +1618,7 @@ if (scenario !== undefined && scenario !== "") {
 										: null,
 									before,
 								);
-								await report.execute("own", {
-									observations: [observation(currentSlug, `Own ${currentSlug}`)],
-								});
+								await report.execute("own", observation(currentSlug, `Own ${currentSlug}`));
 								return;
 							}
 							if (scenario === "scope-stop-failure" || scenario === "scope-stop-hangs") {
@@ -1592,9 +1651,10 @@ if (scenario !== undefined && scenario !== "") {
 										},
 									});
 									if (call === 2) {
-										const result = await report.execute(`${currentSlug}-${call}`, {
-											observations: [observation(currentSlug, `Own ${currentSlug}`)],
-										});
+										const result = await report.execute(
+											`${currentSlug}-${call}`,
+											observation(currentSlug, `Own ${currentSlug}`),
+										);
 										emit({
 											type: "tool_execution_end",
 											toolCallId: `${currentSlug}-${call}`,
@@ -1611,11 +1671,10 @@ if (scenario !== undefined && scenario !== "") {
 								(scenario === "batch" || scenario === "draft-revision") &&
 								currentSlug === "second-practice"
 							) {
-								await report.execute("own-second", {
-									observations: [
-										observation(currentSlug, "Second practice recorded in its own session"),
-									],
-								});
+								await report.execute(
+									"own-second",
+									observation(currentSlug, "Second practice recorded in its own session"),
+								);
 								return;
 							}
 							assert.match(report.description, /local review state/u);
@@ -1653,7 +1712,7 @@ if (scenario !== undefined && scenario !== "") {
 									});
 								for (let attempt = 1; attempt <= 9; attempt += 1) {
 									await report
-										.execute(`o-${attempt}`, { observations: [wrong(attempt)] })
+										.execute(`o-${attempt}`, wrong(attempt))
 										.then(() => record(`refusal-${attempt}:accepted`))
 										.catch((error: unknown) =>
 											record(
@@ -1671,18 +1730,14 @@ if (scenario !== undefined && scenario !== "") {
 									summary = "Unsafe authentication call",
 								) =>
 									report.execute("o-1", {
-										observations: [
-											{
-												...observation("test-practice", summary, {
-													sourceKind: "scm.repository.tree",
-													artifactPath: "repos/primary/.git/HEAD",
-													path,
-													startLine: 2,
-													quote,
-												}),
-												...(hasDraft ? { revises: "test-practice" } : {}),
-											},
-										],
+										...observation("test-practice", summary, {
+											sourceKind: "scm.repository.tree",
+											artifactPath: "repos/primary/.git/HEAD",
+											path,
+											startLine: 2,
+											quote,
+										}),
+										...(hasDraft ? { revises: "test-practice" } : {}),
 									});
 								await assert.rejects(
 									cite("src/Auth.java", "insecure(user);"),
@@ -1703,19 +1758,15 @@ if (scenario !== undefined && scenario !== "") {
 								const historySha = readFileSync(nodePath.join(cwd, "history-sha"), "utf8");
 								const atRevision = async (revision: string, startLine: number) =>
 									report.execute("o-2", {
-										observations: [
-											{
-												...observation("test-practice", `At revision ${startLine}`, {
-													sourceKind: "scm.repository.tree",
-													artifactPath: "repos/primary/.git/HEAD",
-													path: "src/Auth.java",
-													revision,
-													startLine,
-													quote: "insecure();",
-												}),
-												revises: "test-practice",
-											},
-										],
+										...observation("test-practice", `At revision ${startLine}`, {
+											sourceKind: "scm.repository.tree",
+											artifactPath: "repos/primary/.git/HEAD",
+											path: "src/Auth.java",
+											revision,
+											startLine,
+											quote: "insecure();",
+										}),
+										revises: "test-practice",
 									});
 								const relocated: unknown = await atRevision(historySha, 3);
 								record(
@@ -1748,16 +1799,15 @@ if (scenario !== undefined && scenario !== "") {
 									"test-practice",
 									"Retained changed authentication evidence",
 								);
-								await report.execute("provisional-diff", { observations: [provisional] });
+								await report.execute("provisional-diff", provisional);
 								const beforeReplacement = readFileSync(
 									nodePath.join(cwd, "out/review-state.json"),
 									"utf8",
 								);
 								await assert.rejects(
 									report.execute("replacement-without-diff", {
-										observations: [
-											{ ...undecided(["scm.pull-request.core"]), revises: "test-practice" },
-										],
+										...undecided(["scm.pull-request.core"]),
+										revises: "test-practice",
 									}),
 									/must show it read the change/u,
 								);
@@ -1770,16 +1820,12 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (scenario === "argument-repairs") {
 								const encoded = (quote: string, endLine = "[L10]") => ({
-									observations: [
-										{
-											...observation("test-practice", "Unsafe authentication call"),
-											evidence: JSON.stringify({
-												citations: JSON.stringify([
-													{ ...changeCitation, startLine: "[L10]", endLine, quote },
-												]),
-											}),
-										},
-									],
+									...observation("test-practice", "Unsafe authentication call"),
+									evidence: JSON.stringify({
+										citations: JSON.stringify([
+											{ ...changeCitation, startLine: "[L10]", endLine, quote },
+										]),
+									}),
 								});
 								writeFileSync(
 									nodePath.join(cwd, "observation-call.json"),
@@ -1813,28 +1859,23 @@ if (scenario !== undefined && scenario !== "") {
 								const readState = () =>
 									readObservations(nodePath.join(cwd, "out/review-state.json"));
 								await assert.rejects(
-									report.execute("wrong-draft", {
-										observations: [{ ...positive, revises: "second-practice" }],
-									}),
+									report.execute("wrong-draft", { ...positive, revises: "second-practice" }),
 									/revises must name/u,
 								);
 								await assert.rejects(
 									report.execute("invalid-first", {
-										observations: [
-											{
-												...positive,
-												revises: "test-practice",
-												evidence: {
-													citations: [{ ...changeCitation, quote: "notInTheDiff();" }],
-												},
-											},
-										],
+										...positive,
+										revises: "test-practice",
+										evidence: {
+											citations: [{ ...changeCitation, quote: "notInTheDiff();" }],
+										},
 									}),
 									/citation does not match/u,
 								);
 								assert.equal(existsSync(nodePath.join(cwd, "out/review-state.json")), false);
 								const first = await report.execute("first", {
-									observations: [{ ...positive, revises: "test-practice" }],
+									...positive,
+									revises: "test-practice",
 								});
 								record(`draft-first:${JSON.stringify(first)}`);
 								assert.ok(isRecord(first) && isRecord(first.details));
@@ -1842,7 +1883,7 @@ if (scenario !== undefined && scenario !== "") {
 								assert.equal(first.details.revised, 0);
 								// A resend that changes nothing stores nothing: an error, or it reads as done.
 								const duplicate = await report
-									.execute("retry", { observations: [positive] })
+									.execute("retry", positive)
 									.then((result) => `accepted ${JSON.stringify(result)}`)
 									.catch((error: unknown) =>
 										error instanceof Error ? error.message : String(error),
@@ -1850,26 +1891,23 @@ if (scenario !== undefined && scenario !== "") {
 								record(`draft-duplicate:${duplicate}`);
 								assert.equal(readState().length, 1);
 								await assert.rejects(
-									report.execute("implicit", { observations: [negative] }),
+									report.execute("implicit", negative),
 									/resend the complete observation with revises/u,
 								);
 								await assert.rejects(
 									report.execute("invalid", {
-										observations: [
-											{
-												...negative,
-												revises: "test-practice",
-												evidence: {
-													citations: [{ ...changeCitation, quote: "+ notInTheDiff();" }],
-												},
-											},
-										],
+										...negative,
+										revises: "test-practice",
+										evidence: {
+											citations: [{ ...changeCitation, quote: "+ notInTheDiff();" }],
+										},
 									}),
 									/citation does not match/u,
 								);
 								assert.equal(readState()[0]?.outcome, "MET");
 								const corrected = await report.execute("correct", {
-									observations: [{ ...negative, revises: "test-practice" }],
+									...negative,
+									revises: "test-practice",
 								});
 								assert.ok(isRecord(corrected) && isRecord(corrected.details));
 								assert.equal(corrected.details.revised, 1);
@@ -1878,14 +1916,11 @@ if (scenario !== undefined && scenario !== "") {
 								record(`draft-corrected:${JSON.stringify(corrected)}`);
 								const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
 								await assert.rejects(
-									report.execute("ambiguous", {
-										observations: [
-											observation("second-practice", "Another result"),
-											{ ...positive, revises: "test-practice" },
-											{ ...negative, practiceSlug: "TEST_PRACTICE", revises: "test-practice" },
-										],
-									}),
-									/without changing any drafts/u,
+									report.execute(
+										"another-practice",
+										observation("second-practice", "Another result"),
+									),
+									/this session/u,
 								);
 								assert.equal(
 									readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
@@ -1894,31 +1929,31 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							if (scenario === "compose-abstention") {
-								await report.execute("o-mixed", {
-									observations: [
-										{
-											...observation("test-practice", "Authentication call"),
-											outcome: "MET",
-											severity: null,
-										},
-										{
-											...undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
-											practiceSlug: "second-practice",
-										},
-										{
-											...observation("third-practice", "Whether the call is reachable"),
-											outcome: "UNDETERMINED",
-											severity: null,
-											evidence: {
-												citations: [changeCitation],
-												undecidability: {
-													openQuestion: "Is insecure() reachable from the login flow?",
-													wouldSettleIt: "The callers of Auth outside this change.",
-												},
+								const own = [
+									{
+										...observation("test-practice", "Authentication call"),
+										outcome: "MET",
+										severity: null,
+									},
+									{
+										...undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
+										practiceSlug: "second-practice",
+									},
+									{
+										...observation("third-practice", "Whether the call is reachable"),
+										outcome: "UNDETERMINED",
+										severity: null,
+										evidence: {
+											citations: [changeCitation],
+											undecidability: {
+												openQuestion: "Is insecure() reachable from the login flow?",
+												wouldSettleIt: "The callers of Auth outside this change.",
 											},
 										},
-									].filter((item) => item.practiceSlug === currentSlug),
-								});
+									},
+								].find((item) => item.practiceSlug === currentSlug);
+								assert.ok(own);
+								await report.execute("o-mixed", own);
 								return;
 							}
 							if (scenario === "comment-undecided") {
@@ -1927,21 +1962,17 @@ if (scenario !== undefined && scenario !== "") {
 								const metadataOnly = undecided(["scm.pull-request.core"]);
 								const tone = await report
 									.execute("tone", {
-										observations: [
-											{
-												...metadataOnly,
-												practiceSlug: "review-tone",
-												summary: "The tone of the reviewer's note is ambiguous",
-												outcome: "UNDETERMINED",
-												evidence: {
-													citations: metadataOnly.evidence.citations,
-													undecidability: {
-														openQuestion: "Is the note a question or an order?",
-														wouldSettleIt: "The reviewer's next note on the thread.",
-													},
-												},
+										...metadataOnly,
+										practiceSlug: "review-tone",
+										summary: "The tone of the reviewer's note is ambiguous",
+										outcome: "UNDETERMINED",
+										evidence: {
+											citations: metadataOnly.evidence.citations,
+											undecidability: {
+												openQuestion: "Is the note a question or an order?",
+												wouldSettleIt: "The reviewer's next note on the thread.",
 											},
-										],
+										},
 									})
 									.then(() => "stored")
 									.catch((error: unknown) =>
@@ -1949,15 +1980,16 @@ if (scenario !== undefined && scenario !== "") {
 									);
 								record(`tone-undecided:${tone}`);
 								const code = await report
-									.execute("code-na", { observations: [metadataOnly] })
+									.execute("code-na", metadataOnly)
 									.then(() => "stored")
 									.catch((error: unknown) =>
 										error instanceof Error ? error.message : String(error),
 									);
 								record(`code-undecided:${code}`);
-								await report.execute("code", {
-									observations: [observation(currentSlug, "Unsafe authentication call")],
-								});
+								await report.execute(
+									"code",
+									observation(currentSlug, "Unsafe authentication call"),
+								);
 								return;
 							}
 							if (scenario !== "batch") {
@@ -1978,9 +2010,10 @@ if (scenario !== undefined && scenario !== "") {
 										},
 									});
 								}
-								const measured = await report.execute("o-1", {
-									observations: [observation(currentSlug, "Unsafe authentication call")],
-								});
+								const measured = await report.execute(
+									"o-1",
+									observation(currentSlug, "Unsafe authentication call"),
+								);
 								if (scenario === "finish") {
 									record(`batch:${JSON.stringify(measured)}`);
 									emit({
@@ -1994,34 +2027,30 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							await assert.rejects(
-								report.execute("o-na", { observations: [undecided(["scm.pull-request.core"])] }),
+								report.execute("o-na", undecided(["scm.pull-request.core"])),
 								/must show it read the change/u,
 							);
-							await report.execute("o-na2", {
-								observations: [undecided(["scm.pull-request.core", "scm.pull-request.diff"])],
-							});
+							await report.execute(
+								"o-na2",
+								undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
+							);
 							const revise = (summary: string, citation: unknown = changeCitation) => ({
 								revises: "test-practice",
 								...observation("test-practice", summary, citation),
 							});
 							const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
-							const encoded = JSON.stringify([revise("A typed correction")]);
-							for (const observations of [
-								encoded,
-								`${encoded}"`,
-								"[{not json",
-								revise("A lone object"),
-							]) {
-								await assert.rejects(report.execute("non-array", { observations }));
-								assert.equal(
-									readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
-									before,
-								);
-							}
-							record("non-array:unchanged");
-							const corrected = await report.execute("typed-correction", {
-								observations: [revise("A typed correction")],
-							});
+							await assert.rejects(
+								report.execute("non-root", { observations: [revise("A wrapped correction")] }),
+							);
+							assert.equal(
+								readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
+								before,
+							);
+							record("non-root:unchanged");
+							const corrected = await report.execute(
+								"typed-correction",
+								revise("A typed correction"),
+							);
 							assert.ok(isRecord(corrected) && isRecord(corrected.details));
 							assert.equal(corrected.details.revised, 1);
 							const revised = readObservations(nodePath.join(cwd, "out/review-state.json"))[0];
@@ -2033,72 +2062,70 @@ if (scenario !== undefined && scenario !== "") {
 							assert.ok(isRecord(quoted));
 							assert.equal(quoted.quote, " insecure();");
 							const { side: _side, ...sideless } = changeCitation;
-							const reply = await report.execute("o-1", {
-								observations: [
-									revise("Unsafe authentication call", sideless),
-									{
-										...observation("second-practice", "A quote that is not in the change", {
-											...changeCitation,
-											quote: "+ somethingElse();",
-										}),
-										revises: "second-practice",
-									},
-								],
-							});
+							const reply = await report.execute(
+								"o-1",
+								revise("Unsafe authentication call", sideless),
+							);
 							record(`batch:${JSON.stringify(reply)}`);
+							const outside = await report
+								.execute("o-outside", {
+									...observation("second-practice", "A quote that is not in the change", {
+										...changeCitation,
+										quote: "+ somethingElse();",
+									}),
+									revises: "second-practice",
+								})
+								.then(() => "accepted")
+								.catch((error: unknown) =>
+									error instanceof Error ? error.message : String(error),
+								);
+							record(`outside:${outside}`);
 							await assert.rejects(
-								report.execute("o-long", { observations: [revise(OVERLONG_SUMMARY)] }),
+								report.execute("o-long", revise(OVERLONG_SUMMARY)),
 								/summary must be at most/u,
 							);
-							const kind = await report.execute("o-kind", {
-								observations: [
-									revise("Cited under the wrong source kind", {
-										...changeCitation,
-										sourceKind: "scm.pull-request.core",
-									}),
-								],
-							});
+							const kind = await report.execute(
+								"o-kind",
+								revise("Cited under the wrong source kind", {
+									...changeCitation,
+									sourceKind: "scm.pull-request.core",
+								}),
+							);
 							record(`corrected-kind:${JSON.stringify(kind)}`);
 							// A record cited under the diff's source kind, with a diff side: recorded as the
 							// record's own source, without the side admission would refuse.
-							const side = await report.execute("o-side", {
-								observations: [
-									revise("A record cited with a diff side", {
-										sourceKind: "scm.pull-request.diff",
-										artifactPath: "evidence/metadata.json",
-										path: "evidence/metadata.json",
-										side: "NEW",
-										revision: "c".repeat(40),
-										startLine: 1,
-										quote: '"title": "Add login"',
-									}),
-								],
-							});
+							const side = await report.execute(
+								"o-side",
+								revise("A record cited with a diff side", {
+									sourceKind: "scm.pull-request.diff",
+									artifactPath: "evidence/metadata.json",
+									path: "evidence/metadata.json",
+									side: "NEW",
+									revision: "c".repeat(40),
+									startLine: 1,
+									quote: '"title": "Add login"',
+								}),
+							);
 							record(`corrected-side:${JSON.stringify(side)}`);
 							const withSide = readObservations(nodePath.join(cwd, "out/review-state.json")).find(
 								(item) => item.practiceSlug === "test-practice",
 							);
 							record(`side-recorded:${JSON.stringify(withSide)}`);
-							const path = await report.execute("o-path", {
-								observations: [
-									revise("A record quoted under the change", {
-										...changeCitation,
-										path: "evidence/metadata.json",
-										startLine: 1,
-										endLine: 1,
-										quote: '"title": "Add login"',
-									}),
-								],
-							});
+							const path = await report.execute(
+								"o-path",
+								revise("A record quoted under the change", {
+									...changeCitation,
+									path: "evidence/metadata.json",
+									startLine: 1,
+									endLine: 1,
+									quote: '"title": "Add login"',
+								}),
+							);
 							record(`corrected-path:${JSON.stringify(path)}`);
-							await report.execute("o-2", {
-								observations: [revise("The login change calls an insecure helper")],
-							});
+							await report.execute("o-2", revise("The login change calls an insecure helper"));
 							// A resend of what is already recorded stores nothing: an error, or it reads as done.
 							const resent = await report
-								.execute("o-3", {
-									observations: [revise("The login change calls an insecure helper")],
-								})
+								.execute("o-3", revise("The login change calls an insecure helper"))
 								.then(() => "accepted")
 								.catch((error: unknown) =>
 									error instanceof Error ? error.message : String(error),
@@ -2150,6 +2177,15 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-runtime-error",
 		"compose-recovered-error",
 		"compose-complete-error",
+		"compose-support-selected",
+		"compose-support-empty",
+		"compose-support-duplicate",
+		"compose-support-missing",
+		"compose-support-malformed",
+		"compose-support-invalid-optional",
+		"compose-support-unavailable",
+		"compose-support-refused",
+		"compose-support-refused-only",
 		"compose",
 		"compose-fresh-history",
 		"compose-history-invalid",
@@ -2165,6 +2201,7 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-quiet",
 		"compose-empty",
 		"compose-reselect",
+		"compose-qualify",
 		"compose-recover",
 		"compose-repeat-select",
 		"compose-invalid-select",
@@ -2178,6 +2215,15 @@ if (scenario !== undefined && scenario !== "") {
 	]) {
 		const stage =
 			new Map([
+				["compose-support-selected", "compose-support"],
+				["compose-support-empty", "compose-support"],
+				["compose-support-duplicate", "compose-support"],
+				["compose-support-missing", "compose-support"],
+				["compose-support-malformed", "compose-support"],
+				["compose-support-invalid-optional", "compose-support"],
+				["compose-support-unavailable", "compose-support"],
+				["compose-support-refused", "compose-support"],
+				["compose-support-refused-only", "compose-support"],
 				["compose-loop-rejection", "compose-loop"],
 				["compose-fresh-history", "compose"],
 				["compose-history-invalid", "compose"],
@@ -2198,7 +2244,7 @@ if (scenario !== undefined && scenario !== "") {
 				"scope-repeat":
 					"identical evidence reads in fresh practice sessions do not become a repeated-call loop",
 				"scope-ownership":
-					"inactive reports and repeated inactive items cannot mutate drafts or spend another practice's refusal allowance",
+					"inactive reports and inactive revisions cannot mutate drafts or spend another practice's refusal allowance",
 				"scope-budget":
 					"fresh practice sessions share one group budget and accumulate nonzero native usage once",
 				"scope-stop-hangs":
@@ -2224,9 +2270,10 @@ if (scenario !== undefined && scenario !== "") {
 					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
 				"argument-repairs":
 					"repairs observation transport without accepting a false quote or an overlong range",
-				batch: "normalizes corrections and answers distinct practices per item",
+				batch:
+					"normalizes corrections, refuses a non-root observation and answers another practice's item",
 				"draft-revision":
-					"replaces only an explicitly corrected valid draft and refuses an ambiguous batch atomically",
+					"replaces only an explicitly corrected valid draft and refuses another practice's item without changing drafts",
 				"replacement-witness": "refuses a replacement that relies on its superseded diff witness",
 				"comment-undecided":
 					"accepts an undecided result without the change only for a practice that does not read it",
@@ -2235,9 +2282,10 @@ if (scenario !== undefined && scenario !== "") {
 				repeat: "nudges a turn that repeats one call and ends it when the call keeps coming",
 				"tree-citation":
 					"verifies a HEAD repository citation against the checkout and finalizes out/",
-				compose: "counts an issue and a merge request with the same number as distinct work",
+				compose:
+					"uses selected native issue and merge request identities while retaining current-only unit grounding",
 				"compose-foreign-provider":
-					"counts matching work numbers at different providers as distinct work",
+					"keeps distinct native work identities separate from provider URL text",
 				"compose-overflow":
 					"compacts the session before a composition prompt that would not fit beside what it holds",
 				"compose-silent":
@@ -2251,6 +2299,8 @@ if (scenario !== undefined && scenario !== "") {
 					"restores the exact criterion before illustrations and leads when native turn preparation compacts",
 				"measure-context-missing":
 					"keeps a missing criterion explicit without changing the recording contract",
+				"compose-qualify":
+					"reselects a mixed public review while preserving canonical observations and its supported concern",
 				"compose-reselect":
 					"stores only a final review that matches the selection accepted last, and nothing after it",
 				"compose-recover":
@@ -2302,6 +2352,32 @@ if (scenario !== undefined && scenario !== "") {
 					if (fixture === "compose-context-unavailable") {
 						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
 					}
+					if (stage === "compose-support") {
+						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
+						writeFileSync(
+							nodePath.join(cwd, "history/observations.json"),
+							JSON.stringify({
+								observations: [
+									{
+										practiceSlug: "test-practice",
+										outcome: "NOT_MET",
+										artifact: {
+											kind: "scm.issue",
+											url: "https://gitlab.example/group/repo/-/issues/1",
+										},
+									},
+									{
+										practiceSlug: "test-practice",
+										outcome: "NOT_MET",
+										artifact: {
+											kind: "scm.issue",
+											url: "https://gitlab.example/group/repo/-/issues/2",
+										},
+									},
+								],
+							}),
+						);
+					}
 					writeFileSync(nodePath.join(cwd, "events"), "");
 					writeFileSync(
 						nodePath.join(cwd, "evidence/metadata.json"),
@@ -2351,6 +2427,14 @@ if (scenario !== undefined && scenario !== "") {
 								channels: {
 									IN_APP: { enabled: true, maxUnits: 1 },
 									IN_CONTEXT: { enabled: true, maxUnits: 1 },
+									...(stage === "compose-support"
+										? {
+												IN_CHAT: {
+													enabled: fixture !== "compose-support-refused-only",
+													maxUnits: 1,
+												},
+											}
+										: {}),
 								},
 								inContextPlacementKinds:
 									stage === "compose" || stage === "compose-foreign-provider"
@@ -2445,6 +2529,7 @@ if (scenario !== undefined && scenario !== "") {
 						stage === "batch" ||
 						stage === "draft-revision" ||
 						stage === "compose-fold" ||
+						stage === "compose-qualify" ||
 						stage === "compose-abstention"
 					) {
 						index = [
@@ -2506,6 +2591,9 @@ if (scenario !== undefined && scenario !== "") {
 							env: {
 								...process.env,
 								PI_ORCHESTRATION_SCENARIO: stage,
+								PI_IN_APP_SUPPORT_MODE: fixture.startsWith("compose-support-")
+									? fixture.slice("compose-support-".length)
+									: undefined,
 								PI_UNAVAILABLE_CONTEXT: String(fixture === "compose-context-unavailable"),
 								PI_PUBLIC_HISTORY_MODE: new Map([
 									["compose-fresh-history", "fresh"],
@@ -2888,12 +2976,13 @@ const captured = JSON.parse(readFileSync(process.argv[1], "utf8"));
 const tool = { name: "report_observation", parameters: captured.parameters };
 const validate = (args) => validateToolArguments(tool, { name: tool.name, arguments: prepareObservationArguments(args) });
 assert.deepEqual(validate(captured.arguments), prepareObservationArguments(captured.arguments));
-const encoded = JSON.stringify(captured.arguments.observations);
-for (const observations of [encoded, encoded + '"', captured.arguments.observations[0]]) {
-  assert.throws(() => validate({ observations }));
+// The canonical observation is the root: an encoded root, a list or the old wrapper refuses the call.
+const base = prepareObservationArguments(captured.arguments);
+const encoded = JSON.stringify(base);
+for (const sent of [encoded, encoded + '"', [base], { observations: [base] }]) {
+  assert.throws(() => validate(sent), JSON.stringify(sent).slice(0, 160));
 }
 // The canonical observation reaches the SDK whole: nested shapes, required fields and vocabularies refuse the call.
-const base = prepareObservationArguments(captured.arguments).observations[0];
 const citation = base.evidence.citations[0];
 const without = (record, key) => Object.fromEntries(Object.entries(record).filter(([name]) => name !== key));
 for (const item of [
@@ -2910,7 +2999,7 @@ for (const item of [
   { ...base, evidence: { citations: [{ ...citation, side: "MIDDLE" }] } },
   { ...base, evidence: { citations: [{ ...citation, startLine: 0 }] } },
 ]) {
-  assert.throws(() => validate({ observations: [item] }), JSON.stringify(item).slice(0, 160));
+  assert.throws(() => validate(item), JSON.stringify(item).slice(0, 160));
 }
 // Optional fields stay optional: their absence is accepted as it is, not filled in.
 for (const item of [
@@ -2919,7 +3008,7 @@ for (const item of [
   { ...base, outcome: "NOT_APPLICABLE", severity: null, evidence: { citations: [citation], inapplicability: { consulted: [citation.sourceKind], subject: "Runtime behavior", ruledOutBy: "Only documentation changed." } } },
   { ...base, outcome: "UNDETERMINED", severity: null, evidence: { citations: [citation], undecidability: { openQuestion: "Was the described test run?", wouldSettleIt: "The referenced test report." } } },
 ]) {
-  assert.deepEqual(validate({ observations: [item] }), { observations: [item] });
+  assert.deepEqual(validate(item), item);
 }
 // The declaration leaves the SDK unchanged for an OpenAI-compatible endpoint: same model, no forced strict mode.
 let payload;
@@ -2964,7 +3053,7 @@ assert.notEqual(outgoing.function.strict, true);`,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("draft-duplicate:")) ?? "",
-								/#1 test-practice: already recorded; this item changed nothing, so do not send it again/u,
+								/test-practice: already recorded; this item changed nothing, so do not send it again/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("draft-corrected:")) ?? "",
@@ -3057,10 +3146,13 @@ assert.notEqual(outgoing.function.strict, true);`,
 								events.find((event) => event.startsWith("resent:")) ?? "",
 								/already recorded; this item changed nothing, so do not send it again/u,
 							);
-							assert.ok(events.includes("non-array:unchanged"), events.join("\n"));
+							assert.ok(events.includes("non-root:unchanged"), events.join("\n"));
 							const reply = events.find((event) => event.startsWith("batch:")) ?? "";
-							assert.match(reply, /#1 test-practice: revised \(negative\)/u, child.stderr);
-							assert.match(reply, /#2 second-practice: refused/u);
+							assert.match(reply, /test-practice: revised \(negative\)/u, child.stderr);
+							assert.match(
+								events.find((event) => event.startsWith("outside:")) ?? "",
+								/second-practice: refused — this session assesses only 'test-practice'/u,
+							);
 							assert.match(reply, /Every practice of this turn has a recorded result/u);
 							// Nothing is left for the turn to record, so the run ends with this call.
 							assert.match(reply, /"terminate":true/u);
@@ -3100,7 +3192,7 @@ assert.notEqual(outgoing.function.strict, true);`,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("corrected-side:")) ?? "",
-								/#1 test-practice: revised \(negative\)\.[^#]*evidence\/metadata\.json is staged by scm\.pull-request\.core, not scm\.pull-request\.diff; recorded as scm\.pull-request\.core/u,
+								/test-practice: revised \(negative\)\.[^#]*evidence\/metadata\.json is staged by scm\.pull-request\.core, not scm\.pull-request\.diff; recorded as scm\.pull-request\.core/u,
 							);
 							const recordedSide = events.find((event) => event.startsWith("side-recorded:")) ?? "";
 							assert.match(recordedSide, /"summary":"A record cited with a diff side"/u);
@@ -3119,7 +3211,11 @@ assert.notEqual(outgoing.function.strict, true);`,
 							const result = readObservations(nodePath.join(cwd, "out/result.json"));
 							assert.equal(result.length, 2);
 							assert.equal(result[0]?.summary, "The login change calls an insecure helper");
-							assert.equal(result[1]?.summary, "Second practice recorded in its own session");
+							assert.equal(
+								result[1]?.summary,
+								"Second practice recorded in its own session",
+								child.stderr,
+							);
 							const { evidence } = result[0];
 							assert.ok(isRecord(evidence));
 							assert.ok(Array.isArray(evidence.citations));
@@ -3260,6 +3356,56 @@ assert.notEqual(outgoing.function.strict, true);`,
 							);
 							assert.equal(result.admissionDigest, "admitted-digest");
 							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
+						case "compose-support": {
+							assert.equal(child.status, 0, child.stderr);
+							const payload: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(payload) && Array.isArray(payload.units));
+							assert.ok(payload.review !== null);
+							assert.equal(payload.admissionDigest, "admitted-digest");
+							assert.deepEqual(
+								JSON.parse(
+									readFileSync(nodePath.join(cwd, "work/composition/observations.json"), "utf8"),
+								),
+								{ observations: [admittedObservation] },
+							);
+
+							const mode = fixture.slice("compose-support-".length);
+							assert.equal(
+								payload.units.some(
+									(unit: unknown) =>
+										isRecord(unit) && unit.channel === "IN_CHAT" && unit.action === "NEW",
+								),
+								mode !== "refused-only",
+							);
+							assert.deepEqual(
+								payload.units
+									.filter((unit: unknown) => isRecord(unit) && unit.channel === "IN_APP")
+									.map((unit: unknown) => {
+										assert.ok(isRecord(unit));
+										return unit.action;
+									}),
+								new Map<string, string[]>([
+									["selected", ["NEW"]],
+									["empty", ["WITHHOLD"]],
+									["duplicate", ["WITHHOLD"]],
+								]).get(mode) ?? [],
+							);
+							assert.deepEqual(
+								payload.compositionFailures,
+								["missing", "malformed", "unavailable", "invalid-optional"].includes(mode)
+									? [{ phase: "PRIVATE_FEEDBACK", reason: "RUNTIME_ERROR" }]
+									: [],
+							);
+							assert.equal(
+								events.filter(
+									(event) => event.includes("tools=") && event.includes("report_feedback"),
+								).length,
+								mode === "refused-only" ? 0 : 1,
+							);
 							break;
 						}
 						case "compose":
@@ -3412,18 +3558,8 @@ assert.notEqual(outgoing.function.strict, true);`,
 								events.join("\n"),
 							);
 							assert.match(
-								events.find((event) => event.startsWith("feedback-alone:")) ?? "",
-								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
-								child.stderr,
-							);
-							assert.match(
-								events.find((event) => event.startsWith("feedback-same-work:")) ?? "",
-								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
-								child.stderr,
-							);
-							assert.match(
-								events.find((event) => event.startsWith("feedback-unresolved:")) ?? "",
-								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
+								events.find((event) => event.startsWith("feedback-historical:")) ?? "",
+								/does not name an admitted observation from this run/u,
 							);
 							const reply = events.find((event) => event.startsWith("feedback:")) ?? "";
 							// The composition turn goes on to its summary; only the retry ends on its last decision.
@@ -3804,6 +3940,47 @@ assert.notEqual(outgoing.function.strict, true);`,
 							});
 							assert.ok(retry.includes(staged), retry);
 							assert.ok(!retry.includes("### Criteria of `second-practice`"), retry);
+							break;
+						}
+						case "compose-qualify": {
+							assert.equal(child.status, 0, child.stderr);
+							const initial = readFileSync(nodePath.join(cwd, "qualification-initial.txt"), "utf8");
+							const replacement = readFileSync(
+								nodePath.join(cwd, "qualification-reselected.txt"),
+								"utf8",
+							);
+							const second = { ...publicRow, id: "observation-2", practiceSlug: "second-practice" };
+							assert.deepEqual(selectedRowsOf(initial), {
+								acceptedSelection: { selected: ["observation-1", "observation-2"], withheld: [] },
+								selectedObservations: [publicRow, second],
+							});
+							for (const slug of ["test-practice", "second-practice"]) {
+								const criteria = readFileSync(
+									nodePath.join(cwd, `catalog/practices/${slug}.md`),
+									"utf8",
+								);
+								assert.ok(initial.includes(`markdown\n${criteria}\n`), initial);
+							}
+							assert.deepEqual(selectedRowsOf(replacement), {
+								acceptedSelection: {
+									selected: ["observation-1"],
+									withheld: [{ basedOn: ["observation-2"], reason: "BELOW_BAR" }],
+								},
+								selectedObservations: [publicRow],
+							});
+							assert.ok(!replacement.includes("### Criteria of `second-practice`"), replacement);
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback));
+							assert.equal(feedback.admissionDigest, "admitted-digest");
+							assert.deepEqual(feedback.review, {
+								summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+								inline: [],
+								withheld: [{ basedOn: ["observation-2"], reason: "BELOW_BAR" }],
+							});
+							assert.ok(events.includes("qualification:canonical-unchanged"), events.join("\n"));
+							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
 							break;
 						}
 						case "compose-reselect": {

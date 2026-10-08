@@ -6,11 +6,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService.AdmissionIdentity;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService.StaleAttemptException;
+import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppSupportContext;
+import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppSupportReader;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -19,6 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -26,6 +30,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -39,6 +45,9 @@ class ObservationAdmissionConcurrencyIntegrationTest extends BaseIntegrationTest
 
     @MockitoSpyBean
     private PullRequestReviewHandler reviewHandler;
+
+    @MockitoSpyBean
+    private InAppSupportReader supportReader;
 
     @Autowired
     private ObservationAdmissionService admission;
@@ -57,6 +66,84 @@ class ObservationAdmissionConcurrencyIntegrationTest extends BaseIntegrationTest
 
     @Autowired
     private JsonMapper mapper;
+
+    @ParameterizedTest
+    @EnumSource(InAppSupportContext.State.class)
+    void shouldSerializeSupportThroughTheConfiguredOptionalFieldContract(InAppSupportContext.State state) {
+        var occurrence = new InAppSupportContext.Occurrence(
+                UUID.randomUUID(),
+                "scm.pull_request",
+                21L,
+                "NOT_MET",
+                "LIVE",
+                "An observed problem",
+                null,
+                null,
+                null,
+                "2026-10-08T00:00:00Z");
+        var context = new InAppSupportContext(
+                state,
+                "2026-10-08T00:00:01Z",
+                null,
+                state == InAppSupportContext.State.COMPLETE
+                        ? List.of(new InAppSupportContext.PracticeSupport("handles-errors", List.of(occurrence)))
+                        : List.of());
+
+        var wire = mapper.valueToTree(context);
+
+        assertThat(wire.path("state").asString()).isEqualTo(state.name());
+        assertThat(wire.path("readAt").asString()).isEqualTo(context.readAt());
+        assertThat(wire.has("refusal")).isFalse();
+        if (state == InAppSupportContext.State.COMPLETE) {
+            var selected = wire.path("practices").path(0).path("occurrences").path(0);
+            assertThat(selected.path("observationId").asString())
+                    .isEqualTo(occurrence.observationId().toString());
+            assertThat(selected.path("artifactId").asLong()).isEqualTo(21L);
+            assertThat(selected.path("outcome").asString()).isEqualTo("NOT_MET");
+            assertThat(selected.has("evidenceRationale")).isFalse();
+            assertThat(selected.has("evidence")).isFalse();
+            assertThat(selected.has("practiceRevisionId")).isFalse();
+        }
+    }
+
+    @Test
+    void shouldKeepCommittedAdmissionWhenItsSupportReadFails() {
+        var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace(
+                "support-failure-" + UUID.randomUUID().toString().substring(0, 8)));
+        var job = new AgentJob();
+        job.setWorkspace(workspace);
+        job.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        job.setConfigSnapshot(mapper.createObjectNode());
+        job.setStatus(AgentJobStatus.RUNNING);
+        job.setWorkerId("support-worker");
+        job.setMetadata(mapper.createObjectNode().put("preserved", "value"));
+        var saved = jobs.saveAndFlush(job);
+        PreparedObservations publication = admitted -> {
+            admitted.setMetadata(mapper.createObjectNode().put("admitted", true));
+            jobs.saveAndFlush(admitted);
+        };
+        doReturn(publication)
+                .when(reviewHandler)
+                .prepareObservations(argThat(candidate -> candidate.getId().equals(saved.getId())), any());
+        doThrow(new IllegalStateException("support unavailable"))
+                .when(supportReader)
+                .snapshot(argThat(candidate -> candidate.getId().equals(saved.getId())), any());
+
+        var response = admission.admit(
+                new AdmissionIdentity(saved.getId(), workspace.getId(), 0, "support-worker"), mapper.createArrayNode());
+
+        var persisted = jobs.findById(saved.getId()).orElseThrow();
+        var metadata = Objects.requireNonNull(persisted.getMetadata());
+        assertThat(metadata.path("admitted").asBoolean()).isTrue();
+        assertThat(metadata.path(ObservationAdmissionService.DIGEST_METADATA_KEY)
+                        .asString())
+                .isEqualTo(response.path("admissionDigest").asString())
+                .isNotBlank();
+        assertThat(persisted.getStatus()).isEqualTo(AgentJobStatus.RUNNING);
+        assertThat(response.path("inAppSupport").path("state").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(response.path("observations").isArray()).isTrue();
+    }
 
     @Test
     void shouldKeepPublicationRefusalAfterItsWritesRollBack() {

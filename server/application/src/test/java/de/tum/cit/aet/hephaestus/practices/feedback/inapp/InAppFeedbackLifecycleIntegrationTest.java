@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionRe
 import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppCompositionListener;
 import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppFeedbackPreparer;
 import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppFeedbackRouter;
+import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppSupportReader;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
@@ -68,6 +69,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -157,12 +159,19 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
                 agentJobRepository,
                 observationRepository,
                 feedbackRepository,
-                visibilityPolicy,
+                new StaticListableBeanFactory(Map.of(
+                                "supportReader",
+                                new InAppSupportReader(
+                                        observationRepository,
+                                        visibilityPolicy,
+                                        previousInAppFeedback,
+                                        openGate,
+                                        clock)))
+                        .getBeanProvider(InAppSupportReader.class),
                 workspaceDefaults,
                 resultParser,
                 preparer,
                 openGate,
-                previousInAppFeedback,
                 clock);
     }
 
