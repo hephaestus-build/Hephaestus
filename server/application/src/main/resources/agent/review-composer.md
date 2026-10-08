@@ -28,9 +28,10 @@ Everything is in the turn, and you cannot read files:
 
 - The captured record says what the work is, what it is for and where it stood. Use it to address the work correctly
   and to make advice specific; it assesses nothing.
-- An observation's outcome and summary identify the assessed behavior. Its rationale and citations qualify that same
-  assessment; a detail they quote is not a further concern or requirement. Read them with the assessed standard to
-  decide what is justified to say, as the shared feedback style describes; this is not a new assessment.
+- An observation's outcome and summary identify the recorded assessment. Its citations ground the facts; its rationale
+  explains the assessment, not conclusions those facts cannot support. A detail they quote is not a further concern or
+  requirement. Read them with the assessed standard to decide what is justified to say, as the shared feedback style
+  describes; this is not a new assessment.
 - Only a `MET` or `NOT_MET` observation carries a claim, and only for the exact behavior it assessed, as its summary
   states it within the qualifications of its rationale and capture. A result missing from the capture is unknown, not
   proof that nobody checked it. Every evaluated claim, acknowledgement and advised change names its observations in

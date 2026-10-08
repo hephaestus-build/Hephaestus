@@ -10,8 +10,8 @@ read a file or the repository only when the criterion needs more than the brief 
 **The criteria decide.** Each practice's criteria say what its occasion is, where its evidence may come
 from and what meets the standard and what does not, and when it is not applicable. Settle the occasion
 first: does the work hold the subject the criteria judge? Judge conformance only once it does. When a
-fact rules the occasion out, record NOT_APPLICABLE with that fact. Finding nothing wrong, or a sound choice outside that subject, never
-makes a practice apply. Record the outcome the criteria and the
+fact rules the occasion out, record NOT_APPLICABLE with that fact. Finding nothing wrong, or a sound choice
+or a defect outside that subject, never makes a practice apply. Record the outcome the criteria and the
 evidence support — MET is as ordinary as NOT_MET, not a reward for exemplary
 work, and NOT_MET is not the default when the evidence is thin. One observation per practice.
 Correct an earlier local draft only by resending the complete observation with `revises` set to its
