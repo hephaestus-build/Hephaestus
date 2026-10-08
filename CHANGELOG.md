@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.85.0
+
+### Minor Changes
+
+- The workspace admin lists of practice reviews, work, observations, and feedback load more rows when you scroll to the end of a list. They no longer show numbered pages. If more rows do not load, the list tells you and you can retry. If the list cannot update, the rows that you have stay on the screen. You can also use **Show more** at the end of a list with the keyboard. A row does not show two times when a new review starts while you scroll.
+- Feedback on a pull request, merge request or issue addresses its author's work. Feedback about reviewing stays with the reviewer on their own practice page or in their own conversation, subject to the existing delivery checks.
+
+  **Operators:** API responses that report why feedback was withheld can now contain the reason `PUBLIC_SUBJECT_INELIGIBLE`. If a custom API client rejects unknown enum values, update it to accept this value before you upgrade. The clients bundled with this release already accept this value.
+
+- Practices across the workspace shows every count, however small. A bar shows each part that holds a developer, also a part of one, and each figure shows its typical range as soon as one developer is counted. Before, the page held back a part of one to three developers and a typical range over fewer than seven developers. It still names nobody, but in a small group other members can sometimes tell where a developer stands. The page, the user docs and the TUM privacy notice say so. The page also says that a standing comes from AI review, can be wrong and is not a grade. **Operators:** before you upgrade, update your privacy notice and record a decision for this audience; see the migration guide.
+
+### Patch Changes
+
+- Practice review guidance asks for relevant context around deciding evidence, without requiring unsupported consequences. Its examples cite the facts they describe.
+- Worker shutdown settles all active reviews before waiting for container cleanup. Container stops run in parallel within one bounded cleanup period, so a slow stop cannot delay settlement of the other reviews. Interrupted reviews retain their recorded observations and usage.
+- Usage accounting keeps cache writes separate from ordinary input and preserves uncertainty when recorded totals disagree.
+- Practice reviews declare the complete structure of an observation report, including its required fields and allowed values, and refuse a report that does not match it before anything is recorded. The checks that decide whether a report's evidence, practice and session are accepted are unchanged.
+- Source builds resolve shared build dependencies directly from Maven Central while retaining the Gradle Plugin Portal for plugins.
+- Closed issue reviews assess outcome accounting only when the issue states a checkable completion condition.
+  A broad activity name does not create a separate closure obligation, while a concrete title can state the outcome without a checklist.
+- When feedback chooses what to raise on your work, it now has the complete practice standard in view. Practice-page explanations and next steps have separate roles.
+- Practice review explanations say why the work does or does not fall under each practice before they describe how it meets or falls short of it. Feedback distinguishes the recorded assessment from what the captured evidence supports.
+- Practice reviews now present each practice’s complete standard before recording examples and advisory leads. The recording task uses that standard to qualify the observation, while recorded observations and review limits stay unchanged.
+- Pull-based deployments let the running worker drain within the grace period it was started with before replacing its dependencies, also when the new release removes the worker. A failed stop applies nothing and records no release. This applies once a host adopts the updated reconciler.
+- The next step on a feedback card and the reason for an observation in the admin view now show their formatting, such as code and links. They no longer show raw Markdown characters such as backticks. Code in feedback text also no longer shows a backtick on each side.
+- Reviews on pull requests, merge requests and issues can recognize an evidenced response to earlier advice and useful initial choices, while keeping useful next actions first. A changed result alone does not establish a fix.
+- Citation refusals identify the invalid reference and where to find a valid artifact without listing every captured repository file.
+- GitHub commit synchronization can recover after empty or unusable provider responses.
+- Feedback composition considers each recorded observation together with its evidence and the practice standard, and can withhold a claim that these do not support. Reviews on the work place each acknowledgement once, in the summary or on a line. Recorded observations stay unchanged.
+- Default practices distinguish adopted outcome confirmations from generic checks, implementation residue from descriptive artwork, and representative SwiftUI preview values from empty or unknown defaults. Workspaces can adopt the updated practices without changing earlier observations.
+- Closed, merged or changed work can still contribute to feedback on your practice pages and in the mentor conversation when its observations remain current and authorized. Withholding a note on the work no longer stops private feedback preparation. Prepared feedback still follows your delivery settings.
+- Practice page feedback now uses the supporting work selected after a review records its observations. If that support cannot be read, feedback on the work and in conversation can still be prepared.
+- Feedback on a pull request, merge request or issue can now compare against advice Hephaestus already gave on that work after its practices change. That earlier advice shows what was said before. It is not treated as a current claim about the work.
+- Reviews on work can take account of feedback delivered while the review was running, without treating that later advice as something the captured work already answered.
+- Feedback on pull requests and merge requests can now use complete cited code from the reviewed revision and the relevant cited diff. Files that cannot be shown are identified with the reason.
+- Reviews on pull requests, merge requests and issues keep each point in one place. Line notes carry the points about the code at that line, and the summary gives the overall priorities and the asks about the work as a whole. Acknowledgements appear once.
+- New feedback delivered on the reviewed work now keeps the revision it reviewed, as feedback awaiting approval already did.
+- Public feedback composition records its conversation in the review attempt’s temporary diagnostic storage, like practice measurement and private composition. The record is removed when the attempt is cleaned up; it is not a durable archive.
+- Guidance for feedback on a pull request, merge request or issue now asks that each recorded concern be checked against its practice standard and the captured work before it is raised. A concern that this evidence does not support can be left out, and supported concerns stay in the feedback. Recorded observations do not change.
+- Bundled practice guidance distinguishes workflow status from product terms in titles. A stated user goal, impact or task context can explain why a change exists without a separate rationale sentence. Existing workspace definitions change only when administrators adopt the update.
+- Release and image rescan verification now accepts a vulnerability advisory snapshot up to 48 hours old. Scans still reject older snapshots and snapshots dated in the future.
+- When a review on your work chooses which observations to raise, it now has the full standard behind each chosen practice available, including the responses that standard accepts, such as a reasoned decline or a clarification.
+- Focused practice reviews can reuse their shared reviewed-work context on supported Responses models while keeping each practice assessment separate.
+- Earlier feedback remains available when a later review posts a separate comment on the same work.
+- Practice reviews record each practice through one complete observation while preserving evidence validation.
+- Practice reviews keep what a change's source shows apart from consequences it does not show, such as erased stored data. The removal of a feature with persisted state is judged from its removed lines as well as its added ones.
+- If a finished review returns text the database cannot store, Hephaestus records a terminal failure and retains its recorded usage rather than leaving the review running. The rejected result is not delivered. An invalid transcript is replaced with an omission note.
+- Bundled practice guidance now treats a plain issue reference, such as "Related to #12", as linking the change to its issue, including for work that delivers only part of it. A recorded need, such as data that must survive a restart or stay on the device, counts as the reason for a stored-data change without a list of rejected alternatives. Existing workspace definitions change only when administrators adopt the updated defaults.
+- Practice reviews accept observations in one structured form. Invalid submissions leave previously recorded evidence unchanged.
+- Reviews that run on a separate worker can prepare practice-page feedback from the authorized supporting work. Before this fix, a split deployment left that feedback out.
+- Practices across the workspace loads faster in large courses, including reviews that cite earlier observations. Each request checks current access and privacy choices. The page loads its overview and tiles together and shows a loading message if the first read takes a moment.
+
 ## 0.84.0
 
 ### Minor Changes
