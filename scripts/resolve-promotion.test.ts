@@ -150,6 +150,6 @@ await test("the deploy-state headline names a hold, a rollback and a database re
 			freeze: false,
 			refreshDatabaseImage: true,
 		}),
-		`chore(deploy): channels/staging.json -> ${commit} (rollback allowed, database image refreshed)`,
+		`chore(deploy): channels/staging.json -> ${commit} (rollback allowed, database image refresh requested)`,
 	);
 });

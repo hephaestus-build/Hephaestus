@@ -35,7 +35,7 @@ await test("a commit is recorded against itself, with what its channel allows", 
 	assert.equal(request.production_environment, false);
 	assert.equal(
 		request.description,
-		`commit ${commit.slice(0, 12)} · rollback allowed · database image refreshed`,
+		`commit ${commit.slice(0, 12)} · rollback allowed · database image refresh requested`,
 	);
 	assert.deepEqual(request.payload, {
 		commit,

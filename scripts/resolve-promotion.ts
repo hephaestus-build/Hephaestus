@@ -78,7 +78,7 @@ export async function resolvePromotion(
 export function promotionQualifiers(channel: Channel): string[] {
 	return [
 		channel.allowRollback === true ? "rollback allowed" : undefined,
-		channel.refreshDatabaseImage === true ? "database image refreshed" : undefined,
+		channel.refreshDatabaseImage === true ? "database image refresh requested" : undefined,
 	].filter(isSet);
 }
 
