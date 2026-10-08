@@ -370,7 +370,6 @@ jobs:
               - 'webapp/src/api/**'
               - 'extension/src/api/**'
               - 'scripts/api-generator/**'
-              - 'pnpm-workspace.yaml'
             agent-images:
               - 'docker/agents/**'
             postgres-image:

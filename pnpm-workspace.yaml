@@ -52,8 +52,6 @@ catalog:
   "@vitest/coverage-v8": 4.1.11
   "@vitest/runner": 4.1.11
   vite: npm:@voidzero-dev/vite-plus-core@0.3.2
-  # Both API clients use this generator version.
-  "@hey-api/openapi-ts": 0.99.0
 
 overrides:
   "get-uri>basic-ftp": 6.2.1

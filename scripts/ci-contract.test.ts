@@ -688,7 +688,6 @@ void describe("CI contract", () => {
 			assert.ok(clients.includes(`${client}/src/api/**`), client);
 		}
 		assert.ok(clients.includes("scripts/api-generator/**"));
-		assert.ok(clients.includes("pnpm-workspace.yaml"));
 		for (const [name, location] of [
 			["server-package", ["jobs", "server-package", "if"]],
 			["contracts_changed", ["jobs", "Build", "with", "contracts_changed"]],
