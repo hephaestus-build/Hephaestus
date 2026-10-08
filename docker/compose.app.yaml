@@ -134,16 +134,35 @@ services:
         max-size: "50m"
         max-file: "5"
 
-  # A new named volume is created root-owned, and one created by an earlier image keeps that image's
-  # uid. The buildpack image runs as `cnb` (1002:1001), so nothing under /data/git-repos is writable
-  # until the ownership matches — and that surfaces when an agent job first writes there, not at
-  # startup. -h so a symlink inside a checkout is retargeted rather than followed out of the volume.
+  # The buildpack user needs both caches owned by 1002:1001. Root ownership alone does not prove an
+  # interrupted legacy migration finished; publish a root-owned receipt only after the full change.
+  # -h changes symlink ownership without following targets outside the volume.
   volume-init:
     image: ${HEPHAESTUS_IMAGE_ALPINE:?verified release lock required}
     command:
       - sh
       - -c
-      - "chown -Rh 1002:1001 /data/git-repos /data/worker-git-repos && chmod 0755 /data/git-repos /data/worker-git-repos"
+      - |
+        set -eu
+        owner=1002:1001
+        for root in /data/git-repos /data/worker-git-repos; do
+          if [ -L "$$root" ] || [ ! -d "$$root" ]; then
+            echo "$$root is not a directory" >&2
+            exit 1
+          fi
+          receipt="$$root/.hephaestus-owner"
+          if [ ! -L "$$receipt" ] && [ -f "$$receipt" ] && [ "$$(stat -c %u:%a "$$receipt")" = 0:600 ] \
+            && [ "$$(cat "$$receipt")" = "$$owner" ]; then
+            chown -h "$$owner" "$$root"
+          else
+            rm -f "$$receipt"
+            chown -Rh "$$owner" "$$root"
+            pending=$$(mktemp "$$receipt.XXXXXX")
+            printf '%s\n' "$$owner" > "$$pending"
+            mv -f "$$pending" "$$receipt"
+          fi
+          chmod 0755 "$$root"
+        done
     volumes:
       - git-repos:/data/git-repos
       - worker-git-repos:/data/worker-git-repos
