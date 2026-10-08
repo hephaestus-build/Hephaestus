@@ -576,6 +576,7 @@ if (scenario !== undefined && scenario !== "") {
 		buildSessionProjection: () => ({ messages: [] }),
 	};
 	const sessionLoaders = new Set<object>();
+	let sessions = 0;
 	let prompts = 0;
 	let measuredTool: CustomTool | undefined;
 	/** What the runner steered the session with, in order. */
@@ -673,6 +674,8 @@ if (scenario !== undefined && scenario !== "") {
 					}
 				};
 				record(`create:session tools=${options.tools.join(",")}`);
+				sessions += 1;
+				const sessionNumber = sessions;
 				if (scenario === "settle-safety") {
 					now += 20_000;
 					compacting = false;
@@ -1574,6 +1577,49 @@ if (scenario !== undefined && scenario !== "") {
 								record(`feedback-bare:${bare}`);
 								return;
 							}
+							if (scenario === "natural-stop" || scenario === "natural-stop-twice") {
+								// The model answers in prose and the session ends on its own: prose records nothing.
+								record(`natural-prompt:${prompts}:session-${sessionNumber}`);
+								if (scenario === "natural-stop" && prompts > 1) {
+									const reply = await tool("report_observation").execute(
+										"o-natural",
+										observation("test-practice", "Unsafe authentication call"),
+									);
+									record(`natural-recorded:${JSON.stringify(reply)}`);
+									return;
+								}
+								if (scenario === "natural-stop-twice" && prompts === 1) {
+									emit({
+										type: "tool_execution_start",
+										toolCallId: "r-1",
+										toolName: "read",
+										args: { path: "evidence/missing.json" },
+									});
+									emit({
+										type: "tool_execution_end",
+										toolCallId: "r-1",
+										toolName: "read",
+										isError: true,
+										result: { content: [{ type: "text", text: "ENOENT: no such file" }] },
+									});
+								}
+								emit({
+									type: "message_end",
+									message: {
+										role: "assistant",
+										stopReason: "stop",
+										usage: callUsage(200),
+										content: [
+											{
+												type: "text",
+												text: "The change calls insecure(), so the practice is not met.",
+											},
+										],
+									},
+								});
+								emit({ type: "turn_end" });
+								return;
+							}
 							if (text.includes("## Unfinished practices")) {
 								const unfinished =
 									scenario === "stall" || scenario === "repeat" || scenario === "cut-off"
@@ -1922,10 +1968,19 @@ if (scenario !== undefined && scenario !== "") {
 								const negative = observation("test-practice", "Authentication call");
 								const readState = () =>
 									readObservations(nodePath.join(cwd, "out/review-state.json"));
+								// No draft exists yet, so there is no reference to name: the answer says to omit it.
 								await assert.rejects(
 									report.execute("wrong-draft", { ...positive, revises: "second-practice" }),
-									/revises must name/u,
+									/revises must name[\s\S]*omit revises for its first observation/u,
 								);
+								// A null or empty reference that reaches the recorder is not an omitted one: both are refused
+								// and nothing is stored. (Pi's own validation drops a null one first; argument-repairs shows it.)
+								for (const revises of [null, ""]) {
+									await assert.rejects(
+										report.execute("blank-draft", { ...positive, revises }),
+										/omit revises for its first observation/u,
+									);
+								}
 								await assert.rejects(
 									report.execute("invalid-first", {
 										...positive,
@@ -1954,6 +2009,16 @@ if (scenario !== undefined && scenario !== "") {
 									);
 								record(`draft-duplicate:${duplicate}`);
 								assert.equal(readState().length, 1);
+								// A foreign reference stays refused once a draft exists, and the draft stays as it was.
+								const recorded = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
+								await assert.rejects(
+									report.execute("foreign-draft", { ...negative, revises: "second-practice" }),
+									/revises must name this practice's draft reference, 'test-practice'/u,
+								);
+								assert.equal(
+									readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
+									recorded,
+								);
 								await assert.rejects(
 									report.execute("implicit", negative),
 									/resend the complete observation with revises/u,
@@ -2058,6 +2123,15 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (scenario !== "batch") {
 								if (scenario === "finish" && currentSlug === "second-practice") {
+									// The loop guard, not the model, ends this session: finishing it is the finish scope's.
+									for (let call = 1; call <= 6; call += 1) {
+										emit({
+											type: "tool_execution_start",
+											toolCallId: `b-${call}`,
+											toolName: "bash",
+											args: { command: "git show abc --stat | head" },
+										});
+									}
 									return;
 								}
 								if (scenario === "finish") {
@@ -2229,6 +2303,8 @@ if (scenario !== undefined && scenario !== "") {
 		"draft-revision",
 		"argument-repairs",
 		"finish",
+		"natural-stop",
+		"natural-stop-twice",
 		"refusal-cap",
 		"repeat",
 		"tree-citation",
@@ -2343,7 +2419,12 @@ if (scenario !== undefined && scenario !== "") {
 				"replacement-witness": "refuses a replacement that relies on its superseded diff witness",
 				"comment-undecided":
 					"accepts an undecided result without the change only for a practice that does not read it",
-				finish: "finishes missing practices in fresh sessions under one shared finish budget",
+				finish:
+					"finishes practices the runner cut short in fresh sessions under one shared finish budget",
+				"natural-stop":
+					"asks a session that ended in prose once, in the same session, to record its practice",
+				"natural-stop-twice":
+					"leaves a practice not reached when its session ends in prose again after failed reads",
 				"refusal-cap": "stops accepting a practice after eight refused submissions",
 				repeat: "nudges a turn that repeats one call and ends it when the call keeps coming",
 				"tree-citation":
@@ -3089,6 +3170,12 @@ for (const item of [
 ]) {
   assert.deepEqual(validate(item), item);
 }
+// Pi drops a null revises before the tool runs, so it arrives omitted. An empty or wrong string keeps the shape and
+// reaches the recorder, which refuses it.
+assert.deepEqual(validate({ ...base, revises: null }), base);
+for (const revises of ["", "another-practice"]) {
+  assert.deepEqual(validate({ ...base, revises }), { ...base, revises });
+}
 // The declaration leaves the SDK unchanged for an OpenAI-compatible endpoint: same model, no forced strict mode.
 let payload;
 const model = {
@@ -3217,6 +3304,8 @@ assert.notEqual(outgoing.function.strict, true);`,
 							}
 							assert.doesNotMatch(system, /`(?:write|edit)`|tools\.(?:write|edit)\(/u);
 							assert.match(system, /Each fresh session names one practice/u);
+							// The reporter is a direct call only; scripts reach the evidence tools.
+							assert.match(system, /Call it directly: a codemode script cannot call it/u);
 							assert.match(
 								readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8"),
 								/### Practice `test-practice`/u,
@@ -3410,6 +3499,60 @@ assert.notEqual(outgoing.function.strict, true);`,
 								refusals[8] ?? "",
 								/8 submissions for 'test-practice' were refused; no more are accepted/u,
 							);
+							// Exhaustion is not a recorded result, and the closed practice is not asked again.
+							assert.ok(
+								!events.includes("Every practice of this turn has a recorded result."),
+								events.join("\n"),
+							);
+							assert.ok(
+								afterCap.includes("No recorded result for: test-practice."),
+								afterCap.join("\n"),
+							);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1"],
+							);
+							reached({ "test-practice": "NOT_REACHED" });
+							break;
+						}
+						case "natural-stop": {
+							assert.equal(child.status, 0, child.stderr);
+							// One session holds what it read: the request to record goes to it, not to a fresh one.
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("natural-prompt:")),
+								["natural-prompt:1:session-1", "natural-prompt:2:session-1"],
+							);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("create:session")),
+								["create:session tools=read,grep,find,ls,bash,codemode,report_observation"],
+							);
+							assert.ok(
+								events.includes("exposure:report_observation=model-only"),
+								events.join("\n"),
+							);
+							const request = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
+							assert.match(request, /report_observation/u);
+							assert.match(request, /test-practice/u);
+							assert.doesNotMatch(request, /### Practice `|## Unfinished practices/u);
+							assert.match(
+								events.find((event) => event.startsWith("natural-recorded:")) ?? "",
+								/test-practice: stored \(negative\)/u,
+							);
+							assert.equal(readObservations(nodePath.join(cwd, "out/result.json")).length, 1);
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
+						case "natural-stop-twice": {
+							// Nothing recorded: the run fails as a review that reached no practice, not one that measured.
+							assert.equal(child.status, 1, child.stderr);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("natural-prompt:")),
+								["natural-prompt:1:session-1", "natural-prompt:2:session-1"],
+							);
+							assert.equal(events.filter((event) => event.startsWith("create:session")).length, 1);
+							assert.doesNotMatch(child.stderr, /Finishing 1 practice/u);
+							assert.deepEqual(readObservations(nodePath.join(cwd, "out/review-state.json")), []);
+							assert.equal(existsSync(nodePath.join(cwd, "out/result.json")), false);
 							reached({ "test-practice": "NOT_REACHED" });
 							break;
 						}

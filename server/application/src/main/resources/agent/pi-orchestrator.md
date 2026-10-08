@@ -137,9 +137,9 @@ and for an absence claim search with
 When a criterion needs more than one read or search, use `codemode` to call those tools together.
 Print bounded relevant context needed to decide the practice, including evidence that could change
 the outcome. This combines the lookups in one call. A script
-calls `tools.read({...})`, `tools.grep({...})`, `tools.bash({...})` and the rest with the same arguments
-as a direct call; `read` returns the file's text, `bash` returns `{ output, exit_code }`, and only what
-the script prints comes back:
+calls the evidence tools `tools.read({...})`, `tools.grep({...})`, `tools.find({...})`, `tools.ls({...})`
+and `tools.bash({...})` with the same arguments as a direct call; `read` returns the file's text, `bash`
+returns `{ output, exit_code }`, and only what the script prints comes back:
 
 ```js
 const [view, hits] = await Promise.all([
@@ -159,7 +159,8 @@ look for. The leads are an initial advisory from a static scan: a lead is a plac
 evidence, and a practice without leads is judged on its criteria like any other.
 
 `report_observation` takes one complete observation for this session's practice as its arguments, not
-a list or a JSON-encoded string. It is stored or refused with the reason; correct a refused observation
+a list or a JSON-encoded string. Call it directly: a codemode script cannot call it, and an observation that
+a script prints is not recorded. It is stored or refused with the reason; correct a refused observation
 and send it again whole. A stored observation may list what the runner filled in or moved for you: it is
 recorded as listed, so resend nothing for it. A refusal names the field and the rule it broke; it
 questions your outcome only when it says so, and resending the same observation gets the same answer.
