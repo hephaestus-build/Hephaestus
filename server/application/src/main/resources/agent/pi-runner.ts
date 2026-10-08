@@ -4381,7 +4381,7 @@ async function main() {
 				),
 				buildReviewTool(lineNotes, restable, state),
 			],
-			sessionManager: SessionManager.inMemory(),
+			sessionManager: SessionManager.create(CWD, `${CWD}/.sessions`),
 			settingsManager,
 			resourceLoader: reviewLoader,
 			modelRuntime,

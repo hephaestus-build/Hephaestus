@@ -149,7 +149,7 @@ void test("public composition cannot discover or read private history through na
 		resourceLoader,
 		settingsManager,
 		modelRuntime,
-		sessionManager: SessionManager.inMemory(CWD),
+		sessionManager: SessionManager.create(CWD, path.join(CWD, ".sessions")),
 	});
 	try {
 		assert.deepEqual(session.getActiveToolNames(), ["select_feedback", "report_review"]);
