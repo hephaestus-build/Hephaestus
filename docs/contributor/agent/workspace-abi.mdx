@@ -479,10 +479,14 @@ The feedback tools store nothing until the server has admitted the recorded obse
 The public tool schema constrains those identifiers to the current eligible decided observations.
 Withholding can name only `NOT_MET` observations.
 
-`report_observation` and private `report_feedback` take a list of several observations or units in one call.
-Each is stored or refused on its own with the reason.
+`report_observation` takes one complete observation as the call's arguments.
+It is stored or refused with the reason.
+Its evidence and citations may arrive as JSON text.
+The observation itself must arrive as an object.
 
-The tools accept the list as a JSON string or an array.
+Private `report_feedback` takes a list of several units in one call.
+Each is stored or refused on its own with the reason.
+It accepts the list as a JSON string or an array.
 A smaller model often sends the string form.
 
 If offered only the array, it resends the same string against the SDK's schema error indefinitely.
