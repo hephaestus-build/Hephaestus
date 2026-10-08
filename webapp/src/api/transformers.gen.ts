@@ -3,1641 +3,1641 @@
 import type { AcceptPracticeReleaseResponse, AddLabelToTeamResponse, AdminCheckReleaseResponse, AdminCreateLlmConnectionResponse, AdminCreateLlmModelResponse, AdminCreateLoginProviderResponse, AdminCreateProductSurveyResponse, AdminErasePersonDataResponse, AdminGetInstanceSettingsResponse, AdminGetLlmConnectionResponse, AdminGetLlmModelResponse, AdminGetLlmUsageReportResponse, AdminGetPersonDataRequestResponse, AdminGetProductSurveyResponse, AdminGetReleaseResponse, AdminListAuthEventsResponse, AdminListConfigAuditEventsResponse, AdminListLlmConnectionsResponse, AdminListLlmModelsResponse, AdminListLoginProvidersResponse, AdminListProductFeedbackResponse, AdminListProductSurveyResponsesResponse, AdminListProductSurveysResponse, AdminListWorkspacesResponse, AdminPreviewPersonDataResponse, AdminTriageProductFeedbackResponse, AdminUpdateLlmConnectionResponse, AdminUpdateLlmModelPriceResponse, AdminUpdateLlmModelResponse, AdminUpdateLlmModelSharingResponse, AdminUpdateLoginProviderResponse, AdminUpdateProductSurveyResponse, AdminUpdateSilentModeResponse, AdoptGroupResponse, AdoptPracticeResponse, AssignRoleResponse, AuditResponse, BindGroupResponse, CancelAgentJobResponse, CreateGroupResponse, CreatePracticeResponse, CreateSweepScheduleResponse, CreateWorkspaceResponse, DecideFeedbackProposalResponse, ExchangeClientSignInResponse, GetAccountAiChoiceResponse, GetActivitySummaryResponse, GetActivityWorkResponse, GetAgentJobResponse, GetAllTeamsResponse, GetArtifactTraceResponse, GetBackfillRunResponse, GetConnectionSyncStatusResponse, GetCurrentUserMembershipResponse, GetDataExportStatusResponse, GetFeedbackProposalDecisionResponse, GetFeedbackResponseResponse, GetGroupResponse, GetInAppFeedbackResponse, GetIntegrationCatalogResponse, GetLabelFiltersResponse, GetLlmUsageReportResponse, GetMemberResponse, GetObservationResponse, GetOpenWorkResponse, GetOutlineCollectionResponse, GetOutlineTokenStatusResponse, GetOwnArtifactTraceResponse, GetOwnDeliveredWorkFeedbackResponse, GetPracticeGroupTrendResponse, GetPracticeProfileOverviewResponse, GetPracticeProfileReviewRunResponse, GetPracticeResponse, GetPracticeReviewFeedbackResponse, GetPracticeReviewObservationResponse, GetPracticeReviewOverviewResponse, GetSummaryResponse, GetThreadResponse, GetWorkspaceResponse, ListAgentJobsResponse, ListBackfillRunsResponse, ListConnectionSyncJobsResponse, ListConnectionSyncResourcesResponse, ListGroupsResponse, ListLinkedIdentitiesResponse, ListMembersResponse, ListObservationsResponse, ListOutlineCollectionsResponse, ListPracticeGroupReviewRunsResponse, ListPracticeGroupStandingsResponse, ListPracticeProfileReviewRunsResponse, ListPracticeReviewFeedbackResponse, ListPracticeReviewObservationsResponse, ListPracticeReviewsResponse, ListPracticesResponse, ListPracticeStandingsResponse, ListProductSurveyInvitationsResponse, ListResponse, ListReviewedWorkReviewRunsResponse, ListSessionsResponse, ListSlackChannelConsentEventsResponse, ListSlackChannelsResponse, ListSweepSchedulesResponse, ListThreadsResponse, ListTracedArtifactsResponse, ListWorkspaceConfigAuditEventsResponse, ListWorkspacesResponse, PlacePracticeResponse, PreflightBackfillRunResponse, ReadResponse, RefreshClientSessionResponse, RegisterOutlineCollectionResponse, RegisterSlackChannelResponse, RemoveLabelFromTeamResponse, RenameSlugResponse, ReorderGroupsResponse, ReorderPracticesResponse, ReplaceFeedbackResponseResponse, ReplaceSweepScheduleResponse, RetryAgentJobDeliveryResponse, SetAutonomyResponse, SetGroupAutonomyResponse, TriggerSyncJobResponse, UpdateAccountAiChoiceResponse, UpdateBackfillRunStatusResponse, UpdateConnectionStatusResponse, UpdateConnectionSyncJobResponse, UpdateFeaturesResponse, UpdateGroupResponse, UpdateMemberVisibilityResponse, UpdateOutlineCollectionStateResponse, UpdatePracticeResponse, UpdatePracticeReviewFeedbackWithdrawalResponse, UpdatePracticeReviewObservationValidityResponse, UpdatePublicVisibilityResponse, UpdateSlackChannelConsentResponse, UpdateStatusResponse, UpdateTokenResponse, VoteResponse, WorkspaceCreateLlmConnectionResponse, WorkspaceCreateLlmModelResponse, WorkspaceGetLlmConnectionResponse, WorkspaceGetLlmModelResponse, WorkspaceListLlmConnectionsResponse, WorkspaceListLlmModelsResponse, WorkspaceUpdateLlmConnectionResponse, WorkspaceUpdateLlmModelResponse } from './types.gen.js';
 
 const authEventViewSchemaResponseTransformer = (data: any) => {
-  data.occurredAt = new Date(data.occurredAt);
-  return data;
+    data.occurredAt = new Date(data.occurredAt);
+    return data;
 };
 
 const pageResponseDtoAuthEventViewSchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => authEventViewSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => authEventViewSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const adminListAuthEventsResponseTransformer = async (data: any): Promise<AdminListAuthEventsResponse> => {
-  data = pageResponseDtoAuthEventViewSchemaResponseTransformer(data);
-  return data;
+    data = pageResponseDtoAuthEventViewSchemaResponseTransformer(data);
+    return data;
 };
 
 const configAuditEntryViewSchemaResponseTransformer = (data: any) => {
-  if (data.occurredAt) {
-    data.occurredAt = new Date(data.occurredAt);
-  }
-  return data;
+    if (data.occurredAt) {
+        data.occurredAt = new Date(data.occurredAt);
+    }
+    return data;
 };
 
 const pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => configAuditEntryViewSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => configAuditEntryViewSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const adminListConfigAuditEventsResponseTransformer = async (data: any): Promise<AdminListConfigAuditEventsResponse> => {
-  data = pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer(data);
-  return data;
+    data = pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer(data);
+    return data;
 };
 
 const llmConnectionSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.updatedAt) {
-    data.updatedAt = new Date(data.updatedAt);
-  }
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.updatedAt) {
+        data.updatedAt = new Date(data.updatedAt);
+    }
+    return data;
 };
 
 export const adminListLlmConnectionsResponseTransformer = async (data: any): Promise<AdminListLlmConnectionsResponse> => {
-  data = data.map((item: any) => llmConnectionSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => llmConnectionSchemaResponseTransformer(item));
+    return data;
 };
 
 export const adminCreateLlmConnectionResponseTransformer = async (data: any): Promise<AdminCreateLlmConnectionResponse> => {
-  data = llmConnectionSchemaResponseTransformer(data);
-  return data;
+    data = llmConnectionSchemaResponseTransformer(data);
+    return data;
 };
 
 const llmModelPriceSchemaResponseTransformer = (data: any) => {
-  data.effectiveFrom = new Date(data.effectiveFrom);
-  if (data.effectiveTo) {
-    data.effectiveTo = new Date(data.effectiveTo);
-  }
-  return data;
+    data.effectiveFrom = new Date(data.effectiveFrom);
+    if (data.effectiveTo) {
+        data.effectiveTo = new Date(data.effectiveTo);
+    }
+    return data;
 };
 
 const llmModelSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.currentPrice) {
-    data.currentPrice = llmModelPriceSchemaResponseTransformer(data.currentPrice);
-  }
-  if (data.updatedAt) {
-    data.updatedAt = new Date(data.updatedAt);
-  }
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.currentPrice) {
+        data.currentPrice = llmModelPriceSchemaResponseTransformer(data.currentPrice);
+    }
+    if (data.updatedAt) {
+        data.updatedAt = new Date(data.updatedAt);
+    }
+    return data;
 };
 
 export const adminCreateLlmModelResponseTransformer = async (data: any): Promise<AdminCreateLlmModelResponse> => {
-  data = llmModelSchemaResponseTransformer(data);
-  return data;
+    data = llmModelSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminGetLlmConnectionResponseTransformer = async (data: any): Promise<AdminGetLlmConnectionResponse> => {
-  data = llmConnectionSchemaResponseTransformer(data);
-  return data;
+    data = llmConnectionSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminUpdateLlmConnectionResponseTransformer = async (data: any): Promise<AdminUpdateLlmConnectionResponse> => {
-  data = llmConnectionSchemaResponseTransformer(data);
-  return data;
+    data = llmConnectionSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminListLlmModelsResponseTransformer = async (data: any): Promise<AdminListLlmModelsResponse> => {
-  data = data.map((item: any) => llmModelSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => llmModelSchemaResponseTransformer(item));
+    return data;
 };
 
 export const adminGetLlmModelResponseTransformer = async (data: any): Promise<AdminGetLlmModelResponse> => {
-  data = llmModelSchemaResponseTransformer(data);
-  return data;
+    data = llmModelSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminUpdateLlmModelResponseTransformer = async (data: any): Promise<AdminUpdateLlmModelResponse> => {
-  data = llmModelSchemaResponseTransformer(data);
-  return data;
+    data = llmModelSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminUpdateLlmModelPriceResponseTransformer = async (data: any): Promise<AdminUpdateLlmModelPriceResponse> => {
-  data = llmModelSchemaResponseTransformer(data);
-  return data;
+    data = llmModelSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminUpdateLlmModelSharingResponseTransformer = async (data: any): Promise<AdminUpdateLlmModelSharingResponse> => {
-  data = llmModelSchemaResponseTransformer(data);
-  return data;
+    data = llmModelSchemaResponseTransformer(data);
+    return data;
 };
 
 const fxRateInfoSchemaResponseTransformer = (data: any) => {
-  data.rateDate = new Date(data.rateDate);
-  return data;
+    data.rateDate = new Date(data.rateDate);
+    return data;
 };
 
 const adminLlmUsageReportSchemaResponseTransformer = (data: any) => {
-  if (data.fx) {
-    data.fx = fxRateInfoSchemaResponseTransformer(data.fx);
-  }
-  return data;
+    if (data.fx) {
+        data.fx = fxRateInfoSchemaResponseTransformer(data.fx);
+    }
+    return data;
 };
 
 export const adminGetLlmUsageReportResponseTransformer = async (data: any): Promise<AdminGetLlmUsageReportResponse> => {
-  data = adminLlmUsageReportSchemaResponseTransformer(data);
-  return data;
+    data = adminLlmUsageReportSchemaResponseTransformer(data);
+    return data;
 };
 
 const loginProviderViewSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  data.updatedAt = new Date(data.updatedAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    data.updatedAt = new Date(data.updatedAt);
+    return data;
 };
 
 export const adminListLoginProvidersResponseTransformer = async (data: any): Promise<AdminListLoginProvidersResponse> => {
-  data = data.map((item: any) => loginProviderViewSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => loginProviderViewSchemaResponseTransformer(item));
+    return data;
 };
 
 export const adminCreateLoginProviderResponseTransformer = async (data: any): Promise<AdminCreateLoginProviderResponse> => {
-  data = loginProviderViewSchemaResponseTransformer(data);
-  return data;
+    data = loginProviderViewSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminUpdateLoginProviderResponseTransformer = async (data: any): Promise<AdminUpdateLoginProviderResponse> => {
-  data = loginProviderViewSchemaResponseTransformer(data);
-  return data;
+    data = loginProviderViewSchemaResponseTransformer(data);
+    return data;
 };
 
 const personDataRequestSchemaResponseTransformer = (data: any) => {
-  data.expiresAt = new Date(data.expiresAt);
-  return data;
+    data.expiresAt = new Date(data.expiresAt);
+    return data;
 };
 
 export const adminPreviewPersonDataResponseTransformer = async (data: any): Promise<AdminPreviewPersonDataResponse> => {
-  data = personDataRequestSchemaResponseTransformer(data);
-  return data;
+    data = personDataRequestSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminGetPersonDataRequestResponseTransformer = async (data: any): Promise<AdminGetPersonDataRequestResponse> => {
-  data = personDataRequestSchemaResponseTransformer(data);
-  return data;
+    data = personDataRequestSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminErasePersonDataResponseTransformer = async (data: any): Promise<AdminErasePersonDataResponse> => {
-  data = personDataRequestSchemaResponseTransformer(data);
-  return data;
+    data = personDataRequestSchemaResponseTransformer(data);
+    return data;
 };
 
 const feedbackItemSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.resolvedAt) {
-    data.resolvedAt = new Date(data.resolvedAt);
-  }
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.resolvedAt) {
+        data.resolvedAt = new Date(data.resolvedAt);
+    }
+    return data;
 };
 
 const pagedModelFeedbackItemSchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => feedbackItemSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => feedbackItemSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const adminListProductFeedbackResponseTransformer = async (data: any): Promise<AdminListProductFeedbackResponse> => {
-  data = pagedModelFeedbackItemSchemaResponseTransformer(data);
-  return data;
+    data = pagedModelFeedbackItemSchemaResponseTransformer(data);
+    return data;
 };
 
 const surveySchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.endsAt) {
-    data.endsAt = new Date(data.endsAt);
-  }
-  data.startsAt = new Date(data.startsAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.endsAt) {
+        data.endsAt = new Date(data.endsAt);
+    }
+    data.startsAt = new Date(data.startsAt);
+    return data;
 };
 
 const pagedModelSurveySchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => surveySchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => surveySchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const adminListProductSurveysResponseTransformer = async (data: any): Promise<AdminListProductSurveysResponse> => {
-  data = pagedModelSurveySchemaResponseTransformer(data);
-  return data;
+    data = pagedModelSurveySchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminCreateProductSurveyResponseTransformer = async (data: any): Promise<AdminCreateProductSurveyResponse> => {
-  data = surveySchemaResponseTransformer(data);
-  return data;
+    data = surveySchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminGetProductSurveyResponseTransformer = async (data: any): Promise<AdminGetProductSurveyResponse> => {
-  data = surveySchemaResponseTransformer(data);
-  return data;
+    data = surveySchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminUpdateProductSurveyResponseTransformer = async (data: any): Promise<AdminUpdateProductSurveyResponse> => {
-  data = surveySchemaResponseTransformer(data);
-  return data;
+    data = surveySchemaResponseTransformer(data);
+    return data;
 };
 
 const surveyResponseSchemaResponseTransformer = (data: any) => {
-  data.decidedAt = new Date(data.decidedAt);
-  return data;
+    data.decidedAt = new Date(data.decidedAt);
+    return data;
 };
 
 const pagedModelSurveyResponseSchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => surveyResponseSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => surveyResponseSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const adminListProductSurveyResponsesResponseTransformer = async (data: any): Promise<AdminListProductSurveyResponsesResponse> => {
-  data = pagedModelSurveyResponseSchemaResponseTransformer(data);
-  return data;
+    data = pagedModelSurveyResponseSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminTriageProductFeedbackResponseTransformer = async (data: any): Promise<AdminTriageProductFeedbackResponse> => {
-  data = feedbackItemSchemaResponseTransformer(data);
-  return data;
+    data = feedbackItemSchemaResponseTransformer(data);
+    return data;
 };
 
 const releaseStartSchemaResponseTransformer = (data: any) => {
-  data.startedAt = new Date(data.startedAt);
-  return data;
+    data.startedAt = new Date(data.startedAt);
+    return data;
 };
 
 const latestReleaseSchemaResponseTransformer = (data: any) => {
-  data.publishedAt = new Date(data.publishedAt);
-  return data;
+    data.publishedAt = new Date(data.publishedAt);
+    return data;
 };
 
 const releaseStatusSchemaResponseTransformer = (data: any) => {
-  data.history = data.history.map((item: any) => releaseStartSchemaResponseTransformer(item));
-  if (data.lastAttempt) {
-    data.lastAttempt = new Date(data.lastAttempt);
-  }
-  if (data.lastSuccess) {
-    data.lastSuccess = new Date(data.lastSuccess);
-  }
-  if (data.latest) {
-    data.latest = latestReleaseSchemaResponseTransformer(data.latest);
-  }
-  if (data.nextCheck) {
-    data.nextCheck = new Date(data.nextCheck);
-  }
-  if (data.retryUntil) {
-    data.retryUntil = new Date(data.retryUntil);
-  }
-  if (data.runningSince) {
-    data.runningSince = new Date(data.runningSince);
-  }
-  return data;
+    data.history = data.history.map((item: any) => releaseStartSchemaResponseTransformer(item));
+    if (data.lastAttempt) {
+        data.lastAttempt = new Date(data.lastAttempt);
+    }
+    if (data.lastSuccess) {
+        data.lastSuccess = new Date(data.lastSuccess);
+    }
+    if (data.latest) {
+        data.latest = latestReleaseSchemaResponseTransformer(data.latest);
+    }
+    if (data.nextCheck) {
+        data.nextCheck = new Date(data.nextCheck);
+    }
+    if (data.retryUntil) {
+        data.retryUntil = new Date(data.retryUntil);
+    }
+    if (data.runningSince) {
+        data.runningSince = new Date(data.runningSince);
+    }
+    return data;
 };
 
 export const adminGetReleaseResponseTransformer = async (data: any): Promise<AdminGetReleaseResponse> => {
-  data = releaseStatusSchemaResponseTransformer(data);
-  return data;
+    data = releaseStatusSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminCheckReleaseResponseTransformer = async (data: any): Promise<AdminCheckReleaseResponse> => {
-  data = releaseStatusSchemaResponseTransformer(data);
-  return data;
+    data = releaseStatusSchemaResponseTransformer(data);
+    return data;
 };
 
 const instanceSettingsSchemaResponseTransformer = (data: any) => {
-  if (data.silentModeChangedAt) {
-    data.silentModeChangedAt = new Date(data.silentModeChangedAt);
-  }
-  return data;
+    if (data.silentModeChangedAt) {
+        data.silentModeChangedAt = new Date(data.silentModeChangedAt);
+    }
+    return data;
 };
 
 export const adminGetInstanceSettingsResponseTransformer = async (data: any): Promise<AdminGetInstanceSettingsResponse> => {
-  data = instanceSettingsSchemaResponseTransformer(data);
-  return data;
+    data = instanceSettingsSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adminUpdateSilentModeResponseTransformer = async (data: any): Promise<AdminUpdateSilentModeResponse> => {
-  data = instanceSettingsSchemaResponseTransformer(data);
-  return data;
+    data = instanceSettingsSchemaResponseTransformer(data);
+    return data;
 };
 
 const adminWorkspaceViewSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    return data;
 };
 
 export const adminListWorkspacesResponseTransformer = async (data: any): Promise<AdminListWorkspacesResponse> => {
-  data = data.map((item: any) => adminWorkspaceViewSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => adminWorkspaceViewSchemaResponseTransformer(item));
+    return data;
 };
 
 const clientSessionTokensSchemaResponseTransformer = (data: any) => {
-  data.accessTokenExpiresAt = new Date(data.accessTokenExpiresAt);
-  data.sessionExpiresAt = new Date(data.sessionExpiresAt);
-  return data;
+    data.accessTokenExpiresAt = new Date(data.accessTokenExpiresAt);
+    data.sessionExpiresAt = new Date(data.sessionExpiresAt);
+    return data;
 };
 
 export const refreshClientSessionResponseTransformer = async (data: any): Promise<RefreshClientSessionResponse> => {
-  data = clientSessionTokensSchemaResponseTransformer(data);
-  return data;
+    data = clientSessionTokensSchemaResponseTransformer(data);
+    return data;
 };
 
 export const exchangeClientSignInResponseTransformer = async (data: any): Promise<ExchangeClientSignInResponse> => {
-  data = clientSessionTokensSchemaResponseTransformer(data);
-  return data;
+    data = clientSessionTokensSchemaResponseTransformer(data);
+    return data;
 };
 
 const accountAiChoiceSchemaResponseTransformer = (data: any) => {
-  if (data.updatedAt) {
-    data.updatedAt = new Date(data.updatedAt);
-  }
-  return data;
+    if (data.updatedAt) {
+        data.updatedAt = new Date(data.updatedAt);
+    }
+    return data;
 };
 
 export const getAccountAiChoiceResponseTransformer = async (data: any): Promise<GetAccountAiChoiceResponse> => {
-  data = accountAiChoiceSchemaResponseTransformer(data);
-  return data;
+    data = accountAiChoiceSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updateAccountAiChoiceResponseTransformer = async (data: any): Promise<UpdateAccountAiChoiceResponse> => {
-  data = accountAiChoiceSchemaResponseTransformer(data);
-  return data;
+    data = accountAiChoiceSchemaResponseTransformer(data);
+    return data;
 };
 
 const exportStatusSchemaResponseTransformer = (data: any) => {
-  if (data.completedAt) {
-    data.completedAt = new Date(data.completedAt);
-  }
-  if (data.expiresAt) {
-    data.expiresAt = new Date(data.expiresAt);
-  }
-  if (data.requestedAt) {
-    data.requestedAt = new Date(data.requestedAt);
-  }
-  return data;
+    if (data.completedAt) {
+        data.completedAt = new Date(data.completedAt);
+    }
+    if (data.expiresAt) {
+        data.expiresAt = new Date(data.expiresAt);
+    }
+    if (data.requestedAt) {
+        data.requestedAt = new Date(data.requestedAt);
+    }
+    return data;
 };
 
 export const getDataExportStatusResponseTransformer = async (data: any): Promise<GetDataExportStatusResponse> => {
-  data = exportStatusSchemaResponseTransformer(data);
-  return data;
+    data = exportStatusSchemaResponseTransformer(data);
+    return data;
 };
 
 const identityViewSchemaResponseTransformer = (data: any) => {
-  if (data.lastLoginAt) {
-    data.lastLoginAt = new Date(data.lastLoginAt);
-  }
-  return data;
+    if (data.lastLoginAt) {
+        data.lastLoginAt = new Date(data.lastLoginAt);
+    }
+    return data;
 };
 
 export const listLinkedIdentitiesResponseTransformer = async (data: any): Promise<ListLinkedIdentitiesResponse> => {
-  data = data.map((item: any) => identityViewSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => identityViewSchemaResponseTransformer(item));
+    return data;
 };
 
 const sessionViewSchemaResponseTransformer = (data: any) => {
-  data.expiresAt = new Date(data.expiresAt);
-  if (data.issuedAt) {
-    data.issuedAt = new Date(data.issuedAt);
-  }
-  return data;
+    data.expiresAt = new Date(data.expiresAt);
+    if (data.issuedAt) {
+        data.issuedAt = new Date(data.issuedAt);
+    }
+    return data;
 };
 
 export const listSessionsResponseTransformer = async (data: any): Promise<ListSessionsResponse> => {
-  data = data.map((item: any) => sessionViewSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => sessionViewSchemaResponseTransformer(item));
+    return data;
 };
 
 const workspaceListItemSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    return data;
 };
 
 export const listWorkspacesResponseTransformer = async (data: any): Promise<ListWorkspacesResponse> => {
-  data = data.map((item: any) => workspaceListItemSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => workspaceListItemSchemaResponseTransformer(item));
+    return data;
 };
 
 const workspaceSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.installationLinkedAt) {
-    data.installationLinkedAt = new Date(data.installationLinkedAt);
-  }
-  data.updatedAt = new Date(data.updatedAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.installationLinkedAt) {
+        data.installationLinkedAt = new Date(data.installationLinkedAt);
+    }
+    data.updatedAt = new Date(data.updatedAt);
+    return data;
 };
 
 export const createWorkspaceResponseTransformer = async (data: any): Promise<CreateWorkspaceResponse> => {
-  data = workspaceSchemaResponseTransformer(data);
-  return data;
+    data = workspaceSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getWorkspaceResponseTransformer = async (data: any): Promise<GetWorkspaceResponse> => {
-  data = workspaceSchemaResponseTransformer(data);
-  return data;
+    data = workspaceSchemaResponseTransformer(data);
+    return data;
 };
 
 const labelInfoSchemaResponseTransformer = (data: any) => {
-  if (data.repository) {
-    data.repository = repositoryInfoSchemaResponseTransformer(data.repository);
-  }
-  return data;
+    if (data.repository) {
+        data.repository = repositoryInfoSchemaResponseTransformer(data.repository);
+    }
+    return data;
 };
 
 const repositoryInfoSchemaResponseTransformer = (data: any) => {
-  if (data.labels) {
-    data.labels = data.labels.map((item: any) => labelInfoSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.labels) {
+        data.labels = data.labels.map((item: any) => labelInfoSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 const workItemSchemaResponseTransformer = (data: any) => {
-  if (data.createdAt) {
-    data.createdAt = new Date(data.createdAt);
-  }
-  if (data.repository) {
-    data.repository = repositoryInfoSchemaResponseTransformer(data.repository);
-  }
-  if (data.updatedAt) {
-    data.updatedAt = new Date(data.updatedAt);
-  }
-  return data;
+    if (data.createdAt) {
+        data.createdAt = new Date(data.createdAt);
+    }
+    if (data.repository) {
+        data.repository = repositoryInfoSchemaResponseTransformer(data.repository);
+    }
+    if (data.updatedAt) {
+        data.updatedAt = new Date(data.updatedAt);
+    }
+    return data;
 };
 
 const workItemListSchemaResponseTransformer = (data: any) => {
-  data.content = data.content.map((item: any) => workItemSchemaResponseTransformer(item));
-  return data;
+    data.content = data.content.map((item: any) => workItemSchemaResponseTransformer(item));
+    return data;
 };
 
 const openWorkSchemaResponseTransformer = (data: any) => {
-  data.issues = workItemListSchemaResponseTransformer(data.issues);
-  data.pullRequests = workItemListSchemaResponseTransformer(data.pullRequests);
-  data.reviewRequests = workItemListSchemaResponseTransformer(data.reviewRequests);
-  data.teamReviewRequests = workItemListSchemaResponseTransformer(data.teamReviewRequests);
-  return data;
+    data.issues = workItemListSchemaResponseTransformer(data.issues);
+    data.pullRequests = workItemListSchemaResponseTransformer(data.pullRequests);
+    data.reviewRequests = workItemListSchemaResponseTransformer(data.reviewRequests);
+    data.teamReviewRequests = workItemListSchemaResponseTransformer(data.teamReviewRequests);
+    return data;
 };
 
 export const getOpenWorkResponseTransformer = async (data: any): Promise<GetOpenWorkResponse> => {
-  data = openWorkSchemaResponseTransformer(data);
-  return data;
+    data = openWorkSchemaResponseTransformer(data);
+    return data;
 };
 
 const activityBucketSchemaResponseTransformer = (data: any) => {
-  data.start = new Date(data.start);
-  return data;
+    data.start = new Date(data.start);
+    return data;
 };
 
 const activityOverviewSchemaResponseTransformer = (data: any) => {
-  data.buckets = data.buckets.map((item: any) => activityBucketSchemaResponseTransformer(item));
-  return data;
+    data.buckets = data.buckets.map((item: any) => activityBucketSchemaResponseTransformer(item));
+    return data;
 };
 
 export const getActivitySummaryResponseTransformer = async (data: any): Promise<GetActivitySummaryResponse> => {
-  data = activityOverviewSchemaResponseTransformer(data);
-  return data;
+    data = activityOverviewSchemaResponseTransformer(data);
+    return data;
 };
 
 const activityWorkSchemaResponseTransformer = (data: any) => {
-  data.lastOccurredAt = new Date(data.lastOccurredAt);
-  if (data.work) {
-    data.work = workItemSchemaResponseTransformer(data.work);
-  }
-  return data;
+    data.lastOccurredAt = new Date(data.lastOccurredAt);
+    if (data.work) {
+        data.work = workItemSchemaResponseTransformer(data.work);
+    }
+    return data;
 };
 
 const activityWorkPageSchemaResponseTransformer = (data: any) => {
-  data.content = data.content.map((item: any) => activityWorkSchemaResponseTransformer(item));
-  return data;
+    data.content = data.content.map((item: any) => activityWorkSchemaResponseTransformer(item));
+    return data;
 };
 
 export const getActivityWorkResponseTransformer = async (data: any): Promise<GetActivityWorkResponse> => {
-  data = activityWorkPageSchemaResponseTransformer(data);
-  return data;
+    data = activityWorkPageSchemaResponseTransformer(data);
+    return data;
 };
 
 const agentJobSchemaResponseTransformer = (data: any) => {
-  data.availableAt = new Date(data.availableAt);
-  if (data.completedAt) {
-    data.completedAt = new Date(data.completedAt);
-  }
-  data.createdAt = new Date(data.createdAt);
-  if (data.startedAt) {
-    data.startedAt = new Date(data.startedAt);
-  }
-  return data;
+    data.availableAt = new Date(data.availableAt);
+    if (data.completedAt) {
+        data.completedAt = new Date(data.completedAt);
+    }
+    data.createdAt = new Date(data.createdAt);
+    if (data.startedAt) {
+        data.startedAt = new Date(data.startedAt);
+    }
+    return data;
 };
 
 const pageResponseDtoAgentJobSchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => agentJobSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => agentJobSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const listAgentJobsResponseTransformer = async (data: any): Promise<ListAgentJobsResponse> => {
-  data = pageResponseDtoAgentJobSchemaResponseTransformer(data);
-  return data;
+    data = pageResponseDtoAgentJobSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getAgentJobResponseTransformer = async (data: any): Promise<GetAgentJobResponse> => {
-  data = agentJobSchemaResponseTransformer(data);
-  return data;
+    data = agentJobSchemaResponseTransformer(data);
+    return data;
 };
 
 export const cancelAgentJobResponseTransformer = async (data: any): Promise<CancelAgentJobResponse> => {
-  data = agentJobSchemaResponseTransformer(data);
-  return data;
+    data = agentJobSchemaResponseTransformer(data);
+    return data;
 };
 
 export const retryAgentJobDeliveryResponseTransformer = async (data: any): Promise<RetryAgentJobDeliveryResponse> => {
-  data = agentJobSchemaResponseTransformer(data);
-  return data;
+    data = agentJobSchemaResponseTransformer(data);
+    return data;
 };
 
 export const listWorkspaceConfigAuditEventsResponseTransformer = async (data: any): Promise<ListWorkspaceConfigAuditEventsResponse> => {
-  data = pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer(data);
-  return data;
+    data = pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer(data);
+    return data;
 };
 
 const connectionSummarySchemaResponseTransformer = (data: any) => {
-  if (data.createdAt) {
-    data.createdAt = new Date(data.createdAt);
-  }
-  if (data.credentialsUnreadableSince) {
-    data.credentialsUnreadableSince = new Date(data.credentialsUnreadableSince);
-  }
-  if (data.updatedAt) {
-    data.updatedAt = new Date(data.updatedAt);
-  }
-  return data;
+    if (data.createdAt) {
+        data.createdAt = new Date(data.createdAt);
+    }
+    if (data.credentialsUnreadableSince) {
+        data.credentialsUnreadableSince = new Date(data.credentialsUnreadableSince);
+    }
+    if (data.updatedAt) {
+        data.updatedAt = new Date(data.updatedAt);
+    }
+    return data;
 };
 
 export const listResponseTransformer = async (data: any): Promise<ListResponse> => {
-  data = data.map((item: any) => connectionSummarySchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => connectionSummarySchemaResponseTransformer(item));
+    return data;
 };
 
 const integrationCatalogEntrySchemaResponseTransformer = (data: any) => {
-  if (data.credentialsUnreadableSince) {
-    data.credentialsUnreadableSince = new Date(data.credentialsUnreadableSince);
-  }
-  return data;
+    if (data.credentialsUnreadableSince) {
+        data.credentialsUnreadableSince = new Date(data.credentialsUnreadableSince);
+    }
+    return data;
 };
 
 export const getIntegrationCatalogResponseTransformer = async (data: any): Promise<GetIntegrationCatalogResponse> => {
-  data = data.map((item: any) => integrationCatalogEntrySchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => integrationCatalogEntrySchemaResponseTransformer(item));
+    return data;
 };
 
 const outlineTokenStatusSchemaResponseTransformer = (data: any) => {
-  if (data.expiresAt) {
-    data.expiresAt = new Date(data.expiresAt);
-  }
-  if (data.lastActiveAt) {
-    data.lastActiveAt = new Date(data.lastActiveAt);
-  }
-  return data;
+    if (data.expiresAt) {
+        data.expiresAt = new Date(data.expiresAt);
+    }
+    if (data.lastActiveAt) {
+        data.lastActiveAt = new Date(data.lastActiveAt);
+    }
+    return data;
 };
 
 export const getOutlineTokenStatusResponseTransformer = async (data: any): Promise<GetOutlineTokenStatusResponse> => {
-  data = outlineTokenStatusSchemaResponseTransformer(data);
-  return data;
+    data = outlineTokenStatusSchemaResponseTransformer(data);
+    return data;
 };
 
 const syncJobSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.finishedAt) {
-    data.finishedAt = new Date(data.finishedAt);
-  }
-  if (data.startedAt) {
-    data.startedAt = new Date(data.startedAt);
-  }
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.finishedAt) {
+        data.finishedAt = new Date(data.finishedAt);
+    }
+    if (data.startedAt) {
+        data.startedAt = new Date(data.startedAt);
+    }
+    return data;
 };
 
 const rateLimitSnapshotSchemaResponseTransformer = (data: any) => {
-  data.observedAt = new Date(data.observedAt);
-  if (data.resetAt) {
-    data.resetAt = new Date(data.resetAt);
-  }
-  if (data.throttledUntil) {
-    data.throttledUntil = new Date(data.throttledUntil);
-  }
-  return data;
+    data.observedAt = new Date(data.observedAt);
+    if (data.resetAt) {
+        data.resetAt = new Date(data.resetAt);
+    }
+    if (data.throttledUntil) {
+        data.throttledUntil = new Date(data.throttledUntil);
+    }
+    return data;
 };
 
 const connectionSyncStatusSchemaResponseTransformer = (data: any) => {
-  if (data.activeJob) {
-    data.activeJob = syncJobSchemaResponseTransformer(data.activeJob);
-  }
-  if (data.lastEventProcessedAt) {
-    data.lastEventProcessedAt = new Date(data.lastEventProcessedAt);
-  }
-  if (data.lastJob) {
-    data.lastJob = syncJobSchemaResponseTransformer(data.lastJob);
-  }
-  if (data.lastSuccessfulSyncAt) {
-    data.lastSuccessfulSyncAt = new Date(data.lastSuccessfulSyncAt);
-  }
-  if (data.nextScheduledSyncAt) {
-    data.nextScheduledSyncAt = new Date(data.nextScheduledSyncAt);
-  }
-  if (data.rateLimit) {
-    data.rateLimit = rateLimitSnapshotSchemaResponseTransformer(data.rateLimit);
-  }
-  return data;
+    if (data.activeJob) {
+        data.activeJob = syncJobSchemaResponseTransformer(data.activeJob);
+    }
+    if (data.lastEventProcessedAt) {
+        data.lastEventProcessedAt = new Date(data.lastEventProcessedAt);
+    }
+    if (data.lastJob) {
+        data.lastJob = syncJobSchemaResponseTransformer(data.lastJob);
+    }
+    if (data.lastSuccessfulSyncAt) {
+        data.lastSuccessfulSyncAt = new Date(data.lastSuccessfulSyncAt);
+    }
+    if (data.nextScheduledSyncAt) {
+        data.nextScheduledSyncAt = new Date(data.nextScheduledSyncAt);
+    }
+    if (data.rateLimit) {
+        data.rateLimit = rateLimitSnapshotSchemaResponseTransformer(data.rateLimit);
+    }
+    return data;
 };
 
 export const getConnectionSyncStatusResponseTransformer = async (data: any): Promise<GetConnectionSyncStatusResponse> => {
-  data = connectionSyncStatusSchemaResponseTransformer(data);
-  return data;
+    data = connectionSyncStatusSchemaResponseTransformer(data);
+    return data;
 };
 
 const pageResponseDtoSyncJobSchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => syncJobSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => syncJobSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const listConnectionSyncJobsResponseTransformer = async (data: any): Promise<ListConnectionSyncJobsResponse> => {
-  data = pageResponseDtoSyncJobSchemaResponseTransformer(data);
-  return data;
+    data = pageResponseDtoSyncJobSchemaResponseTransformer(data);
+    return data;
 };
 
 export const triggerSyncJobResponseTransformer = async (data: any): Promise<TriggerSyncJobResponse> => {
-  data = syncJobSchemaResponseTransformer(data);
-  return data;
+    data = syncJobSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updateConnectionSyncJobResponseTransformer = async (data: any): Promise<UpdateConnectionSyncJobResponse> => {
-  data = syncJobSchemaResponseTransformer(data);
-  return data;
+    data = syncJobSchemaResponseTransformer(data);
+    return data;
 };
 
 const syncResourceCountSchemaResponseTransformer = (data: any) => {
-  if (data.lastSyncedAt) {
-    data.lastSyncedAt = new Date(data.lastSyncedAt);
-  }
-  return data;
+    if (data.lastSyncedAt) {
+        data.lastSyncedAt = new Date(data.lastSyncedAt);
+    }
+    return data;
 };
 
 const syncResourceStateSchemaResponseTransformer = (data: any) => {
-  if (data.backfillCompletedThrough) {
-    data.backfillCompletedThrough = new Date(data.backfillCompletedThrough);
-  }
-  data.counts = data.counts.map((item: any) => syncResourceCountSchemaResponseTransformer(item));
-  if (data.lastSyncedAt) {
-    data.lastSyncedAt = new Date(data.lastSyncedAt);
-  }
-  return data;
+    if (data.backfillCompletedThrough) {
+        data.backfillCompletedThrough = new Date(data.backfillCompletedThrough);
+    }
+    data.counts = data.counts.map((item: any) => syncResourceCountSchemaResponseTransformer(item));
+    if (data.lastSyncedAt) {
+        data.lastSyncedAt = new Date(data.lastSyncedAt);
+    }
+    return data;
 };
 
 export const listConnectionSyncResourcesResponseTransformer = async (data: any): Promise<ListConnectionSyncResourcesResponse> => {
-  data = data.map((item: any) => syncResourceStateSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => syncResourceStateSchemaResponseTransformer(item));
+    return data;
 };
 
 const connectionDetailSchemaResponseTransformer = (data: any) => {
-  if (data.createdAt) {
-    data.createdAt = new Date(data.createdAt);
-  }
-  if (data.credentialsUnreadableSince) {
-    data.credentialsUnreadableSince = new Date(data.credentialsUnreadableSince);
-  }
-  if (data.tokenExpiresAt) {
-    data.tokenExpiresAt = new Date(data.tokenExpiresAt);
-  }
-  if (data.tokenExpiryCheckedAt) {
-    data.tokenExpiryCheckedAt = new Date(data.tokenExpiryCheckedAt);
-  }
-  if (data.updatedAt) {
-    data.updatedAt = new Date(data.updatedAt);
-  }
-  return data;
+    if (data.createdAt) {
+        data.createdAt = new Date(data.createdAt);
+    }
+    if (data.credentialsUnreadableSince) {
+        data.credentialsUnreadableSince = new Date(data.credentialsUnreadableSince);
+    }
+    if (data.tokenExpiresAt) {
+        data.tokenExpiresAt = new Date(data.tokenExpiresAt);
+    }
+    if (data.tokenExpiryCheckedAt) {
+        data.tokenExpiryCheckedAt = new Date(data.tokenExpiryCheckedAt);
+    }
+    if (data.updatedAt) {
+        data.updatedAt = new Date(data.updatedAt);
+    }
+    return data;
 };
 
 export const readResponseTransformer = async (data: any): Promise<ReadResponse> => {
-  data = connectionDetailSchemaResponseTransformer(data);
-  return data;
+    data = connectionDetailSchemaResponseTransformer(data);
+    return data;
 };
 
 const connectionAuditEntrySchemaResponseTransformer = (data: any) => {
-  if (data.occurredAt) {
-    data.occurredAt = new Date(data.occurredAt);
-  }
-  return data;
+    if (data.occurredAt) {
+        data.occurredAt = new Date(data.occurredAt);
+    }
+    return data;
 };
 
 export const auditResponseTransformer = async (data: any): Promise<AuditResponse> => {
-  data = data.map((item: any) => connectionAuditEntrySchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => connectionAuditEntrySchemaResponseTransformer(item));
+    return data;
 };
 
 export const updateConnectionStatusResponseTransformer = async (data: any): Promise<UpdateConnectionStatusResponse> => {
-  data = connectionSummarySchemaResponseTransformer(data);
-  return data;
+    data = connectionSummarySchemaResponseTransformer(data);
+    return data;
 };
 
 export const updateFeaturesResponseTransformer = async (data: any): Promise<UpdateFeaturesResponse> => {
-  data = workspaceSchemaResponseTransformer(data);
-  return data;
+    data = workspaceSchemaResponseTransformer(data);
+    return data;
 };
 
 const workspaceLlmConnectionSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.updatedAt) {
-    data.updatedAt = new Date(data.updatedAt);
-  }
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.updatedAt) {
+        data.updatedAt = new Date(data.updatedAt);
+    }
+    return data;
 };
 
 export const workspaceListLlmConnectionsResponseTransformer = async (data: any): Promise<WorkspaceListLlmConnectionsResponse> => {
-  data = data.map((item: any) => workspaceLlmConnectionSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => workspaceLlmConnectionSchemaResponseTransformer(item));
+    return data;
 };
 
 export const workspaceCreateLlmConnectionResponseTransformer = async (data: any): Promise<WorkspaceCreateLlmConnectionResponse> => {
-  data = workspaceLlmConnectionSchemaResponseTransformer(data);
-  return data;
+    data = workspaceLlmConnectionSchemaResponseTransformer(data);
+    return data;
 };
 
 const workspaceLlmModelSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.updatedAt) {
-    data.updatedAt = new Date(data.updatedAt);
-  }
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.updatedAt) {
+        data.updatedAt = new Date(data.updatedAt);
+    }
+    return data;
 };
 
 export const workspaceCreateLlmModelResponseTransformer = async (data: any): Promise<WorkspaceCreateLlmModelResponse> => {
-  data = workspaceLlmModelSchemaResponseTransformer(data);
-  return data;
+    data = workspaceLlmModelSchemaResponseTransformer(data);
+    return data;
 };
 
 export const workspaceGetLlmConnectionResponseTransformer = async (data: any): Promise<WorkspaceGetLlmConnectionResponse> => {
-  data = workspaceLlmConnectionSchemaResponseTransformer(data);
-  return data;
+    data = workspaceLlmConnectionSchemaResponseTransformer(data);
+    return data;
 };
 
 export const workspaceUpdateLlmConnectionResponseTransformer = async (data: any): Promise<WorkspaceUpdateLlmConnectionResponse> => {
-  data = workspaceLlmConnectionSchemaResponseTransformer(data);
-  return data;
+    data = workspaceLlmConnectionSchemaResponseTransformer(data);
+    return data;
 };
 
 export const workspaceListLlmModelsResponseTransformer = async (data: any): Promise<WorkspaceListLlmModelsResponse> => {
-  data = data.map((item: any) => workspaceLlmModelSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => workspaceLlmModelSchemaResponseTransformer(item));
+    return data;
 };
 
 export const workspaceGetLlmModelResponseTransformer = async (data: any): Promise<WorkspaceGetLlmModelResponse> => {
-  data = workspaceLlmModelSchemaResponseTransformer(data);
-  return data;
+    data = workspaceLlmModelSchemaResponseTransformer(data);
+    return data;
 };
 
 export const workspaceUpdateLlmModelResponseTransformer = async (data: any): Promise<WorkspaceUpdateLlmModelResponse> => {
-  data = workspaceLlmModelSchemaResponseTransformer(data);
-  return data;
+    data = workspaceLlmModelSchemaResponseTransformer(data);
+    return data;
 };
 
 const llmUsageByDaySchemaResponseTransformer = (data: any) => {
-  data.day = new Date(data.day);
-  return data;
+    data.day = new Date(data.day);
+    return data;
 };
 
 const workspaceLlmUsageReportSchemaResponseTransformer = (data: any) => {
-  data.byDay = data.byDay.map((item: any) => llmUsageByDaySchemaResponseTransformer(item));
-  if (data.fx) {
-    data.fx = fxRateInfoSchemaResponseTransformer(data.fx);
-  }
-  return data;
+    data.byDay = data.byDay.map((item: any) => llmUsageByDaySchemaResponseTransformer(item));
+    if (data.fx) {
+        data.fx = fxRateInfoSchemaResponseTransformer(data.fx);
+    }
+    return data;
 };
 
 export const getLlmUsageReportResponseTransformer = async (data: any): Promise<GetLlmUsageReportResponse> => {
-  data = workspaceLlmUsageReportSchemaResponseTransformer(data);
-  return data;
+    data = workspaceLlmUsageReportSchemaResponseTransformer(data);
+    return data;
 };
 
 const workspaceMembershipSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    return data;
 };
 
 export const listMembersResponseTransformer = async (data: any): Promise<ListMembersResponse> => {
-  data = data.map((item: any) => workspaceMembershipSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => workspaceMembershipSchemaResponseTransformer(item));
+    return data;
 };
 
 export const assignRoleResponseTransformer = async (data: any): Promise<AssignRoleResponse> => {
-  data = workspaceMembershipSchemaResponseTransformer(data);
-  return data;
+    data = workspaceMembershipSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getCurrentUserMembershipResponseTransformer = async (data: any): Promise<GetCurrentUserMembershipResponse> => {
-  data = workspaceMembershipSchemaResponseTransformer(data);
-  return data;
+    data = workspaceMembershipSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getMemberResponseTransformer = async (data: any): Promise<GetMemberResponse> => {
-  data = workspaceMembershipSchemaResponseTransformer(data);
-  return data;
+    data = workspaceMembershipSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updateMemberVisibilityResponseTransformer = async (data: any): Promise<UpdateMemberVisibilityResponse> => {
-  data = workspaceMembershipSchemaResponseTransformer(data);
-  return data;
+    data = workspaceMembershipSchemaResponseTransformer(data);
+    return data;
 };
 
 const chatThreadSummarySchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    return data;
 };
 
 export const listThreadsResponseTransformer = async (data: any): Promise<ListThreadsResponse> => {
-  data = data.map((item: any) => chatThreadSummarySchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => chatThreadSummarySchemaResponseTransformer(item));
+    return data;
 };
 
 const chatMessageSchemaResponseTransformer = (data: any) => {
-  if (data.createdAt) {
-    data.createdAt = new Date(data.createdAt);
-  }
-  return data;
+    if (data.createdAt) {
+        data.createdAt = new Date(data.createdAt);
+    }
+    return data;
 };
 
 const chatThreadDetailSchemaResponseTransformer = (data: any) => {
-  if (data.createdAt) {
-    data.createdAt = new Date(data.createdAt);
-  }
-  if (data.messages) {
-    data.messages = data.messages.map((item: any) => chatMessageSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.createdAt) {
+        data.createdAt = new Date(data.createdAt);
+    }
+    if (data.messages) {
+        data.messages = data.messages.map((item: any) => chatMessageSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const getThreadResponseTransformer = async (data: any): Promise<GetThreadResponse> => {
-  data = chatThreadDetailSchemaResponseTransformer(data);
-  return data;
+    data = chatThreadDetailSchemaResponseTransformer(data);
+    return data;
 };
 
 const chatMessageVoteSchemaResponseTransformer = (data: any) => {
-  if (data.updatedAt) {
-    data.updatedAt = new Date(data.updatedAt);
-  }
-  return data;
+    if (data.updatedAt) {
+        data.updatedAt = new Date(data.updatedAt);
+    }
+    return data;
 };
 
 export const voteResponseTransformer = async (data: any): Promise<VoteResponse> => {
-  data = chatMessageVoteSchemaResponseTransformer(data);
-  return data;
+    data = chatMessageVoteSchemaResponseTransformer(data);
+    return data;
 };
 
 const outlineCollectionSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.lastSyncedAt) {
-    data.lastSyncedAt = new Date(data.lastSyncedAt);
-  }
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.lastSyncedAt) {
+        data.lastSyncedAt = new Date(data.lastSyncedAt);
+    }
+    return data;
 };
 
 export const listOutlineCollectionsResponseTransformer = async (data: any): Promise<ListOutlineCollectionsResponse> => {
-  data = data.map((item: any) => outlineCollectionSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => outlineCollectionSchemaResponseTransformer(item));
+    return data;
 };
 
 export const registerOutlineCollectionResponseTransformer = async (data: any): Promise<RegisterOutlineCollectionResponse> => {
-  data = outlineCollectionSchemaResponseTransformer(data);
-  return data;
+    data = outlineCollectionSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getOutlineCollectionResponseTransformer = async (data: any): Promise<GetOutlineCollectionResponse> => {
-  data = outlineCollectionSchemaResponseTransformer(data);
-  return data;
+    data = outlineCollectionSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updateOutlineCollectionStateResponseTransformer = async (data: any): Promise<UpdateOutlineCollectionStateResponse> => {
-  data = outlineCollectionSchemaResponseTransformer(data);
-  return data;
+    data = outlineCollectionSchemaResponseTransformer(data);
+    return data;
 };
 
 const practiceSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  data.updatedAt = new Date(data.updatedAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    data.updatedAt = new Date(data.updatedAt);
+    return data;
 };
 
 const catalogGroupAdoptionResultSchemaResponseTransformer = (data: any) => {
-  data.added = data.added.map((item: any) => practiceSchemaResponseTransformer(item));
-  data.moved = data.moved.map((item: any) => practiceSchemaResponseTransformer(item));
-  return data;
+    data.added = data.added.map((item: any) => practiceSchemaResponseTransformer(item));
+    data.moved = data.moved.map((item: any) => practiceSchemaResponseTransformer(item));
+    return data;
 };
 
 export const adoptGroupResponseTransformer = async (data: any): Promise<AdoptGroupResponse> => {
-  data = catalogGroupAdoptionResultSchemaResponseTransformer(data);
-  return data;
+    data = catalogGroupAdoptionResultSchemaResponseTransformer(data);
+    return data;
 };
 
 export const adoptPracticeResponseTransformer = async (data: any): Promise<AdoptPracticeResponse> => {
-  data = practiceSchemaResponseTransformer(data);
-  return data;
+    data = practiceSchemaResponseTransformer(data);
+    return data;
 };
 
 const practiceGroupSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.updatedAt) {
-    data.updatedAt = new Date(data.updatedAt);
-  }
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.updatedAt) {
+        data.updatedAt = new Date(data.updatedAt);
+    }
+    return data;
 };
 
 export const listGroupsResponseTransformer = async (data: any): Promise<ListGroupsResponse> => {
-  data = data.map((item: any) => practiceGroupSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => practiceGroupSchemaResponseTransformer(item));
+    return data;
 };
 
 export const createGroupResponseTransformer = async (data: any): Promise<CreateGroupResponse> => {
-  data = practiceGroupSchemaResponseTransformer(data);
-  return data;
+    data = practiceGroupSchemaResponseTransformer(data);
+    return data;
 };
 
 export const reorderGroupsResponseTransformer = async (data: any): Promise<ReorderGroupsResponse> => {
-  data = data.map((item: any) => practiceGroupSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => practiceGroupSchemaResponseTransformer(item));
+    return data;
 };
 
 const trendSupportSchemaResponseTransformer = (data: any) => {
-  if (data.firstOpportunityAt) {
-    data.firstOpportunityAt = new Date(data.firstOpportunityAt);
-  }
-  if (data.lastOpportunityAt) {
-    data.lastOpportunityAt = new Date(data.lastOpportunityAt);
-  }
-  return data;
+    if (data.firstOpportunityAt) {
+        data.firstOpportunityAt = new Date(data.firstOpportunityAt);
+    }
+    if (data.lastOpportunityAt) {
+        data.lastOpportunityAt = new Date(data.lastOpportunityAt);
+    }
+    return data;
 };
 
 const practiceGroupStandingSchemaResponseTransformer = (data: any) => {
-  if (data.feedbackSince) {
-    data.feedbackSince = new Date(data.feedbackSince);
-  }
-  if (data.trendSupport) {
-    data.trendSupport = trendSupportSchemaResponseTransformer(data.trendSupport);
-  }
-  return data;
+    if (data.feedbackSince) {
+        data.feedbackSince = new Date(data.feedbackSince);
+    }
+    if (data.trendSupport) {
+        data.trendSupport = trendSupportSchemaResponseTransformer(data.trendSupport);
+    }
+    return data;
 };
 
 export const listPracticeGroupStandingsResponseTransformer = async (data: any): Promise<ListPracticeGroupStandingsResponse> => {
-  data = data.map((item: any) => practiceGroupStandingSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => practiceGroupStandingSchemaResponseTransformer(item));
+    return data;
 };
 
 export const getGroupResponseTransformer = async (data: any): Promise<GetGroupResponse> => {
-  data = practiceGroupSchemaResponseTransformer(data);
-  return data;
+    data = practiceGroupSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updateGroupResponseTransformer = async (data: any): Promise<UpdateGroupResponse> => {
-  data = practiceGroupSchemaResponseTransformer(data);
-  return data;
+    data = practiceGroupSchemaResponseTransformer(data);
+    return data;
 };
 
 export const setGroupAutonomyResponseTransformer = async (data: any): Promise<SetGroupAutonomyResponse> => {
-  data = practiceGroupSchemaResponseTransformer(data);
-  return data;
+    data = practiceGroupSchemaResponseTransformer(data);
+    return data;
 };
 
 const feedbackResponseSchemaResponseTransformer = (data: any) => {
-  if (data.respondedAt) {
-    data.respondedAt = new Date(data.respondedAt);
-  }
-  return data;
+    if (data.respondedAt) {
+        data.respondedAt = new Date(data.respondedAt);
+    }
+    return data;
 };
 
 const observationDetailSchemaResponseTransformer = (data: any) => {
-  if (data.feedbackResponse) {
-    data.feedbackResponse = feedbackResponseSchemaResponseTransformer(data.feedbackResponse);
-  }
-  if (data.invalidatedAt) {
-    data.invalidatedAt = new Date(data.invalidatedAt);
-  }
-  data.observedAt = new Date(data.observedAt);
-  return data;
+    if (data.feedbackResponse) {
+        data.feedbackResponse = feedbackResponseSchemaResponseTransformer(data.feedbackResponse);
+    }
+    if (data.invalidatedAt) {
+        data.invalidatedAt = new Date(data.invalidatedAt);
+    }
+    data.observedAt = new Date(data.observedAt);
+    return data;
 };
 
 const practiceGroupReviewRunSchemaResponseTransformer = (data: any) => {
-  data.observations = data.observations.map((item: any) => observationDetailSchemaResponseTransformer(item));
-  data.reviewedAt = new Date(data.reviewedAt);
-  return data;
+    data.observations = data.observations.map((item: any) => observationDetailSchemaResponseTransformer(item));
+    data.reviewedAt = new Date(data.reviewedAt);
+    return data;
 };
 
 const practiceGroupReviewRunsPageSchemaResponseTransformer = (data: any) => {
-  data.content = data.content.map((item: any) => practiceGroupReviewRunSchemaResponseTransformer(item));
-  return data;
+    data.content = data.content.map((item: any) => practiceGroupReviewRunSchemaResponseTransformer(item));
+    return data;
 };
 
 export const listPracticeGroupReviewRunsResponseTransformer = async (data: any): Promise<ListPracticeGroupReviewRunsResponse> => {
-  data = practiceGroupReviewRunsPageSchemaResponseTransformer(data);
-  return data;
+    data = practiceGroupReviewRunsPageSchemaResponseTransformer(data);
+    return data;
 };
 
 const trendOpportunitySchemaResponseTransformer = (data: any) => {
-  data.occurredAt = new Date(data.occurredAt);
-  return data;
+    data.occurredAt = new Date(data.occurredAt);
+    return data;
 };
 
 const practiceTrendSchemaResponseTransformer = (data: any) => {
-  data.opportunities = data.opportunities.map((item: any) => trendOpportunitySchemaResponseTransformer(item));
-  data.support = trendSupportSchemaResponseTransformer(data.support);
-  return data;
+    data.opportunities = data.opportunities.map((item: any) => trendOpportunitySchemaResponseTransformer(item));
+    data.support = trendSupportSchemaResponseTransformer(data.support);
+    return data;
 };
 
 const practiceGroupTrendSchemaResponseTransformer = (data: any) => {
-  data.group = practiceTrendSchemaResponseTransformer(data.group);
-  data.practices = data.practices.map((item: any) => practiceTrendSchemaResponseTransformer(item));
-  return data;
+    data.group = practiceTrendSchemaResponseTransformer(data.group);
+    data.practices = data.practices.map((item: any) => practiceTrendSchemaResponseTransformer(item));
+    return data;
 };
 
 export const getPracticeGroupTrendResponseTransformer = async (data: any): Promise<GetPracticeGroupTrendResponse> => {
-  data = practiceGroupTrendSchemaResponseTransformer(data);
-  return data;
+    data = practiceGroupTrendSchemaResponseTransformer(data);
+    return data;
 };
 
 const profileChangeSchemaResponseTransformer = (data: any) => {
-  data.at = new Date(data.at);
-  return data;
+    data.at = new Date(data.at);
+    return data;
 };
 
 const heldPracticeSchemaResponseTransformer = (data: any) => {
-  data.since = new Date(data.since);
-  return data;
+    data.since = new Date(data.since);
+    return data;
 };
 
 const reviewRunRefSchemaResponseTransformer = (data: any) => {
-  data.at = new Date(data.at);
-  return data;
+    data.at = new Date(data.at);
+    return data;
 };
 
 const overviewWindowSchemaResponseTransformer = (data: any) => {
-  data.since = new Date(data.since);
-  data.until = new Date(data.until);
-  return data;
+    data.since = new Date(data.since);
+    data.until = new Date(data.until);
+    return data;
 };
 
 const practiceProfileOverviewSchemaResponseTransformer = (data: any) => {
-  data.changes = data.changes.map((item: any) => profileChangeSchemaResponseTransformer(item));
-  data.holdingUp = data.holdingUp.map((item: any) => heldPracticeSchemaResponseTransformer(item));
-  if (data.latestRun) {
-    data.latestRun = reviewRunRefSchemaResponseTransformer(data.latestRun);
-  }
-  data.window = overviewWindowSchemaResponseTransformer(data.window);
-  return data;
+    data.changes = data.changes.map((item: any) => profileChangeSchemaResponseTransformer(item));
+    data.holdingUp = data.holdingUp.map((item: any) => heldPracticeSchemaResponseTransformer(item));
+    if (data.latestRun) {
+        data.latestRun = reviewRunRefSchemaResponseTransformer(data.latestRun);
+    }
+    data.window = overviewWindowSchemaResponseTransformer(data.window);
+    return data;
 };
 
 export const getPracticeProfileOverviewResponseTransformer = async (data: any): Promise<GetPracticeProfileOverviewResponse> => {
-  data = practiceProfileOverviewSchemaResponseTransformer(data);
-  return data;
+    data = practiceProfileOverviewSchemaResponseTransformer(data);
+    return data;
 };
 
 const profileReviewRunSchemaResponseTransformer = (data: any) => {
-  data.reviewedAt = new Date(data.reviewedAt);
-  return data;
+    data.reviewedAt = new Date(data.reviewedAt);
+    return data;
 };
 
 const profileReviewRunsPageSchemaResponseTransformer = (data: any) => {
-  data.content = data.content.map((item: any) => profileReviewRunSchemaResponseTransformer(item));
-  return data;
+    data.content = data.content.map((item: any) => profileReviewRunSchemaResponseTransformer(item));
+    return data;
 };
 
 export const listPracticeProfileReviewRunsResponseTransformer = async (data: any): Promise<ListPracticeProfileReviewRunsResponse> => {
-  data = profileReviewRunsPageSchemaResponseTransformer(data);
-  return data;
+    data = profileReviewRunsPageSchemaResponseTransformer(data);
+    return data;
 };
 
 const profileReviewRunDetailSchemaResponseTransformer = (data: any) => {
-  data.observations = data.observations.map((item: any) => observationDetailSchemaResponseTransformer(item));
-  data.run = profileReviewRunSchemaResponseTransformer(data.run);
-  return data;
+    data.observations = data.observations.map((item: any) => observationDetailSchemaResponseTransformer(item));
+    data.run = profileReviewRunSchemaResponseTransformer(data.run);
+    return data;
 };
 
 export const getPracticeProfileReviewRunResponseTransformer = async (data: any): Promise<GetPracticeProfileReviewRunResponse> => {
-  data = profileReviewRunDetailSchemaResponseTransformer(data);
-  return data;
+    data = profileReviewRunDetailSchemaResponseTransformer(data);
+    return data;
 };
 
 export const listPracticesResponseTransformer = async (data: any): Promise<ListPracticesResponse> => {
-  data = data.map((item: any) => practiceSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => practiceSchemaResponseTransformer(item));
+    return data;
 };
 
 export const createPracticeResponseTransformer = async (data: any): Promise<CreatePracticeResponse> => {
-  data = practiceSchemaResponseTransformer(data);
-  return data;
+    data = practiceSchemaResponseTransformer(data);
+    return data;
 };
 
 const reviewBackfillRunSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.finishedAt) {
-    data.finishedAt = new Date(data.finishedAt);
-  }
-  data.fromAt = new Date(data.fromAt);
-  if (data.startedAt) {
-    data.startedAt = new Date(data.startedAt);
-  }
-  data.toAt = new Date(data.toAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.finishedAt) {
+        data.finishedAt = new Date(data.finishedAt);
+    }
+    data.fromAt = new Date(data.fromAt);
+    if (data.startedAt) {
+        data.startedAt = new Date(data.startedAt);
+    }
+    data.toAt = new Date(data.toAt);
+    return data;
 };
 
 export const listBackfillRunsResponseTransformer = async (data: any): Promise<ListBackfillRunsResponse> => {
-  data = data.map((item: any) => reviewBackfillRunSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => reviewBackfillRunSchemaResponseTransformer(item));
+    return data;
 };
 
 export const preflightBackfillRunResponseTransformer = async (data: any): Promise<PreflightBackfillRunResponse> => {
-  data = reviewBackfillRunSchemaResponseTransformer(data);
-  return data;
+    data = reviewBackfillRunSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getBackfillRunResponseTransformer = async (data: any): Promise<GetBackfillRunResponse> => {
-  data = reviewBackfillRunSchemaResponseTransformer(data);
-  return data;
+    data = reviewBackfillRunSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updateBackfillRunStatusResponseTransformer = async (data: any): Promise<UpdateBackfillRunStatusResponse> => {
-  data = reviewBackfillRunSchemaResponseTransformer(data);
-  return data;
+    data = reviewBackfillRunSchemaResponseTransformer(data);
+    return data;
 };
 
 const inAppCleanWorkSchemaResponseTransformer = (data: any) => {
-  data.reviewedAt = new Date(data.reviewedAt);
-  return data;
+    data.reviewedAt = new Date(data.reviewedAt);
+    return data;
 };
 
 const inAppEvidenceSchemaResponseTransformer = (data: any) => {
-  data.observedAt = new Date(data.observedAt);
-  return data;
+    data.observedAt = new Date(data.observedAt);
+    return data;
 };
 
 const inAppFeedbackSchemaResponseTransformer = (data: any) => {
-  data.cleanWork = data.cleanWork.map((item: any) => inAppCleanWorkSchemaResponseTransformer(item));
-  if (data.closedAt) {
-    data.closedAt = new Date(data.closedAt);
-  }
-  data.evidence = data.evidence.map((item: any) => inAppEvidenceSchemaResponseTransformer(item));
-  data.preparedAt = new Date(data.preparedAt);
-  if (data.readAt) {
-    data.readAt = new Date(data.readAt);
-  }
-  if (data.response) {
-    data.response = feedbackResponseSchemaResponseTransformer(data.response);
-  }
-  if (data.withdrawnAt) {
-    data.withdrawnAt = new Date(data.withdrawnAt);
-  }
-  return data;
+    data.cleanWork = data.cleanWork.map((item: any) => inAppCleanWorkSchemaResponseTransformer(item));
+    if (data.closedAt) {
+        data.closedAt = new Date(data.closedAt);
+    }
+    data.evidence = data.evidence.map((item: any) => inAppEvidenceSchemaResponseTransformer(item));
+    data.preparedAt = new Date(data.preparedAt);
+    if (data.readAt) {
+        data.readAt = new Date(data.readAt);
+    }
+    if (data.response) {
+        data.response = feedbackResponseSchemaResponseTransformer(data.response);
+    }
+    if (data.withdrawnAt) {
+        data.withdrawnAt = new Date(data.withdrawnAt);
+    }
+    return data;
 };
 
 export const getInAppFeedbackResponseTransformer = async (data: any): Promise<GetInAppFeedbackResponse> => {
-  data = data.map((item: any) => inAppFeedbackSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => inAppFeedbackSchemaResponseTransformer(item));
+    return data;
 };
 
 const deliveredWorkFeedbackItemSchemaResponseTransformer = (data: any) => {
-  if (data.deliveredAt) {
-    data.deliveredAt = new Date(data.deliveredAt);
-  }
-  return data;
+    if (data.deliveredAt) {
+        data.deliveredAt = new Date(data.deliveredAt);
+    }
+    return data;
 };
 
 const deliveredWorkFeedbackSchemaResponseTransformer = (data: any) => {
-  data.feedback = data.feedback.map((item: any) => deliveredWorkFeedbackItemSchemaResponseTransformer(item));
-  return data;
+    data.feedback = data.feedback.map((item: any) => deliveredWorkFeedbackItemSchemaResponseTransformer(item));
+    return data;
 };
 
 export const getOwnDeliveredWorkFeedbackResponseTransformer = async (data: any): Promise<GetOwnDeliveredWorkFeedbackResponse> => {
-  data = deliveredWorkFeedbackSchemaResponseTransformer(data);
-  return data;
+    data = deliveredWorkFeedbackSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getFeedbackResponseResponseTransformer = async (data: any): Promise<GetFeedbackResponseResponse> => {
-  if (data) {
-    data = feedbackResponseSchemaResponseTransformer(data);
-  }
-  return data;
+    if (data) {
+        data = feedbackResponseSchemaResponseTransformer(data);
+    }
+    return data;
 };
 
 export const replaceFeedbackResponseResponseTransformer = async (data: any): Promise<ReplaceFeedbackResponseResponse> => {
-  data = feedbackResponseSchemaResponseTransformer(data);
-  return data;
+    data = feedbackResponseSchemaResponseTransformer(data);
+    return data;
 };
 
 const observationListSchemaResponseTransformer = (data: any) => {
-  data.observedAt = new Date(data.observedAt);
-  return data;
+    data.observedAt = new Date(data.observedAt);
+    return data;
 };
 
 const pageResponseDtoObservationListSchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => observationListSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => observationListSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const listObservationsResponseTransformer = async (data: any): Promise<ListObservationsResponse> => {
-  data = pageResponseDtoObservationListSchemaResponseTransformer(data);
-  return data;
+    data = pageResponseDtoObservationListSchemaResponseTransformer(data);
+    return data;
 };
 
 const developerPracticeSummarySchemaResponseTransformer = (data: any) => {
-  if (data.lastObservedAt) {
-    data.lastObservedAt = new Date(data.lastObservedAt);
-  }
-  return data;
+    if (data.lastObservedAt) {
+        data.lastObservedAt = new Date(data.lastObservedAt);
+    }
+    return data;
 };
 
 export const getSummaryResponseTransformer = async (data: any): Promise<GetSummaryResponse> => {
-  data = data.map((item: any) => developerPracticeSummarySchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => developerPracticeSummarySchemaResponseTransformer(item));
+    return data;
 };
 
 export const getObservationResponseTransformer = async (data: any): Promise<GetObservationResponse> => {
-  data = observationDetailSchemaResponseTransformer(data);
-  return data;
+    data = observationDetailSchemaResponseTransformer(data);
+    return data;
 };
 
 export const acceptPracticeReleaseResponseTransformer = async (data: any): Promise<AcceptPracticeReleaseResponse> => {
-  data = practiceSchemaResponseTransformer(data);
-  return data;
+    data = practiceSchemaResponseTransformer(data);
+    return data;
 };
 
 export const reorderPracticesResponseTransformer = async (data: any): Promise<ReorderPracticesResponse> => {
-  data = data.map((item: any) => practiceSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => practiceSchemaResponseTransformer(item));
+    return data;
 };
 
 export const listReviewedWorkReviewRunsResponseTransformer = async (data: any): Promise<ListReviewedWorkReviewRunsResponse> => {
-  data = practiceGroupReviewRunsPageSchemaResponseTransformer(data);
-  return data;
+    data = practiceGroupReviewRunsPageSchemaResponseTransformer(data);
+    return data;
 };
 
 const reviewRunSummarySchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    return data;
 };
 
 const pagedModelReviewRunSummarySchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => reviewRunSummarySchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => reviewRunSummarySchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const listPracticeReviewsResponseTransformer = async (data: any): Promise<ListPracticeReviewsResponse> => {
-  data = pagedModelReviewRunSummarySchemaResponseTransformer(data);
-  return data;
+    data = pagedModelReviewRunSummarySchemaResponseTransformer(data);
+    return data;
 };
 
 const reviewFeedbackSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.deliveredAt) {
-    data.deliveredAt = new Date(data.deliveredAt);
-  }
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.deliveredAt) {
+        data.deliveredAt = new Date(data.deliveredAt);
+    }
+    return data;
 };
 
 const pagedModelReviewFeedbackSchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => reviewFeedbackSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => reviewFeedbackSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const listPracticeReviewFeedbackResponseTransformer = async (data: any): Promise<ListPracticeReviewFeedbackResponse> => {
-  data = pagedModelReviewFeedbackSchemaResponseTransformer(data);
-  return data;
+    data = pagedModelReviewFeedbackSchemaResponseTransformer(data);
+    return data;
 };
 
 const feedbackApprovalSchemaResponseTransformer = (data: any) => {
-  if (data.decidedAt) {
-    data.decidedAt = new Date(data.decidedAt);
-  }
-  return data;
+    if (data.decidedAt) {
+        data.decidedAt = new Date(data.decidedAt);
+    }
+    return data;
 };
 
 const deliveryPolicyTraceSchemaResponseTransformer = (data: any) => {
-  data.evaluatedAt = new Date(data.evaluatedAt);
-  return data;
+    data.evaluatedAt = new Date(data.evaluatedAt);
+    return data;
 };
 
 const feedbackDisputeSchemaResponseTransformer = (data: any) => {
-  data.disputedAt = new Date(data.disputedAt);
-  return data;
+    data.disputedAt = new Date(data.disputedAt);
+    return data;
 };
 
 const reviewBoundObservationSchemaResponseTransformer = (data: any) => {
-  data.observedAt = new Date(data.observedAt);
-  return data;
+    data.observedAt = new Date(data.observedAt);
+    return data;
 };
 
 const feedbackWithdrawalSchemaResponseTransformer = (data: any) => {
-  if (data.restoredAt) {
-    data.restoredAt = new Date(data.restoredAt);
-  }
-  data.withdrawnAt = new Date(data.withdrawnAt);
-  return data;
+    if (data.restoredAt) {
+        data.restoredAt = new Date(data.restoredAt);
+    }
+    data.withdrawnAt = new Date(data.withdrawnAt);
+    return data;
 };
 
 const reviewFeedbackDetailSchemaResponseTransformer = (data: any) => {
-  if (data.approval) {
-    data.approval = feedbackApprovalSchemaResponseTransformer(data.approval);
-  }
-  data.createdAt = new Date(data.createdAt);
-  if (data.deliveredAt) {
-    data.deliveredAt = new Date(data.deliveredAt);
-  }
-  data.deliveryPolicy = data.deliveryPolicy.map((item: any) => deliveryPolicyTraceSchemaResponseTransformer(item));
-  if (data.dispute) {
-    data.dispute = feedbackDisputeSchemaResponseTransformer(data.dispute);
-  }
-  data.observations = data.observations.map((item: any) => reviewBoundObservationSchemaResponseTransformer(item));
-  data.withdrawals = data.withdrawals.map((item: any) => feedbackWithdrawalSchemaResponseTransformer(item));
-  return data;
+    if (data.approval) {
+        data.approval = feedbackApprovalSchemaResponseTransformer(data.approval);
+    }
+    data.createdAt = new Date(data.createdAt);
+    if (data.deliveredAt) {
+        data.deliveredAt = new Date(data.deliveredAt);
+    }
+    data.deliveryPolicy = data.deliveryPolicy.map((item: any) => deliveryPolicyTraceSchemaResponseTransformer(item));
+    if (data.dispute) {
+        data.dispute = feedbackDisputeSchemaResponseTransformer(data.dispute);
+    }
+    data.observations = data.observations.map((item: any) => reviewBoundObservationSchemaResponseTransformer(item));
+    data.withdrawals = data.withdrawals.map((item: any) => feedbackWithdrawalSchemaResponseTransformer(item));
+    return data;
 };
 
 export const getPracticeReviewFeedbackResponseTransformer = async (data: any): Promise<GetPracticeReviewFeedbackResponse> => {
-  data = reviewFeedbackDetailSchemaResponseTransformer(data);
-  return data;
+    data = reviewFeedbackDetailSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getFeedbackProposalDecisionResponseTransformer = async (data: any): Promise<GetFeedbackProposalDecisionResponse> => {
-  data = feedbackApprovalSchemaResponseTransformer(data);
-  return data;
+    data = feedbackApprovalSchemaResponseTransformer(data);
+    return data;
 };
 
 export const decideFeedbackProposalResponseTransformer = async (data: any): Promise<DecideFeedbackProposalResponse> => {
-  data = feedbackApprovalSchemaResponseTransformer(data);
-  return data;
+    data = feedbackApprovalSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updatePracticeReviewFeedbackWithdrawalResponseTransformer = async (data: any): Promise<UpdatePracticeReviewFeedbackWithdrawalResponse> => {
-  data = reviewFeedbackDetailSchemaResponseTransformer(data);
-  return data;
+    data = reviewFeedbackDetailSchemaResponseTransformer(data);
+    return data;
 };
 
 const reviewObservationSchemaResponseTransformer = (data: any) => {
-  if (data.disputedAt) {
-    data.disputedAt = new Date(data.disputedAt);
-  }
-  if (data.invalidatedAt) {
-    data.invalidatedAt = new Date(data.invalidatedAt);
-  }
-  data.observedAt = new Date(data.observedAt);
-  return data;
+    if (data.disputedAt) {
+        data.disputedAt = new Date(data.disputedAt);
+    }
+    if (data.invalidatedAt) {
+        data.invalidatedAt = new Date(data.invalidatedAt);
+    }
+    data.observedAt = new Date(data.observedAt);
+    return data;
 };
 
 const pagedModelReviewObservationSchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => reviewObservationSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => reviewObservationSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const listPracticeReviewObservationsResponseTransformer = async (data: any): Promise<ListPracticeReviewObservationsResponse> => {
-  data = pagedModelReviewObservationSchemaResponseTransformer(data);
-  return data;
+    data = pagedModelReviewObservationSchemaResponseTransformer(data);
+    return data;
 };
 
 const reviewBoundFeedbackSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.deliveredAt) {
-    data.deliveredAt = new Date(data.deliveredAt);
-  }
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.deliveredAt) {
+        data.deliveredAt = new Date(data.deliveredAt);
+    }
+    return data;
 };
 
 const observationInvalidationSchemaResponseTransformer = (data: any) => {
-  data.invalidatedAt = new Date(data.invalidatedAt);
-  if (data.restoredAt) {
-    data.restoredAt = new Date(data.restoredAt);
-  }
-  return data;
+    data.invalidatedAt = new Date(data.invalidatedAt);
+    if (data.restoredAt) {
+        data.restoredAt = new Date(data.restoredAt);
+    }
+    return data;
 };
 
 const reviewObservationDetailSchemaResponseTransformer = (data: any) => {
-  data.disputes = data.disputes.map((item: any) => feedbackDisputeSchemaResponseTransformer(item));
-  data.feedback = data.feedback.map((item: any) => reviewBoundFeedbackSchemaResponseTransformer(item));
-  data.invalidations = data.invalidations.map((item: any) => observationInvalidationSchemaResponseTransformer(item));
-  data.observedAt = new Date(data.observedAt);
-  return data;
+    data.disputes = data.disputes.map((item: any) => feedbackDisputeSchemaResponseTransformer(item));
+    data.feedback = data.feedback.map((item: any) => reviewBoundFeedbackSchemaResponseTransformer(item));
+    data.invalidations = data.invalidations.map((item: any) => observationInvalidationSchemaResponseTransformer(item));
+    data.observedAt = new Date(data.observedAt);
+    return data;
 };
 
 export const getPracticeReviewObservationResponseTransformer = async (data: any): Promise<GetPracticeReviewObservationResponse> => {
-  data = reviewObservationDetailSchemaResponseTransformer(data);
-  return data;
+    data = reviewObservationDetailSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updatePracticeReviewObservationValidityResponseTransformer = async (data: any): Promise<UpdatePracticeReviewObservationValidityResponse> => {
-  data = reviewObservationDetailSchemaResponseTransformer(data);
-  return data;
+    data = reviewObservationDetailSchemaResponseTransformer(data);
+    return data;
 };
 
 const practiceReviewBucketSchemaResponseTransformer = (data: any) => {
-  data.start = new Date(data.start);
-  return data;
+    data.start = new Date(data.start);
+    return data;
 };
 
 const practiceReviewOverviewSchemaResponseTransformer = (data: any) => {
-  data.buckets = data.buckets.map((item: any) => practiceReviewBucketSchemaResponseTransformer(item));
-  data.from = new Date(data.from);
-  data.to = new Date(data.to);
-  return data;
+    data.buckets = data.buckets.map((item: any) => practiceReviewBucketSchemaResponseTransformer(item));
+    data.from = new Date(data.from);
+    data.to = new Date(data.to);
+    return data;
 };
 
 export const getPracticeReviewOverviewResponseTransformer = async (data: any): Promise<GetPracticeReviewOverviewResponse> => {
-  data = practiceReviewOverviewSchemaResponseTransformer(data);
-  return data;
+    data = practiceReviewOverviewSchemaResponseTransformer(data);
+    return data;
 };
 
 const practiceStandingSchemaResponseTransformer = (data: any) => {
-  if (data.trendSupport) {
-    data.trendSupport = trendSupportSchemaResponseTransformer(data.trendSupport);
-  }
-  return data;
+    if (data.trendSupport) {
+        data.trendSupport = trendSupportSchemaResponseTransformer(data.trendSupport);
+    }
+    return data;
 };
 
 export const listPracticeStandingsResponseTransformer = async (data: any): Promise<ListPracticeStandingsResponse> => {
-  data = data.map((item: any) => practiceStandingSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => practiceStandingSchemaResponseTransformer(item));
+    return data;
 };
 
 const reviewSweepScheduleSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  if (data.lastRunAt) {
-    data.lastRunAt = new Date(data.lastRunAt);
-  }
-  data.nextRunAt = new Date(data.nextRunAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    if (data.lastRunAt) {
+        data.lastRunAt = new Date(data.lastRunAt);
+    }
+    data.nextRunAt = new Date(data.nextRunAt);
+    return data;
 };
 
 export const listSweepSchedulesResponseTransformer = async (data: any): Promise<ListSweepSchedulesResponse> => {
-  data = data.map((item: any) => reviewSweepScheduleSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => reviewSweepScheduleSchemaResponseTransformer(item));
+    return data;
 };
 
 export const createSweepScheduleResponseTransformer = async (data: any): Promise<CreateSweepScheduleResponse> => {
-  data = reviewSweepScheduleSchemaResponseTransformer(data);
-  return data;
+    data = reviewSweepScheduleSchemaResponseTransformer(data);
+    return data;
 };
 
 export const replaceSweepScheduleResponseTransformer = async (data: any): Promise<ReplaceSweepScheduleResponse> => {
-  data = reviewSweepScheduleSchemaResponseTransformer(data);
-  return data;
+    data = reviewSweepScheduleSchemaResponseTransformer(data);
+    return data;
 };
 
 const tracedArtifactSchemaResponseTransformer = (data: any) => {
-  data.lastSignalAt = new Date(data.lastSignalAt);
-  return data;
+    data.lastSignalAt = new Date(data.lastSignalAt);
+    return data;
 };
 
 const pagedModelTracedArtifactSchemaResponseTransformer = (data: any) => {
-  if (data.content) {
-    data.content = data.content.map((item: any) => tracedArtifactSchemaResponseTransformer(item));
-  }
-  return data;
+    if (data.content) {
+        data.content = data.content.map((item: any) => tracedArtifactSchemaResponseTransformer(item));
+    }
+    return data;
 };
 
 export const listTracedArtifactsResponseTransformer = async (data: any): Promise<ListTracedArtifactsResponse> => {
-  data = pagedModelTracedArtifactSchemaResponseTransformer(data);
-  return data;
+    data = pagedModelTracedArtifactSchemaResponseTransformer(data);
+    return data;
 };
 
 const practiceTraceEntrySchemaResponseTransformer = (data: any) => {
-  if (data.decidedAt) {
-    data.decidedAt = new Date(data.decidedAt);
-  }
-  return data;
+    if (data.decidedAt) {
+        data.decidedAt = new Date(data.decidedAt);
+    }
+    return data;
 };
 
 const tracedSignalSchemaResponseTransformer = (data: any) => {
-  data.occurredAt = new Date(data.occurredAt);
-  return data;
+    data.occurredAt = new Date(data.occurredAt);
+    return data;
 };
 
 const artifactTraceSchemaResponseTransformer = (data: any) => {
-  data.practices = data.practices.map((item: any) => practiceTraceEntrySchemaResponseTransformer(item));
-  data.signals = data.signals.map((item: any) => tracedSignalSchemaResponseTransformer(item));
-  return data;
+    data.practices = data.practices.map((item: any) => practiceTraceEntrySchemaResponseTransformer(item));
+    data.signals = data.signals.map((item: any) => tracedSignalSchemaResponseTransformer(item));
+    return data;
 };
 
 export const getArtifactTraceResponseTransformer = async (data: any): Promise<GetArtifactTraceResponse> => {
-  data = artifactTraceSchemaResponseTransformer(data);
-  return data;
+    data = artifactTraceSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getOwnArtifactTraceResponseTransformer = async (data: any): Promise<GetOwnArtifactTraceResponse> => {
-  data = artifactTraceSchemaResponseTransformer(data);
-  return data;
+    data = artifactTraceSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getPracticeResponseTransformer = async (data: any): Promise<GetPracticeResponse> => {
-  data = practiceSchemaResponseTransformer(data);
-  return data;
+    data = practiceSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updatePracticeResponseTransformer = async (data: any): Promise<UpdatePracticeResponse> => {
-  data = practiceSchemaResponseTransformer(data);
-  return data;
+    data = practiceSchemaResponseTransformer(data);
+    return data;
 };
 
 export const setAutonomyResponseTransformer = async (data: any): Promise<SetAutonomyResponse> => {
-  data = practiceSchemaResponseTransformer(data);
-  return data;
+    data = practiceSchemaResponseTransformer(data);
+    return data;
 };
 
 export const bindGroupResponseTransformer = async (data: any): Promise<BindGroupResponse> => {
-  data = practiceSchemaResponseTransformer(data);
-  return data;
+    data = practiceSchemaResponseTransformer(data);
+    return data;
 };
 
 export const placePracticeResponseTransformer = async (data: any): Promise<PlacePracticeResponse> => {
-  data = data.map((item: any) => practiceSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => practiceSchemaResponseTransformer(item));
+    return data;
 };
 
 const surveyInvitationSchemaResponseTransformer = (data: any) => {
-  if (data.endsAt) {
-    data.endsAt = new Date(data.endsAt);
-  }
-  return data;
+    if (data.endsAt) {
+        data.endsAt = new Date(data.endsAt);
+    }
+    return data;
 };
 
 export const listProductSurveyInvitationsResponseTransformer = async (data: any): Promise<ListProductSurveyInvitationsResponse> => {
-  data = data.map((item: any) => surveyInvitationSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => surveyInvitationSchemaResponseTransformer(item));
+    return data;
 };
 
 export const updatePublicVisibilityResponseTransformer = async (data: any): Promise<UpdatePublicVisibilityResponse> => {
-  data = workspaceSchemaResponseTransformer(data);
-  return data;
+    data = workspaceSchemaResponseTransformer(data);
+    return data;
 };
 
 const slackMonitoredChannelSchemaResponseTransformer = (data: any) => {
-  if (data.consentAnnouncedAt) {
-    data.consentAnnouncedAt = new Date(data.consentAnnouncedAt);
-  }
-  data.createdAt = new Date(data.createdAt);
-  return data;
+    if (data.consentAnnouncedAt) {
+        data.consentAnnouncedAt = new Date(data.consentAnnouncedAt);
+    }
+    data.createdAt = new Date(data.createdAt);
+    return data;
 };
 
 export const listSlackChannelsResponseTransformer = async (data: any): Promise<ListSlackChannelsResponse> => {
-  data = data.map((item: any) => slackMonitoredChannelSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => slackMonitoredChannelSchemaResponseTransformer(item));
+    return data;
 };
 
 export const registerSlackChannelResponseTransformer = async (data: any): Promise<RegisterSlackChannelResponse> => {
-  data = slackMonitoredChannelSchemaResponseTransformer(data);
-  return data;
+    data = slackMonitoredChannelSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updateSlackChannelConsentResponseTransformer = async (data: any): Promise<UpdateSlackChannelConsentResponse> => {
-  data = slackMonitoredChannelSchemaResponseTransformer(data);
-  return data;
+    data = slackMonitoredChannelSchemaResponseTransformer(data);
+    return data;
 };
 
 const slackChannelConsentEventSchemaResponseTransformer = (data: any) => {
-  data.createdAt = new Date(data.createdAt);
-  return data;
+    data.createdAt = new Date(data.createdAt);
+    return data;
 };
 
 export const listSlackChannelConsentEventsResponseTransformer = async (data: any): Promise<ListSlackChannelConsentEventsResponse> => {
-  data = data.map((item: any) => slackChannelConsentEventSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => slackChannelConsentEventSchemaResponseTransformer(item));
+    return data;
 };
 
 export const renameSlugResponseTransformer = async (data: any): Promise<RenameSlugResponse> => {
-  data = workspaceSchemaResponseTransformer(data);
-  return data;
+    data = workspaceSchemaResponseTransformer(data);
+    return data;
 };
 
 export const updateStatusResponseTransformer = async (data: any): Promise<UpdateStatusResponse> => {
-  data = workspaceSchemaResponseTransformer(data);
-  return data;
+    data = workspaceSchemaResponseTransformer(data);
+    return data;
 };
 
 const teamInfoSchemaResponseTransformer = (data: any) => {
-  data.labels = data.labels.map((item: any) => labelInfoSchemaResponseTransformer(item));
-  data.repositories = data.repositories.map((item: any) => repositoryInfoSchemaResponseTransformer(item));
-  return data;
+    data.labels = data.labels.map((item: any) => labelInfoSchemaResponseTransformer(item));
+    data.repositories = data.repositories.map((item: any) => repositoryInfoSchemaResponseTransformer(item));
+    return data;
 };
 
 export const getAllTeamsResponseTransformer = async (data: any): Promise<GetAllTeamsResponse> => {
-  data = data.map((item: any) => teamInfoSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => teamInfoSchemaResponseTransformer(item));
+    return data;
 };
 
 export const removeLabelFromTeamResponseTransformer = async (data: any): Promise<RemoveLabelFromTeamResponse> => {
-  data = teamInfoSchemaResponseTransformer(data);
-  return data;
+    data = teamInfoSchemaResponseTransformer(data);
+    return data;
 };
 
 export const addLabelToTeamResponseTransformer = async (data: any): Promise<AddLabelToTeamResponse> => {
-  data = teamInfoSchemaResponseTransformer(data);
-  return data;
+    data = teamInfoSchemaResponseTransformer(data);
+    return data;
 };
 
 export const getLabelFiltersResponseTransformer = async (data: any): Promise<GetLabelFiltersResponse> => {
-  data = data.map((item: any) => labelInfoSchemaResponseTransformer(item));
-  return data;
+    data = data.map((item: any) => labelInfoSchemaResponseTransformer(item));
+    return data;
 };
 
 export const updateTokenResponseTransformer = async (data: any): Promise<UpdateTokenResponse> => {
-  data = workspaceSchemaResponseTransformer(data);
-  return data;
+    data = workspaceSchemaResponseTransformer(data);
+    return data;
 };

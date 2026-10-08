@@ -522,6 +522,11 @@ vp run generate:api   # regenerates server/openapi.yaml from the packaged JAR, t
 spec: this one and the Chrome extension's `extension/src/api/**`. Commit the spec and both clients
 with the change.
 
+Both clients use the generator in `scripts/api-generator/`.
+That workspace supplies the TypeScript 6 compiler API required by the stable generator.
+The applications and root tooling keep TypeScript 7.
+The generator pin lives in `scripts/api-generator/package.json`.
+
 - Schema names carry no `DTO` suffix. The server strips it when it publishes the spec.
 - Pair every new endpoint with its generated TanStack Query options. Never hand-roll `fetch` — the
   generated client is configured once and carries the cookie session.

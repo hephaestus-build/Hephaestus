@@ -5,62 +5,62 @@ import { type Client, type ClientMeta, type Options as Options2, type RequestRes
 import type { AcceptPracticeReleaseData, AcceptPracticeReleaseResponses, AcknowledgeProductSurveyInvitationData, AcknowledgeProductSurveyInvitationResponses, AddLabelFilterData, AddLabelFilterErrors, AddLabelFilterResponses, AddLabelToTeamData, AddLabelToTeamResponses, AddRepositoryToMonitorData, AddRepositoryToMonitorResponses, AdminAcceptPracticeReleaseData, AdminAcceptPracticeReleaseResponses, AdminCheckReleaseData, AdminCheckReleaseResponses, AdminCreateCuratedGroupData, AdminCreateCuratedGroupErrors, AdminCreateCuratedGroupResponses, AdminCreateCuratedPracticeData, AdminCreateCuratedPracticeErrors, AdminCreateCuratedPracticeResponses, AdminCreateLlmConnectionData, AdminCreateLlmConnectionErrors, AdminCreateLlmConnectionResponses, AdminCreateLlmModelData, AdminCreateLlmModelErrors, AdminCreateLlmModelResponses, AdminCreateLoginProviderData, AdminCreateLoginProviderResponses, AdminCreateProductSurveyData, AdminCreateProductSurveyResponses, AdminDeclinePracticeReleaseData, AdminDeclinePracticeReleaseResponses, AdminDeleteCuratedGroupOverrideData, AdminDeleteCuratedGroupOverrideErrors, AdminDeleteCuratedGroupOverrideResponses, AdminDeleteCuratedPracticeOverrideData, AdminDeleteCuratedPracticeOverrideErrors, AdminDeleteCuratedPracticeOverrideResponses, AdminDeleteLlmConnectionData, AdminDeleteLlmConnectionErrors, AdminDeleteLlmConnectionResponses, AdminDeleteLlmModelData, AdminDeleteLlmModelErrors, AdminDeleteLlmModelResponses, AdminDeleteLoginProviderData, AdminDeleteLoginProviderResponses, AdminDeleteProductSurveyData, AdminDeleteProductSurveyResponses, AdminErasePersonDataData, AdminErasePersonDataResponses, AdminExportAuthEventsData, AdminExportAuthEventsResponses, AdminExportPersonDataData, AdminExportPersonDataResponses, AdminExportProductSurveyResponsesData, AdminExportProductSurveyResponsesResponses, AdminGetConfigurationReadinessData, AdminGetConfigurationReadinessResponses, AdminGetCuratedCatalogData, AdminGetCuratedCatalogResponses, AdminGetCuratedGroupData, AdminGetCuratedGroupResponses, AdminGetCuratedPracticeData, AdminGetCuratedPracticeResponses, AdminGetInstanceSettingsData, AdminGetInstanceSettingsResponses, AdminGetLlmConnectionData, AdminGetLlmConnectionErrors, AdminGetLlmConnectionResponses, AdminGetLlmModelData, AdminGetLlmModelErrors, AdminGetLlmModelResponses, AdminGetLlmSettingsData, AdminGetLlmSettingsResponses, AdminGetLlmUsageReportData, AdminGetLlmUsageReportResponses, AdminGetPersonDataRequestData, AdminGetPersonDataRequestResponses, AdminGetPracticeDefinitionOptionsData, AdminGetPracticeDefinitionOptionsResponses, AdminGetPracticeReleaseData, AdminGetPracticeReleaseResponses, AdminGetProductSurveyData, AdminGetProductSurveyResponses, AdminGetProductSurveySummaryData, AdminGetProductSurveySummaryResponses, AdminGetReleaseData, AdminGetReleaseResponses, AdminKeepCuratedGroupData, AdminKeepCuratedGroupErrors, AdminKeepCuratedGroupResponses, AdminKeepCuratedPracticeData, AdminKeepCuratedPracticeErrors, AdminKeepCuratedPracticeResponses, AdminListAuthEventsData, AdminListAuthEventsResponses, AdminListConfigAuditEventsData, AdminListConfigAuditEventsResponses, AdminListLlmConnectionsData, AdminListLlmConnectionsResponses, AdminListLlmModelsData, AdminListLlmModelsResponses, AdminListLoginProvidersData, AdminListLoginProvidersResponses, AdminListPersonDataProvidersData, AdminListPersonDataProvidersResponses, AdminListProductFeedbackData, AdminListProductFeedbackResponses, AdminListProductSurveyResponsesData, AdminListProductSurveyResponsesResponses, AdminListProductSurveysData, AdminListProductSurveysResponses, AdminListUsersData, AdminListUsersResponses, AdminListWorkspacesData, AdminListWorkspacesResponses, AdminPlaceCuratedPracticeData, AdminPlaceCuratedPracticeResponses, AdminPreviewPersonDataData, AdminPreviewPersonDataResponses, AdminPreviewSurveyEmailInvitationsData, AdminPreviewSurveyEmailInvitationsResponses, AdminProbeLlmConnectionData, AdminProbeLlmConnectionDraftData, AdminProbeLlmConnectionDraftResponses, AdminProbeLlmConnectionResponses, AdminReorderCuratedGroupsData, AdminReorderCuratedGroupsResponses, AdminReorderCuratedPracticesData, AdminReorderCuratedPracticesResponses, AdminResetCuratedCatalogOrderData, AdminResetCuratedCatalogOrderResponses, AdminRevokeUserSessionsData, AdminRevokeUserSessionsResponses, AdminSendSurveyEmailInvitationsData, AdminSendSurveyEmailInvitationsErrors, AdminSendSurveyEmailInvitationsResponses, AdminSendTestEmailData, AdminSendTestEmailErrors, AdminSendTestEmailResponses, AdminTriageProductFeedbackData, AdminTriageProductFeedbackResponses, AdminUpdateCuratedGroupData, AdminUpdateCuratedGroupErrors, AdminUpdateCuratedGroupResponses, AdminUpdateCuratedGroupStatusData, AdminUpdateCuratedGroupStatusErrors, AdminUpdateCuratedGroupStatusResponses, AdminUpdateCuratedPracticeData, AdminUpdateCuratedPracticeErrors, AdminUpdateCuratedPracticeResponses, AdminUpdateCuratedPracticeStatusData, AdminUpdateCuratedPracticeStatusErrors, AdminUpdateCuratedPracticeStatusResponses, AdminUpdateLlmConnectionData, AdminUpdateLlmConnectionErrors, AdminUpdateLlmConnectionResponses, AdminUpdateLlmModelData, AdminUpdateLlmModelErrors, AdminUpdateLlmModelPriceData, AdminUpdateLlmModelPriceErrors, AdminUpdateLlmModelPriceResponses, AdminUpdateLlmModelResponses, AdminUpdateLlmModelSharingData, AdminUpdateLlmModelSharingErrors, AdminUpdateLlmModelSharingResponses, AdminUpdateLlmSettingsData, AdminUpdateLlmSettingsResponses, AdminUpdateLoginProviderData, AdminUpdateLoginProviderResponses, AdminUpdateProductSurveyData, AdminUpdateProductSurveyResponses, AdminUpdateSilentModeData, AdminUpdateSilentModeErrors, AdminUpdateSilentModeResponses, AdminUpdateUserData, AdminUpdateUserResponses, AdminUpdateWorkspaceLlmBudgetData, AdminUpdateWorkspaceLlmBudgetResponses, AdoptGroupData, AdoptGroupResponses, AdoptPracticeData, AdoptPracticeErrors, AdoptPracticeResponses, AssignRoleData, AssignRoleResponses, AuditData, AuditResponses, AutonomyRollupData, AutonomyRollupResponses, BindGroupData, BindGroupErrors, BindGroupResponses, CallbackGetData, CallbackGetResponses, CallbackPostData, CallbackPostResponses, CancelAgentJobData, CancelAgentJobErrors, CancelAgentJobResponses, CompleteFirstLoginConsentData, CompleteFirstLoginConsentResponses, ConfigureAgentData, ConfigureAgentErrors, ConfigureAgentResponses, CreateGroupData, CreateGroupErrors, CreateGroupResponses, CreatePracticeData, CreatePracticeErrors, CreatePracticeResponses, CreateSweepScheduleData, CreateSweepScheduleErrors, CreateSweepScheduleResponses, CreateWorkspaceData, CreateWorkspaceResponses, DecideFeedbackProposalData, DecideFeedbackProposalResponses, DeclinePracticeReleaseData, DeclinePracticeReleaseResponses, DeclineProductSurveyData, DeclineProductSurveyResponses, DeleteAgentData, DeleteAgentResponses, DeleteCurrentUserData, DeleteCurrentUserResponses, DeleteFeedbackResponseData, DeleteFeedbackResponseErrors, DeleteFeedbackResponseResponses, DeleteGroupData, DeleteGroupErrors, DeleteGroupResponses, DeleteOutlineCollectionData, DeleteOutlineCollectionErrors, DeleteOutlineCollectionResponses, DeletePracticeData, DeletePracticeErrors, DeletePracticeResponses, DeleteSweepScheduleData, DeleteSweepScheduleErrors, DeleteSweepScheduleResponses, DeleteThreadData, DeleteThreadErrors, DeleteThreadResponses, DismissMemberOnboardingData, DismissMemberOnboardingResponses, DownloadDataExportData, DownloadDataExportResponses, ExchangeClientSignInData, ExchangeClientSignInErrors, ExchangeClientSignInResponses, GetAccountAiChoiceData, GetAccountAiChoiceResponses, GetActivitySummaryData, GetActivitySummaryErrors, GetActivitySummaryResponses, GetActivityWorkData, GetActivityWorkErrors, GetActivityWorkResponses, GetAgentJobData, GetAgentJobErrors, GetAgentJobResponses, GetAllTeamsData, GetAllTeamsResponses, GetArtifactTraceData, GetArtifactTraceErrors, GetArtifactTraceResponses, GetBackfillRunData, GetBackfillRunErrors, GetBackfillRunResponses, GetClientSignInConfigurationData, GetClientSignInConfigurationErrors, GetClientSignInConfigurationResponses, GetConnectionSyncStatusData, GetConnectionSyncStatusResponses, GetConsentStatusData, GetConsentStatusResponses, GetCuratedPracticeCatalogEntryData, GetCuratedPracticeCatalogEntryResponses, GetCurrentUserData, GetCurrentUserMembershipData, GetCurrentUserMembershipResponses, GetCurrentUserResponses, GetDataExportStatusData, GetDataExportStatusResponses, GetFeedbackProposalDecisionData, GetFeedbackProposalDecisionResponses, GetFeedbackResolutionCountsData, GetFeedbackResolutionCountsResponses, GetFeedbackResponseData, GetFeedbackResponseErrors, GetFeedbackResponseResponses, GetGroupData, GetGroupErrors, GetGroupResponses, GetInAppFeedbackData, GetInAppFeedbackResponses, GetIntegrationCatalogData, GetIntegrationCatalogResponses, GetJwksData, GetJwksResponses, GetLabelFiltersData, GetLabelFiltersResponses, GetLlmUsageReportData, GetLlmUsageReportResponses, GetMemberData, GetMemberOnboardingData, GetMemberOnboardingLinkOptionsData, GetMemberOnboardingLinkOptionsResponses, GetMemberOnboardingResponses, GetMemberOnboardingSettingsData, GetMemberOnboardingSettingsResponses, GetMemberResponses, GetNotificationPreferencesData, GetNotificationPreferencesResponses, GetObservationData, GetObservationErrors, GetObservationResponses, GetOpenWorkData, GetOpenWorkErrors, GetOpenWorkResponses, GetOutlineCollectionData, GetOutlineCollectionErrors, GetOutlineCollectionResponses, GetOutlineTokenStatusData, GetOutlineTokenStatusErrors, GetOutlineTokenStatusResponses, GetOwnArtifactTraceData, GetOwnArtifactTraceErrors, GetOwnArtifactTraceResponses, GetOwnDeliveredWorkFeedbackData, GetOwnDeliveredWorkFeedbackResponses, GetPracticeData, GetPracticeDefinitionOptionsData, GetPracticeDefinitionOptionsResponses, GetPracticeErrors, GetPracticeGroupTrendData, GetPracticeGroupTrendErrors, GetPracticeGroupTrendResponses, GetPracticeProfileOverviewData, GetPracticeProfileOverviewResponses, GetPracticeProfileReviewRunData, GetPracticeProfileReviewRunErrors, GetPracticeProfileReviewRunResponses, GetPracticeReleaseData, GetPracticeReleaseResponses, GetPracticeResponses, GetPracticeReviewFeedbackData, GetPracticeReviewFeedbackErrors, GetPracticeReviewFeedbackResponses, GetPracticeReviewObservationData, GetPracticeReviewObservationErrors, GetPracticeReviewObservationResponses, GetPracticeReviewOverviewData, GetPracticeReviewOverviewErrors, GetPracticeReviewOverviewResponses, GetPracticeReviewSettingsData, GetPracticeReviewSettingsResponses, GetPracticesAcrossWorkspaceData, GetPracticesAcrossWorkspaceResponses, GetPracticesAcrossWorkspaceTilesData, GetPracticesAcrossWorkspaceTilesResponses, GetProvidersData, GetProvidersResponses, GetRepositoriesToMonitorData, GetRepositoriesToMonitorResponses, GetRepositorySettingsData, GetRepositorySettingsResponses, GetSlackUserPreferencesData, GetSlackUserPreferencesResponses, GetSummaryData, GetSummaryResponses, GetTeamSettingsData, GetTeamSettingsResponses, GetThreadData, GetThreadErrors, GetThreadResponses, GetUserFeaturesData, GetUserFeaturesResponses, GetUserSettingsData, GetUserSettingsResponses, GetUsersWithTeamsData, GetUsersWithTeamsResponses, GetUserViewUserData, GetUserViewUserResponses, GetWorkspaceData, GetWorkspaceResponses, GitLabPreflightData, GitLabPreflightResponses, InitiateData, InitiateResponses, ListAdoptablePracticesData, ListAdoptablePracticesErrors, ListAdoptablePracticesResponses, ListAgentJobsData, ListAgentJobsResponses, ListAgentsData, ListAgentsResponses, ListBackfillRunsData, ListBackfillRunsResponses, ListConnectionSyncJobsData, ListConnectionSyncJobsResponses, ListConnectionSyncResourcesData, ListConnectionSyncResourcesResponses, ListData, ListGitLabGroupsData, ListGitLabGroupsResponses, ListGlobalContributorsData, ListGlobalContributorsResponses, ListGroupsData, ListGroupsResponses, ListIdentityProvidersData, ListIdentityProvidersResponses, ListLinkedIdentitiesData, ListLinkedIdentitiesResponses, ListMemberActivityData, ListMemberActivityErrors, ListMemberActivityResponses, ListMembersData, ListMembersResponses, ListObservationsData, ListObservationsResponses, ListOutlineCollectionCandidatesData, ListOutlineCollectionCandidatesErrors, ListOutlineCollectionCandidatesResponses, ListOutlineCollectionsData, ListOutlineCollectionsErrors, ListOutlineCollectionsResponses, ListPracticeEvidenceOutcomesData, ListPracticeEvidenceOutcomesResponses, ListPracticeGroupReviewRunsData, ListPracticeGroupReviewRunsErrors, ListPracticeGroupReviewRunsResponses, ListPracticeGroupStandingsData, ListPracticeGroupStandingsResponses, ListPracticeProfileReviewRunsData, ListPracticeProfileReviewRunsErrors, ListPracticeProfileReviewRunsResponses, ListPracticeReleasesData, ListPracticeReleasesResponses, ListPracticeReviewFeedbackData, ListPracticeReviewFeedbackErrors, ListPracticeReviewFeedbackResponses, ListPracticeReviewObservationsData, ListPracticeReviewObservationsErrors, ListPracticeReviewObservationsResponses, ListPracticeReviewsData, ListPracticeReviewsErrors, ListPracticeReviewsResponses, ListPracticesData, ListPracticesResponses, ListPracticeStandingsData, ListPracticeStandingsResponses, ListProductSurveyInvitationsData, ListProductSurveyInvitationsResponses, ListResponses, ListReviewedPracticesData, ListReviewedPracticesResponses, ListReviewedWorkReviewRunsData, ListReviewedWorkReviewRunsErrors, ListReviewedWorkReviewRunsResponses, ListSessionsData, ListSessionsResponses, ListSlackChannelCandidatesData, ListSlackChannelCandidatesResponses, ListSlackChannelConsentEventsData, ListSlackChannelConsentEventsResponses, ListSlackChannelsData, ListSlackChannelsResponses, ListSweepSchedulesData, ListSweepSchedulesResponses, ListThreadsData, ListThreadsResponses, ListTracedArtifactsData, ListTracedArtifactsErrors, ListTracedArtifactsResponses, ListUserViewUsersData, ListUserViewUsersResponses, ListWorkspaceConfigAuditEventsData, ListWorkspaceConfigAuditEventsResponses, ListWorkspacesData, ListWorkspacesResponses, LogoutClientSessionData, LogoutClientSessionErrors, LogoutClientSessionResponses, LogoutData, LogoutResponses, PlacePracticeData, PlacePracticeErrors, PlacePracticeResponses, PreflightBackfillRunData, PreflightBackfillRunErrors, PreflightBackfillRunResponses, PrepareMentorSandboxData, PrepareMentorSandboxResponses, PreviewCoverageData, PreviewCoverageResponses, PreviewGroupAdoptionData, PreviewGroupAdoptionResponses, PreviewPracticeAdoptionData, PreviewPracticeAdoptionErrors, PreviewPracticeAdoptionResponses, PurgeWorkspaceData, PurgeWorkspaceResponses, ReadData, ReadResponses, RefreshClientSessionData, RefreshClientSessionErrors, RefreshClientSessionResponses, RefreshData, RefreshErrors, RefreshResponses, RegisterOutlineCollectionData, RegisterOutlineCollectionErrors, RegisterOutlineCollectionResponses, RegisterSlackChannelData, RegisterSlackChannelResponses, RemoveLabelFilterData, RemoveLabelFilterErrors, RemoveLabelFilterResponses, RemoveLabelFromTeamData, RemoveLabelFromTeamResponses, RemoveMemberData, RemoveMemberResponses, RemoveRepositoryToMonitorData, RemoveRepositoryToMonitorResponses, RemoveVoteData, RemoveVoteErrors, RemoveVoteResponses, RenameSlugData, RenameSlugResponses, ReorderGroupsData, ReorderGroupsErrors, ReorderGroupsResponses, ReorderPracticesData, ReorderPracticesErrors, ReorderPracticesResponses, ReplaceFeedbackResponseData, ReplaceFeedbackResponseErrors, ReplaceFeedbackResponseResponses, ReplaceSweepScheduleData, ReplaceSweepScheduleErrors, ReplaceSweepScheduleResponses, RequestDataExportData, RequestDataExportResponses, RequestPracticeReviewData, RequestPracticeReviewErrors, RequestPracticeReviewResponses, ResolveReviewContextData, ResolveReviewContextErrors, ResolveReviewContextResponses, RetryAgentJobDeliveryData, RetryAgentJobDeliveryErrors, RetryAgentJobDeliveryResponses, RevokeOtherSessionsData, RevokeOtherSessionsResponses, RevokeSessionData, RevokeSessionResponses, SetAutonomyData, SetAutonomyErrors, SetAutonomyResponses, SetGroupAutonomyData, SetGroupAutonomyErrors, SetGroupAutonomyResponses, SubmitInstanceProductFeedbackData, SubmitInstanceProductFeedbackResponses, SubmitProductSurveyResponseData, SubmitProductSurveyResponseResponses, SubmitWorkspaceProductFeedbackData, SubmitWorkspaceProductFeedbackResponses, TriggerSyncJobData, TriggerSyncJobErrors, TriggerSyncJobResponses, UndoProductSurveyDeclineData, UndoProductSurveyDeclineResponses, UnlinkIdentityData, UnlinkIdentityErrors, UnlinkIdentityResponses, UnsubscribeEmailData, UnsubscribeEmailResponses, UpdateAccountAiChoiceData, UpdateAccountAiChoiceResponses, UpdateBackfillRunStatusData, UpdateBackfillRunStatusErrors, UpdateBackfillRunStatusResponses, UpdateConnectionStatusData, UpdateConnectionStatusResponses, UpdateConnectionSyncJobData, UpdateConnectionSyncJobErrors, UpdateConnectionSyncJobResponses, UpdateFeaturesData, UpdateFeaturesResponses, UpdateGroupData, UpdateGroupErrors, UpdateGroupResponses, UpdateMemberAiChoiceData, UpdateMemberAiChoiceResponses, UpdateMemberOnboardingSettingsData, UpdateMemberOnboardingSettingsResponses, UpdateMemberVisibilityData, UpdateMemberVisibilityResponses, UpdateNotificationPreferencesData, UpdateNotificationPreferencesErrors, UpdateNotificationPreferencesResponses, UpdateOutlineCollectionStateData, UpdateOutlineCollectionStateErrors, UpdateOutlineCollectionStateResponses, UpdatePracticeData, UpdatePracticeErrors, UpdatePracticeResponses, UpdatePracticeReviewFeedbackWithdrawalData, UpdatePracticeReviewFeedbackWithdrawalErrors, UpdatePracticeReviewFeedbackWithdrawalResponses, UpdatePracticeReviewObservationValidityData, UpdatePracticeReviewObservationValidityErrors, UpdatePracticeReviewObservationValidityResponses, UpdatePracticeReviewSettingsData, UpdatePracticeReviewSettingsResponses, UpdatePublicVisibilityData, UpdatePublicVisibilityResponses, UpdateRepositorySettingsData, UpdateRepositorySettingsErrors, UpdateRepositorySettingsResponses, UpdateRepositoryVisibilityData, UpdateRepositoryVisibilityResponses, UpdateResearchConsentData, UpdateResearchConsentResponses, UpdateSlackChannelConsentData, UpdateSlackChannelConsentResponses, UpdateSlackUserPreferencesData, UpdateSlackUserPreferencesResponses, UpdateStatusData, UpdateStatusResponses, UpdateTeamSettingsData, UpdateTeamSettingsErrors, UpdateTeamSettingsResponses, UpdateTeamVisibilityData, UpdateTeamVisibilityResponses, UpdateTokenData, UpdateTokenResponses, UpdateUserSettingsData, UpdateUserSettingsResponses, UpdateWorkspaceLlmBudgetData, UpdateWorkspaceLlmBudgetResponses, VoteData, VoteErrors, VoteResponses, WorkspaceCreateLlmConnectionData, WorkspaceCreateLlmConnectionErrors, WorkspaceCreateLlmConnectionResponses, WorkspaceCreateLlmModelData, WorkspaceCreateLlmModelErrors, WorkspaceCreateLlmModelResponses, WorkspaceDeleteLlmConnectionData, WorkspaceDeleteLlmConnectionErrors, WorkspaceDeleteLlmConnectionResponses, WorkspaceDeleteLlmModelData, WorkspaceDeleteLlmModelErrors, WorkspaceDeleteLlmModelResponses, WorkspaceGetLlmConnectionData, WorkspaceGetLlmConnectionErrors, WorkspaceGetLlmConnectionResponses, WorkspaceGetLlmModelData, WorkspaceGetLlmModelErrors, WorkspaceGetLlmModelResponses, WorkspaceGetLlmSettingsData, WorkspaceGetLlmSettingsResponses, WorkspaceListAvailableLlmModelsData, WorkspaceListAvailableLlmModelsResponses, WorkspaceListLlmConnectionsData, WorkspaceListLlmConnectionsResponses, WorkspaceListLlmModelsData, WorkspaceListLlmModelsResponses, WorkspaceProbeLlmConnectionData, WorkspaceProbeLlmConnectionResponses, WorkspaceUpdateLlmConnectionData, WorkspaceUpdateLlmConnectionErrors, WorkspaceUpdateLlmConnectionResponses, WorkspaceUpdateLlmModelData, WorkspaceUpdateLlmModelErrors, WorkspaceUpdateLlmModelResponses } from './types.gen.js';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
-  /**
-   * You can provide a client instance returned by `createClient()` instead of
-   * individual options. This might be also useful if you want to implement a
-   * custom client.
-   */
-  client?: Client;
-  /**
-   * You can pass arbitrary values through the `meta` object. This can be
-   * used to access values that aren't defined as part of the SDK function.
-   */
-  meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
+    /**
+     * You can provide a client instance returned by `createClient()` instead of
+     * individual options. This might be also useful if you want to implement a
+     * custom client.
+     */
+    client?: Client;
+    /**
+     * You can pass arbitrary values through the `meta` object. This can be
+     * used to access values that aren't defined as part of the SDK function.
+     */
+    meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
 
 /**
  * JWK set (public keys only)
  */
 export const getJwks = <ThrowOnError extends boolean = false>(options?: Options<GetJwksData, ThrowOnError>): RequestResult<GetJwksResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetJwksResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/.well-known/jwks.json',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/.well-known/jwks.json',
+    ...options
 });
 
 /**
  * List auth audit events (paged, newest first)
  */
 export const adminListAuthEvents = <ThrowOnError extends boolean = false>(options?: Options<AdminListAuthEventsData, ThrowOnError>): RequestResult<AdminListAuthEventsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListAuthEventsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/audit',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/audit',
+    ...options
 });
 
 /**
  * Export the filtered audit log as CSV (newest first, capped)
  */
 export const adminExportAuthEvents = <ThrowOnError extends boolean = false>(options?: Options<AdminExportAuthEventsData, ThrowOnError>): RequestResult<AdminExportAuthEventsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminExportAuthEventsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/audit/export',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/audit/export',
+    ...options
 });
 
 /**
  * List admin configuration changes across workspaces (paged, newest first)
  */
 export const adminListConfigAuditEvents = <ThrowOnError extends boolean = false>(options?: Options<AdminListConfigAuditEventsData, ThrowOnError>): RequestResult<AdminListConfigAuditEventsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListConfigAuditEventsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/config-audit',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/config-audit',
+    ...options
 });
 
 /**
  * Get redacted configuration readiness
  */
 export const adminGetConfigurationReadiness = <ThrowOnError extends boolean = false>(options?: Options<AdminGetConfigurationReadinessData, ThrowOnError>): RequestResult<AdminGetConfigurationReadinessResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminGetConfigurationReadinessResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/configuration-readiness',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/configuration-readiness',
+    ...options
 });
 
 /**
@@ -69,295 +69,295 @@ export const adminGetConfigurationReadiness = <ThrowOnError extends boolean = fa
  * Sends a test email through the configured relay to the given address, or to the caller's verified address when none is given.
  */
 export const adminSendTestEmail = <ThrowOnError extends boolean = false>(options?: Options<AdminSendTestEmailData, ThrowOnError>): RequestResult<AdminSendTestEmailResponses, AdminSendTestEmailErrors, ThrowOnError> => (options?.client ?? client).post<AdminSendTestEmailResponses, AdminSendTestEmailErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/email/test',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options?.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/email/test',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers
+    }
 });
 
 /**
  * List LLM connections
  */
 export const adminListLlmConnections = <ThrowOnError extends boolean = false>(options?: Options<AdminListLlmConnectionsData, ThrowOnError>): RequestResult<AdminListLlmConnectionsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListLlmConnectionsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/connections',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/connections',
+    ...options
 });
 
 /**
  * Create an LLM connection
  */
 export const adminCreateLlmConnection = <ThrowOnError extends boolean = false>(options: Options<AdminCreateLlmConnectionData, ThrowOnError>): RequestResult<AdminCreateLlmConnectionResponses, AdminCreateLlmConnectionErrors, ThrowOnError> => (options.client ?? client).post<AdminCreateLlmConnectionResponses, AdminCreateLlmConnectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/connections',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/connections',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Test a draft connection and fetch its models
  */
 export const adminProbeLlmConnectionDraft = <ThrowOnError extends boolean = false>(options: Options<AdminProbeLlmConnectionDraftData, ThrowOnError>): RequestResult<AdminProbeLlmConnectionDraftResponses, unknown, ThrowOnError> => (options.client ?? client).post<AdminProbeLlmConnectionDraftResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/connections/probe',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/connections/probe',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Create a model on an LLM connection
  */
 export const adminCreateLlmModel = <ThrowOnError extends boolean = false>(options: Options<AdminCreateLlmModelData, ThrowOnError>): RequestResult<AdminCreateLlmModelResponses, AdminCreateLlmModelErrors, ThrowOnError> => (options.client ?? client).post<AdminCreateLlmModelResponses, AdminCreateLlmModelErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/connections/{connectionId}/models',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/connections/{connectionId}/models',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Delete an LLM connection
  */
 export const adminDeleteLlmConnection = <ThrowOnError extends boolean = false>(options: Options<AdminDeleteLlmConnectionData, ThrowOnError>): RequestResult<AdminDeleteLlmConnectionResponses, AdminDeleteLlmConnectionErrors, ThrowOnError> => (options.client ?? client).delete<AdminDeleteLlmConnectionResponses, AdminDeleteLlmConnectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/connections/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/connections/{id}',
+    ...options
 });
 
 /**
  * Get an LLM connection
  */
 export const adminGetLlmConnection = <ThrowOnError extends boolean = false>(options: Options<AdminGetLlmConnectionData, ThrowOnError>): RequestResult<AdminGetLlmConnectionResponses, AdminGetLlmConnectionErrors, ThrowOnError> => (options.client ?? client).get<AdminGetLlmConnectionResponses, AdminGetLlmConnectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/connections/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/connections/{id}',
+    ...options
 });
 
 /**
  * Update an LLM connection
  */
 export const adminUpdateLlmConnection = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateLlmConnectionData, ThrowOnError>): RequestResult<AdminUpdateLlmConnectionResponses, AdminUpdateLlmConnectionErrors, ThrowOnError> => (options.client ?? client).patch<AdminUpdateLlmConnectionResponses, AdminUpdateLlmConnectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/connections/{id}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/connections/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Test a stored connection and fetch its models
  */
 export const adminProbeLlmConnection = <ThrowOnError extends boolean = false>(options: Options<AdminProbeLlmConnectionData, ThrowOnError>): RequestResult<AdminProbeLlmConnectionResponses, unknown, ThrowOnError> => (options.client ?? client).post<AdminProbeLlmConnectionResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/connections/{id}/probe',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/connections/{id}/probe',
+    ...options
 });
 
 /**
  * List LLM catalog models
  */
 export const adminListLlmModels = <ThrowOnError extends boolean = false>(options?: Options<AdminListLlmModelsData, ThrowOnError>): RequestResult<AdminListLlmModelsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListLlmModelsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/models',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/models',
+    ...options
 });
 
 /**
  * Delete an LLM catalog model
  */
 export const adminDeleteLlmModel = <ThrowOnError extends boolean = false>(options: Options<AdminDeleteLlmModelData, ThrowOnError>): RequestResult<AdminDeleteLlmModelResponses, AdminDeleteLlmModelErrors, ThrowOnError> => (options.client ?? client).delete<AdminDeleteLlmModelResponses, AdminDeleteLlmModelErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/models/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/models/{id}',
+    ...options
 });
 
 /**
  * Get an LLM catalog model
  */
 export const adminGetLlmModel = <ThrowOnError extends boolean = false>(options: Options<AdminGetLlmModelData, ThrowOnError>): RequestResult<AdminGetLlmModelResponses, AdminGetLlmModelErrors, ThrowOnError> => (options.client ?? client).get<AdminGetLlmModelResponses, AdminGetLlmModelErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/models/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/models/{id}',
+    ...options
 });
 
 /**
  * Update a model's metadata
  */
 export const adminUpdateLlmModel = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateLlmModelData, ThrowOnError>): RequestResult<AdminUpdateLlmModelResponses, AdminUpdateLlmModelErrors, ThrowOnError> => (options.client ?? client).patch<AdminUpdateLlmModelResponses, AdminUpdateLlmModelErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/models/{id}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/models/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Reprice a model
  */
 export const adminUpdateLlmModelPrice = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateLlmModelPriceData, ThrowOnError>): RequestResult<AdminUpdateLlmModelPriceResponses, AdminUpdateLlmModelPriceErrors, ThrowOnError> => (options.client ?? client).put<AdminUpdateLlmModelPriceResponses, AdminUpdateLlmModelPriceErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/models/{id}/price',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/models/{id}/price',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Share a model with all or selected workspaces
  */
 export const adminUpdateLlmModelSharing = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateLlmModelSharingData, ThrowOnError>): RequestResult<AdminUpdateLlmModelSharingResponses, AdminUpdateLlmModelSharingErrors, ThrowOnError> => (options.client ?? client).put<AdminUpdateLlmModelSharingResponses, AdminUpdateLlmModelSharingErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/models/{id}/sharing',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/models/{id}/sharing',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Get instance-wide LLM governance settings
  */
 export const adminGetLlmSettings = <ThrowOnError extends boolean = false>(options?: Options<AdminGetLlmSettingsData, ThrowOnError>): RequestResult<AdminGetLlmSettingsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminGetLlmSettingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/settings',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/settings',
+    ...options
 });
 
 /**
  * Update instance-wide LLM governance settings
  */
 export const adminUpdateLlmSettings = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateLlmSettingsData, ThrowOnError>): RequestResult<AdminUpdateLlmSettingsResponses, unknown, ThrowOnError> => (options.client ?? client).put<AdminUpdateLlmSettingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/settings',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/settings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Per-workspace LLM spend rollup for one month (all workspaces)
  */
 export const adminGetLlmUsageReport = <ThrowOnError extends boolean = false>(options?: Options<AdminGetLlmUsageReportData, ThrowOnError>): RequestResult<AdminGetLlmUsageReportResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminGetLlmUsageReportResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/llm/usage',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/llm/usage',
+    ...options
 });
 
 /**
  * List login providers
  */
 export const adminListLoginProviders = <ThrowOnError extends boolean = false>(options?: Options<AdminListLoginProvidersData, ThrowOnError>): RequestResult<AdminListLoginProvidersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListLoginProvidersResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/login-providers',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/login-providers',
+    ...options
 });
 
 /**
  * Create a login provider
  */
 export const adminCreateLoginProvider = <ThrowOnError extends boolean = false>(options: Options<AdminCreateLoginProviderData, ThrowOnError>): RequestResult<AdminCreateLoginProviderResponses, unknown, ThrowOnError> => (options.client ?? client).post<AdminCreateLoginProviderResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/login-providers',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/login-providers',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Delete a login provider
  */
 export const adminDeleteLoginProvider = <ThrowOnError extends boolean = false>(options: Options<AdminDeleteLoginProviderData, ThrowOnError>): RequestResult<AdminDeleteLoginProviderResponses, unknown, ThrowOnError> => (options.client ?? client).delete<AdminDeleteLoginProviderResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/login-providers/{registrationId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/login-providers/{registrationId}',
+    ...options
 });
 
 /**
  * Update a login provider
  */
 export const adminUpdateLoginProvider = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateLoginProviderData, ThrowOnError>): RequestResult<AdminUpdateLoginProviderResponses, unknown, ThrowOnError> => (options.client ?? client).patch<AdminUpdateLoginProviderResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/login-providers/{registrationId}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/login-providers/{registrationId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Resolve exact identities and preview every personal-data store
  */
 export const adminPreviewPersonData = <ThrowOnError extends boolean = false>(options: Options<AdminPreviewPersonDataData, ThrowOnError>): RequestResult<AdminPreviewPersonDataResponses, unknown, ThrowOnError> => (options.client ?? client).post<AdminPreviewPersonDataResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/person-data/preview',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/person-data/preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List exact provider instances without credentials
  */
 export const adminListPersonDataProviders = <ThrowOnError extends boolean = false>(options?: Options<AdminListPersonDataProvidersData, ThrowOnError>): RequestResult<AdminListPersonDataProvidersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListPersonDataProvidersResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/person-data/providers',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/person-data/providers',
+    ...options
 });
 
 /**
  * Get a person-data preview or erasure receipt
  */
 export const adminGetPersonDataRequest = <ThrowOnError extends boolean = false>(options: Options<AdminGetPersonDataRequestData, ThrowOnError>): RequestResult<AdminGetPersonDataRequestResponses, unknown, ThrowOnError> => (options.client ?? client).get<AdminGetPersonDataRequestResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/person-data/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/person-data/{id}',
+    ...options
 });
 
 /**
  * Start or resume the preview's audited erasure job
  */
 export const adminErasePersonData = <ThrowOnError extends boolean = false>(options: Options<AdminErasePersonDataData, ThrowOnError>): RequestResult<AdminErasePersonDataResponses, unknown, ThrowOnError> => (options.client ?? client).post<AdminErasePersonDataResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/person-data/{id}/erase',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/person-data/{id}/erase',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Download the preview's frozen scope as one JSON file
  */
 export const adminExportPersonData = <ThrowOnError extends boolean = false>(options: Options<AdminExportPersonDataData, ThrowOnError>): RequestResult<AdminExportPersonDataResponses, unknown, ThrowOnError> => (options.client ?? client).post<AdminExportPersonDataResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/person-data/{id}/export',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/person-data/{id}/export',
+    ...options
 });
 
 /**
@@ -366,9 +366,9 @@ export const adminExportPersonData = <ThrowOnError extends boolean = false>(opti
  * Practice summaries, complete groups, ordering, and catalog state. Fetch a practice for its full definition.
  */
 export const adminGetCuratedCatalog = <ThrowOnError extends boolean = false>(options?: Options<AdminGetCuratedCatalogData, ThrowOnError>): RequestResult<AdminGetCuratedCatalogResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminGetCuratedCatalogResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog',
+    ...options
 });
 
 /**
@@ -377,75 +377,75 @@ export const adminGetCuratedCatalog = <ThrowOnError extends boolean = false>(opt
  * Returns available review events, recommended requirements, and allowed evidence sources by work type
  */
 export const adminGetPracticeDefinitionOptions = <ThrowOnError extends boolean = false>(options?: Options<AdminGetPracticeDefinitionOptionsData, ThrowOnError>): RequestResult<AdminGetPracticeDefinitionOptionsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminGetPracticeDefinitionOptionsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/definition-options',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/definition-options',
+    ...options
 });
 
 /**
  * Add a group to the catalog
  */
 export const adminCreateCuratedGroup = <ThrowOnError extends boolean = false>(options: Options<AdminCreateCuratedGroupData, ThrowOnError>): RequestResult<AdminCreateCuratedGroupResponses, AdminCreateCuratedGroupErrors, ThrowOnError> => (options.client ?? client).post<AdminCreateCuratedGroupResponses, AdminCreateCuratedGroupErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/groups',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/groups',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Reorder catalog groups
  */
 export const adminReorderCuratedGroups = <ThrowOnError extends boolean = false>(options: Options<AdminReorderCuratedGroupsData, ThrowOnError>): RequestResult<AdminReorderCuratedGroupsResponses, unknown, ThrowOnError> => (options.client ?? client).patch<AdminReorderCuratedGroupsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/groups/reorder',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/groups/reorder',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Read a catalog group
  */
 export const adminGetCuratedGroup = <ThrowOnError extends boolean = false>(options: Options<AdminGetCuratedGroupData, ThrowOnError>): RequestResult<AdminGetCuratedGroupResponses, unknown, ThrowOnError> => (options.client ?? client).get<AdminGetCuratedGroupResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/groups/{slug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/groups/{slug}',
+    ...options
 });
 
 /**
  * Replace a group definition
  */
 export const adminUpdateCuratedGroup = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateCuratedGroupData, ThrowOnError>): RequestResult<AdminUpdateCuratedGroupResponses, AdminUpdateCuratedGroupErrors, ThrowOnError> => (options.client ?? client).put<AdminUpdateCuratedGroupResponses, AdminUpdateCuratedGroupErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/groups/{slug}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/groups/{slug}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Use the Hephaestus definition of a group
  */
 export const adminDeleteCuratedGroupOverride = <ThrowOnError extends boolean = false>(options: Options<AdminDeleteCuratedGroupOverrideData, ThrowOnError>): RequestResult<AdminDeleteCuratedGroupOverrideResponses, AdminDeleteCuratedGroupOverrideErrors, ThrowOnError> => (options.client ?? client).delete<AdminDeleteCuratedGroupOverrideResponses, AdminDeleteCuratedGroupOverrideErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/groups/{slug}/override',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/groups/{slug}/override',
+    ...options
 });
 
 /**
  * Keep the saved group customization
  */
 export const adminKeepCuratedGroup = <ThrowOnError extends boolean = false>(options: Options<AdminKeepCuratedGroupData, ThrowOnError>): RequestResult<AdminKeepCuratedGroupResponses, AdminKeepCuratedGroupErrors, ThrowOnError> => (options.client ?? client).put<AdminKeepCuratedGroupResponses, AdminKeepCuratedGroupErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/groups/{slug}/override/acknowledgement',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/groups/{slug}/override/acknowledgement',
+    ...options
 });
 
 /**
@@ -454,70 +454,70 @@ export const adminKeepCuratedGroup = <ThrowOnError extends boolean = false>(opti
  * Excluding a group also excludes its practices from new workspaces; existing workspaces do not change.
  */
 export const adminUpdateCuratedGroupStatus = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateCuratedGroupStatusData, ThrowOnError>): RequestResult<AdminUpdateCuratedGroupStatusResponses, AdminUpdateCuratedGroupStatusErrors, ThrowOnError> => (options.client ?? client).patch<AdminUpdateCuratedGroupStatusResponses, AdminUpdateCuratedGroupStatusErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/groups/{slug}/status',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/groups/{slug}/status',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Use the Hephaestus default order
  */
 export const adminResetCuratedCatalogOrder = <ThrowOnError extends boolean = false>(options: Options<AdminResetCuratedCatalogOrderData, ThrowOnError>): RequestResult<AdminResetCuratedCatalogOrderResponses, unknown, ThrowOnError> => (options.client ?? client).delete<AdminResetCuratedCatalogOrderResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/order',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/order',
+    ...options
 });
 
 /**
  * Add a practice to the catalog
  */
 export const adminCreateCuratedPractice = <ThrowOnError extends boolean = false>(options: Options<AdminCreateCuratedPracticeData, ThrowOnError>): RequestResult<AdminCreateCuratedPracticeResponses, AdminCreateCuratedPracticeErrors, ThrowOnError> => (options.client ?? client).post<AdminCreateCuratedPracticeResponses, AdminCreateCuratedPracticeErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Reorder practices within one catalog group
  */
 export const adminReorderCuratedPractices = <ThrowOnError extends boolean = false>(options: Options<AdminReorderCuratedPracticesData, ThrowOnError>): RequestResult<AdminReorderCuratedPracticesResponses, unknown, ThrowOnError> => (options.client ?? client).patch<AdminReorderCuratedPracticesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices/reorder',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices/reorder',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Read a catalog practice
  */
 export const adminGetCuratedPractice = <ThrowOnError extends boolean = false>(options: Options<AdminGetCuratedPracticeData, ThrowOnError>): RequestResult<AdminGetCuratedPracticeResponses, unknown, ThrowOnError> => (options.client ?? client).get<AdminGetCuratedPracticeResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices/{slug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices/{slug}',
+    ...options
 });
 
 /**
  * Replace a practice definition
  */
 export const adminUpdateCuratedPractice = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateCuratedPracticeData, ThrowOnError>): RequestResult<AdminUpdateCuratedPracticeResponses, AdminUpdateCuratedPracticeErrors, ThrowOnError> => (options.client ?? client).put<AdminUpdateCuratedPracticeResponses, AdminUpdateCuratedPracticeErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices/{slug}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices/{slug}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -526,9 +526,9 @@ export const adminUpdateCuratedPractice = <ThrowOnError extends boolean = false>
  * Discards the customization, so the practice follows the Hephaestus default again.
  */
 export const adminDeleteCuratedPracticeOverride = <ThrowOnError extends boolean = false>(options: Options<AdminDeleteCuratedPracticeOverrideData, ThrowOnError>): RequestResult<AdminDeleteCuratedPracticeOverrideResponses, AdminDeleteCuratedPracticeOverrideErrors, ThrowOnError> => (options.client ?? client).delete<AdminDeleteCuratedPracticeOverrideResponses, AdminDeleteCuratedPracticeOverrideErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices/{slug}/override',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices/{slug}/override',
+    ...options
 });
 
 /**
@@ -537,283 +537,283 @@ export const adminDeleteCuratedPracticeOverride = <ThrowOnError extends boolean 
  * Acknowledges that a saved custom practice is no longer shipped. Changed bundled practices use the release endpoint.
  */
 export const adminKeepCuratedPractice = <ThrowOnError extends boolean = false>(options: Options<AdminKeepCuratedPracticeData, ThrowOnError>): RequestResult<AdminKeepCuratedPracticeResponses, AdminKeepCuratedPracticeErrors, ThrowOnError> => (options.client ?? client).put<AdminKeepCuratedPracticeResponses, AdminKeepCuratedPracticeErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices/{slug}/override/acknowledgement',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices/{slug}/override/acknowledgement',
+    ...options
 });
 
 /**
  * Move a practice to another catalog group
  */
 export const adminPlaceCuratedPractice = <ThrowOnError extends boolean = false>(options: Options<AdminPlaceCuratedPracticeData, ThrowOnError>): RequestResult<AdminPlaceCuratedPracticeResponses, unknown, ThrowOnError> => (options.client ?? client).patch<AdminPlaceCuratedPracticeResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices/{slug}/placement',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices/{slug}/placement',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Decline this bundled practice update
  */
 export const adminDeclinePracticeRelease = <ThrowOnError extends boolean = false>(options: Options<AdminDeclinePracticeReleaseData, ThrowOnError>): RequestResult<AdminDeclinePracticeReleaseResponses, unknown, ThrowOnError> => (options.client ?? client).delete<AdminDeclinePracticeReleaseResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices/{slug}/release',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices/{slug}/release',
+    ...options
 });
 
 /**
  * Compare a bundled practice update with the instance version
  */
 export const adminGetPracticeRelease = <ThrowOnError extends boolean = false>(options: Options<AdminGetPracticeReleaseData, ThrowOnError>): RequestResult<AdminGetPracticeReleaseResponses, unknown, ThrowOnError> => (options.client ?? client).get<AdminGetPracticeReleaseResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices/{slug}/release',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices/{slug}/release',
+    ...options
 });
 
 /**
  * Accept selected fields from a bundled practice update
  */
 export const adminAcceptPracticeRelease = <ThrowOnError extends boolean = false>(options: Options<AdminAcceptPracticeReleaseData, ThrowOnError>): RequestResult<AdminAcceptPracticeReleaseResponses, unknown, ThrowOnError> => (options.client ?? client).put<AdminAcceptPracticeReleaseResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices/{slug}/release',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices/{slug}/release',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Exclude a practice from new workspaces, or include it again
  */
 export const adminUpdateCuratedPracticeStatus = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateCuratedPracticeStatusData, ThrowOnError>): RequestResult<AdminUpdateCuratedPracticeStatusResponses, AdminUpdateCuratedPracticeStatusErrors, ThrowOnError> => (options.client ?? client).patch<AdminUpdateCuratedPracticeStatusResponses, AdminUpdateCuratedPracticeStatusErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/practice-catalog/practices/{slug}/status',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/practice-catalog/practices/{slug}/status',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List product feedback, newest first
  */
 export const adminListProductFeedback = <ThrowOnError extends boolean = false>(options?: Options<AdminListProductFeedbackData, ThrowOnError>): RequestResult<AdminListProductFeedbackResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListProductFeedbackResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback',
+    ...options
 });
 
 /**
  * List product surveys with participation counts
  */
 export const adminListProductSurveys = <ThrowOnError extends boolean = false>(options?: Options<AdminListProductSurveysData, ThrowOnError>): RequestResult<AdminListProductSurveysResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListProductSurveysResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/surveys',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/surveys',
+    ...options
 });
 
 /**
  * Publish a product survey
  */
 export const adminCreateProductSurvey = <ThrowOnError extends boolean = false>(options: Options<AdminCreateProductSurveyData, ThrowOnError>): RequestResult<AdminCreateProductSurveyResponses, unknown, ThrowOnError> => (options.client ?? client).post<AdminCreateProductSurveyResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/surveys',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/surveys',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Delete a survey and every response to it
  */
 export const adminDeleteProductSurvey = <ThrowOnError extends boolean = false>(options: Options<AdminDeleteProductSurveyData, ThrowOnError>): RequestResult<AdminDeleteProductSurveyResponses, unknown, ThrowOnError> => (options.client ?? client).delete<AdminDeleteProductSurveyResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/surveys/{surveyId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/surveys/{surveyId}',
+    ...options
 });
 
 /**
  * Read one product survey
  */
 export const adminGetProductSurvey = <ThrowOnError extends boolean = false>(options: Options<AdminGetProductSurveyData, ThrowOnError>): RequestResult<AdminGetProductSurveyResponses, unknown, ThrowOnError> => (options.client ?? client).get<AdminGetProductSurveyResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/surveys/{surveyId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/surveys/{surveyId}',
+    ...options
 });
 
 /**
  * Edit a survey's title, purpose, schedule or pause state
  */
 export const adminUpdateProductSurvey = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateProductSurveyData, ThrowOnError>): RequestResult<AdminUpdateProductSurveyResponses, unknown, ThrowOnError> => (options.client ?? client).put<AdminUpdateProductSurveyResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/surveys/{surveyId}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/surveys/{surveyId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Preview eligible survey email recipients and relay acceptance counts
  */
 export const adminPreviewSurveyEmailInvitations = <ThrowOnError extends boolean = false>(options: Options<AdminPreviewSurveyEmailInvitationsData, ThrowOnError>): RequestResult<AdminPreviewSurveyEmailInvitationsResponses, unknown, ThrowOnError> => (options.client ?? client).get<AdminPreviewSurveyEmailInvitationsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/surveys/{surveyId}/email-invitations',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/surveys/{surveyId}/email-invitations',
+    ...options
 });
 
 /**
  * Queue up to 1000 new or explicitly retried cancelled survey email invitations
  */
 export const adminSendSurveyEmailInvitations = <ThrowOnError extends boolean = false>(options: Options<AdminSendSurveyEmailInvitationsData, ThrowOnError>): RequestResult<AdminSendSurveyEmailInvitationsResponses, AdminSendSurveyEmailInvitationsErrors, ThrowOnError> => (options.client ?? client).post<AdminSendSurveyEmailInvitationsResponses, AdminSendSurveyEmailInvitationsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/surveys/{surveyId}/email-invitations',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/surveys/{surveyId}/email-invitations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List responses and declines, newest first
  */
 export const adminListProductSurveyResponses = <ThrowOnError extends boolean = false>(options: Options<AdminListProductSurveyResponsesData, ThrowOnError>): RequestResult<AdminListProductSurveyResponsesResponses, unknown, ThrowOnError> => (options.client ?? client).get<AdminListProductSurveyResponsesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/surveys/{surveyId}/responses',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/surveys/{surveyId}/responses',
+    ...options
 });
 
 /**
  * Export responses and declines as CSV
  */
 export const adminExportProductSurveyResponses = <ThrowOnError extends boolean = false>(options: Options<AdminExportProductSurveyResponsesData, ThrowOnError>): RequestResult<AdminExportProductSurveyResponsesResponses, unknown, ThrowOnError> => (options.client ?? client).get<AdminExportProductSurveyResponsesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/surveys/{surveyId}/responses/export',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/surveys/{surveyId}/responses/export',
+    ...options
 });
 
 /**
  * Aggregate the responses per question
  */
 export const adminGetProductSurveySummary = <ThrowOnError extends boolean = false>(options: Options<AdminGetProductSurveySummaryData, ThrowOnError>): RequestResult<AdminGetProductSurveySummaryResponses, unknown, ThrowOnError> => (options.client ?? client).get<AdminGetProductSurveySummaryResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/surveys/{surveyId}/summary',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/surveys/{surveyId}/summary',
+    ...options
 });
 
 /**
  * Mark product feedback as resolved or reopen it
  */
 export const adminTriageProductFeedback = <ThrowOnError extends boolean = false>(options: Options<AdminTriageProductFeedbackData, ThrowOnError>): RequestResult<AdminTriageProductFeedbackResponses, unknown, ThrowOnError> => (options.client ?? client).patch<AdminTriageProductFeedbackResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/product-feedback/{feedbackId}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/product-feedback/{feedbackId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Get the running release and the last update check
  */
 export const adminGetRelease = <ThrowOnError extends boolean = false>(options?: Options<AdminGetReleaseData, ThrowOnError>): RequestResult<AdminGetReleaseResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminGetReleaseResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/release',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/release',
+    ...options
 });
 
 /**
  * Check GitHub for a newer release now
  */
 export const adminCheckRelease = <ThrowOnError extends boolean = false>(options?: Options<AdminCheckReleaseData, ThrowOnError>): RequestResult<AdminCheckReleaseResponses, unknown, ThrowOnError> => (options?.client ?? client).post<AdminCheckReleaseResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/release/checks',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/release/checks',
+    ...options
 });
 
 /**
  * Get instance settings
  */
 export const adminGetInstanceSettings = <ThrowOnError extends boolean = false>(options?: Options<AdminGetInstanceSettingsData, ThrowOnError>): RequestResult<AdminGetInstanceSettingsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminGetInstanceSettingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/settings',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/settings',
+    ...options
 });
 
 /**
  * Engage or release the instance-wide silent mode
  */
 export const adminUpdateSilentMode = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateSilentModeData, ThrowOnError>): RequestResult<AdminUpdateSilentModeResponses, AdminUpdateSilentModeErrors, ThrowOnError> => (options.client ?? client).patch<AdminUpdateSilentModeResponses, AdminUpdateSilentModeErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/settings/silent-mode',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/settings/silent-mode',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List accounts (paged)
  */
 export const adminListUsers = <ThrowOnError extends boolean = false>(options?: Options<AdminListUsersData, ThrowOnError>): RequestResult<AdminListUsersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListUsersResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/users',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/users',
+    ...options
 });
 
 /**
  * Update an account's app role
  */
 export const adminUpdateUser = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateUserData, ThrowOnError>): RequestResult<AdminUpdateUserResponses, unknown, ThrowOnError> => (options.client ?? client).patch<AdminUpdateUserResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/users/{id}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/users/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Force sign-out: revoke all of an account's active sessions
  */
 export const adminRevokeUserSessions = <ThrowOnError extends boolean = false>(options: Options<AdminRevokeUserSessionsData, ThrowOnError>): RequestResult<AdminRevokeUserSessionsResponses, unknown, ThrowOnError> => (options.client ?? client).delete<AdminRevokeUserSessionsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/users/{id}/sessions',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/users/{id}/sessions',
+    ...options
 });
 
 /**
  * List all workspaces (metadata only)
  */
 export const adminListWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<AdminListWorkspacesData, ThrowOnError>): RequestResult<AdminListWorkspacesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListWorkspacesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/workspaces',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/workspaces',
+    ...options
 });
 
 /**
  * Set or clear a workspace's monthly cap on host-funded LLM spend
  */
 export const adminUpdateWorkspaceLlmBudget = <ThrowOnError extends boolean = false>(options: Options<AdminUpdateWorkspaceLlmBudgetData, ThrowOnError>): RequestResult<AdminUpdateWorkspaceLlmBudgetResponses, unknown, ThrowOnError> => (options.client ?? client).put<AdminUpdateWorkspaceLlmBudgetResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/admin/workspaces/{workspaceSlug}/llm/budget',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/admin/workspaces/{workspaceSlug}/llm/budget',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -822,48 +822,48 @@ export const adminUpdateWorkspaceLlmBudget = <ThrowOnError extends boolean = fal
  * Public. A client that finds no such endpoint is talking to a server without installed-client sign-in.
  */
 export const getClientSignInConfiguration = <ThrowOnError extends boolean = false>(options: Options<GetClientSignInConfigurationData, ThrowOnError>): RequestResult<GetClientSignInConfigurationResponses, GetClientSignInConfigurationErrors, ThrowOnError> => (options.client ?? client).get<GetClientSignInConfigurationResponses, GetClientSignInConfigurationErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/auth/client/configuration',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/auth/client/configuration',
+    ...options
 });
 
 /**
  * End the session its refresh secret belongs to
  */
 export const logoutClientSession = <ThrowOnError extends boolean = false>(options: Options<LogoutClientSessionData, ThrowOnError>): RequestResult<LogoutClientSessionResponses, LogoutClientSessionErrors, ThrowOnError> => (options.client ?? client).post<LogoutClientSessionResponses, LogoutClientSessionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/auth/client/logout',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/auth/client/logout',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Rotate the session's access token and refresh secret
  */
 export const refreshClientSession = <ThrowOnError extends boolean = false>(options: Options<RefreshClientSessionData, ThrowOnError>): RequestResult<RefreshClientSessionResponses, RefreshClientSessionErrors, ThrowOnError> => (options.client ?? client).post<RefreshClientSessionResponses, RefreshClientSessionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/auth/client/refresh',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/auth/client/refresh',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Redeem a sign-in handoff code with its PKCE verifier
  */
 export const exchangeClientSignIn = <ThrowOnError extends boolean = false>(options: Options<ExchangeClientSignInData, ThrowOnError>): RequestResult<ExchangeClientSignInResponses, ExchangeClientSignInErrors, ThrowOnError> => (options.client ?? client).post<ExchangeClientSignInResponses, ExchangeClientSignInErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/auth/client/token',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/auth/client/token',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -872,18 +872,18 @@ export const exchangeClientSignIn = <ThrowOnError extends boolean = false>(optio
  * An installed-client access token ends its whole session.
  */
 export const logout = <ThrowOnError extends boolean = false>(options?: Options<LogoutData, ThrowOnError>): RequestResult<LogoutResponses, unknown, ThrowOnError> => (options?.client ?? client).post<LogoutResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/auth/logout',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/auth/logout',
+    ...options
 });
 
 /**
  * Rotate the access token (new jti, old revoked)
  */
 export const refresh = <ThrowOnError extends boolean = false>(options?: Options<RefreshData, ThrowOnError>): RequestResult<RefreshResponses, RefreshErrors, ThrowOnError> => (options?.client ?? client).post<RefreshResponses, RefreshErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/auth/refresh',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/auth/refresh',
+    ...options
 });
 
 /**
@@ -897,151 +897,151 @@ export const listGlobalContributors = <ThrowOnError extends boolean = false>(opt
  * List available identity providers
  */
 export const listIdentityProviders = <ThrowOnError extends boolean = false>(options?: Options<ListIdentityProvidersData, ThrowOnError>): RequestResult<ListIdentityProvidersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListIdentityProvidersResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/identity-providers',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/identity-providers',
+    ...options
 });
 
 /**
  * Unsubscribe from one optional email subscription
  */
 export const unsubscribeEmail = <ThrowOnError extends boolean = false>(options: Options<UnsubscribeEmailData, ThrowOnError>): RequestResult<UnsubscribeEmailResponses, unknown, ThrowOnError> => (options.client ?? client).post<UnsubscribeEmailResponses, unknown, ThrowOnError>({
-  ...urlSearchParamsBodySerializer,
-  url: '/notifications/unsubscribe/{token}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/x-www-form-urlencoded',
-    ...options.headers
-  }
+    ...urlSearchParamsBodySerializer,
+    url: '/notifications/unsubscribe/{token}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...options.headers
+    }
 });
 
 export const callbackGet = <ThrowOnError extends boolean = false>(options: Options<CallbackGetData, ThrowOnError>): RequestResult<CallbackGetResponses, unknown, ThrowOnError> => (options.client ?? client).get<CallbackGetResponses, unknown, ThrowOnError>({
-  querySerializer: { parameters: { allParams: { object: { style: 'form' } } } },
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/oauth/callback/{kind}',
-  ...options
+    querySerializer: { parameters: { allParams: { object: { style: 'form' } } } },
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/oauth/callback/{kind}',
+    ...options
 });
 
 export const callbackPost = <ThrowOnError extends boolean = false>(options: Options<CallbackPostData, ThrowOnError>): RequestResult<CallbackPostResponses, unknown, ThrowOnError> => (options.client ?? client).post<CallbackPostResponses, unknown, ThrowOnError>({
-  querySerializer: { parameters: { allParams: { object: { style: 'form' } } } },
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/oauth/callback/{kind}',
-  ...options
+    querySerializer: { parameters: { allParams: { object: { style: 'form' } } } },
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/oauth/callback/{kind}',
+    ...options
 });
 
 /**
  * Send instance-scoped product feedback
  */
 export const submitInstanceProductFeedback = <ThrowOnError extends boolean = false>(options: Options<SubmitInstanceProductFeedbackData, ThrowOnError>): RequestResult<SubmitInstanceProductFeedbackResponses, unknown, ThrowOnError> => (options.client ?? client).post<SubmitInstanceProductFeedbackResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/product-feedback',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/product-feedback',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Delete the current account (GDPR Art. 17)
  */
 export const deleteCurrentUser = <ThrowOnError extends boolean = false>(options?: Options<DeleteCurrentUserData, ThrowOnError>): RequestResult<DeleteCurrentUserResponses, unknown, ThrowOnError> => (options?.client ?? client).delete<DeleteCurrentUserResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user',
+    ...options
 });
 
 /**
  * Get the current user
  */
 export const getCurrentUser = <ThrowOnError extends boolean = false>(options?: Options<GetCurrentUserData, ThrowOnError>): RequestResult<GetCurrentUserResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetCurrentUserResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user',
+    ...options
 });
 
 /**
  * Get your AI choice
  */
 export const getAccountAiChoice = <ThrowOnError extends boolean = false>(options?: Options<GetAccountAiChoiceData, ThrowOnError>): RequestResult<GetAccountAiChoiceResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetAccountAiChoiceResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/ai-choice',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/ai-choice',
+    ...options
 });
 
 /**
  * Change your AI choice for every workspace you are in
  */
 export const updateAccountAiChoice = <ThrowOnError extends boolean = false>(options: Options<UpdateAccountAiChoiceData, ThrowOnError>): RequestResult<UpdateAccountAiChoiceResponses, unknown, ThrowOnError> => (options.client ?? client).put<UpdateAccountAiChoiceResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/ai-choice',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/ai-choice',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Get the current consent notice and status
  */
 export const getConsentStatus = <ThrowOnError extends boolean = false>(options?: Options<GetConsentStatusData, ThrowOnError>): RequestResult<GetConsentStatusResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetConsentStatusResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/consent',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/consent',
+    ...options
 });
 
 /**
  * Complete the first-login transparency step
  */
 export const completeFirstLoginConsent = <ThrowOnError extends boolean = false>(options: Options<CompleteFirstLoginConsentData, ThrowOnError>): RequestResult<CompleteFirstLoginConsentResponses, unknown, ThrowOnError> => (options.client ?? client).put<CompleteFirstLoginConsentResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/consent',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/consent',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Grant or withdraw research consent
  */
 export const updateResearchConsent = <ThrowOnError extends boolean = false>(options: Options<UpdateResearchConsentData, ThrowOnError>): RequestResult<UpdateResearchConsentResponses, unknown, ThrowOnError> => (options.client ?? client).put<UpdateResearchConsentResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/consent/research',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/consent/research',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Request a data export (async)
  */
 export const requestDataExport = <ThrowOnError extends boolean = false>(options?: Options<RequestDataExportData, ThrowOnError>): RequestResult<RequestDataExportResponses, unknown, ThrowOnError> => (options?.client ?? client).post<RequestDataExportResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/exports',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/exports',
+    ...options
 });
 
 /**
  * Get data-export status
  */
 export const getDataExportStatus = <ThrowOnError extends boolean = false>(options: Options<GetDataExportStatusData, ThrowOnError>): RequestResult<GetDataExportStatusResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetDataExportStatusResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/exports/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/exports/{id}',
+    ...options
 });
 
 /**
  * Download the data-export bundle
  */
 export const downloadDataExport = <ThrowOnError extends boolean = false>(options: Options<DownloadDataExportData, ThrowOnError>): RequestResult<DownloadDataExportResponses, unknown, ThrowOnError> => (options.client ?? client).get<DownloadDataExportResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/exports/{id}/download',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/exports/{id}/download',
+    ...options
 });
 
 /**
@@ -1050,67 +1050,67 @@ export const downloadDataExport = <ThrowOnError extends boolean = false>(options
  * Returns all feature flags evaluated for the authenticated user. Combines role checks and server-side config toggles.
  */
 export const getUserFeatures = <ThrowOnError extends boolean = false>(options?: Options<GetUserFeaturesData, ThrowOnError>): RequestResult<GetUserFeaturesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetUserFeaturesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/features',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/features',
+    ...options
 });
 
 /**
  * List linked identity providers
  */
 export const listLinkedIdentities = <ThrowOnError extends boolean = false>(options?: Options<ListLinkedIdentitiesData, ThrowOnError>): RequestResult<ListLinkedIdentitiesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListLinkedIdentitiesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/identities',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/identities',
+    ...options
 });
 
 /**
  * Unlink one of the current user's linked identity providers
  */
 export const unlinkIdentity = <ThrowOnError extends boolean = false>(options: Options<UnlinkIdentityData, ThrowOnError>): RequestResult<UnlinkIdentityResponses, UnlinkIdentityErrors, ThrowOnError> => (options.client ?? client).delete<UnlinkIdentityResponses, UnlinkIdentityErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/identities/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/identities/{id}',
+    ...options
 });
 
 /**
  * Get your email subscriptions
  */
 export const getNotificationPreferences = <ThrowOnError extends boolean = false>(options?: Options<GetNotificationPreferencesData, ThrowOnError>): RequestResult<GetNotificationPreferencesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetNotificationPreferencesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/notification-preferences',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/notification-preferences',
+    ...options
 });
 
 /**
  * Update your email subscriptions
  */
 export const updateNotificationPreferences = <ThrowOnError extends boolean = false>(options: Options<UpdateNotificationPreferencesData, ThrowOnError>): RequestResult<UpdateNotificationPreferencesResponses, UpdateNotificationPreferencesErrors, ThrowOnError> => (options.client ?? client).put<UpdateNotificationPreferencesResponses, UpdateNotificationPreferencesErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/notification-preferences',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/notification-preferences',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Revoke all sessions except the current one
  */
 export const revokeOtherSessions = <ThrowOnError extends boolean = false>(options?: Options<RevokeOtherSessionsData, ThrowOnError>): RequestResult<RevokeOtherSessionsResponses, unknown, ThrowOnError> => (options?.client ?? client).delete<RevokeOtherSessionsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/sessions',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/sessions',
+    ...options
 });
 
 /**
  * List active sessions for the current user
  */
 export const listSessions = <ThrowOnError extends boolean = false>(options?: Options<ListSessionsData, ThrowOnError>): RequestResult<ListSessionsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListSessionsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/sessions',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/sessions',
+    ...options
 });
 
 /**
@@ -1119,88 +1119,88 @@ export const listSessions = <ThrowOnError extends boolean = false>(options?: Opt
  * Any token of an installed-client session, even one it rotated away, ends that session.
  */
 export const revokeSession = <ThrowOnError extends boolean = false>(options: Options<RevokeSessionData, ThrowOnError>): RequestResult<RevokeSessionResponses, unknown, ThrowOnError> => (options.client ?? client).delete<RevokeSessionResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/sessions/{jti}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/sessions/{jti}',
+    ...options
 });
 
 /**
  * Get user settings
  */
 export const getUserSettings = <ThrowOnError extends boolean = false>(options?: Options<GetUserSettingsData, ThrowOnError>): RequestResult<GetUserSettingsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetUserSettingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/settings',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/settings',
+    ...options
 });
 
 /**
  * Update user settings
  */
 export const updateUserSettings = <ThrowOnError extends boolean = false>(options: Options<UpdateUserSettingsData, ThrowOnError>): RequestResult<UpdateUserSettingsResponses, unknown, ThrowOnError> => (options.client ?? client).post<UpdateUserSettingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/settings',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/settings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Get current user's Slack preferences
  */
 export const getSlackUserPreferences = <ThrowOnError extends boolean = false>(options?: Options<GetSlackUserPreferencesData, ThrowOnError>): RequestResult<GetSlackUserPreferencesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetSlackUserPreferencesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/user/slack/preferences',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/user/slack/preferences',
+    ...options
 });
 
 /**
  * List all workspaces
  */
 export const listWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListWorkspacesData, ThrowOnError>): RequestResult<ListWorkspacesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListWorkspacesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces',
+    ...options
 });
 
 /**
  * Create a new workspace
  */
 export const createWorkspace = <ThrowOnError extends boolean = false>(options: Options<CreateWorkspaceData, ThrowOnError>): RequestResult<CreateWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).post<CreateWorkspaceResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List GitLab groups accessible to a PAT
  */
 export const listGitLabGroups = <ThrowOnError extends boolean = false>(options: Options<ListGitLabGroupsData, ThrowOnError>): RequestResult<ListGitLabGroupsResponses, unknown, ThrowOnError> => (options.client ?? client).post<ListGitLabGroupsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/gitlab/groups',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/gitlab/groups',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Validate a GitLab PAT before workspace creation
  */
 export const gitLabPreflight = <ThrowOnError extends boolean = false>(options: Options<GitLabPreflightData, ThrowOnError>): RequestResult<GitLabPreflightResponses, unknown, ThrowOnError> => (options.client ?? client).post<GitLabPreflightResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/gitlab/preflight',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/gitlab/preflight',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -1214,9 +1214,9 @@ export const getProviders = <ThrowOnError extends boolean = false>(options?: Opt
  * Permanently delete a workspace and purge its data
  */
 export const purgeWorkspace = <ThrowOnError extends boolean = false>(options: Options<PurgeWorkspaceData, ThrowOnError>): RequestResult<PurgeWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).delete<PurgeWorkspaceResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}',
+    ...options
 });
 
 /**
@@ -1230,9 +1230,9 @@ export const getWorkspace = <ThrowOnError extends boolean = false>(options: Opti
  * Members shown in workspace activity, or one team's, ordered by name.
  */
 export const listMemberActivity = <ThrowOnError extends boolean = false>(options: Options<ListMemberActivityData, ThrowOnError>): RequestResult<ListMemberActivityResponses, ListMemberActivityErrors, ThrowOnError> => (options.client ?? client).get<ListMemberActivityResponses, ListMemberActivityErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/activity/members',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/activity/members',
+    ...options
 });
 
 /**
@@ -1241,9 +1241,9 @@ export const listMemberActivity = <ThrowOnError extends boolean = false>(options
  * Review requests, open pull requests and assigned issues, most recently updated first. Pull requests carry their reviewers.
  */
 export const getOpenWork = <ThrowOnError extends boolean = false>(options: Options<GetOpenWorkData, ThrowOnError>): RequestResult<GetOpenWorkResponses, GetOpenWorkErrors, ThrowOnError> => (options.client ?? client).get<GetOpenWorkResponses, GetOpenWorkErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/activity/members/{login}/open-work',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/activity/members/{login}/open-work',
+    ...options
 });
 
 /**
@@ -1252,9 +1252,9 @@ export const getOpenWork = <ThrowOnError extends boolean = false>(options: Optio
  * One member's activity when login is given, otherwise everyone's in the workspace or the team. With both, the member's activity within the team's scope. The range is split into days, weeks or months, by its length, in the given time zone.
  */
 export const getActivitySummary = <ThrowOnError extends boolean = false>(options: Options<GetActivitySummaryData, ThrowOnError>): RequestResult<GetActivitySummaryResponses, GetActivitySummaryErrors, ThrowOnError> => (options.client ?? client).get<GetActivitySummaryResponses, GetActivitySummaryErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/activity/summary',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/activity/summary',
+    ...options
 });
 
 /**
@@ -1263,110 +1263,110 @@ export const getActivitySummary = <ThrowOnError extends boolean = false>(options
  * One member's activity when login is given, otherwise everyone's in the workspace or the team. With both, the member's activity within the team's scope. Each pull request or issue is listed once, by its latest activity in the range, newest first.
  */
 export const getActivityWork = <ThrowOnError extends boolean = false>(options: Options<GetActivityWorkData, ThrowOnError>): RequestResult<GetActivityWorkResponses, GetActivityWorkErrors, ThrowOnError> => (options.client ?? client).get<GetActivityWorkResponses, GetActivityWorkErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/activity/work',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/activity/work',
+    ...options
 });
 
 /**
  * List the workspace's agents and how each is configured
  */
 export const listAgents = <ThrowOnError extends boolean = false>(options: Options<ListAgentsData, ThrowOnError>): RequestResult<ListAgentsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListAgentsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/agents',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/agents',
+    ...options
 });
 
 /**
  * List agent jobs for a workspace
  */
 export const listAgentJobs = <ThrowOnError extends boolean = false>(options: Options<ListAgentJobsData, ThrowOnError>): RequestResult<ListAgentJobsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListAgentJobsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/agents/jobs',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/agents/jobs',
+    ...options
 });
 
 /**
  * Get agent job details
  */
 export const getAgentJob = <ThrowOnError extends boolean = false>(options: Options<GetAgentJobData, ThrowOnError>): RequestResult<GetAgentJobResponses, GetAgentJobErrors, ThrowOnError> => (options.client ?? client).get<GetAgentJobResponses, GetAgentJobErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/agents/jobs/{jobId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/agents/jobs/{jobId}',
+    ...options
 });
 
 /**
  * Cancel an agent job
  */
 export const cancelAgentJob = <ThrowOnError extends boolean = false>(options: Options<CancelAgentJobData, ThrowOnError>): RequestResult<CancelAgentJobResponses, CancelAgentJobErrors, ThrowOnError> => (options.client ?? client).post<CancelAgentJobResponses, CancelAgentJobErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/agents/jobs/{jobId}/cancel',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/agents/jobs/{jobId}/cancel',
+    ...options
 });
 
 /**
  * Retry delivery for a completed agent job
  */
 export const retryAgentJobDelivery = <ThrowOnError extends boolean = false>(options: Options<RetryAgentJobDeliveryData, ThrowOnError>): RequestResult<RetryAgentJobDeliveryResponses, RetryAgentJobDeliveryErrors, ThrowOnError> => (options.client ?? client).post<RetryAgentJobDeliveryResponses, RetryAgentJobDeliveryErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/agents/jobs/{jobId}/delivery/retry',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/agents/jobs/{jobId}/delivery/retry',
+    ...options
 });
 
 /**
  * Remove the agent for one purpose (turn it off)
  */
 export const deleteAgent = <ThrowOnError extends boolean = false>(options: Options<DeleteAgentData, ThrowOnError>): RequestResult<DeleteAgentResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteAgentResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/agents/{purpose}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/agents/{purpose}',
+    ...options
 });
 
 /**
  * Configure the agent for one purpose
  */
 export const configureAgent = <ThrowOnError extends boolean = false>(options: Options<ConfigureAgentData, ThrowOnError>): RequestResult<ConfigureAgentResponses, ConfigureAgentErrors, ThrowOnError> => (options.client ?? client).put<ConfigureAgentResponses, ConfigureAgentErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/agents/{purpose}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/agents/{purpose}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List this workspace's admin configuration changes (paged, newest first)
  */
 export const listWorkspaceConfigAuditEvents = <ThrowOnError extends boolean = false>(options: Options<ListWorkspaceConfigAuditEventsData, ThrowOnError>): RequestResult<ListWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/config-audit',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/config-audit',
+    ...options
 });
 
 export const list = <ThrowOnError extends boolean = false>(options: Options<ListData, ThrowOnError>): RequestResult<ListResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections',
+    ...options
 });
 
 export const initiate = <ThrowOnError extends boolean = false>(options: Options<InitiateData, ThrowOnError>): RequestResult<InitiateResponses, unknown, ThrowOnError> => (options.client ?? client).post<InitiateResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Every integration kind this workspace could connect, joined against existing connections
  */
 export const getIntegrationCatalog = <ThrowOnError extends boolean = false>(options: Options<GetIntegrationCatalogData, ThrowOnError>): RequestResult<GetIntegrationCatalogResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetIntegrationCatalogResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections/catalog',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections/catalog',
+    ...options
 });
 
 /**
@@ -1375,277 +1375,277 @@ export const getIntegrationCatalog = <ThrowOnError extends boolean = false>(opti
  * Probes Outline directly. Reports whether the token is still accepted and, when the token may list its own key, its name, expiry and last use. Outline cannot rotate a key from a key, so an expiring token is renewed in Outline and re-entered here.
  */
 export const getOutlineTokenStatus = <ThrowOnError extends boolean = false>(options: Options<GetOutlineTokenStatusData, ThrowOnError>): RequestResult<GetOutlineTokenStatusResponses, GetOutlineTokenStatusErrors, ThrowOnError> => (options.client ?? client).get<GetOutlineTokenStatusResponses, GetOutlineTokenStatusErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections/outline/token',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections/outline/token',
+    ...options
 });
 
 /**
  * Unified sync status for one connection
  */
 export const getConnectionSyncStatus = <ThrowOnError extends boolean = false>(options: Options<GetConnectionSyncStatusData, ThrowOnError>): RequestResult<GetConnectionSyncStatusResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetConnectionSyncStatusResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections/{connectionId}/sync',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections/{connectionId}/sync',
+    ...options
 });
 
 /**
  * Paginated sync job history for one connection
  */
 export const listConnectionSyncJobs = <ThrowOnError extends boolean = false>(options: Options<ListConnectionSyncJobsData, ThrowOnError>): RequestResult<ListConnectionSyncJobsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListConnectionSyncJobsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs',
+    ...options
 });
 
 /**
  * Trigger a manual sync or backfill
  *
  * Trigger a manual sync. Idempotent-absorb: a connection that already has an active job answers
- *  200 with that job rather than erroring, so a double-click "Sync now" is harmless.
+ * 200 with that job rather than erroring, so a double-click "Sync now" is harmless.
  */
 export const triggerSyncJob = <ThrowOnError extends boolean = false>(options: Options<TriggerSyncJobData, ThrowOnError>): RequestResult<TriggerSyncJobResponses, TriggerSyncJobErrors, ThrowOnError> => (options.client ?? client).post<TriggerSyncJobResponses, TriggerSyncJobErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Update a running sync job
  */
 export const updateConnectionSyncJob = <ThrowOnError extends boolean = false>(options: Options<UpdateConnectionSyncJobData, ThrowOnError>): RequestResult<UpdateConnectionSyncJobResponses, UpdateConnectionSyncJobErrors, ThrowOnError> => (options.client ?? client).patch<UpdateConnectionSyncJobResponses, UpdateConnectionSyncJobErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs/{jobId}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs/{jobId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Per-resource sync state (repos / channels / collections) for one connection
  */
 export const listConnectionSyncResources = <ThrowOnError extends boolean = false>(options: Options<ListConnectionSyncResourcesData, ThrowOnError>): RequestResult<ListConnectionSyncResourcesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListConnectionSyncResourcesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections/{connectionId}/sync/resources',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections/{connectionId}/sync/resources',
+    ...options
 });
 
 export const read = <ThrowOnError extends boolean = false>(options: Options<ReadData, ThrowOnError>): RequestResult<ReadResponses, unknown, ThrowOnError> => (options.client ?? client).get<ReadResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections/{id}',
+    ...options
 });
 
 export const audit = <ThrowOnError extends boolean = false>(options: Options<AuditData, ThrowOnError>): RequestResult<AuditResponses, unknown, ThrowOnError> => (options.client ?? client).get<AuditResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections/{id}/audit',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections/{id}/audit',
+    ...options
 });
 
 /**
  * Resource-oriented lifecycle transition: <code>ACTIVE</code> (reactivate), <code>SUSPENDED</code>
- *  (suspend), or <code>UNINSTALLED</code> (disconnect).
+ * (suspend), or <code>UNINSTALLED</code> (disconnect).
  *
  * Resource-oriented lifecycle transition: <code>ACTIVE</code> (reactivate), <code>SUSPENDED</code>
- *  (suspend), or <code>UNINSTALLED</code> (disconnect). Disconnecting erases the integration's mirrored
- *  data and then, best effort, removes what it installed at the provider; if the erase fails, the
- *  connection is left unchanged. <code>PENDING</code> is internal to the OAuth handshake and rejected as
- *  a bad request; illegal transitions surface as 409 via the state machine.
+ * (suspend), or <code>UNINSTALLED</code> (disconnect). Disconnecting erases the integration's mirrored
+ * data and then, best effort, removes what it installed at the provider; if the erase fails, the
+ * connection is left unchanged. <code>PENDING</code> is internal to the OAuth handshake and rejected as
+ * a bad request; illegal transitions surface as 409 via the state machine.
  */
 export const updateConnectionStatus = <ThrowOnError extends boolean = false>(options: Options<UpdateConnectionStatusData, ThrowOnError>): RequestResult<UpdateConnectionStatusResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateConnectionStatusResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/connections/{id}/status',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/connections/{id}/status',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Update workspace feature flags
  */
 export const updateFeatures = <ThrowOnError extends boolean = false>(options: Options<UpdateFeaturesData, ThrowOnError>): RequestResult<UpdateFeaturesResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateFeaturesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/features',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/features',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List models this workspace can bind a Task to (shared + your own)
  */
 export const workspaceListAvailableLlmModels = <ThrowOnError extends boolean = false>(options: Options<WorkspaceListAvailableLlmModelsData, ThrowOnError>): RequestResult<WorkspaceListAvailableLlmModelsResponses, unknown, ThrowOnError> => (options.client ?? client).get<WorkspaceListAvailableLlmModelsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/available-models',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/available-models',
+    ...options
 });
 
 /**
  * Set or clear this workspace's monthly cap on its own-provider LLM spend
  */
 export const updateWorkspaceLlmBudget = <ThrowOnError extends boolean = false>(options: Options<UpdateWorkspaceLlmBudgetData, ThrowOnError>): RequestResult<UpdateWorkspaceLlmBudgetResponses, unknown, ThrowOnError> => (options.client ?? client).put<UpdateWorkspaceLlmBudgetResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/budget',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/budget',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List your AI provider connections
  */
 export const workspaceListLlmConnections = <ThrowOnError extends boolean = false>(options: Options<WorkspaceListLlmConnectionsData, ThrowOnError>): RequestResult<WorkspaceListLlmConnectionsResponses, unknown, ThrowOnError> => (options.client ?? client).get<WorkspaceListLlmConnectionsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/connections',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/connections',
+    ...options
 });
 
 /**
  * Connect your own AI provider
  */
 export const workspaceCreateLlmConnection = <ThrowOnError extends boolean = false>(options: Options<WorkspaceCreateLlmConnectionData, ThrowOnError>): RequestResult<WorkspaceCreateLlmConnectionResponses, WorkspaceCreateLlmConnectionErrors, ThrowOnError> => (options.client ?? client).post<WorkspaceCreateLlmConnectionResponses, WorkspaceCreateLlmConnectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/connections',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/connections',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Create a model on your AI provider
  */
 export const workspaceCreateLlmModel = <ThrowOnError extends boolean = false>(options: Options<WorkspaceCreateLlmModelData, ThrowOnError>): RequestResult<WorkspaceCreateLlmModelResponses, WorkspaceCreateLlmModelErrors, ThrowOnError> => (options.client ?? client).post<WorkspaceCreateLlmModelResponses, WorkspaceCreateLlmModelErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/connections/{connectionId}/models',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/connections/{connectionId}/models',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Remove your AI provider connection
  */
 export const workspaceDeleteLlmConnection = <ThrowOnError extends boolean = false>(options: Options<WorkspaceDeleteLlmConnectionData, ThrowOnError>): RequestResult<WorkspaceDeleteLlmConnectionResponses, WorkspaceDeleteLlmConnectionErrors, ThrowOnError> => (options.client ?? client).delete<WorkspaceDeleteLlmConnectionResponses, WorkspaceDeleteLlmConnectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/connections/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/connections/{id}',
+    ...options
 });
 
 /**
  * Get one of your AI provider connections
  */
 export const workspaceGetLlmConnection = <ThrowOnError extends boolean = false>(options: Options<WorkspaceGetLlmConnectionData, ThrowOnError>): RequestResult<WorkspaceGetLlmConnectionResponses, WorkspaceGetLlmConnectionErrors, ThrowOnError> => (options.client ?? client).get<WorkspaceGetLlmConnectionResponses, WorkspaceGetLlmConnectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/connections/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/connections/{id}',
+    ...options
 });
 
 /**
  * Update your AI provider connection
  */
 export const workspaceUpdateLlmConnection = <ThrowOnError extends boolean = false>(options: Options<WorkspaceUpdateLlmConnectionData, ThrowOnError>): RequestResult<WorkspaceUpdateLlmConnectionResponses, WorkspaceUpdateLlmConnectionErrors, ThrowOnError> => (options.client ?? client).patch<WorkspaceUpdateLlmConnectionResponses, WorkspaceUpdateLlmConnectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/connections/{id}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/connections/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Test your AI provider connection
  */
 export const workspaceProbeLlmConnection = <ThrowOnError extends boolean = false>(options: Options<WorkspaceProbeLlmConnectionData, ThrowOnError>): RequestResult<WorkspaceProbeLlmConnectionResponses, unknown, ThrowOnError> => (options.client ?? client).post<WorkspaceProbeLlmConnectionResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/connections/{id}/probe',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/connections/{id}/probe',
+    ...options
 });
 
 /**
  * List models on your AI provider
  */
 export const workspaceListLlmModels = <ThrowOnError extends boolean = false>(options: Options<WorkspaceListLlmModelsData, ThrowOnError>): RequestResult<WorkspaceListLlmModelsResponses, unknown, ThrowOnError> => (options.client ?? client).get<WorkspaceListLlmModelsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/models',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/models',
+    ...options
 });
 
 /**
  * Remove a model on your AI provider
  */
 export const workspaceDeleteLlmModel = <ThrowOnError extends boolean = false>(options: Options<WorkspaceDeleteLlmModelData, ThrowOnError>): RequestResult<WorkspaceDeleteLlmModelResponses, WorkspaceDeleteLlmModelErrors, ThrowOnError> => (options.client ?? client).delete<WorkspaceDeleteLlmModelResponses, WorkspaceDeleteLlmModelErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/models/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/models/{id}',
+    ...options
 });
 
 /**
  * Get a model on your AI provider
  */
 export const workspaceGetLlmModel = <ThrowOnError extends boolean = false>(options: Options<WorkspaceGetLlmModelData, ThrowOnError>): RequestResult<WorkspaceGetLlmModelResponses, WorkspaceGetLlmModelErrors, ThrowOnError> => (options.client ?? client).get<WorkspaceGetLlmModelResponses, WorkspaceGetLlmModelErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/models/{id}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/models/{id}',
+    ...options
 });
 
 /**
  * Update a model on your AI provider
  */
 export const workspaceUpdateLlmModel = <ThrowOnError extends boolean = false>(options: Options<WorkspaceUpdateLlmModelData, ThrowOnError>): RequestResult<WorkspaceUpdateLlmModelResponses, WorkspaceUpdateLlmModelErrors, ThrowOnError> => (options.client ?? client).patch<WorkspaceUpdateLlmModelResponses, WorkspaceUpdateLlmModelErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/models/{id}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/models/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Get the instance LLM policy as it applies to this workspace
  */
 export const workspaceGetLlmSettings = <ThrowOnError extends boolean = false>(options: Options<WorkspaceGetLlmSettingsData, ThrowOnError>): RequestResult<WorkspaceGetLlmSettingsResponses, unknown, ThrowOnError> => (options.client ?? client).get<WorkspaceGetLlmSettingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/settings',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/settings',
+    ...options
 });
 
 /**
  * Get the workspace's LLM usage report for one month
  */
 export const getLlmUsageReport = <ThrowOnError extends boolean = false>(options: Options<GetLlmUsageReportData, ThrowOnError>): RequestResult<GetLlmUsageReportResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetLlmUsageReportResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/llm/usage',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/llm/usage',
+    ...options
 });
 
 export const listMembers = <ThrowOnError extends boolean = false>(options: Options<ListMembersData, ThrowOnError>): RequestResult<ListMembersResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListMembersResponses, unknown, ThrowOnError>({ url: '/workspaces/{workspaceSlug}/members', ...options });
 
 export const assignRole = <ThrowOnError extends boolean = false>(options: Options<AssignRoleData, ThrowOnError>): RequestResult<AssignRoleResponses, unknown, ThrowOnError> => (options.client ?? client).post<AssignRoleResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/members/assign',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/members/assign',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -1656,159 +1656,159 @@ export const assignRole = <ThrowOnError extends boolean = false>(options: Option
 export const getCurrentUserMembership = <ThrowOnError extends boolean = false>(options: Options<GetCurrentUserMembershipData, ThrowOnError>): RequestResult<GetCurrentUserMembershipResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetCurrentUserMembershipResponses, unknown, ThrowOnError>({ url: '/workspaces/{workspaceSlug}/members/me', ...options });
 
 export const removeMember = <ThrowOnError extends boolean = false>(options: Options<RemoveMemberData, ThrowOnError>): RequestResult<RemoveMemberResponses, unknown, ThrowOnError> => (options.client ?? client).delete<RemoveMemberResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/members/{userId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/members/{userId}',
+    ...options
 });
 
 export const getMember = <ThrowOnError extends boolean = false>(options: Options<GetMemberData, ThrowOnError>): RequestResult<GetMemberResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetMemberResponses, unknown, ThrowOnError>({ url: '/workspaces/{workspaceSlug}/members/{userId}', ...options });
 
 export const updateMemberVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateMemberVisibilityData, ThrowOnError>): RequestResult<UpdateMemberVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateMemberVisibilityResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/members/{userId}/hidden',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/members/{userId}/hidden',
+    ...options
 });
 
 /**
  * Prepare the current member's Heph sandbox in the background
  */
 export const prepareMentorSandbox = <ThrowOnError extends boolean = false>(options: Options<PrepareMentorSandboxData, ThrowOnError>): RequestResult<PrepareMentorSandboxResponses, unknown, ThrowOnError> => (options.client ?? client).post<PrepareMentorSandboxResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/mentor/sandbox',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/mentor/sandbox',
+    ...options
 });
 
 /**
  * List the current user's mentor threads in this workspace
  */
 export const listThreads = <ThrowOnError extends boolean = false>(options: Options<ListThreadsData, ThrowOnError>): RequestResult<ListThreadsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListThreadsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/mentor/threads',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/mentor/threads',
+    ...options
 });
 
 /**
  * Delete a mentor thread (cascades to messages, votes, parts)
  */
 export const deleteThread = <ThrowOnError extends boolean = false>(options: Options<DeleteThreadData, ThrowOnError>): RequestResult<DeleteThreadResponses, DeleteThreadErrors, ThrowOnError> => (options.client ?? client).delete<DeleteThreadResponses, DeleteThreadErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}',
+    ...options
 });
 
 /**
  * Get a mentor thread with its full message history
  */
 export const getThread = <ThrowOnError extends boolean = false>(options: Options<GetThreadData, ThrowOnError>): RequestResult<GetThreadResponses, GetThreadErrors, ThrowOnError> => (options.client ?? client).get<GetThreadResponses, GetThreadErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}',
+    ...options
 });
 
 /**
  * Remove a vote on an assistant message (idempotent)
  */
 export const removeVote = <ThrowOnError extends boolean = false>(options: Options<RemoveVoteData, ThrowOnError>): RequestResult<RemoveVoteResponses, RemoveVoteErrors, ThrowOnError> => (options.client ?? client).delete<RemoveVoteResponses, RemoveVoteErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}/messages/{messageId}/vote',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}/messages/{messageId}/vote',
+    ...options
 });
 
 /**
  * Upsert a vote on an assistant message
  */
 export const vote = <ThrowOnError extends boolean = false>(options: Options<VoteData, ThrowOnError>): RequestResult<VoteResponses, VoteErrors, ThrowOnError> => (options.client ?? client).post<VoteResponses, VoteErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}/messages/{messageId}/vote',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}/messages/{messageId}/vote',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Get your first-visit setup and AI choice in this workspace
  */
 export const getMemberOnboarding = <ThrowOnError extends boolean = false>(options: Options<GetMemberOnboardingData, ThrowOnError>): RequestResult<GetMemberOnboardingResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetMemberOnboardingResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/onboarding/me',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/onboarding/me',
+    ...options
 });
 
 /**
  * Change your AI choice without changing workspace membership
  */
 export const updateMemberAiChoice = <ThrowOnError extends boolean = false>(options: Options<UpdateMemberAiChoiceData, ThrowOnError>): RequestResult<UpdateMemberAiChoiceResponses, unknown, ThrowOnError> => (options.client ?? client).put<UpdateMemberAiChoiceResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/onboarding/me/ai-choice',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/onboarding/me/ai-choice',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Skip first-visit setup for now without treating that as an AI choice
  */
 export const dismissMemberOnboarding = <ThrowOnError extends boolean = false>(options: Options<DismissMemberOnboardingData, ThrowOnError>): RequestResult<DismissMemberOnboardingResponses, unknown, ThrowOnError> => (options.client ?? client).put<DismissMemberOnboardingResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/onboarding/me/dismissal',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/onboarding/me/dismissal',
+    ...options
 });
 
 /**
  * Get this workspace's member-onboarding settings
  */
 export const getMemberOnboardingSettings = <ThrowOnError extends boolean = false>(options: Options<GetMemberOnboardingSettingsData, ThrowOnError>): RequestResult<GetMemberOnboardingSettingsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetMemberOnboardingSettingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/onboarding/settings',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/onboarding/settings',
+    ...options
 });
 
 /**
  * Configure first-visit setup and required workspace account links
  */
 export const updateMemberOnboardingSettings = <ThrowOnError extends boolean = false>(options: Options<UpdateMemberOnboardingSettingsData, ThrowOnError>): RequestResult<UpdateMemberOnboardingSettingsResponses, unknown, ThrowOnError> => (options.client ?? client).put<UpdateMemberOnboardingSettingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/onboarding/settings',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/onboarding/settings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List workspace account links available for onboarding requirements
  */
 export const getMemberOnboardingLinkOptions = <ThrowOnError extends boolean = false>(options: Options<GetMemberOnboardingLinkOptionsData, ThrowOnError>): RequestResult<GetMemberOnboardingLinkOptionsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetMemberOnboardingLinkOptionsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/onboarding/settings/links',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/onboarding/settings/links',
+    ...options
 });
 
 /**
  * List the workspace's mirrored Outline collections with their sync state
  */
 export const listOutlineCollections = <ThrowOnError extends boolean = false>(options: Options<ListOutlineCollectionsData, ThrowOnError>): RequestResult<ListOutlineCollectionsResponses, ListOutlineCollectionsErrors, ThrowOnError> => (options.client ?? client).get<ListOutlineCollectionsResponses, ListOutlineCollectionsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/outline/collections',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/outline/collections',
+    ...options
 });
 
 /**
  * Register an Outline collection for mirroring (lands ENABLED + PENDING; idempotent on the id)
  */
 export const registerOutlineCollection = <ThrowOnError extends boolean = false>(options: Options<RegisterOutlineCollectionData, ThrowOnError>): RequestResult<RegisterOutlineCollectionResponses, RegisterOutlineCollectionErrors, ThrowOnError> => (options.client ?? client).post<RegisterOutlineCollectionResponses, RegisterOutlineCollectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/outline/collections',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/outline/collections',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -1817,27 +1817,27 @@ export const registerOutlineCollection = <ThrowOnError extends boolean = false>(
  * Proxies Outline's collections.list with the stored token under a bounded interactive page budget. Served with Cache-Control: no-store — the live upstream view must not be cached.
  */
 export const listOutlineCollectionCandidates = <ThrowOnError extends boolean = false>(options: Options<ListOutlineCollectionCandidatesData, ThrowOnError>): RequestResult<ListOutlineCollectionCandidatesResponses, ListOutlineCollectionCandidatesErrors, ThrowOnError> => (options.client ?? client).get<ListOutlineCollectionCandidatesResponses, ListOutlineCollectionCandidatesErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/outline/collections/candidates',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/outline/collections/candidates',
+    ...options
 });
 
 /**
  * Remove a collection from the mirror and erase its mirrored documents (terminal)
  */
 export const deleteOutlineCollection = <ThrowOnError extends boolean = false>(options: Options<DeleteOutlineCollectionData, ThrowOnError>): RequestResult<DeleteOutlineCollectionResponses, DeleteOutlineCollectionErrors, ThrowOnError> => (options.client ?? client).delete<DeleteOutlineCollectionResponses, DeleteOutlineCollectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/outline/collections/{collectionId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/outline/collections/{collectionId}',
+    ...options
 });
 
 /**
  * One mirrored Outline collection with its sync state and live document count
  */
 export const getOutlineCollection = <ThrowOnError extends boolean = false>(options: Options<GetOutlineCollectionData, ThrowOnError>): RequestResult<GetOutlineCollectionResponses, GetOutlineCollectionErrors, ThrowOnError> => (options.client ?? client).get<GetOutlineCollectionResponses, GetOutlineCollectionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/outline/collections/{collectionId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/outline/collections/{collectionId}',
+    ...options
 });
 
 /**
@@ -1846,58 +1846,58 @@ export const getOutlineCollection = <ThrowOnError extends boolean = false>(optio
  * Resuming (PAUSED → ENABLED) resets the sync status to PENDING and kicks a targeted sync; requesting the current state is an idempotent no-op.
  */
 export const updateOutlineCollectionState = <ThrowOnError extends boolean = false>(options: Options<UpdateOutlineCollectionStateData, ThrowOnError>): RequestResult<UpdateOutlineCollectionStateResponses, UpdateOutlineCollectionStateErrors, ThrowOnError> => (options.client ?? client).patch<UpdateOutlineCollectionStateResponses, UpdateOutlineCollectionStateErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/outline/collections/{collectionId}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/outline/collections/{collectionId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List practices available for adoption
  */
 export const listAdoptablePractices = <ThrowOnError extends boolean = false>(options: Options<ListAdoptablePracticesData, ThrowOnError>): RequestResult<ListAdoptablePracticesResponses, ListAdoptablePracticesErrors, ThrowOnError> => (options.client ?? client).get<ListAdoptablePracticesResponses, ListAdoptablePracticesErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-catalog/adoption',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-catalog/adoption',
+    ...options
 });
 
 /**
  * Preview adoption of a catalog group and its practices
  */
 export const previewGroupAdoption = <ThrowOnError extends boolean = false>(options: Options<PreviewGroupAdoptionData, ThrowOnError>): RequestResult<PreviewGroupAdoptionResponses, unknown, ThrowOnError> => (options.client ?? client).get<PreviewGroupAdoptionResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{slug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{slug}',
+    ...options
 });
 
 /**
  * Adopt all available practices in a catalog group
  */
 export const adoptGroup = <ThrowOnError extends boolean = false>(options: Options<AdoptGroupData, ThrowOnError>): RequestResult<AdoptGroupResponses, unknown, ThrowOnError> => (options.client ?? client).post<AdoptGroupResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{slug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-catalog/adoption/groups/{slug}',
+    ...options
 });
 
 /**
  * Get a practice adoption preview
  */
 export const previewPracticeAdoption = <ThrowOnError extends boolean = false>(options: Options<PreviewPracticeAdoptionData, ThrowOnError>): RequestResult<PreviewPracticeAdoptionResponses, PreviewPracticeAdoptionErrors, ThrowOnError> => (options.client ?? client).get<PreviewPracticeAdoptionResponses, PreviewPracticeAdoptionErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-catalog/adoption/{slug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-catalog/adoption/{slug}',
+    ...options
 });
 
 /**
  * Adopt a catalog practice
  */
 export const adoptPractice = <ThrowOnError extends boolean = false>(options: Options<AdoptPracticeData, ThrowOnError>): RequestResult<AdoptPracticeResponses, AdoptPracticeErrors, ThrowOnError> => (options.client ?? client).post<AdoptPracticeResponses, AdoptPracticeErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-catalog/adoption/{slug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-catalog/adoption/{slug}',
+    ...options
 });
 
 /**
@@ -1906,9 +1906,9 @@ export const adoptPractice = <ThrowOnError extends boolean = false>(options: Opt
  * The current instance-catalog definition for comparison with a workspace copy.
  */
 export const getCuratedPracticeCatalogEntry = <ThrowOnError extends boolean = false>(options: Options<GetCuratedPracticeCatalogEntryData, ThrowOnError>): RequestResult<GetCuratedPracticeCatalogEntryResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetCuratedPracticeCatalogEntryResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-catalog/practices/{slug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-catalog/practices/{slug}',
+    ...options
 });
 
 /**
@@ -1917,22 +1917,22 @@ export const getCuratedPracticeCatalogEntry = <ThrowOnError extends boolean = fa
  * Returns the workspace's practice groups
  */
 export const listGroups = <ThrowOnError extends boolean = false>(options: Options<ListGroupsData, ThrowOnError>): RequestResult<ListGroupsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListGroupsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-groups',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-groups',
+    ...options
 });
 
 /**
  * Create a new practice group
  */
 export const createGroup = <ThrowOnError extends boolean = false>(options: Options<CreateGroupData, ThrowOnError>): RequestResult<CreateGroupResponses, CreateGroupErrors, ThrowOnError> => (options.client ?? client).post<CreateGroupResponses, CreateGroupErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-groups',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-groups',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -1941,13 +1941,13 @@ export const createGroup = <ThrowOnError extends boolean = false>(options: Optio
  * Sets each group's display order to its index in the provided slug list (one atomic write)
  */
 export const reorderGroups = <ThrowOnError extends boolean = false>(options: Options<ReorderGroupsData, ThrowOnError>): RequestResult<ReorderGroupsResponses, ReorderGroupsErrors, ThrowOnError> => (options.client ?? client).patch<ReorderGroupsResponses, ReorderGroupsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-groups/reorder',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-groups/reorder',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -1956,9 +1956,9 @@ export const reorderGroups = <ThrowOnError extends boolean = false>(options: Opt
  * Returns every active practice group's standing, direction, guidance, and supporting observations.
  */
 export const listPracticeGroupStandings = <ThrowOnError extends boolean = false>(options: Options<ListPracticeGroupStandingsData, ThrowOnError>): RequestResult<ListPracticeGroupStandingsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListPracticeGroupStandingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-groups/standings',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-groups/standings',
+    ...options
 });
 
 /**
@@ -1967,31 +1967,31 @@ export const listPracticeGroupStandings = <ThrowOnError extends boolean = false>
  * Deletes the group. By default its practices move to Unassigned; deletePractices=true deletes them too.
  */
 export const deleteGroup = <ThrowOnError extends boolean = false>(options: Options<DeleteGroupData, ThrowOnError>): RequestResult<DeleteGroupResponses, DeleteGroupErrors, ThrowOnError> => (options.client ?? client).delete<DeleteGroupResponses, DeleteGroupErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}',
+    ...options
 });
 
 /**
  * Get a practice group
  */
 export const getGroup = <ThrowOnError extends boolean = false>(options: Options<GetGroupData, ThrowOnError>): RequestResult<GetGroupResponses, GetGroupErrors, ThrowOnError> => (options.client ?? client).get<GetGroupResponses, GetGroupErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}',
+    ...options
 });
 
 /**
  * Update a practice group
  */
 export const updateGroup = <ThrowOnError extends boolean = false>(options: Options<UpdateGroupData, ThrowOnError>): RequestResult<UpdateGroupResponses, UpdateGroupErrors, ThrowOnError> => (options.client ?? client).patch<UpdateGroupResponses, UpdateGroupErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2000,13 +2000,13 @@ export const updateGroup = <ThrowOnError extends boolean = false>(options: Optio
  * Applies to every practice in the group that holds no autonomy of its own; practices that set their own are left alone. OFF stops their reviews entirely. HUMAN_APPROVAL runs them and records every observation, holds feedback on the work for an authorized reviewer, and still writes the developer's practice pages and the mentor, which are read on request. AUTOMATIC sends feedback on the work without asking. Send a null autonomy to clear the group's own setting so it follows the workspace default.
  */
 export const setGroupAutonomy = <ThrowOnError extends boolean = false>(options: Options<SetGroupAutonomyData, ThrowOnError>): RequestResult<SetGroupAutonomyResponses, SetGroupAutonomyErrors, ThrowOnError> => (options.client ?? client).patch<SetGroupAutonomyResponses, SetGroupAutonomyErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/autonomy',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/autonomy',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2015,9 +2015,9 @@ export const setGroupAutonomy = <ThrowOnError extends boolean = false>(options: 
  * Returns complete review runs newest first, including visible undecided observations.
  */
 export const listPracticeGroupReviewRuns = <ThrowOnError extends boolean = false>(options: Options<ListPracticeGroupReviewRunsData, ThrowOnError>): RequestResult<ListPracticeGroupReviewRunsResponses, ListPracticeGroupReviewRunsErrors, ThrowOnError> => (options.client ?? client).get<ListPracticeGroupReviewRunsResponses, ListPracticeGroupReviewRunsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/review-runs',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/review-runs',
+    ...options
 });
 
 /**
@@ -2026,9 +2026,9 @@ export const listPracticeGroupReviewRuns = <ThrowOnError extends boolean = false
  * Returns the group direction and every eligible practice direction with inspectable support.
  */
 export const getPracticeGroupTrend = <ThrowOnError extends boolean = false>(options: Options<GetPracticeGroupTrendData, ThrowOnError>): RequestResult<GetPracticeGroupTrendResponses, GetPracticeGroupTrendErrors, ThrowOnError> => (options.client ?? client).get<GetPracticeGroupTrendResponses, GetPracticeGroupTrendErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/trend',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/trend',
+    ...options
 });
 
 /**
@@ -2037,9 +2037,9 @@ export const getPracticeGroupTrend = <ThrowOnError extends boolean = false>(opti
  * Returns the practices met as a strength, every change to a standing, trend, group or piece of feedback inside the window, and the work reviewed inside it, as structured events. The window opens at the run before the latest one and closes now; with no such run it spans the standing's look-back of 90 days.
  */
 export const getPracticeProfileOverview = <ThrowOnError extends boolean = false>(options: Options<GetPracticeProfileOverviewData, ThrowOnError>): RequestResult<GetPracticeProfileOverviewResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetPracticeProfileOverviewResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-profile/overview',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-profile/overview',
+    ...options
 });
 
 /**
@@ -2048,9 +2048,9 @@ export const getPracticeProfileOverview = <ThrowOnError extends boolean = false>
  * One row per run that recorded an observation about the calling developer, across every practice group, with what that run found about them. Counts are narrowed to this developer: a run over shared work says nothing here about anybody else.
  */
 export const listPracticeProfileReviewRuns = <ThrowOnError extends boolean = false>(options: Options<ListPracticeProfileReviewRunsData, ThrowOnError>): RequestResult<ListPracticeProfileReviewRunsResponses, ListPracticeProfileReviewRunsErrors, ThrowOnError> => (options.client ?? client).get<ListPracticeProfileReviewRunsResponses, ListPracticeProfileReviewRunsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-profile/review-runs',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-profile/review-runs',
+    ...options
 });
 
 /**
@@ -2059,9 +2059,9 @@ export const listPracticeProfileReviewRuns = <ThrowOnError extends boolean = fal
  * A run that recorded nothing about the calling developer is not theirs to read and answers 404, the same answer a run in another workspace gets.
  */
 export const getPracticeProfileReviewRun = <ThrowOnError extends boolean = false>(options: Options<GetPracticeProfileReviewRunData, ThrowOnError>): RequestResult<GetPracticeProfileReviewRunResponses, GetPracticeProfileReviewRunErrors, ThrowOnError> => (options.client ?? client).get<GetPracticeProfileReviewRunResponses, GetPracticeProfileReviewRunErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practice-profile/review-runs/{reviewId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practice-profile/review-runs/{reviewId}',
+    ...options
 });
 
 /**
@@ -2070,22 +2070,22 @@ export const getPracticeProfileReviewRun = <ThrowOnError extends boolean = false
  * Returns this workspace's practices, each with the autonomy in force for it, whether that autonomy was set on the practice or inherited from its group or the workspace, and which level decided it. Optionally narrowed to one autonomy.
  */
 export const listPractices = <ThrowOnError extends boolean = false>(options: Options<ListPracticesData, ThrowOnError>): RequestResult<ListPracticesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListPracticesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices',
+    ...options
 });
 
 /**
  * Create a new practice definition
  */
 export const createPractice = <ThrowOnError extends boolean = false>(options: Options<CreatePracticeData, ThrowOnError>): RequestResult<CreatePracticeResponses, CreatePracticeErrors, ThrowOnError> => (options.client ?? client).post<CreatePracticeResponses, CreatePracticeErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2094,18 +2094,18 @@ export const createPractice = <ThrowOnError extends boolean = false>(options: Op
  * How many practices sit at each autonomy, for the whole workspace and for each group, plus the workspace default and where feedback may go. The summary a hundred-practice catalogue is read through — answered here so a client never has to fetch every practice to count them.
  */
 export const autonomyRollup = <ThrowOnError extends boolean = false>(options: Options<AutonomyRollupData, ThrowOnError>): RequestResult<AutonomyRollupResponses, unknown, ThrowOnError> => (options.client ?? client).get<AutonomyRollupResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/autonomy',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/autonomy',
+    ...options
 });
 
 /**
  * List this workspace's recent backfill campaigns
  */
 export const listBackfillRuns = <ThrowOnError extends boolean = false>(options: Options<ListBackfillRunsData, ThrowOnError>): RequestResult<ListBackfillRunsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListBackfillRunsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/backfill-runs',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/backfill-runs',
+    ...options
 });
 
 /**
@@ -2114,22 +2114,22 @@ export const listBackfillRuns = <ThrowOnError extends boolean = false>(options: 
  * Creates a run awaiting confirmation. Submits nothing and spends nothing.
  */
 export const preflightBackfillRun = <ThrowOnError extends boolean = false>(options: Options<PreflightBackfillRunData, ThrowOnError>): RequestResult<PreflightBackfillRunResponses, PreflightBackfillRunErrors, ThrowOnError> => (options.client ?? client).post<PreflightBackfillRunResponses, PreflightBackfillRunErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/backfill-runs',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/backfill-runs',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Get one backfill campaign, including its live progress
  */
 export const getBackfillRun = <ThrowOnError extends boolean = false>(options: Options<GetBackfillRunData, ThrowOnError>): RequestResult<GetBackfillRunResponses, GetBackfillRunErrors, ThrowOnError> => (options.client ?? client).get<GetBackfillRunResponses, GetBackfillRunErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/backfill-runs/{runId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/backfill-runs/{runId}',
+    ...options
 });
 
 /**
@@ -2138,13 +2138,13 @@ export const getBackfillRun = <ThrowOnError extends boolean = false>(options: Op
  * RUNNING authorises the estimated spend and starts the campaign; CANCELLED stops it for good.
  */
 export const updateBackfillRunStatus = <ThrowOnError extends boolean = false>(options: Options<UpdateBackfillRunStatusData, ThrowOnError>): RequestResult<UpdateBackfillRunStatusResponses, UpdateBackfillRunStatusErrors, ThrowOnError> => (options.client ?? client).patch<UpdateBackfillRunStatusResponses, UpdateBackfillRunStatusErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/backfill-runs/{runId}/status',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/backfill-runs/{runId}/status',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2153,9 +2153,9 @@ export const updateBackfillRunStatus = <ThrowOnError extends boolean = false>(op
  * Returns available review events, recommended requirements, and allowed evidence sources by work type
  */
 export const getPracticeDefinitionOptions = <ThrowOnError extends boolean = false>(options: Options<GetPracticeDefinitionOptionsData, ThrowOnError>): RequestResult<GetPracticeDefinitionOptionsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetPracticeDefinitionOptionsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/definition-options',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/definition-options',
+    ...options
 });
 
 /**
@@ -2164,9 +2164,9 @@ export const getPracticeDefinitionOptions = <ThrowOnError extends boolean = fals
  * Process-level messages prepared for the authenticated developer: for each way of working that recurs in their work, what the pattern is, the pieces of work it was observed on, and one thing to try next. Distinct from in-context notes (which say what is wrong in one diff) and from the mentor conversation (which asks rather than tells). Reading a message is what delivers it, so this GET records the delivery.
  */
 export const getInAppFeedback = <ThrowOnError extends boolean = false>(options: Options<GetInAppFeedbackData, ThrowOnError>): RequestResult<GetInAppFeedbackResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetInAppFeedbackResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/feedback/in-app',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/feedback/in-app',
+    ...options
 });
 
 /**
@@ -2175,36 +2175,36 @@ export const getInAppFeedback = <ThrowOnError extends boolean = false>(options: 
  * Read-only metadata for up to 50 in-context pieces of feedback addressed to the caller with recorded provider comments, newest delivery first. Uses the exact connected-provider work lookup. Only recorded successful placements are included, even when the remaining delivery failed. Incomplete units omit draft practice metadata. No bodies, private channels or replaced feedback; admin status does not broaden the recipient. Permalinks are recorded provider links, not live existence checks.
  */
 export const getOwnDeliveredWorkFeedback = <ThrowOnError extends boolean = false>(options: Options<GetOwnDeliveredWorkFeedbackData, ThrowOnError>): RequestResult<GetOwnDeliveredWorkFeedbackResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetOwnDeliveredWorkFeedbackResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/feedback/on-work',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/feedback/on-work',
+    ...options
 });
 
 /**
  * Get feedback resolution counts
  */
 export const getFeedbackResolutionCounts = <ThrowOnError extends boolean = false>(options: Options<GetFeedbackResolutionCountsData, ThrowOnError>): RequestResult<GetFeedbackResolutionCountsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetFeedbackResolutionCountsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/feedback/resolution-counts',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/feedback/resolution-counts',
+    ...options
 });
 
 /**
  * Delete the response to delivered feedback
  */
 export const deleteFeedbackResponse = <ThrowOnError extends boolean = false>(options: Options<DeleteFeedbackResponseData, ThrowOnError>): RequestResult<DeleteFeedbackResponseResponses, DeleteFeedbackResponseErrors, ThrowOnError> => (options.client ?? client).delete<DeleteFeedbackResponseResponses, DeleteFeedbackResponseErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/feedback/{feedbackId}/response',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/feedback/{feedbackId}/response',
+    ...options
 });
 
 /**
  * Get the current feedback response
  */
 export const getFeedbackResponse = <ThrowOnError extends boolean = false>(options: Options<GetFeedbackResponseData, ThrowOnError>): RequestResult<GetFeedbackResponseResponses, GetFeedbackResponseErrors, ThrowOnError> => (options.client ?? client).get<GetFeedbackResponseResponses, GetFeedbackResponseErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/feedback/{feedbackId}/response',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/feedback/{feedbackId}/response',
+    ...options
 });
 
 /**
@@ -2213,13 +2213,13 @@ export const getFeedbackResponse = <ThrowOnError extends boolean = false>(option
  * Sets the complete current response. Repeating the same request has no effect.
  */
 export const replaceFeedbackResponse = <ThrowOnError extends boolean = false>(options: Options<ReplaceFeedbackResponseData, ThrowOnError>): RequestResult<ReplaceFeedbackResponseResponses, ReplaceFeedbackResponseErrors, ThrowOnError> => (options.client ?? client).put<ReplaceFeedbackResponseResponses, ReplaceFeedbackResponseErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/feedback/{feedbackId}/response',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/feedback/{feedbackId}/response',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2228,9 +2228,9 @@ export const replaceFeedbackResponse = <ThrowOnError extends boolean = false>(op
  * Paginated observations for the authenticated developer with optional filters
  */
 export const listObservations = <ThrowOnError extends boolean = false>(options: Options<ListObservationsData, ThrowOnError>): RequestResult<ListObservationsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListObservationsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/observations',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/observations',
+    ...options
 });
 
 /**
@@ -2239,58 +2239,58 @@ export const listObservations = <ThrowOnError extends boolean = false>(options: 
  * Aggregated observation counts per practice for dashboard cards
  */
 export const getSummary = <ThrowOnError extends boolean = false>(options: Options<GetSummaryData, ThrowOnError>): RequestResult<GetSummaryResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetSummaryResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/observations/summary',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/observations/summary',
+    ...options
 });
 
 /**
  * Get observation detail
  */
 export const getObservation = <ThrowOnError extends boolean = false>(options: Options<GetObservationData, ThrowOnError>): RequestResult<GetObservationResponses, GetObservationErrors, ThrowOnError> => (options.client ?? client).get<GetObservationResponses, GetObservationErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/observations/{observationId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/observations/{observationId}',
+    ...options
 });
 
 /**
  * List pending practice releases
  */
 export const listPracticeReleases = <ThrowOnError extends boolean = false>(options: Options<ListPracticeReleasesData, ThrowOnError>): RequestResult<ListPracticeReleasesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListPracticeReleasesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/releases',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/releases',
+    ...options
 });
 
 /**
  * Decline this version of a practice release
  */
 export const declinePracticeRelease = <ThrowOnError extends boolean = false>(options: Options<DeclinePracticeReleaseData, ThrowOnError>): RequestResult<DeclinePracticeReleaseResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeclinePracticeReleaseResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/releases/{slug}',
+    ...options
 });
 
 /**
  * Compare the adopted, current, and offered practice
  */
 export const getPracticeRelease = <ThrowOnError extends boolean = false>(options: Options<GetPracticeReleaseData, ThrowOnError>): RequestResult<GetPracticeReleaseResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetPracticeReleaseResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/releases/{slug}',
+    ...options
 });
 
 /**
  * Accept selected fields from a practice release
  */
 export const acceptPracticeRelease = <ThrowOnError extends boolean = false>(options: Options<AcceptPracticeReleaseData, ThrowOnError>): RequestResult<AcceptPracticeReleaseResponses, unknown, ThrowOnError> => (options.client ?? client).put<AcceptPracticeReleaseResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/releases/{slug}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/releases/{slug}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2299,13 +2299,13 @@ export const acceptPracticeRelease = <ThrowOnError extends boolean = false>(opti
  * Sets each practice's display order to its index in the provided slug list (one atomic write)
  */
 export const reorderPractices = <ThrowOnError extends boolean = false>(options: Options<ReorderPracticesData, ThrowOnError>): RequestResult<ReorderPracticesResponses, ReorderPracticesErrors, ThrowOnError> => (options.client ?? client).patch<ReorderPracticesResponses, ReorderPracticesErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reorder',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reorder',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2314,9 +2314,9 @@ export const reorderPractices = <ThrowOnError extends boolean = false>(options: 
  * Reads the address only: nothing is fetched from it. The address must be on the server this workspace is connected to. Every way of not finding the work — not mirrored, not monitored here, another server, deleted or confidential — is the same 404.
  */
 export const resolveReviewContext = <ThrowOnError extends boolean = false>(options: Options<ResolveReviewContextData, ThrowOnError>): RequestResult<ResolveReviewContextResponses, ResolveReviewContextErrors, ThrowOnError> => (options.client ?? client).get<ResolveReviewContextResponses, ResolveReviewContextErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/review-context',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/review-context',
+    ...options
 });
 
 /**
@@ -2325,48 +2325,48 @@ export const resolveReviewContext = <ThrowOnError extends boolean = false>(optio
  * Answers 200 both when a review starts and when one deliberately does not; the body says which, and why. 403 only when the caller has no standing on the artifact.
  */
 export const requestPracticeReview = <ThrowOnError extends boolean = false>(options: Options<RequestPracticeReviewData, ThrowOnError>): RequestResult<RequestPracticeReviewResponses, RequestPracticeReviewErrors, ThrowOnError> => (options.client ?? client).post<RequestPracticeReviewResponses, RequestPracticeReviewErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/review-requests',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/review-requests',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Get the workspace's practice-review policy
  */
 export const getPracticeReviewSettings = <ThrowOnError extends boolean = false>(options: Options<GetPracticeReviewSettingsData, ThrowOnError>): RequestResult<GetPracticeReviewSettingsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetPracticeReviewSettingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/review-settings',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/review-settings',
+    ...options
 });
 
 /**
  * Update the workspace's practice-review policy
  */
 export const updatePracticeReviewSettings = <ThrowOnError extends boolean = false>(options: Options<UpdatePracticeReviewSettingsData, ThrowOnError>): RequestResult<UpdatePracticeReviewSettingsResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdatePracticeReviewSettingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/review-settings',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/review-settings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Preview the effective counts for proposed practice-review coverage
  */
 export const previewCoverage = <ThrowOnError extends boolean = false>(options: Options<PreviewCoverageData, ThrowOnError>): RequestResult<PreviewCoverageResponses, unknown, ThrowOnError> => (options.client ?? client).post<PreviewCoverageResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/review-settings/coverage-preview',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/review-settings/coverage-preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2375,9 +2375,9 @@ export const previewCoverage = <ThrowOnError extends boolean = false>(options: O
  * Returns the developer-facing name, group, rationale, and example for every practice the workspace reviews (any autonomy above OFF)
  */
 export const listReviewedPractices = <ThrowOnError extends boolean = false>(options: Options<ListReviewedPracticesData, ThrowOnError>): RequestResult<ListReviewedPracticesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListReviewedPracticesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviewed',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviewed',
+    ...options
 });
 
 /**
@@ -2386,9 +2386,9 @@ export const listReviewedPractices = <ThrowOnError extends boolean = false>(opti
  * Complete review runs newest first, every practice group together, with each observation's feedback response.
  */
 export const listReviewedWorkReviewRuns = <ThrowOnError extends boolean = false>(options: Options<ListReviewedWorkReviewRunsData, ThrowOnError>): RequestResult<ListReviewedWorkReviewRunsResponses, ListReviewedWorkReviewRunsErrors, ThrowOnError> => (options.client ?? client).get<ListReviewedWorkReviewRunsResponses, ListReviewedWorkReviewRunsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviewed-work/{artifactKind}/{artifactId}/review-runs',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviewed-work/{artifactKind}/{artifactId}/review-runs',
+    ...options
 });
 
 /**
@@ -2397,9 +2397,9 @@ export const listReviewedWorkReviewRuns = <ThrowOnError extends boolean = false>
  * Results are ordered newest first.
  */
 export const listPracticeReviews = <ThrowOnError extends boolean = false>(options: Options<ListPracticeReviewsData, ThrowOnError>): RequestResult<ListPracticeReviewsResponses, ListPracticeReviewsErrors, ThrowOnError> => (options.client ?? client).get<ListPracticeReviewsResponses, ListPracticeReviewsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews',
+    ...options
 });
 
 /**
@@ -2408,9 +2408,9 @@ export const listPracticeReviews = <ThrowOnError extends boolean = false>(option
  * One entry per practice that recent reviews considered, with the sources that skipped it.
  */
 export const listPracticeEvidenceOutcomes = <ThrowOnError extends boolean = false>(options: Options<ListPracticeEvidenceOutcomesData, ThrowOnError>): RequestResult<ListPracticeEvidenceOutcomesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListPracticeEvidenceOutcomesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews/evidence-outcomes',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews/evidence-outcomes',
+    ...options
 });
 
 /**
@@ -2419,40 +2419,40 @@ export const listPracticeEvidenceOutcomes = <ThrowOnError extends boolean = fals
  * Results include every delivery state and are ordered newest first by default.
  */
 export const listPracticeReviewFeedback = <ThrowOnError extends boolean = false>(options: Options<ListPracticeReviewFeedbackData, ThrowOnError>): RequestResult<ListPracticeReviewFeedbackResponses, ListPracticeReviewFeedbackErrors, ThrowOnError> => (options.client ?? client).get<ListPracticeReviewFeedbackResponses, ListPracticeReviewFeedbackErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews/feedback',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews/feedback',
+    ...options
 });
 
 /**
  * Get feedback with its stored body, observations and placements
  */
 export const getPracticeReviewFeedback = <ThrowOnError extends boolean = false>(options: Options<GetPracticeReviewFeedbackData, ThrowOnError>): RequestResult<GetPracticeReviewFeedbackResponses, GetPracticeReviewFeedbackErrors, ThrowOnError> => (options.client ?? client).get<GetPracticeReviewFeedbackResponses, GetPracticeReviewFeedbackErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}',
+    ...options
 });
 
 /**
  * Get the decision for a feedback proposal
  */
 export const getFeedbackProposalDecision = <ThrowOnError extends boolean = false>(options: Options<GetFeedbackProposalDecisionData, ThrowOnError>): RequestResult<GetFeedbackProposalDecisionResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetFeedbackProposalDecisionResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/approval',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/approval',
+    ...options
 });
 
 /**
  * Approve or reject an immutable feedback proposal
  */
 export const decideFeedbackProposal = <ThrowOnError extends boolean = false>(options: Options<DecideFeedbackProposalData, ThrowOnError>): RequestResult<DecideFeedbackProposalResponses, unknown, ThrowOnError> => (options.client ?? client).put<DecideFeedbackProposalResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/approval',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/approval',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2461,13 +2461,13 @@ export const decideFeedbackProposal = <ThrowOnError extends boolean = false>(opt
  * Only practice-page feedback that is waiting to be read or already shown can be withdrawn. The developer sees that it was withdrawn, not what it said; its record and evidence stay. Restoring puts it back through the page's ordinary checks and sends nothing.
  */
 export const updatePracticeReviewFeedbackWithdrawal = <ThrowOnError extends boolean = false>(options: Options<UpdatePracticeReviewFeedbackWithdrawalData, ThrowOnError>): RequestResult<UpdatePracticeReviewFeedbackWithdrawalResponses, UpdatePracticeReviewFeedbackWithdrawalErrors, ThrowOnError> => (options.client ?? client).patch<UpdatePracticeReviewFeedbackWithdrawalResponses, UpdatePracticeReviewFeedbackWithdrawalErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/withdrawal',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/withdrawal',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2476,18 +2476,18 @@ export const updatePracticeReviewFeedbackWithdrawal = <ThrowOnError extends bool
  * Results include linked feedback outcomes and are ordered newest first by default.
  */
 export const listPracticeReviewObservations = <ThrowOnError extends boolean = false>(options: Options<ListPracticeReviewObservationsData, ThrowOnError>): RequestResult<ListPracticeReviewObservationsResponses, ListPracticeReviewObservationsErrors, ThrowOnError> => (options.client ?? client).get<ListPracticeReviewObservationsResponses, ListPracticeReviewObservationsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews/observations',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews/observations',
+    ...options
 });
 
 /**
  * Get an observation with its evidence and linked feedback
  */
 export const getPracticeReviewObservation = <ThrowOnError extends boolean = false>(options: Options<GetPracticeReviewObservationData, ThrowOnError>): RequestResult<GetPracticeReviewObservationResponses, GetPracticeReviewObservationErrors, ThrowOnError> => (options.client ?? client).get<GetPracticeReviewObservationResponses, GetPracticeReviewObservationErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews/observations/{observationId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews/observations/{observationId}',
+    ...options
 });
 
 /**
@@ -2496,13 +2496,13 @@ export const getPracticeReviewObservation = <ThrowOnError extends boolean = fals
  * Invalidating stops feedback citing the observation that has not reached anyone yet. Feedback already delivered keeps its record, and a comment already posted on the provider stays there. Restoring does not re-send anything.
  */
 export const updatePracticeReviewObservationValidity = <ThrowOnError extends boolean = false>(options: Options<UpdatePracticeReviewObservationValidityData, ThrowOnError>): RequestResult<UpdatePracticeReviewObservationValidityResponses, UpdatePracticeReviewObservationValidityErrors, ThrowOnError> => (options.client ?? client).patch<UpdatePracticeReviewObservationValidityResponses, UpdatePracticeReviewObservationValidityErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews/observations/{observationId}/validity',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews/observations/{observationId}/validity',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2511,9 +2511,9 @@ export const updatePracticeReviewObservationValidity = <ThrowOnError extends boo
  * In total, over time and by practice. Reviews count by when they were created, observations by when they were recorded and feedback by when it was created, as the review, observation and feedback lists filter them. The range is split into days, weeks or months, by its length, in the given time zone.
  */
 export const getPracticeReviewOverview = <ThrowOnError extends boolean = false>(options: Options<GetPracticeReviewOverviewData, ThrowOnError>): RequestResult<GetPracticeReviewOverviewResponses, GetPracticeReviewOverviewErrors, ThrowOnError> => (options.client ?? client).get<GetPracticeReviewOverviewResponses, GetPracticeReviewOverviewErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/reviews/overview',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/reviews/overview',
+    ...options
 });
 
 /**
@@ -2522,18 +2522,18 @@ export const getPracticeReviewOverview = <ThrowOnError extends boolean = false>(
  * Returns each practice's standing, direction, supporting observations, and developer guidance.
  */
 export const listPracticeStandings = <ThrowOnError extends boolean = false>(options: Options<ListPracticeStandingsData, ThrowOnError>): RequestResult<ListPracticeStandingsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListPracticeStandingsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/standings',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/standings',
+    ...options
 });
 
 /**
  * List this workspace's sweep schedules
  */
 export const listSweepSchedules = <ThrowOnError extends boolean = false>(options: Options<ListSweepSchedulesData, ThrowOnError>): RequestResult<ListSweepSchedulesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListSweepSchedulesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/sweep-schedules',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/sweep-schedules',
+    ...options
 });
 
 /**
@@ -2542,13 +2542,13 @@ export const listSweepSchedules = <ThrowOnError extends boolean = false>(options
  * Authorises the recurring spend. The first sweep runs within the hour.
  */
 export const createSweepSchedule = <ThrowOnError extends boolean = false>(options: Options<CreateSweepScheduleData, ThrowOnError>): RequestResult<CreateSweepScheduleResponses, CreateSweepScheduleErrors, ThrowOnError> => (options.client ?? client).post<CreateSweepScheduleResponses, CreateSweepScheduleErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/sweep-schedules',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/sweep-schedules',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2557,9 +2557,9 @@ export const createSweepSchedule = <ThrowOnError extends boolean = false>(option
  * Removes the instruction. Campaigns it already opened keep their records.
  */
 export const deleteSweepSchedule = <ThrowOnError extends boolean = false>(options: Options<DeleteSweepScheduleData, ThrowOnError>): RequestResult<DeleteSweepScheduleResponses, DeleteSweepScheduleErrors, ThrowOnError> => (options.client ?? client).delete<DeleteSweepScheduleResponses, DeleteSweepScheduleErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/sweep-schedules/{scheduleId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/sweep-schedules/{scheduleId}',
+    ...options
 });
 
 /**
@@ -2568,13 +2568,13 @@ export const deleteSweepSchedule = <ThrowOnError extends boolean = false>(option
  * Changes the cadence, the window, or whether the sweep runs at all.
  */
 export const replaceSweepSchedule = <ThrowOnError extends boolean = false>(options: Options<ReplaceSweepScheduleData, ThrowOnError>): RequestResult<ReplaceSweepScheduleResponses, ReplaceSweepScheduleErrors, ThrowOnError> => (options.client ?? client).put<ReplaceSweepScheduleResponses, ReplaceSweepScheduleErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/sweep-schedules/{scheduleId}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/sweep-schedules/{scheduleId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2583,9 +2583,9 @@ export const replaceSweepSchedule = <ThrowOnError extends boolean = false>(optio
  * Workspace admins only. Built from the signal ledger, so it includes work that was never reviewed — which is exactly what a listing derived from review runs cannot show. Most recently signalled first.
  */
 export const listTracedArtifacts = <ThrowOnError extends boolean = false>(options: Options<ListTracedArtifactsData, ThrowOnError>): RequestResult<ListTracedArtifactsResponses, ListTracedArtifactsErrors, ThrowOnError> => (options.client ?? client).get<ListTracedArtifactsResponses, ListTracedArtifactsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/trace',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/trace',
+    ...options
 });
 
 /**
@@ -2594,9 +2594,9 @@ export const listTracedArtifacts = <ThrowOnError extends boolean = false>(option
  * Every practice the workspace runs against this kind of work appears, including the ones that did nothing, each with the recorded reason. Name a review and every answer is that review's own. A workspace admin may read any work, with or without a review; anyone else must name a review that observed them on this work, and reads only the observations about them and the feedback addressed to them. 404 means nothing about this artifact was ever recorded here, the named review never ran on it, or the caller may not read it.
  */
 export const getArtifactTrace = <ThrowOnError extends boolean = false>(options: Options<GetArtifactTraceData, ThrowOnError>): RequestResult<GetArtifactTraceResponses, GetArtifactTraceErrors, ThrowOnError> => (options.client ?? client).get<GetArtifactTraceResponses, GetArtifactTraceErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/trace/{artifactKind}/{artifactId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/trace/{artifactKind}/{artifactId}',
+    ...options
 });
 
 /**
@@ -2605,9 +2605,9 @@ export const getArtifactTrace = <ThrowOnError extends boolean = false>(options: 
  * Counts only observations about the caller and feedback addressed to them, including when the caller is a workspace admin. The named review must have observed them on this work. An inaccessible review answers the same 404 as an absent one.
  */
 export const getOwnArtifactTrace = <ThrowOnError extends boolean = false>(options: Options<GetOwnArtifactTraceData, ThrowOnError>): RequestResult<GetOwnArtifactTraceResponses, GetOwnArtifactTraceErrors, ThrowOnError> => (options.client ?? client).get<GetOwnArtifactTraceResponses, GetOwnArtifactTraceErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/trace/{artifactKind}/{artifactId}/own',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/trace/{artifactKind}/{artifactId}/own',
+    ...options
 });
 
 /**
@@ -2616,9 +2616,9 @@ export const getOwnArtifactTrace = <ThrowOnError extends boolean = false>(option
  * Counts developers, never names them. Every split shows all its parts, however few developers they count. The splits count every developer's current standing and take no window.
  */
 export const getPracticesAcrossWorkspace = <ThrowOnError extends boolean = false>(options: Options<GetPracticesAcrossWorkspaceData, ThrowOnError>): RequestResult<GetPracticesAcrossWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetPracticesAcrossWorkspaceResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/workspace-overview',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/workspace-overview',
+    ...options
 });
 
 /**
@@ -2627,40 +2627,40 @@ export const getPracticesAcrossWorkspace = <ThrowOnError extends boolean = false
  * A middle half shows whenever one or more developers are counted in the window.
  */
 export const getPracticesAcrossWorkspaceTiles = <ThrowOnError extends boolean = false>(options: Options<GetPracticesAcrossWorkspaceTilesData, ThrowOnError>): RequestResult<GetPracticesAcrossWorkspaceTilesResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetPracticesAcrossWorkspaceTilesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/workspace-overview/tiles',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/workspace-overview/tiles',
+    ...options
 });
 
 /**
  * Delete a practice definition
  */
 export const deletePractice = <ThrowOnError extends boolean = false>(options: Options<DeletePracticeData, ThrowOnError>): RequestResult<DeletePracticeResponses, DeletePracticeErrors, ThrowOnError> => (options.client ?? client).delete<DeletePracticeResponses, DeletePracticeErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}',
+    ...options
 });
 
 /**
  * Get a practice definition
  */
 export const getPractice = <ThrowOnError extends boolean = false>(options: Options<GetPracticeData, ThrowOnError>): RequestResult<GetPracticeResponses, GetPracticeErrors, ThrowOnError> => (options.client ?? client).get<GetPracticeResponses, GetPracticeErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}',
+    ...options
 });
 
 /**
  * Update a practice
  */
 export const updatePractice = <ThrowOnError extends boolean = false>(options: Options<UpdatePracticeData, ThrowOnError>): RequestResult<UpdatePracticeResponses, UpdatePracticeErrors, ThrowOnError> => (options.client ?? client).patch<UpdatePracticeResponses, UpdatePracticeErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2669,13 +2669,13 @@ export const updatePractice = <ThrowOnError extends boolean = false>(options: Op
  * OFF stops the review entirely. HUMAN_APPROVAL runs it and records every observation, holds feedback on the work for an authorized reviewer, and still writes the developer's practice pages and the mentor, which are read on request. AUTOMATIC sends feedback on the work without asking, as far as this workspace's reach allows. Send a null autonomy to clear the practice's own setting so it follows its group, and through the group the workspace default.
  */
 export const setAutonomy = <ThrowOnError extends boolean = false>(options: Options<SetAutonomyData, ThrowOnError>): RequestResult<SetAutonomyResponses, SetAutonomyErrors, ThrowOnError> => (options.client ?? client).patch<SetAutonomyResponses, SetAutonomyErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}/autonomy',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}/autonomy',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2684,13 +2684,13 @@ export const setAutonomy = <ThrowOnError extends boolean = false>(options: Optio
  * Moves the practice to the requested group, or to Unassigned when groupSlug is null
  */
 export const bindGroup = <ThrowOnError extends boolean = false>(options: Options<BindGroupData, ThrowOnError>): RequestResult<BindGroupResponses, BindGroupErrors, ThrowOnError> => (options.client ?? client).put<BindGroupResponses, BindGroupErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}/group',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}/group',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2699,97 +2699,97 @@ export const bindGroup = <ThrowOnError extends boolean = false>(options: Options
  * Moves the practice and sets its exact position in one atomic write; omit groupSlug for Unassigned
  */
 export const placePractice = <ThrowOnError extends boolean = false>(options: Options<PlacePracticeData, ThrowOnError>): RequestResult<PlacePracticeResponses, PlacePracticeErrors, ThrowOnError> => (options.client ?? client).put<PlacePracticeResponses, PlacePracticeErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}/placement',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/practices/{practiceSlug}/placement',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Send product feedback to instance administrators
  */
 export const submitWorkspaceProductFeedback = <ThrowOnError extends boolean = false>(options: Options<SubmitWorkspaceProductFeedbackData, ThrowOnError>): RequestResult<SubmitWorkspaceProductFeedbackResponses, unknown, ThrowOnError> => (options.client ?? client).post<SubmitWorkspaceProductFeedbackResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/product-feedback',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/product-feedback',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List the open surveys the current account has neither answered nor declined
  */
 export const listProductSurveyInvitations = <ThrowOnError extends boolean = false>(options: Options<ListProductSurveyInvitationsData, ThrowOnError>): RequestResult<ListProductSurveyInvitationsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListProductSurveyInvitationsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/product-feedback/surveys',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/product-feedback/surveys',
+    ...options
 });
 
 /**
  * Undo a decline; a submitted response is never touched
  */
 export const undoProductSurveyDecline = <ThrowOnError extends boolean = false>(options: Options<UndoProductSurveyDeclineData, ThrowOnError>): RequestResult<UndoProductSurveyDeclineResponses, unknown, ThrowOnError> => (options.client ?? client).delete<UndoProductSurveyDeclineResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline',
+    ...options
 });
 
 /**
  * Decline a survey for the current account
  */
 export const declineProductSurvey = <ThrowOnError extends boolean = false>(options: Options<DeclineProductSurveyData, ThrowOnError>): RequestResult<DeclineProductSurveyResponses, unknown, ThrowOnError> => (options.client ?? client).put<DeclineProductSurveyResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline',
+    ...options
 });
 
 /**
  * Record that the invitation was shown to the current account
  */
 export const acknowledgeProductSurveyInvitation = <ThrowOnError extends boolean = false>(options: Options<AcknowledgeProductSurveyInvitationData, ThrowOnError>): RequestResult<AcknowledgeProductSurveyInvitationResponses, unknown, ThrowOnError> => (options.client ?? client).put<AcknowledgeProductSurveyInvitationResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/invitation',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/invitation',
+    ...options
 });
 
 /**
  * Submit a survey response once
  */
 export const submitProductSurveyResponse = <ThrowOnError extends boolean = false>(options: Options<SubmitProductSurveyResponseData, ThrowOnError>): RequestResult<SubmitProductSurveyResponseResponses, unknown, ThrowOnError> => (options.client ?? client).post<SubmitProductSurveyResponseResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/responses',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/responses',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Toggle public visibility for a workspace
  */
 export const updatePublicVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdatePublicVisibilityData, ThrowOnError>): RequestResult<UpdatePublicVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdatePublicVisibilityResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/public-visibility',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/public-visibility',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Remove a repository from a workspace monitor list
  */
 export const removeRepositoryToMonitor = <ThrowOnError extends boolean = false>(options: Options<RemoveRepositoryToMonitorData, ThrowOnError>): RequestResult<RemoveRepositoryToMonitorResponses, unknown, ThrowOnError> => (options.client ?? client).delete<RemoveRepositoryToMonitorResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/repositories',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/repositories',
+    ...options
 });
 
 /**
@@ -2801,101 +2801,101 @@ export const getRepositoriesToMonitor = <ThrowOnError extends boolean = false>(o
  * Add a repository to a workspace monitor list
  */
 export const addRepositoryToMonitor = <ThrowOnError extends boolean = false>(options: Options<AddRepositoryToMonitorData, ThrowOnError>): RequestResult<AddRepositoryToMonitorResponses, unknown, ThrowOnError> => (options.client ?? client).post<AddRepositoryToMonitorResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/repositories',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/repositories',
+    ...options
 });
 
 /**
  * List the workspace's allow-listed Slack channels with their consent state
  */
 export const listSlackChannels = <ThrowOnError extends boolean = false>(options: Options<ListSlackChannelsData, ThrowOnError>): RequestResult<ListSlackChannelsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListSlackChannelsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/slack/channels',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/slack/channels',
+    ...options
 });
 
 /**
  * Allow-list a Slack channel (lands in PENDING; idempotent on the natural key)
  */
 export const registerSlackChannel = <ThrowOnError extends boolean = false>(options: Options<RegisterSlackChannelData, ThrowOnError>): RequestResult<RegisterSlackChannelResponses, unknown, ThrowOnError> => (options.client ?? client).post<RegisterSlackChannelResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/slack/channels',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/slack/channels',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List Slack channels available to add to monitoring
  */
 export const listSlackChannelCandidates = <ThrowOnError extends boolean = false>(options: Options<ListSlackChannelCandidatesData, ThrowOnError>): RequestResult<ListSlackChannelCandidatesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListSlackChannelCandidatesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/slack/channels/candidates',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/slack/channels/candidates',
+    ...options
 });
 
 /**
  * Transition a Slack channel to a target consent state (activate / pause / resume / revoke)
  */
 export const updateSlackChannelConsent = <ThrowOnError extends boolean = false>(options: Options<UpdateSlackChannelConsentData, ThrowOnError>): RequestResult<UpdateSlackChannelConsentResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateSlackChannelConsentResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * The immutable consent-transition audit trail of one Slack channel
  */
 export const listSlackChannelConsentEvents = <ThrowOnError extends boolean = false>(options: Options<ListSlackChannelConsentEventsData, ThrowOnError>): RequestResult<ListSlackChannelConsentEventsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListSlackChannelConsentEventsResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}/consent-events',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/slack/channels/{slackChannelId}/consent-events',
+    ...options
 });
 
 /**
  * Update current user's Slack workspace preferences
  */
 export const updateSlackUserPreferences = <ThrowOnError extends boolean = false>(options: Options<UpdateSlackUserPreferencesData, ThrowOnError>): RequestResult<UpdateSlackUserPreferencesResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateSlackUserPreferencesResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/slack/me/preferences',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/slack/me/preferences',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Rename workspace slug and create redirect
  */
 export const renameSlug = <ThrowOnError extends boolean = false>(options: Options<RenameSlugData, ThrowOnError>): RequestResult<RenameSlugResponses, unknown, ThrowOnError> => (options.client ?? client).patch<RenameSlugResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/slug',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/slug',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Update workspace lifecycle status
  */
 export const updateStatus = <ThrowOnError extends boolean = false>(options: Options<UpdateStatusData, ThrowOnError>): RequestResult<UpdateStatusResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateStatusResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/status',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/status',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2911,41 +2911,41 @@ export const getAllTeams = <ThrowOnError extends boolean = false>(options: Optio
  * Show or hide a team in workspace activity
  */
 export const updateTeamVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateTeamVisibilityData, ThrowOnError>): RequestResult<UpdateTeamVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).post<UpdateTeamVisibilityResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/team/{id}/visibility',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/team/{id}/visibility',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 export const updateRepositoryVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateRepositoryVisibilityData, ThrowOnError>): RequestResult<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).post<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/team/{teamId}/repositories/{repositoryId}/visibility',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/team/{teamId}/repositories/{repositoryId}/visibility',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Remove a repository label from a team
  */
 export const removeLabelFromTeam = <ThrowOnError extends boolean = false>(options: Options<RemoveLabelFromTeamData, ThrowOnError>): RequestResult<RemoveLabelFromTeamResponses, unknown, ThrowOnError> => (options.client ?? client).delete<RemoveLabelFromTeamResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}',
+    ...options
 });
 
 /**
  * Add a repository label to a team
  */
 export const addLabelToTeam = <ThrowOnError extends boolean = false>(options: Options<AddLabelToTeamData, ThrowOnError>): RequestResult<AddLabelToTeamResponses, unknown, ThrowOnError> => (options.client ?? client).post<AddLabelToTeamResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/teams/{teamId}/labels/{repositoryId}/{label}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/labels/{repositoryId}/{label}',
+    ...options
 });
 
 /**
@@ -2961,13 +2961,13 @@ export const getTeamSettings = <ThrowOnError extends boolean = false>(options: O
  * Updates the visibility settings for a team in the workspace
  */
 export const updateTeamSettings = <ThrowOnError extends boolean = false>(options: Options<UpdateTeamSettingsData, ThrowOnError>): RequestResult<UpdateTeamSettingsResponses, UpdateTeamSettingsErrors, ThrowOnError> => (options.client ?? client).patch<UpdateTeamSettingsResponses, UpdateTeamSettingsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -2983,9 +2983,9 @@ export const getLabelFilters = <ThrowOnError extends boolean = false>(options: O
  * Removes a label filter from a team in the workspace
  */
 export const removeLabelFilter = <ThrowOnError extends boolean = false>(options: Options<RemoveLabelFilterData, ThrowOnError>): RequestResult<RemoveLabelFilterResponses, RemoveLabelFilterErrors, ThrowOnError> => (options.client ?? client).delete<RemoveLabelFilterResponses, RemoveLabelFilterErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId}',
+    ...options
 });
 
 /**
@@ -2994,9 +2994,9 @@ export const removeLabelFilter = <ThrowOnError extends boolean = false>(options:
  * Adds a label as a filter for a team in the workspace
  */
 export const addLabelFilter = <ThrowOnError extends boolean = false>(options: Options<AddLabelFilterData, ThrowOnError>): RequestResult<AddLabelFilterResponses, AddLabelFilterErrors, ThrowOnError> => (options.client ?? client).post<AddLabelFilterResponses, AddLabelFilterErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId}',
+    ...options
 });
 
 /**
@@ -3012,44 +3012,44 @@ export const getRepositorySettings = <ThrowOnError extends boolean = false>(opti
  * Updates the contribution visibility settings for a repository in a team
  */
 export const updateRepositorySettings = <ThrowOnError extends boolean = false>(options: Options<UpdateRepositorySettingsData, ThrowOnError>): RequestResult<UpdateRepositorySettingsResponses, UpdateRepositorySettingsErrors, ThrowOnError> => (options.client ?? client).patch<UpdateRepositorySettingsResponses, UpdateRepositorySettingsErrors, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId}',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Update workspace Personal Access Token
  */
 export const updateToken = <ThrowOnError extends boolean = false>(options: Options<UpdateTokenData, ThrowOnError>): RequestResult<UpdateTokenResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateTokenResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/token',
-  ...options,
-  headers: {
-    'Content-Type': 'application/json',
-    ...options.headers
-  }
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/token',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * List workspace users and their linked account status
  */
 export const listUserViewUsers = <ThrowOnError extends boolean = false>(options: Options<ListUserViewUsersData, ThrowOnError>): RequestResult<ListUserViewUsersResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListUserViewUsersResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/user-view/users',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/user-view/users',
+    ...options
 });
 
 /**
  * Confirm access to a workspace user
  */
 export const getUserViewUser = <ThrowOnError extends boolean = false>(options: Options<GetUserViewUserData, ThrowOnError>): RequestResult<GetUserViewUserResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetUserViewUserResponses, unknown, ThrowOnError>({
-  security: [{ scheme: 'bearer', type: 'http' }],
-  url: '/workspaces/{workspaceSlug}/user-view/users/{userId}',
-  ...options
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/user-view/users/{userId}',
+    ...options
 });
 
 /**

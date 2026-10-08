@@ -183,6 +183,7 @@ void test("vulnerability remediation bypasses normal update latency", () => {
 	assert.equal(config.osvVulnerabilityAlerts, true);
 	assert.equal(config.dependencyDashboardOSVVulnerabilitySummary, "unresolved");
 	assert.deepEqual(config.vulnerabilityAlerts, {
+		rangeStrategy: "replace",
 		enabled: true,
 		minimumReleaseAge: null,
 		dependencyDashboardApproval: false,

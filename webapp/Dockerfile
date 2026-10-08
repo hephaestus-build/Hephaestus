@@ -7,6 +7,8 @@ RUN pnpm runtime set node ${NODE_VERSION} -g
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .oxfmtrc.json .oxlintrc.json oxlint.react.jsonc oxlint.app.jsonc /repo/
 COPY webapp/package.json /repo/webapp/
 COPY docs/package.json /repo/docs/
+COPY extension/package.json /repo/extension/
+COPY scripts/api-generator/package.json /repo/scripts/api-generator/
 COPY patches/ /repo/patches/
 COPY docker/agents/pi/patches/ /repo/docker/agents/pi/patches/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \

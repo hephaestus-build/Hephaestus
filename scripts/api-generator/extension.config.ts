@@ -7,8 +7,8 @@ import { defineConfig } from "@hey-api/openapi-ts";
  * say so. No TanStack plugin: the views reach the API only through the worker.
  */
 export default defineConfig({
-	input: "../server/openapi.yaml",
-	output: "src/api",
+	input: "../../server/openapi.yaml",
+	output: "../../extension/src/api",
 	plugins: ["@hey-api/typescript", "@hey-api/client-fetch", "@hey-api/sdk"],
 	parser: {
 		filters: {

@@ -96,6 +96,24 @@
 			"allowedVersions": "11.x"
 		},
 		{
+			"description": "The stable API generator consumes the TypeScript 6 compiler API",
+			"matchManagers": ["npm"],
+			"matchFileNames": ["scripts/api-generator/package.json"],
+			"matchPackageNames": ["typescript"],
+			"allowedVersions": "6.x",
+			"groupName": "Hey API"
+		},
+		{
+			"description": "Both API clients use one stable generator; prerelease snapshots do not match npm advisory ranges",
+			"matchManagers": ["npm"],
+			"matchPackageNames": ["@hey-api/*"],
+			"allowedVersions": "/^[0-9]+\\.[0-9]+\\.[0-9]+$/",
+			"groupName": "Hey API",
+			"prBodyNotes": [
+				"Run `vp run generate:api:client` and commit both generated clients. Verify webapp and extension tests and builds."
+			]
+		},
+		{
 			"matchManagers": ["npm"],
 			"matchFileNames": ["webapp/package.json"],
 			"matchPackageNames": ["ai", "@ai-sdk/react"],
@@ -257,6 +275,7 @@
 		}
 	],
 	"vulnerabilityAlerts": {
+		"rangeStrategy": "replace",
 		"enabled": true,
 		"labels": ["security", "dependencies"],
 		"minimumReleaseAge": null,

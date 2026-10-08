@@ -13,7 +13,7 @@
 		"test:storybook": "vp test --run --project storybook --reporter=default --reporter=junit --outputFile.junit=test-results/junit-stories.xml",
 		"test:e2e": "playwright test",
 		"storybook:dev": "storybook dev -p 6007",
-		"generate:api": "openapi-ts",
+		"generate:api": "vp run --filter api-generator generate:extension",
 		"build:e2e": "wxt build --mode e2e"
 	},
 	"dependencies": {
@@ -26,7 +26,6 @@
 		"zod": "4.5.4"
 	},
 	"devDependencies": {
-		"@hey-api/openapi-ts": "0.0.0-next-20260824173136",
 		"@oxlint/plugins": "catalog:",
 		"@playwright/test": "1.63.0",
 		"@storybook/addon-a11y": "10.6.0",

@@ -27,7 +27,7 @@
 		"test:e2e": "playwright test",
 		"export:assets": "node scripts/export-assets.ts",
 		"storybook:dev": "storybook dev -p 6006",
-		"generate:api": "openapi-ts"
+		"generate:api": "vp run --filter api-generator generate:webapp"
 	},
 	"dependencies": {
 		"@ai-sdk/react": "4.0.96",
@@ -69,7 +69,6 @@
 		"@chromatic-com/storybook": "5.3.1",
 		"@fontsource-variable/inter": "5.3.0",
 		"@gitlab/svgs": "3.164.0",
-		"@hey-api/openapi-ts": "0.0.0-next-20260824173136",
 		"@oxlint/plugins": "catalog:",
 		"@playwright/test": "1.63.0",
 		"@primer/primitives": "11.10.0",
