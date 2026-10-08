@@ -631,6 +631,7 @@ export function checkImages(
 			"attestation",
 			"verify",
 			`oci://${repositoryPath}@${digest}`,
+			"--bundle-from-oci",
 			"--repo",
 			repository,
 			"--signer-workflow",

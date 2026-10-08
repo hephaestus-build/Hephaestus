@@ -172,7 +172,15 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 					repository,
 				]);
 				if (failure !== "signature") {
-					expected.push(["gh", "attestation", "verify", `oci://${immutable}`, "--owner", owner]);
+					expected.push([
+						"gh",
+						"attestation",
+						"verify",
+						`oci://${immutable}`,
+						"--bundle-from-oci",
+						"--owner",
+						owner,
+					]);
 				}
 				if (failure === "none" && site.job === "tag-unchanged-images") {
 					expected.push([

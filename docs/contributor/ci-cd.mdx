@@ -615,6 +615,8 @@ Image verification stays beside publishing. The single-platform step signs and v
 The merge job signs recursively, then verifies the index. The alias job verifies each immutable
 subject before moving its tags. Merge and alias jobs need no checkout or repository toolchain just
 to verify registry evidence.
+Provenance verification reads attestation bundles from the image registry and keeps the existing
+identity and predicate policy.
 
 `scripts/ci-provenance.test.ts` executes all three shell paths and pins
 the same repository/workflow signature identity, GitHub OIDC issuer and owner-constrained

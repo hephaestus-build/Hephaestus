@@ -411,6 +411,7 @@ function verifyIndexSignatures(manifest: Manifest, release: string): void {
 				"attestation",
 				"verify",
 				`oci://${reference}`,
+				"--bundle-from-oci",
 				"--owner",
 				owner,
 				"--signer-workflow",

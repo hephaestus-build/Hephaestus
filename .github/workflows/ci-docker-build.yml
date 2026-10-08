@@ -221,7 +221,7 @@ jobs:
               --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
               --certificate-github-workflow-repository "$REPOSITORY" \
               > /dev/null
-            gh attestation verify "oci://$verified" --owner "$REPOSITORY_OWNER"
+            gh attestation verify "oci://$verified" --bundle-from-oci --owner "$REPOSITORY_OWNER"
             docker buildx imagetools create \
               --tag "$image:$HEAD_SHA" \
               --tag "$image:pr-$PR_NUMBER" \
