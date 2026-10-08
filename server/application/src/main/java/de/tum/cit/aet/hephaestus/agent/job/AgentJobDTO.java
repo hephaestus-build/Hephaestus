@@ -36,9 +36,16 @@ public record AgentJobDTO(
                                 + "ran because required evidence was missing, unreadable, stale, or unauthorized — so no observations "
                                 + "means nothing was assessed, not that nothing was wrong. COALESCED means no model ran because a "
                                 + "completed review had already answered every ready practice on exactly the same code — its "
-                                + "answers are listed in answeredPractices, and this run assessed nothing anew. REVIEWED "
-                                + "means the model ran against sufficient evidence.")
+                                + "answers are listed in answeredPractices, and this run assessed nothing anew. SUPERSEDED "
+                                + "means the waiting attempt was replaced by an admitted newer review of the same author's "
+                                + "current work, named in coveringJobId, which carries this review's practices and may still "
+                                + "be waiting or running; the replacement makes no additional assessment, and earlier attempt "
+                                + "history remains. REVIEWED means the model ran against sufficient evidence.")
         ReviewRunOutcome reviewOutcome,
+
+        @Schema(description = "The newer review that replaced this one; set only when reviewOutcome is SUPERSEDED")
+        @Nullable
+        UUID coveringJobId,
 
         @NonNull
         @Schema(
@@ -141,6 +148,7 @@ public record AgentJobDTO(
                 job.getMetadata(),
                 job.getOutput(),
                 ReviewRunOutcome.fromJobOutput(job.getOutput()),
+                ReviewRunOutcome.coveringJobId(job.getOutput()),
                 redactInstanceBaseUrl(snapshot),
                 snapshotString(snapshot, "upstreamModelId"),
                 job.getExitCode(),
@@ -180,6 +188,7 @@ public record AgentJobDTO(
                 row.getMetadata(),
                 row.getOutput(),
                 ReviewRunOutcome.fromJobOutput(row.getOutput()),
+                ReviewRunOutcome.coveringJobId(row.getOutput()),
                 redactInstanceBaseUrl(snapshot),
                 snapshotString(snapshot, "upstreamModelId"),
                 row.getExitCode(),

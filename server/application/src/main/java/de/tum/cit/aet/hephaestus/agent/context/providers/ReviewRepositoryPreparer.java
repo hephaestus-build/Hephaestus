@@ -127,11 +127,21 @@ public class ReviewRepositoryPreparer {
         var key = authorized.key();
         var source = authorized.source();
         String cloneUrl = authorized.cloneUrl();
-        String token = source.accessToken(key.workspaceId())
-                .orElseThrow(() -> new JobPreparationException("SCM credentials are unavailable"));
         var metadata = job.getMetadata();
         if (metadata == null) throw new JobPreparationException("Review job has no metadata");
         String head = requireText(metadata, "commit_sha");
+        String recordedBase = null;
+        if (source.recordsReviewDiffBase()) {
+            if (!head.equals(authorized.head())) {
+                throw new JobPreparationException("Recorded merge request revision does not match the queued head");
+            }
+            recordedBase = authorized.base();
+            if (recordedBase == null || recordedBase.isBlank()) {
+                throw new JobPreparationException("Recorded merge request base commit is unavailable");
+            }
+        }
+        String token = source.accessToken(key.workspaceId())
+                .orElseThrow(() -> new JobPreparationException("SCM credentials are unavailable"));
         git.ensureRepository(key, cloneUrl, token);
         // The branch fetch usually carries the head already; the provider's review ref is for one it
         // does not reach, such as a fork's or a force-pushed branch's.
@@ -139,13 +149,6 @@ public class ReviewRepositoryPreparer {
             var reviewRef = source.reviewHeadRef(authorized.number());
             if (reviewRef.isPresent()) git.fetchRemoteCommit(key, cloneUrl, reviewRef.get(), head, token);
             if (!git.commitExists(key, head)) throw new JobPreparationException("Pinned review commit is unavailable");
-        }
-        String recordedBase = null;
-        if (source.recordsReviewDiffBase()) {
-            if (!head.equals(authorized.head())) {
-                throw new JobPreparationException("Recorded merge request revision does not match the queued head");
-            }
-            recordedBase = authorized.base();
         }
         String target = recordedBase != null ? recordedBase : MetaJson.optString(metadata, "base_ref_oid");
         if (target == null) target = git.resolveBranchHead(key, requireText(metadata, "target_branch"));

@@ -320,6 +320,10 @@ export type AgentJob = {
    */
   configSnapshot: unknown;
   /**
+   * The newer review that replaced this one; set only when reviewOutcome is SUPERSEDED
+   */
+  coveringJobId?: string;
+  /**
    * Timestamp when the job was created
    */
   createdAt: Date;
@@ -404,9 +408,9 @@ export type AgentJob = {
    */
   retryCount: number;
   /**
-   * Why a COMPLETED run produced the observations it did. INSUFFICIENT_EVIDENCE means no model ran because required evidence was missing, unreadable, stale, or unauthorized — so no observations means nothing was assessed, not that nothing was wrong. COALESCED means no model ran because a completed review had already answered every ready practice on exactly the same code — its answers are listed in answeredPractices, and this run assessed nothing anew. REVIEWED means the model ran against sufficient evidence.
+   * Why a COMPLETED run produced the observations it did. INSUFFICIENT_EVIDENCE means no model ran because required evidence was missing, unreadable, stale, or unauthorized — so no observations means nothing was assessed, not that nothing was wrong. COALESCED means no model ran because a completed review had already answered every ready practice on exactly the same code — its answers are listed in answeredPractices, and this run assessed nothing anew. SUPERSEDED means the waiting attempt was replaced by an admitted newer review of the same author's current work, named in coveringJobId, which carries this review's practices and may still be waiting or running; the replacement makes no additional assessment, and earlier attempt history remains. REVIEWED means the model ran against sufficient evidence.
    */
-  reviewOutcome: 'REVIEWED' | 'INSUFFICIENT_EVIDENCE' | 'COALESCED';
+  reviewOutcome: 'REVIEWED' | 'INSUFFICIENT_EVIDENCE' | 'COALESCED' | 'SUPERSEDED';
   /**
    * Timestamp when the job started running
    */
@@ -5196,6 +5200,7 @@ export type ReviewRunSummary = {
    * Result-processing status: null = not applicable, PENDING = awaiting processing, DELIVERED = processing finished, FAILED = processing error. Processing may include delivery; this status alone does not establish feedback publication.
    */
   resultProcessing?: 'PENDING' | 'DELIVERED' | 'FAILED';
+  reviewOutcome: 'REVIEWED' | 'INSUFFICIENT_EVIDENCE' | 'COALESCED' | 'SUPERSEDED';
   status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'TIMED_OUT' | 'CANCELLED';
   target: ReviewRunTarget;
 };

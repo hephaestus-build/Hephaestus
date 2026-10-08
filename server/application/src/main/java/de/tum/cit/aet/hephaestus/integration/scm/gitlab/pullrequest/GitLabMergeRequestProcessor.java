@@ -1243,7 +1243,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 sourceBranch,
                 targetBranch,
                 headRefOid,
-                null, // baseRefOid — not in webhook, null preserves existing
+                null, // A changed head without a provider base invalidates the stored diff pair.
                 mergedBy != null ? mergedBy.getId() : null,
                 mergeCommitSha // the hook's merge_commit_sha; null, as before a merge, keeps the stored one
                 );

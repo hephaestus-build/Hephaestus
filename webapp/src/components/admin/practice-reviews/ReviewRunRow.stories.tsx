@@ -76,6 +76,16 @@ export const Completed: Story = {
 	},
 };
 
+export const ReplacedByANewerReview: Story = {
+	args: { review: { ...completed, reviewOutcome: "SUPERSEDED" } },
+	play: async ({ canvas }) => {
+		canvas.getByRole("button", { name: "Replaced" });
+		canvas.getByText("Replaced by a newer review.");
+		await expect(canvas.queryByRole("list", { name: "Observations" })).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/Feedback:/u)).not.toBeInTheDocument();
+	},
+};
+
 /** The reviewed work is not always a pull request, and the row says which kind it was. */
 export const AConversation: Story = {
 	args: { review: conversation },

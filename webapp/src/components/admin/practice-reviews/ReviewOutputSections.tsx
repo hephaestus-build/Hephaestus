@@ -40,6 +40,11 @@ const NO_ASSESSMENT: Partial<
 		description:
 			"An earlier review had already checked every ready practice on the same code, so this review did not assess them again. Open the earlier review to see its observations.",
 	},
+	SUPERSEDED: {
+		title: "Replaced by a newer review",
+		description:
+			"A newer admitted review carries this review’s practices on the updated work and may still be waiting or running.",
+	},
 };
 
 export interface ReviewOutputScope {

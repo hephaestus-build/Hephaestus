@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.context.providers.LinkedWorkItemContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.ReplaceableReviewCoverage;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -27,12 +29,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Coalesces pushes and title or description edits into one review of the work as it stands after
@@ -42,6 +47,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>Also the pending-signal reaper's way back in for a pull request: a push or edit admission held back is
  * re-offered through the same settlement, so it waits for newer edits and pushes as the sweep does and
  * cannot review the work ahead of them. Every other pull-request occasion goes straight to the submitter.
+ *
+ * <p>A review admitted here can wait in the queue while the work moves on and a newer one is admitted. The sweep then
+ * completes each queued one the newest covers as {@link ReviewRunOutcome#SUPERSEDED} instead of starting its next
+ * attempt ({@link #replaceCovered(long, long)}).
  */
 @Component
 @ConditionalOnServerRole
@@ -71,6 +80,12 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
     private final PracticeReviewProperties reviewProperties;
     private final AgentJobRepository jobs;
     private final TransactionTemplate transactions;
+    private final ReplaceableReviewCoverage coverage;
+    private final AgentJobTelemetry telemetry;
+    private final JsonMapper mapper;
+    // Where the next replacement pass resumes, by workspace and pull request id. Sweeps are serialized by their lock.
+    private long replacementCursorWorkspace;
+    private long replacementCursorPullRequest;
 
     public PullRequestPushCoalescer(
             ArtifactSignalRepository signals,
@@ -80,7 +95,10 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
             WorkspaceResolver workspaceResolver,
             PracticeReviewProperties reviewProperties,
             AgentJobRepository jobs,
-            TransactionTemplate transactions) {
+            TransactionTemplate transactions,
+            ReplaceableReviewCoverage coverage,
+            AgentJobTelemetry telemetry,
+            JsonMapper mapper) {
         this.signals = signals;
         this.pullRequests = pullRequests;
         this.recorder = recorder;
@@ -89,6 +107,9 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
         this.reviewProperties = reviewProperties;
         this.jobs = jobs;
         this.transactions = transactions;
+        this.coverage = coverage;
+        this.telemetry = telemetry;
+        this.mapper = mapper;
     }
 
     @Override
@@ -129,6 +150,95 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
                 }
             }
         }
+        replaceCovered();
+    }
+
+    /**
+     * One page of pull requests with a queued review and a later one, in key order from where the last page ended,
+     * so an uncovered review cannot hold the page and keep the rest waiting. Each pull request commits on its own.
+     */
+    void replaceCovered() {
+        var page = jobs.findQueuedAuthorReviewsWithALaterOne(
+                signalValues(), replacementCursorWorkspace, replacementCursorPullRequest, BATCH_SIZE);
+        for (var work : page) {
+            try {
+                transactions.executeWithoutResult(
+                        status -> replaceCovered(work.getWorkspaceId(), work.getPullRequestId()));
+            } catch (RuntimeException e) {
+                log.warn(
+                        "Could not replace covered reviews: workspaceId={}, pullRequestId={}",
+                        work.getWorkspaceId(),
+                        work.getPullRequestId(),
+                        e);
+            }
+        }
+        boolean more = page.size() == BATCH_SIZE;
+        replacementCursorWorkspace = more ? page.getLast().getWorkspaceId() : 0;
+        replacementCursorPullRequest = more ? page.getLast().getPullRequestId() : 0;
+    }
+
+    /**
+     * Completes each queued automatic push, edit or linked-work review of the author as {@link
+     * ReviewRunOutcome#SUPERSEDED} when the newest such review of the pull request covers it: the newest is queued or
+     * running, was admitted for the work as it stands (head, title, description and, for linked work, the closing
+     * issues' material), and {@link ReplaceableReviewCoverage} holds. Nothing is retargeted. A newest occasion still
+     * held in the ledger is not a review yet, so it replaces nothing until its owner admits it. Ready, merge and
+     * reviewer reviews are never selected.
+     *
+     * <p>Locks the pull request first, as {@link #drain} and the mirror's writers do, then the newest review for share
+     * so a claim or cancel of it settles first, then the queued ones as a claim locks them, skipping any a claim holds.
+     */
+    void replaceCovered(long workspaceId, long pullRequestId) {
+        pullRequests.lockById(pullRequestId);
+        AgentJob newest = jobs.lockLatestAuthorReviewOf(workspaceId, pullRequestId, signalValues())
+                .orElse(null);
+        // Admitted and not yet finished. A finished review answers through its own record (COALESCED), not here.
+        if (newest == null
+                || (newest.getStatus() != AgentJobStatus.QUEUED && newest.getStatus() != AgentJobStatus.RUNNING)) {
+            return;
+        }
+        PullRequest pr = pullRequests.findByIdWithAllForGate(pullRequestId).orElse(null);
+        if (pr == null || pr.getDeletedAt() != null || !admittedForWorkAsItStands(workspaceId, newest, pr)) return;
+        for (AgentJob queued :
+                jobs.lockQueuedAuthorReviewsBefore(workspaceId, pullRequestId, signalValues(), newest.getCreatedAt())) {
+            if (!coverage.covers(newest, queued)) continue;
+            queued.setStatus(AgentJobStatus.COMPLETED);
+            queued.setCompletedAt(Instant.now());
+            queued.setOutput(mapper.createObjectNode()
+                    .put(ReviewRunOutcome.OUTPUT_FIELD, ReviewRunOutcome.SUPERSEDED.name())
+                    .put(ReviewRunOutcome.COVERING_JOB_FIELD, newest.getId().toString()));
+            AgentJob superseded = jobs.save(queued);
+            log.info("Superseded a queued review: jobId={}, coveringJobId={}", superseded.getId(), newest.getId());
+            TransactionCallbacks.afterCommit(
+                    () -> telemetry.terminal(superseded, AgentJobStatus.COMPLETED, AgentJobTelemetry.age(superseded)));
+        }
+    }
+
+    /** An equal head alone is not enough: an edit or linked-work review also read the text and issues it names. */
+    private boolean admittedForWorkAsItStands(long workspaceId, AgentJob review, PullRequest pr) {
+        JsonNode facts = review.getMetadata();
+        if (facts == null
+                || pr.getHeadRefOid() == null
+                || !pr.getHeadRefOid().equals(text(facts, "commit_sha"))
+                || !Objects.equals(pr.getTitle(), text(facts, "title"))
+                || !Objects.equals(pr.getBody(), text(facts, "body"))) {
+            return false;
+        }
+        if (!ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.value().equals(text(facts, "signal"))) return true;
+        String linked = text(facts, "linked_issue_revision");
+        return LinkedWorkItemContentSource.currentClosingMaterialKey(
+                        workspaceId, pr, pullRequests.findClosingIssuesById(pr.getId()))
+                .map(key -> key.revision().value().equals(linked))
+                .orElse(false);
+    }
+
+    private static @Nullable String text(JsonNode metadata, String key) {
+        JsonNode value = metadata.get(key);
+        return value == null || value.isNull() ? null : value.asString();
+    }
+
+    private static List<String> signalValues() {
+        return SIGNALS.stream().map(SignalName::value).toList();
     }
 
     void drain(long workspaceId, long pullRequestId, Instant now) {

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.handler.ReplaceableReviewCoverage;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.json.JsonMapper;
 
 class PullRequestPushCoalescerTest extends BaseUnitTest {
     private static final Instant NOW = Instant.parse("2026-09-23T12:00:00Z");
@@ -49,7 +51,10 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
             workspaceResolver,
             new PracticeReviewProperties(false, 15, 5, null, 12, 16000),
             jobs,
-            mock(TransactionTemplate.class));
+            mock(TransactionTemplate.class),
+            mock(ReplaceableReviewCoverage.class),
+            mock(AgentJobTelemetry.class),
+            JsonMapper.builder().build());
 
     private final PullRequest pullRequest = pullRequest();
 

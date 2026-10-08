@@ -1021,6 +1021,7 @@ export const reviewRuns: ReviewRunSummary[] = allRuns
 	.map((run) => ({
 		id: run.id,
 		status: run.status,
+		reviewOutcome: "REVIEWED" as const,
 		target: run.work,
 		createdAt: new Date(run.startedAt),
 		observations: {

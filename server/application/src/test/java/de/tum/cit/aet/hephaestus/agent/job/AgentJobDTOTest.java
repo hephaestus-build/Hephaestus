@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -91,6 +92,26 @@ class AgentJobDTOTest extends BaseUnitTest {
         assertThat(dto.availableAt())
                 .as("defaulted to submit time by prePersist, never null")
                 .isNotNull();
+    }
+
+    @Test
+    void shouldNameTheCoveringReviewOnlyForASupersededRun() {
+        AgentJob superseded = jobWithSnapshot(snapshotWithScope(FundingSource.INSTANCE));
+        UUID covering = UUID.randomUUID();
+        superseded.setOutput(
+                MAPPER.createObjectNode().put("outcome", "SUPERSEDED").put("coveringJobId", covering.toString()));
+        AgentJob coalesced = jobWithSnapshot(snapshotWithScope(FundingSource.INSTANCE));
+        coalesced.setOutput(
+                MAPPER.createObjectNode().put("outcome", "COALESCED").put("coveringJobId", covering.toString()));
+
+        AgentJobDTO dto = AgentJobDTO.from(superseded, ReviewRunTargetMapper.from(superseded));
+        AgentJobDTO other = AgentJobDTO.from(coalesced, ReviewRunTargetMapper.from(coalesced));
+
+        assertThat(dto.reviewOutcome()).isEqualTo(ReviewRunOutcome.SUPERSEDED);
+        assertThat(dto.coveringJobId()).isEqualTo(covering);
+        assertThat(dto.deliveryStatus()).isNull();
+        assertThat(other.reviewOutcome()).isEqualTo(ReviewRunOutcome.COALESCED);
+        assertThat(other.coveringJobId()).isNull();
     }
 
     private static AgentJob jobWithSnapshot(ConfigSnapshot snapshot) {

@@ -362,7 +362,8 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
      * no processing status yet matches only when the filter leaves result processing open.
      */
     @Query("SELECT j.id AS id, j.status AS status, j.deliveryStatus AS deliveryStatus, j.jobType AS jobType, "
-            + "j.integrationKind AS integrationKind, j.metadata AS metadata, j.createdAt AS createdAt FROM AgentJob j "
+            + "j.integrationKind AS integrationKind, j.metadata AS metadata, j.createdAt AS createdAt, "
+            + "function('jsonb_extract_path_text', j.output, 'outcome') AS reviewOutcome FROM AgentJob j "
             + "WHERE j.workspace.id = :workspaceId AND j.purpose = :purpose "
             + "AND j.status IN :#{#filter.statuses()} "
             + "AND (:#{#filter.anyResultProcessing()} = TRUE "
@@ -519,6 +520,90 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             @Param("title") @Nullable String title,
             @Param("body") @Nullable String body,
             @Param("excludedSignals") Collection<String> excludedSignals);
+
+    /**
+     * The newest review of this pull request's author under one of {@code signals}, share-locked so that a claim or
+     * cancel of it still in progress commits before a decision reads its state.
+     */
+    @Query(value = """
+        SELECT j.* FROM agent_job j
+        WHERE j.workspace_id = :workspaceId
+          AND j.job_type = 'PULL_REQUEST_REVIEW'
+          AND j.metadata -> 'pull_request_id' = to_jsonb(CAST(:pullRequestId AS bigint))
+          AND j.metadata ->> 'signal' IN (:signals)
+          AND j.metadata -> 'about_user_id' IS NULL
+          AND j.practice_trigger_mode = 'AUTO'
+        ORDER BY j.created_at DESC, j.id DESC
+        LIMIT 1
+        FOR SHARE
+        """, nativeQuery = true)
+    Optional<AgentJob> lockLatestAuthorReviewOf(
+            @Param("workspaceId") long workspaceId,
+            @Param("pullRequestId") long pullRequestId,
+            @Param("signals") Collection<String> signals);
+
+    /**
+     * Queued reviews of this pull request's author under one of {@code signals} created before {@code before}, locked
+     * as a claim locks them. A row a claim already holds is skipped: that claim decides it.
+     */
+    @Query(value = """
+        SELECT j.* FROM agent_job j
+        WHERE j.workspace_id = :workspaceId
+          AND j.job_type = 'PULL_REQUEST_REVIEW'
+          AND j.status = 'QUEUED'
+          AND j.metadata -> 'pull_request_id' = to_jsonb(CAST(:pullRequestId AS bigint))
+          AND j.metadata ->> 'signal' IN (:signals)
+          AND j.metadata -> 'about_user_id' IS NULL
+          AND j.practice_trigger_mode = 'AUTO'
+          AND j.created_at < :before
+        FOR UPDATE SKIP LOCKED
+        """, nativeQuery = true)
+    List<AgentJob> lockQueuedAuthorReviewsBefore(
+            @Param("workspaceId") long workspaceId,
+            @Param("pullRequestId") long pullRequestId,
+            @Param("signals") Collection<String> signals,
+            @Param("before") Instant before);
+
+    /**
+     * Candidates only, in key order after the given pull request, so a sweep pages through every candidate rather than
+     * revisiting the same first batch. The caller locks each pull request and decides again.
+     */
+    @WorkspaceAgnostic("Finds queued reviews with a later one across workspaces; each decision is workspace-scoped")
+    @Query(value = """
+        SELECT queued.workspace_id AS "workspaceId",
+               CAST(queued.metadata ->> 'pull_request_id' AS bigint) AS "pullRequestId"
+        FROM agent_job queued
+        WHERE queued.status = 'QUEUED'
+          AND queued.job_type = 'PULL_REQUEST_REVIEW'
+          AND queued.metadata ->> 'signal' IN (:signals)
+          AND queued.metadata -> 'about_user_id' IS NULL
+          AND queued.practice_trigger_mode = 'AUTO'
+          AND (queued.workspace_id, CAST(queued.metadata ->> 'pull_request_id' AS bigint))
+              > (:afterWorkspaceId, :afterPullRequestId)
+          AND EXISTS (
+              SELECT 1 FROM agent_job later
+              WHERE later.workspace_id = queued.workspace_id
+                AND later.job_type = 'PULL_REQUEST_REVIEW'
+                AND later.metadata -> 'pull_request_id' = queued.metadata -> 'pull_request_id'
+                AND later.metadata ->> 'signal' IN (:signals)
+                AND later.metadata -> 'about_user_id' IS NULL
+                AND later.practice_trigger_mode = 'AUTO'
+                AND later.created_at > queued.created_at)
+        GROUP BY 1, 2
+        ORDER BY 1, 2
+        LIMIT :batchSize
+        """, nativeQuery = true)
+    List<QueuedAuthorReviewRow> findQueuedAuthorReviewsWithALaterOne(
+            @Param("signals") Collection<String> signals,
+            @Param("afterWorkspaceId") long afterWorkspaceId,
+            @Param("afterPullRequestId") long afterPullRequestId,
+            @Param("batchSize") int batchSize);
+
+    interface QueuedAuthorReviewRow {
+        Long getWorkspaceId();
+
+        Long getPullRequestId();
+    }
 
     public interface CapturedReviewedWorkRow {
         UUID getId();
@@ -1310,6 +1395,9 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
     interface ReviewRunSummaryRow extends ReviewRunTargetRow {
         AgentJobStatus getStatus();
+
+        @Nullable
+        String getReviewOutcome();
 
         @Nullable
         DeliveryStatus getDeliveryStatus();
