@@ -498,6 +498,21 @@ void describe("CI contract", () => {
 		}
 	});
 
+	void test("the webapp image copies every workspace manifest before installing dependencies", async () => {
+		const workspace = parseDocument(await readFile("pnpm-workspace.yaml", "utf8"));
+		const packages = workspace.get("packages");
+		assert.ok(isSeq(packages));
+		const dockerfile = await readFile("webapp/Dockerfile", "utf8");
+		const fetch = dockerfile.indexOf("pnpm fetch --filter webapp");
+		assert.ok(fetch > 0);
+		const sources = buildStageCopySources(dockerfile.slice(0, fetch));
+		for (const item of packages.items) {
+			const directory = asString(isScalar(item) ? item.value : item, "workspace package");
+			const manifest = path.posix.join(directory, "package.json");
+			assert.ok(sources.includes(manifest), `The install layer must copy ${manifest}`);
+		}
+	});
+
 	void test("the webapp image copies the catalogue imported by preview fixtures", async () => {
 		const config = asRecord(parseJsonc(await readFile("webapp/tsconfig.json", "utf8")), "tsconfig");
 		const options = asRecord(config.compilerOptions, "compiler options");
