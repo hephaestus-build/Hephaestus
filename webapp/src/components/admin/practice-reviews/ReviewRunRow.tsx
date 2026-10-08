@@ -3,7 +3,7 @@ import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	RESULT_PROCESSING_DEFS,
-	REVIEW_STATUS_DEFS,
+	reviewStatusDef,
 } from "@/components/practice-vocabulary/review-status-defs";
 
 import { reviewLevel } from "./review-levels";
@@ -25,7 +25,7 @@ export function ReviewRunRow({ review }: ReviewRunRowProps) {
 	const entry = reviewLevel(review.id);
 	return (
 		<ReviewRow
-			status={REVIEW_STATUS_DEFS[review.status]}
+			status={reviewStatusDef(review)}
 			title={<ReviewRowLink entry={entry}>{review.target.title}</ReviewRowLink>}
 			meta={
 				<>
@@ -62,6 +62,9 @@ function hasFeedbackOutput(review: ReviewRunSummary) {
  * found nothing, so neither gets one.
  */
 function RunOutputSummary({ review }: { review: ReviewRunSummary }) {
+	if (review.reviewOutcome === "SUPERSEDED") {
+		return <p>Replaced by a newer review.</p>;
+	}
 	if (review.status === "COMPLETED" || hasObservationOutput(review) || hasFeedbackOutput(review)) {
 		return (
 			<>

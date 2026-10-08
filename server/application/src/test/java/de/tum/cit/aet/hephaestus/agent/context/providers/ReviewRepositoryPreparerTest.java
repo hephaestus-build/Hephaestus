@@ -223,12 +223,28 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         pullRequest.setBaseRefOid("c".repeat(40));
         pullRequest.setHeadRefOid(stale ? "d".repeat(40) : HEAD);
         when(tokens.recordsReviewDiffBase()).thenReturn(true);
-        when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
-        when(git.commitExists(KEY, HEAD)).thenReturn(true);
+        if (!stale) {
+            when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
+            when(git.commitExists(KEY, HEAD)).thenReturn(true);
+        }
         assertThatThrownBy(() -> preparer.prepare(job))
                 .isInstanceOf(JobPreparationException.class)
                 .hasMessageContaining(stale ? "does not match" : "base commit is unavailable");
         verify(git, never()).reviewBase(any(), anyString(), anyString());
+        if (stale) verifyNoInteractions(git);
+    }
+
+    @Test
+    void shouldNotSubstituteAQueuedBaseWhenTheProviderDiffBaseIsMissing() {
+        authorize();
+        when(tokens.recordsReviewDiffBase()).thenReturn(true);
+
+        assertThatThrownBy(() -> preparer.prepare(job))
+                .isInstanceOf(JobPreparationException.class)
+                .hasMessageContaining("Recorded merge request base commit is unavailable");
+
+        verify(tokens, never()).accessToken(1);
+        verifyNoInteractions(git);
     }
 
     @Test

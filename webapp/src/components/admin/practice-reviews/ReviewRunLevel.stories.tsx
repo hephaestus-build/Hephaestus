@@ -250,6 +250,44 @@ export const AnsweredByAnEarlierReview: Story = {
 	},
 };
 
+export const ReplacedByANewerReview: Story = {
+	args: {
+		job: {
+			status: "ready",
+			job: {
+				...reviewJob(COMPLETED_RUN),
+				reviewOutcome: "SUPERSEDED",
+				coveringJobId: "eeeeeeee-2222-2222-2222-222222222222",
+				startedAt: undefined,
+				deliveryStatus: undefined,
+				llmModel: undefined,
+				llmTotalCalls: 0,
+				llmTotalInputTokens: 0,
+				llmTotalOutputTokens: 0,
+				llmTotalReasoningTokens: 0,
+				exitCode: undefined,
+			},
+		},
+		observations: NOTHING,
+		feedback: NOTHING,
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await waitFor(async () =>
+			expect(await panel.findAllByText("Replaced by a newer review")).toHaveLength(2),
+		);
+		await expect(panel.queryByText("No observations were recorded")).toBeNull();
+		await expect(panel.queryByText("No feedback was composed")).toBeNull();
+		await expect(panel.queryByText("Answered by an earlier review")).toBeNull();
+		await expect(panel.getByText("Replaced", { exact: true })).toBeVisible();
+		await expect(panel.queryByText("Completed", { exact: true })).toBeNull();
+		await expect(panel.getByRole("link", { name: "the newer review" })).toHaveAttribute(
+			"href",
+			expect.stringContaining("eeeeeeee-2222-2222-2222-222222222222"),
+		);
+	},
+};
+
 /**
  * Nothing yet, and the reason is that the review is still going — not that it found nothing. A run in
  * flight is the one that can be stopped, so the footer offers exactly that, behind a confirmation.

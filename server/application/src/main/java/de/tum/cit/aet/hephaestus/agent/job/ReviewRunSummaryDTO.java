@@ -14,6 +14,7 @@ import org.jspecify.annotations.Nullable;
 public record ReviewRunSummaryDTO(
         @NonNull UUID id,
         @NonNull AgentJobStatus status,
+        @NonNull ReviewRunOutcome reviewOutcome,
 
         @Schema(description = DeliveryStatus.DESCRIPTION) @Nullable
         DeliveryStatus resultProcessing,
@@ -30,6 +31,7 @@ public record ReviewRunSummaryDTO(
         return new ReviewRunSummaryDTO(
                 review.getId(),
                 review.getStatus(),
+                ReviewRunOutcome.fromRecordedValue(review.getReviewOutcome()),
                 review.getDeliveryStatus(),
                 ReviewRunTargetDTO.from(target),
                 review.getCreatedAt(),

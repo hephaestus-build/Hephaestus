@@ -3,6 +3,7 @@ import { InlineLink } from "@/components/common/InlineLink";
 import { useNow } from "@/components/common/use-now";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { hasText } from "@/lib/text";
 import { holdReasonCopy, jobWait } from "./job-utils";
 import { practiceLevel, reviewLevel } from "./review-levels";
 
@@ -32,6 +33,18 @@ export function ReviewRunNotices({ job, practices, outputMayBeIncomplete }: Revi
 	const answered = job.answeredPractices ?? [];
 	return (
 		<>
+			{job.reviewOutcome === "SUPERSEDED" && hasText(job.coveringJobId) && (
+				<Alert>
+					<AlertTitle>Newer review</AlertTitle>
+					<AlertDescription>
+						Open{" "}
+						<InlineLink render={<DetailStackLink entry={reviewLevel(job.coveringJobId)} />}>
+							the newer review
+						</InlineLink>{" "}
+						to see its progress and results.
+					</AlertDescription>
+				</Alert>
+			)}
 			{answered.length > 0 && (
 				<Alert>
 					<AlertTitle>

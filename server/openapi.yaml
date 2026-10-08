@@ -9751,6 +9751,11 @@ components:
           description: Frozen agent config at submit time (an INSTANCE-scoped connection's
             baseUrl is redacted to scheme://host; only a WORKSPACE-scoped connection's
             baseUrl is left intact)
+        coveringJobId:
+          type: string
+          format: uuid
+          description: The newer review that replaced this one; set only when reviewOutcome
+            is SUPERSEDED
         createdAt:
           type: string
           format: date-time
@@ -9850,11 +9855,16 @@ components:
             \ not that nothing was wrong. COALESCED means no model ran because a completed\
             \ review had already answered every ready practice on exactly the same\
             \ code — its answers are listed in answeredPractices, and this run assessed\
-            \ nothing anew. REVIEWED means the model ran against sufficient evidence."
+            \ nothing anew. SUPERSEDED means the waiting attempt was replaced by an\
+            \ admitted newer review of the same author's current work, named in coveringJobId,\
+            \ which carries this review's practices and may still be waiting or running;\
+            \ the replacement makes no additional assessment, and earlier attempt\
+            \ history remains. REVIEWED means the model ran against sufficient evidence."
           enum:
           - REVIEWED
           - INSUFFICIENT_EVIDENCE
           - COALESCED
+          - SUPERSEDED
         startedAt:
           type: string
           format: date-time
@@ -17701,6 +17711,13 @@ components:
           - PENDING
           - DELIVERED
           - FAILED
+        reviewOutcome:
+          type: string
+          enum:
+          - REVIEWED
+          - INSUFFICIENT_EVIDENCE
+          - COALESCED
+          - SUPERSEDED
         status:
           type: string
           enum:
@@ -17717,6 +17734,7 @@ components:
       - feedback
       - id
       - observations
+      - reviewOutcome
       - status
       - target
     ReviewRunTarget:

@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.ReplaceableReviewCoverage;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -47,6 +48,8 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
@@ -54,6 +57,8 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
+import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -146,6 +151,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -158,6 +164,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     private static final String HEAD = "1".repeat(40);
     private static final String NEXT_HEAD = "2".repeat(40);
     private static final String TREE = "3".repeat(40);
+    private static final String LATER_HEAD = "4".repeat(40);
     private static final byte[] GENERATED_PATHS = "{\"patterns\":[],\"paths\":[]}".getBytes(StandardCharsets.UTF_8);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -251,6 +258,15 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     @Autowired
     private AnsweredPractices answeredPractices;
 
+    @Autowired
+    private ReplaceableReviewCoverage coverage;
+
+    @Autowired
+    private AgentJobTelemetry telemetry;
+
+    @Autowired
+    private JsonMapper jsonMapper;
+
     private Workspace workspace;
     private User developer;
     private Repository repository;
@@ -289,7 +305,10 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 workspaceResolver,
                 reviewProperties,
                 agentJobRepository,
-                transactions);
+                transactions,
+                coverage,
+                telemetry,
+                jsonMapper);
     }
 
     @ParameterizedTest
@@ -1368,6 +1387,267 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 .satisfies(row -> assertThat(row.getReviewedWork()).isNotNull());
         assertThat(agentJobRepository.findCapturedReviewedWork(other.getId(), Set.of(job.getId())))
                 .isEmpty();
+    }
+
+    /**
+     * A push queued behind a newer one: nothing replaces it while the newer one waits in the ledger or when the
+     * decision rolls back. Once the newer one is admitted for the work as it stands, a later pass with no new occasion
+     * completes it as superseded, names the newer review, and leaves its ledger row and delivery untouched. A retry
+     * waiting after an earlier attempt keeps that attempt's captured evidence, logs and usage as they were recorded.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldSupersedeAQueuedPushOnlyAfterANewerPushIsAdmittedAndTheDecisionCommits(boolean retried) {
+        practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        push(NEXT_HEAD);
+        settle(pr);
+        SignalKey olderKey = currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        AgentJob admitted = jobOf(rowOf(olderKey));
+        if (retried) {
+            ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(MAPPER);
+            EvidenceSnapshotFixtures.availableSource(
+                    snapshot, PullRequestContentSource.DIFF.value(), ReviewedWorkFixtures.BASE + ":" + NEXT_HEAD);
+            admitted.setEvidenceSnapshot(snapshot);
+            admitted.setRetryCount(1);
+            admitted.setContainerLogs("attempt 1 ended before admission");
+            admitted.setLlmTotalCalls(3);
+            admitted.setLlmTotalInputTokens(1200);
+            admitted.setLlmTotalOutputTokens(300);
+            agentJobRepository.saveAndFlush(admitted);
+        }
+        AgentJob older = job(admitted);
+        push(LATER_HEAD);
+
+        replace(pr);
+        assertThat(job(older).getStatus()).isEqualTo(AgentJobStatus.QUEUED);
+
+        settle(pr);
+        AgentJob newer = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        transactions.executeWithoutResult(status -> {
+            coalescer.replaceCovered(workspace.getId(), pr.getId());
+            status.setRollbackOnly();
+        });
+        assertThat(job(older).getStatus()).isEqualTo(AgentJobStatus.QUEUED);
+
+        replace(pr);
+
+        AgentJob superseded = job(older);
+        assertThat(superseded.getStatus()).isEqualTo(AgentJobStatus.COMPLETED);
+        assertThat(ReviewRunOutcome.fromJobOutput(superseded.getOutput())).isEqualTo(ReviewRunOutcome.SUPERSEDED);
+        assertThat(ReviewRunOutcome.coveringJobId(superseded.getOutput())).isEqualTo(newer.getId());
+        assertThat(superseded.getDeliveryStatus()).isNull();
+        assertThat(superseded.getMetadata()).isEqualTo(older.getMetadata());
+        assertThat(superseded.getRetryCount()).isEqualTo(older.getRetryCount());
+        assertThat(superseded.getEvidenceSnapshot()).isEqualTo(older.getEvidenceSnapshot());
+        assertThat(superseded.getContainerLogs()).isEqualTo(older.getContainerLogs());
+        assertThat(superseded.getLlmTotalCalls()).isEqualTo(older.getLlmTotalCalls());
+        assertThat(superseded.getLlmTotalInputTokens()).isEqualTo(older.getLlmTotalInputTokens());
+        assertThat(superseded.getLlmTotalOutputTokens()).isEqualTo(older.getLlmTotalOutputTokens());
+        assertThat(ObservationAdmissionService.isAdmitted(superseded)).isFalse();
+        assertThat(observationRepository.findByAgentJobId(superseded.getId(), workspace.getId()))
+                .isEmpty();
+        assertThat(rowOf(olderKey).getState()).isEqualTo(SignalState.TRIGGERED);
+        assertThat(job(newer).getStatus()).isEqualTo(AgentJobStatus.QUEUED);
+        var summary = agentJobRepository
+                .findReviewRunSummaries(
+                        workspace.getId(),
+                        AgentPurpose.PRACTICE_REVIEW,
+                        new ReviewRunFilterParams(null, null, null, null),
+                        null,
+                        null,
+                        Pageable.unpaged())
+                .stream()
+                .filter(row -> row.getId().equals(older.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(ReviewRunOutcome.fromRecordedValue(summary.getReviewOutcome()))
+                .isEqualTo(ReviewRunOutcome.SUPERSEDED);
+    }
+
+    /** The newer occasion was held back for budget; the reaper admits it without another webhook. */
+    @Test
+    void shouldSupersedeAQueuedPushWhenTheReaperAdmitsTheHeldBackNewerOne() {
+        practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        push(NEXT_HEAD);
+        settle(pr);
+        AgentJob older = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        upsert(false, LATER_HEAD, "Adds the thing");
+        SignalKey held = pending(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+
+        replace(pr);
+        assertThat(job(older).getStatus()).isEqualTo(AgentJobStatus.QUEUED);
+
+        reoffer();
+        replace(pr);
+
+        assertThat(ReviewRunOutcome.coveringJobId(job(older).getOutput()))
+                .isEqualTo(jobOf(rowOf(held)).getId());
+    }
+
+    /** A pass pages through every candidate in the instance, so it reaches this one without a new occasion. */
+    @Test
+    void shouldReachAQueuedBacklogReviewThroughThePagedPass() {
+        practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        push(NEXT_HEAD);
+        settle(pr);
+        AgentJob older = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        push(LATER_HEAD);
+        settle(pr);
+
+        for (int pass = 0; pass < 100 && job(older).getStatus() == AgentJobStatus.QUEUED; pass++) {
+            coalescer.replaceCovered();
+        }
+
+        assertThat(ReviewRunOutcome.fromJobOutput(job(older).getOutput())).isEqualTo(ReviewRunOutcome.SUPERSEDED);
+    }
+
+    /** Whichever locks the queued row first decides it; the other leaves it alone. */
+    @Test
+    void shouldLeaveAQueuedReviewToAClaimThatHoldsIt() throws Exception {
+        practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        push(NEXT_HEAD);
+        settle(pr);
+        AgentJob older = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        push(LATER_HEAD);
+        settle(pr);
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+
+        try (ExecutorService threads = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<?> claim = threads.submit(() -> transactions.executeWithoutResult(status -> {
+                assertThat(agentJobRepository.findByIdQueuedForUpdateSkipLocked(older.getId(), Instant.now()))
+                        .isPresent();
+                held.countDown();
+                awaitUninterruptibly(release);
+            }));
+            awaitUninterruptibly(held);
+            replace(pr);
+            assertThat(job(older).getStatus()).isEqualTo(AgentJobStatus.QUEUED);
+            release.countDown();
+            claim.get(30, TimeUnit.SECONDS);
+        }
+
+        replace(pr);
+        assertThat(job(older).getStatus()).isEqualTo(AgentJobStatus.COMPLETED);
+        var reclaimed = transactions.execute(
+                status -> agentJobRepository.findByIdQueuedForUpdateSkipLocked(older.getId(), Instant.now()));
+        assertThat(reclaimed).isEmpty();
+    }
+
+    /** An edit review covers a queued push only when it selects every practice the push selects. */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldSupersedeAQueuedPushWithAnEditReviewOnlyWhenItSelectsEveryPushPractice(boolean editSelectsIt) {
+        if (editSelectsIt) {
+            practice(
+                    "ships-tests-with-the-change",
+                    ScmSignals.PULL_REQUEST_SYNCHRONIZED,
+                    ScmSignals.PULL_REQUEST_EDITED);
+        } else {
+            practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+            practice("describe-what-and-why", ScmSignals.PULL_REQUEST_EDITED);
+        }
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        push(NEXT_HEAD);
+        settle(pr);
+        AgentJob older = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        edit("Adds the thing because reviewers could not tell why", Set.of("body"));
+        settle(pr);
+        assertThat(signalOf(jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_EDITED)))))
+                .isEqualTo(ScmSignals.PULL_REQUEST_EDITED.value());
+
+        replace(pr);
+
+        assertThat(job(older).getStatus()).isEqualTo(editSelectsIt ? AgentJobStatus.COMPLETED : AgentJobStatus.QUEUED);
+    }
+
+    /**
+     * The newest review covers nothing when it was not admitted for the work as it stands, even at the same head, or
+     * when it has finished: a completed review answers through its own record, never as a replacement.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"STALE", "FAILED", "COMPLETED"})
+    void shouldKeepAQueuedPushWhenTheNewestReviewIsStaleOrFinished(String newest) {
+        practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        push(NEXT_HEAD);
+        settle(pr);
+        AgentJob older = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        push(LATER_HEAD);
+        settle(pr);
+        AgentJob newer = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        if (newest.equals("STALE")) {
+            edit("Adds the thing because reviewers could not tell why", Set.of("body"));
+        } else {
+            newer.setStatus(AgentJobStatus.valueOf(newest));
+            agentJobRepository.saveAndFlush(newer);
+        }
+
+        replace(pr);
+
+        assertThat(job(older).getStatus()).isEqualTo(AgentJobStatus.QUEUED);
+    }
+
+    /** Once the newest review has captured, only what its readiness report found ready is carried forward. */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldSupersedeAQueuedPushOnlyWithPracticesTheRunningReviewFoundReady(boolean codeReady) {
+        practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        push(NEXT_HEAD);
+        settle(pr);
+        AgentJob older = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        push(LATER_HEAD);
+        settle(pr);
+        AgentJob newer = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        Instant decidedAt = Instant.now();
+        var diff = new SourceReadinessCheck(
+                PullRequestContentSource.DIFF,
+                ArtifactSourceCatalogRegistry.CURRENT_VERSION,
+                decidedAt,
+                decidedAt,
+                codeReady,
+                codeReady ? List.of() : List.of(SourceReadinessReason.SOURCE_NOT_AVAILABLE));
+        newer.setStatus(AgentJobStatus.RUNNING);
+        newer.setReviewReadiness(jsonMapper.valueToTree(new AutomatedReviewReadinessReport(
+                ArtifactSourceCatalogRegistry.CURRENT_VERSION,
+                "0".repeat(64),
+                ArtifactKinds.PULL_REQUEST.value(),
+                decidedAt,
+                decidedAt,
+                List.of(new AutomatedReviewReadinessDecision(
+                        "ships-tests-with-the-change", decidedAt, codeReady, List.of(), List.of(diff))))));
+        agentJobRepository.saveAndFlush(newer);
+
+        replace(pr);
+
+        assertThat(job(older).getStatus()).isEqualTo(codeReady ? AgentJobStatus.COMPLETED : AgentJobStatus.QUEUED);
+    }
+
+    /** Ready is not a revision occasion: a later push never replaces it. */
+    @Test
+    void shouldNeverSupersedeAQueuedReadyReview() {
+        practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_READY, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        PullRequest pr = pullRequest(true, HEAD, "Adds the thing");
+        AgentJob ready = markReady(pr);
+        push(NEXT_HEAD);
+        settle(pr);
+
+        replace(pr);
+
+        assertThat(job(ready).getStatus()).isEqualTo(AgentJobStatus.QUEUED);
+    }
+
+    private void replace(PullRequest pr) {
+        transactions.executeWithoutResult(status -> coalescer.replaceCovered(workspace.getId(), pr.getId()));
+    }
+
+    private AgentJob job(AgentJob job) {
+        return agentJobRepository.findById(job.getId()).orElseThrow();
     }
 
     private void bindModel(Workspace workspace) {

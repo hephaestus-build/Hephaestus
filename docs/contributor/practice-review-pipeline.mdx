@@ -386,6 +386,38 @@ Draft, coverage, consent, withdrawal and autonomy gates apply as usual, and only
 
 A recheck that records nothing for a practice leaves the earlier claim current.
 
+A review that this coalescer admits can wait in the queue while the work moves on.
+Each sweep then reads one page of pull requests that have a queued automatic author review under these occasions and a later one.
+The next sweep continues after the last pull request of the page.
+For each pull request, the sweep locks the pull request, then the newest such review for share, then the queued ones as a claim does.
+A row that a claim holds is skipped.
+The newest review covers a queued one only when all of the following hold:
+
+- It is queued or running.
+  A finished review is never a replacement.
+  Only the `COALESCED` path reuses an answer on the same code.
+- It was admitted for the current head, title and description.
+  A linked-work review also names the current closing-issue material.
+- Both name the same pull request, author, merger and origin, and neither is about a reviewer.
+- The developer's current AI choice permits both.
+  Both use the model route that the workspace binds the developer to now.
+- It selects every practice that the queued review selects.
+  Both selections use the current catalogue.
+  Each uses its own occasion, review state and rechecked practices.
+  When it has already captured, only the practices that its readiness report records as ready count.
+  A report that cannot be read covers nothing.
+- The queued one has no admitted observations.
+
+A covered review completes with the outcome `SUPERSEDED` and `coveringJobId` instead of starting its waiting attempt.
+The replacement makes no additional assessment.
+A retried review keeps the history of its earlier attempts.
+This records an obligation that moves to the covering review, not a result.
+
+The covering review can still wait, run or fail.
+The replaced review has no delivery status, and its ledger row stays `TRIGGERED`.
+A newer occasion that waits in the ledger replaces nothing until the coalescer or the reaper admits it.
+Ready, merge and reviewer reviews are never replaced.
+
 `PullRequestPushCoalescer` is also the pending-signal reaper's resubmitter for pull requests.
 A push or edit whose admission was held back is re-offered through the same locked settlement.
 For example, admission can be `PENDING` for budget or an unavailable model.

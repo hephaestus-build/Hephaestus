@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import {
 	RESULT_PROCESSING_DEFS,
-	REVIEW_STATUS_DEFS,
+	reviewStatusDef,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
 import {
@@ -81,7 +81,7 @@ export function ReviewRunLevel({
 			chips={
 				job && (
 					<>
-						<StatusBadge def={REVIEW_STATUS_DEFS[job.status]} />
+						<StatusBadge def={reviewStatusDef(job)} />
 						{job.deliveryStatus && <StatusBadge def={RESULT_PROCESSING_DEFS[job.deliveryStatus]} />}
 					</>
 				)

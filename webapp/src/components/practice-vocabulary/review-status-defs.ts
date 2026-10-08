@@ -4,12 +4,13 @@ import {
 	CircleSlashIcon,
 	ClockIcon,
 	LoaderIcon,
+	Repeat2Icon,
 	TimerOffIcon,
 } from "lucide-react";
 
 import type { AgentJob } from "@/api/types.gen";
 
-import type { StatusDefs } from "@/components/common/status-def";
+import type { StatusDef, StatusDefs } from "@/components/common/status-def";
 
 export type ReviewStatus = AgentJob["status"];
 export type ResultProcessingStatus = NonNullable<AgentJob["deliveryStatus"]>;
@@ -56,6 +57,20 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		description: "Somebody stopped it before it finished.",
 	},
 };
+
+const REPLACED_REVIEW_STATUS: StatusDef = {
+	label: "Replaced",
+	icon: Repeat2Icon,
+	badgeVariant: "secondary",
+	description:
+		"A newer admitted review carries this review’s practices and may still be waiting or running.",
+};
+
+export function reviewStatusDef(review: Pick<AgentJob, "status" | "reviewOutcome">): StatusDef {
+	return review.reviewOutcome === "SUPERSEDED"
+		? REPLACED_REVIEW_STATUS
+		: REVIEW_STATUS_DEFS[review.status];
+}
 
 /**
  * Processing a review's results includes delivering its feedback automatically, so a failed

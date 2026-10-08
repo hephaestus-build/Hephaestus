@@ -171,6 +171,13 @@ The review outcome `COALESCED` is a different fact, which is recorded on a compl
 An earlier completed review had already answered every ready practice on the same code, so no model ran.
 [Push and edit coalescing](./practice-review-pipeline.mdx#push-and-edit-coalescing) owns the rule.
 
+The review outcome `SUPERSEDED` is a third fact.
+The waiting attempt was replaced by an admitted newer review of the same author's current work.
+The newer review carries every practice that this review selects, and it can still be waiting or running.
+The replacement makes no additional assessment, and the history of earlier attempts remains.
+It is not superseded feedback, which is feedback replaced on its thread.
+The same section owns the rule.
+
 ## Practice autonomy
 
 `PracticeAutonomy` answers one question: **who may authorize feedback pushed onto the work for this practice?** It is not the whole delivery policy.
