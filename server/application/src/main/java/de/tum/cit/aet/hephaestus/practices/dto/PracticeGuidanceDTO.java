@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * Served on its own, so the developer's practice pages load the markup only for the practice that a developer opens.
  */
-@Schema(description = "The visual and the Read more guide of one practice, as the practice panel shows them")
+@Schema(description = "The visual and the guide of one practice, as the practice panel shows them")
 public record PracticeGuidanceDTO(
         @NonNull @Schema(description = "URL-safe identifier unique within workspace")
         String practiceSlug,

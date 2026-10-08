@@ -227,7 +227,7 @@
 					}
 				},
 				"guide": {
-					"description": "Optional Read more guide: a classpath Markdown resource under this practice's own guidance folder. It shows each figure as ![description](figures/<name>.svg). Developer guidance: it never changes how the practice is reviewed.",
+					"description": "Optional guide that the Guide tab of the developer's practice panel shows: a classpath Markdown resource under this practice's own guidance folder. It shows each figure as ![description](figures/<name>.svg). Developer guidance: it never changes how the practice is reviewed.",
 					"type": "string",
 					"pattern": "^practices/guidance/[a-z0-9]+(?:-[a-z0-9]+)*/guide\\.md$"
 				},

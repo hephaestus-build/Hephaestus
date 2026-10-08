@@ -67,7 +67,7 @@ export const WithGuide: Story = {
 	},
 };
 
-/** Preview shows the guide as a developer reads it behind Read more, with its figure drawn. */
+/** Preview shows the guide as a developer reads it in the Guide tab, with its figure drawn bare. */
 export const Preview: Story = {
 	args: { value: bundledGuidance.guide },
 	play: async ({ canvas }) => {

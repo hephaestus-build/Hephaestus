@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -702,6 +702,24 @@ describe("practice profile route", () => {
 		await waitFor(() => expect(router.state.location.searchStr).not.toContain("practiceTab"));
 	});
 
+	it("opens a link to the guide on the observations when the practice has no guide", async () => {
+		const { visual } = bundledGuidance;
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practices/:practiceSlug/guidance", ({ params }) =>
+				HttpResponse.json({ practiceSlug: params.practiceSlug, visual }),
+			),
+		);
+		renderRouteAtWithRouter(
+			`${PAGE}?detail=${encodeURIComponent(JSON.stringify([group, practiceEntry]))}&practiceTab=guide`,
+		);
+		// The picture is in, so the guidance has settled without a guide.
+		await screen.findByRole("img", { name: visual.alt }, ROUTE_RENDER_WAIT);
+
+		const observations = await screen.findByRole("tab", { name: /^Observations/u }, SETTLE_WAIT);
+		expect(observations.getAttribute("aria-selected")).toBe("true");
+		expect(screen.queryByRole("tab", { name: "Guide" })).toBeNull();
+	});
+
 	it("keeps the URL silent on the default feedback tab and spells every other one", async () => {
 		const router = await renderProfile();
 
@@ -768,8 +786,8 @@ const guidance = {
 const PRACTICE_PAGE = `${PAGE}?detail=${encodeURIComponent(JSON.stringify([group, practiceEntry]))}`;
 
 /**
- * The introduction over the practice level: its picture and guide are a request of their own,
- * asked for only once a practice is open, and the reader's choice to hide it outlives the visit.
+ * The introduction and the Guide tab of the practice level: the picture and guide are a request of
+ * their own, asked for only once a practice is open.
  */
 describe("practice introduction", () => {
 	let guidanceAsked: unknown[] = [];
@@ -783,8 +801,6 @@ describe("practice introduction", () => {
 			}),
 		);
 	});
-	afterEach(() => localStorage.clear());
-
 	it("asks for the picture and guide only for the practice that is open", async () => {
 		const router = await renderProfile();
 		expect(guidanceAsked).toStrictEqual([]);
@@ -796,23 +812,14 @@ describe("practice introduction", () => {
 		expect(guidanceAsked).toStrictEqual([practice.slug]);
 	});
 
-	it("remembers that the reader hid the introduction of this practice on the next visit", async () => {
-		renderRouteAtWithRouter(PRACTICE_PAGE);
-		const intro = await screen.findByRole("region", { name: "Introduction" }, ROUTE_RENDER_WAIT);
-		await within(intro).findByRole("img", { name: guidance.visual.alt }, SETTLE_WAIT);
+	it("opens the guide a link asks for, in the practice's Guide tab", async () => {
+		renderRouteAtWithRouter(`${PRACTICE_PAGE}&practiceTab=guide`);
+		await screen.findByRole("heading", { name: practice.name }, ROUTE_RENDER_WAIT);
 
-		fireEvent.click(within(intro).getByRole("button", { name: "Hide introduction" }));
-		await within(intro).findByRole("button", { name: "Show introduction" });
-		expect(within(intro).queryByRole("img")).toBeNull();
-		cleanup();
-
-		renderRouteAtWithRouter(PRACTICE_PAGE);
-		const again = await screen.findByRole("region", { name: "Introduction" }, ROUTE_RENDER_WAIT);
-		const show = within(again).getByRole("button", { name: "Show introduction" });
-		expect(within(again).queryByRole("img")).toBeNull();
-
-		fireEvent.click(show);
-		await within(again).findByRole("img", { name: guidance.visual.alt }, SETTLE_WAIT);
+		const tab = await screen.findByRole("tab", { name: "Guide" }, SETTLE_WAIT);
+		expect(tab.getAttribute("aria-selected")).toBe("true");
+		screen.getByRole("heading", { level: 4, name: "How to do it" });
+		expect(screen.queryByRole("button", { name: "Read more" })).toBeNull();
 	});
 });
 

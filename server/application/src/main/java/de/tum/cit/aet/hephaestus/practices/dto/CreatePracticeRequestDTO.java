@@ -96,7 +96,7 @@ public record CreatePracticeRequestDTO(
         @Schema(description = "Developer-facing picture of the practice; guidance, never review rules") @Nullable
         PracticeVisual visual,
 
-        @Schema(description = "Read more text and its figures; guidance, never review rules") @Nullable
+        @Schema(description = "Guide text and its figures; guidance, never review rules") @Nullable
         PracticeGuide guide)
         implements ClosedPracticeInput {
     public CreatePracticeRequestDTO(

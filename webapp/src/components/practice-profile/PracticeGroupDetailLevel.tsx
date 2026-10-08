@@ -281,10 +281,10 @@ export function PracticeGroupDetailLevel({
 					) : undefined
 				}
 			/>
-			<DrawerBody className="flex flex-col gap-4 pt-2">
-				{/* The line under the header, with room on both sides: the header, the line and Heph's
-				    card read as three things. */}
-				<Separator className="mb-2" />
+			<DrawerBody className="flex flex-col gap-6 pt-2">
+				{/* The line under the header, with the room on each side that the blocks below keep
+				    between them. */}
+				<Separator />
 				{body}
 			</DrawerBody>
 		</>

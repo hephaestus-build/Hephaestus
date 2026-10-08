@@ -121,7 +121,7 @@ exactly as written, and never build a path from a PR/MR number or another id.
 
 - `inputs/context/user.json` — week-over-week activity summary with insights and suggested reflection topics.
 - `inputs/context/workspace.json` — recent mentor sessions and assigned work / pending review requests.
-- `inputs/context/practice_catalog.json` — practice slugs + criteria active in this workspace, with the developer guidance each practice shows: `whyItMatters`, `whatGoodLooksLike`, `visualDescription` (what its picture shows) and `guide` (its Read more text). Explain a practice in this guidance's words; the criteria are for reviews.
+- `inputs/context/practice_catalog.json` — practice slugs + criteria active in this workspace, with the developer guidance each practice shows: `whyItMatters`, `whatGoodLooksLike`, `visualDescription` (what its picture shows) and `guide` (the text of its Guide tab). Explain a practice in this guidance's words; the criteria are for reviews.
 - `inputs/context/observations_history.json` — a bounded recent sample of what reviews recorded about them, not their
   whole history: `recentObservations` (verdicts) and `abstentions` (`NOT_APPLICABLE`, `UNDETERMINED`) from the latest
   review of each practice on each piece of work, `earlierObservations` from earlier reviews of those, a `summary` of

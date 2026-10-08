@@ -16,7 +16,7 @@ Research on instruction supports a picture under conditions:
 - Two cases that differ in one decisive fact help a learner find the principle [1].
 - Decoration that is not relevant makes learning worse [2].
 - A static picture is as good as an animation, unless the topic is a process in time [3, 4].
-- Help that a novice needs can slow an expert down [5]. Thus, the expert must be able to skip it.
+- Help that a novice needs can slow an expert down [5]. Thus, the detail must stay out of the expert's way.
 - Progressive disclosure shows the main idea first and the detail on request [6].
 - A complex picture needs a text description [7].
 
@@ -47,7 +47,12 @@ Where the long explanation lives:
 
 1. **MDX.** Rejected. MDX executes code.
 2. **Long articles in a separate education area.** Rejected. Readership is low and maintenance is high.
-3. **Markdown with a few SVG figures, behind "Read more" on the practice panel.** Chosen. A **Sources** section links to authoritative work instead of a long article.
+3. **Markdown with a few SVG figures, on the practice panel.** Chosen. A **Sources** section links to authoritative work instead of a long article.
+
+Where the panel shows the guide:
+
+1. **A "Read more" disclosure under the introduction.** Rejected. An open guide moves the observations down the panel.
+2. **A Guide tab beside the Observations and Feedback tabs.** Chosen. The guide is one step away and does not move the observations.
 
 How visuals are made:
 
@@ -64,8 +69,12 @@ Where the bundled files live:
 A practice definition has two optional developer guidance fields at all three scopes.
 A **practice visual** is one SVG with a description.
 A **practice guide** is Markdown with SVG figures.
-The practice panel shows the visual between **Why it matters** and **What good looks like**, and the guide behind **Read more**.
-A developer can hide the introduction of a practice.
+
+The practice panel starts with an introduction.
+**Why it matters** is the lead sentence, the visual follows it, and **What good looks like** is the caption of the visual.
+The tabs **Observations**, **Feedback**, and **Guide** follow the introduction.
+The **Guide** tab shows the guide, and it appears only for a practice that has a guide.
+The introduction has no control that hides it.
 
 The fields follow the rules of other developer guidance:
 
@@ -90,13 +99,14 @@ The webapp sanitizes the markup again with DOMPurify [9] and draws it inline.
 - The server and DOMPurify each hold a copy of the rules, and the copies can drift. The server is the gate. DOMPurify is the second layer.
 - Each bundled visual and guide is content that maintainers review like code.
 - Heph explains a practice in the same words as the panel.
+- The introduction always shows. It is short, and the detail is in the **Guide** tab.
 
 ## Revisit trigger
 
 - A theme change that the `pv-*` classes cannot express.
 - A practice whose idea is a process in time, for which a static picture fails [3, 4].
 - A security finding that requires a sandbox, such as an `<iframe>`, instead of inline markup.
-- Evidence that developers do not open **Read more**, or that the guides cost more to maintain than they give.
+- Evidence that developers do not open the **Guide** tab, or that the guides cost more to maintain than they give.
 
 ## Sources
 

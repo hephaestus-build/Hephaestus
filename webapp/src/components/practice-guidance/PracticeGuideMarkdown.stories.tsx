@@ -5,8 +5,9 @@ import { bundledGuidance } from "@/stories/practice-guidance-story-mock-data";
 import { PracticeGuideMarkdown } from "./PracticeGuideMarkdown";
 
 /**
- * A practice's "Read more" guide. Its headings sit under the level's own, so each renders as an
- * `h4`; its one image form is the guide's own figure, drawn as a themed picture.
+ * The practice guide, as a practice's Guide tab and the admin previews show it. Its headings sit
+ * under the surface's own, so each renders as an `h4`; its one image form is the guide's own figure,
+ * drawn bare at the width of the text.
  */
 const meta = {
 	component: PracticeGuideMarkdown,

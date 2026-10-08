@@ -1201,7 +1201,7 @@ export type CreatePracticeRequest = {
      */
     groupSlug?: string | null;
     /**
-     * Read more text and its figures; guidance, never review rules
+     * Guide text and its figures; guidance, never review rules
      */
     guide?: PracticeGuide;
     /**
@@ -1548,7 +1548,7 @@ export type CuratedPracticeRequest = {
     evidenceRequirements: Array<PracticeEvidenceRequirement>;
     groupSlug?: string;
     /**
-     * Read more text and its figures; guidance, never review rules
+     * Guide text and its figures; guidance, never review rules
      */
     guide?: PracticeGuide;
     name: string;
@@ -3373,7 +3373,7 @@ export type Practice = {
      */
     groupSlug?: string;
     /**
-     * Developer-facing Read more text and its figures (developer layer)
+     * Developer-facing guide text and its figures (developer layer)
      */
     guide?: PracticeGuide;
     /**
@@ -3755,7 +3755,7 @@ export type PracticeGroupTrend = {
 };
 
 /**
- * The visual and the Read more guide of one practice, as the practice panel shows them
+ * The visual and the guide of one practice, as the practice panel shows them
  */
 export type PracticeGuidance = {
     guide?: PracticeGuide;
@@ -3767,7 +3767,7 @@ export type PracticeGuidance = {
 };
 
 /**
- * Developer guidance: the Read more text of a practice and the SVG figures it shows. Never changes how the practice is reviewed
+ * Developer guidance: the text of a practice's Guide tab and the SVG figures it shows. Never changes how the practice is reviewed
  */
 export type PracticeGuide = {
     /**
@@ -6334,7 +6334,7 @@ export type UpdatePracticeRequest = {
      */
     group?: BindPracticeGroupRequest;
     /**
-     * Read more text and its figures; guidance, never review rules
+     * Guide text and its figures; guidance, never review rules
      */
     guide?: PracticeGuide;
     /**

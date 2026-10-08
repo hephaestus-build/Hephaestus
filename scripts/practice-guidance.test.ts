@@ -166,7 +166,9 @@ for (const { slug, visual, guide } of bundledPractices) {
 	if (visual !== undefined) {
 		await test(`${slug}: the visual follows the style guide`, () => {
 			const svg = read(visual.file);
-			assert.deepEqual(canvasOf(svg), [0, 0, 640, 320], `${visual.file}: viewBox`);
+			const [x, y, width, height] = canvasOf(svg);
+			assert.deepEqual([x, y, width], [0, 0, 640], `${visual.file}: viewBox "0 0 640 H"`);
+			assert.ok((height ?? Number.NaN) <= 320, `${visual.file}: the viewBox height is 320 or less`);
 			assert.deepEqual(fixedColors(svg), [], `${visual.file}: color with pv-* classes only`);
 			assert.doesNotMatch(visual.alt, REDUNDANT_OPENING, `${slug}: the visual's description`);
 		});

@@ -4,6 +4,7 @@ import {
 	Fragment,
 	type HTMLAttributes,
 	type ImgHTMLAttributes,
+	type OlHTMLAttributes,
 	type ReactNode,
 	useContext,
 } from "react";
@@ -74,8 +75,22 @@ function ChosenImage({ src, alt }: ImgHTMLAttributes<HTMLImageElement>): ReactNo
 	return typeof src === "string" ? renderImage({ src, alt: alt ?? "" }) : null;
 }
 
+/**
+ * Lists without the renderer's `list-inside`, so the prose styles place the marker outside and a
+ * wrapped line lines up with the text rather than under the bullet.
+ */
+function UnorderedList({ children }: HTMLAttributes<HTMLUListElement>) {
+	return <ul>{children}</ul>;
+}
+
+function OrderedList({ children, start }: OlHTMLAttributes<HTMLOListElement>) {
+	return <ol start={start}>{children}</ol>;
+}
+
 const UNTRUSTED_MARKDOWN_COMPONENTS = {
 	a: SafeAnchor,
+	ul: UnorderedList,
+	ol: OrderedList,
 	code: MarkdownCode,
 	img: ChosenImage,
 	h1: DemotedHeading,

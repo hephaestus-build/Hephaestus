@@ -136,8 +136,8 @@ public class PracticeCatalogController {
 
     @GetMapping("/{practiceSlug}/guidance")
     @Operation(
-            summary = "Read one practice's visual and Read more guide",
-            description = "Returns the visual and the Read more guide that the practice panel shows. Any workspace "
+            summary = "Read one practice's visual and guide",
+            description = "Returns the visual and the guide that the practice panel shows. Any workspace "
                     + "member can read them. Carries an ETag, so an unchanged visual and guide answer 304.")
     @ApiResponse(
             responseCode = "200",

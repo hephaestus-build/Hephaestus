@@ -1,6 +1,6 @@
 ---
 title: Practice visuals and guides
-description: The style guide for the visual and the Read more guide of a bundled practice.
+description: The style guide for the visual and the guide of a bundled practice.
 ---
 
 # Practice visuals and guides
@@ -28,11 +28,13 @@ Thus, a description must give the full meaning of its picture.
 
 | Picture | viewBox |
 | --- | --- |
-| Visual | `0 0 640 320` |
+| Visual | `0 0 640 H`, where `H` is 320 or less |
 | Figure | `0 0 640 H`, where `H` is 480 or less |
 
 - Do not set `width` or `height` on the root. The panel scales the picture to its column.
-- Keep at least 16 units free at the left and right edges.
+- Draw to the edges of the canvas. Leave only the unit that a stroke needs at the edge.
+  The panel aligns the picture with the text column and sets the space around it.
+  Empty space inside the canvas moves the picture out of line.
 - Align shapes to whole units.
 
 ## Color
@@ -48,9 +50,7 @@ Thus, a description must give the full meaning of its picture.
 
 Text in the picture inherits the font of the app.
 
-- Use `font-size` 15 or more.
-- Use 18 to 20 with `font-weight="600"` for titles.
-- Use 15 to 17 for labels.
+- Use 16 with `font-weight="600"` for titles and 15 for labels. At the panel's width this matches the body text, so the picture does not compete with the headings around it.
 - Use at most about 12 words in a visual.
 - Write labels in sentence case, in the product voice, with no period.
 - SVG text does not wrap. Put each line in its own `<text>` or `<tspan>`.

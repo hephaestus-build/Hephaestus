@@ -4,7 +4,7 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 import type { DetailStackEntry } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
-import { PracticeIntro } from "@/components/practice-guidance/PracticeIntro";
+import type { PracticeGuidanceState } from "@/components/practice-guidance/PracticeIntro";
 import type { ReviewRunFeedState } from "@/components/profile/review-runs";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
 import { withPageBehind } from "@/stories/decorators";
@@ -23,7 +23,7 @@ import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock
 import { bundledGuidance } from "@/stories/practice-guidance-story-mock-data";
 import { packagingGroup } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
-import { Stateful, StatefulPatch } from "@/stories/stateful";
+import { StatefulPatch } from "@/stories/stateful";
 import { precedes } from "@/test/dom";
 
 import {
@@ -50,22 +50,12 @@ interface LevelState {
 	tab: PracticeTab;
 }
 
-/**
- * The introduction as the route renders it over the tabs, with whether it is hidden held here
- * where the route keeps it in the browser. Its own states are `PracticeIntro`'s stories.
- */
-const storyIntro = (
-	<Stateful initial={false}>
-		{(hidden, setHidden) => (
-			<PracticeIntro
-				practice={focusedChanges}
-				guidance={{ status: "ready", visual: bundledGuidance.visual, guide: bundledGuidance.guide }}
-				hidden={hidden}
-				onHiddenChange={setHidden}
-			/>
-		)}
-	</Stateful>
-);
+/** The bundled picture and guide; the introduction's own states are `PracticeIntro`'s stories. */
+const readyGuidance = {
+	status: "ready",
+	visual: bundledGuidance.visual,
+	guide: bundledGuidance.guide,
+} satisfies PracticeGuidanceState;
 
 /** The level with the ratings held in story state, where the route keeps them on the server. */
 function RatedLevel(props: PracticeDetailLevelProps) {
@@ -92,7 +82,7 @@ const meta = {
 			onClose: fn(),
 		},
 		practice: focusedChanges,
-		intro: storyIntro,
+		guidance: readyGuidance,
 		feed: readyFeed,
 		feedbackCards: ALL_FEEDBACK_CARDS,
 		observations: { onRespond: fn() },
@@ -108,8 +98,8 @@ const meta = {
 		feed: { control: false },
 		// The close is the drawer stack's, which the render holds; only the crumbs come from here.
 		path: { control: false },
-		// An element the route renders.
-		intro: { control: false },
+		// A discriminated union, for the reason `feed` gives.
+		guidance: { control: false },
 	},
 	render: (args) => (
 		<StatefulPatch<LevelState>
@@ -173,8 +163,8 @@ if (!olderObservation) {
 }
 
 /**
- * Opens on the practice's introduction — why it matters, the picture captioned with what good
- * looks like, and the guide behind "Read more" — over the tabs. The observations come first, under
+ * Opens on the practice's introduction — why it matters, then the picture captioned with what good
+ * looks like — over the tabs. The observations come first, under
  * where the reader stands, with the newest open to why it was noted, the evidence, the next step
  * and its response controls; every earlier row is a line the reader can open. Nothing was loaded
  * to open it.
@@ -184,6 +174,13 @@ export const Default: Story = {
 		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
 		const intro = screen.getByRole("region", { name: "Introduction" });
 		await expect(precedes(intro, screen.getByRole("tablist", { name: "Practice" }))).toBe(true);
+		await expect(
+			within(intro).getByRole("figure", { name: focusedChanges.whatGoodLooksLike }),
+		).toBeVisible();
+		await expect(screen.getByRole("tab", { name: "Guide" })).toHaveAttribute(
+			"aria-selected",
+			"false",
+		);
 		// Where the reader stands leads the observations it rests on.
 		await expect(
 			precedes(
@@ -349,6 +346,55 @@ export const FeedbackOnTheWorkOnly: Story = {
 			"href",
 			"https://github.com/HephaestusTest/practice-validation/pull/902#issuecomment-1",
 		);
+	},
+};
+
+/**
+ * The practice guide, a tab beside the observations and the feedback rather than a disclosure in
+ * the introduction: its headings and its figure at the width of the text, under the introduction
+ * that stays above every tab.
+ */
+export const GuideTab: Story = {
+	args: { tab: "guide" },
+	play: async () => {
+		await expectSettledVisible(
+			await screen.findByRole("heading", { level: 3, name: "Practice guide" }),
+		);
+		await expect(screen.getByRole("tab", { name: "Guide" })).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		const panel = screen.getByRole("tabpanel", { name: "Guide" });
+		for (const heading of [
+			"How to do it",
+			"When it does not apply",
+			"Common mistakes",
+			"Sources",
+		]) {
+			await expect(within(panel).getByRole("heading", { level: 4, name: heading })).toBeVisible();
+		}
+		await expect(
+			within(panel).getByRole("img", { name: /^Three changes in order: first a refactor/u }),
+		).toBeVisible();
+		await expect(screen.getByRole("region", { name: "Introduction" })).toBeVisible();
+		await expect(screen.queryByText("Read more")).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * A practice with a picture and no guide has no Guide tab, so a link that asks for the guide lands
+ * on the observations instead of an empty tab.
+ */
+export const WithoutGuide: Story = {
+	args: { tab: "guide", guidance: { status: "ready", visual: bundledGuidance.visual } },
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		await expect(screen.getByRole("tab", { name: "Observations 3" })).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await expect(screen.queryByRole("tab", { name: "Guide" })).not.toBeInTheDocument();
+		await expect(screen.getByRole("img", { name: bundledGuidance.visual.alt })).toBeVisible();
 	},
 };
 

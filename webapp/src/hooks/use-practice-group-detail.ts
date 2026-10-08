@@ -42,7 +42,7 @@ export interface PracticeGroupDetail {
 	/** The open practice, whether or not a group level is open under it. */
 	practice?: PracticeStanding;
 	feed: ReviewRunFeedState;
-	/** The open practice's picture and "Read more" guide; loading while no practice is open. */
+	/** The open practice's picture and guide; loading while no practice is open. */
 	guidance: PracticeGuidanceState;
 	/** Absent when this reader may not respond, which leaves no response controls. */
 	respond?: FeedbackResponseWrite["respond"];

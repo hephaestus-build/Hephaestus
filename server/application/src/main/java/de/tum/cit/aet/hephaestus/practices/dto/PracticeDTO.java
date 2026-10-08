@@ -77,7 +77,7 @@ public record PracticeDTO(
         @Nullable @Schema(description = "Developer-facing picture of the practice (developer layer)")
         PracticeVisual visual,
 
-        @Nullable @Schema(description = "Developer-facing Read more text and its figures (developer layer)")
+        @Nullable @Schema(description = "Developer-facing guide text and its figures (developer layer)")
         PracticeGuide guide,
 
         @NonNull

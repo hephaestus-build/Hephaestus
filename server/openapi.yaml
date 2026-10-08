@@ -8215,9 +8215,9 @@ paths:
       - Practice Catalog
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/guidance:
     get:
-      description: "Returns the visual and the Read more guide that the practice panel\
-        \ shows. Any workspace member can read them. Carries an ETag, so an unchanged\
-        \ visual and guide answer 304."
+      description: "Returns the visual and the guide that the practice panel shows.\
+        \ Any workspace member can read them. Carries an ETag, so an unchanged visual\
+        \ and guide answer 304."
       operationId: getPracticeGuidance
       parameters:
       - description: Workspace slug
@@ -8245,7 +8245,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Practice not found
-      summary: Read one practice's visual and Read more guide
+      summary: Read one practice's visual and guide
       tags:
       - Practice Catalog
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/placement:
@@ -11299,7 +11299,7 @@ components:
             for Unassigned.
         guide:
           $ref: "#/components/schemas/PracticeGuide"
-          description: "Read more text and its figures; guidance, never review rules"
+          description: "Guide text and its figures; guidance, never review rules"
         name:
           type: string
           description: Human-readable name
@@ -11935,7 +11935,7 @@ components:
           minLength: 0
         guide:
           $ref: "#/components/schemas/PracticeGuide"
-          description: "Read more text and its figures; guidance, never review rules"
+          description: "Guide text and its figures; guidance, never review rules"
         name:
           type: string
           maxLength: 128
@@ -14764,8 +14764,7 @@ components:
           description: "Slug of the practice group this practice is bound to, if any"
         guide:
           $ref: "#/components/schemas/PracticeGuide"
-          description: Developer-facing Read more text and its figures (developer
-            layer)
+          description: Developer-facing guide text and its figures (developer layer)
         id:
           type: integer
           format: int64
@@ -15326,8 +15325,8 @@ components:
       - practices
     PracticeGuidance:
       type: object
-      description: "The visual and the Read more guide of one practice, as the practice\
-        \ panel shows them"
+      description: "The visual and the guide of one practice, as the practice panel\
+        \ shows them"
       properties:
         guide:
           $ref: "#/components/schemas/PracticeGuide"
@@ -15341,8 +15340,8 @@ components:
     PracticeGuide:
       type: object
       additionalProperties: false
-      description: "Developer guidance: the Read more text of a practice and the SVG\
-        \ figures it shows. Never changes how the practice is reviewed"
+      description: "Developer guidance: the text of a practice's Guide tab and the\
+        \ SVG figures it shows. Never changes how the practice is reviewed"
       properties:
         figures:
           type: object
@@ -19426,7 +19425,7 @@ components:
             to leave unchanged
         guide:
           $ref: "#/components/schemas/PracticeGuide"
-          description: "Read more text and its figures; guidance, never review rules"
+          description: "Guide text and its figures; guidance, never review rules"
         name:
           type: string
           description: Human-readable name

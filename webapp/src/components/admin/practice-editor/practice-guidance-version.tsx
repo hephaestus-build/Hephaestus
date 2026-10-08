@@ -7,7 +7,7 @@ import { figureDescription } from "./practice-guidance-draft";
 export function PracticeVisualVersion({ visual }: { visual: PracticeVisualValue }) {
 	return (
 		<div className="flex max-w-md flex-col gap-1">
-			<PracticeVisual svg={visual.svg} alt={visual.alt} size="sm" />
+			<PracticeVisual svg={visual.svg} alt={visual.alt} />
 			{/* The picture's name already says it, so a screen reader hears it once. */}
 			<p aria-hidden className="text-xs text-muted-foreground">
 				{visual.alt}
@@ -38,7 +38,6 @@ export function PracticeGuideVersion({ guide }: { guide: PracticeGuide }) {
 							<PracticeVisual
 								svg={guide.figures[name] ?? ""}
 								alt={figureDescription(guide.markdown, name) ?? `Figure ${name}`}
-								size="sm"
 							/>
 							<p className="font-mono text-xs text-muted-foreground">figures/{name}.svg</p>
 						</li>

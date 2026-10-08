@@ -9,7 +9,7 @@ import org.jspecify.annotations.NonNull;
 
 @Schema(
         additionalProperties = Schema.AdditionalPropertiesValue.FALSE,
-        description = "Developer guidance: the Read more text of a practice and the SVG figures it shows. Never "
+        description = "Developer guidance: the text of a practice's Guide tab and the SVG figures it shows. Never "
                 + "changes how the practice is reviewed")
 public record PracticeGuide(
         @NonNull

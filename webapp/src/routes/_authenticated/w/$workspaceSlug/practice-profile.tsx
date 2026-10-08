@@ -5,14 +5,11 @@ import {
 	retainSearchParams,
 	stripSearchParams,
 } from "@tanstack/react-router";
-import { useLocalStorage } from "usehooks-ts";
-import { z } from "zod";
 
 import type { PracticeGroup } from "@/api/types.gen";
 import { combinePanelStates, queryLoadState } from "@/components/common/panel-state";
 import { parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
-import { PracticeIntro } from "@/components/practice-guidance/PracticeIntro";
 import {
 	composeGroupOverview,
 	composeNextStep,
@@ -58,19 +55,6 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-
 	},
 });
 
-/**
- * The practices whose introduction the reader hid, by slug. Kept in this browser rather than on the
- * server: it is how the reader likes the page, not something about their work.
- */
-const HIDDEN_INTROS_KEY = "hephaestus.practice-intro.hidden";
-
-const NO_HIDDEN_INTROS: string[] = [];
-
-/** What another tab or an older build left under the key; anything else reads as nothing hidden. */
-const hiddenIntrosSchema = z.array(z.string()).catch(NO_HIDDEN_INTROS);
-
-const readHiddenIntros = (raw: string) => hiddenIntrosSchema.parse(JSON.parse(raw));
-
 function PracticeProfile() {
 	// A user view reads the developer's page and answers nothing on their behalf.
 	const readOnly = useAuth().userView !== undefined;
@@ -111,9 +95,6 @@ function PracticeProfile() {
 		practiceSlug: openLevelId(detailStack, "practice"),
 		practiceStandings,
 	});
-	const [hiddenIntros, setHiddenIntros] = useLocalStorage(HIDDEN_INTROS_KEY, NO_HIDDEN_INTROS, {
-		deserializer: readHiddenIntros,
-	});
 
 	// The page and every level over it show the three together, so they load and fail as one;
 	// whether this workspace reviews practices at all is read with them, since without that answer
@@ -146,21 +127,6 @@ function PracticeProfile() {
 			practiceLevel(practiceSlug),
 		]);
 	};
-	const openPracticeStanding = detail.practice;
-	const practiceIntro = openPracticeStanding ? (
-		<PracticeIntro
-			key={openPracticeStanding.slug}
-			practice={openPracticeStanding}
-			guidance={detail.guidance}
-			hidden={hiddenIntros.includes(openPracticeStanding.slug)}
-			onHiddenChange={(hidden) =>
-				setHiddenIntros((current) => [
-					...current.filter((slug) => slug !== openPracticeStanding.slug),
-					...(hidden ? [openPracticeStanding.slug] : []),
-				])
-			}
-		/>
-	) : undefined;
 
 	return (
 		<>
@@ -199,7 +165,6 @@ function PracticeProfile() {
 				ratingProps={readOnly ? undefined : feedback.ratingProps}
 				onOpenPractice={(practiceSlug) => stackControls.open(practiceLevel(practiceSlug))}
 				practiceTab={search.practiceTab}
-				practiceIntro={practiceIntro}
 				skeletonRows={REVIEW_RUN_PAGE_SIZE}
 				reviewRuns={{
 					list: {

@@ -5173,9 +5173,9 @@ export const bindGroupMutation = (options?: Partial<Options<BindGroupData>>): Us
 export const getPracticeGuidanceQueryKey = (options: Options<GetPracticeGuidanceData>) => createQueryKey('getPracticeGuidance', options, false, ['Practice Catalog']);
 
 /**
- * Read one practice's visual and Read more guide
+ * Read one practice's visual and guide
  *
- * Returns the visual and the Read more guide that the practice panel shows. Any workspace member can read them. Carries an ETag, so an unchanged visual and guide answer 304.
+ * Returns the visual and the guide that the practice panel shows. Any workspace member can read them. Carries an ETag, so an unchanged visual and guide answer 304.
  */
 export const getPracticeGuidanceOptions = (options: Options<GetPracticeGuidanceData>) => queryOptions<GetPracticeGuidanceResponse, GetPracticeGuidanceError, GetPracticeGuidanceResponse, ReturnType<typeof getPracticeGuidanceQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {

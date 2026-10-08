@@ -188,7 +188,7 @@ A practice can have two optional fields for the developer:
 - **Visual** is one SVG picture and its description.
   The developer's practice panel shows it between **Why it matters** and **What good looks like**.
 - **Guide** is a longer explanation in Markdown, with up to 4 SVG figures.
-  The panel shows it behind **Read more**.
+  The developer opens it in the **Guide** tab of the practice panel.
 
 Both fields are developer guidance.
 They do not change how the practice is reviewed.
@@ -317,13 +317,14 @@ The one idea that the picture must show: <one sentence>
 Layout: <one of: "Not yet" on the left and "Good" on the right | a cause and its effect, left to right | numbered steps, left to right>
 
 Rules for the file:
-- Start with <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320">. Do not set width or height.
+- Start with <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 H">, where H is the height the drawing needs, at most 320. Do not set width or height.
+- Draw to the edges of the canvas. Leave no empty margin around the drawing.
 - Use only these elements: svg, g, path, rect, circle, ellipse, line, polyline, polygon, text, tspan, title, desc.
 - Use only these attributes: x, y, width, height, rx, ry, cx, cy, r, x1, y1, x2, y2, d, points, dx, dy, transform, class, fill, stroke, stroke-width, stroke-linecap, stroke-linejoin, stroke-dasharray, opacity, font-size, font-weight, text-anchor.
 - Do not use id, style, href, url(...), gradients, filters, markers, masks, images, scripts, or a DOCTYPE.
 - Color every shape and every text with one of these classes, not with a color value: pv-fill-ink, pv-fill-muted, pv-fill-surface, pv-fill-accent, pv-fill-accent-soft, pv-stroke-ink, pv-stroke-muted, pv-stroke-line, pv-stroke-accent.
 - Use fill="none" on a shape that has only a stroke.
-- Do not set a font family. Use font-size 15 or more. Use font-size 18 to 20 and font-weight 600 for titles.
+- Do not set a font family. Use font-size 15 or more. Use font-size 16 and font-weight 600 for titles.
 - Use 12 words of text or fewer. Label every difference with text. Do not show a difference with color alone.
 - Draw lines of code and files as rounded bars. Draw a change or an issue as a card. Draw a limit as a dashed line.
 - Draw an arrow as one line path and one small filled triangle path.

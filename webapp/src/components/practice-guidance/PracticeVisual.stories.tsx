@@ -10,15 +10,6 @@ const NO_GROUND = "rgba(0, 0, 0, 0)";
 /** `--background` in the light theme. */
 const LIGHT_GROUND = "oklch(1 0 0)";
 
-/** The element the picture is drawn into: the one child of the image's wrapper. */
-function canvasOf(image: HTMLElement): HTMLElement {
-	const canvas = image.firstElementChild;
-	if (!(canvas instanceof HTMLElement)) {
-		throw new Error("The picture has no canvas");
-	}
-	return canvas;
-}
-
 /** A shape's paint once the theme has colored it. */
 function fillOf(canvas: HTMLElement, selector: string): string {
 	const shape = canvas.querySelector(selector);
@@ -29,15 +20,16 @@ function fillOf(canvas: HTMLElement, selector: string): string {
 }
 
 /**
- * The picture a practice opens with. Its `pv-*` classes take the theme's tokens, so the same markup
- * reads in both themes. A picture that brings its own colors sits on the light ground instead.
+ * The picture a practice opens with, bare: no border, card or padding, so whoever places it owns the
+ * one surface around it. Its `pv-*` classes take the theme's tokens, so the same markup reads in both
+ * themes. A picture that brings its own colors sits on the light ground instead.
  */
 const meta = {
 	component: PracticeVisual,
 	parameters: { layout: "padded" },
 	decorators: [
 		(Story) => (
-			<div className="max-w-3xl">
+			<div className="max-w-2xl">
 				<Story />
 			</div>
 		),
@@ -53,16 +45,17 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The bundled picture: one image named by its alt text, its shapes in theme colors. */
+/** The bundled picture: one image named by its alt text, its shapes in theme colors, no frame. */
 export const Default: Story = {
 	play: async ({ canvas, args }) => {
-		const image = canvas.getByRole("img", { name: args.alt });
-		await expect(image).toBeVisible();
-		const drawn = canvasOf(image);
-		// The accent and the ink are theme tokens, not SVG's default black.
+		const drawn = canvas.getByRole("img", { name: args.alt });
+		await expect(drawn).toBeVisible();
+		// The accent and the ink are theme tokens, not SVG's default black, on the caller's ground.
 		await expect(fillOf(drawn, ".pv-fill-accent")).not.toBe(BLACK);
 		await expect(fillOf(drawn, "text.pv-fill-ink")).toBe(getComputedStyle(drawn).color);
 		await expect(getComputedStyle(drawn).backgroundColor).toBe(NO_GROUND);
+		// No frame of its own, so a caller's surface around it is the only one.
+		await expect(getComputedStyle(drawn).borderTopWidth).toBe("0px");
 	},
 };
 
@@ -70,7 +63,7 @@ export const Default: Story = {
 export const Dark: Story = {
 	globals: { theme: "dark" },
 	play: async ({ canvas, args }) => {
-		const drawn = canvasOf(canvas.getByRole("img", { name: args.alt }));
+		const drawn = canvas.getByRole("img", { name: args.alt });
 		await expect(fillOf(drawn, "text.pv-fill-ink")).toBe(getComputedStyle(drawn).color);
 	},
 };
@@ -79,7 +72,7 @@ export const Dark: Story = {
 export const OwnColors: Story = {
 	args: unthemedVisual,
 	play: async ({ canvas, args }) => {
-		const drawn = canvasOf(canvas.getByRole("img", { name: args.alt }));
+		const drawn = canvas.getByRole("img", { name: args.alt });
 		await expect(getComputedStyle(drawn).backgroundColor).toBe(LIGHT_GROUND);
 	},
 };

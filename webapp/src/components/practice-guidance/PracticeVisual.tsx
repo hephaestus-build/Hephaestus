@@ -1,5 +1,3 @@
-import { cva, type VariantProps } from "class-variance-authority";
-
 import { cn } from "cn";
 
 import { sanitizePracticeSvg, usesThemeClasses } from "./practice-svg";
@@ -18,44 +16,35 @@ const PRACTICE_SVG_THEME = [
 	"[&_.pv-stroke-accent]:stroke-mentor",
 ];
 
-const practiceVisualVariants = cva("rounded-xl border bg-card", {
-	variants: {
-		size: {
-			/** A thumbnail or one version beside another, in an admin list or comparison. */
-			sm: "p-2",
-			/** The picture a developer reads. */
-			md: "p-4 sm:p-6",
-		},
-	},
-	defaultVariants: { size: "md" },
-});
-
-export interface PracticeVisualProps extends VariantProps<typeof practiceVisualVariants> {
+export interface PracticeVisualProps {
 	/** The SVG markup, as the server stores it. It is sanitized again before it is drawn. */
 	svg: string;
 	/** What the picture shows, for people who cannot see it; the picture's accessible name. */
 	alt: string;
+	/** Sizes the picture in its caller's layout; the picture fills the width it is given. */
 	className?: string;
 }
 
 /**
- * One practice picture, drawn inline so its `pv-*` classes follow the theme. A picture with none
- * of them brings its own colors, so it sits on the light theme's ground in both themes. The
- * wrapper is the image, so the reader hears `alt` once and not the words inside the picture.
+ * One practice picture, drawn inline so its `pv-*` classes follow the theme. It brings no surface of
+ * its own: it sits on whatever ground its caller gives it, so a caller's card is never doubled. A
+ * picture with none of the classes brings its own colors, so it alone keeps a light ground in both
+ * themes. The element is the image, so the reader hears `alt` once and not the words inside it.
  */
-export function PracticeVisual({ svg, alt, size, className }: PracticeVisualProps) {
+export function PracticeVisual({ svg, alt, className }: PracticeVisualProps) {
 	const markup = sanitizePracticeSvg(svg);
 	return (
-		<div role="img" aria-label={alt} className={cn(practiceVisualVariants({ size }), className)}>
-			<div
-				className={cn(
-					"[&_svg]:mx-auto [&_svg]:block [&_svg]:h-auto [&_svg]:max-h-72 [&_svg]:w-full",
-					PRACTICE_SVG_THEME,
-					!usesThemeClasses(markup) && "light rounded-md bg-background p-2",
-				)}
-				// oxlint-disable-next-line react/no-danger -- sanitizePracticeSvg output; inline, not an <img>, so the pv-* classes take the theme
-				dangerouslySetInnerHTML={{ __html: markup }}
-			/>
-		</div>
+		<div
+			role="img"
+			aria-label={alt}
+			className={cn(
+				"[&_svg]:block [&_svg]:h-auto [&_svg]:w-full",
+				PRACTICE_SVG_THEME,
+				!usesThemeClasses(markup) && "light rounded-md bg-background p-2",
+				className,
+			)}
+			// oxlint-disable-next-line react/no-danger -- sanitizePracticeSvg output; inline, not an <img>, so the pv-* classes take the theme
+			dangerouslySetInnerHTML={{ __html: markup }}
+		/>
 	);
 }

@@ -2694,9 +2694,9 @@ export const bindGroup = <ThrowOnError extends boolean = false>(options: Options
 });
 
 /**
- * Read one practice's visual and Read more guide
+ * Read one practice's visual and guide
  *
- * Returns the visual and the Read more guide that the practice panel shows. Any workspace member can read them. Carries an ETag, so an unchanged visual and guide answer 304.
+ * Returns the visual and the guide that the practice panel shows. Any workspace member can read them. Carries an ETag, so an unchanged visual and guide answer 304.
  */
 export const getPracticeGuidance = <ThrowOnError extends boolean = false>(options: Options<GetPracticeGuidanceData, ThrowOnError>): RequestResult<GetPracticeGuidanceResponses, GetPracticeGuidanceErrors, ThrowOnError> => (options.client ?? client).get<GetPracticeGuidanceResponses, GetPracticeGuidanceErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

@@ -48,9 +48,9 @@ export interface PracticeGuideEditorProps {
 }
 
 /**
- * The practice's "Read more" guide: Markdown with up to four SVG figures. Adding a figure writes its
- * Markdown line at the cursor, and removing a figure takes its lines out of the text, so the text
- * and the figures cannot drift apart.
+ * The practice guide, which developers read in the practice's Guide tab: Markdown with up to four
+ * SVG figures. Adding a figure writes its Markdown line at the cursor, and removing a figure takes
+ * its lines out of the text, so the text and the figures cannot drift apart.
  */
 export function PracticeGuideEditor({
 	value,
@@ -95,8 +95,8 @@ export function PracticeGuideEditor({
 		<FieldSet>
 			<FieldLegend>Guide</FieldLegend>
 			<FieldDescription>
-				Optional. A longer explanation that developers open with Read more. Write it in Markdown,
-				with up to {MAX_GUIDE_FIGURES} SVG figures.
+				Optional. A longer explanation that developers read in the practice’s Guide tab. Write it in
+				Markdown, with up to {MAX_GUIDE_FIGURES} SVG figures.
 			</FieldDescription>
 
 			<Field data-invalid={hasText(error) ? "true" : undefined}>
@@ -194,7 +194,6 @@ export function PracticeGuideEditor({
 								<PracticeVisual
 									svg={value.figures[name] ?? ""}
 									alt={figureDescription(value.markdown, name) ?? `Figure ${name}`}
-									size="sm"
 									className="w-28 shrink-0"
 								/>
 								<div className="min-w-0 flex-1 space-y-1">

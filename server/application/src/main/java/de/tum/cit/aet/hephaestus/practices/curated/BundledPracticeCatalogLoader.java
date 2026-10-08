@@ -282,7 +282,7 @@ public class BundledPracticeCatalogLoader {
     }
 
     /**
-     * The Read more guide of a bundled practice and every figure it shows. A figure is read from the path the
+     * The guide of a bundled practice and every figure it shows. A figure is read from the path the
      * Markdown names, relative to the guide, so GitHub previews the guide with its figures.
      */
     private static @Nullable PracticeGuide guide(JsonNode node, String slug) {

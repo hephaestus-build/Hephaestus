@@ -1,24 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 168">
-  <rect class="pv-fill-surface pv-stroke-line" x="16" y="24" width="176" height="120" rx="12" stroke-width="1.5"/>
-  <rect class="pv-fill-accent" x="32" y="40" width="40" height="10" rx="3"/>
-  <rect class="pv-fill-accent" x="32" y="54" width="28" height="10" rx="3"/>
-  <text class="pv-fill-muted" x="176" y="52" font-size="15" text-anchor="end">1</text>
-  <text class="pv-fill-ink" x="32" y="102" font-size="17" font-weight="600">Refactor</text>
-  <text class="pv-fill-muted" x="32" y="126" font-size="15">No new behavior</text>
-  <rect class="pv-fill-surface pv-stroke-line" x="232" y="24" width="176" height="120" rx="12" stroke-width="1.5"/>
-  <rect class="pv-fill-muted" x="248" y="40" width="40" height="10" rx="3"/>
-  <rect class="pv-fill-muted" x="248" y="54" width="28" height="10" rx="3"/>
-  <text class="pv-fill-muted" x="392" y="52" font-size="15" text-anchor="end">2</text>
-  <text class="pv-fill-ink" x="248" y="102" font-size="17" font-weight="600">Add the feature</text>
-  <text class="pv-fill-muted" x="248" y="126" font-size="15">One new behavior</text>
-  <rect class="pv-fill-surface pv-stroke-line" x="448" y="24" width="176" height="120" rx="12" stroke-width="1.5"/>
-  <rect class="pv-fill-surface pv-stroke-ink" x="464" y="40" width="40" height="10" rx="3" stroke-width="1.5"/>
-  <rect class="pv-fill-surface pv-stroke-ink" x="464" y="54" width="28" height="10" rx="3" stroke-width="1.5"/>
-  <text class="pv-fill-muted" x="608" y="52" font-size="15" text-anchor="end">3</text>
-  <text class="pv-fill-ink" x="464" y="102" font-size="17" font-weight="600">Clean up</text>
-  <text class="pv-fill-muted" x="464" y="126" font-size="15">Remove old code</text>
-  <path class="pv-stroke-accent" d="M198 84h20" fill="none" stroke-width="2" stroke-linecap="round"/>
-  <path class="pv-fill-accent" d="M226 84l-8-5v10z"/>
-  <path class="pv-stroke-accent" d="M414 84h20" fill="none" stroke-width="2" stroke-linecap="round"/>
-  <path class="pv-fill-accent" d="M442 84l-8-5v10z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 120">
+  <rect class="pv-fill-surface pv-stroke-line" x="1" y="1" width="174" height="118" rx="12" stroke-width="1.5"/>
+  <rect class="pv-fill-accent" x="16" y="16" width="40" height="10" rx="3"/>
+  <rect class="pv-fill-accent" x="16" y="30" width="28" height="10" rx="3"/>
+  <text class="pv-fill-muted" x="160" y="28" font-size="15" text-anchor="end">1</text>
+  <text class="pv-fill-ink" x="16" y="78" font-size="16" font-weight="600">Refactor</text>
+  <text class="pv-fill-muted" x="16" y="102" font-size="15">No new behavior</text>
+  <rect class="pv-fill-surface pv-stroke-line" x="233" y="1" width="174" height="118" rx="12" stroke-width="1.5"/>
+  <rect class="pv-fill-muted" x="248" y="16" width="40" height="10" rx="3"/>
+  <rect class="pv-fill-muted" x="248" y="30" width="28" height="10" rx="3"/>
+  <text class="pv-fill-muted" x="392" y="28" font-size="15" text-anchor="end">2</text>
+  <text class="pv-fill-ink" x="248" y="78" font-size="16" font-weight="600">Add the feature</text>
+  <text class="pv-fill-muted" x="248" y="102" font-size="15">One new behavior</text>
+  <rect class="pv-fill-surface pv-stroke-line" x="465" y="1" width="174" height="118" rx="12" stroke-width="1.5"/>
+  <rect class="pv-fill-surface pv-stroke-ink" x="480" y="16" width="40" height="10" rx="3" stroke-width="1.5"/>
+  <rect class="pv-fill-surface pv-stroke-ink" x="480" y="30" width="28" height="10" rx="3" stroke-width="1.5"/>
+  <text class="pv-fill-muted" x="624" y="28" font-size="15" text-anchor="end">3</text>
+  <text class="pv-fill-ink" x="480" y="78" font-size="16" font-weight="600">Clean up</text>
+  <text class="pv-fill-muted" x="480" y="102" font-size="15">Remove old code</text>
+  <path class="pv-stroke-accent" d="M186 60h28" fill="none" stroke-width="2" stroke-linecap="round"/>
+  <path class="pv-fill-accent" d="M222 60l-8-5v10z"/>
+  <path class="pv-stroke-accent" d="M418 60h28" fill="none" stroke-width="2" stroke-linecap="round"/>
+  <path class="pv-fill-accent" d="M454 60l-8-5v10z"/>
 </svg>

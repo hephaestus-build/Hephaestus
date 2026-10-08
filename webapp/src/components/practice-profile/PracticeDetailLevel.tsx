@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import type { PracticeStanding } from "@/api/types.gen";
 import {
@@ -11,6 +11,11 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
+import { PracticeGuideMarkdown } from "@/components/practice-guidance/PracticeGuideMarkdown";
+import {
+	type PracticeGuidanceState,
+	PracticeIntro,
+} from "@/components/practice-guidance/PracticeIntro";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import { isSettledStanding } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import { formatStandingBasis } from "@/components/practice-vocabulary/practice-trend-presentation";
@@ -34,12 +39,13 @@ import { hasText } from "@/lib/text";
 
 import { newestFirst } from "./practice-feedback-cards";
 import { FeedbackEmpty, LabelledBlock } from "./practice-profile-blocks";
-import { PRACTICE_TABS, type PracticeTab } from "./practice-profile-search";
+import { DEFAULT_PRACTICE_TAB, PRACTICE_TABS, type PracticeTab } from "./practice-profile-search";
 import { requestedReviewNote } from "./requested-review-note";
 
 const TAB_LABELS: Record<PracticeTab, string> = {
 	observations: "Observations",
 	feedback: "Feedback",
+	guide: "Guide",
 };
 
 export interface PracticeDetailLevelProps {
@@ -53,11 +59,14 @@ export interface PracticeDetailLevelProps {
 	/** The practice, as the standings carry it: the catalog's words and where the reader stands. */
 	practice?: PracticeStanding;
 	/**
-	 * The practice's introduction over the tabs — its words, picture and guide — which the route
-	 * renders, since it loads the picture and remembers whether the reader hid it.
+	 * The practice's picture and guide, which load on their own after the standing: the picture
+	 * joins the introduction, and a guide adds the Guide tab.
 	 */
-	intro?: ReactElement;
-	/** The tab shown, from the route's `practiceTab` search param. */
+	guidance: PracticeGuidanceState;
+	/**
+	 * The tab asked for, from the route's `practiceTab` search param. Guide on a practice with no
+	 * guide shows the observations.
+	 */
 	tab: PracticeTab;
 	onTabChange?: (tab: PracticeTab) => void;
 	feed?: ReviewRunFeedState;
@@ -92,17 +101,18 @@ function feedbackCardsOf(cards: PracticeFeedbackCardEntry[], practiceSlug: strin
 const NO_CARDS: PracticeFeedbackCardEntry[] = [];
 
 /**
- * One practice as the level over its group: the practice's introduction, then two tabs — where the
- * reader stands and what the reviews of their work found, and the feedback written from it. It is
- * the deepest level, so it is the one that carries the observations — the newest open on arrival
- * and every earlier one a press away, each opening and closing on its own.
+ * One practice as the level over its group: the practice's introduction, then its tabs — where the
+ * reader stands and what the reviews of their work found, the feedback written from it, and the
+ * practice guide when the practice has one. It is the deepest level, so it is the one that carries
+ * the observations — the newest open on arrival and every earlier one a press away, each opening
+ * and closing on its own.
  */
 export function PracticeDetailLevel({
 	nested,
 	path,
 	onOpenGroup,
 	practice,
-	intro,
+	guidance,
 	tab,
 	onTabChange,
 	feed = EMPTY_REVIEW_RUN_FEED,
@@ -143,6 +153,11 @@ export function PracticeDetailLevel({
 				: undefined,
 		feedback: feedbackCount,
 	};
+	const guide = guidance.status === "ready" ? guidance.guide : undefined;
+	// The Guide tab exists only once a guide has arrived; until then, or without one, a link to it
+	// lands on the observations.
+	const tabs = PRACTICE_TABS.filter((candidate) => candidate !== "guide" || guide !== undefined);
+	const shownTab = tabs.includes(tab) ? tab : DEFAULT_PRACTICE_TAB;
 	// No "Learn more" on a card here: the practice's introduction already leads this level.
 	const feedbackCard = (card: PracticeFeedbackCardEntry) => (
 		<PracticeFeedbackCard
@@ -157,10 +172,10 @@ export function PracticeDetailLevel({
 	if (isLoading) {
 		body = (
 			// The tabs and the observations they open on, as they will be laid out.
-			<>
-				<PracticeTabsSkeleton tabs={PRACTICE_TABS.length} />
+			<div className="flex flex-col gap-4">
+				<PracticeTabsSkeleton tabs={tabs.length} />
 				<ReviewRunFeedSkeleton rows={skeletonRows} />
-			</>
+			</div>
 		);
 	} else if (error != null) {
 		body = (
@@ -178,11 +193,11 @@ export function PracticeDetailLevel({
 		const requestedNote = requestedReviewNote(practice, runs);
 		body = (
 			<>
-				{intro}
+				<PracticeIntro practice={practice} guidance={guidance} />
 				<Tabs
-					value={tab}
+					value={shownTab}
 					onValueChange={(next) => {
-						const chosen = PRACTICE_TABS.find((candidate) => candidate === next);
+						const chosen = tabs.find((candidate) => candidate === next);
 						if (chosen) {
 							onTabChange?.(chosen);
 						}
@@ -191,7 +206,7 @@ export function PracticeDetailLevel({
 				>
 					<PracticeTabsRail>
 						<PracticeTabsList aria-label="Practice">
-							{PRACTICE_TABS.map((candidate) => (
+							{tabs.map((candidate) => (
 								<PracticeTabsTrigger key={candidate} value={candidate} count={counts[candidate]}>
 									{TAB_LABELS[candidate]}
 								</PracticeTabsTrigger>
@@ -279,6 +294,14 @@ export function PracticeDetailLevel({
 							)}
 						</Section>
 					</TabsContent>
+					{guide && (
+						<TabsContent value="guide" className="min-w-0">
+							{/* `h3`: the guide's own headings are `h4`, and the outline may not skip a level. */}
+							<Section size="lg" level={3} title="Practice guide">
+								<PracticeGuideMarkdown guide={guide} />
+							</Section>
+						</TabsContent>
+					)}
 				</Tabs>
 			</>
 		);
@@ -315,7 +338,7 @@ export function PracticeDetailLevel({
 					)
 				}
 			/>
-			<DrawerBody className="flex flex-col gap-4 pt-2">{body}</DrawerBody>
+			<DrawerBody className="flex flex-col gap-6 pt-2">{body}</DrawerBody>
 		</>
 	);
 }
