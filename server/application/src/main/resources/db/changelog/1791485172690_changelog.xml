@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1791485172690-1" author="hephaestus">
+        <createTable tableName="release_start">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="release_startPK"/>
+            </column>
+            <column name="channel" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="commit_sha" type="VARCHAR(40)"/>
+            <column name="environment" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="image" type="VARCHAR(512)"/>
+            <column name="started_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>

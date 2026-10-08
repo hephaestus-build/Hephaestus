@@ -68,18 +68,56 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
 	);
 }
 
-function runningLabel(running: ReleaseStatus["running"]): string {
-	switch (running.channel) {
+function releaseLabel({ version, channel }: Pick<ReleaseStatus["running"], "version" | "channel">) {
+	switch (channel) {
 		case "RELEASE": {
-			return `v${running.version}`;
+			return `v${version}`;
 		}
 		case "COMMIT": {
-			return `commit ${running.version.slice(0, 7)}`;
+			return `commit ${version.slice(0, 7)}`;
 		}
 		case "DEVELOPMENT": {
-			return running.version;
+			return version;
 		}
 	}
+}
+
+function ReleaseHistory({ release }: { release: ReleaseStatus }) {
+	if (release.history.length === 0) {
+		return null;
+	}
+	return (
+		<Collapsible>
+			<CollapsibleTrigger render={<Button type="button" variant="quiet" size="sm" />}>
+				Show release history
+			</CollapsibleTrigger>
+			<CollapsibleContent className="mt-2">
+				<ul className="space-y-1.5">
+					{release.history.map((entry) => (
+						<li
+							key={entry.startedAt.toISOString()}
+							className="flex min-w-0 items-center gap-2 text-sm"
+						>
+							<span className="min-w-0 truncate font-mono">{releaseLabel(entry)}</span>
+							{entry.environment !== release.running.environment && (
+								<span className="min-w-0 truncate text-muted-foreground">
+									in {entry.environment}
+								</span>
+							)}
+							<RelativeTime
+								value={entry.startedAt}
+								className="ml-auto shrink-0 text-xs whitespace-nowrap"
+							/>
+						</li>
+					))}
+				</ul>
+				<p className="mt-2 text-xs text-muted-foreground">
+					Each release appears when this instance first started it. A restart adds nothing. A
+					rollback adds the older release again.
+				</p>
+			</CollapsibleContent>
+		</Collapsible>
+	);
 }
 
 function CheckSummary({ release }: { release: ReleaseStatus }) {
@@ -242,8 +280,18 @@ function ReleaseBody({ state }: InstanceReleaseCardProps) {
 		<>
 			<div className="flex flex-wrap items-center gap-2">
 				<StatusBadge def={RELEASE_CHECK_STATUS_DEFS[release.status]} />
-				<span className="font-mono text-sm">{runningLabel(release.running)}</span>
+				<span className="font-mono text-sm">{releaseLabel(release.running)}</span>
 			</div>
+
+			<p className="text-sm">
+				Running in <span className="font-medium">{release.running.environment}</span>
+				{release.runningSince !== undefined && (
+					<>
+						, started <RelativeTime value={release.runningSince} />
+					</>
+				)}
+				.
+			</p>
 
 			<p className="text-sm text-muted-foreground">
 				<CheckSummary release={release} />
@@ -273,6 +321,8 @@ function ReleaseBody({ state }: InstanceReleaseCardProps) {
 				</CollapsibleTrigger>
 				<CollapsibleContent className="mt-2">
 					<dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+						<dt className="text-muted-foreground">Environment</dt>
+						<dd className="font-mono break-all">{release.running.environment}</dd>
 						<dt className="text-muted-foreground">Version</dt>
 						<dd className="font-mono break-all">{release.running.version}</dd>
 						<dt className="text-muted-foreground">Commit</dt>
@@ -289,6 +339,8 @@ function ReleaseBody({ state }: InstanceReleaseCardProps) {
 					</p>
 				</CollapsibleContent>
 			</Collapsible>
+
+			<ReleaseHistory release={release} />
 		</>
 	);
 }

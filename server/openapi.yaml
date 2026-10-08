@@ -16478,6 +16478,34 @@ components:
           pattern: "^[CG][A-Z0-9]{8,}$"
       required:
       - slackChannelId
+    ReleaseStart:
+      type: object
+      description: A release the server role started on this instance.
+      properties:
+        channel:
+          type: string
+          enum:
+          - RELEASE
+          - COMMIT
+          - DEVELOPMENT
+        commit:
+          type: string
+        environment:
+          type: string
+        image:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+          description: when the server role first started this release; a restart
+            does not change it
+        version:
+          type: string
+      required:
+      - channel
+      - environment
+      - startedAt
+      - version
     ReleaseStatus:
       type: object
       description: |-
@@ -16492,6 +16520,11 @@ components:
           - RATE_LIMITED
           - UNAVAILABLE
           - MALFORMED
+        history:
+          type: array
+          description: "the releases this instance ran, newest first"
+          items:
+            $ref: "#/components/schemas/ReleaseStart"
         lastAttempt:
           type: string
           format: date-time
@@ -16516,6 +16549,11 @@ components:
         running:
           $ref: "#/components/schemas/RunningRelease"
           description: the identity this process reports
+        runningSince:
+          type: string
+          format: date-time
+          description: "when this instance started the running release, absent unless\
+            \ the newest start is it"
         status:
           type: string
           description: the verdict an administrator reads first
@@ -16527,6 +16565,7 @@ components:
           - UPDATE_AVAILABLE
           - FAILED
       required:
+      - history
       - running
       - status
     RenameWorkspaceSlugRequest:
@@ -17930,6 +17969,9 @@ components:
         commit:
           type: string
           description: the source commit the lock names
+        environment:
+          type: string
+          description: the name the deployment gives this instance
         image:
           type: string
           description: the digest reference this container was started from
@@ -17947,6 +17989,7 @@ components:
           description: the version the deployment passed as <code>APP_VERSION</code>
       required:
       - channel
+      - environment
       - roles
       - version
     SessionView:

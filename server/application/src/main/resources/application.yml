@@ -186,6 +186,10 @@ management:
             otlp:
                 enabled: ${TRACING_OTLP_ENABLED:false}
     opentelemetry:
+        # Boot derives only service.name and service.namespace, not the release and deployment a span came from.
+        resource-attributes:
+            "[service.version]": ${spring.application.version}
+            "[deployment.environment.name]": ${hephaestus.release.environment}
         tracing:
             export:
                 otlp:
@@ -265,6 +269,7 @@ hephaestus:
         commit: ${HEPHAESTUS_RELEASE_COMMIT:}
         image: ${HEPHAESTUS_IMAGE_APPLICATION_SERVER:}
         check-enabled: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:true}
+        environment: ${DEPLOYMENT_ENVIRONMENT:local}
     database:
         allow-insecure-remote: ${HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE:false}
     consent:

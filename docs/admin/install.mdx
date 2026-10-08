@@ -439,6 +439,24 @@ GitHub sees the source IP and the time.
 The overview then shows the identity without a check.
 A failed check reaches only instance administration, never health or readiness.
 
+### Deployment environment and release history
+
+Set `DEPLOYMENT_ENVIRONMENT` in `.env` to the name of the deployment, such as `production` or `staging`.
+Use lowercase letters, digits, `.`, `_` or `-`, at most 64 characters.
+Hephaestus refuses to start with another value.
+When it is unset, the instance reports `local`.
+The webapp, the **Release** card, error reports and exported traces all use this name.
+
+The **Release** card also says when this instance first started the release that it runs.
+**Show release history** lists the last ten releases that the server started, newest first.
+The server records a release when it starts one that differs from the last recorded release.
+A restart adds nothing.
+A rollback adds the older release again.
+
+The time is when the server first started that release, not when its images were pulled.
+The history names no person.
+Each worker and webhook server reports its own identity in `/actuator/info` only.
+
 ## Rollback
 
 :::caution CAUTION: Images alone cannot reverse a schema change

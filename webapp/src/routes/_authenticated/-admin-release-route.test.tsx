@@ -14,11 +14,21 @@ const status = {
 	running: {
 		version: "1.2.3",
 		channel: "RELEASE",
+		environment: "production",
 		commit: "a".repeat(40),
 		image: `ghcr.io/hephaestus-build/application-server@sha256:${"b".repeat(64)}`,
 		roles: ["SERVER"],
 	},
 	status: "NEVER_CHECKED",
+	runningSince: "2026-09-08T00:00:00Z",
+	history: [
+		{
+			version: "1.2.3",
+			channel: "RELEASE",
+			environment: "production",
+			startedAt: "2026-09-08T00:00:00Z",
+		},
+	],
 } satisfies Wire<ReleaseStatus>;
 
 describe("instance overview release card", () => {
@@ -41,6 +51,9 @@ describe("instance overview release card", () => {
 		const user = userEvent.setup();
 		renderRouteAt("/admin");
 		await screen.findByText("Not checked yet", {}, ROUTE_RENDER_WAIT);
+		expect(screen.getByText(/running in/iu).textContent).toMatch(
+			/^Running in production, started .+ ago\.$/u,
+		);
 		await user.click(screen.getByRole("button", { name: "Check now" }));
 		await screen.findByText(/GitHub rate-limited the request/u, {}, ROUTE_RENDER_WAIT);
 		expect(checks).toBe(1);

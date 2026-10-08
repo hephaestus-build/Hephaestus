@@ -12,10 +12,12 @@ import de.tum.cit.aet.hephaestus.core.release.ReleaseCheckClient.Failed;
 import de.tum.cit.aet.hephaestus.core.release.ReleaseCheckClient.Found;
 import de.tum.cit.aet.hephaestus.core.release.ReleaseCheckClient.NotModified;
 import de.tum.cit.aet.hephaestus.core.release.ReleaseStatusDTO.LatestReleaseDTO;
+import de.tum.cit.aet.hephaestus.core.release.ReleaseStatusDTO.ReleaseStartDTO;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -52,11 +54,13 @@ class ReleaseCheckServiceTest {
     }
 
     private final ReleaseCheckClient client = mock(ReleaseCheckClient.class);
+    private final ReleaseHistory history = mock(ReleaseHistory.class);
     private final SteppingClock clock = new SteppingClock();
 
     private ReleaseCheckService service(String version, boolean enabled) {
-        var properties = new ReleaseProperties(ReleaseFixtures.COMMIT, ReleaseFixtures.IMAGE, enabled);
-        return new ReleaseCheckService(running(version), client, clock, properties);
+        var properties = new ReleaseProperties(
+                ReleaseFixtures.COMMIT, ReleaseFixtures.IMAGE, enabled, ReleaseFixtures.ENVIRONMENT);
+        return new ReleaseCheckService(running(version), history, client, clock, properties);
     }
 
     private static Found found(String version) {
@@ -70,6 +74,37 @@ class ReleaseCheckServiceTest {
     }
 
     private static final Failed OUTAGE = new Failed(ReleaseCheckFailure.UNAVAILABLE, null);
+
+    @Test
+    void shouldReportWhenTheRunningReleaseLastStartedWhenAnInstanceRolledBackToIt() {
+        var current = running("1.2.3").get();
+        var newer = running("1.3.0").get();
+        when(history.recent())
+                .thenReturn(List.of(
+                        ReleaseHistory.startOf(current, NOW),
+                        ReleaseHistory.startOf(newer, NOW.minus(DAY)),
+                        ReleaseHistory.startOf(current, NOW.minus(DAY.multipliedBy(2)))));
+        var status = service("1.2.3", true).status();
+        assertThat(status.runningSince()).isEqualTo(NOW);
+        assertThat(status.history()).extracting(ReleaseStartDTO::version).containsExactly("1.2.3", "1.3.0", "1.2.3");
+    }
+
+    @Test
+    void shouldNotReadTheHistoryWhenThePollHasNothingToCheck() {
+        // The poll runs every minute, and a development build never checks.
+        service("0.0.0-development", true).poll();
+        verifyNoInteractions(history);
+    }
+
+    @Test
+    void shouldReportNoStartWhenTheNewestStartIsAnotherRelease() {
+        // Recording the rollback to 1.2.3 failed, so its earlier run is the only 1.2.3 row.
+        when(history.recent())
+                .thenReturn(List.of(
+                        ReleaseHistory.startOf(running("1.3.0").get(), NOW),
+                        ReleaseHistory.startOf(running("1.2.3").get(), NOW.minus(DAY))));
+        assertThat(service("1.2.3", true).status().runningSince()).isNull();
+    }
 
     @Test
     void shouldReuseACompletedAnswerForADayThenRevalidateWithTheEtag() {

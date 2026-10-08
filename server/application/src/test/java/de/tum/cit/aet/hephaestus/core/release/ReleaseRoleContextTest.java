@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.release;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import org.junit.jupiter.api.Tag;
@@ -9,6 +10,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Tag("unit")
 class ReleaseRoleContextTest {
@@ -18,12 +20,15 @@ class ReleaseRoleContextTest {
 
     private final ApplicationContextRunner context = new ApplicationContextRunner()
             .withBean(Clock.class, Clock::systemUTC)
+            .withBean(ReleaseStartRepository.class, () -> mock(ReleaseStartRepository.class))
+            .withBean(TransactionTemplate.class, () -> mock(TransactionTemplate.class))
             .withPropertyValues("spring.application.version=1.2.3")
             .withUserConfiguration(
                     PropertiesConfiguration.class,
                     ValidationAutoConfiguration.class,
                     RunningRelease.class,
                     ReleaseCheckClient.class,
+                    ReleaseHistory.class,
                     ReleaseCheckService.class,
                     ReleaseAdminController.class);
 
@@ -38,6 +43,7 @@ class ReleaseRoleContextTest {
                         .hasNotFailed()
                         .hasSingleBean(RunningRelease.class)
                         .doesNotHaveBean(ReleaseCheckClient.class)
+                        .doesNotHaveBean(ReleaseHistory.class)
                         .doesNotHaveBean(ReleaseCheckService.class)
                         .doesNotHaveBean(ReleaseAdminController.class));
     }
