@@ -28,48 +28,39 @@ function line(value: unknown): unknown {
 	return Number.isSafeInteger(coordinate) ? coordinate : value;
 }
 
-/** Repair transport forms before Pi validates scalar types, never outcomes, quotes, paths, or sides. */
+/**
+ * Repair transport forms of one observation before Pi validates scalar types, never outcomes, quotes, paths, or
+ * sides. The observation itself is typed: a string, a list or any other non-object becomes an empty object, which
+ * the required fields refuse.
+ */
 export function prepareObservationArguments(args: unknown): Record<string, unknown> {
 	if (!isRecord(args) || Array.isArray(args)) {
 		return {};
 	}
-	// The outer list is typed: a string or a lone object is left as sent, for the tool to refuse.
-	const { observations } = args;
-	if (!Array.isArray(observations)) {
+	const evidence = container(args.evidence, "object");
+	if (!isRecord(evidence) || Array.isArray(evidence)) {
 		return args;
 	}
+	const citationList = container(evidence.citations, "array");
+	const citations =
+		isRecord(citationList) && !Array.isArray(citationList) ? [citationList] : citationList;
 	return {
 		...args,
-		observations: observations.map((item: unknown) => {
-			if (!isRecord(item) || Array.isArray(item)) {
-				return item;
-			}
-			const evidence = container(item.evidence, "object");
-			if (!isRecord(evidence) || Array.isArray(evidence)) {
-				return item;
-			}
-			const citationList = container(evidence.citations, "array");
-			const citations =
-				isRecord(citationList) && !Array.isArray(citationList) ? [citationList] : citationList;
-			return {
-				...item,
-				evidence: {
-					...evidence,
-					citations: Array.isArray(citations)
-						? citations.map((citation: unknown) => {
-								if (!isRecord(citation) || Array.isArray(citation)) {
-									return citation;
-								}
-								return Object.fromEntries(
-									Object.entries(citation).map(([key, value]) => [
-										key,
-										key === "startLine" || key === "endLine" ? line(value) : value,
-									]),
-								);
-							})
-						: citations,
-				},
-			};
-		}),
+		evidence: {
+			...evidence,
+			citations: Array.isArray(citations)
+				? citations.map((citation: unknown) => {
+						if (!isRecord(citation) || Array.isArray(citation)) {
+							return citation;
+						}
+						return Object.fromEntries(
+							Object.entries(citation).map(([key, value]) => [
+								key,
+								key === "startLine" || key === "endLine" ? line(value) : value,
+							]),
+						);
+					})
+				: citations,
+		},
 	};
 }

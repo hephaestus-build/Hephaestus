@@ -20,29 +20,24 @@ const observation = {
 	evidence: { citations: [citation] },
 };
 
-void test("decodes nested containers while keeping the outer observation list typed", () => {
+void test("decodes nested containers while keeping the root observation typed", () => {
 	const input = {
-		observations: [
-			{ ...observation, evidence: JSON.stringify({ citations: JSON.stringify([citation]) }) },
-		],
+		...observation,
+		evidence: JSON.stringify({ citations: JSON.stringify([citation]) }),
 	};
-	assert.deepEqual(prepareObservationArguments(input), { observations: [observation] });
-	assert.equal(typeof input.observations[0]?.evidence, "string");
+	assert.deepEqual(prepareObservationArguments(input), observation);
+	assert.equal(typeof input.evidence, "string");
 });
 
-void test("keeps non-array outer submissions unchanged for the reporter to refuse", () => {
-	for (const observations of [
-		observation,
-		JSON.stringify([observation]),
-		`${JSON.stringify([observation])}"`,
-	]) {
-		assert.deepEqual(prepareObservationArguments({ observations }), { observations });
-	}
+void test("keeps the obsolete wrapper unchanged for the reporter to refuse", () => {
+	const wrapped = { observations: [observation] };
+	assert.deepEqual(prepareObservationArguments(wrapped), wrapped);
 	assert.deepEqual(
 		prepareObservationArguments({
-			observations: [{ ...observation, evidence: { citations: citation } }],
+			...observation,
+			evidence: { citations: citation },
 		}),
-		{ observations: [observation] },
+		observation,
 	);
 });
 
@@ -50,14 +45,10 @@ void test("reads only decimal line coordinates from numbered views", () => {
 	for (const startLine of ["10", "L10", "[L10]", " [L10] "]) {
 		assert.deepEqual(
 			prepareObservationArguments({
-				observations: [
-					{
-						...observation,
-						evidence: { citations: [{ ...citation, startLine, endLine: "[L12]" }] },
-					},
-				],
+				...observation,
+				evidence: { citations: [{ ...citation, startLine, endLine: "[L12]" }] },
 			}),
-			{ observations: [observation] },
+			observation,
 		);
 	}
 	for (const startLine of [
@@ -75,7 +66,8 @@ void test("reads only decimal line coordinates from numbered views", () => {
 		null,
 	]) {
 		const input = {
-			observations: [{ ...observation, evidence: { citations: [{ ...citation, startLine }] } }],
+			...observation,
+			evidence: { citations: [{ ...citation, startLine }] },
 		};
 		assert.deepEqual(prepareObservationArguments(input), input);
 	}
@@ -101,16 +93,13 @@ void test("leaves malformed containers and invalid claims for admission", () => 
 			],
 		},
 	]) {
-		const input = { observations: [{ ...observation, outcome: "INVALID", evidence }] };
+		const input = { ...observation, outcome: "INVALID", evidence };
 		assert.deepEqual(prepareObservationArguments(input), input);
-	}
-	for (const observations of ["[{not json}]", "null", "42", 42]) {
-		assert.deepEqual(prepareObservationArguments({ observations }), { observations });
 	}
 });
 
-void test("preserves a mixed batch and is idempotent", () => {
-	const input = { observations: [observation, null, { practiceSlug: "missing-evidence" }] };
+void test("preserves the observation and is idempotent", () => {
+	const input = observation;
 	const prepared = prepareObservationArguments(input);
 	assert.deepEqual(prepared, input);
 	assert.deepEqual(prepareObservationArguments(prepared), prepared);
@@ -131,8 +120,14 @@ void test("review prompts and bundled practices do not require write or edit too
 	}
 });
 
-void test("refuses arguments without the tool's outer object", () => {
-	for (const args of [null, 42, [observation], JSON.stringify([observation])]) {
+void test("refuses arguments without one root observation object", () => {
+	for (const args of [
+		null,
+		42,
+		[observation],
+		JSON.stringify(observation),
+		JSON.stringify([observation]),
+	]) {
 		assert.deepEqual(prepareObservationArguments(args), {});
 	}
 });

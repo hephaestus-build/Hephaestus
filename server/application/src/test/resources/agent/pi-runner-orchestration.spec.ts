@@ -650,12 +650,8 @@ if (scenario !== undefined && scenario !== "") {
 									const statePath = nodePath.join(cwd, "out/review-state.json");
 									const before = readFileSync(statePath, "utf8");
 									const reply = await tool("report_observation").execute("late", {
-										observations: [
-											{
-												...observation("test-practice", "Late overwrite"),
-												revises: "test-practice",
-											},
-										],
+										...observation("test-practice", "Late overwrite"),
+										revises: "test-practice",
 									});
 									assert.ok(isRecord(reply));
 									assert.ok(isRecord(reply.details));
@@ -805,11 +801,10 @@ if (scenario !== undefined && scenario !== "") {
 										},
 									});
 									if (recording) {
-										const reply = await tool("report_observation").execute("w-6", {
-											observations: [
-												observation("test-practice", "Recorded in the call that spent the budget"),
-											],
-										});
+										const reply = await tool("report_observation").execute(
+											"w-6",
+											observation("test-practice", "Recorded in the call that spent the budget"),
+										);
 										record(`recorded:${JSON.stringify(reply)}`);
 										emit({
 											type: "tool_execution_end",
@@ -1171,12 +1166,8 @@ if (scenario !== undefined && scenario !== "") {
 									);
 									assert.ok(measuredTool);
 									const closed = await measuredTool.execute("after-admission", {
-										observations: [
-											{
-												...observation("test-practice", "Forbidden late replacement"),
-												revises: "test-practice",
-											},
-										],
+										...observation("test-practice", "Forbidden late replacement"),
+										revises: "test-practice",
 									});
 									record(`draft-closed:${JSON.stringify(closed)}`);
 									return;
@@ -1455,9 +1446,10 @@ if (scenario !== undefined && scenario !== "") {
 									scenario === "stall" || scenario === "repeat" || scenario === "cut-off"
 										? "test-practice"
 										: "second-practice";
-								const reply = await tool("report_observation").execute("o-3", {
-									observations: [observation(unfinished, "Recorded on the finishing turn")],
-								});
+								const reply = await tool("report_observation").execute(
+									"o-3",
+									observation(unfinished, "Recorded on the finishing turn"),
+								);
 								record(`finish:${JSON.stringify(reply)}`);
 								return;
 							}
@@ -1517,9 +1509,7 @@ if (scenario !== undefined && scenario !== "") {
 									toolName: "read",
 									args: { path: "work/change/diff.patch" },
 								});
-								await report.execute("own", {
-									observations: [observation(currentSlug, `Own ${currentSlug}`)],
-								});
+								await report.execute("own", observation(currentSlug, `Own ${currentSlug}`));
 								return;
 							}
 							if (scenario === "scope-ownership") {
@@ -1528,22 +1518,17 @@ if (scenario !== undefined && scenario !== "") {
 								const before = existsSync(nodePath.join(cwd, "out/review-state.json"))
 									? readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8")
 									: null;
+								// More attempts than the refusal limit: an item outside the session spends none of it.
 								for (let attempt = 0; attempt < 9; attempt += 1) {
 									await assert.rejects(
-										report.execute(`inactive-${attempt}`, {
-											observations: [
-												observation(sibling, "Inactive result"),
-												observation(sibling, "Duplicate inactive result"),
-											],
-										}),
-										/without changing any drafts/u,
+										report.execute(`inactive-${attempt}`, observation(sibling, "Inactive result")),
+										/this session/u,
 									);
 								}
 								await assert.rejects(
 									report.execute("inactive-revision", {
-										observations: [
-											{ ...observation(sibling, "Overwrite sibling"), revises: sibling },
-										],
+										...observation(sibling, "Overwrite sibling"),
+										revises: sibling,
 									}),
 									/this session/u,
 								);
@@ -1553,9 +1538,7 @@ if (scenario !== undefined && scenario !== "") {
 										: null,
 									before,
 								);
-								await report.execute("own", {
-									observations: [observation(currentSlug, `Own ${currentSlug}`)],
-								});
+								await report.execute("own", observation(currentSlug, `Own ${currentSlug}`));
 								return;
 							}
 							if (scenario === "scope-stop-failure" || scenario === "scope-stop-hangs") {
@@ -1588,9 +1571,10 @@ if (scenario !== undefined && scenario !== "") {
 										},
 									});
 									if (call === 2) {
-										const result = await report.execute(`${currentSlug}-${call}`, {
-											observations: [observation(currentSlug, `Own ${currentSlug}`)],
-										});
+										const result = await report.execute(
+											`${currentSlug}-${call}`,
+											observation(currentSlug, `Own ${currentSlug}`),
+										);
 										emit({
 											type: "tool_execution_end",
 											toolCallId: `${currentSlug}-${call}`,
@@ -1607,11 +1591,10 @@ if (scenario !== undefined && scenario !== "") {
 								(scenario === "batch" || scenario === "draft-revision") &&
 								currentSlug === "second-practice"
 							) {
-								await report.execute("own-second", {
-									observations: [
-										observation(currentSlug, "Second practice recorded in its own session"),
-									],
-								});
+								await report.execute(
+									"own-second",
+									observation(currentSlug, "Second practice recorded in its own session"),
+								);
 								return;
 							}
 							assert.match(report.description, /local review state/u);
@@ -1649,7 +1632,7 @@ if (scenario !== undefined && scenario !== "") {
 									});
 								for (let attempt = 1; attempt <= 9; attempt += 1) {
 									await report
-										.execute(`o-${attempt}`, { observations: [wrong(attempt)] })
+										.execute(`o-${attempt}`, wrong(attempt))
 										.then(() => record(`refusal-${attempt}:accepted`))
 										.catch((error: unknown) =>
 											record(
@@ -1667,18 +1650,14 @@ if (scenario !== undefined && scenario !== "") {
 									summary = "Unsafe authentication call",
 								) =>
 									report.execute("o-1", {
-										observations: [
-											{
-												...observation("test-practice", summary, {
-													sourceKind: "scm.repository.tree",
-													artifactPath: "repos/primary/.git/HEAD",
-													path,
-													startLine: 2,
-													quote,
-												}),
-												...(hasDraft ? { revises: "test-practice" } : {}),
-											},
-										],
+										...observation("test-practice", summary, {
+											sourceKind: "scm.repository.tree",
+											artifactPath: "repos/primary/.git/HEAD",
+											path,
+											startLine: 2,
+											quote,
+										}),
+										...(hasDraft ? { revises: "test-practice" } : {}),
 									});
 								await assert.rejects(
 									cite("src/Auth.java", "insecure(user);"),
@@ -1699,19 +1678,15 @@ if (scenario !== undefined && scenario !== "") {
 								const historySha = readFileSync(nodePath.join(cwd, "history-sha"), "utf8");
 								const atRevision = async (revision: string, startLine: number) =>
 									report.execute("o-2", {
-										observations: [
-											{
-												...observation("test-practice", `At revision ${startLine}`, {
-													sourceKind: "scm.repository.tree",
-													artifactPath: "repos/primary/.git/HEAD",
-													path: "src/Auth.java",
-													revision,
-													startLine,
-													quote: "insecure();",
-												}),
-												revises: "test-practice",
-											},
-										],
+										...observation("test-practice", `At revision ${startLine}`, {
+											sourceKind: "scm.repository.tree",
+											artifactPath: "repos/primary/.git/HEAD",
+											path: "src/Auth.java",
+											revision,
+											startLine,
+											quote: "insecure();",
+										}),
+										revises: "test-practice",
 									});
 								const relocated: unknown = await atRevision(historySha, 3);
 								record(
@@ -1744,16 +1719,15 @@ if (scenario !== undefined && scenario !== "") {
 									"test-practice",
 									"Retained changed authentication evidence",
 								);
-								await report.execute("provisional-diff", { observations: [provisional] });
+								await report.execute("provisional-diff", provisional);
 								const beforeReplacement = readFileSync(
 									nodePath.join(cwd, "out/review-state.json"),
 									"utf8",
 								);
 								await assert.rejects(
 									report.execute("replacement-without-diff", {
-										observations: [
-											{ ...undecided(["scm.pull-request.core"]), revises: "test-practice" },
-										],
+										...undecided(["scm.pull-request.core"]),
+										revises: "test-practice",
 									}),
 									/must show it read the change/u,
 								);
@@ -1766,16 +1740,12 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (scenario === "argument-repairs") {
 								const encoded = (quote: string, endLine = "[L10]") => ({
-									observations: [
-										{
-											...observation("test-practice", "Unsafe authentication call"),
-											evidence: JSON.stringify({
-												citations: JSON.stringify([
-													{ ...changeCitation, startLine: "[L10]", endLine, quote },
-												]),
-											}),
-										},
-									],
+									...observation("test-practice", "Unsafe authentication call"),
+									evidence: JSON.stringify({
+										citations: JSON.stringify([
+											{ ...changeCitation, startLine: "[L10]", endLine, quote },
+										]),
+									}),
 								});
 								writeFileSync(
 									nodePath.join(cwd, "observation-call.json"),
@@ -1809,28 +1779,23 @@ if (scenario !== undefined && scenario !== "") {
 								const readState = () =>
 									readObservations(nodePath.join(cwd, "out/review-state.json"));
 								await assert.rejects(
-									report.execute("wrong-draft", {
-										observations: [{ ...positive, revises: "second-practice" }],
-									}),
+									report.execute("wrong-draft", { ...positive, revises: "second-practice" }),
 									/revises must name/u,
 								);
 								await assert.rejects(
 									report.execute("invalid-first", {
-										observations: [
-											{
-												...positive,
-												revises: "test-practice",
-												evidence: {
-													citations: [{ ...changeCitation, quote: "notInTheDiff();" }],
-												},
-											},
-										],
+										...positive,
+										revises: "test-practice",
+										evidence: {
+											citations: [{ ...changeCitation, quote: "notInTheDiff();" }],
+										},
 									}),
 									/citation does not match/u,
 								);
 								assert.equal(existsSync(nodePath.join(cwd, "out/review-state.json")), false);
 								const first = await report.execute("first", {
-									observations: [{ ...positive, revises: "test-practice" }],
+									...positive,
+									revises: "test-practice",
 								});
 								record(`draft-first:${JSON.stringify(first)}`);
 								assert.ok(isRecord(first) && isRecord(first.details));
@@ -1838,7 +1803,7 @@ if (scenario !== undefined && scenario !== "") {
 								assert.equal(first.details.revised, 0);
 								// A resend that changes nothing stores nothing: an error, or it reads as done.
 								const duplicate = await report
-									.execute("retry", { observations: [positive] })
+									.execute("retry", positive)
 									.then((result) => `accepted ${JSON.stringify(result)}`)
 									.catch((error: unknown) =>
 										error instanceof Error ? error.message : String(error),
@@ -1846,26 +1811,23 @@ if (scenario !== undefined && scenario !== "") {
 								record(`draft-duplicate:${duplicate}`);
 								assert.equal(readState().length, 1);
 								await assert.rejects(
-									report.execute("implicit", { observations: [negative] }),
+									report.execute("implicit", negative),
 									/resend the complete observation with revises/u,
 								);
 								await assert.rejects(
 									report.execute("invalid", {
-										observations: [
-											{
-												...negative,
-												revises: "test-practice",
-												evidence: {
-													citations: [{ ...changeCitation, quote: "+ notInTheDiff();" }],
-												},
-											},
-										],
+										...negative,
+										revises: "test-practice",
+										evidence: {
+											citations: [{ ...changeCitation, quote: "+ notInTheDiff();" }],
+										},
 									}),
 									/citation does not match/u,
 								);
 								assert.equal(readState()[0]?.outcome, "MET");
 								const corrected = await report.execute("correct", {
-									observations: [{ ...negative, revises: "test-practice" }],
+									...negative,
+									revises: "test-practice",
 								});
 								assert.ok(isRecord(corrected) && isRecord(corrected.details));
 								assert.equal(corrected.details.revised, 1);
@@ -1874,14 +1836,11 @@ if (scenario !== undefined && scenario !== "") {
 								record(`draft-corrected:${JSON.stringify(corrected)}`);
 								const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
 								await assert.rejects(
-									report.execute("ambiguous", {
-										observations: [
-											observation("second-practice", "Another result"),
-											{ ...positive, revises: "test-practice" },
-											{ ...negative, practiceSlug: "TEST_PRACTICE", revises: "test-practice" },
-										],
-									}),
-									/without changing any drafts/u,
+									report.execute(
+										"another-practice",
+										observation("second-practice", "Another result"),
+									),
+									/this session/u,
 								);
 								assert.equal(
 									readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
@@ -1890,31 +1849,31 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							if (scenario === "compose-abstention") {
-								await report.execute("o-mixed", {
-									observations: [
-										{
-											...observation("test-practice", "Authentication call"),
-											outcome: "MET",
-											severity: null,
-										},
-										{
-											...undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
-											practiceSlug: "second-practice",
-										},
-										{
-											...observation("third-practice", "Whether the call is reachable"),
-											outcome: "UNDETERMINED",
-											severity: null,
-											evidence: {
-												citations: [changeCitation],
-												undecidability: {
-													openQuestion: "Is insecure() reachable from the login flow?",
-													wouldSettleIt: "The callers of Auth outside this change.",
-												},
+								const own = [
+									{
+										...observation("test-practice", "Authentication call"),
+										outcome: "MET",
+										severity: null,
+									},
+									{
+										...undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
+										practiceSlug: "second-practice",
+									},
+									{
+										...observation("third-practice", "Whether the call is reachable"),
+										outcome: "UNDETERMINED",
+										severity: null,
+										evidence: {
+											citations: [changeCitation],
+											undecidability: {
+												openQuestion: "Is insecure() reachable from the login flow?",
+												wouldSettleIt: "The callers of Auth outside this change.",
 											},
 										},
-									].filter((item) => item.practiceSlug === currentSlug),
-								});
+									},
+								].find((item) => item.practiceSlug === currentSlug);
+								assert.ok(own);
+								await report.execute("o-mixed", own);
 								return;
 							}
 							if (scenario === "comment-undecided") {
@@ -1923,21 +1882,17 @@ if (scenario !== undefined && scenario !== "") {
 								const metadataOnly = undecided(["scm.pull-request.core"]);
 								const tone = await report
 									.execute("tone", {
-										observations: [
-											{
-												...metadataOnly,
-												practiceSlug: "review-tone",
-												summary: "The tone of the reviewer's note is ambiguous",
-												outcome: "UNDETERMINED",
-												evidence: {
-													citations: metadataOnly.evidence.citations,
-													undecidability: {
-														openQuestion: "Is the note a question or an order?",
-														wouldSettleIt: "The reviewer's next note on the thread.",
-													},
-												},
+										...metadataOnly,
+										practiceSlug: "review-tone",
+										summary: "The tone of the reviewer's note is ambiguous",
+										outcome: "UNDETERMINED",
+										evidence: {
+											citations: metadataOnly.evidence.citations,
+											undecidability: {
+												openQuestion: "Is the note a question or an order?",
+												wouldSettleIt: "The reviewer's next note on the thread.",
 											},
-										],
+										},
 									})
 									.then(() => "stored")
 									.catch((error: unknown) =>
@@ -1945,15 +1900,16 @@ if (scenario !== undefined && scenario !== "") {
 									);
 								record(`tone-undecided:${tone}`);
 								const code = await report
-									.execute("code-na", { observations: [metadataOnly] })
+									.execute("code-na", metadataOnly)
 									.then(() => "stored")
 									.catch((error: unknown) =>
 										error instanceof Error ? error.message : String(error),
 									);
 								record(`code-undecided:${code}`);
-								await report.execute("code", {
-									observations: [observation(currentSlug, "Unsafe authentication call")],
-								});
+								await report.execute(
+									"code",
+									observation(currentSlug, "Unsafe authentication call"),
+								);
 								return;
 							}
 							if (scenario !== "batch") {
@@ -1974,9 +1930,10 @@ if (scenario !== undefined && scenario !== "") {
 										},
 									});
 								}
-								const measured = await report.execute("o-1", {
-									observations: [observation(currentSlug, "Unsafe authentication call")],
-								});
+								const measured = await report.execute(
+									"o-1",
+									observation(currentSlug, "Unsafe authentication call"),
+								);
 								if (scenario === "finish") {
 									record(`batch:${JSON.stringify(measured)}`);
 									emit({
@@ -1990,34 +1947,30 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							await assert.rejects(
-								report.execute("o-na", { observations: [undecided(["scm.pull-request.core"])] }),
+								report.execute("o-na", undecided(["scm.pull-request.core"])),
 								/must show it read the change/u,
 							);
-							await report.execute("o-na2", {
-								observations: [undecided(["scm.pull-request.core", "scm.pull-request.diff"])],
-							});
+							await report.execute(
+								"o-na2",
+								undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
+							);
 							const revise = (summary: string, citation: unknown = changeCitation) => ({
 								revises: "test-practice",
 								...observation("test-practice", summary, citation),
 							});
 							const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
-							const encoded = JSON.stringify([revise("A typed correction")]);
-							for (const observations of [
-								encoded,
-								`${encoded}"`,
-								"[{not json",
-								revise("A lone object"),
-							]) {
-								await assert.rejects(report.execute("non-array", { observations }));
-								assert.equal(
-									readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
-									before,
-								);
-							}
-							record("non-array:unchanged");
-							const corrected = await report.execute("typed-correction", {
-								observations: [revise("A typed correction")],
-							});
+							await assert.rejects(
+								report.execute("non-root", { observations: [revise("A wrapped correction")] }),
+							);
+							assert.equal(
+								readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
+								before,
+							);
+							record("non-root:unchanged");
+							const corrected = await report.execute(
+								"typed-correction",
+								revise("A typed correction"),
+							);
 							assert.ok(isRecord(corrected) && isRecord(corrected.details));
 							assert.equal(corrected.details.revised, 1);
 							const revised = readObservations(nodePath.join(cwd, "out/review-state.json"))[0];
@@ -2029,72 +1982,70 @@ if (scenario !== undefined && scenario !== "") {
 							assert.ok(isRecord(quoted));
 							assert.equal(quoted.quote, " insecure();");
 							const { side: _side, ...sideless } = changeCitation;
-							const reply = await report.execute("o-1", {
-								observations: [
-									revise("Unsafe authentication call", sideless),
-									{
-										...observation("second-practice", "A quote that is not in the change", {
-											...changeCitation,
-											quote: "+ somethingElse();",
-										}),
-										revises: "second-practice",
-									},
-								],
-							});
+							const reply = await report.execute(
+								"o-1",
+								revise("Unsafe authentication call", sideless),
+							);
 							record(`batch:${JSON.stringify(reply)}`);
+							const outside = await report
+								.execute("o-outside", {
+									...observation("second-practice", "A quote that is not in the change", {
+										...changeCitation,
+										quote: "+ somethingElse();",
+									}),
+									revises: "second-practice",
+								})
+								.then(() => "accepted")
+								.catch((error: unknown) =>
+									error instanceof Error ? error.message : String(error),
+								);
+							record(`outside:${outside}`);
 							await assert.rejects(
-								report.execute("o-long", { observations: [revise(OVERLONG_SUMMARY)] }),
+								report.execute("o-long", revise(OVERLONG_SUMMARY)),
 								/summary must be at most/u,
 							);
-							const kind = await report.execute("o-kind", {
-								observations: [
-									revise("Cited under the wrong source kind", {
-										...changeCitation,
-										sourceKind: "scm.pull-request.core",
-									}),
-								],
-							});
+							const kind = await report.execute(
+								"o-kind",
+								revise("Cited under the wrong source kind", {
+									...changeCitation,
+									sourceKind: "scm.pull-request.core",
+								}),
+							);
 							record(`corrected-kind:${JSON.stringify(kind)}`);
 							// A record cited under the diff's source kind, with a diff side: recorded as the
 							// record's own source, without the side admission would refuse.
-							const side = await report.execute("o-side", {
-								observations: [
-									revise("A record cited with a diff side", {
-										sourceKind: "scm.pull-request.diff",
-										artifactPath: "evidence/metadata.json",
-										path: "evidence/metadata.json",
-										side: "NEW",
-										revision: "c".repeat(40),
-										startLine: 1,
-										quote: '"title": "Add login"',
-									}),
-								],
-							});
+							const side = await report.execute(
+								"o-side",
+								revise("A record cited with a diff side", {
+									sourceKind: "scm.pull-request.diff",
+									artifactPath: "evidence/metadata.json",
+									path: "evidence/metadata.json",
+									side: "NEW",
+									revision: "c".repeat(40),
+									startLine: 1,
+									quote: '"title": "Add login"',
+								}),
+							);
 							record(`corrected-side:${JSON.stringify(side)}`);
 							const withSide = readObservations(nodePath.join(cwd, "out/review-state.json")).find(
 								(item) => item.practiceSlug === "test-practice",
 							);
 							record(`side-recorded:${JSON.stringify(withSide)}`);
-							const path = await report.execute("o-path", {
-								observations: [
-									revise("A record quoted under the change", {
-										...changeCitation,
-										path: "evidence/metadata.json",
-										startLine: 1,
-										endLine: 1,
-										quote: '"title": "Add login"',
-									}),
-								],
-							});
+							const path = await report.execute(
+								"o-path",
+								revise("A record quoted under the change", {
+									...changeCitation,
+									path: "evidence/metadata.json",
+									startLine: 1,
+									endLine: 1,
+									quote: '"title": "Add login"',
+								}),
+							);
 							record(`corrected-path:${JSON.stringify(path)}`);
-							await report.execute("o-2", {
-								observations: [revise("The login change calls an insecure helper")],
-							});
+							await report.execute("o-2", revise("The login change calls an insecure helper"));
 							// A resend of what is already recorded stores nothing: an error, or it reads as done.
 							const resent = await report
-								.execute("o-3", {
-									observations: [revise("The login change calls an insecure helper")],
-								})
+								.execute("o-3", revise("The login change calls an insecure helper"))
 								.then(() => "accepted")
 								.catch((error: unknown) =>
 									error instanceof Error ? error.message : String(error),
@@ -2192,7 +2143,7 @@ if (scenario !== undefined && scenario !== "") {
 				"scope-repeat":
 					"identical evidence reads in fresh practice sessions do not become a repeated-call loop",
 				"scope-ownership":
-					"inactive reports and repeated inactive items cannot mutate drafts or spend another practice's refusal allowance",
+					"inactive reports and inactive revisions cannot mutate drafts or spend another practice's refusal allowance",
 				"scope-budget":
 					"fresh practice sessions share one group budget and accumulate nonzero native usage once",
 				"scope-stop-hangs":
@@ -2218,9 +2169,10 @@ if (scenario !== undefined && scenario !== "") {
 					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
 				"argument-repairs":
 					"repairs observation transport without accepting a false quote or an overlong range",
-				batch: "normalizes corrections and answers distinct practices per item",
+				batch:
+					"normalizes corrections, refuses a non-root observation and answers another practice's item",
 				"draft-revision":
-					"replaces only an explicitly corrected valid draft and refuses an ambiguous batch atomically",
+					"replaces only an explicitly corrected valid draft and refuses another practice's item without changing drafts",
 				"replacement-witness": "refuses a replacement that relies on its superseded diff witness",
 				"comment-undecided":
 					"accepts an undecided result without the change only for a practice that does not read it",
@@ -2870,12 +2822,13 @@ const captured = JSON.parse(readFileSync(process.argv[1], "utf8"));
 const tool = { name: "report_observation", parameters: captured.parameters };
 const validate = (args) => validateToolArguments(tool, { name: tool.name, arguments: prepareObservationArguments(args) });
 assert.deepEqual(validate(captured.arguments), prepareObservationArguments(captured.arguments));
-const encoded = JSON.stringify(captured.arguments.observations);
-for (const observations of [encoded, encoded + '"', captured.arguments.observations[0]]) {
-  assert.throws(() => validate({ observations }));
+// The canonical observation is the root: an encoded root, a list or the old wrapper refuses the call.
+const base = prepareObservationArguments(captured.arguments);
+const encoded = JSON.stringify(base);
+for (const sent of [encoded, encoded + '"', [base], { observations: [base] }]) {
+  assert.throws(() => validate(sent), JSON.stringify(sent).slice(0, 160));
 }
 // The canonical observation reaches the SDK whole: nested shapes, required fields and vocabularies refuse the call.
-const base = prepareObservationArguments(captured.arguments).observations[0];
 const citation = base.evidence.citations[0];
 const without = (record, key) => Object.fromEntries(Object.entries(record).filter(([name]) => name !== key));
 for (const item of [
@@ -2892,7 +2845,7 @@ for (const item of [
   { ...base, evidence: { citations: [{ ...citation, side: "MIDDLE" }] } },
   { ...base, evidence: { citations: [{ ...citation, startLine: 0 }] } },
 ]) {
-  assert.throws(() => validate({ observations: [item] }), JSON.stringify(item).slice(0, 160));
+  assert.throws(() => validate(item), JSON.stringify(item).slice(0, 160));
 }
 // Optional fields stay optional: their absence is accepted as it is, not filled in.
 for (const item of [
@@ -2901,7 +2854,7 @@ for (const item of [
   { ...base, outcome: "NOT_APPLICABLE", severity: null, evidence: { citations: [citation], inapplicability: { consulted: [citation.sourceKind], subject: "Runtime behavior", ruledOutBy: "Only documentation changed." } } },
   { ...base, outcome: "UNDETERMINED", severity: null, evidence: { citations: [citation], undecidability: { openQuestion: "Was the described test run?", wouldSettleIt: "The referenced test report." } } },
 ]) {
-  assert.deepEqual(validate({ observations: [item] }), { observations: [item] });
+  assert.deepEqual(validate(item), item);
 }
 // The declaration leaves the SDK unchanged for an OpenAI-compatible endpoint: same model, no forced strict mode.
 let payload;
@@ -2946,7 +2899,7 @@ assert.notEqual(outgoing.function.strict, true);`,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("draft-duplicate:")) ?? "",
-								/#1 test-practice: already recorded; this item changed nothing, so do not send it again/u,
+								/test-practice: already recorded; this item changed nothing, so do not send it again/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("draft-corrected:")) ?? "",
@@ -3015,10 +2968,13 @@ assert.notEqual(outgoing.function.strict, true);`,
 								events.find((event) => event.startsWith("resent:")) ?? "",
 								/already recorded; this item changed nothing, so do not send it again/u,
 							);
-							assert.ok(events.includes("non-array:unchanged"), events.join("\n"));
+							assert.ok(events.includes("non-root:unchanged"), events.join("\n"));
 							const reply = events.find((event) => event.startsWith("batch:")) ?? "";
-							assert.match(reply, /#1 test-practice: revised \(negative\)/u, child.stderr);
-							assert.match(reply, /#2 second-practice: refused/u);
+							assert.match(reply, /test-practice: revised \(negative\)/u, child.stderr);
+							assert.match(
+								events.find((event) => event.startsWith("outside:")) ?? "",
+								/second-practice: refused — this session assesses only 'test-practice'/u,
+							);
 							assert.match(reply, /Every practice of this turn has a recorded result/u);
 							// Nothing is left for the turn to record, so the run ends with this call.
 							assert.match(reply, /"terminate":true/u);
@@ -3040,7 +2996,7 @@ assert.notEqual(outgoing.function.strict, true);`,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("corrected-side:")) ?? "",
-								/#1 test-practice: revised \(negative\)\.[^#]*evidence\/metadata\.json is staged by scm\.pull-request\.core, not scm\.pull-request\.diff; recorded as scm\.pull-request\.core/u,
+								/test-practice: revised \(negative\)\.[^#]*evidence\/metadata\.json is staged by scm\.pull-request\.core, not scm\.pull-request\.diff; recorded as scm\.pull-request\.core/u,
 							);
 							const recordedSide = events.find((event) => event.startsWith("side-recorded:")) ?? "";
 							assert.match(recordedSide, /"summary":"A record cited with a diff side"/u);
@@ -3059,7 +3015,11 @@ assert.notEqual(outgoing.function.strict, true);`,
 							const result = readObservations(nodePath.join(cwd, "out/result.json"));
 							assert.equal(result.length, 2);
 							assert.equal(result[0]?.summary, "The login change calls an insecure helper");
-							assert.equal(result[1]?.summary, "Second practice recorded in its own session");
+							assert.equal(
+								result[1]?.summary,
+								"Second practice recorded in its own session",
+								child.stderr,
+							);
 							const { evidence } = result[0];
 							assert.ok(isRecord(evidence));
 							assert.ok(Array.isArray(evidence.citations));

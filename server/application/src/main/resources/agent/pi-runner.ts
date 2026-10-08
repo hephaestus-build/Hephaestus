@@ -15,6 +15,7 @@ import {
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
+	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 
 import {
@@ -730,7 +731,7 @@ const evidenceSchema = {
 		},
 	},
 } as const;
-const observationSchema = {
+const observationSchema: ToolDefinition["parameters"] = {
 	type: "object",
 	additionalProperties: false,
 	required: ["practiceSlug", "summary", "outcome", "severity", "evidence", "evidenceRationale"],
@@ -1299,8 +1300,8 @@ function noteCutOff(turn: TurnTrace, cutOff: boolean): void {
 			activeSession,
 			`Your last call was cut off at the ${outputLimit}-token output limit, so its tool received it ` +
 				"incomplete and failed: the error it reports is the cut, not your syntax. Send a short call " +
-				"instead — a search with a pattern rather than a list of every value, and a few " +
-				"observations per call.",
+				"instead — a search with a pattern rather than a list of every value. Keep each recording " +
+				"call complete.",
 		);
 	}
 }
@@ -1568,18 +1569,12 @@ function buildReportObservationTool() {
 	return defineTool({
 		name: "report_observation",
 		exposure: "model-only",
-		label: "Report Observations",
+		label: "Report Observation",
 		description:
 			"Record one complete evidenced observation for this session’s active practice in local review state, " +
-			"for server admission after measuring. Its draft reference is the practice slug. " +
-			"Correct it explicitly with revises and a complete observation. Send at most one item per practice in a call; repeated practices refuse the whole call.",
-		parameters: {
-			type: "object",
-			required: ["observations"],
-			properties: {
-				observations: { type: "array", items: observationSchema },
-			},
-		},
+			"for server admission after measuring. The arguments are that one observation. Its draft reference is " +
+			"the practice slug. Correct it explicitly with revises and a complete observation.",
+		parameters: observationSchema,
 		prepareArguments: prepareObservationArguments,
 		execute: async (toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
 			if (measurementClosed) {
@@ -1596,30 +1591,13 @@ function buildReportObservationTool() {
 					},
 				};
 			}
-			// The recording list is a typed value, never a second JSON document to parse or repair.
-			if (!isRecord(params) || !Array.isArray(params.observations)) {
-				const reason = "observations must be a JSON array of observation objects";
-				logRefusal("(not an array)", reason);
-				return refusal(toolCallId, `observations refused — ${reason}. No draft changed.`);
+			// The observation is a typed value, never a second JSON document to parse or repair.
+			if (!isRecord(params) || Array.isArray(params)) {
+				const reason = "the arguments must be one observation object";
+				logRefusal("(not an object)", reason);
+				return refusal(toolCallId, `observation refused — ${reason}. No draft changed.`);
 			}
-			const submitted = params.observations;
-			const slugs = submitted.map((item) =>
-				isRecord(item) ? normalizePracticeSlug(item.practiceSlug) : "",
-			);
-			const repeated = slugs.filter((slug, index) => slug !== "" && slugs.indexOf(slug) !== index);
-			if (repeated.length > 0) {
-				for (const slug of new Set(repeated)) {
-					if (slug === activePractice) {
-						countRefusal(slug);
-					}
-					logRefusal(slug, "more than one item for this practice in the call");
-				}
-				return refusal(
-					toolCallId,
-					`Call refused without changing any drafts: more than one item for ${[...new Set(repeated)].join(", ")}. Send one complete observation per practice.`,
-				);
-			}
-			const outcomes = submitted.map(record);
+			const outcomes = [record(params)];
 			const stored = outcomes.filter(
 				(outcome) => outcome.kind === "stored" || outcome.kind === "revised",
 			);
@@ -1642,8 +1620,8 @@ function buildReportObservationTool() {
 			// it can no longer accept.
 			const remainingPractices = owedPractices();
 			const closed = currentTurnSlugs.filter((slug) => blockedPractices.has(slug));
-			const lines = outcomes.map((outcome, index) => {
-				const head = `#${index + 1} ${outcome.slug}:`;
+			const lines = outcomes.map((outcome) => {
+				const head = `${outcome.slug}:`;
 				if (outcome.kind === "stored" || outcome.kind === "revised") {
 					return `${head} ${outcome.kind}${outcome.negative ? " (negative)" : ""}. Draft reference: '${outcome.slug}'.${outcome.filled.map((line) => `\n   ${line}`).join("")}`;
 				}
@@ -1670,8 +1648,7 @@ function buildReportObservationTool() {
 				remainingPractices,
 			};
 			// A call that stored nothing is an error the session must correct — a resend of what is already
-			// recorded included, or it reads as success and is sent again; one that stored some of what it
-			// sent is an answer, with the refusals named in it.
+			// recorded included, or it reads as success and is sent again.
 			if (stored.length === 0) {
 				return refusal(toolCallId, text);
 			}
@@ -3536,12 +3513,9 @@ const OBSERVATION_EXAMPLE = (() => {
 		},
 	];
 	return `## How report_observation takes observations
-\`observations\` is an array with one complete object for this session's practice, not a JSON-encoded string. These are alternative call illustrations, not evidence from this work:
+The arguments are one complete observation object for this session's practice, not a list and not a JSON-encoded string. Each block below is a whole alternative call, with an illustrative outcome, not evidence from this work:
 ${example
-	.map(
-		(observation) =>
-			`\`\`\`json\n${JSON.stringify({ observations: [observation] }, null, 1)}\n\`\`\``,
-	)
+	.map((observation) => `\`\`\`json\n${JSON.stringify(observation, null, 1)}\n\`\`\``)
 	.join("\n\n")}`;
 })();
 
