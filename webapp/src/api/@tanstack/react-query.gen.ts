@@ -7,36 +7,36 @@ import { acceptPracticeRelease, acknowledgeProductSurveyInvitation, addLabelFilt
 import type { AcceptPracticeReleaseData, AcceptPracticeReleaseResponse, AcknowledgeProductSurveyInvitationData, AddLabelFilterData, AddLabelToTeamData, AddLabelToTeamResponse, AddRepositoryToMonitorData, AdminAcceptPracticeReleaseData, AdminAcceptPracticeReleaseResponse, AdminCheckReleaseData, AdminCheckReleaseResponse, AdminCreateCuratedGroupData, AdminCreateCuratedGroupError, AdminCreateCuratedGroupResponse, AdminCreateCuratedPracticeData, AdminCreateCuratedPracticeError, AdminCreateCuratedPracticeResponse, AdminCreateLlmConnectionData, AdminCreateLlmConnectionResponse, AdminCreateLlmModelData, AdminCreateLlmModelResponse, AdminCreateLoginProviderData, AdminCreateLoginProviderResponse, AdminCreateProductSurveyData, AdminCreateProductSurveyResponse, AdminDeclinePracticeReleaseData, AdminDeclinePracticeReleaseResponse, AdminDeleteCuratedGroupOverrideData, AdminDeleteCuratedGroupOverrideError, AdminDeleteCuratedGroupOverrideResponse, AdminDeleteCuratedPracticeOverrideData, AdminDeleteCuratedPracticeOverrideError, AdminDeleteCuratedPracticeOverrideResponse, AdminDeleteLlmConnectionData, AdminDeleteLlmConnectionResponse, AdminDeleteLlmModelData, AdminDeleteLlmModelResponse, AdminDeleteLoginProviderData, AdminDeleteProductSurveyData, AdminErasePersonDataData, AdminErasePersonDataResponse, AdminExportAuthEventsData, AdminExportAuthEventsResponse, AdminExportPersonDataData, AdminExportPersonDataResponse, AdminExportProductSurveyResponsesData, AdminExportProductSurveyResponsesResponse, AdminGetConfigurationReadinessData, AdminGetConfigurationReadinessResponse, AdminGetCuratedCatalogData, AdminGetCuratedCatalogResponse, AdminGetCuratedGroupData, AdminGetCuratedGroupResponse, AdminGetCuratedPracticeData, AdminGetCuratedPracticeResponse, AdminGetInstanceSettingsData, AdminGetInstanceSettingsResponse, AdminGetLlmConnectionData, AdminGetLlmConnectionResponse, AdminGetLlmModelData, AdminGetLlmModelResponse, AdminGetLlmSettingsData, AdminGetLlmSettingsResponse, AdminGetLlmUsageReportData, AdminGetLlmUsageReportResponse, AdminGetPersonDataRequestData, AdminGetPersonDataRequestResponse, AdminGetPracticeDefinitionOptionsData, AdminGetPracticeDefinitionOptionsResponse, AdminGetPracticeReleaseData, AdminGetPracticeReleaseResponse, AdminGetProductSurveyData, AdminGetProductSurveyResponse, AdminGetProductSurveySummaryData, AdminGetProductSurveySummaryResponse, AdminGetReleaseData, AdminGetReleaseResponse, AdminKeepCuratedGroupData, AdminKeepCuratedGroupError, AdminKeepCuratedGroupResponse, AdminKeepCuratedPracticeData, AdminKeepCuratedPracticeError, AdminKeepCuratedPracticeResponse, AdminListAuthEventsData, AdminListAuthEventsResponse, AdminListConfigAuditEventsData, AdminListConfigAuditEventsResponse, AdminListLlmConnectionsData, AdminListLlmConnectionsResponse, AdminListLlmModelsData, AdminListLlmModelsResponse, AdminListLoginProvidersData, AdminListLoginProvidersResponse, AdminListPersonDataProvidersData, AdminListPersonDataProvidersResponse, AdminListProductFeedbackData, AdminListProductFeedbackResponse, AdminListProductSurveyResponsesData, AdminListProductSurveyResponsesResponse, AdminListProductSurveysData, AdminListProductSurveysResponse, AdminListUsersData, AdminListUsersResponse, AdminListWorkspacesData, AdminListWorkspacesResponse, AdminPlaceCuratedPracticeData, AdminPlaceCuratedPracticeResponse, AdminPreviewPersonDataData, AdminPreviewPersonDataResponse, AdminPreviewSurveyEmailInvitationsData, AdminPreviewSurveyEmailInvitationsResponse, AdminProbeLlmConnectionData, AdminProbeLlmConnectionDraftData, AdminProbeLlmConnectionDraftResponse, AdminProbeLlmConnectionResponse, AdminReorderCuratedGroupsData, AdminReorderCuratedGroupsResponse, AdminReorderCuratedPracticesData, AdminReorderCuratedPracticesResponse, AdminResetCuratedCatalogOrderData, AdminResetCuratedCatalogOrderResponse, AdminRevokeUserSessionsData, AdminRevokeUserSessionsResponse, AdminSendSurveyEmailInvitationsData, AdminSendSurveyEmailInvitationsError, AdminSendSurveyEmailInvitationsResponse, AdminSendTestEmailData, AdminSendTestEmailError, AdminSendTestEmailResponse, AdminTriageProductFeedbackData, AdminTriageProductFeedbackResponse, AdminUpdateCuratedGroupData, AdminUpdateCuratedGroupError, AdminUpdateCuratedGroupResponse, AdminUpdateCuratedGroupStatusData, AdminUpdateCuratedGroupStatusError, AdminUpdateCuratedGroupStatusResponse, AdminUpdateCuratedPracticeData, AdminUpdateCuratedPracticeError, AdminUpdateCuratedPracticeResponse, AdminUpdateCuratedPracticeStatusData, AdminUpdateCuratedPracticeStatusError, AdminUpdateCuratedPracticeStatusResponse, AdminUpdateLlmConnectionData, AdminUpdateLlmConnectionResponse, AdminUpdateLlmModelData, AdminUpdateLlmModelPriceData, AdminUpdateLlmModelPriceResponse, AdminUpdateLlmModelResponse, AdminUpdateLlmModelSharingData, AdminUpdateLlmModelSharingResponse, AdminUpdateLlmSettingsData, AdminUpdateLlmSettingsResponse, AdminUpdateLoginProviderData, AdminUpdateLoginProviderResponse, AdminUpdateProductSurveyData, AdminUpdateProductSurveyResponse, AdminUpdateSilentModeData, AdminUpdateSilentModeError, AdminUpdateSilentModeResponse, AdminUpdateUserData, AdminUpdateUserResponse, AdminUpdateWorkspaceLlmBudgetData, AdminUpdateWorkspaceLlmBudgetResponse, AdoptGroupData, AdoptGroupResponse, AdoptPracticeData, AdoptPracticeError, AdoptPracticeResponse, AssignRoleData, AssignRoleResponse, AuditData, AuditResponse, AutonomyRollupData, AutonomyRollupResponse, BindGroupData, BindGroupError, BindGroupResponse, CallbackGetData, CallbackGetResponse, CallbackPostData, CallbackPostResponse, CancelAgentJobData, CancelAgentJobResponse, CompleteFirstLoginConsentData, CompleteFirstLoginConsentResponse, ConfigureAgentData, ConfigureAgentResponse, CreateGroupData, CreateGroupResponse, CreatePracticeData, CreatePracticeError, CreatePracticeResponse, CreateSweepScheduleData, CreateSweepScheduleError, CreateSweepScheduleResponse, CreateWorkspaceData, CreateWorkspaceResponse, DecideFeedbackProposalData, DecideFeedbackProposalResponse, DeclinePracticeReleaseData, DeclinePracticeReleaseResponse, DeclineProductSurveyData, DeleteAgentData, DeleteAgentResponse, DeleteCurrentUserData, DeleteFeedbackResponseData, DeleteFeedbackResponseResponse, DeleteGroupData, DeleteGroupResponse, DeleteOutlineCollectionData, DeleteOutlineCollectionResponse, DeletePracticeData, DeletePracticeError, DeletePracticeResponse, DeleteSweepScheduleData, DeleteSweepScheduleError, DeleteSweepScheduleResponse, DeleteThreadData, DeleteThreadResponse, DismissMemberOnboardingData, DismissMemberOnboardingResponse, DownloadDataExportData, DownloadDataExportResponse, ExchangeClientSignInData, ExchangeClientSignInError, ExchangeClientSignInResponse, GetAccountAiChoiceData, GetAccountAiChoiceResponse, GetActivitySummaryData, GetActivitySummaryError, GetActivitySummaryResponse, GetActivityWorkData, GetActivityWorkError, GetActivityWorkResponse, GetAgentJobData, GetAgentJobResponse, GetAllTeamsData, GetAllTeamsResponse, GetArtifactTraceData, GetArtifactTraceError, GetArtifactTraceResponse, GetBackfillRunData, GetBackfillRunError, GetBackfillRunResponse, GetClientSignInConfigurationData, GetClientSignInConfigurationError, GetClientSignInConfigurationResponse, GetConnectionSyncStatusData, GetConnectionSyncStatusResponse, GetConsentStatusData, GetConsentStatusResponse, GetCuratedPracticeCatalogEntryData, GetCuratedPracticeCatalogEntryResponse, GetCurrentUserData, GetCurrentUserMembershipData, GetCurrentUserMembershipResponse, GetCurrentUserResponse, GetDataExportStatusData, GetDataExportStatusResponse, GetFeedbackProposalDecisionData, GetFeedbackProposalDecisionResponse, GetFeedbackResolutionCountsData, GetFeedbackResolutionCountsResponse, GetFeedbackResponseData, GetFeedbackResponseResponse, GetGroupData, GetGroupResponse, GetInAppFeedbackData, GetInAppFeedbackResponse, GetIntegrationCatalogData, GetIntegrationCatalogResponse, GetJwksData, GetJwksResponse, GetLabelFiltersData, GetLabelFiltersResponse, GetLlmUsageReportData, GetLlmUsageReportResponse, GetMemberData, GetMemberOnboardingData, GetMemberOnboardingLinkOptionsData, GetMemberOnboardingLinkOptionsResponse, GetMemberOnboardingResponse, GetMemberOnboardingSettingsData, GetMemberOnboardingSettingsResponse, GetMemberResponse, GetNotificationPreferencesData, GetNotificationPreferencesResponse, GetObservationData, GetObservationResponse, GetOpenWorkData, GetOpenWorkError, GetOpenWorkResponse, GetOutlineCollectionData, GetOutlineCollectionResponse, GetOutlineTokenStatusData, GetOutlineTokenStatusResponse, GetOwnArtifactTraceData, GetOwnArtifactTraceError, GetOwnArtifactTraceResponse, GetOwnDeliveredWorkFeedbackData, GetOwnDeliveredWorkFeedbackResponse, GetPracticeData, GetPracticeDefinitionOptionsData, GetPracticeDefinitionOptionsResponse, GetPracticeError, GetPracticeGroupTrendData, GetPracticeGroupTrendResponse, GetPracticeProfileOverviewData, GetPracticeProfileOverviewResponse, GetPracticeProfileReviewRunData, GetPracticeProfileReviewRunError, GetPracticeProfileReviewRunResponse, GetPracticeReleaseData, GetPracticeReleaseResponse, GetPracticeResponse, GetPracticeReviewFeedbackData, GetPracticeReviewFeedbackError, GetPracticeReviewFeedbackResponse, GetPracticeReviewObservationData, GetPracticeReviewObservationError, GetPracticeReviewObservationResponse, GetPracticeReviewOverviewData, GetPracticeReviewOverviewError, GetPracticeReviewOverviewResponse, GetPracticeReviewSettingsData, GetPracticeReviewSettingsResponse, GetPracticesAcrossWorkspaceData, GetPracticesAcrossWorkspaceResponse, GetPracticesAcrossWorkspaceTilesData, GetPracticesAcrossWorkspaceTilesResponse, GetProvidersData, GetProvidersResponse, GetRepositoriesToMonitorData, GetRepositoriesToMonitorResponse, GetRepositorySettingsData, GetRepositorySettingsResponse, GetSlackUserPreferencesData, GetSlackUserPreferencesResponse, GetSummaryData, GetSummaryResponse, GetTeamSettingsData, GetTeamSettingsResponse, GetThreadData, GetThreadResponse, GetUserFeaturesData, GetUserFeaturesResponse, GetUserSettingsData, GetUserSettingsResponse, GetUsersWithTeamsData, GetUsersWithTeamsResponse, GetUserViewUserData, GetUserViewUserResponse, GetWorkspaceData, GetWorkspaceResponse, GitLabPreflightData, GitLabPreflightResponse2, InitiateData, InitiateResponse, ListAdoptablePracticesData, ListAdoptablePracticesError, ListAdoptablePracticesResponse, ListAgentJobsData, ListAgentJobsResponse, ListAgentsData, ListAgentsResponse, ListBackfillRunsData, ListBackfillRunsResponse, ListConnectionSyncJobsData, ListConnectionSyncJobsResponse, ListConnectionSyncResourcesData, ListConnectionSyncResourcesResponse, ListData, ListGitLabGroupsData, ListGitLabGroupsResponse, ListGlobalContributorsData, ListGlobalContributorsResponse, ListGroupsData, ListGroupsResponse, ListIdentityProvidersData, ListIdentityProvidersResponse, ListLinkedIdentitiesData, ListLinkedIdentitiesResponse, ListMemberActivityData, ListMemberActivityError, ListMemberActivityResponse, ListMembersData, ListMembersResponse, ListObservationsData, ListObservationsResponse, ListOutlineCollectionCandidatesData, ListOutlineCollectionCandidatesResponse, ListOutlineCollectionsData, ListOutlineCollectionsResponse, ListPracticeEvidenceOutcomesData, ListPracticeEvidenceOutcomesResponse, ListPracticeGroupReviewRunsData, ListPracticeGroupReviewRunsError, ListPracticeGroupReviewRunsResponse, ListPracticeGroupStandingsData, ListPracticeGroupStandingsResponse, ListPracticeProfileReviewRunsData, ListPracticeProfileReviewRunsError, ListPracticeProfileReviewRunsResponse, ListPracticeReleasesData, ListPracticeReleasesResponse, ListPracticeReviewFeedbackData, ListPracticeReviewFeedbackError, ListPracticeReviewFeedbackResponse, ListPracticeReviewObservationsData, ListPracticeReviewObservationsError, ListPracticeReviewObservationsResponse, ListPracticeReviewsData, ListPracticeReviewsError, ListPracticeReviewsResponse, ListPracticesData, ListPracticesResponse, ListPracticeStandingsData, ListPracticeStandingsResponse, ListProductSurveyInvitationsData, ListProductSurveyInvitationsResponse, ListResponse, ListReviewedPracticesData, ListReviewedPracticesResponse, ListReviewedWorkReviewRunsData, ListReviewedWorkReviewRunsError, ListReviewedWorkReviewRunsResponse, ListSessionsData, ListSessionsResponse, ListSlackChannelCandidatesData, ListSlackChannelCandidatesResponse, ListSlackChannelConsentEventsData, ListSlackChannelConsentEventsResponse, ListSlackChannelsData, ListSlackChannelsResponse, ListSweepSchedulesData, ListSweepSchedulesResponse, ListThreadsData, ListThreadsResponse, ListTracedArtifactsData, ListTracedArtifactsError, ListTracedArtifactsResponse, ListUserViewUsersData, ListUserViewUsersResponse, ListWorkspaceConfigAuditEventsData, ListWorkspaceConfigAuditEventsResponse, ListWorkspacesData, ListWorkspacesResponse, LogoutClientSessionData, LogoutClientSessionError, LogoutClientSessionResponse, LogoutData, PlacePracticeData, PlacePracticeError, PlacePracticeResponse, PreflightBackfillRunData, PreflightBackfillRunError, PreflightBackfillRunResponse, PrepareMentorSandboxData, PreviewCoverageData, PreviewCoverageResponse, PreviewGroupAdoptionData, PreviewGroupAdoptionResponse, PreviewPracticeAdoptionData, PreviewPracticeAdoptionError, PreviewPracticeAdoptionResponse, PurgeWorkspaceData, PurgeWorkspaceResponse, ReadData, ReadResponse, RefreshClientSessionData, RefreshClientSessionError, RefreshClientSessionResponse, RefreshData, RefreshResponse, RegisterOutlineCollectionData, RegisterOutlineCollectionResponse, RegisterSlackChannelData, RegisterSlackChannelResponse, RemoveLabelFilterData, RemoveLabelFilterResponse, RemoveLabelFromTeamData, RemoveLabelFromTeamResponse, RemoveMemberData, RemoveMemberResponse, RemoveRepositoryToMonitorData, RemoveVoteData, RemoveVoteResponse, RenameSlugData, RenameSlugResponse, ReorderGroupsData, ReorderGroupsResponse, ReorderPracticesData, ReorderPracticesError, ReorderPracticesResponse, ReplaceFeedbackResponseData, ReplaceFeedbackResponseResponse, ReplaceSweepScheduleData, ReplaceSweepScheduleError, ReplaceSweepScheduleResponse, RequestDataExportData, RequestDataExportResponse, RequestPracticeReviewData, RequestPracticeReviewError, RequestPracticeReviewResponse, ResolveReviewContextData, ResolveReviewContextError, ResolveReviewContextResponse, RetryAgentJobDeliveryData, RetryAgentJobDeliveryResponse, RevokeOtherSessionsData, RevokeSessionData, SetAutonomyData, SetAutonomyError, SetAutonomyResponse, SetGroupAutonomyData, SetGroupAutonomyResponse, SubmitInstanceProductFeedbackData, SubmitProductSurveyResponseData, SubmitWorkspaceProductFeedbackData, TriggerSyncJobData, TriggerSyncJobError, TriggerSyncJobResponse, UndoProductSurveyDeclineData, UnlinkIdentityData, UnlinkIdentityResponse, UnsubscribeEmailData, UnsubscribeEmailResponse, UpdateAccountAiChoiceData, UpdateAccountAiChoiceResponse, UpdateBackfillRunStatusData, UpdateBackfillRunStatusError, UpdateBackfillRunStatusResponse, UpdateConnectionStatusData, UpdateConnectionStatusResponse, UpdateConnectionSyncJobData, UpdateConnectionSyncJobError, UpdateConnectionSyncJobResponse, UpdateFeaturesData, UpdateFeaturesResponse, UpdateGroupData, UpdateGroupResponse, UpdateMemberAiChoiceData, UpdateMemberAiChoiceResponse, UpdateMemberOnboardingSettingsData, UpdateMemberOnboardingSettingsResponse, UpdateMemberVisibilityData, UpdateMemberVisibilityResponse, UpdateNotificationPreferencesData, UpdateNotificationPreferencesError, UpdateNotificationPreferencesResponse, UpdateOutlineCollectionStateData, UpdateOutlineCollectionStateResponse, UpdatePracticeData, UpdatePracticeError, UpdatePracticeResponse, UpdatePracticeReviewFeedbackWithdrawalData, UpdatePracticeReviewFeedbackWithdrawalError, UpdatePracticeReviewFeedbackWithdrawalResponse, UpdatePracticeReviewObservationValidityData, UpdatePracticeReviewObservationValidityError, UpdatePracticeReviewObservationValidityResponse, UpdatePracticeReviewSettingsData, UpdatePracticeReviewSettingsResponse, UpdatePublicVisibilityData, UpdatePublicVisibilityResponse, UpdateRepositorySettingsData, UpdateRepositorySettingsError, UpdateRepositorySettingsResponse, UpdateRepositoryVisibilityData, UpdateResearchConsentData, UpdateResearchConsentResponse, UpdateSlackChannelConsentData, UpdateSlackChannelConsentResponse, UpdateSlackUserPreferencesData, UpdateSlackUserPreferencesResponse, UpdateStatusData, UpdateStatusResponse, UpdateTeamSettingsData, UpdateTeamSettingsError, UpdateTeamSettingsResponse, UpdateTeamVisibilityData, UpdateTokenData, UpdateTokenResponse, UpdateUserSettingsData, UpdateUserSettingsResponse, UpdateWorkspaceLlmBudgetData, UpdateWorkspaceLlmBudgetResponse, VoteData, VoteResponse, WorkspaceCreateLlmConnectionData, WorkspaceCreateLlmConnectionResponse, WorkspaceCreateLlmModelData, WorkspaceCreateLlmModelResponse, WorkspaceDeleteLlmConnectionData, WorkspaceDeleteLlmConnectionResponse, WorkspaceDeleteLlmModelData, WorkspaceDeleteLlmModelResponse, WorkspaceGetLlmConnectionData, WorkspaceGetLlmConnectionResponse, WorkspaceGetLlmModelData, WorkspaceGetLlmModelResponse, WorkspaceGetLlmSettingsData, WorkspaceGetLlmSettingsResponse, WorkspaceListAvailableLlmModelsData, WorkspaceListAvailableLlmModelsResponse, WorkspaceListLlmConnectionsData, WorkspaceListLlmConnectionsResponse, WorkspaceListLlmModelsData, WorkspaceListLlmModelsResponse, WorkspaceProbeLlmConnectionData, WorkspaceProbeLlmConnectionResponse, WorkspaceUpdateLlmConnectionData, WorkspaceUpdateLlmConnectionResponse, WorkspaceUpdateLlmModelData, WorkspaceUpdateLlmModelResponse } from '../types.gen.js';
 
 export type QueryKey<TOptions extends Options> = [
-  Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
-    _id: string;
-    _infinite?: boolean;
-    tags?: ReadonlyArray<string>;
-  }
+    Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
+        _id: string;
+        _infinite?: boolean;
+        tags?: ReadonlyArray<string>;
+    }
 ];
 
 const createQueryKey = <TOptions extends Options>(id: string, options?: TOptions, infinite?: boolean, tags?: ReadonlyArray<string>): [
-  QueryKey<TOptions>[0]
+    QueryKey<TOptions>[0]
 ] => {
-  const params: QueryKey<TOptions>[0] = { _id: id, baseUrl: options?.baseUrl || (options?.client ?? client).getConfig().baseUrl } as QueryKey<TOptions>[0];
-  if (infinite) {
-    params._infinite = infinite;
-  }
-  if (tags) {
-    params.tags = tags;
-  }
-  if (options?.body) {
-    params.body = options.body;
-  }
-  if (options?.headers) {
-    params.headers = options.headers;
-  }
-  if (options?.path) {
-    params.path = options.path;
-  }
-  if (options?.query) {
-    params.query = options.query;
-  }
-  return [params];
+    const params: QueryKey<TOptions>[0] = { _id: id, baseUrl: options?.baseUrl || (options?.client ?? client).getConfig().baseUrl } as QueryKey<TOptions>[0];
+    if (infinite) {
+        params._infinite = infinite;
+    }
+    if (tags) {
+        params.tags = tags;
+    }
+    if (options?.body) {
+        params.body = options.body;
+    }
+    if (options?.headers) {
+        params.headers = options.headers;
+    }
+    if (options?.path) {
+        params.path = options.path;
+    }
+    if (options?.query) {
+        params.query = options.query;
+    }
+    return [params];
 };
 
 export const getJwksQueryKey = (options?: Options<GetJwksData>) => createQueryKey('getJwks', options, false, ['Auth discovery']);
@@ -45,16 +45,16 @@ export const getJwksQueryKey = (options?: Options<GetJwksData>) => createQueryKe
  * JWK set (public keys only)
  */
 export const getJwksOptions = (options?: Options<GetJwksData>) => queryOptions<GetJwksResponse, DefaultError, GetJwksResponse, ReturnType<typeof getJwksQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getJwks({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getJwksQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getJwks({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getJwksQueryKey(options)
 });
 
 export const adminListAuthEventsQueryKey = (options?: Options<AdminListAuthEventsData>) => createQueryKey('adminListAuthEvents', options, false, ['Admin']);
@@ -63,45 +63,45 @@ export const adminListAuthEventsQueryKey = (options?: Options<AdminListAuthEvent
  * List auth audit events (paged, newest first)
  */
 export const adminListAuthEventsOptions = (options?: Options<AdminListAuthEventsData>) => queryOptions<AdminListAuthEventsResponse, DefaultError, AdminListAuthEventsResponse, ReturnType<typeof adminListAuthEventsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListAuthEvents({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListAuthEventsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListAuthEvents({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListAuthEventsQueryKey(options)
 });
 
 const createInfiniteParams = <K extends Pick<QueryKey<Options>[0], 'body' | 'headers' | 'path' | 'query'>>(queryKey: QueryKey<Options>, page: K) => {
-  const params = { ...queryKey[0] };
-  if (page.body) {
-    params.body = {
-      ...queryKey[0].body as any,
-      ...page.body as any
-    };
-  }
-  if (page.headers) {
-    params.headers = {
-      ...queryKey[0].headers,
-      ...page.headers
-    };
-  }
-  if (page.path) {
-    params.path = {
-      ...queryKey[0].path as any,
-      ...page.path as any
-    };
-  }
-  if (page.query) {
-    params.query = {
-      ...queryKey[0].query as any,
-      ...page.query as any
-    };
-  }
-  return params as unknown as typeof page;
+    const params = { ...queryKey[0] };
+    if (page.body) {
+        params.body = {
+            ...queryKey[0].body as any,
+            ...page.body as any
+        };
+    }
+    if (page.headers) {
+        params.headers = {
+            ...queryKey[0].headers,
+            ...page.headers
+        };
+    }
+    if (page.path) {
+        params.path = {
+            ...queryKey[0].path as any,
+            ...page.path as any
+        };
+    }
+    if (page.query) {
+        params.query = {
+            ...queryKey[0].query as any,
+            ...page.query as any
+        };
+    }
+    return params as unknown as typeof page;
 };
 
 export const adminListAuthEventsInfiniteQueryKey = (options?: Options<AdminListAuthEventsData>): QueryKey<Options<AdminListAuthEventsData>> => createQueryKey('adminListAuthEvents', options, true);
@@ -110,28 +110,28 @@ export const adminListAuthEventsInfiniteQueryKey = (options?: Options<AdminListA
  * List auth audit events (paged, newest first)
  */
 export const adminListAuthEventsInfiniteOptions = (options?: Options<AdminListAuthEventsData>) => {
-  const opts = infiniteQueryOptions<AdminListAuthEventsResponse, DefaultError, InfiniteData<AdminListAuthEventsResponse>, QueryKey<Options<AdminListAuthEventsData>>, number | Pick<QueryKey<Options<AdminListAuthEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<AdminListAuthEventsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await adminListAuthEvents({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: adminListAuthEventsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<AdminListAuthEventsResponse, DefaultError, InfiniteData<AdminListAuthEventsResponse>, QueryKey<Options<AdminListAuthEventsData>>, number | Pick<QueryKey<Options<AdminListAuthEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<AdminListAuthEventsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await adminListAuthEvents({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: adminListAuthEventsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const adminExportAuthEventsQueryKey = (options?: Options<AdminExportAuthEventsData>) => createQueryKey('adminExportAuthEvents', options, false, ['Admin']);
@@ -140,16 +140,16 @@ export const adminExportAuthEventsQueryKey = (options?: Options<AdminExportAuthE
  * Export the filtered audit log as CSV (newest first, capped)
  */
 export const adminExportAuthEventsOptions = (options?: Options<AdminExportAuthEventsData>) => queryOptions<AdminExportAuthEventsResponse, DefaultError, AdminExportAuthEventsResponse, ReturnType<typeof adminExportAuthEventsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminExportAuthEvents({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminExportAuthEventsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminExportAuthEvents({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminExportAuthEventsQueryKey(options)
 });
 
 export const adminListConfigAuditEventsQueryKey = (options?: Options<AdminListConfigAuditEventsData>) => createQueryKey('adminListConfigAuditEvents', options, false, ['Admin']);
@@ -158,16 +158,16 @@ export const adminListConfigAuditEventsQueryKey = (options?: Options<AdminListCo
  * List admin configuration changes across workspaces (paged, newest first)
  */
 export const adminListConfigAuditEventsOptions = (options?: Options<AdminListConfigAuditEventsData>) => queryOptions<AdminListConfigAuditEventsResponse, DefaultError, AdminListConfigAuditEventsResponse, ReturnType<typeof adminListConfigAuditEventsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListConfigAuditEvents({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListConfigAuditEventsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListConfigAuditEvents({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListConfigAuditEventsQueryKey(options)
 });
 
 export const adminListConfigAuditEventsInfiniteQueryKey = (options?: Options<AdminListConfigAuditEventsData>): QueryKey<Options<AdminListConfigAuditEventsData>> => createQueryKey('adminListConfigAuditEvents', options, true);
@@ -176,28 +176,28 @@ export const adminListConfigAuditEventsInfiniteQueryKey = (options?: Options<Adm
  * List admin configuration changes across workspaces (paged, newest first)
  */
 export const adminListConfigAuditEventsInfiniteOptions = (options?: Options<AdminListConfigAuditEventsData>) => {
-  const opts = infiniteQueryOptions<AdminListConfigAuditEventsResponse, DefaultError, InfiniteData<AdminListConfigAuditEventsResponse>, QueryKey<Options<AdminListConfigAuditEventsData>>, number | Pick<QueryKey<Options<AdminListConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<AdminListConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await adminListConfigAuditEvents({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: adminListConfigAuditEventsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<AdminListConfigAuditEventsResponse, DefaultError, InfiniteData<AdminListConfigAuditEventsResponse>, QueryKey<Options<AdminListConfigAuditEventsData>>, number | Pick<QueryKey<Options<AdminListConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<AdminListConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await adminListConfigAuditEvents({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: adminListConfigAuditEventsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const adminGetConfigurationReadinessQueryKey = (options?: Options<AdminGetConfigurationReadinessData>) => createQueryKey('adminGetConfigurationReadiness', options, false, ['Configuration Readiness']);
@@ -206,16 +206,16 @@ export const adminGetConfigurationReadinessQueryKey = (options?: Options<AdminGe
  * Get redacted configuration readiness
  */
 export const adminGetConfigurationReadinessOptions = (options?: Options<AdminGetConfigurationReadinessData>) => queryOptions<AdminGetConfigurationReadinessResponse, DefaultError, AdminGetConfigurationReadinessResponse, ReturnType<typeof adminGetConfigurationReadinessQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetConfigurationReadiness({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetConfigurationReadinessQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetConfigurationReadiness({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetConfigurationReadinessQueryKey(options)
 });
 
 /**
@@ -224,17 +224,17 @@ export const adminGetConfigurationReadinessOptions = (options?: Options<AdminGet
  * Sends a test email through the configured relay to the given address, or to the caller's verified address when none is given.
  */
 export const adminSendTestEmailMutation = (options?: Partial<Options<AdminSendTestEmailData>>): UseMutationOptions<AdminSendTestEmailResponse, AdminSendTestEmailError, Options<AdminSendTestEmailData>> => {
-  const mutationOptions: UseMutationOptions<AdminSendTestEmailResponse, AdminSendTestEmailError, Options<AdminSendTestEmailData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminSendTestEmail({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminSendTestEmailResponse, AdminSendTestEmailError, Options<AdminSendTestEmailData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminSendTestEmail({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminListLlmConnectionsQueryKey = (options?: Options<AdminListLlmConnectionsData>) => createQueryKey('adminListLlmConnections', options, false, ['Admin LLM']);
@@ -243,84 +243,84 @@ export const adminListLlmConnectionsQueryKey = (options?: Options<AdminListLlmCo
  * List LLM connections
  */
 export const adminListLlmConnectionsOptions = (options?: Options<AdminListLlmConnectionsData>) => queryOptions<AdminListLlmConnectionsResponse, DefaultError, AdminListLlmConnectionsResponse, ReturnType<typeof adminListLlmConnectionsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListLlmConnections({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListLlmConnectionsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListLlmConnections({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListLlmConnectionsQueryKey(options)
 });
 
 /**
  * Create an LLM connection
  */
 export const adminCreateLlmConnectionMutation = (options?: Partial<Options<AdminCreateLlmConnectionData>>): UseMutationOptions<AdminCreateLlmConnectionResponse, DefaultError, Options<AdminCreateLlmConnectionData>> => {
-  const mutationOptions: UseMutationOptions<AdminCreateLlmConnectionResponse, DefaultError, Options<AdminCreateLlmConnectionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminCreateLlmConnection({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminCreateLlmConnectionResponse, DefaultError, Options<AdminCreateLlmConnectionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminCreateLlmConnection({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Test a draft connection and fetch its models
  */
 export const adminProbeLlmConnectionDraftMutation = (options?: Partial<Options<AdminProbeLlmConnectionDraftData>>): UseMutationOptions<AdminProbeLlmConnectionDraftResponse, DefaultError, Options<AdminProbeLlmConnectionDraftData>> => {
-  const mutationOptions: UseMutationOptions<AdminProbeLlmConnectionDraftResponse, DefaultError, Options<AdminProbeLlmConnectionDraftData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminProbeLlmConnectionDraft({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminProbeLlmConnectionDraftResponse, DefaultError, Options<AdminProbeLlmConnectionDraftData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminProbeLlmConnectionDraft({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Create a model on an LLM connection
  */
 export const adminCreateLlmModelMutation = (options?: Partial<Options<AdminCreateLlmModelData>>): UseMutationOptions<AdminCreateLlmModelResponse, DefaultError, Options<AdminCreateLlmModelData>> => {
-  const mutationOptions: UseMutationOptions<AdminCreateLlmModelResponse, DefaultError, Options<AdminCreateLlmModelData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminCreateLlmModel({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminCreateLlmModelResponse, DefaultError, Options<AdminCreateLlmModelData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminCreateLlmModel({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Delete an LLM connection
  */
 export const adminDeleteLlmConnectionMutation = (options?: Partial<Options<AdminDeleteLlmConnectionData>>): UseMutationOptions<AdminDeleteLlmConnectionResponse, DefaultError, Options<AdminDeleteLlmConnectionData>> => {
-  const mutationOptions: UseMutationOptions<AdminDeleteLlmConnectionResponse, DefaultError, Options<AdminDeleteLlmConnectionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminDeleteLlmConnection({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminDeleteLlmConnectionResponse, DefaultError, Options<AdminDeleteLlmConnectionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminDeleteLlmConnection({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetLlmConnectionQueryKey = (options: Options<AdminGetLlmConnectionData>) => createQueryKey('adminGetLlmConnection', options, false, ['Admin LLM']);
@@ -329,50 +329,50 @@ export const adminGetLlmConnectionQueryKey = (options: Options<AdminGetLlmConnec
  * Get an LLM connection
  */
 export const adminGetLlmConnectionOptions = (options: Options<AdminGetLlmConnectionData>) => queryOptions<AdminGetLlmConnectionResponse, DefaultError, AdminGetLlmConnectionResponse, ReturnType<typeof adminGetLlmConnectionQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetLlmConnection({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetLlmConnectionQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetLlmConnection({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetLlmConnectionQueryKey(options)
 });
 
 /**
  * Update an LLM connection
  */
 export const adminUpdateLlmConnectionMutation = (options?: Partial<Options<AdminUpdateLlmConnectionData>>): UseMutationOptions<AdminUpdateLlmConnectionResponse, DefaultError, Options<AdminUpdateLlmConnectionData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateLlmConnectionResponse, DefaultError, Options<AdminUpdateLlmConnectionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateLlmConnection({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateLlmConnectionResponse, DefaultError, Options<AdminUpdateLlmConnectionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateLlmConnection({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Test a stored connection and fetch its models
  */
 export const adminProbeLlmConnectionMutation = (options?: Partial<Options<AdminProbeLlmConnectionData>>): UseMutationOptions<AdminProbeLlmConnectionResponse, DefaultError, Options<AdminProbeLlmConnectionData>> => {
-  const mutationOptions: UseMutationOptions<AdminProbeLlmConnectionResponse, DefaultError, Options<AdminProbeLlmConnectionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminProbeLlmConnection({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminProbeLlmConnectionResponse, DefaultError, Options<AdminProbeLlmConnectionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminProbeLlmConnection({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminListLlmModelsQueryKey = (options?: Options<AdminListLlmModelsData>) => createQueryKey('adminListLlmModels', options, false, ['Admin LLM']);
@@ -381,33 +381,33 @@ export const adminListLlmModelsQueryKey = (options?: Options<AdminListLlmModelsD
  * List LLM catalog models
  */
 export const adminListLlmModelsOptions = (options?: Options<AdminListLlmModelsData>) => queryOptions<AdminListLlmModelsResponse, DefaultError, AdminListLlmModelsResponse, ReturnType<typeof adminListLlmModelsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListLlmModels({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListLlmModelsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListLlmModels({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListLlmModelsQueryKey(options)
 });
 
 /**
  * Delete an LLM catalog model
  */
 export const adminDeleteLlmModelMutation = (options?: Partial<Options<AdminDeleteLlmModelData>>): UseMutationOptions<AdminDeleteLlmModelResponse, DefaultError, Options<AdminDeleteLlmModelData>> => {
-  const mutationOptions: UseMutationOptions<AdminDeleteLlmModelResponse, DefaultError, Options<AdminDeleteLlmModelData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminDeleteLlmModel({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminDeleteLlmModelResponse, DefaultError, Options<AdminDeleteLlmModelData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminDeleteLlmModel({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetLlmModelQueryKey = (options: Options<AdminGetLlmModelData>) => createQueryKey('adminGetLlmModel', options, false, ['Admin LLM']);
@@ -416,67 +416,67 @@ export const adminGetLlmModelQueryKey = (options: Options<AdminGetLlmModelData>)
  * Get an LLM catalog model
  */
 export const adminGetLlmModelOptions = (options: Options<AdminGetLlmModelData>) => queryOptions<AdminGetLlmModelResponse, DefaultError, AdminGetLlmModelResponse, ReturnType<typeof adminGetLlmModelQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetLlmModel({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetLlmModelQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetLlmModel({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetLlmModelQueryKey(options)
 });
 
 /**
  * Update a model's metadata
  */
 export const adminUpdateLlmModelMutation = (options?: Partial<Options<AdminUpdateLlmModelData>>): UseMutationOptions<AdminUpdateLlmModelResponse, DefaultError, Options<AdminUpdateLlmModelData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateLlmModelResponse, DefaultError, Options<AdminUpdateLlmModelData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateLlmModel({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateLlmModelResponse, DefaultError, Options<AdminUpdateLlmModelData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateLlmModel({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Reprice a model
  */
 export const adminUpdateLlmModelPriceMutation = (options?: Partial<Options<AdminUpdateLlmModelPriceData>>): UseMutationOptions<AdminUpdateLlmModelPriceResponse, DefaultError, Options<AdminUpdateLlmModelPriceData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateLlmModelPriceResponse, DefaultError, Options<AdminUpdateLlmModelPriceData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateLlmModelPrice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateLlmModelPriceResponse, DefaultError, Options<AdminUpdateLlmModelPriceData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateLlmModelPrice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Share a model with all or selected workspaces
  */
 export const adminUpdateLlmModelSharingMutation = (options?: Partial<Options<AdminUpdateLlmModelSharingData>>): UseMutationOptions<AdminUpdateLlmModelSharingResponse, DefaultError, Options<AdminUpdateLlmModelSharingData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateLlmModelSharingResponse, DefaultError, Options<AdminUpdateLlmModelSharingData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateLlmModelSharing({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateLlmModelSharingResponse, DefaultError, Options<AdminUpdateLlmModelSharingData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateLlmModelSharing({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetLlmSettingsQueryKey = (options?: Options<AdminGetLlmSettingsData>) => createQueryKey('adminGetLlmSettings', options, false, ['Admin LLM']);
@@ -485,33 +485,33 @@ export const adminGetLlmSettingsQueryKey = (options?: Options<AdminGetLlmSetting
  * Get instance-wide LLM governance settings
  */
 export const adminGetLlmSettingsOptions = (options?: Options<AdminGetLlmSettingsData>) => queryOptions<AdminGetLlmSettingsResponse, DefaultError, AdminGetLlmSettingsResponse, ReturnType<typeof adminGetLlmSettingsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetLlmSettings({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetLlmSettingsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetLlmSettings({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetLlmSettingsQueryKey(options)
 });
 
 /**
  * Update instance-wide LLM governance settings
  */
 export const adminUpdateLlmSettingsMutation = (options?: Partial<Options<AdminUpdateLlmSettingsData>>): UseMutationOptions<AdminUpdateLlmSettingsResponse, DefaultError, Options<AdminUpdateLlmSettingsData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateLlmSettingsResponse, DefaultError, Options<AdminUpdateLlmSettingsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateLlmSettings({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateLlmSettingsResponse, DefaultError, Options<AdminUpdateLlmSettingsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateLlmSettings({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetLlmUsageReportQueryKey = (options?: Options<AdminGetLlmUsageReportData>) => createQueryKey('adminGetLlmUsageReport', options, false, ['Admin']);
@@ -520,16 +520,16 @@ export const adminGetLlmUsageReportQueryKey = (options?: Options<AdminGetLlmUsag
  * Per-workspace LLM spend rollup for one month (all workspaces)
  */
 export const adminGetLlmUsageReportOptions = (options?: Options<AdminGetLlmUsageReportData>) => queryOptions<AdminGetLlmUsageReportResponse, DefaultError, AdminGetLlmUsageReportResponse, ReturnType<typeof adminGetLlmUsageReportQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetLlmUsageReport({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetLlmUsageReportQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetLlmUsageReport({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetLlmUsageReportQueryKey(options)
 });
 
 export const adminListLoginProvidersQueryKey = (options?: Options<AdminListLoginProvidersData>) => createQueryKey('adminListLoginProviders', options, false, ['Admin']);
@@ -538,84 +538,84 @@ export const adminListLoginProvidersQueryKey = (options?: Options<AdminListLogin
  * List login providers
  */
 export const adminListLoginProvidersOptions = (options?: Options<AdminListLoginProvidersData>) => queryOptions<AdminListLoginProvidersResponse, DefaultError, AdminListLoginProvidersResponse, ReturnType<typeof adminListLoginProvidersQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListLoginProviders({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListLoginProvidersQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListLoginProviders({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListLoginProvidersQueryKey(options)
 });
 
 /**
  * Create a login provider
  */
 export const adminCreateLoginProviderMutation = (options?: Partial<Options<AdminCreateLoginProviderData>>): UseMutationOptions<AdminCreateLoginProviderResponse, DefaultError, Options<AdminCreateLoginProviderData>> => {
-  const mutationOptions: UseMutationOptions<AdminCreateLoginProviderResponse, DefaultError, Options<AdminCreateLoginProviderData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminCreateLoginProvider({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminCreateLoginProviderResponse, DefaultError, Options<AdminCreateLoginProviderData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminCreateLoginProvider({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Delete a login provider
  */
 export const adminDeleteLoginProviderMutation = (options?: Partial<Options<AdminDeleteLoginProviderData>>): UseMutationOptions<unknown, DefaultError, Options<AdminDeleteLoginProviderData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AdminDeleteLoginProviderData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminDeleteLoginProvider({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AdminDeleteLoginProviderData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminDeleteLoginProvider({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Update a login provider
  */
 export const adminUpdateLoginProviderMutation = (options?: Partial<Options<AdminUpdateLoginProviderData>>): UseMutationOptions<AdminUpdateLoginProviderResponse, DefaultError, Options<AdminUpdateLoginProviderData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateLoginProviderResponse, DefaultError, Options<AdminUpdateLoginProviderData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateLoginProvider({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateLoginProviderResponse, DefaultError, Options<AdminUpdateLoginProviderData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateLoginProvider({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Resolve exact identities and preview every personal-data store
  */
 export const adminPreviewPersonDataMutation = (options?: Partial<Options<AdminPreviewPersonDataData>>): UseMutationOptions<AdminPreviewPersonDataResponse, DefaultError, Options<AdminPreviewPersonDataData>> => {
-  const mutationOptions: UseMutationOptions<AdminPreviewPersonDataResponse, DefaultError, Options<AdminPreviewPersonDataData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminPreviewPersonData({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminPreviewPersonDataResponse, DefaultError, Options<AdminPreviewPersonDataData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminPreviewPersonData({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminListPersonDataProvidersQueryKey = (options?: Options<AdminListPersonDataProvidersData>) => createQueryKey('adminListPersonDataProviders', options, false, ['Person Data']);
@@ -624,16 +624,16 @@ export const adminListPersonDataProvidersQueryKey = (options?: Options<AdminList
  * List exact provider instances without credentials
  */
 export const adminListPersonDataProvidersOptions = (options?: Options<AdminListPersonDataProvidersData>) => queryOptions<AdminListPersonDataProvidersResponse, DefaultError, AdminListPersonDataProvidersResponse, ReturnType<typeof adminListPersonDataProvidersQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListPersonDataProviders({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListPersonDataProvidersQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListPersonDataProviders({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListPersonDataProvidersQueryKey(options)
 });
 
 export const adminGetPersonDataRequestQueryKey = (options: Options<AdminGetPersonDataRequestData>) => createQueryKey('adminGetPersonDataRequest', options, false, ['Person Data']);
@@ -642,50 +642,50 @@ export const adminGetPersonDataRequestQueryKey = (options: Options<AdminGetPerso
  * Get a person-data preview or erasure receipt
  */
 export const adminGetPersonDataRequestOptions = (options: Options<AdminGetPersonDataRequestData>) => queryOptions<AdminGetPersonDataRequestResponse, DefaultError, AdminGetPersonDataRequestResponse, ReturnType<typeof adminGetPersonDataRequestQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetPersonDataRequest({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetPersonDataRequestQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetPersonDataRequest({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetPersonDataRequestQueryKey(options)
 });
 
 /**
  * Start or resume the preview's audited erasure job
  */
 export const adminErasePersonDataMutation = (options?: Partial<Options<AdminErasePersonDataData>>): UseMutationOptions<AdminErasePersonDataResponse, DefaultError, Options<AdminErasePersonDataData>> => {
-  const mutationOptions: UseMutationOptions<AdminErasePersonDataResponse, DefaultError, Options<AdminErasePersonDataData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminErasePersonData({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminErasePersonDataResponse, DefaultError, Options<AdminErasePersonDataData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminErasePersonData({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Download the preview's frozen scope as one JSON file
  */
 export const adminExportPersonDataMutation = (options?: Partial<Options<AdminExportPersonDataData>>): UseMutationOptions<AdminExportPersonDataResponse, DefaultError, Options<AdminExportPersonDataData>> => {
-  const mutationOptions: UseMutationOptions<AdminExportPersonDataResponse, DefaultError, Options<AdminExportPersonDataData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminExportPersonData({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminExportPersonDataResponse, DefaultError, Options<AdminExportPersonDataData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminExportPersonData({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetCuratedCatalogQueryKey = (options?: Options<AdminGetCuratedCatalogData>) => createQueryKey('adminGetCuratedCatalog', options, false, ['Admin Practice Catalog']);
@@ -696,16 +696,16 @@ export const adminGetCuratedCatalogQueryKey = (options?: Options<AdminGetCurated
  * Practice summaries, complete groups, ordering, and catalog state. Fetch a practice for its full definition.
  */
 export const adminGetCuratedCatalogOptions = (options?: Options<AdminGetCuratedCatalogData>) => queryOptions<AdminGetCuratedCatalogResponse, DefaultError, AdminGetCuratedCatalogResponse, ReturnType<typeof adminGetCuratedCatalogQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetCuratedCatalog({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetCuratedCatalogQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetCuratedCatalog({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetCuratedCatalogQueryKey(options)
 });
 
 export const adminGetPracticeDefinitionOptionsQueryKey = (options?: Options<AdminGetPracticeDefinitionOptionsData>) => createQueryKey('adminGetPracticeDefinitionOptions', options, false, ['Admin Practice Catalog']);
@@ -716,50 +716,50 @@ export const adminGetPracticeDefinitionOptionsQueryKey = (options?: Options<Admi
  * Returns available review events, recommended requirements, and allowed evidence sources by work type
  */
 export const adminGetPracticeDefinitionOptionsOptions = (options?: Options<AdminGetPracticeDefinitionOptionsData>) => queryOptions<AdminGetPracticeDefinitionOptionsResponse, DefaultError, AdminGetPracticeDefinitionOptionsResponse, ReturnType<typeof adminGetPracticeDefinitionOptionsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetPracticeDefinitionOptions({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetPracticeDefinitionOptionsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetPracticeDefinitionOptions({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetPracticeDefinitionOptionsQueryKey(options)
 });
 
 /**
  * Add a group to the catalog
  */
 export const adminCreateCuratedGroupMutation = (options?: Partial<Options<AdminCreateCuratedGroupData>>): UseMutationOptions<AdminCreateCuratedGroupResponse, AdminCreateCuratedGroupError, Options<AdminCreateCuratedGroupData>> => {
-  const mutationOptions: UseMutationOptions<AdminCreateCuratedGroupResponse, AdminCreateCuratedGroupError, Options<AdminCreateCuratedGroupData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminCreateCuratedGroup({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminCreateCuratedGroupResponse, AdminCreateCuratedGroupError, Options<AdminCreateCuratedGroupData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminCreateCuratedGroup({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Reorder catalog groups
  */
 export const adminReorderCuratedGroupsMutation = (options?: Partial<Options<AdminReorderCuratedGroupsData>>): UseMutationOptions<AdminReorderCuratedGroupsResponse, DefaultError, Options<AdminReorderCuratedGroupsData>> => {
-  const mutationOptions: UseMutationOptions<AdminReorderCuratedGroupsResponse, DefaultError, Options<AdminReorderCuratedGroupsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminReorderCuratedGroups({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminReorderCuratedGroupsResponse, DefaultError, Options<AdminReorderCuratedGroupsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminReorderCuratedGroups({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetCuratedGroupQueryKey = (options: Options<AdminGetCuratedGroupData>) => createQueryKey('adminGetCuratedGroup', options, false, ['Admin Practice Catalog']);
@@ -768,67 +768,67 @@ export const adminGetCuratedGroupQueryKey = (options: Options<AdminGetCuratedGro
  * Read a catalog group
  */
 export const adminGetCuratedGroupOptions = (options: Options<AdminGetCuratedGroupData>) => queryOptions<AdminGetCuratedGroupResponse, DefaultError, AdminGetCuratedGroupResponse, ReturnType<typeof adminGetCuratedGroupQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetCuratedGroup({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetCuratedGroupQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetCuratedGroup({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetCuratedGroupQueryKey(options)
 });
 
 /**
  * Replace a group definition
  */
 export const adminUpdateCuratedGroupMutation = (options?: Partial<Options<AdminUpdateCuratedGroupData>>): UseMutationOptions<AdminUpdateCuratedGroupResponse, AdminUpdateCuratedGroupError, Options<AdminUpdateCuratedGroupData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateCuratedGroupResponse, AdminUpdateCuratedGroupError, Options<AdminUpdateCuratedGroupData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateCuratedGroup({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateCuratedGroupResponse, AdminUpdateCuratedGroupError, Options<AdminUpdateCuratedGroupData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateCuratedGroup({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Use the Hephaestus definition of a group
  */
 export const adminDeleteCuratedGroupOverrideMutation = (options?: Partial<Options<AdminDeleteCuratedGroupOverrideData>>): UseMutationOptions<AdminDeleteCuratedGroupOverrideResponse, AdminDeleteCuratedGroupOverrideError, Options<AdminDeleteCuratedGroupOverrideData>> => {
-  const mutationOptions: UseMutationOptions<AdminDeleteCuratedGroupOverrideResponse, AdminDeleteCuratedGroupOverrideError, Options<AdminDeleteCuratedGroupOverrideData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminDeleteCuratedGroupOverride({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminDeleteCuratedGroupOverrideResponse, AdminDeleteCuratedGroupOverrideError, Options<AdminDeleteCuratedGroupOverrideData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminDeleteCuratedGroupOverride({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Keep the saved group customization
  */
 export const adminKeepCuratedGroupMutation = (options?: Partial<Options<AdminKeepCuratedGroupData>>): UseMutationOptions<AdminKeepCuratedGroupResponse, AdminKeepCuratedGroupError, Options<AdminKeepCuratedGroupData>> => {
-  const mutationOptions: UseMutationOptions<AdminKeepCuratedGroupResponse, AdminKeepCuratedGroupError, Options<AdminKeepCuratedGroupData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminKeepCuratedGroup({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminKeepCuratedGroupResponse, AdminKeepCuratedGroupError, Options<AdminKeepCuratedGroupData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminKeepCuratedGroup({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -837,68 +837,68 @@ export const adminKeepCuratedGroupMutation = (options?: Partial<Options<AdminKee
  * Excluding a group also excludes its practices from new workspaces; existing workspaces do not change.
  */
 export const adminUpdateCuratedGroupStatusMutation = (options?: Partial<Options<AdminUpdateCuratedGroupStatusData>>): UseMutationOptions<AdminUpdateCuratedGroupStatusResponse, AdminUpdateCuratedGroupStatusError, Options<AdminUpdateCuratedGroupStatusData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateCuratedGroupStatusResponse, AdminUpdateCuratedGroupStatusError, Options<AdminUpdateCuratedGroupStatusData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateCuratedGroupStatus({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateCuratedGroupStatusResponse, AdminUpdateCuratedGroupStatusError, Options<AdminUpdateCuratedGroupStatusData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateCuratedGroupStatus({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Use the Hephaestus default order
  */
 export const adminResetCuratedCatalogOrderMutation = (options?: Partial<Options<AdminResetCuratedCatalogOrderData>>): UseMutationOptions<AdminResetCuratedCatalogOrderResponse, DefaultError, Options<AdminResetCuratedCatalogOrderData>> => {
-  const mutationOptions: UseMutationOptions<AdminResetCuratedCatalogOrderResponse, DefaultError, Options<AdminResetCuratedCatalogOrderData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminResetCuratedCatalogOrder({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminResetCuratedCatalogOrderResponse, DefaultError, Options<AdminResetCuratedCatalogOrderData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminResetCuratedCatalogOrder({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Add a practice to the catalog
  */
 export const adminCreateCuratedPracticeMutation = (options?: Partial<Options<AdminCreateCuratedPracticeData>>): UseMutationOptions<AdminCreateCuratedPracticeResponse, AdminCreateCuratedPracticeError, Options<AdminCreateCuratedPracticeData>> => {
-  const mutationOptions: UseMutationOptions<AdminCreateCuratedPracticeResponse, AdminCreateCuratedPracticeError, Options<AdminCreateCuratedPracticeData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminCreateCuratedPractice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminCreateCuratedPracticeResponse, AdminCreateCuratedPracticeError, Options<AdminCreateCuratedPracticeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminCreateCuratedPractice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Reorder practices within one catalog group
  */
 export const adminReorderCuratedPracticesMutation = (options?: Partial<Options<AdminReorderCuratedPracticesData>>): UseMutationOptions<AdminReorderCuratedPracticesResponse, DefaultError, Options<AdminReorderCuratedPracticesData>> => {
-  const mutationOptions: UseMutationOptions<AdminReorderCuratedPracticesResponse, DefaultError, Options<AdminReorderCuratedPracticesData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminReorderCuratedPractices({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminReorderCuratedPracticesResponse, DefaultError, Options<AdminReorderCuratedPracticesData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminReorderCuratedPractices({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetCuratedPracticeQueryKey = (options: Options<AdminGetCuratedPracticeData>) => createQueryKey('adminGetCuratedPractice', options, false, ['Admin Practice Catalog']);
@@ -907,33 +907,33 @@ export const adminGetCuratedPracticeQueryKey = (options: Options<AdminGetCurated
  * Read a catalog practice
  */
 export const adminGetCuratedPracticeOptions = (options: Options<AdminGetCuratedPracticeData>) => queryOptions<AdminGetCuratedPracticeResponse, DefaultError, AdminGetCuratedPracticeResponse, ReturnType<typeof adminGetCuratedPracticeQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetCuratedPractice({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetCuratedPracticeQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetCuratedPractice({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetCuratedPracticeQueryKey(options)
 });
 
 /**
  * Replace a practice definition
  */
 export const adminUpdateCuratedPracticeMutation = (options?: Partial<Options<AdminUpdateCuratedPracticeData>>): UseMutationOptions<AdminUpdateCuratedPracticeResponse, AdminUpdateCuratedPracticeError, Options<AdminUpdateCuratedPracticeData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateCuratedPracticeResponse, AdminUpdateCuratedPracticeError, Options<AdminUpdateCuratedPracticeData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateCuratedPractice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateCuratedPracticeResponse, AdminUpdateCuratedPracticeError, Options<AdminUpdateCuratedPracticeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateCuratedPractice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -942,17 +942,17 @@ export const adminUpdateCuratedPracticeMutation = (options?: Partial<Options<Adm
  * Discards the customization, so the practice follows the Hephaestus default again.
  */
 export const adminDeleteCuratedPracticeOverrideMutation = (options?: Partial<Options<AdminDeleteCuratedPracticeOverrideData>>): UseMutationOptions<AdminDeleteCuratedPracticeOverrideResponse, AdminDeleteCuratedPracticeOverrideError, Options<AdminDeleteCuratedPracticeOverrideData>> => {
-  const mutationOptions: UseMutationOptions<AdminDeleteCuratedPracticeOverrideResponse, AdminDeleteCuratedPracticeOverrideError, Options<AdminDeleteCuratedPracticeOverrideData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminDeleteCuratedPracticeOverride({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminDeleteCuratedPracticeOverrideResponse, AdminDeleteCuratedPracticeOverrideError, Options<AdminDeleteCuratedPracticeOverrideData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminDeleteCuratedPracticeOverride({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -961,51 +961,51 @@ export const adminDeleteCuratedPracticeOverrideMutation = (options?: Partial<Opt
  * Acknowledges that a saved custom practice is no longer shipped. Changed bundled practices use the release endpoint.
  */
 export const adminKeepCuratedPracticeMutation = (options?: Partial<Options<AdminKeepCuratedPracticeData>>): UseMutationOptions<AdminKeepCuratedPracticeResponse, AdminKeepCuratedPracticeError, Options<AdminKeepCuratedPracticeData>> => {
-  const mutationOptions: UseMutationOptions<AdminKeepCuratedPracticeResponse, AdminKeepCuratedPracticeError, Options<AdminKeepCuratedPracticeData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminKeepCuratedPractice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminKeepCuratedPracticeResponse, AdminKeepCuratedPracticeError, Options<AdminKeepCuratedPracticeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminKeepCuratedPractice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Move a practice to another catalog group
  */
 export const adminPlaceCuratedPracticeMutation = (options?: Partial<Options<AdminPlaceCuratedPracticeData>>): UseMutationOptions<AdminPlaceCuratedPracticeResponse, DefaultError, Options<AdminPlaceCuratedPracticeData>> => {
-  const mutationOptions: UseMutationOptions<AdminPlaceCuratedPracticeResponse, DefaultError, Options<AdminPlaceCuratedPracticeData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminPlaceCuratedPractice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminPlaceCuratedPracticeResponse, DefaultError, Options<AdminPlaceCuratedPracticeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminPlaceCuratedPractice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Decline this bundled practice update
  */
 export const adminDeclinePracticeReleaseMutation = (options?: Partial<Options<AdminDeclinePracticeReleaseData>>): UseMutationOptions<AdminDeclinePracticeReleaseResponse, DefaultError, Options<AdminDeclinePracticeReleaseData>> => {
-  const mutationOptions: UseMutationOptions<AdminDeclinePracticeReleaseResponse, DefaultError, Options<AdminDeclinePracticeReleaseData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminDeclinePracticeRelease({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminDeclinePracticeReleaseResponse, DefaultError, Options<AdminDeclinePracticeReleaseData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminDeclinePracticeRelease({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetPracticeReleaseQueryKey = (options: Options<AdminGetPracticeReleaseData>) => createQueryKey('adminGetPracticeRelease', options, false, ['Admin Practice Catalog']);
@@ -1014,50 +1014,50 @@ export const adminGetPracticeReleaseQueryKey = (options: Options<AdminGetPractic
  * Compare a bundled practice update with the instance version
  */
 export const adminGetPracticeReleaseOptions = (options: Options<AdminGetPracticeReleaseData>) => queryOptions<AdminGetPracticeReleaseResponse, DefaultError, AdminGetPracticeReleaseResponse, ReturnType<typeof adminGetPracticeReleaseQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetPracticeRelease({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetPracticeReleaseQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetPracticeRelease({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetPracticeReleaseQueryKey(options)
 });
 
 /**
  * Accept selected fields from a bundled practice update
  */
 export const adminAcceptPracticeReleaseMutation = (options?: Partial<Options<AdminAcceptPracticeReleaseData>>): UseMutationOptions<AdminAcceptPracticeReleaseResponse, DefaultError, Options<AdminAcceptPracticeReleaseData>> => {
-  const mutationOptions: UseMutationOptions<AdminAcceptPracticeReleaseResponse, DefaultError, Options<AdminAcceptPracticeReleaseData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminAcceptPracticeRelease({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminAcceptPracticeReleaseResponse, DefaultError, Options<AdminAcceptPracticeReleaseData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminAcceptPracticeRelease({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Exclude a practice from new workspaces, or include it again
  */
 export const adminUpdateCuratedPracticeStatusMutation = (options?: Partial<Options<AdminUpdateCuratedPracticeStatusData>>): UseMutationOptions<AdminUpdateCuratedPracticeStatusResponse, AdminUpdateCuratedPracticeStatusError, Options<AdminUpdateCuratedPracticeStatusData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateCuratedPracticeStatusResponse, AdminUpdateCuratedPracticeStatusError, Options<AdminUpdateCuratedPracticeStatusData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateCuratedPracticeStatus({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateCuratedPracticeStatusResponse, AdminUpdateCuratedPracticeStatusError, Options<AdminUpdateCuratedPracticeStatusData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateCuratedPracticeStatus({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminListProductFeedbackQueryKey = (options?: Options<AdminListProductFeedbackData>) => createQueryKey('adminListProductFeedback', options, false, ['feedback-admin']);
@@ -1066,16 +1066,16 @@ export const adminListProductFeedbackQueryKey = (options?: Options<AdminListProd
  * List product feedback, newest first
  */
 export const adminListProductFeedbackOptions = (options?: Options<AdminListProductFeedbackData>) => queryOptions<AdminListProductFeedbackResponse, DefaultError, AdminListProductFeedbackResponse, ReturnType<typeof adminListProductFeedbackQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListProductFeedback({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListProductFeedbackQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListProductFeedback({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListProductFeedbackQueryKey(options)
 });
 
 export const adminListProductFeedbackInfiniteQueryKey = (options?: Options<AdminListProductFeedbackData>): QueryKey<Options<AdminListProductFeedbackData>> => createQueryKey('adminListProductFeedback', options, true);
@@ -1084,28 +1084,28 @@ export const adminListProductFeedbackInfiniteQueryKey = (options?: Options<Admin
  * List product feedback, newest first
  */
 export const adminListProductFeedbackInfiniteOptions = (options?: Options<AdminListProductFeedbackData>) => {
-  const opts = infiniteQueryOptions<AdminListProductFeedbackResponse, DefaultError, InfiniteData<AdminListProductFeedbackResponse>, QueryKey<Options<AdminListProductFeedbackData>>, number | Pick<QueryKey<Options<AdminListProductFeedbackData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<AdminListProductFeedbackData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await adminListProductFeedback({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: adminListProductFeedbackInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<AdminListProductFeedbackResponse, DefaultError, InfiniteData<AdminListProductFeedbackResponse>, QueryKey<Options<AdminListProductFeedbackData>>, number | Pick<QueryKey<Options<AdminListProductFeedbackData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<AdminListProductFeedbackData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await adminListProductFeedback({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: adminListProductFeedbackInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const adminListProductSurveysQueryKey = (options?: Options<AdminListProductSurveysData>) => createQueryKey('adminListProductSurveys', options, false, ['survey-admin']);
@@ -1114,16 +1114,16 @@ export const adminListProductSurveysQueryKey = (options?: Options<AdminListProdu
  * List product surveys with participation counts
  */
 export const adminListProductSurveysOptions = (options?: Options<AdminListProductSurveysData>) => queryOptions<AdminListProductSurveysResponse, DefaultError, AdminListProductSurveysResponse, ReturnType<typeof adminListProductSurveysQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListProductSurveys({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListProductSurveysQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListProductSurveys({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListProductSurveysQueryKey(options)
 });
 
 export const adminListProductSurveysInfiniteQueryKey = (options?: Options<AdminListProductSurveysData>): QueryKey<Options<AdminListProductSurveysData>> => createQueryKey('adminListProductSurveys', options, true);
@@ -1132,62 +1132,62 @@ export const adminListProductSurveysInfiniteQueryKey = (options?: Options<AdminL
  * List product surveys with participation counts
  */
 export const adminListProductSurveysInfiniteOptions = (options?: Options<AdminListProductSurveysData>) => {
-  const opts = infiniteQueryOptions<AdminListProductSurveysResponse, DefaultError, InfiniteData<AdminListProductSurveysResponse>, QueryKey<Options<AdminListProductSurveysData>>, number | Pick<QueryKey<Options<AdminListProductSurveysData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<AdminListProductSurveysData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await adminListProductSurveys({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: adminListProductSurveysInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<AdminListProductSurveysResponse, DefaultError, InfiniteData<AdminListProductSurveysResponse>, QueryKey<Options<AdminListProductSurveysData>>, number | Pick<QueryKey<Options<AdminListProductSurveysData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<AdminListProductSurveysData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await adminListProductSurveys({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: adminListProductSurveysInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 /**
  * Publish a product survey
  */
 export const adminCreateProductSurveyMutation = (options?: Partial<Options<AdminCreateProductSurveyData>>): UseMutationOptions<AdminCreateProductSurveyResponse, DefaultError, Options<AdminCreateProductSurveyData>> => {
-  const mutationOptions: UseMutationOptions<AdminCreateProductSurveyResponse, DefaultError, Options<AdminCreateProductSurveyData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminCreateProductSurvey({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminCreateProductSurveyResponse, DefaultError, Options<AdminCreateProductSurveyData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminCreateProductSurvey({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Delete a survey and every response to it
  */
 export const adminDeleteProductSurveyMutation = (options?: Partial<Options<AdminDeleteProductSurveyData>>): UseMutationOptions<unknown, DefaultError, Options<AdminDeleteProductSurveyData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AdminDeleteProductSurveyData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminDeleteProductSurvey({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AdminDeleteProductSurveyData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminDeleteProductSurvey({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetProductSurveyQueryKey = (options: Options<AdminGetProductSurveyData>) => createQueryKey('adminGetProductSurvey', options, false, ['survey-admin']);
@@ -1196,33 +1196,33 @@ export const adminGetProductSurveyQueryKey = (options: Options<AdminGetProductSu
  * Read one product survey
  */
 export const adminGetProductSurveyOptions = (options: Options<AdminGetProductSurveyData>) => queryOptions<AdminGetProductSurveyResponse, DefaultError, AdminGetProductSurveyResponse, ReturnType<typeof adminGetProductSurveyQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetProductSurvey({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetProductSurveyQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetProductSurvey({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetProductSurveyQueryKey(options)
 });
 
 /**
  * Edit a survey's title, purpose, schedule or pause state
  */
 export const adminUpdateProductSurveyMutation = (options?: Partial<Options<AdminUpdateProductSurveyData>>): UseMutationOptions<AdminUpdateProductSurveyResponse, DefaultError, Options<AdminUpdateProductSurveyData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateProductSurveyResponse, DefaultError, Options<AdminUpdateProductSurveyData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateProductSurvey({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateProductSurveyResponse, DefaultError, Options<AdminUpdateProductSurveyData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateProductSurvey({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminPreviewSurveyEmailInvitationsQueryKey = (options: Options<AdminPreviewSurveyEmailInvitationsData>) => createQueryKey('adminPreviewSurveyEmailInvitations', options, false, ['survey-admin']);
@@ -1231,33 +1231,33 @@ export const adminPreviewSurveyEmailInvitationsQueryKey = (options: Options<Admi
  * Preview eligible survey email recipients and relay acceptance counts
  */
 export const adminPreviewSurveyEmailInvitationsOptions = (options: Options<AdminPreviewSurveyEmailInvitationsData>) => queryOptions<AdminPreviewSurveyEmailInvitationsResponse, DefaultError, AdminPreviewSurveyEmailInvitationsResponse, ReturnType<typeof adminPreviewSurveyEmailInvitationsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminPreviewSurveyEmailInvitations({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminPreviewSurveyEmailInvitationsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminPreviewSurveyEmailInvitations({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminPreviewSurveyEmailInvitationsQueryKey(options)
 });
 
 /**
  * Queue up to 1000 new or explicitly retried cancelled survey email invitations
  */
 export const adminSendSurveyEmailInvitationsMutation = (options?: Partial<Options<AdminSendSurveyEmailInvitationsData>>): UseMutationOptions<AdminSendSurveyEmailInvitationsResponse, AdminSendSurveyEmailInvitationsError, Options<AdminSendSurveyEmailInvitationsData>> => {
-  const mutationOptions: UseMutationOptions<AdminSendSurveyEmailInvitationsResponse, AdminSendSurveyEmailInvitationsError, Options<AdminSendSurveyEmailInvitationsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminSendSurveyEmailInvitations({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminSendSurveyEmailInvitationsResponse, AdminSendSurveyEmailInvitationsError, Options<AdminSendSurveyEmailInvitationsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminSendSurveyEmailInvitations({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminListProductSurveyResponsesQueryKey = (options: Options<AdminListProductSurveyResponsesData>) => createQueryKey('adminListProductSurveyResponses', options, false, ['survey-admin']);
@@ -1266,16 +1266,16 @@ export const adminListProductSurveyResponsesQueryKey = (options: Options<AdminLi
  * List responses and declines, newest first
  */
 export const adminListProductSurveyResponsesOptions = (options: Options<AdminListProductSurveyResponsesData>) => queryOptions<AdminListProductSurveyResponsesResponse, DefaultError, AdminListProductSurveyResponsesResponse, ReturnType<typeof adminListProductSurveyResponsesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListProductSurveyResponses({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListProductSurveyResponsesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListProductSurveyResponses({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListProductSurveyResponsesQueryKey(options)
 });
 
 export const adminListProductSurveyResponsesInfiniteQueryKey = (options: Options<AdminListProductSurveyResponsesData>): QueryKey<Options<AdminListProductSurveyResponsesData>> => createQueryKey('adminListProductSurveyResponses', options, true);
@@ -1284,28 +1284,28 @@ export const adminListProductSurveyResponsesInfiniteQueryKey = (options: Options
  * List responses and declines, newest first
  */
 export const adminListProductSurveyResponsesInfiniteOptions = (options: Options<AdminListProductSurveyResponsesData>) => {
-  const opts = infiniteQueryOptions<AdminListProductSurveyResponsesResponse, DefaultError, InfiniteData<AdminListProductSurveyResponsesResponse>, QueryKey<Options<AdminListProductSurveyResponsesData>>, number | Pick<QueryKey<Options<AdminListProductSurveyResponsesData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<AdminListProductSurveyResponsesData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await adminListProductSurveyResponses({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: adminListProductSurveyResponsesInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<AdminListProductSurveyResponsesResponse, DefaultError, InfiniteData<AdminListProductSurveyResponsesResponse>, QueryKey<Options<AdminListProductSurveyResponsesData>>, number | Pick<QueryKey<Options<AdminListProductSurveyResponsesData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<AdminListProductSurveyResponsesData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await adminListProductSurveyResponses({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: adminListProductSurveyResponsesInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const adminExportProductSurveyResponsesQueryKey = (options: Options<AdminExportProductSurveyResponsesData>) => createQueryKey('adminExportProductSurveyResponses', options, false, ['survey-admin']);
@@ -1314,16 +1314,16 @@ export const adminExportProductSurveyResponsesQueryKey = (options: Options<Admin
  * Export responses and declines as CSV
  */
 export const adminExportProductSurveyResponsesOptions = (options: Options<AdminExportProductSurveyResponsesData>) => queryOptions<AdminExportProductSurveyResponsesResponse, DefaultError, AdminExportProductSurveyResponsesResponse, ReturnType<typeof adminExportProductSurveyResponsesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminExportProductSurveyResponses({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminExportProductSurveyResponsesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminExportProductSurveyResponses({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminExportProductSurveyResponsesQueryKey(options)
 });
 
 export const adminGetProductSurveySummaryQueryKey = (options: Options<AdminGetProductSurveySummaryData>) => createQueryKey('adminGetProductSurveySummary', options, false, ['survey-admin']);
@@ -1332,33 +1332,33 @@ export const adminGetProductSurveySummaryQueryKey = (options: Options<AdminGetPr
  * Aggregate the responses per question
  */
 export const adminGetProductSurveySummaryOptions = (options: Options<AdminGetProductSurveySummaryData>) => queryOptions<AdminGetProductSurveySummaryResponse, DefaultError, AdminGetProductSurveySummaryResponse, ReturnType<typeof adminGetProductSurveySummaryQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetProductSurveySummary({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetProductSurveySummaryQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetProductSurveySummary({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetProductSurveySummaryQueryKey(options)
 });
 
 /**
  * Mark product feedback as resolved or reopen it
  */
 export const adminTriageProductFeedbackMutation = (options?: Partial<Options<AdminTriageProductFeedbackData>>): UseMutationOptions<AdminTriageProductFeedbackResponse, DefaultError, Options<AdminTriageProductFeedbackData>> => {
-  const mutationOptions: UseMutationOptions<AdminTriageProductFeedbackResponse, DefaultError, Options<AdminTriageProductFeedbackData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminTriageProductFeedback({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminTriageProductFeedbackResponse, DefaultError, Options<AdminTriageProductFeedbackData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminTriageProductFeedback({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetReleaseQueryKey = (options?: Options<AdminGetReleaseData>) => createQueryKey('adminGetRelease', options, false, ['Instance Release']);
@@ -1367,33 +1367,33 @@ export const adminGetReleaseQueryKey = (options?: Options<AdminGetReleaseData>) 
  * Get the running release and the last update check
  */
 export const adminGetReleaseOptions = (options?: Options<AdminGetReleaseData>) => queryOptions<AdminGetReleaseResponse, DefaultError, AdminGetReleaseResponse, ReturnType<typeof adminGetReleaseQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetRelease({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetReleaseQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetRelease({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetReleaseQueryKey(options)
 });
 
 /**
  * Check GitHub for a newer release now
  */
 export const adminCheckReleaseMutation = (options?: Partial<Options<AdminCheckReleaseData>>): UseMutationOptions<AdminCheckReleaseResponse, DefaultError, Options<AdminCheckReleaseData>> => {
-  const mutationOptions: UseMutationOptions<AdminCheckReleaseResponse, DefaultError, Options<AdminCheckReleaseData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminCheckRelease({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminCheckReleaseResponse, DefaultError, Options<AdminCheckReleaseData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminCheckRelease({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminGetInstanceSettingsQueryKey = (options?: Options<AdminGetInstanceSettingsData>) => createQueryKey('adminGetInstanceSettings', options, false, ['Instance Settings']);
@@ -1402,33 +1402,33 @@ export const adminGetInstanceSettingsQueryKey = (options?: Options<AdminGetInsta
  * Get instance settings
  */
 export const adminGetInstanceSettingsOptions = (options?: Options<AdminGetInstanceSettingsData>) => queryOptions<AdminGetInstanceSettingsResponse, DefaultError, AdminGetInstanceSettingsResponse, ReturnType<typeof adminGetInstanceSettingsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminGetInstanceSettings({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminGetInstanceSettingsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminGetInstanceSettings({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminGetInstanceSettingsQueryKey(options)
 });
 
 /**
  * Engage or release the instance-wide silent mode
  */
 export const adminUpdateSilentModeMutation = (options?: Partial<Options<AdminUpdateSilentModeData>>): UseMutationOptions<AdminUpdateSilentModeResponse, AdminUpdateSilentModeError, Options<AdminUpdateSilentModeData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateSilentModeResponse, AdminUpdateSilentModeError, Options<AdminUpdateSilentModeData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateSilentMode({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateSilentModeResponse, AdminUpdateSilentModeError, Options<AdminUpdateSilentModeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateSilentMode({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminListUsersQueryKey = (options?: Options<AdminListUsersData>) => createQueryKey('adminListUsers', options, false, ['Admin']);
@@ -1437,16 +1437,16 @@ export const adminListUsersQueryKey = (options?: Options<AdminListUsersData>) =>
  * List accounts (paged)
  */
 export const adminListUsersOptions = (options?: Options<AdminListUsersData>) => queryOptions<AdminListUsersResponse, DefaultError, AdminListUsersResponse, ReturnType<typeof adminListUsersQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListUsers({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListUsersQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListUsers({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListUsersQueryKey(options)
 });
 
 export const adminListUsersInfiniteQueryKey = (options?: Options<AdminListUsersData>): QueryKey<Options<AdminListUsersData>> => createQueryKey('adminListUsers', options, true);
@@ -1455,62 +1455,62 @@ export const adminListUsersInfiniteQueryKey = (options?: Options<AdminListUsersD
  * List accounts (paged)
  */
 export const adminListUsersInfiniteOptions = (options?: Options<AdminListUsersData>) => {
-  const opts = infiniteQueryOptions<AdminListUsersResponse, DefaultError, InfiniteData<AdminListUsersResponse>, QueryKey<Options<AdminListUsersData>>, number | Pick<QueryKey<Options<AdminListUsersData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<AdminListUsersData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await adminListUsers({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: adminListUsersInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<AdminListUsersResponse, DefaultError, InfiniteData<AdminListUsersResponse>, QueryKey<Options<AdminListUsersData>>, number | Pick<QueryKey<Options<AdminListUsersData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<AdminListUsersData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await adminListUsers({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: adminListUsersInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 /**
  * Update an account's app role
  */
 export const adminUpdateUserMutation = (options?: Partial<Options<AdminUpdateUserData>>): UseMutationOptions<AdminUpdateUserResponse, DefaultError, Options<AdminUpdateUserData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateUserResponse, DefaultError, Options<AdminUpdateUserData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateUser({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateUserResponse, DefaultError, Options<AdminUpdateUserData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateUser({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Force sign-out: revoke all of an account's active sessions
  */
 export const adminRevokeUserSessionsMutation = (options?: Partial<Options<AdminRevokeUserSessionsData>>): UseMutationOptions<AdminRevokeUserSessionsResponse, DefaultError, Options<AdminRevokeUserSessionsData>> => {
-  const mutationOptions: UseMutationOptions<AdminRevokeUserSessionsResponse, DefaultError, Options<AdminRevokeUserSessionsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminRevokeUserSessions({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminRevokeUserSessionsResponse, DefaultError, Options<AdminRevokeUserSessionsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminRevokeUserSessions({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const adminListWorkspacesQueryKey = (options?: Options<AdminListWorkspacesData>) => createQueryKey('adminListWorkspaces', options, false, ['Admin']);
@@ -1519,33 +1519,33 @@ export const adminListWorkspacesQueryKey = (options?: Options<AdminListWorkspace
  * List all workspaces (metadata only)
  */
 export const adminListWorkspacesOptions = (options?: Options<AdminListWorkspacesData>) => queryOptions<AdminListWorkspacesResponse, DefaultError, AdminListWorkspacesResponse, ReturnType<typeof adminListWorkspacesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await adminListWorkspaces({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: adminListWorkspacesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await adminListWorkspaces({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: adminListWorkspacesQueryKey(options)
 });
 
 /**
  * Set or clear a workspace's monthly cap on host-funded LLM spend
  */
 export const adminUpdateWorkspaceLlmBudgetMutation = (options?: Partial<Options<AdminUpdateWorkspaceLlmBudgetData>>): UseMutationOptions<AdminUpdateWorkspaceLlmBudgetResponse, DefaultError, Options<AdminUpdateWorkspaceLlmBudgetData>> => {
-  const mutationOptions: UseMutationOptions<AdminUpdateWorkspaceLlmBudgetResponse, DefaultError, Options<AdminUpdateWorkspaceLlmBudgetData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adminUpdateWorkspaceLlmBudget({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdminUpdateWorkspaceLlmBudgetResponse, DefaultError, Options<AdminUpdateWorkspaceLlmBudgetData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adminUpdateWorkspaceLlmBudget({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getClientSignInConfigurationQueryKey = (options: Options<GetClientSignInConfigurationData>) => createQueryKey('getClientSignInConfiguration', options, false, ['Client session']);
@@ -1556,67 +1556,67 @@ export const getClientSignInConfigurationQueryKey = (options: Options<GetClientS
  * Public. A client that finds no such endpoint is talking to a server without installed-client sign-in.
  */
 export const getClientSignInConfigurationOptions = (options: Options<GetClientSignInConfigurationData>) => queryOptions<GetClientSignInConfigurationResponse, GetClientSignInConfigurationError, GetClientSignInConfigurationResponse, ReturnType<typeof getClientSignInConfigurationQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getClientSignInConfiguration({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getClientSignInConfigurationQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getClientSignInConfiguration({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getClientSignInConfigurationQueryKey(options)
 });
 
 /**
  * End the session its refresh secret belongs to
  */
 export const logoutClientSessionMutation = (options?: Partial<Options<LogoutClientSessionData>>): UseMutationOptions<LogoutClientSessionResponse, LogoutClientSessionError, Options<LogoutClientSessionData>> => {
-  const mutationOptions: UseMutationOptions<LogoutClientSessionResponse, LogoutClientSessionError, Options<LogoutClientSessionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await logoutClientSession({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<LogoutClientSessionResponse, LogoutClientSessionError, Options<LogoutClientSessionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await logoutClientSession({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Rotate the session's access token and refresh secret
  */
 export const refreshClientSessionMutation = (options?: Partial<Options<RefreshClientSessionData>>): UseMutationOptions<RefreshClientSessionResponse, RefreshClientSessionError, Options<RefreshClientSessionData>> => {
-  const mutationOptions: UseMutationOptions<RefreshClientSessionResponse, RefreshClientSessionError, Options<RefreshClientSessionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await refreshClientSession({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RefreshClientSessionResponse, RefreshClientSessionError, Options<RefreshClientSessionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await refreshClientSession({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Redeem a sign-in handoff code with its PKCE verifier
  */
 export const exchangeClientSignInMutation = (options?: Partial<Options<ExchangeClientSignInData>>): UseMutationOptions<ExchangeClientSignInResponse, ExchangeClientSignInError, Options<ExchangeClientSignInData>> => {
-  const mutationOptions: UseMutationOptions<ExchangeClientSignInResponse, ExchangeClientSignInError, Options<ExchangeClientSignInData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await exchangeClientSignIn({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<ExchangeClientSignInResponse, ExchangeClientSignInError, Options<ExchangeClientSignInData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await exchangeClientSignIn({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -1625,34 +1625,34 @@ export const exchangeClientSignInMutation = (options?: Partial<Options<ExchangeC
  * An installed-client access token ends its whole session.
  */
 export const logoutMutation = (options?: Partial<Options<LogoutData>>): UseMutationOptions<unknown, DefaultError, Options<LogoutData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<LogoutData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await logout({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<LogoutData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await logout({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Rotate the access token (new jti, old revoked)
  */
 export const refreshMutation = (options?: Partial<Options<RefreshData>>): UseMutationOptions<RefreshResponse, DefaultError, Options<RefreshData>> => {
-  const mutationOptions: UseMutationOptions<RefreshResponse, DefaultError, Options<RefreshData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await refresh({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RefreshResponse, DefaultError, Options<RefreshData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await refresh({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listGlobalContributorsQueryKey = (options?: Options<ListGlobalContributorsData>) => createQueryKey('listGlobalContributors', options, false, ['Contributors']);
@@ -1663,16 +1663,16 @@ export const listGlobalContributorsQueryKey = (options?: Options<ListGlobalContr
  * Returns contributors to the Hephaestus project (for the About page)
  */
 export const listGlobalContributorsOptions = (options?: Options<ListGlobalContributorsData>) => queryOptions<ListGlobalContributorsResponse, DefaultError, ListGlobalContributorsResponse, ReturnType<typeof listGlobalContributorsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listGlobalContributors({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listGlobalContributorsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listGlobalContributors({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listGlobalContributorsQueryKey(options)
 });
 
 export const listIdentityProvidersQueryKey = (options?: Options<ListIdentityProvidersData>) => createQueryKey('listIdentityProviders', options, false, ['Auth discovery']);
@@ -1681,96 +1681,96 @@ export const listIdentityProvidersQueryKey = (options?: Options<ListIdentityProv
  * List available identity providers
  */
 export const listIdentityProvidersOptions = (options?: Options<ListIdentityProvidersData>) => queryOptions<ListIdentityProvidersResponse, DefaultError, ListIdentityProvidersResponse, ReturnType<typeof listIdentityProvidersQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listIdentityProviders({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listIdentityProvidersQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listIdentityProviders({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listIdentityProvidersQueryKey(options)
 });
 
 /**
  * Unsubscribe from one optional email subscription
  */
 export const unsubscribeEmailMutation = (options?: Partial<Options<UnsubscribeEmailData>>): UseMutationOptions<UnsubscribeEmailResponse, DefaultError, Options<UnsubscribeEmailData>> => {
-  const mutationOptions: UseMutationOptions<UnsubscribeEmailResponse, DefaultError, Options<UnsubscribeEmailData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await unsubscribeEmail({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UnsubscribeEmailResponse, DefaultError, Options<UnsubscribeEmailData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await unsubscribeEmail({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const callbackGetQueryKey = (options: Options<CallbackGetData>) => createQueryKey('callbackGet', options, false, ['o-auth-callback']);
 
 export const callbackGetOptions = (options: Options<CallbackGetData>) => queryOptions<CallbackGetResponse, DefaultError, CallbackGetResponse, ReturnType<typeof callbackGetQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await callbackGet({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: callbackGetQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await callbackGet({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: callbackGetQueryKey(options)
 });
 
 export const callbackPostMutation = (options?: Partial<Options<CallbackPostData>>): UseMutationOptions<CallbackPostResponse, DefaultError, Options<CallbackPostData>> => {
-  const mutationOptions: UseMutationOptions<CallbackPostResponse, DefaultError, Options<CallbackPostData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await callbackPost({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<CallbackPostResponse, DefaultError, Options<CallbackPostData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await callbackPost({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Send instance-scoped product feedback
  */
 export const submitInstanceProductFeedbackMutation = (options?: Partial<Options<SubmitInstanceProductFeedbackData>>): UseMutationOptions<unknown, DefaultError, Options<SubmitInstanceProductFeedbackData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<SubmitInstanceProductFeedbackData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await submitInstanceProductFeedback({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<SubmitInstanceProductFeedbackData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await submitInstanceProductFeedback({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Delete the current account (GDPR Art. 17)
  */
 export const deleteCurrentUserMutation = (options?: Partial<Options<DeleteCurrentUserData>>): UseMutationOptions<unknown, DefaultError, Options<DeleteCurrentUserData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<DeleteCurrentUserData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await deleteCurrentUser({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<DeleteCurrentUserData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deleteCurrentUser({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getCurrentUserQueryKey = (options?: Options<GetCurrentUserData>) => createQueryKey('getCurrentUser', options, false, ['Account']);
@@ -1779,16 +1779,16 @@ export const getCurrentUserQueryKey = (options?: Options<GetCurrentUserData>) =>
  * Get the current user
  */
 export const getCurrentUserOptions = (options?: Options<GetCurrentUserData>) => queryOptions<GetCurrentUserResponse, DefaultError, GetCurrentUserResponse, ReturnType<typeof getCurrentUserQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getCurrentUser({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getCurrentUserQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCurrentUser({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCurrentUserQueryKey(options)
 });
 
 export const getAccountAiChoiceQueryKey = (options?: Options<GetAccountAiChoiceData>) => createQueryKey('getAccountAiChoice', options, false, ['Account']);
@@ -1797,33 +1797,33 @@ export const getAccountAiChoiceQueryKey = (options?: Options<GetAccountAiChoiceD
  * Get your AI choice
  */
 export const getAccountAiChoiceOptions = (options?: Options<GetAccountAiChoiceData>) => queryOptions<GetAccountAiChoiceResponse, DefaultError, GetAccountAiChoiceResponse, ReturnType<typeof getAccountAiChoiceQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getAccountAiChoice({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getAccountAiChoiceQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getAccountAiChoice({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getAccountAiChoiceQueryKey(options)
 });
 
 /**
  * Change your AI choice for every workspace you are in
  */
 export const updateAccountAiChoiceMutation = (options?: Partial<Options<UpdateAccountAiChoiceData>>): UseMutationOptions<UpdateAccountAiChoiceResponse, DefaultError, Options<UpdateAccountAiChoiceData>> => {
-  const mutationOptions: UseMutationOptions<UpdateAccountAiChoiceResponse, DefaultError, Options<UpdateAccountAiChoiceData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateAccountAiChoice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateAccountAiChoiceResponse, DefaultError, Options<UpdateAccountAiChoiceData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateAccountAiChoice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getConsentStatusQueryKey = (options?: Options<GetConsentStatusData>) => createQueryKey('getConsentStatus', options, false, ['Consent']);
@@ -1832,67 +1832,67 @@ export const getConsentStatusQueryKey = (options?: Options<GetConsentStatusData>
  * Get the current consent notice and status
  */
 export const getConsentStatusOptions = (options?: Options<GetConsentStatusData>) => queryOptions<GetConsentStatusResponse, DefaultError, GetConsentStatusResponse, ReturnType<typeof getConsentStatusQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getConsentStatus({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getConsentStatusQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getConsentStatus({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getConsentStatusQueryKey(options)
 });
 
 /**
  * Complete the first-login transparency step
  */
 export const completeFirstLoginConsentMutation = (options?: Partial<Options<CompleteFirstLoginConsentData>>): UseMutationOptions<CompleteFirstLoginConsentResponse, DefaultError, Options<CompleteFirstLoginConsentData>> => {
-  const mutationOptions: UseMutationOptions<CompleteFirstLoginConsentResponse, DefaultError, Options<CompleteFirstLoginConsentData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await completeFirstLoginConsent({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<CompleteFirstLoginConsentResponse, DefaultError, Options<CompleteFirstLoginConsentData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await completeFirstLoginConsent({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Grant or withdraw research consent
  */
 export const updateResearchConsentMutation = (options?: Partial<Options<UpdateResearchConsentData>>): UseMutationOptions<UpdateResearchConsentResponse, DefaultError, Options<UpdateResearchConsentData>> => {
-  const mutationOptions: UseMutationOptions<UpdateResearchConsentResponse, DefaultError, Options<UpdateResearchConsentData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateResearchConsent({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateResearchConsentResponse, DefaultError, Options<UpdateResearchConsentData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateResearchConsent({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Request a data export (async)
  */
 export const requestDataExportMutation = (options?: Partial<Options<RequestDataExportData>>): UseMutationOptions<RequestDataExportResponse, DefaultError, Options<RequestDataExportData>> => {
-  const mutationOptions: UseMutationOptions<RequestDataExportResponse, DefaultError, Options<RequestDataExportData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await requestDataExport({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RequestDataExportResponse, DefaultError, Options<RequestDataExportData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await requestDataExport({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getDataExportStatusQueryKey = (options: Options<GetDataExportStatusData>) => createQueryKey('getDataExportStatus', options, false, ['Account']);
@@ -1901,16 +1901,16 @@ export const getDataExportStatusQueryKey = (options: Options<GetDataExportStatus
  * Get data-export status
  */
 export const getDataExportStatusOptions = (options: Options<GetDataExportStatusData>) => queryOptions<GetDataExportStatusResponse, DefaultError, GetDataExportStatusResponse, ReturnType<typeof getDataExportStatusQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getDataExportStatus({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getDataExportStatusQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getDataExportStatus({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getDataExportStatusQueryKey(options)
 });
 
 export const downloadDataExportQueryKey = (options: Options<DownloadDataExportData>) => createQueryKey('downloadDataExport', options, false, ['Account']);
@@ -1919,16 +1919,16 @@ export const downloadDataExportQueryKey = (options: Options<DownloadDataExportDa
  * Download the data-export bundle
  */
 export const downloadDataExportOptions = (options: Options<DownloadDataExportData>) => queryOptions<DownloadDataExportResponse, DefaultError, DownloadDataExportResponse, ReturnType<typeof downloadDataExportQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await downloadDataExport({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: downloadDataExportQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await downloadDataExport({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: downloadDataExportQueryKey(options)
 });
 
 export const getUserFeaturesQueryKey = (options?: Options<GetUserFeaturesData>) => createQueryKey('getUserFeatures', options, false, ['Account']);
@@ -1939,16 +1939,16 @@ export const getUserFeaturesQueryKey = (options?: Options<GetUserFeaturesData>) 
  * Returns all feature flags evaluated for the authenticated user. Combines role checks and server-side config toggles.
  */
 export const getUserFeaturesOptions = (options?: Options<GetUserFeaturesData>) => queryOptions<GetUserFeaturesResponse, DefaultError, GetUserFeaturesResponse, ReturnType<typeof getUserFeaturesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getUserFeatures({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getUserFeaturesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getUserFeatures({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getUserFeaturesQueryKey(options)
 });
 
 export const listLinkedIdentitiesQueryKey = (options?: Options<ListLinkedIdentitiesData>) => createQueryKey('listLinkedIdentities', options, false, ['Account']);
@@ -1957,33 +1957,33 @@ export const listLinkedIdentitiesQueryKey = (options?: Options<ListLinkedIdentit
  * List linked identity providers
  */
 export const listLinkedIdentitiesOptions = (options?: Options<ListLinkedIdentitiesData>) => queryOptions<ListLinkedIdentitiesResponse, DefaultError, ListLinkedIdentitiesResponse, ReturnType<typeof listLinkedIdentitiesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listLinkedIdentities({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listLinkedIdentitiesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listLinkedIdentities({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listLinkedIdentitiesQueryKey(options)
 });
 
 /**
  * Unlink one of the current user's linked identity providers
  */
 export const unlinkIdentityMutation = (options?: Partial<Options<UnlinkIdentityData>>): UseMutationOptions<UnlinkIdentityResponse, DefaultError, Options<UnlinkIdentityData>> => {
-  const mutationOptions: UseMutationOptions<UnlinkIdentityResponse, DefaultError, Options<UnlinkIdentityData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await unlinkIdentity({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UnlinkIdentityResponse, DefaultError, Options<UnlinkIdentityData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await unlinkIdentity({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getNotificationPreferencesQueryKey = (options?: Options<GetNotificationPreferencesData>) => createQueryKey('getNotificationPreferences', options, false, ['notification-preferences']);
@@ -1992,50 +1992,50 @@ export const getNotificationPreferencesQueryKey = (options?: Options<GetNotifica
  * Get your email subscriptions
  */
 export const getNotificationPreferencesOptions = (options?: Options<GetNotificationPreferencesData>) => queryOptions<GetNotificationPreferencesResponse, DefaultError, GetNotificationPreferencesResponse, ReturnType<typeof getNotificationPreferencesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getNotificationPreferences({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getNotificationPreferencesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getNotificationPreferences({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getNotificationPreferencesQueryKey(options)
 });
 
 /**
  * Update your email subscriptions
  */
 export const updateNotificationPreferencesMutation = (options?: Partial<Options<UpdateNotificationPreferencesData>>): UseMutationOptions<UpdateNotificationPreferencesResponse, UpdateNotificationPreferencesError, Options<UpdateNotificationPreferencesData>> => {
-  const mutationOptions: UseMutationOptions<UpdateNotificationPreferencesResponse, UpdateNotificationPreferencesError, Options<UpdateNotificationPreferencesData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateNotificationPreferences({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateNotificationPreferencesResponse, UpdateNotificationPreferencesError, Options<UpdateNotificationPreferencesData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateNotificationPreferences({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Revoke all sessions except the current one
  */
 export const revokeOtherSessionsMutation = (options?: Partial<Options<RevokeOtherSessionsData>>): UseMutationOptions<unknown, DefaultError, Options<RevokeOtherSessionsData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<RevokeOtherSessionsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await revokeOtherSessions({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<RevokeOtherSessionsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await revokeOtherSessions({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listSessionsQueryKey = (options?: Options<ListSessionsData>) => createQueryKey('listSessions', options, false, ['Account']);
@@ -2044,16 +2044,16 @@ export const listSessionsQueryKey = (options?: Options<ListSessionsData>) => cre
  * List active sessions for the current user
  */
 export const listSessionsOptions = (options?: Options<ListSessionsData>) => queryOptions<ListSessionsResponse, DefaultError, ListSessionsResponse, ReturnType<typeof listSessionsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listSessions({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listSessionsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listSessions({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listSessionsQueryKey(options)
 });
 
 /**
@@ -2062,17 +2062,17 @@ export const listSessionsOptions = (options?: Options<ListSessionsData>) => quer
  * Any token of an installed-client session, even one it rotated away, ends that session.
  */
 export const revokeSessionMutation = (options?: Partial<Options<RevokeSessionData>>): UseMutationOptions<unknown, DefaultError, Options<RevokeSessionData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<RevokeSessionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await revokeSession({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<RevokeSessionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await revokeSession({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getUserSettingsQueryKey = (options?: Options<GetUserSettingsData>) => createQueryKey('getUserSettings', options, false, ['Account']);
@@ -2081,33 +2081,33 @@ export const getUserSettingsQueryKey = (options?: Options<GetUserSettingsData>) 
  * Get user settings
  */
 export const getUserSettingsOptions = (options?: Options<GetUserSettingsData>) => queryOptions<GetUserSettingsResponse, DefaultError, GetUserSettingsResponse, ReturnType<typeof getUserSettingsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getUserSettings({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getUserSettingsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getUserSettings({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getUserSettingsQueryKey(options)
 });
 
 /**
  * Update user settings
  */
 export const updateUserSettingsMutation = (options?: Partial<Options<UpdateUserSettingsData>>): UseMutationOptions<UpdateUserSettingsResponse, DefaultError, Options<UpdateUserSettingsData>> => {
-  const mutationOptions: UseMutationOptions<UpdateUserSettingsResponse, DefaultError, Options<UpdateUserSettingsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateUserSettings({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateUserSettingsResponse, DefaultError, Options<UpdateUserSettingsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateUserSettings({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getSlackUserPreferencesQueryKey = (options?: Options<GetSlackUserPreferencesData>) => createQueryKey('getSlackUserPreferences', options, false, ['Slack User Preferences']);
@@ -2116,16 +2116,16 @@ export const getSlackUserPreferencesQueryKey = (options?: Options<GetSlackUserPr
  * Get current user's Slack preferences
  */
 export const getSlackUserPreferencesOptions = (options?: Options<GetSlackUserPreferencesData>) => queryOptions<GetSlackUserPreferencesResponse, DefaultError, GetSlackUserPreferencesResponse, ReturnType<typeof getSlackUserPreferencesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getSlackUserPreferences({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getSlackUserPreferencesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getSlackUserPreferences({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getSlackUserPreferencesQueryKey(options)
 });
 
 export const listWorkspacesQueryKey = (options?: Options<ListWorkspacesData>) => createQueryKey('listWorkspaces', options, false, ['workspace-registry']);
@@ -2134,67 +2134,67 @@ export const listWorkspacesQueryKey = (options?: Options<ListWorkspacesData>) =>
  * List all workspaces
  */
 export const listWorkspacesOptions = (options?: Options<ListWorkspacesData>) => queryOptions<ListWorkspacesResponse, DefaultError, ListWorkspacesResponse, ReturnType<typeof listWorkspacesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listWorkspaces({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listWorkspacesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listWorkspaces({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listWorkspacesQueryKey(options)
 });
 
 /**
  * Create a new workspace
  */
 export const createWorkspaceMutation = (options?: Partial<Options<CreateWorkspaceData>>): UseMutationOptions<CreateWorkspaceResponse, DefaultError, Options<CreateWorkspaceData>> => {
-  const mutationOptions: UseMutationOptions<CreateWorkspaceResponse, DefaultError, Options<CreateWorkspaceData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await createWorkspace({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<CreateWorkspaceResponse, DefaultError, Options<CreateWorkspaceData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await createWorkspace({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * List GitLab groups accessible to a PAT
  */
 export const listGitLabGroupsMutation = (options?: Partial<Options<ListGitLabGroupsData>>): UseMutationOptions<ListGitLabGroupsResponse, DefaultError, Options<ListGitLabGroupsData>> => {
-  const mutationOptions: UseMutationOptions<ListGitLabGroupsResponse, DefaultError, Options<ListGitLabGroupsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await listGitLabGroups({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<ListGitLabGroupsResponse, DefaultError, Options<ListGitLabGroupsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await listGitLabGroups({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Validate a GitLab PAT before workspace creation
  */
 export const gitLabPreflightMutation = (options?: Partial<Options<GitLabPreflightData>>): UseMutationOptions<GitLabPreflightResponse2, DefaultError, Options<GitLabPreflightData>> => {
-  const mutationOptions: UseMutationOptions<GitLabPreflightResponse2, DefaultError, Options<GitLabPreflightData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await gitLabPreflight({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<GitLabPreflightResponse2, DefaultError, Options<GitLabPreflightData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await gitLabPreflight({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getProvidersQueryKey = (options?: Options<GetProvidersData>) => createQueryKey('getProviders', options, false, ['workspace-registry']);
@@ -2205,33 +2205,33 @@ export const getProvidersQueryKey = (options?: Options<GetProvidersData>) => cre
  * Returns available workspace providers with their configuration. Public endpoint — no authentication required.
  */
 export const getProvidersOptions = (options?: Options<GetProvidersData>) => queryOptions<GetProvidersResponse, DefaultError, GetProvidersResponse, ReturnType<typeof getProvidersQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getProviders({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getProvidersQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getProviders({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getProvidersQueryKey(options)
 });
 
 /**
  * Permanently delete a workspace and purge its data
  */
 export const purgeWorkspaceMutation = (options?: Partial<Options<PurgeWorkspaceData>>): UseMutationOptions<PurgeWorkspaceResponse, DefaultError, Options<PurgeWorkspaceData>> => {
-  const mutationOptions: UseMutationOptions<PurgeWorkspaceResponse, DefaultError, Options<PurgeWorkspaceData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await purgeWorkspace({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<PurgeWorkspaceResponse, DefaultError, Options<PurgeWorkspaceData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await purgeWorkspace({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getWorkspaceQueryKey = (options: Options<GetWorkspaceData>) => createQueryKey('getWorkspace', options, false, ['workspace']);
@@ -2240,16 +2240,16 @@ export const getWorkspaceQueryKey = (options: Options<GetWorkspaceData>) => crea
  * Fetch a workspace by slug
  */
 export const getWorkspaceOptions = (options: Options<GetWorkspaceData>) => queryOptions<GetWorkspaceResponse, DefaultError, GetWorkspaceResponse, ReturnType<typeof getWorkspaceQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getWorkspace({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getWorkspaceQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getWorkspace({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getWorkspaceQueryKey(options)
 });
 
 export const listMemberActivityQueryKey = (options: Options<ListMemberActivityData>) => createQueryKey('listMemberActivity', options, false, ['Activity']);
@@ -2260,16 +2260,16 @@ export const listMemberActivityQueryKey = (options: Options<ListMemberActivityDa
  * Members shown in workspace activity, or one team's, ordered by name.
  */
 export const listMemberActivityOptions = (options: Options<ListMemberActivityData>) => queryOptions<ListMemberActivityResponse, ListMemberActivityError, ListMemberActivityResponse, ReturnType<typeof listMemberActivityQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listMemberActivity({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listMemberActivityQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listMemberActivity({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listMemberActivityQueryKey(options)
 });
 
 export const getOpenWorkQueryKey = (options: Options<GetOpenWorkData>) => createQueryKey('getOpenWork', options, false, ['Activity']);
@@ -2280,16 +2280,16 @@ export const getOpenWorkQueryKey = (options: Options<GetOpenWorkData>) => create
  * Review requests, open pull requests and assigned issues, most recently updated first. Pull requests carry their reviewers.
  */
 export const getOpenWorkOptions = (options: Options<GetOpenWorkData>) => queryOptions<GetOpenWorkResponse, GetOpenWorkError, GetOpenWorkResponse, ReturnType<typeof getOpenWorkQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getOpenWork({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getOpenWorkQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getOpenWork({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getOpenWorkQueryKey(options)
 });
 
 export const getActivitySummaryQueryKey = (options: Options<GetActivitySummaryData>) => createQueryKey('getActivitySummary', options, false, ['Activity']);
@@ -2300,16 +2300,16 @@ export const getActivitySummaryQueryKey = (options: Options<GetActivitySummaryDa
  * One member's activity when login is given, otherwise everyone's in the workspace or the team. With both, the member's activity within the team's scope. The range is split into days, weeks or months, by its length, in the given time zone.
  */
 export const getActivitySummaryOptions = (options: Options<GetActivitySummaryData>) => queryOptions<GetActivitySummaryResponse, GetActivitySummaryError, GetActivitySummaryResponse, ReturnType<typeof getActivitySummaryQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getActivitySummary({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getActivitySummaryQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getActivitySummary({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getActivitySummaryQueryKey(options)
 });
 
 export const getActivityWorkQueryKey = (options: Options<GetActivityWorkData>) => createQueryKey('getActivityWork', options, false, ['Activity']);
@@ -2320,16 +2320,16 @@ export const getActivityWorkQueryKey = (options: Options<GetActivityWorkData>) =
  * One member's activity when login is given, otherwise everyone's in the workspace or the team. With both, the member's activity within the team's scope. Each pull request or issue is listed once, by its latest activity in the range, newest first.
  */
 export const getActivityWorkOptions = (options: Options<GetActivityWorkData>) => queryOptions<GetActivityWorkResponse, GetActivityWorkError, GetActivityWorkResponse, ReturnType<typeof getActivityWorkQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getActivityWork({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getActivityWorkQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getActivityWork({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getActivityWorkQueryKey(options)
 });
 
 export const getActivityWorkInfiniteQueryKey = (options: Options<GetActivityWorkData>): QueryKey<Options<GetActivityWorkData>> => createQueryKey('getActivityWork', options, true);
@@ -2340,28 +2340,28 @@ export const getActivityWorkInfiniteQueryKey = (options: Options<GetActivityWork
  * One member's activity when login is given, otherwise everyone's in the workspace or the team. With both, the member's activity within the team's scope. Each pull request or issue is listed once, by its latest activity in the range, newest first.
  */
 export const getActivityWorkInfiniteOptions = (options: Options<GetActivityWorkData>) => {
-  const opts = infiniteQueryOptions<GetActivityWorkResponse, GetActivityWorkError, InfiniteData<GetActivityWorkResponse>, QueryKey<Options<GetActivityWorkData>>, string | Pick<QueryKey<Options<GetActivityWorkData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<GetActivityWorkData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          cursor: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await getActivityWork({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: getActivityWorkInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<GetActivityWorkResponse, GetActivityWorkError, InfiniteData<GetActivityWorkResponse>, QueryKey<Options<GetActivityWorkData>>, string | Pick<QueryKey<Options<GetActivityWorkData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<GetActivityWorkData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    cursor: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await getActivityWork({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: getActivityWorkInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const listAgentsQueryKey = (options: Options<ListAgentsData>) => createQueryKey('listAgents', options, false, ['Agents']);
@@ -2370,16 +2370,16 @@ export const listAgentsQueryKey = (options: Options<ListAgentsData>) => createQu
  * List the workspace's agents and how each is configured
  */
 export const listAgentsOptions = (options: Options<ListAgentsData>) => queryOptions<ListAgentsResponse, DefaultError, ListAgentsResponse, ReturnType<typeof listAgentsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listAgents({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listAgentsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listAgents({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listAgentsQueryKey(options)
 });
 
 export const listAgentJobsQueryKey = (options: Options<ListAgentJobsData>) => createQueryKey('listAgentJobs', options, false, ['Agent Jobs']);
@@ -2388,16 +2388,16 @@ export const listAgentJobsQueryKey = (options: Options<ListAgentJobsData>) => cr
  * List agent jobs for a workspace
  */
 export const listAgentJobsOptions = (options: Options<ListAgentJobsData>) => queryOptions<ListAgentJobsResponse, DefaultError, ListAgentJobsResponse, ReturnType<typeof listAgentJobsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listAgentJobs({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listAgentJobsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listAgentJobs({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listAgentJobsQueryKey(options)
 });
 
 export const listAgentJobsInfiniteQueryKey = (options: Options<ListAgentJobsData>): QueryKey<Options<ListAgentJobsData>> => createQueryKey('listAgentJobs', options, true);
@@ -2406,28 +2406,28 @@ export const listAgentJobsInfiniteQueryKey = (options: Options<ListAgentJobsData
  * List agent jobs for a workspace
  */
 export const listAgentJobsInfiniteOptions = (options: Options<ListAgentJobsData>) => {
-  const opts = infiniteQueryOptions<ListAgentJobsResponse, DefaultError, InfiniteData<ListAgentJobsResponse>, QueryKey<Options<ListAgentJobsData>>, number | Pick<QueryKey<Options<ListAgentJobsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListAgentJobsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listAgentJobs({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listAgentJobsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListAgentJobsResponse, DefaultError, InfiniteData<ListAgentJobsResponse>, QueryKey<Options<ListAgentJobsData>>, number | Pick<QueryKey<Options<ListAgentJobsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListAgentJobsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listAgentJobs({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listAgentJobsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const getAgentJobQueryKey = (options: Options<GetAgentJobData>) => createQueryKey('getAgentJob', options, false, ['Agent Jobs']);
@@ -2436,84 +2436,84 @@ export const getAgentJobQueryKey = (options: Options<GetAgentJobData>) => create
  * Get agent job details
  */
 export const getAgentJobOptions = (options: Options<GetAgentJobData>) => queryOptions<GetAgentJobResponse, DefaultError, GetAgentJobResponse, ReturnType<typeof getAgentJobQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getAgentJob({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getAgentJobQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getAgentJob({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getAgentJobQueryKey(options)
 });
 
 /**
  * Cancel an agent job
  */
 export const cancelAgentJobMutation = (options?: Partial<Options<CancelAgentJobData>>): UseMutationOptions<CancelAgentJobResponse, DefaultError, Options<CancelAgentJobData>> => {
-  const mutationOptions: UseMutationOptions<CancelAgentJobResponse, DefaultError, Options<CancelAgentJobData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await cancelAgentJob({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<CancelAgentJobResponse, DefaultError, Options<CancelAgentJobData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await cancelAgentJob({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Retry delivery for a completed agent job
  */
 export const retryAgentJobDeliveryMutation = (options?: Partial<Options<RetryAgentJobDeliveryData>>): UseMutationOptions<RetryAgentJobDeliveryResponse, DefaultError, Options<RetryAgentJobDeliveryData>> => {
-  const mutationOptions: UseMutationOptions<RetryAgentJobDeliveryResponse, DefaultError, Options<RetryAgentJobDeliveryData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await retryAgentJobDelivery({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RetryAgentJobDeliveryResponse, DefaultError, Options<RetryAgentJobDeliveryData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await retryAgentJobDelivery({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Remove the agent for one purpose (turn it off)
  */
 export const deleteAgentMutation = (options?: Partial<Options<DeleteAgentData>>): UseMutationOptions<DeleteAgentResponse, DefaultError, Options<DeleteAgentData>> => {
-  const mutationOptions: UseMutationOptions<DeleteAgentResponse, DefaultError, Options<DeleteAgentData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await deleteAgent({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<DeleteAgentResponse, DefaultError, Options<DeleteAgentData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deleteAgent({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Configure the agent for one purpose
  */
 export const configureAgentMutation = (options?: Partial<Options<ConfigureAgentData>>): UseMutationOptions<ConfigureAgentResponse, DefaultError, Options<ConfigureAgentData>> => {
-  const mutationOptions: UseMutationOptions<ConfigureAgentResponse, DefaultError, Options<ConfigureAgentData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await configureAgent({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<ConfigureAgentResponse, DefaultError, Options<ConfigureAgentData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await configureAgent({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listWorkspaceConfigAuditEventsQueryKey = (options: Options<ListWorkspaceConfigAuditEventsData>) => createQueryKey('listWorkspaceConfigAuditEvents', options, false, ['Config Audit']);
@@ -2522,16 +2522,16 @@ export const listWorkspaceConfigAuditEventsQueryKey = (options: Options<ListWork
  * List this workspace's admin configuration changes (paged, newest first)
  */
 export const listWorkspaceConfigAuditEventsOptions = (options: Options<ListWorkspaceConfigAuditEventsData>) => queryOptions<ListWorkspaceConfigAuditEventsResponse, DefaultError, ListWorkspaceConfigAuditEventsResponse, ReturnType<typeof listWorkspaceConfigAuditEventsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listWorkspaceConfigAuditEvents({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listWorkspaceConfigAuditEventsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listWorkspaceConfigAuditEvents({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listWorkspaceConfigAuditEventsQueryKey(options)
 });
 
 export const listWorkspaceConfigAuditEventsInfiniteQueryKey = (options: Options<ListWorkspaceConfigAuditEventsData>): QueryKey<Options<ListWorkspaceConfigAuditEventsData>> => createQueryKey('listWorkspaceConfigAuditEvents', options, true);
@@ -2540,57 +2540,57 @@ export const listWorkspaceConfigAuditEventsInfiniteQueryKey = (options: Options<
  * List this workspace's admin configuration changes (paged, newest first)
  */
 export const listWorkspaceConfigAuditEventsInfiniteOptions = (options: Options<ListWorkspaceConfigAuditEventsData>) => {
-  const opts = infiniteQueryOptions<ListWorkspaceConfigAuditEventsResponse, DefaultError, InfiniteData<ListWorkspaceConfigAuditEventsResponse>, QueryKey<Options<ListWorkspaceConfigAuditEventsData>>, number | Pick<QueryKey<Options<ListWorkspaceConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListWorkspaceConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listWorkspaceConfigAuditEvents({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listWorkspaceConfigAuditEventsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListWorkspaceConfigAuditEventsResponse, DefaultError, InfiniteData<ListWorkspaceConfigAuditEventsResponse>, QueryKey<Options<ListWorkspaceConfigAuditEventsData>>, number | Pick<QueryKey<Options<ListWorkspaceConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListWorkspaceConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listWorkspaceConfigAuditEvents({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listWorkspaceConfigAuditEventsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const listQueryKey = (options: Options<ListData>) => createQueryKey('list', options, false, ['Connections']);
 
 export const listOptions = (options: Options<ListData>) => queryOptions<ListResponse, DefaultError, ListResponse, ReturnType<typeof listQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await list({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await list({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listQueryKey(options)
 });
 
 export const initiateMutation = (options?: Partial<Options<InitiateData>>): UseMutationOptions<InitiateResponse, DefaultError, Options<InitiateData>> => {
-  const mutationOptions: UseMutationOptions<InitiateResponse, DefaultError, Options<InitiateData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await initiate({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<InitiateResponse, DefaultError, Options<InitiateData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await initiate({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getIntegrationCatalogQueryKey = (options: Options<GetIntegrationCatalogData>) => createQueryKey('getIntegrationCatalog', options, false, ['Sync']);
@@ -2599,16 +2599,16 @@ export const getIntegrationCatalogQueryKey = (options: Options<GetIntegrationCat
  * Every integration kind this workspace could connect, joined against existing connections
  */
 export const getIntegrationCatalogOptions = (options: Options<GetIntegrationCatalogData>) => queryOptions<GetIntegrationCatalogResponse, DefaultError, GetIntegrationCatalogResponse, ReturnType<typeof getIntegrationCatalogQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getIntegrationCatalog({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getIntegrationCatalogQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getIntegrationCatalog({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getIntegrationCatalogQueryKey(options)
 });
 
 export const getOutlineTokenStatusQueryKey = (options: Options<GetOutlineTokenStatusData>) => createQueryKey('getOutlineTokenStatus', options, false, ['Connections']);
@@ -2619,16 +2619,16 @@ export const getOutlineTokenStatusQueryKey = (options: Options<GetOutlineTokenSt
  * Probes Outline directly. Reports whether the token is still accepted and, when the token may list its own key, its name, expiry and last use. Outline cannot rotate a key from a key, so an expiring token is renewed in Outline and re-entered here.
  */
 export const getOutlineTokenStatusOptions = (options: Options<GetOutlineTokenStatusData>) => queryOptions<GetOutlineTokenStatusResponse, DefaultError, GetOutlineTokenStatusResponse, ReturnType<typeof getOutlineTokenStatusQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getOutlineTokenStatus({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getOutlineTokenStatusQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getOutlineTokenStatus({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getOutlineTokenStatusQueryKey(options)
 });
 
 export const getConnectionSyncStatusQueryKey = (options: Options<GetConnectionSyncStatusData>) => createQueryKey('getConnectionSyncStatus', options, false, ['Sync']);
@@ -2637,16 +2637,16 @@ export const getConnectionSyncStatusQueryKey = (options: Options<GetConnectionSy
  * Unified sync status for one connection
  */
 export const getConnectionSyncStatusOptions = (options: Options<GetConnectionSyncStatusData>) => queryOptions<GetConnectionSyncStatusResponse, DefaultError, GetConnectionSyncStatusResponse, ReturnType<typeof getConnectionSyncStatusQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getConnectionSyncStatus({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getConnectionSyncStatusQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getConnectionSyncStatus({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getConnectionSyncStatusQueryKey(options)
 });
 
 export const listConnectionSyncJobsQueryKey = (options: Options<ListConnectionSyncJobsData>) => createQueryKey('listConnectionSyncJobs', options, false, ['Sync']);
@@ -2655,16 +2655,16 @@ export const listConnectionSyncJobsQueryKey = (options: Options<ListConnectionSy
  * Paginated sync job history for one connection
  */
 export const listConnectionSyncJobsOptions = (options: Options<ListConnectionSyncJobsData>) => queryOptions<ListConnectionSyncJobsResponse, DefaultError, ListConnectionSyncJobsResponse, ReturnType<typeof listConnectionSyncJobsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listConnectionSyncJobs({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listConnectionSyncJobsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listConnectionSyncJobs({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listConnectionSyncJobsQueryKey(options)
 });
 
 export const listConnectionSyncJobsInfiniteQueryKey = (options: Options<ListConnectionSyncJobsData>): QueryKey<Options<ListConnectionSyncJobsData>> => createQueryKey('listConnectionSyncJobs', options, true);
@@ -2673,65 +2673,65 @@ export const listConnectionSyncJobsInfiniteQueryKey = (options: Options<ListConn
  * Paginated sync job history for one connection
  */
 export const listConnectionSyncJobsInfiniteOptions = (options: Options<ListConnectionSyncJobsData>) => {
-  const opts = infiniteQueryOptions<ListConnectionSyncJobsResponse, DefaultError, InfiniteData<ListConnectionSyncJobsResponse>, QueryKey<Options<ListConnectionSyncJobsData>>, number | Pick<QueryKey<Options<ListConnectionSyncJobsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListConnectionSyncJobsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listConnectionSyncJobs({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listConnectionSyncJobsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListConnectionSyncJobsResponse, DefaultError, InfiniteData<ListConnectionSyncJobsResponse>, QueryKey<Options<ListConnectionSyncJobsData>>, number | Pick<QueryKey<Options<ListConnectionSyncJobsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListConnectionSyncJobsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listConnectionSyncJobs({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listConnectionSyncJobsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 /**
  * Trigger a manual sync or backfill
  *
  * Trigger a manual sync. Idempotent-absorb: a connection that already has an active job answers
- *  200 with that job rather than erroring, so a double-click "Sync now" is harmless.
+ * 200 with that job rather than erroring, so a double-click "Sync now" is harmless.
  */
 export const triggerSyncJobMutation = (options?: Partial<Options<TriggerSyncJobData>>): UseMutationOptions<TriggerSyncJobResponse, TriggerSyncJobError, Options<TriggerSyncJobData>> => {
-  const mutationOptions: UseMutationOptions<TriggerSyncJobResponse, TriggerSyncJobError, Options<TriggerSyncJobData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await triggerSyncJob({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<TriggerSyncJobResponse, TriggerSyncJobError, Options<TriggerSyncJobData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await triggerSyncJob({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Update a running sync job
  */
 export const updateConnectionSyncJobMutation = (options?: Partial<Options<UpdateConnectionSyncJobData>>): UseMutationOptions<UpdateConnectionSyncJobResponse, UpdateConnectionSyncJobError, Options<UpdateConnectionSyncJobData>> => {
-  const mutationOptions: UseMutationOptions<UpdateConnectionSyncJobResponse, UpdateConnectionSyncJobError, Options<UpdateConnectionSyncJobData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateConnectionSyncJob({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateConnectionSyncJobResponse, UpdateConnectionSyncJobError, Options<UpdateConnectionSyncJobData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateConnectionSyncJob({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listConnectionSyncResourcesQueryKey = (options: Options<ListConnectionSyncResourcesData>) => createQueryKey('listConnectionSyncResources', options, false, ['Sync']);
@@ -2740,87 +2740,87 @@ export const listConnectionSyncResourcesQueryKey = (options: Options<ListConnect
  * Per-resource sync state (repos / channels / collections) for one connection
  */
 export const listConnectionSyncResourcesOptions = (options: Options<ListConnectionSyncResourcesData>) => queryOptions<ListConnectionSyncResourcesResponse, DefaultError, ListConnectionSyncResourcesResponse, ReturnType<typeof listConnectionSyncResourcesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listConnectionSyncResources({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listConnectionSyncResourcesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listConnectionSyncResources({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listConnectionSyncResourcesQueryKey(options)
 });
 
 export const readQueryKey = (options: Options<ReadData>) => createQueryKey('read', options, false, ['Connections']);
 
 export const readOptions = (options: Options<ReadData>) => queryOptions<ReadResponse, DefaultError, ReadResponse, ReturnType<typeof readQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await read({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: readQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await read({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: readQueryKey(options)
 });
 
 export const auditQueryKey = (options: Options<AuditData>) => createQueryKey('audit', options, false, ['Connections']);
 
 export const auditOptions = (options: Options<AuditData>) => queryOptions<AuditResponse, DefaultError, AuditResponse, ReturnType<typeof auditQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await audit({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: auditQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await audit({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: auditQueryKey(options)
 });
 
 /**
  * Resource-oriented lifecycle transition: <code>ACTIVE</code> (reactivate), <code>SUSPENDED</code>
- *  (suspend), or <code>UNINSTALLED</code> (disconnect).
+ * (suspend), or <code>UNINSTALLED</code> (disconnect).
  *
  * Resource-oriented lifecycle transition: <code>ACTIVE</code> (reactivate), <code>SUSPENDED</code>
- *  (suspend), or <code>UNINSTALLED</code> (disconnect). Disconnecting erases the integration's mirrored
- *  data and then, best effort, removes what it installed at the provider; if the erase fails, the
- *  connection is left unchanged. <code>PENDING</code> is internal to the OAuth handshake and rejected as
- *  a bad request; illegal transitions surface as 409 via the state machine.
+ * (suspend), or <code>UNINSTALLED</code> (disconnect). Disconnecting erases the integration's mirrored
+ * data and then, best effort, removes what it installed at the provider; if the erase fails, the
+ * connection is left unchanged. <code>PENDING</code> is internal to the OAuth handshake and rejected as
+ * a bad request; illegal transitions surface as 409 via the state machine.
  */
 export const updateConnectionStatusMutation = (options?: Partial<Options<UpdateConnectionStatusData>>): UseMutationOptions<UpdateConnectionStatusResponse, DefaultError, Options<UpdateConnectionStatusData>> => {
-  const mutationOptions: UseMutationOptions<UpdateConnectionStatusResponse, DefaultError, Options<UpdateConnectionStatusData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateConnectionStatus({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateConnectionStatusResponse, DefaultError, Options<UpdateConnectionStatusData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateConnectionStatus({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Update workspace feature flags
  */
 export const updateFeaturesMutation = (options?: Partial<Options<UpdateFeaturesData>>): UseMutationOptions<UpdateFeaturesResponse, DefaultError, Options<UpdateFeaturesData>> => {
-  const mutationOptions: UseMutationOptions<UpdateFeaturesResponse, DefaultError, Options<UpdateFeaturesData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateFeatures({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateFeaturesResponse, DefaultError, Options<UpdateFeaturesData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateFeatures({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const workspaceListAvailableLlmModelsQueryKey = (options: Options<WorkspaceListAvailableLlmModelsData>) => createQueryKey('workspaceListAvailableLlmModels', options, false, ['Workspace LLM']);
@@ -2829,33 +2829,33 @@ export const workspaceListAvailableLlmModelsQueryKey = (options: Options<Workspa
  * List models this workspace can bind a Task to (shared + your own)
  */
 export const workspaceListAvailableLlmModelsOptions = (options: Options<WorkspaceListAvailableLlmModelsData>) => queryOptions<WorkspaceListAvailableLlmModelsResponse, DefaultError, WorkspaceListAvailableLlmModelsResponse, ReturnType<typeof workspaceListAvailableLlmModelsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await workspaceListAvailableLlmModels({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: workspaceListAvailableLlmModelsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await workspaceListAvailableLlmModels({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: workspaceListAvailableLlmModelsQueryKey(options)
 });
 
 /**
  * Set or clear this workspace's monthly cap on its own-provider LLM spend
  */
 export const updateWorkspaceLlmBudgetMutation = (options?: Partial<Options<UpdateWorkspaceLlmBudgetData>>): UseMutationOptions<UpdateWorkspaceLlmBudgetResponse, DefaultError, Options<UpdateWorkspaceLlmBudgetData>> => {
-  const mutationOptions: UseMutationOptions<UpdateWorkspaceLlmBudgetResponse, DefaultError, Options<UpdateWorkspaceLlmBudgetData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateWorkspaceLlmBudget({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateWorkspaceLlmBudgetResponse, DefaultError, Options<UpdateWorkspaceLlmBudgetData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateWorkspaceLlmBudget({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const workspaceListLlmConnectionsQueryKey = (options: Options<WorkspaceListLlmConnectionsData>) => createQueryKey('workspaceListLlmConnections', options, false, ['Workspace LLM']);
@@ -2864,67 +2864,67 @@ export const workspaceListLlmConnectionsQueryKey = (options: Options<WorkspaceLi
  * List your AI provider connections
  */
 export const workspaceListLlmConnectionsOptions = (options: Options<WorkspaceListLlmConnectionsData>) => queryOptions<WorkspaceListLlmConnectionsResponse, DefaultError, WorkspaceListLlmConnectionsResponse, ReturnType<typeof workspaceListLlmConnectionsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await workspaceListLlmConnections({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: workspaceListLlmConnectionsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await workspaceListLlmConnections({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: workspaceListLlmConnectionsQueryKey(options)
 });
 
 /**
  * Connect your own AI provider
  */
 export const workspaceCreateLlmConnectionMutation = (options?: Partial<Options<WorkspaceCreateLlmConnectionData>>): UseMutationOptions<WorkspaceCreateLlmConnectionResponse, DefaultError, Options<WorkspaceCreateLlmConnectionData>> => {
-  const mutationOptions: UseMutationOptions<WorkspaceCreateLlmConnectionResponse, DefaultError, Options<WorkspaceCreateLlmConnectionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await workspaceCreateLlmConnection({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<WorkspaceCreateLlmConnectionResponse, DefaultError, Options<WorkspaceCreateLlmConnectionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await workspaceCreateLlmConnection({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Create a model on your AI provider
  */
 export const workspaceCreateLlmModelMutation = (options?: Partial<Options<WorkspaceCreateLlmModelData>>): UseMutationOptions<WorkspaceCreateLlmModelResponse, DefaultError, Options<WorkspaceCreateLlmModelData>> => {
-  const mutationOptions: UseMutationOptions<WorkspaceCreateLlmModelResponse, DefaultError, Options<WorkspaceCreateLlmModelData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await workspaceCreateLlmModel({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<WorkspaceCreateLlmModelResponse, DefaultError, Options<WorkspaceCreateLlmModelData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await workspaceCreateLlmModel({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Remove your AI provider connection
  */
 export const workspaceDeleteLlmConnectionMutation = (options?: Partial<Options<WorkspaceDeleteLlmConnectionData>>): UseMutationOptions<WorkspaceDeleteLlmConnectionResponse, DefaultError, Options<WorkspaceDeleteLlmConnectionData>> => {
-  const mutationOptions: UseMutationOptions<WorkspaceDeleteLlmConnectionResponse, DefaultError, Options<WorkspaceDeleteLlmConnectionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await workspaceDeleteLlmConnection({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<WorkspaceDeleteLlmConnectionResponse, DefaultError, Options<WorkspaceDeleteLlmConnectionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await workspaceDeleteLlmConnection({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const workspaceGetLlmConnectionQueryKey = (options: Options<WorkspaceGetLlmConnectionData>) => createQueryKey('workspaceGetLlmConnection', options, false, ['Workspace LLM']);
@@ -2933,50 +2933,50 @@ export const workspaceGetLlmConnectionQueryKey = (options: Options<WorkspaceGetL
  * Get one of your AI provider connections
  */
 export const workspaceGetLlmConnectionOptions = (options: Options<WorkspaceGetLlmConnectionData>) => queryOptions<WorkspaceGetLlmConnectionResponse, DefaultError, WorkspaceGetLlmConnectionResponse, ReturnType<typeof workspaceGetLlmConnectionQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await workspaceGetLlmConnection({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: workspaceGetLlmConnectionQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await workspaceGetLlmConnection({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: workspaceGetLlmConnectionQueryKey(options)
 });
 
 /**
  * Update your AI provider connection
  */
 export const workspaceUpdateLlmConnectionMutation = (options?: Partial<Options<WorkspaceUpdateLlmConnectionData>>): UseMutationOptions<WorkspaceUpdateLlmConnectionResponse, DefaultError, Options<WorkspaceUpdateLlmConnectionData>> => {
-  const mutationOptions: UseMutationOptions<WorkspaceUpdateLlmConnectionResponse, DefaultError, Options<WorkspaceUpdateLlmConnectionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await workspaceUpdateLlmConnection({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<WorkspaceUpdateLlmConnectionResponse, DefaultError, Options<WorkspaceUpdateLlmConnectionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await workspaceUpdateLlmConnection({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Test your AI provider connection
  */
 export const workspaceProbeLlmConnectionMutation = (options?: Partial<Options<WorkspaceProbeLlmConnectionData>>): UseMutationOptions<WorkspaceProbeLlmConnectionResponse, DefaultError, Options<WorkspaceProbeLlmConnectionData>> => {
-  const mutationOptions: UseMutationOptions<WorkspaceProbeLlmConnectionResponse, DefaultError, Options<WorkspaceProbeLlmConnectionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await workspaceProbeLlmConnection({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<WorkspaceProbeLlmConnectionResponse, DefaultError, Options<WorkspaceProbeLlmConnectionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await workspaceProbeLlmConnection({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const workspaceListLlmModelsQueryKey = (options: Options<WorkspaceListLlmModelsData>) => createQueryKey('workspaceListLlmModels', options, false, ['Workspace LLM']);
@@ -2985,33 +2985,33 @@ export const workspaceListLlmModelsQueryKey = (options: Options<WorkspaceListLlm
  * List models on your AI provider
  */
 export const workspaceListLlmModelsOptions = (options: Options<WorkspaceListLlmModelsData>) => queryOptions<WorkspaceListLlmModelsResponse, DefaultError, WorkspaceListLlmModelsResponse, ReturnType<typeof workspaceListLlmModelsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await workspaceListLlmModels({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: workspaceListLlmModelsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await workspaceListLlmModels({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: workspaceListLlmModelsQueryKey(options)
 });
 
 /**
  * Remove a model on your AI provider
  */
 export const workspaceDeleteLlmModelMutation = (options?: Partial<Options<WorkspaceDeleteLlmModelData>>): UseMutationOptions<WorkspaceDeleteLlmModelResponse, DefaultError, Options<WorkspaceDeleteLlmModelData>> => {
-  const mutationOptions: UseMutationOptions<WorkspaceDeleteLlmModelResponse, DefaultError, Options<WorkspaceDeleteLlmModelData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await workspaceDeleteLlmModel({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<WorkspaceDeleteLlmModelResponse, DefaultError, Options<WorkspaceDeleteLlmModelData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await workspaceDeleteLlmModel({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const workspaceGetLlmModelQueryKey = (options: Options<WorkspaceGetLlmModelData>) => createQueryKey('workspaceGetLlmModel', options, false, ['Workspace LLM']);
@@ -3020,33 +3020,33 @@ export const workspaceGetLlmModelQueryKey = (options: Options<WorkspaceGetLlmMod
  * Get a model on your AI provider
  */
 export const workspaceGetLlmModelOptions = (options: Options<WorkspaceGetLlmModelData>) => queryOptions<WorkspaceGetLlmModelResponse, DefaultError, WorkspaceGetLlmModelResponse, ReturnType<typeof workspaceGetLlmModelQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await workspaceGetLlmModel({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: workspaceGetLlmModelQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await workspaceGetLlmModel({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: workspaceGetLlmModelQueryKey(options)
 });
 
 /**
  * Update a model on your AI provider
  */
 export const workspaceUpdateLlmModelMutation = (options?: Partial<Options<WorkspaceUpdateLlmModelData>>): UseMutationOptions<WorkspaceUpdateLlmModelResponse, DefaultError, Options<WorkspaceUpdateLlmModelData>> => {
-  const mutationOptions: UseMutationOptions<WorkspaceUpdateLlmModelResponse, DefaultError, Options<WorkspaceUpdateLlmModelData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await workspaceUpdateLlmModel({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<WorkspaceUpdateLlmModelResponse, DefaultError, Options<WorkspaceUpdateLlmModelData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await workspaceUpdateLlmModel({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const workspaceGetLlmSettingsQueryKey = (options: Options<WorkspaceGetLlmSettingsData>) => createQueryKey('workspaceGetLlmSettings', options, false, ['Workspace LLM']);
@@ -3055,16 +3055,16 @@ export const workspaceGetLlmSettingsQueryKey = (options: Options<WorkspaceGetLlm
  * Get the instance LLM policy as it applies to this workspace
  */
 export const workspaceGetLlmSettingsOptions = (options: Options<WorkspaceGetLlmSettingsData>) => queryOptions<WorkspaceGetLlmSettingsResponse, DefaultError, WorkspaceGetLlmSettingsResponse, ReturnType<typeof workspaceGetLlmSettingsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await workspaceGetLlmSettings({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: workspaceGetLlmSettingsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await workspaceGetLlmSettings({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: workspaceGetLlmSettingsQueryKey(options)
 });
 
 export const getLlmUsageReportQueryKey = (options: Options<GetLlmUsageReportData>) => createQueryKey('getLlmUsageReport', options, false, ['LLM Usage']);
@@ -3073,72 +3073,72 @@ export const getLlmUsageReportQueryKey = (options: Options<GetLlmUsageReportData
  * Get the workspace's LLM usage report for one month
  */
 export const getLlmUsageReportOptions = (options: Options<GetLlmUsageReportData>) => queryOptions<GetLlmUsageReportResponse, DefaultError, GetLlmUsageReportResponse, ReturnType<typeof getLlmUsageReportQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getLlmUsageReport({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getLlmUsageReportQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getLlmUsageReport({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getLlmUsageReportQueryKey(options)
 });
 
 export const listMembersQueryKey = (options: Options<ListMembersData>) => createQueryKey('listMembers', options, false, ['workspace-membership']);
 
 export const listMembersOptions = (options: Options<ListMembersData>) => queryOptions<ListMembersResponse, DefaultError, ListMembersResponse, ReturnType<typeof listMembersQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listMembers({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listMembersQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listMembers({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listMembersQueryKey(options)
 });
 
 export const listMembersInfiniteQueryKey = (options: Options<ListMembersData>): QueryKey<Options<ListMembersData>> => createQueryKey('listMembers', options, true);
 
 export const listMembersInfiniteOptions = (options: Options<ListMembersData>) => {
-  const opts = infiniteQueryOptions<ListMembersResponse, DefaultError, InfiniteData<ListMembersResponse>, QueryKey<Options<ListMembersData>>, number | Pick<QueryKey<Options<ListMembersData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListMembersData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listMembers({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listMembersInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListMembersResponse, DefaultError, InfiniteData<ListMembersResponse>, QueryKey<Options<ListMembersData>>, number | Pick<QueryKey<Options<ListMembersData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListMembersData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listMembers({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listMembersInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const assignRoleMutation = (options?: Partial<Options<AssignRoleData>>): UseMutationOptions<AssignRoleResponse, DefaultError, Options<AssignRoleData>> => {
-  const mutationOptions: UseMutationOptions<AssignRoleResponse, DefaultError, Options<AssignRoleData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await assignRole({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AssignRoleResponse, DefaultError, Options<AssignRoleData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await assignRole({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getCurrentUserMembershipQueryKey = (options: Options<GetCurrentUserMembershipData>) => createQueryKey('getCurrentUserMembership', options, false, ['workspace-membership']);
@@ -3149,76 +3149,76 @@ export const getCurrentUserMembershipQueryKey = (options: Options<GetCurrentUser
  * One representative membership, with the account's effective workspace role.
  */
 export const getCurrentUserMembershipOptions = (options: Options<GetCurrentUserMembershipData>) => queryOptions<GetCurrentUserMembershipResponse, DefaultError, GetCurrentUserMembershipResponse, ReturnType<typeof getCurrentUserMembershipQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getCurrentUserMembership({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getCurrentUserMembershipQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCurrentUserMembership({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCurrentUserMembershipQueryKey(options)
 });
 
 export const removeMemberMutation = (options?: Partial<Options<RemoveMemberData>>): UseMutationOptions<RemoveMemberResponse, DefaultError, Options<RemoveMemberData>> => {
-  const mutationOptions: UseMutationOptions<RemoveMemberResponse, DefaultError, Options<RemoveMemberData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await removeMember({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RemoveMemberResponse, DefaultError, Options<RemoveMemberData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await removeMember({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getMemberQueryKey = (options: Options<GetMemberData>) => createQueryKey('getMember', options, false, ['workspace-membership']);
 
 export const getMemberOptions = (options: Options<GetMemberData>) => queryOptions<GetMemberResponse, DefaultError, GetMemberResponse, ReturnType<typeof getMemberQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getMember({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getMemberQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getMember({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getMemberQueryKey(options)
 });
 
 export const updateMemberVisibilityMutation = (options?: Partial<Options<UpdateMemberVisibilityData>>): UseMutationOptions<UpdateMemberVisibilityResponse, DefaultError, Options<UpdateMemberVisibilityData>> => {
-  const mutationOptions: UseMutationOptions<UpdateMemberVisibilityResponse, DefaultError, Options<UpdateMemberVisibilityData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateMemberVisibility({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateMemberVisibilityResponse, DefaultError, Options<UpdateMemberVisibilityData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateMemberVisibility({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Prepare the current member's Heph sandbox in the background
  */
 export const prepareMentorSandboxMutation = (options?: Partial<Options<PrepareMentorSandboxData>>): UseMutationOptions<unknown, DefaultError, Options<PrepareMentorSandboxData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<PrepareMentorSandboxData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await prepareMentorSandbox({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<PrepareMentorSandboxData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await prepareMentorSandbox({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listThreadsQueryKey = (options: Options<ListThreadsData>) => createQueryKey('listThreads', options, false, ['Mentor Threads']);
@@ -3227,33 +3227,33 @@ export const listThreadsQueryKey = (options: Options<ListThreadsData>) => create
  * List the current user's mentor threads in this workspace
  */
 export const listThreadsOptions = (options: Options<ListThreadsData>) => queryOptions<ListThreadsResponse, DefaultError, ListThreadsResponse, ReturnType<typeof listThreadsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listThreads({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listThreadsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listThreads({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listThreadsQueryKey(options)
 });
 
 /**
  * Delete a mentor thread (cascades to messages, votes, parts)
  */
 export const deleteThreadMutation = (options?: Partial<Options<DeleteThreadData>>): UseMutationOptions<DeleteThreadResponse, DefaultError, Options<DeleteThreadData>> => {
-  const mutationOptions: UseMutationOptions<DeleteThreadResponse, DefaultError, Options<DeleteThreadData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await deleteThread({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<DeleteThreadResponse, DefaultError, Options<DeleteThreadData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deleteThread({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getThreadQueryKey = (options: Options<GetThreadData>) => createQueryKey('getThread', options, false, ['Mentor Threads']);
@@ -3262,50 +3262,50 @@ export const getThreadQueryKey = (options: Options<GetThreadData>) => createQuer
  * Get a mentor thread with its full message history
  */
 export const getThreadOptions = (options: Options<GetThreadData>) => queryOptions<GetThreadResponse, DefaultError, GetThreadResponse, ReturnType<typeof getThreadQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getThread({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getThreadQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getThread({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getThreadQueryKey(options)
 });
 
 /**
  * Remove a vote on an assistant message (idempotent)
  */
 export const removeVoteMutation = (options?: Partial<Options<RemoveVoteData>>): UseMutationOptions<RemoveVoteResponse, DefaultError, Options<RemoveVoteData>> => {
-  const mutationOptions: UseMutationOptions<RemoveVoteResponse, DefaultError, Options<RemoveVoteData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await removeVote({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RemoveVoteResponse, DefaultError, Options<RemoveVoteData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await removeVote({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Upsert a vote on an assistant message
  */
 export const voteMutation = (options?: Partial<Options<VoteData>>): UseMutationOptions<VoteResponse, DefaultError, Options<VoteData>> => {
-  const mutationOptions: UseMutationOptions<VoteResponse, DefaultError, Options<VoteData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await vote({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<VoteResponse, DefaultError, Options<VoteData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await vote({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getMemberOnboardingQueryKey = (options: Options<GetMemberOnboardingData>) => createQueryKey('getMemberOnboarding', options, false, ['workspace-onboarding']);
@@ -3314,50 +3314,50 @@ export const getMemberOnboardingQueryKey = (options: Options<GetMemberOnboarding
  * Get your first-visit setup and AI choice in this workspace
  */
 export const getMemberOnboardingOptions = (options: Options<GetMemberOnboardingData>) => queryOptions<GetMemberOnboardingResponse, DefaultError, GetMemberOnboardingResponse, ReturnType<typeof getMemberOnboardingQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getMemberOnboarding({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getMemberOnboardingQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getMemberOnboarding({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getMemberOnboardingQueryKey(options)
 });
 
 /**
  * Change your AI choice without changing workspace membership
  */
 export const updateMemberAiChoiceMutation = (options?: Partial<Options<UpdateMemberAiChoiceData>>): UseMutationOptions<UpdateMemberAiChoiceResponse, DefaultError, Options<UpdateMemberAiChoiceData>> => {
-  const mutationOptions: UseMutationOptions<UpdateMemberAiChoiceResponse, DefaultError, Options<UpdateMemberAiChoiceData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateMemberAiChoice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateMemberAiChoiceResponse, DefaultError, Options<UpdateMemberAiChoiceData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateMemberAiChoice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Skip first-visit setup for now without treating that as an AI choice
  */
 export const dismissMemberOnboardingMutation = (options?: Partial<Options<DismissMemberOnboardingData>>): UseMutationOptions<DismissMemberOnboardingResponse, DefaultError, Options<DismissMemberOnboardingData>> => {
-  const mutationOptions: UseMutationOptions<DismissMemberOnboardingResponse, DefaultError, Options<DismissMemberOnboardingData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await dismissMemberOnboarding({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<DismissMemberOnboardingResponse, DefaultError, Options<DismissMemberOnboardingData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await dismissMemberOnboarding({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getMemberOnboardingSettingsQueryKey = (options: Options<GetMemberOnboardingSettingsData>) => createQueryKey('getMemberOnboardingSettings', options, false, ['workspace-onboarding']);
@@ -3366,33 +3366,33 @@ export const getMemberOnboardingSettingsQueryKey = (options: Options<GetMemberOn
  * Get this workspace's member-onboarding settings
  */
 export const getMemberOnboardingSettingsOptions = (options: Options<GetMemberOnboardingSettingsData>) => queryOptions<GetMemberOnboardingSettingsResponse, DefaultError, GetMemberOnboardingSettingsResponse, ReturnType<typeof getMemberOnboardingSettingsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getMemberOnboardingSettings({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getMemberOnboardingSettingsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getMemberOnboardingSettings({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getMemberOnboardingSettingsQueryKey(options)
 });
 
 /**
  * Configure first-visit setup and required workspace account links
  */
 export const updateMemberOnboardingSettingsMutation = (options?: Partial<Options<UpdateMemberOnboardingSettingsData>>): UseMutationOptions<UpdateMemberOnboardingSettingsResponse, DefaultError, Options<UpdateMemberOnboardingSettingsData>> => {
-  const mutationOptions: UseMutationOptions<UpdateMemberOnboardingSettingsResponse, DefaultError, Options<UpdateMemberOnboardingSettingsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateMemberOnboardingSettings({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateMemberOnboardingSettingsResponse, DefaultError, Options<UpdateMemberOnboardingSettingsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateMemberOnboardingSettings({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getMemberOnboardingLinkOptionsQueryKey = (options: Options<GetMemberOnboardingLinkOptionsData>) => createQueryKey('getMemberOnboardingLinkOptions', options, false, ['workspace-onboarding']);
@@ -3401,16 +3401,16 @@ export const getMemberOnboardingLinkOptionsQueryKey = (options: Options<GetMembe
  * List workspace account links available for onboarding requirements
  */
 export const getMemberOnboardingLinkOptionsOptions = (options: Options<GetMemberOnboardingLinkOptionsData>) => queryOptions<GetMemberOnboardingLinkOptionsResponse, DefaultError, GetMemberOnboardingLinkOptionsResponse, ReturnType<typeof getMemberOnboardingLinkOptionsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getMemberOnboardingLinkOptions({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getMemberOnboardingLinkOptionsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getMemberOnboardingLinkOptions({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getMemberOnboardingLinkOptionsQueryKey(options)
 });
 
 export const listOutlineCollectionsQueryKey = (options: Options<ListOutlineCollectionsData>) => createQueryKey('listOutlineCollections', options, false, ['Outline collections']);
@@ -3419,33 +3419,33 @@ export const listOutlineCollectionsQueryKey = (options: Options<ListOutlineColle
  * List the workspace's mirrored Outline collections with their sync state
  */
 export const listOutlineCollectionsOptions = (options: Options<ListOutlineCollectionsData>) => queryOptions<ListOutlineCollectionsResponse, DefaultError, ListOutlineCollectionsResponse, ReturnType<typeof listOutlineCollectionsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listOutlineCollections({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listOutlineCollectionsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listOutlineCollections({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listOutlineCollectionsQueryKey(options)
 });
 
 /**
  * Register an Outline collection for mirroring (lands ENABLED + PENDING; idempotent on the id)
  */
 export const registerOutlineCollectionMutation = (options?: Partial<Options<RegisterOutlineCollectionData>>): UseMutationOptions<RegisterOutlineCollectionResponse, DefaultError, Options<RegisterOutlineCollectionData>> => {
-  const mutationOptions: UseMutationOptions<RegisterOutlineCollectionResponse, DefaultError, Options<RegisterOutlineCollectionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await registerOutlineCollection({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RegisterOutlineCollectionResponse, DefaultError, Options<RegisterOutlineCollectionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await registerOutlineCollection({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listOutlineCollectionCandidatesQueryKey = (options: Options<ListOutlineCollectionCandidatesData>) => createQueryKey('listOutlineCollectionCandidates', options, false, ['Outline collections']);
@@ -3456,33 +3456,33 @@ export const listOutlineCollectionCandidatesQueryKey = (options: Options<ListOut
  * Proxies Outline's collections.list with the stored token under a bounded interactive page budget. Served with Cache-Control: no-store — the live upstream view must not be cached.
  */
 export const listOutlineCollectionCandidatesOptions = (options: Options<ListOutlineCollectionCandidatesData>) => queryOptions<ListOutlineCollectionCandidatesResponse, DefaultError, ListOutlineCollectionCandidatesResponse, ReturnType<typeof listOutlineCollectionCandidatesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listOutlineCollectionCandidates({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listOutlineCollectionCandidatesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listOutlineCollectionCandidates({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listOutlineCollectionCandidatesQueryKey(options)
 });
 
 /**
  * Remove a collection from the mirror and erase its mirrored documents (terminal)
  */
 export const deleteOutlineCollectionMutation = (options?: Partial<Options<DeleteOutlineCollectionData>>): UseMutationOptions<DeleteOutlineCollectionResponse, DefaultError, Options<DeleteOutlineCollectionData>> => {
-  const mutationOptions: UseMutationOptions<DeleteOutlineCollectionResponse, DefaultError, Options<DeleteOutlineCollectionData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await deleteOutlineCollection({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<DeleteOutlineCollectionResponse, DefaultError, Options<DeleteOutlineCollectionData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deleteOutlineCollection({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getOutlineCollectionQueryKey = (options: Options<GetOutlineCollectionData>) => createQueryKey('getOutlineCollection', options, false, ['Outline collections']);
@@ -3491,16 +3491,16 @@ export const getOutlineCollectionQueryKey = (options: Options<GetOutlineCollecti
  * One mirrored Outline collection with its sync state and live document count
  */
 export const getOutlineCollectionOptions = (options: Options<GetOutlineCollectionData>) => queryOptions<GetOutlineCollectionResponse, DefaultError, GetOutlineCollectionResponse, ReturnType<typeof getOutlineCollectionQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getOutlineCollection({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getOutlineCollectionQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getOutlineCollection({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getOutlineCollectionQueryKey(options)
 });
 
 /**
@@ -3509,17 +3509,17 @@ export const getOutlineCollectionOptions = (options: Options<GetOutlineCollectio
  * Resuming (PAUSED → ENABLED) resets the sync status to PENDING and kicks a targeted sync; requesting the current state is an idempotent no-op.
  */
 export const updateOutlineCollectionStateMutation = (options?: Partial<Options<UpdateOutlineCollectionStateData>>): UseMutationOptions<UpdateOutlineCollectionStateResponse, DefaultError, Options<UpdateOutlineCollectionStateData>> => {
-  const mutationOptions: UseMutationOptions<UpdateOutlineCollectionStateResponse, DefaultError, Options<UpdateOutlineCollectionStateData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateOutlineCollectionState({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateOutlineCollectionStateResponse, DefaultError, Options<UpdateOutlineCollectionStateData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateOutlineCollectionState({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listAdoptablePracticesQueryKey = (options: Options<ListAdoptablePracticesData>) => createQueryKey('listAdoptablePractices', options, false, ['Practice Catalog Adoption']);
@@ -3528,16 +3528,16 @@ export const listAdoptablePracticesQueryKey = (options: Options<ListAdoptablePra
  * List practices available for adoption
  */
 export const listAdoptablePracticesOptions = (options: Options<ListAdoptablePracticesData>) => queryOptions<ListAdoptablePracticesResponse, ListAdoptablePracticesError, ListAdoptablePracticesResponse, ReturnType<typeof listAdoptablePracticesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listAdoptablePractices({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listAdoptablePracticesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listAdoptablePractices({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listAdoptablePracticesQueryKey(options)
 });
 
 export const previewGroupAdoptionQueryKey = (options: Options<PreviewGroupAdoptionData>) => createQueryKey('previewGroupAdoption', options, false, ['Practice Catalog Adoption']);
@@ -3546,33 +3546,33 @@ export const previewGroupAdoptionQueryKey = (options: Options<PreviewGroupAdopti
  * Preview adoption of a catalog group and its practices
  */
 export const previewGroupAdoptionOptions = (options: Options<PreviewGroupAdoptionData>) => queryOptions<PreviewGroupAdoptionResponse, DefaultError, PreviewGroupAdoptionResponse, ReturnType<typeof previewGroupAdoptionQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await previewGroupAdoption({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: previewGroupAdoptionQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await previewGroupAdoption({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: previewGroupAdoptionQueryKey(options)
 });
 
 /**
  * Adopt all available practices in a catalog group
  */
 export const adoptGroupMutation = (options?: Partial<Options<AdoptGroupData>>): UseMutationOptions<AdoptGroupResponse, DefaultError, Options<AdoptGroupData>> => {
-  const mutationOptions: UseMutationOptions<AdoptGroupResponse, DefaultError, Options<AdoptGroupData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adoptGroup({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdoptGroupResponse, DefaultError, Options<AdoptGroupData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adoptGroup({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const previewPracticeAdoptionQueryKey = (options: Options<PreviewPracticeAdoptionData>) => createQueryKey('previewPracticeAdoption', options, false, ['Practice Catalog Adoption']);
@@ -3581,33 +3581,33 @@ export const previewPracticeAdoptionQueryKey = (options: Options<PreviewPractice
  * Get a practice adoption preview
  */
 export const previewPracticeAdoptionOptions = (options: Options<PreviewPracticeAdoptionData>) => queryOptions<PreviewPracticeAdoptionResponse, PreviewPracticeAdoptionError, PreviewPracticeAdoptionResponse, ReturnType<typeof previewPracticeAdoptionQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await previewPracticeAdoption({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: previewPracticeAdoptionQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await previewPracticeAdoption({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: previewPracticeAdoptionQueryKey(options)
 });
 
 /**
  * Adopt a catalog practice
  */
 export const adoptPracticeMutation = (options?: Partial<Options<AdoptPracticeData>>): UseMutationOptions<AdoptPracticeResponse, AdoptPracticeError, Options<AdoptPracticeData>> => {
-  const mutationOptions: UseMutationOptions<AdoptPracticeResponse, AdoptPracticeError, Options<AdoptPracticeData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await adoptPractice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AdoptPracticeResponse, AdoptPracticeError, Options<AdoptPracticeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await adoptPractice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getCuratedPracticeCatalogEntryQueryKey = (options: Options<GetCuratedPracticeCatalogEntryData>) => createQueryKey('getCuratedPracticeCatalogEntry', options, false, ['Practice Catalog']);
@@ -3618,16 +3618,16 @@ export const getCuratedPracticeCatalogEntryQueryKey = (options: Options<GetCurat
  * The current instance-catalog definition for comparison with a workspace copy.
  */
 export const getCuratedPracticeCatalogEntryOptions = (options: Options<GetCuratedPracticeCatalogEntryData>) => queryOptions<GetCuratedPracticeCatalogEntryResponse, DefaultError, GetCuratedPracticeCatalogEntryResponse, ReturnType<typeof getCuratedPracticeCatalogEntryQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getCuratedPracticeCatalogEntry({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getCuratedPracticeCatalogEntryQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getCuratedPracticeCatalogEntry({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getCuratedPracticeCatalogEntryQueryKey(options)
 });
 
 export const listGroupsQueryKey = (options: Options<ListGroupsData>) => createQueryKey('listGroups', options, false, ['Practice Groups']);
@@ -3638,33 +3638,33 @@ export const listGroupsQueryKey = (options: Options<ListGroupsData>) => createQu
  * Returns the workspace's practice groups
  */
 export const listGroupsOptions = (options: Options<ListGroupsData>) => queryOptions<ListGroupsResponse, DefaultError, ListGroupsResponse, ReturnType<typeof listGroupsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listGroups({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listGroupsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listGroups({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listGroupsQueryKey(options)
 });
 
 /**
  * Create a new practice group
  */
 export const createGroupMutation = (options?: Partial<Options<CreateGroupData>>): UseMutationOptions<CreateGroupResponse, DefaultError, Options<CreateGroupData>> => {
-  const mutationOptions: UseMutationOptions<CreateGroupResponse, DefaultError, Options<CreateGroupData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await createGroup({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<CreateGroupResponse, DefaultError, Options<CreateGroupData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await createGroup({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -3673,17 +3673,17 @@ export const createGroupMutation = (options?: Partial<Options<CreateGroupData>>)
  * Sets each group's display order to its index in the provided slug list (one atomic write)
  */
 export const reorderGroupsMutation = (options?: Partial<Options<ReorderGroupsData>>): UseMutationOptions<ReorderGroupsResponse, DefaultError, Options<ReorderGroupsData>> => {
-  const mutationOptions: UseMutationOptions<ReorderGroupsResponse, DefaultError, Options<ReorderGroupsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await reorderGroups({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<ReorderGroupsResponse, DefaultError, Options<ReorderGroupsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await reorderGroups({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listPracticeGroupStandingsQueryKey = (options: Options<ListPracticeGroupStandingsData>) => createQueryKey('listPracticeGroupStandings', options, false, ['Practice Group Standings']);
@@ -3694,16 +3694,16 @@ export const listPracticeGroupStandingsQueryKey = (options: Options<ListPractice
  * Returns every active practice group's standing, direction, guidance, and supporting observations.
  */
 export const listPracticeGroupStandingsOptions = (options: Options<ListPracticeGroupStandingsData>) => queryOptions<ListPracticeGroupStandingsResponse, DefaultError, ListPracticeGroupStandingsResponse, ReturnType<typeof listPracticeGroupStandingsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listPracticeGroupStandings({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listPracticeGroupStandingsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listPracticeGroupStandings({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listPracticeGroupStandingsQueryKey(options)
 });
 
 /**
@@ -3712,17 +3712,17 @@ export const listPracticeGroupStandingsOptions = (options: Options<ListPracticeG
  * Deletes the group. By default its practices move to Unassigned; deletePractices=true deletes them too.
  */
 export const deleteGroupMutation = (options?: Partial<Options<DeleteGroupData>>): UseMutationOptions<DeleteGroupResponse, DefaultError, Options<DeleteGroupData>> => {
-  const mutationOptions: UseMutationOptions<DeleteGroupResponse, DefaultError, Options<DeleteGroupData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await deleteGroup({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<DeleteGroupResponse, DefaultError, Options<DeleteGroupData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deleteGroup({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getGroupQueryKey = (options: Options<GetGroupData>) => createQueryKey('getGroup', options, false, ['Practice Groups']);
@@ -3731,33 +3731,33 @@ export const getGroupQueryKey = (options: Options<GetGroupData>) => createQueryK
  * Get a practice group
  */
 export const getGroupOptions = (options: Options<GetGroupData>) => queryOptions<GetGroupResponse, DefaultError, GetGroupResponse, ReturnType<typeof getGroupQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getGroup({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getGroupQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getGroup({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getGroupQueryKey(options)
 });
 
 /**
  * Update a practice group
  */
 export const updateGroupMutation = (options?: Partial<Options<UpdateGroupData>>): UseMutationOptions<UpdateGroupResponse, DefaultError, Options<UpdateGroupData>> => {
-  const mutationOptions: UseMutationOptions<UpdateGroupResponse, DefaultError, Options<UpdateGroupData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateGroup({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateGroupResponse, DefaultError, Options<UpdateGroupData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateGroup({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -3766,17 +3766,17 @@ export const updateGroupMutation = (options?: Partial<Options<UpdateGroupData>>)
  * Applies to every practice in the group that holds no autonomy of its own; practices that set their own are left alone. OFF stops their reviews entirely. HUMAN_APPROVAL runs them and records every observation, holds feedback on the work for an authorized reviewer, and still writes the developer's practice pages and the mentor, which are read on request. AUTOMATIC sends feedback on the work without asking. Send a null autonomy to clear the group's own setting so it follows the workspace default.
  */
 export const setGroupAutonomyMutation = (options?: Partial<Options<SetGroupAutonomyData>>): UseMutationOptions<SetGroupAutonomyResponse, DefaultError, Options<SetGroupAutonomyData>> => {
-  const mutationOptions: UseMutationOptions<SetGroupAutonomyResponse, DefaultError, Options<SetGroupAutonomyData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await setGroupAutonomy({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<SetGroupAutonomyResponse, DefaultError, Options<SetGroupAutonomyData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await setGroupAutonomy({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listPracticeGroupReviewRunsQueryKey = (options: Options<ListPracticeGroupReviewRunsData>) => createQueryKey('listPracticeGroupReviewRuns', options, false, ['Practice Group Detail']);
@@ -3787,16 +3787,16 @@ export const listPracticeGroupReviewRunsQueryKey = (options: Options<ListPractic
  * Returns complete review runs newest first, including visible undecided observations.
  */
 export const listPracticeGroupReviewRunsOptions = (options: Options<ListPracticeGroupReviewRunsData>) => queryOptions<ListPracticeGroupReviewRunsResponse, ListPracticeGroupReviewRunsError, ListPracticeGroupReviewRunsResponse, ReturnType<typeof listPracticeGroupReviewRunsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listPracticeGroupReviewRuns({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listPracticeGroupReviewRunsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listPracticeGroupReviewRuns({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listPracticeGroupReviewRunsQueryKey(options)
 });
 
 export const listPracticeGroupReviewRunsInfiniteQueryKey = (options: Options<ListPracticeGroupReviewRunsData>): QueryKey<Options<ListPracticeGroupReviewRunsData>> => createQueryKey('listPracticeGroupReviewRuns', options, true);
@@ -3807,28 +3807,28 @@ export const listPracticeGroupReviewRunsInfiniteQueryKey = (options: Options<Lis
  * Returns complete review runs newest first, including visible undecided observations.
  */
 export const listPracticeGroupReviewRunsInfiniteOptions = (options: Options<ListPracticeGroupReviewRunsData>) => {
-  const opts = infiniteQueryOptions<ListPracticeGroupReviewRunsResponse, ListPracticeGroupReviewRunsError, InfiniteData<ListPracticeGroupReviewRunsResponse>, QueryKey<Options<ListPracticeGroupReviewRunsData>>, number | Pick<QueryKey<Options<ListPracticeGroupReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListPracticeGroupReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listPracticeGroupReviewRuns({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listPracticeGroupReviewRunsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListPracticeGroupReviewRunsResponse, ListPracticeGroupReviewRunsError, InfiniteData<ListPracticeGroupReviewRunsResponse>, QueryKey<Options<ListPracticeGroupReviewRunsData>>, number | Pick<QueryKey<Options<ListPracticeGroupReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListPracticeGroupReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listPracticeGroupReviewRuns({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listPracticeGroupReviewRunsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const getPracticeGroupTrendQueryKey = (options: Options<GetPracticeGroupTrendData>) => createQueryKey('getPracticeGroupTrend', options, false, ['Practice Group Detail']);
@@ -3839,16 +3839,16 @@ export const getPracticeGroupTrendQueryKey = (options: Options<GetPracticeGroupT
  * Returns the group direction and every eligible practice direction with inspectable support.
  */
 export const getPracticeGroupTrendOptions = (options: Options<GetPracticeGroupTrendData>) => queryOptions<GetPracticeGroupTrendResponse, DefaultError, GetPracticeGroupTrendResponse, ReturnType<typeof getPracticeGroupTrendQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticeGroupTrend({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticeGroupTrendQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticeGroupTrend({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticeGroupTrendQueryKey(options)
 });
 
 export const getPracticeProfileOverviewQueryKey = (options: Options<GetPracticeProfileOverviewData>) => createQueryKey('getPracticeProfileOverview', options, false, ['Practice Profile']);
@@ -3859,16 +3859,16 @@ export const getPracticeProfileOverviewQueryKey = (options: Options<GetPracticeP
  * Returns the practices met as a strength, every change to a standing, trend, group or piece of feedback inside the window, and the work reviewed inside it, as structured events. The window opens at the run before the latest one and closes now; with no such run it spans the standing's look-back of 90 days.
  */
 export const getPracticeProfileOverviewOptions = (options: Options<GetPracticeProfileOverviewData>) => queryOptions<GetPracticeProfileOverviewResponse, DefaultError, GetPracticeProfileOverviewResponse, ReturnType<typeof getPracticeProfileOverviewQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticeProfileOverview({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticeProfileOverviewQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticeProfileOverview({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticeProfileOverviewQueryKey(options)
 });
 
 export const listPracticeProfileReviewRunsQueryKey = (options: Options<ListPracticeProfileReviewRunsData>) => createQueryKey('listPracticeProfileReviewRuns', options, false, ['Practice Profile']);
@@ -3879,16 +3879,16 @@ export const listPracticeProfileReviewRunsQueryKey = (options: Options<ListPract
  * One row per run that recorded an observation about the calling developer, across every practice group, with what that run found about them. Counts are narrowed to this developer: a run over shared work says nothing here about anybody else.
  */
 export const listPracticeProfileReviewRunsOptions = (options: Options<ListPracticeProfileReviewRunsData>) => queryOptions<ListPracticeProfileReviewRunsResponse, ListPracticeProfileReviewRunsError, ListPracticeProfileReviewRunsResponse, ReturnType<typeof listPracticeProfileReviewRunsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listPracticeProfileReviewRuns({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listPracticeProfileReviewRunsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listPracticeProfileReviewRuns({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listPracticeProfileReviewRunsQueryKey(options)
 });
 
 export const listPracticeProfileReviewRunsInfiniteQueryKey = (options: Options<ListPracticeProfileReviewRunsData>): QueryKey<Options<ListPracticeProfileReviewRunsData>> => createQueryKey('listPracticeProfileReviewRuns', options, true);
@@ -3899,28 +3899,28 @@ export const listPracticeProfileReviewRunsInfiniteQueryKey = (options: Options<L
  * One row per run that recorded an observation about the calling developer, across every practice group, with what that run found about them. Counts are narrowed to this developer: a run over shared work says nothing here about anybody else.
  */
 export const listPracticeProfileReviewRunsInfiniteOptions = (options: Options<ListPracticeProfileReviewRunsData>) => {
-  const opts = infiniteQueryOptions<ListPracticeProfileReviewRunsResponse, ListPracticeProfileReviewRunsError, InfiniteData<ListPracticeProfileReviewRunsResponse>, QueryKey<Options<ListPracticeProfileReviewRunsData>>, number | Pick<QueryKey<Options<ListPracticeProfileReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListPracticeProfileReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listPracticeProfileReviewRuns({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listPracticeProfileReviewRunsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListPracticeProfileReviewRunsResponse, ListPracticeProfileReviewRunsError, InfiniteData<ListPracticeProfileReviewRunsResponse>, QueryKey<Options<ListPracticeProfileReviewRunsData>>, number | Pick<QueryKey<Options<ListPracticeProfileReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListPracticeProfileReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listPracticeProfileReviewRuns({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listPracticeProfileReviewRunsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const getPracticeProfileReviewRunQueryKey = (options: Options<GetPracticeProfileReviewRunData>) => createQueryKey('getPracticeProfileReviewRun', options, false, ['Practice Profile']);
@@ -3931,16 +3931,16 @@ export const getPracticeProfileReviewRunQueryKey = (options: Options<GetPractice
  * A run that recorded nothing about the calling developer is not theirs to read and answers 404, the same answer a run in another workspace gets.
  */
 export const getPracticeProfileReviewRunOptions = (options: Options<GetPracticeProfileReviewRunData>) => queryOptions<GetPracticeProfileReviewRunResponse, GetPracticeProfileReviewRunError, GetPracticeProfileReviewRunResponse, ReturnType<typeof getPracticeProfileReviewRunQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticeProfileReviewRun({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticeProfileReviewRunQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticeProfileReviewRun({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticeProfileReviewRunQueryKey(options)
 });
 
 export const listPracticesQueryKey = (options: Options<ListPracticesData>) => createQueryKey('listPractices', options, false, ['Practice Catalog']);
@@ -3951,33 +3951,33 @@ export const listPracticesQueryKey = (options: Options<ListPracticesData>) => cr
  * Returns this workspace's practices, each with the autonomy in force for it, whether that autonomy was set on the practice or inherited from its group or the workspace, and which level decided it. Optionally narrowed to one autonomy.
  */
 export const listPracticesOptions = (options: Options<ListPracticesData>) => queryOptions<ListPracticesResponse, DefaultError, ListPracticesResponse, ReturnType<typeof listPracticesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listPractices({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listPracticesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listPractices({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listPracticesQueryKey(options)
 });
 
 /**
  * Create a new practice definition
  */
 export const createPracticeMutation = (options?: Partial<Options<CreatePracticeData>>): UseMutationOptions<CreatePracticeResponse, CreatePracticeError, Options<CreatePracticeData>> => {
-  const mutationOptions: UseMutationOptions<CreatePracticeResponse, CreatePracticeError, Options<CreatePracticeData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await createPractice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<CreatePracticeResponse, CreatePracticeError, Options<CreatePracticeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await createPractice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const autonomyRollupQueryKey = (options: Options<AutonomyRollupData>) => createQueryKey('autonomyRollup', options, false, ['Practice Catalog']);
@@ -3988,16 +3988,16 @@ export const autonomyRollupQueryKey = (options: Options<AutonomyRollupData>) => 
  * How many practices sit at each autonomy, for the whole workspace and for each group, plus the workspace default and where feedback may go. The summary a hundred-practice catalogue is read through — answered here so a client never has to fetch every practice to count them.
  */
 export const autonomyRollupOptions = (options: Options<AutonomyRollupData>) => queryOptions<AutonomyRollupResponse, DefaultError, AutonomyRollupResponse, ReturnType<typeof autonomyRollupQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await autonomyRollup({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: autonomyRollupQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await autonomyRollup({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: autonomyRollupQueryKey(options)
 });
 
 export const listBackfillRunsQueryKey = (options: Options<ListBackfillRunsData>) => createQueryKey('listBackfillRuns', options, false, ['Practice Review Backfill']);
@@ -4006,16 +4006,16 @@ export const listBackfillRunsQueryKey = (options: Options<ListBackfillRunsData>)
  * List this workspace's recent backfill campaigns
  */
 export const listBackfillRunsOptions = (options: Options<ListBackfillRunsData>) => queryOptions<ListBackfillRunsResponse, DefaultError, ListBackfillRunsResponse, ReturnType<typeof listBackfillRunsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listBackfillRuns({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listBackfillRunsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listBackfillRuns({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listBackfillRunsQueryKey(options)
 });
 
 /**
@@ -4024,17 +4024,17 @@ export const listBackfillRunsOptions = (options: Options<ListBackfillRunsData>) 
  * Creates a run awaiting confirmation. Submits nothing and spends nothing.
  */
 export const preflightBackfillRunMutation = (options?: Partial<Options<PreflightBackfillRunData>>): UseMutationOptions<PreflightBackfillRunResponse, PreflightBackfillRunError, Options<PreflightBackfillRunData>> => {
-  const mutationOptions: UseMutationOptions<PreflightBackfillRunResponse, PreflightBackfillRunError, Options<PreflightBackfillRunData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await preflightBackfillRun({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<PreflightBackfillRunResponse, PreflightBackfillRunError, Options<PreflightBackfillRunData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await preflightBackfillRun({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getBackfillRunQueryKey = (options: Options<GetBackfillRunData>) => createQueryKey('getBackfillRun', options, false, ['Practice Review Backfill']);
@@ -4043,16 +4043,16 @@ export const getBackfillRunQueryKey = (options: Options<GetBackfillRunData>) => 
  * Get one backfill campaign, including its live progress
  */
 export const getBackfillRunOptions = (options: Options<GetBackfillRunData>) => queryOptions<GetBackfillRunResponse, GetBackfillRunError, GetBackfillRunResponse, ReturnType<typeof getBackfillRunQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getBackfillRun({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getBackfillRunQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getBackfillRun({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getBackfillRunQueryKey(options)
 });
 
 /**
@@ -4061,17 +4061,17 @@ export const getBackfillRunOptions = (options: Options<GetBackfillRunData>) => q
  * RUNNING authorises the estimated spend and starts the campaign; CANCELLED stops it for good.
  */
 export const updateBackfillRunStatusMutation = (options?: Partial<Options<UpdateBackfillRunStatusData>>): UseMutationOptions<UpdateBackfillRunStatusResponse, UpdateBackfillRunStatusError, Options<UpdateBackfillRunStatusData>> => {
-  const mutationOptions: UseMutationOptions<UpdateBackfillRunStatusResponse, UpdateBackfillRunStatusError, Options<UpdateBackfillRunStatusData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateBackfillRunStatus({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateBackfillRunStatusResponse, UpdateBackfillRunStatusError, Options<UpdateBackfillRunStatusData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateBackfillRunStatus({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getPracticeDefinitionOptionsQueryKey = (options: Options<GetPracticeDefinitionOptionsData>) => createQueryKey('getPracticeDefinitionOptions', options, false, ['Practice Catalog']);
@@ -4082,16 +4082,16 @@ export const getPracticeDefinitionOptionsQueryKey = (options: Options<GetPractic
  * Returns available review events, recommended requirements, and allowed evidence sources by work type
  */
 export const getPracticeDefinitionOptionsOptions = (options: Options<GetPracticeDefinitionOptionsData>) => queryOptions<GetPracticeDefinitionOptionsResponse, DefaultError, GetPracticeDefinitionOptionsResponse, ReturnType<typeof getPracticeDefinitionOptionsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticeDefinitionOptions({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticeDefinitionOptionsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticeDefinitionOptions({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticeDefinitionOptionsQueryKey(options)
 });
 
 export const getInAppFeedbackQueryKey = (options: Options<GetInAppFeedbackData>) => createQueryKey('getInAppFeedback', options, false, ['In-App Feedback']);
@@ -4102,16 +4102,16 @@ export const getInAppFeedbackQueryKey = (options: Options<GetInAppFeedbackData>)
  * Process-level messages prepared for the authenticated developer: for each way of working that recurs in their work, what the pattern is, the pieces of work it was observed on, and one thing to try next. Distinct from in-context notes (which say what is wrong in one diff) and from the mentor conversation (which asks rather than tells). Reading a message is what delivers it, so this GET records the delivery.
  */
 export const getInAppFeedbackOptions = (options: Options<GetInAppFeedbackData>) => queryOptions<GetInAppFeedbackResponse, DefaultError, GetInAppFeedbackResponse, ReturnType<typeof getInAppFeedbackQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getInAppFeedback({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getInAppFeedbackQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getInAppFeedback({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getInAppFeedbackQueryKey(options)
 });
 
 export const getOwnDeliveredWorkFeedbackQueryKey = (options: Options<GetOwnDeliveredWorkFeedbackData>) => createQueryKey('getOwnDeliveredWorkFeedback', options, false, ['Practice feedback']);
@@ -4122,16 +4122,16 @@ export const getOwnDeliveredWorkFeedbackQueryKey = (options: Options<GetOwnDeliv
  * Read-only metadata for up to 50 in-context pieces of feedback addressed to the caller with recorded provider comments, newest delivery first. Uses the exact connected-provider work lookup. Only recorded successful placements are included, even when the remaining delivery failed. Incomplete units omit draft practice metadata. No bodies, private channels or replaced feedback; admin status does not broaden the recipient. Permalinks are recorded provider links, not live existence checks.
  */
 export const getOwnDeliveredWorkFeedbackOptions = (options: Options<GetOwnDeliveredWorkFeedbackData>) => queryOptions<GetOwnDeliveredWorkFeedbackResponse, DefaultError, GetOwnDeliveredWorkFeedbackResponse, ReturnType<typeof getOwnDeliveredWorkFeedbackQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getOwnDeliveredWorkFeedback({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getOwnDeliveredWorkFeedbackQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getOwnDeliveredWorkFeedback({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getOwnDeliveredWorkFeedbackQueryKey(options)
 });
 
 export const getFeedbackResolutionCountsQueryKey = (options: Options<GetFeedbackResolutionCountsData>) => createQueryKey('getFeedbackResolutionCounts', options, false, ['Feedback Response']);
@@ -4140,33 +4140,33 @@ export const getFeedbackResolutionCountsQueryKey = (options: Options<GetFeedback
  * Get feedback resolution counts
  */
 export const getFeedbackResolutionCountsOptions = (options: Options<GetFeedbackResolutionCountsData>) => queryOptions<GetFeedbackResolutionCountsResponse, DefaultError, GetFeedbackResolutionCountsResponse, ReturnType<typeof getFeedbackResolutionCountsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getFeedbackResolutionCounts({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getFeedbackResolutionCountsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getFeedbackResolutionCounts({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getFeedbackResolutionCountsQueryKey(options)
 });
 
 /**
  * Delete the response to delivered feedback
  */
 export const deleteFeedbackResponseMutation = (options?: Partial<Options<DeleteFeedbackResponseData>>): UseMutationOptions<DeleteFeedbackResponseResponse, DefaultError, Options<DeleteFeedbackResponseData>> => {
-  const mutationOptions: UseMutationOptions<DeleteFeedbackResponseResponse, DefaultError, Options<DeleteFeedbackResponseData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await deleteFeedbackResponse({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<DeleteFeedbackResponseResponse, DefaultError, Options<DeleteFeedbackResponseData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deleteFeedbackResponse({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getFeedbackResponseQueryKey = (options: Options<GetFeedbackResponseData>) => createQueryKey('getFeedbackResponse', options, false, ['Feedback Response']);
@@ -4175,16 +4175,16 @@ export const getFeedbackResponseQueryKey = (options: Options<GetFeedbackResponse
  * Get the current feedback response
  */
 export const getFeedbackResponseOptions = (options: Options<GetFeedbackResponseData>) => queryOptions<GetFeedbackResponseResponse, DefaultError, GetFeedbackResponseResponse, ReturnType<typeof getFeedbackResponseQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getFeedbackResponse({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getFeedbackResponseQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getFeedbackResponse({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getFeedbackResponseQueryKey(options)
 });
 
 /**
@@ -4193,17 +4193,17 @@ export const getFeedbackResponseOptions = (options: Options<GetFeedbackResponseD
  * Sets the complete current response. Repeating the same request has no effect.
  */
 export const replaceFeedbackResponseMutation = (options?: Partial<Options<ReplaceFeedbackResponseData>>): UseMutationOptions<ReplaceFeedbackResponseResponse, DefaultError, Options<ReplaceFeedbackResponseData>> => {
-  const mutationOptions: UseMutationOptions<ReplaceFeedbackResponseResponse, DefaultError, Options<ReplaceFeedbackResponseData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await replaceFeedbackResponse({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<ReplaceFeedbackResponseResponse, DefaultError, Options<ReplaceFeedbackResponseData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await replaceFeedbackResponse({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listObservationsQueryKey = (options: Options<ListObservationsData>) => createQueryKey('listObservations', options, false, ['Practice Observations']);
@@ -4214,16 +4214,16 @@ export const listObservationsQueryKey = (options: Options<ListObservationsData>)
  * Paginated observations for the authenticated developer with optional filters
  */
 export const listObservationsOptions = (options: Options<ListObservationsData>) => queryOptions<ListObservationsResponse, DefaultError, ListObservationsResponse, ReturnType<typeof listObservationsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listObservations({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listObservationsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listObservations({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listObservationsQueryKey(options)
 });
 
 export const listObservationsInfiniteQueryKey = (options: Options<ListObservationsData>): QueryKey<Options<ListObservationsData>> => createQueryKey('listObservations', options, true);
@@ -4234,28 +4234,28 @@ export const listObservationsInfiniteQueryKey = (options: Options<ListObservatio
  * Paginated observations for the authenticated developer with optional filters
  */
 export const listObservationsInfiniteOptions = (options: Options<ListObservationsData>) => {
-  const opts = infiniteQueryOptions<ListObservationsResponse, DefaultError, InfiniteData<ListObservationsResponse>, QueryKey<Options<ListObservationsData>>, number | Pick<QueryKey<Options<ListObservationsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListObservationsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listObservations({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listObservationsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListObservationsResponse, DefaultError, InfiniteData<ListObservationsResponse>, QueryKey<Options<ListObservationsData>>, number | Pick<QueryKey<Options<ListObservationsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListObservationsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listObservations({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listObservationsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const getSummaryQueryKey = (options: Options<GetSummaryData>) => createQueryKey('getSummary', options, false, ['Practice Observations']);
@@ -4266,16 +4266,16 @@ export const getSummaryQueryKey = (options: Options<GetSummaryData>) => createQu
  * Aggregated observation counts per practice for dashboard cards
  */
 export const getSummaryOptions = (options: Options<GetSummaryData>) => queryOptions<GetSummaryResponse, DefaultError, GetSummaryResponse, ReturnType<typeof getSummaryQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getSummary({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getSummaryQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getSummary({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getSummaryQueryKey(options)
 });
 
 export const getObservationQueryKey = (options: Options<GetObservationData>) => createQueryKey('getObservation', options, false, ['Practice Observations']);
@@ -4284,16 +4284,16 @@ export const getObservationQueryKey = (options: Options<GetObservationData>) => 
  * Get observation detail
  */
 export const getObservationOptions = (options: Options<GetObservationData>) => queryOptions<GetObservationResponse, DefaultError, GetObservationResponse, ReturnType<typeof getObservationQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getObservation({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getObservationQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getObservation({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getObservationQueryKey(options)
 });
 
 export const listPracticeReleasesQueryKey = (options: Options<ListPracticeReleasesData>) => createQueryKey('listPracticeReleases', options, false, ['Practice Catalog']);
@@ -4302,33 +4302,33 @@ export const listPracticeReleasesQueryKey = (options: Options<ListPracticeReleas
  * List pending practice releases
  */
 export const listPracticeReleasesOptions = (options: Options<ListPracticeReleasesData>) => queryOptions<ListPracticeReleasesResponse, DefaultError, ListPracticeReleasesResponse, ReturnType<typeof listPracticeReleasesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listPracticeReleases({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listPracticeReleasesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listPracticeReleases({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listPracticeReleasesQueryKey(options)
 });
 
 /**
  * Decline this version of a practice release
  */
 export const declinePracticeReleaseMutation = (options?: Partial<Options<DeclinePracticeReleaseData>>): UseMutationOptions<DeclinePracticeReleaseResponse, DefaultError, Options<DeclinePracticeReleaseData>> => {
-  const mutationOptions: UseMutationOptions<DeclinePracticeReleaseResponse, DefaultError, Options<DeclinePracticeReleaseData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await declinePracticeRelease({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<DeclinePracticeReleaseResponse, DefaultError, Options<DeclinePracticeReleaseData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await declinePracticeRelease({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getPracticeReleaseQueryKey = (options: Options<GetPracticeReleaseData>) => createQueryKey('getPracticeRelease', options, false, ['Practice Catalog']);
@@ -4337,33 +4337,33 @@ export const getPracticeReleaseQueryKey = (options: Options<GetPracticeReleaseDa
  * Compare the adopted, current, and offered practice
  */
 export const getPracticeReleaseOptions = (options: Options<GetPracticeReleaseData>) => queryOptions<GetPracticeReleaseResponse, DefaultError, GetPracticeReleaseResponse, ReturnType<typeof getPracticeReleaseQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticeRelease({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticeReleaseQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticeRelease({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticeReleaseQueryKey(options)
 });
 
 /**
  * Accept selected fields from a practice release
  */
 export const acceptPracticeReleaseMutation = (options?: Partial<Options<AcceptPracticeReleaseData>>): UseMutationOptions<AcceptPracticeReleaseResponse, DefaultError, Options<AcceptPracticeReleaseData>> => {
-  const mutationOptions: UseMutationOptions<AcceptPracticeReleaseResponse, DefaultError, Options<AcceptPracticeReleaseData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await acceptPracticeRelease({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AcceptPracticeReleaseResponse, DefaultError, Options<AcceptPracticeReleaseData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await acceptPracticeRelease({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -4372,17 +4372,17 @@ export const acceptPracticeReleaseMutation = (options?: Partial<Options<AcceptPr
  * Sets each practice's display order to its index in the provided slug list (one atomic write)
  */
 export const reorderPracticesMutation = (options?: Partial<Options<ReorderPracticesData>>): UseMutationOptions<ReorderPracticesResponse, ReorderPracticesError, Options<ReorderPracticesData>> => {
-  const mutationOptions: UseMutationOptions<ReorderPracticesResponse, ReorderPracticesError, Options<ReorderPracticesData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await reorderPractices({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<ReorderPracticesResponse, ReorderPracticesError, Options<ReorderPracticesData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await reorderPractices({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const resolveReviewContextQueryKey = (options: Options<ResolveReviewContextData>) => createQueryKey('resolveReviewContext', options, false, ['Practice review requests']);
@@ -4393,16 +4393,16 @@ export const resolveReviewContextQueryKey = (options: Options<ResolveReviewConte
  * Reads the address only: nothing is fetched from it. The address must be on the server this workspace is connected to. Every way of not finding the work — not mirrored, not monitored here, another server, deleted or confidential — is the same 404.
  */
 export const resolveReviewContextOptions = (options: Options<ResolveReviewContextData>) => queryOptions<ResolveReviewContextResponse, ResolveReviewContextError, ResolveReviewContextResponse, ReturnType<typeof resolveReviewContextQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await resolveReviewContext({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: resolveReviewContextQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await resolveReviewContext({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: resolveReviewContextQueryKey(options)
 });
 
 /**
@@ -4411,17 +4411,17 @@ export const resolveReviewContextOptions = (options: Options<ResolveReviewContex
  * Answers 200 both when a review starts and when one deliberately does not; the body says which, and why. 403 only when the caller has no standing on the artifact.
  */
 export const requestPracticeReviewMutation = (options?: Partial<Options<RequestPracticeReviewData>>): UseMutationOptions<RequestPracticeReviewResponse, RequestPracticeReviewError, Options<RequestPracticeReviewData>> => {
-  const mutationOptions: UseMutationOptions<RequestPracticeReviewResponse, RequestPracticeReviewError, Options<RequestPracticeReviewData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await requestPracticeReview({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RequestPracticeReviewResponse, RequestPracticeReviewError, Options<RequestPracticeReviewData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await requestPracticeReview({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getPracticeReviewSettingsQueryKey = (options: Options<GetPracticeReviewSettingsData>) => createQueryKey('getPracticeReviewSettings', options, false, ['Practice Review Settings']);
@@ -4430,50 +4430,50 @@ export const getPracticeReviewSettingsQueryKey = (options: Options<GetPracticeRe
  * Get the workspace's practice-review policy
  */
 export const getPracticeReviewSettingsOptions = (options: Options<GetPracticeReviewSettingsData>) => queryOptions<GetPracticeReviewSettingsResponse, DefaultError, GetPracticeReviewSettingsResponse, ReturnType<typeof getPracticeReviewSettingsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticeReviewSettings({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticeReviewSettingsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticeReviewSettings({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticeReviewSettingsQueryKey(options)
 });
 
 /**
  * Update the workspace's practice-review policy
  */
 export const updatePracticeReviewSettingsMutation = (options?: Partial<Options<UpdatePracticeReviewSettingsData>>): UseMutationOptions<UpdatePracticeReviewSettingsResponse, DefaultError, Options<UpdatePracticeReviewSettingsData>> => {
-  const mutationOptions: UseMutationOptions<UpdatePracticeReviewSettingsResponse, DefaultError, Options<UpdatePracticeReviewSettingsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updatePracticeReviewSettings({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdatePracticeReviewSettingsResponse, DefaultError, Options<UpdatePracticeReviewSettingsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updatePracticeReviewSettings({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Preview the effective counts for proposed practice-review coverage
  */
 export const previewCoverageMutation = (options?: Partial<Options<PreviewCoverageData>>): UseMutationOptions<PreviewCoverageResponse, DefaultError, Options<PreviewCoverageData>> => {
-  const mutationOptions: UseMutationOptions<PreviewCoverageResponse, DefaultError, Options<PreviewCoverageData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await previewCoverage({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<PreviewCoverageResponse, DefaultError, Options<PreviewCoverageData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await previewCoverage({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listReviewedPracticesQueryKey = (options: Options<ListReviewedPracticesData>) => createQueryKey('listReviewedPractices', options, false, ['Practice Catalog']);
@@ -4484,16 +4484,16 @@ export const listReviewedPracticesQueryKey = (options: Options<ListReviewedPract
  * Returns the developer-facing name, group, rationale, and example for every practice the workspace reviews (any autonomy above OFF)
  */
 export const listReviewedPracticesOptions = (options: Options<ListReviewedPracticesData>) => queryOptions<ListReviewedPracticesResponse, DefaultError, ListReviewedPracticesResponse, ReturnType<typeof listReviewedPracticesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listReviewedPractices({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listReviewedPracticesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listReviewedPractices({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listReviewedPracticesQueryKey(options)
 });
 
 export const listReviewedWorkReviewRunsQueryKey = (options: Options<ListReviewedWorkReviewRunsData>) => createQueryKey('listReviewedWorkReviewRuns', options, false, ['Practice Group Detail']);
@@ -4504,16 +4504,16 @@ export const listReviewedWorkReviewRunsQueryKey = (options: Options<ListReviewed
  * Complete review runs newest first, every practice group together, with each observation's feedback response.
  */
 export const listReviewedWorkReviewRunsOptions = (options: Options<ListReviewedWorkReviewRunsData>) => queryOptions<ListReviewedWorkReviewRunsResponse, ListReviewedWorkReviewRunsError, ListReviewedWorkReviewRunsResponse, ReturnType<typeof listReviewedWorkReviewRunsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listReviewedWorkReviewRuns({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listReviewedWorkReviewRunsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listReviewedWorkReviewRuns({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listReviewedWorkReviewRunsQueryKey(options)
 });
 
 export const listReviewedWorkReviewRunsInfiniteQueryKey = (options: Options<ListReviewedWorkReviewRunsData>): QueryKey<Options<ListReviewedWorkReviewRunsData>> => createQueryKey('listReviewedWorkReviewRuns', options, true);
@@ -4524,28 +4524,28 @@ export const listReviewedWorkReviewRunsInfiniteQueryKey = (options: Options<List
  * Complete review runs newest first, every practice group together, with each observation's feedback response.
  */
 export const listReviewedWorkReviewRunsInfiniteOptions = (options: Options<ListReviewedWorkReviewRunsData>) => {
-  const opts = infiniteQueryOptions<ListReviewedWorkReviewRunsResponse, ListReviewedWorkReviewRunsError, InfiniteData<ListReviewedWorkReviewRunsResponse>, QueryKey<Options<ListReviewedWorkReviewRunsData>>, number | Pick<QueryKey<Options<ListReviewedWorkReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListReviewedWorkReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listReviewedWorkReviewRuns({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listReviewedWorkReviewRunsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListReviewedWorkReviewRunsResponse, ListReviewedWorkReviewRunsError, InfiniteData<ListReviewedWorkReviewRunsResponse>, QueryKey<Options<ListReviewedWorkReviewRunsData>>, number | Pick<QueryKey<Options<ListReviewedWorkReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListReviewedWorkReviewRunsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listReviewedWorkReviewRuns({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listReviewedWorkReviewRunsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const listPracticeReviewsQueryKey = (options: Options<ListPracticeReviewsData>) => createQueryKey('listPracticeReviews', options, false, ['Practice reviews']);
@@ -4556,16 +4556,16 @@ export const listPracticeReviewsQueryKey = (options: Options<ListPracticeReviews
  * Results are ordered newest first.
  */
 export const listPracticeReviewsOptions = (options: Options<ListPracticeReviewsData>) => queryOptions<ListPracticeReviewsResponse, ListPracticeReviewsError, ListPracticeReviewsResponse, ReturnType<typeof listPracticeReviewsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listPracticeReviews({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listPracticeReviewsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listPracticeReviews({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listPracticeReviewsQueryKey(options)
 });
 
 export const listPracticeReviewsInfiniteQueryKey = (options: Options<ListPracticeReviewsData>): QueryKey<Options<ListPracticeReviewsData>> => createQueryKey('listPracticeReviews', options, true);
@@ -4576,28 +4576,28 @@ export const listPracticeReviewsInfiniteQueryKey = (options: Options<ListPractic
  * Results are ordered newest first.
  */
 export const listPracticeReviewsInfiniteOptions = (options: Options<ListPracticeReviewsData>) => {
-  const opts = infiniteQueryOptions<ListPracticeReviewsResponse, ListPracticeReviewsError, InfiniteData<ListPracticeReviewsResponse>, QueryKey<Options<ListPracticeReviewsData>>, number | Pick<QueryKey<Options<ListPracticeReviewsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListPracticeReviewsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listPracticeReviews({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listPracticeReviewsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListPracticeReviewsResponse, ListPracticeReviewsError, InfiniteData<ListPracticeReviewsResponse>, QueryKey<Options<ListPracticeReviewsData>>, number | Pick<QueryKey<Options<ListPracticeReviewsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListPracticeReviewsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listPracticeReviews({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listPracticeReviewsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const listPracticeEvidenceOutcomesQueryKey = (options: Options<ListPracticeEvidenceOutcomesData>) => createQueryKey('listPracticeEvidenceOutcomes', options, false, ['Practice reviews']);
@@ -4608,16 +4608,16 @@ export const listPracticeEvidenceOutcomesQueryKey = (options: Options<ListPracti
  * One entry per practice that recent reviews considered, with the sources that skipped it.
  */
 export const listPracticeEvidenceOutcomesOptions = (options: Options<ListPracticeEvidenceOutcomesData>) => queryOptions<ListPracticeEvidenceOutcomesResponse, DefaultError, ListPracticeEvidenceOutcomesResponse, ReturnType<typeof listPracticeEvidenceOutcomesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listPracticeEvidenceOutcomes({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listPracticeEvidenceOutcomesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listPracticeEvidenceOutcomes({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listPracticeEvidenceOutcomesQueryKey(options)
 });
 
 export const listPracticeReviewFeedbackQueryKey = (options: Options<ListPracticeReviewFeedbackData>) => createQueryKey('listPracticeReviewFeedback', options, false, ['Practice reviews']);
@@ -4628,16 +4628,16 @@ export const listPracticeReviewFeedbackQueryKey = (options: Options<ListPractice
  * Results include every delivery state and are ordered newest first by default.
  */
 export const listPracticeReviewFeedbackOptions = (options: Options<ListPracticeReviewFeedbackData>) => queryOptions<ListPracticeReviewFeedbackResponse, ListPracticeReviewFeedbackError, ListPracticeReviewFeedbackResponse, ReturnType<typeof listPracticeReviewFeedbackQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listPracticeReviewFeedback({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listPracticeReviewFeedbackQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listPracticeReviewFeedback({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listPracticeReviewFeedbackQueryKey(options)
 });
 
 export const listPracticeReviewFeedbackInfiniteQueryKey = (options: Options<ListPracticeReviewFeedbackData>): QueryKey<Options<ListPracticeReviewFeedbackData>> => createQueryKey('listPracticeReviewFeedback', options, true);
@@ -4648,28 +4648,28 @@ export const listPracticeReviewFeedbackInfiniteQueryKey = (options: Options<List
  * Results include every delivery state and are ordered newest first by default.
  */
 export const listPracticeReviewFeedbackInfiniteOptions = (options: Options<ListPracticeReviewFeedbackData>) => {
-  const opts = infiniteQueryOptions<ListPracticeReviewFeedbackResponse, ListPracticeReviewFeedbackError, InfiniteData<ListPracticeReviewFeedbackResponse>, QueryKey<Options<ListPracticeReviewFeedbackData>>, number | Pick<QueryKey<Options<ListPracticeReviewFeedbackData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListPracticeReviewFeedbackData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listPracticeReviewFeedback({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listPracticeReviewFeedbackInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListPracticeReviewFeedbackResponse, ListPracticeReviewFeedbackError, InfiniteData<ListPracticeReviewFeedbackResponse>, QueryKey<Options<ListPracticeReviewFeedbackData>>, number | Pick<QueryKey<Options<ListPracticeReviewFeedbackData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListPracticeReviewFeedbackData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listPracticeReviewFeedback({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listPracticeReviewFeedbackInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const getPracticeReviewFeedbackQueryKey = (options: Options<GetPracticeReviewFeedbackData>) => createQueryKey('getPracticeReviewFeedback', options, false, ['Practice reviews']);
@@ -4678,16 +4678,16 @@ export const getPracticeReviewFeedbackQueryKey = (options: Options<GetPracticeRe
  * Get feedback with its stored body, observations and placements
  */
 export const getPracticeReviewFeedbackOptions = (options: Options<GetPracticeReviewFeedbackData>) => queryOptions<GetPracticeReviewFeedbackResponse, GetPracticeReviewFeedbackError, GetPracticeReviewFeedbackResponse, ReturnType<typeof getPracticeReviewFeedbackQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticeReviewFeedback({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticeReviewFeedbackQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticeReviewFeedback({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticeReviewFeedbackQueryKey(options)
 });
 
 export const getFeedbackProposalDecisionQueryKey = (options: Options<GetFeedbackProposalDecisionData>) => createQueryKey('getFeedbackProposalDecision', options, false, ['Practice reviews']);
@@ -4696,33 +4696,33 @@ export const getFeedbackProposalDecisionQueryKey = (options: Options<GetFeedback
  * Get the decision for a feedback proposal
  */
 export const getFeedbackProposalDecisionOptions = (options: Options<GetFeedbackProposalDecisionData>) => queryOptions<GetFeedbackProposalDecisionResponse, DefaultError, GetFeedbackProposalDecisionResponse, ReturnType<typeof getFeedbackProposalDecisionQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getFeedbackProposalDecision({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getFeedbackProposalDecisionQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getFeedbackProposalDecision({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getFeedbackProposalDecisionQueryKey(options)
 });
 
 /**
  * Approve or reject an immutable feedback proposal
  */
 export const decideFeedbackProposalMutation = (options?: Partial<Options<DecideFeedbackProposalData>>): UseMutationOptions<DecideFeedbackProposalResponse, DefaultError, Options<DecideFeedbackProposalData>> => {
-  const mutationOptions: UseMutationOptions<DecideFeedbackProposalResponse, DefaultError, Options<DecideFeedbackProposalData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await decideFeedbackProposal({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<DecideFeedbackProposalResponse, DefaultError, Options<DecideFeedbackProposalData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await decideFeedbackProposal({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -4731,17 +4731,17 @@ export const decideFeedbackProposalMutation = (options?: Partial<Options<DecideF
  * Only practice-page feedback that is waiting to be read or already shown can be withdrawn. The developer sees that it was withdrawn, not what it said; its record and evidence stay. Restoring puts it back through the page's ordinary checks and sends nothing.
  */
 export const updatePracticeReviewFeedbackWithdrawalMutation = (options?: Partial<Options<UpdatePracticeReviewFeedbackWithdrawalData>>): UseMutationOptions<UpdatePracticeReviewFeedbackWithdrawalResponse, UpdatePracticeReviewFeedbackWithdrawalError, Options<UpdatePracticeReviewFeedbackWithdrawalData>> => {
-  const mutationOptions: UseMutationOptions<UpdatePracticeReviewFeedbackWithdrawalResponse, UpdatePracticeReviewFeedbackWithdrawalError, Options<UpdatePracticeReviewFeedbackWithdrawalData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updatePracticeReviewFeedbackWithdrawal({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdatePracticeReviewFeedbackWithdrawalResponse, UpdatePracticeReviewFeedbackWithdrawalError, Options<UpdatePracticeReviewFeedbackWithdrawalData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updatePracticeReviewFeedbackWithdrawal({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listPracticeReviewObservationsQueryKey = (options: Options<ListPracticeReviewObservationsData>) => createQueryKey('listPracticeReviewObservations', options, false, ['Practice reviews']);
@@ -4752,16 +4752,16 @@ export const listPracticeReviewObservationsQueryKey = (options: Options<ListPrac
  * Results include linked feedback outcomes and are ordered newest first by default.
  */
 export const listPracticeReviewObservationsOptions = (options: Options<ListPracticeReviewObservationsData>) => queryOptions<ListPracticeReviewObservationsResponse, ListPracticeReviewObservationsError, ListPracticeReviewObservationsResponse, ReturnType<typeof listPracticeReviewObservationsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listPracticeReviewObservations({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listPracticeReviewObservationsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listPracticeReviewObservations({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listPracticeReviewObservationsQueryKey(options)
 });
 
 export const listPracticeReviewObservationsInfiniteQueryKey = (options: Options<ListPracticeReviewObservationsData>): QueryKey<Options<ListPracticeReviewObservationsData>> => createQueryKey('listPracticeReviewObservations', options, true);
@@ -4772,28 +4772,28 @@ export const listPracticeReviewObservationsInfiniteQueryKey = (options: Options<
  * Results include linked feedback outcomes and are ordered newest first by default.
  */
 export const listPracticeReviewObservationsInfiniteOptions = (options: Options<ListPracticeReviewObservationsData>) => {
-  const opts = infiniteQueryOptions<ListPracticeReviewObservationsResponse, ListPracticeReviewObservationsError, InfiniteData<ListPracticeReviewObservationsResponse>, QueryKey<Options<ListPracticeReviewObservationsData>>, number | Pick<QueryKey<Options<ListPracticeReviewObservationsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListPracticeReviewObservationsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listPracticeReviewObservations({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listPracticeReviewObservationsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListPracticeReviewObservationsResponse, ListPracticeReviewObservationsError, InfiniteData<ListPracticeReviewObservationsResponse>, QueryKey<Options<ListPracticeReviewObservationsData>>, number | Pick<QueryKey<Options<ListPracticeReviewObservationsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListPracticeReviewObservationsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listPracticeReviewObservations({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listPracticeReviewObservationsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const getPracticeReviewObservationQueryKey = (options: Options<GetPracticeReviewObservationData>) => createQueryKey('getPracticeReviewObservation', options, false, ['Practice reviews']);
@@ -4802,16 +4802,16 @@ export const getPracticeReviewObservationQueryKey = (options: Options<GetPractic
  * Get an observation with its evidence and linked feedback
  */
 export const getPracticeReviewObservationOptions = (options: Options<GetPracticeReviewObservationData>) => queryOptions<GetPracticeReviewObservationResponse, GetPracticeReviewObservationError, GetPracticeReviewObservationResponse, ReturnType<typeof getPracticeReviewObservationQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticeReviewObservation({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticeReviewObservationQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticeReviewObservation({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticeReviewObservationQueryKey(options)
 });
 
 /**
@@ -4820,17 +4820,17 @@ export const getPracticeReviewObservationOptions = (options: Options<GetPractice
  * Invalidating stops feedback citing the observation that has not reached anyone yet. Feedback already delivered keeps its record, and a comment already posted on the provider stays there. Restoring does not re-send anything.
  */
 export const updatePracticeReviewObservationValidityMutation = (options?: Partial<Options<UpdatePracticeReviewObservationValidityData>>): UseMutationOptions<UpdatePracticeReviewObservationValidityResponse, UpdatePracticeReviewObservationValidityError, Options<UpdatePracticeReviewObservationValidityData>> => {
-  const mutationOptions: UseMutationOptions<UpdatePracticeReviewObservationValidityResponse, UpdatePracticeReviewObservationValidityError, Options<UpdatePracticeReviewObservationValidityData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updatePracticeReviewObservationValidity({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdatePracticeReviewObservationValidityResponse, UpdatePracticeReviewObservationValidityError, Options<UpdatePracticeReviewObservationValidityData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updatePracticeReviewObservationValidity({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getPracticeReviewOverviewQueryKey = (options: Options<GetPracticeReviewOverviewData>) => createQueryKey('getPracticeReviewOverview', options, false, ['Practice reviews']);
@@ -4841,16 +4841,16 @@ export const getPracticeReviewOverviewQueryKey = (options: Options<GetPracticeRe
  * In total, over time and by practice. Reviews count by when they were created, observations by when they were recorded and feedback by when it was created, as the review, observation and feedback lists filter them. The range is split into days, weeks or months, by its length, in the given time zone.
  */
 export const getPracticeReviewOverviewOptions = (options: Options<GetPracticeReviewOverviewData>) => queryOptions<GetPracticeReviewOverviewResponse, GetPracticeReviewOverviewError, GetPracticeReviewOverviewResponse, ReturnType<typeof getPracticeReviewOverviewQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticeReviewOverview({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticeReviewOverviewQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticeReviewOverview({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticeReviewOverviewQueryKey(options)
 });
 
 export const listPracticeStandingsQueryKey = (options: Options<ListPracticeStandingsData>) => createQueryKey('listPracticeStandings', options, false, ['Practice Standings']);
@@ -4861,16 +4861,16 @@ export const listPracticeStandingsQueryKey = (options: Options<ListPracticeStand
  * Returns each practice's standing, direction, supporting observations, and developer guidance.
  */
 export const listPracticeStandingsOptions = (options: Options<ListPracticeStandingsData>) => queryOptions<ListPracticeStandingsResponse, DefaultError, ListPracticeStandingsResponse, ReturnType<typeof listPracticeStandingsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listPracticeStandings({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listPracticeStandingsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listPracticeStandings({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listPracticeStandingsQueryKey(options)
 });
 
 export const listSweepSchedulesQueryKey = (options: Options<ListSweepSchedulesData>) => createQueryKey('listSweepSchedules', options, false, ['Practice Review Sweep']);
@@ -4879,16 +4879,16 @@ export const listSweepSchedulesQueryKey = (options: Options<ListSweepSchedulesDa
  * List this workspace's sweep schedules
  */
 export const listSweepSchedulesOptions = (options: Options<ListSweepSchedulesData>) => queryOptions<ListSweepSchedulesResponse, DefaultError, ListSweepSchedulesResponse, ReturnType<typeof listSweepSchedulesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listSweepSchedules({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listSweepSchedulesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listSweepSchedules({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listSweepSchedulesQueryKey(options)
 });
 
 /**
@@ -4897,17 +4897,17 @@ export const listSweepSchedulesOptions = (options: Options<ListSweepSchedulesDat
  * Authorises the recurring spend. The first sweep runs within the hour.
  */
 export const createSweepScheduleMutation = (options?: Partial<Options<CreateSweepScheduleData>>): UseMutationOptions<CreateSweepScheduleResponse, CreateSweepScheduleError, Options<CreateSweepScheduleData>> => {
-  const mutationOptions: UseMutationOptions<CreateSweepScheduleResponse, CreateSweepScheduleError, Options<CreateSweepScheduleData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await createSweepSchedule({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<CreateSweepScheduleResponse, CreateSweepScheduleError, Options<CreateSweepScheduleData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await createSweepSchedule({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -4916,17 +4916,17 @@ export const createSweepScheduleMutation = (options?: Partial<Options<CreateSwee
  * Removes the instruction. Campaigns it already opened keep their records.
  */
 export const deleteSweepScheduleMutation = (options?: Partial<Options<DeleteSweepScheduleData>>): UseMutationOptions<DeleteSweepScheduleResponse, DeleteSweepScheduleError, Options<DeleteSweepScheduleData>> => {
-  const mutationOptions: UseMutationOptions<DeleteSweepScheduleResponse, DeleteSweepScheduleError, Options<DeleteSweepScheduleData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await deleteSweepSchedule({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<DeleteSweepScheduleResponse, DeleteSweepScheduleError, Options<DeleteSweepScheduleData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deleteSweepSchedule({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -4935,17 +4935,17 @@ export const deleteSweepScheduleMutation = (options?: Partial<Options<DeleteSwee
  * Changes the cadence, the window, or whether the sweep runs at all.
  */
 export const replaceSweepScheduleMutation = (options?: Partial<Options<ReplaceSweepScheduleData>>): UseMutationOptions<ReplaceSweepScheduleResponse, ReplaceSweepScheduleError, Options<ReplaceSweepScheduleData>> => {
-  const mutationOptions: UseMutationOptions<ReplaceSweepScheduleResponse, ReplaceSweepScheduleError, Options<ReplaceSweepScheduleData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await replaceSweepSchedule({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<ReplaceSweepScheduleResponse, ReplaceSweepScheduleError, Options<ReplaceSweepScheduleData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await replaceSweepSchedule({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listTracedArtifactsQueryKey = (options: Options<ListTracedArtifactsData>) => createQueryKey('listTracedArtifacts', options, false, ['Practice review trace']);
@@ -4956,16 +4956,16 @@ export const listTracedArtifactsQueryKey = (options: Options<ListTracedArtifacts
  * Workspace admins only. Built from the signal ledger, so it includes work that was never reviewed — which is exactly what a listing derived from review runs cannot show. Most recently signalled first.
  */
 export const listTracedArtifactsOptions = (options: Options<ListTracedArtifactsData>) => queryOptions<ListTracedArtifactsResponse, ListTracedArtifactsError, ListTracedArtifactsResponse, ReturnType<typeof listTracedArtifactsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listTracedArtifacts({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listTracedArtifactsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listTracedArtifacts({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listTracedArtifactsQueryKey(options)
 });
 
 export const listTracedArtifactsInfiniteQueryKey = (options: Options<ListTracedArtifactsData>): QueryKey<Options<ListTracedArtifactsData>> => createQueryKey('listTracedArtifacts', options, true);
@@ -4976,28 +4976,28 @@ export const listTracedArtifactsInfiniteQueryKey = (options: Options<ListTracedA
  * Workspace admins only. Built from the signal ledger, so it includes work that was never reviewed — which is exactly what a listing derived from review runs cannot show. Most recently signalled first.
  */
 export const listTracedArtifactsInfiniteOptions = (options: Options<ListTracedArtifactsData>) => {
-  const opts = infiniteQueryOptions<ListTracedArtifactsResponse, ListTracedArtifactsError, InfiniteData<ListTracedArtifactsResponse>, QueryKey<Options<ListTracedArtifactsData>>, number | Pick<QueryKey<Options<ListTracedArtifactsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListTracedArtifactsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listTracedArtifacts({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listTracedArtifactsInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListTracedArtifactsResponse, ListTracedArtifactsError, InfiniteData<ListTracedArtifactsResponse>, QueryKey<Options<ListTracedArtifactsData>>, number | Pick<QueryKey<Options<ListTracedArtifactsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListTracedArtifactsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listTracedArtifacts({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listTracedArtifactsInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const getArtifactTraceQueryKey = (options: Options<GetArtifactTraceData>) => createQueryKey('getArtifactTrace', options, false, ['Practice review trace']);
@@ -5008,16 +5008,16 @@ export const getArtifactTraceQueryKey = (options: Options<GetArtifactTraceData>)
  * Every practice the workspace runs against this kind of work appears, including the ones that did nothing, each with the recorded reason. Name a review and every answer is that review's own. A workspace admin may read any work, with or without a review; anyone else must name a review that observed them on this work, and reads only the observations about them and the feedback addressed to them. 404 means nothing about this artifact was ever recorded here, the named review never ran on it, or the caller may not read it.
  */
 export const getArtifactTraceOptions = (options: Options<GetArtifactTraceData>) => queryOptions<GetArtifactTraceResponse, GetArtifactTraceError, GetArtifactTraceResponse, ReturnType<typeof getArtifactTraceQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getArtifactTrace({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getArtifactTraceQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getArtifactTrace({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getArtifactTraceQueryKey(options)
 });
 
 export const getOwnArtifactTraceQueryKey = (options: Options<GetOwnArtifactTraceData>) => createQueryKey('getOwnArtifactTrace', options, false, ['Practice review trace']);
@@ -5028,16 +5028,16 @@ export const getOwnArtifactTraceQueryKey = (options: Options<GetOwnArtifactTrace
  * Counts only observations about the caller and feedback addressed to them, including when the caller is a workspace admin. The named review must have observed them on this work. An inaccessible review answers the same 404 as an absent one.
  */
 export const getOwnArtifactTraceOptions = (options: Options<GetOwnArtifactTraceData>) => queryOptions<GetOwnArtifactTraceResponse, GetOwnArtifactTraceError, GetOwnArtifactTraceResponse, ReturnType<typeof getOwnArtifactTraceQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getOwnArtifactTrace({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getOwnArtifactTraceQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getOwnArtifactTrace({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getOwnArtifactTraceQueryKey(options)
 });
 
 export const getPracticesAcrossWorkspaceQueryKey = (options: Options<GetPracticesAcrossWorkspaceData>) => createQueryKey('getPracticesAcrossWorkspace', options, false, ['Practices Across The Workspace']);
@@ -5048,16 +5048,16 @@ export const getPracticesAcrossWorkspaceQueryKey = (options: Options<GetPractice
  * Counts developers, never names them. Every split shows all its parts, however few developers they count. The splits count every developer's current standing and take no window.
  */
 export const getPracticesAcrossWorkspaceOptions = (options: Options<GetPracticesAcrossWorkspaceData>) => queryOptions<GetPracticesAcrossWorkspaceResponse, DefaultError, GetPracticesAcrossWorkspaceResponse, ReturnType<typeof getPracticesAcrossWorkspaceQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticesAcrossWorkspace({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticesAcrossWorkspaceQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticesAcrossWorkspace({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticesAcrossWorkspaceQueryKey(options)
 });
 
 export const getPracticesAcrossWorkspaceTilesQueryKey = (options: Options<GetPracticesAcrossWorkspaceTilesData>) => createQueryKey('getPracticesAcrossWorkspaceTiles', options, false, ['Practices Across The Workspace']);
@@ -5068,33 +5068,33 @@ export const getPracticesAcrossWorkspaceTilesQueryKey = (options: Options<GetPra
  * A middle half shows whenever one or more developers are counted in the window.
  */
 export const getPracticesAcrossWorkspaceTilesOptions = (options: Options<GetPracticesAcrossWorkspaceTilesData>) => queryOptions<GetPracticesAcrossWorkspaceTilesResponse, DefaultError, GetPracticesAcrossWorkspaceTilesResponse, ReturnType<typeof getPracticesAcrossWorkspaceTilesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPracticesAcrossWorkspaceTiles({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticesAcrossWorkspaceTilesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPracticesAcrossWorkspaceTiles({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticesAcrossWorkspaceTilesQueryKey(options)
 });
 
 /**
  * Delete a practice definition
  */
 export const deletePracticeMutation = (options?: Partial<Options<DeletePracticeData>>): UseMutationOptions<DeletePracticeResponse, DeletePracticeError, Options<DeletePracticeData>> => {
-  const mutationOptions: UseMutationOptions<DeletePracticeResponse, DeletePracticeError, Options<DeletePracticeData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await deletePractice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<DeletePracticeResponse, DeletePracticeError, Options<DeletePracticeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deletePractice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getPracticeQueryKey = (options: Options<GetPracticeData>) => createQueryKey('getPractice', options, false, ['Practice Catalog']);
@@ -5103,33 +5103,33 @@ export const getPracticeQueryKey = (options: Options<GetPracticeData>) => create
  * Get a practice definition
  */
 export const getPracticeOptions = (options: Options<GetPracticeData>) => queryOptions<GetPracticeResponse, GetPracticeError, GetPracticeResponse, ReturnType<typeof getPracticeQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getPractice({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getPracticeQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getPractice({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getPracticeQueryKey(options)
 });
 
 /**
  * Update a practice
  */
 export const updatePracticeMutation = (options?: Partial<Options<UpdatePracticeData>>): UseMutationOptions<UpdatePracticeResponse, UpdatePracticeError, Options<UpdatePracticeData>> => {
-  const mutationOptions: UseMutationOptions<UpdatePracticeResponse, UpdatePracticeError, Options<UpdatePracticeData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updatePractice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdatePracticeResponse, UpdatePracticeError, Options<UpdatePracticeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updatePractice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -5138,17 +5138,17 @@ export const updatePracticeMutation = (options?: Partial<Options<UpdatePracticeD
  * OFF stops the review entirely. HUMAN_APPROVAL runs it and records every observation, holds feedback on the work for an authorized reviewer, and still writes the developer's practice pages and the mentor, which are read on request. AUTOMATIC sends feedback on the work without asking, as far as this workspace's reach allows. Send a null autonomy to clear the practice's own setting so it follows its group, and through the group the workspace default.
  */
 export const setAutonomyMutation = (options?: Partial<Options<SetAutonomyData>>): UseMutationOptions<SetAutonomyResponse, SetAutonomyError, Options<SetAutonomyData>> => {
-  const mutationOptions: UseMutationOptions<SetAutonomyResponse, SetAutonomyError, Options<SetAutonomyData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await setAutonomy({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<SetAutonomyResponse, SetAutonomyError, Options<SetAutonomyData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await setAutonomy({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -5157,17 +5157,17 @@ export const setAutonomyMutation = (options?: Partial<Options<SetAutonomyData>>)
  * Moves the practice to the requested group, or to Unassigned when groupSlug is null
  */
 export const bindGroupMutation = (options?: Partial<Options<BindGroupData>>): UseMutationOptions<BindGroupResponse, BindGroupError, Options<BindGroupData>> => {
-  const mutationOptions: UseMutationOptions<BindGroupResponse, BindGroupError, Options<BindGroupData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await bindGroup({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<BindGroupResponse, BindGroupError, Options<BindGroupData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await bindGroup({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -5176,34 +5176,34 @@ export const bindGroupMutation = (options?: Partial<Options<BindGroupData>>): Us
  * Moves the practice and sets its exact position in one atomic write; omit groupSlug for Unassigned
  */
 export const placePracticeMutation = (options?: Partial<Options<PlacePracticeData>>): UseMutationOptions<PlacePracticeResponse, PlacePracticeError, Options<PlacePracticeData>> => {
-  const mutationOptions: UseMutationOptions<PlacePracticeResponse, PlacePracticeError, Options<PlacePracticeData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await placePractice({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<PlacePracticeResponse, PlacePracticeError, Options<PlacePracticeData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await placePractice({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Send product feedback to instance administrators
  */
 export const submitWorkspaceProductFeedbackMutation = (options?: Partial<Options<SubmitWorkspaceProductFeedbackData>>): UseMutationOptions<unknown, DefaultError, Options<SubmitWorkspaceProductFeedbackData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<SubmitWorkspaceProductFeedbackData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await submitWorkspaceProductFeedback({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<SubmitWorkspaceProductFeedbackData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await submitWorkspaceProductFeedback({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listProductSurveyInvitationsQueryKey = (options: Options<ListProductSurveyInvitationsData>) => createQueryKey('listProductSurveyInvitations', options, false, ['feedback']);
@@ -5212,118 +5212,118 @@ export const listProductSurveyInvitationsQueryKey = (options: Options<ListProduc
  * List the open surveys the current account has neither answered nor declined
  */
 export const listProductSurveyInvitationsOptions = (options: Options<ListProductSurveyInvitationsData>) => queryOptions<ListProductSurveyInvitationsResponse, DefaultError, ListProductSurveyInvitationsResponse, ReturnType<typeof listProductSurveyInvitationsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listProductSurveyInvitations({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listProductSurveyInvitationsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listProductSurveyInvitations({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listProductSurveyInvitationsQueryKey(options)
 });
 
 /**
  * Undo a decline; a submitted response is never touched
  */
 export const undoProductSurveyDeclineMutation = (options?: Partial<Options<UndoProductSurveyDeclineData>>): UseMutationOptions<unknown, DefaultError, Options<UndoProductSurveyDeclineData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<UndoProductSurveyDeclineData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await undoProductSurveyDecline({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<UndoProductSurveyDeclineData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await undoProductSurveyDecline({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Decline a survey for the current account
  */
 export const declineProductSurveyMutation = (options?: Partial<Options<DeclineProductSurveyData>>): UseMutationOptions<unknown, DefaultError, Options<DeclineProductSurveyData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<DeclineProductSurveyData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await declineProductSurvey({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<DeclineProductSurveyData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await declineProductSurvey({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Record that the invitation was shown to the current account
  */
 export const acknowledgeProductSurveyInvitationMutation = (options?: Partial<Options<AcknowledgeProductSurveyInvitationData>>): UseMutationOptions<unknown, DefaultError, Options<AcknowledgeProductSurveyInvitationData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AcknowledgeProductSurveyInvitationData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await acknowledgeProductSurveyInvitation({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AcknowledgeProductSurveyInvitationData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await acknowledgeProductSurveyInvitation({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Submit a survey response once
  */
 export const submitProductSurveyResponseMutation = (options?: Partial<Options<SubmitProductSurveyResponseData>>): UseMutationOptions<unknown, DefaultError, Options<SubmitProductSurveyResponseData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<SubmitProductSurveyResponseData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await submitProductSurveyResponse({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<SubmitProductSurveyResponseData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await submitProductSurveyResponse({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Toggle public visibility for a workspace
  */
 export const updatePublicVisibilityMutation = (options?: Partial<Options<UpdatePublicVisibilityData>>): UseMutationOptions<UpdatePublicVisibilityResponse, DefaultError, Options<UpdatePublicVisibilityData>> => {
-  const mutationOptions: UseMutationOptions<UpdatePublicVisibilityResponse, DefaultError, Options<UpdatePublicVisibilityData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updatePublicVisibility({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdatePublicVisibilityResponse, DefaultError, Options<UpdatePublicVisibilityData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updatePublicVisibility({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Remove a repository from a workspace monitor list
  */
 export const removeRepositoryToMonitorMutation = (options?: Partial<Options<RemoveRepositoryToMonitorData>>): UseMutationOptions<unknown, DefaultError, Options<RemoveRepositoryToMonitorData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<RemoveRepositoryToMonitorData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await removeRepositoryToMonitor({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<RemoveRepositoryToMonitorData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await removeRepositoryToMonitor({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getRepositoriesToMonitorQueryKey = (options: Options<GetRepositoriesToMonitorData>) => createQueryKey('getRepositoriesToMonitor', options, false, ['workspace']);
@@ -5332,33 +5332,33 @@ export const getRepositoriesToMonitorQueryKey = (options: Options<GetRepositorie
  * List repositories monitored by a workspace
  */
 export const getRepositoriesToMonitorOptions = (options: Options<GetRepositoriesToMonitorData>) => queryOptions<GetRepositoriesToMonitorResponse, DefaultError, GetRepositoriesToMonitorResponse, ReturnType<typeof getRepositoriesToMonitorQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getRepositoriesToMonitor({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getRepositoriesToMonitorQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getRepositoriesToMonitor({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getRepositoriesToMonitorQueryKey(options)
 });
 
 /**
  * Add a repository to a workspace monitor list
  */
 export const addRepositoryToMonitorMutation = (options?: Partial<Options<AddRepositoryToMonitorData>>): UseMutationOptions<unknown, DefaultError, Options<AddRepositoryToMonitorData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AddRepositoryToMonitorData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await addRepositoryToMonitor({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AddRepositoryToMonitorData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await addRepositoryToMonitor({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listSlackChannelsQueryKey = (options: Options<ListSlackChannelsData>) => createQueryKey('listSlackChannels', options, false, ['Slack channel activation']);
@@ -5367,33 +5367,33 @@ export const listSlackChannelsQueryKey = (options: Options<ListSlackChannelsData
  * List the workspace's allow-listed Slack channels with their consent state
  */
 export const listSlackChannelsOptions = (options: Options<ListSlackChannelsData>) => queryOptions<ListSlackChannelsResponse, DefaultError, ListSlackChannelsResponse, ReturnType<typeof listSlackChannelsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listSlackChannels({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listSlackChannelsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listSlackChannels({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listSlackChannelsQueryKey(options)
 });
 
 /**
  * Allow-list a Slack channel (lands in PENDING; idempotent on the natural key)
  */
 export const registerSlackChannelMutation = (options?: Partial<Options<RegisterSlackChannelData>>): UseMutationOptions<RegisterSlackChannelResponse, DefaultError, Options<RegisterSlackChannelData>> => {
-  const mutationOptions: UseMutationOptions<RegisterSlackChannelResponse, DefaultError, Options<RegisterSlackChannelData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await registerSlackChannel({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RegisterSlackChannelResponse, DefaultError, Options<RegisterSlackChannelData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await registerSlackChannel({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listSlackChannelCandidatesQueryKey = (options: Options<ListSlackChannelCandidatesData>) => createQueryKey('listSlackChannelCandidates', options, false, ['Slack channel activation']);
@@ -5402,33 +5402,33 @@ export const listSlackChannelCandidatesQueryKey = (options: Options<ListSlackCha
  * List Slack channels available to add to monitoring
  */
 export const listSlackChannelCandidatesOptions = (options: Options<ListSlackChannelCandidatesData>) => queryOptions<ListSlackChannelCandidatesResponse, DefaultError, ListSlackChannelCandidatesResponse, ReturnType<typeof listSlackChannelCandidatesQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listSlackChannelCandidates({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listSlackChannelCandidatesQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listSlackChannelCandidates({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listSlackChannelCandidatesQueryKey(options)
 });
 
 /**
  * Transition a Slack channel to a target consent state (activate / pause / resume / revoke)
  */
 export const updateSlackChannelConsentMutation = (options?: Partial<Options<UpdateSlackChannelConsentData>>): UseMutationOptions<UpdateSlackChannelConsentResponse, DefaultError, Options<UpdateSlackChannelConsentData>> => {
-  const mutationOptions: UseMutationOptions<UpdateSlackChannelConsentResponse, DefaultError, Options<UpdateSlackChannelConsentData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateSlackChannelConsent({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateSlackChannelConsentResponse, DefaultError, Options<UpdateSlackChannelConsentData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateSlackChannelConsent({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listSlackChannelConsentEventsQueryKey = (options: Options<ListSlackChannelConsentEventsData>) => createQueryKey('listSlackChannelConsentEvents', options, false, ['Slack channel activation']);
@@ -5437,67 +5437,67 @@ export const listSlackChannelConsentEventsQueryKey = (options: Options<ListSlack
  * The immutable consent-transition audit trail of one Slack channel
  */
 export const listSlackChannelConsentEventsOptions = (options: Options<ListSlackChannelConsentEventsData>) => queryOptions<ListSlackChannelConsentEventsResponse, DefaultError, ListSlackChannelConsentEventsResponse, ReturnType<typeof listSlackChannelConsentEventsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listSlackChannelConsentEvents({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listSlackChannelConsentEventsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listSlackChannelConsentEvents({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listSlackChannelConsentEventsQueryKey(options)
 });
 
 /**
  * Update current user's Slack workspace preferences
  */
 export const updateSlackUserPreferencesMutation = (options?: Partial<Options<UpdateSlackUserPreferencesData>>): UseMutationOptions<UpdateSlackUserPreferencesResponse, DefaultError, Options<UpdateSlackUserPreferencesData>> => {
-  const mutationOptions: UseMutationOptions<UpdateSlackUserPreferencesResponse, DefaultError, Options<UpdateSlackUserPreferencesData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateSlackUserPreferences({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateSlackUserPreferencesResponse, DefaultError, Options<UpdateSlackUserPreferencesData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateSlackUserPreferences({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Rename workspace slug and create redirect
  */
 export const renameSlugMutation = (options?: Partial<Options<RenameSlugData>>): UseMutationOptions<RenameSlugResponse, DefaultError, Options<RenameSlugData>> => {
-  const mutationOptions: UseMutationOptions<RenameSlugResponse, DefaultError, Options<RenameSlugData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await renameSlug({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RenameSlugResponse, DefaultError, Options<RenameSlugData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await renameSlug({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Update workspace lifecycle status
  */
 export const updateStatusMutation = (options?: Partial<Options<UpdateStatusData>>): UseMutationOptions<UpdateStatusResponse, DefaultError, Options<UpdateStatusData>> => {
-  const mutationOptions: UseMutationOptions<UpdateStatusResponse, DefaultError, Options<UpdateStatusData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateStatus({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateStatusResponse, DefaultError, Options<UpdateStatusData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateStatus({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getAllTeamsQueryKey = (options: Options<GetAllTeamsData>) => createQueryKey('getAllTeams', options, false, ['Teams']);
@@ -5508,16 +5508,16 @@ export const getAllTeamsQueryKey = (options: Options<GetAllTeamsData>) => create
  * Returns all teams in the workspace organization
  */
 export const getAllTeamsOptions = (options: Options<GetAllTeamsData>) => queryOptions<GetAllTeamsResponse, DefaultError, GetAllTeamsResponse, ReturnType<typeof getAllTeamsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getAllTeams({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getAllTeamsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getAllTeams({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getAllTeamsQueryKey(options)
 });
 
 /**
@@ -5526,65 +5526,65 @@ export const getAllTeamsOptions = (options: Options<GetAllTeamsData>) => queryOp
  * Show or hide a team in workspace activity
  */
 export const updateTeamVisibilityMutation = (options?: Partial<Options<UpdateTeamVisibilityData>>): UseMutationOptions<unknown, DefaultError, Options<UpdateTeamVisibilityData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<UpdateTeamVisibilityData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateTeamVisibility({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<UpdateTeamVisibilityData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateTeamVisibility({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const updateRepositoryVisibilityMutation = (options?: Partial<Options<UpdateRepositoryVisibilityData>>): UseMutationOptions<unknown, DefaultError, Options<UpdateRepositoryVisibilityData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<UpdateRepositoryVisibilityData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateRepositoryVisibility({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<UpdateRepositoryVisibilityData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateRepositoryVisibility({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Remove a repository label from a team
  */
 export const removeLabelFromTeamMutation = (options?: Partial<Options<RemoveLabelFromTeamData>>): UseMutationOptions<RemoveLabelFromTeamResponse, DefaultError, Options<RemoveLabelFromTeamData>> => {
-  const mutationOptions: UseMutationOptions<RemoveLabelFromTeamResponse, DefaultError, Options<RemoveLabelFromTeamData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await removeLabelFromTeam({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RemoveLabelFromTeamResponse, DefaultError, Options<RemoveLabelFromTeamData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await removeLabelFromTeam({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Add a repository label to a team
  */
 export const addLabelToTeamMutation = (options?: Partial<Options<AddLabelToTeamData>>): UseMutationOptions<AddLabelToTeamResponse, DefaultError, Options<AddLabelToTeamData>> => {
-  const mutationOptions: UseMutationOptions<AddLabelToTeamResponse, DefaultError, Options<AddLabelToTeamData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await addLabelToTeam({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<AddLabelToTeamResponse, DefaultError, Options<AddLabelToTeamData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await addLabelToTeam({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getTeamSettingsQueryKey = (options: Options<GetTeamSettingsData>) => createQueryKey('getTeamSettings', options, false, ['Team Settings']);
@@ -5595,16 +5595,16 @@ export const getTeamSettingsQueryKey = (options: Options<GetTeamSettingsData>) =
  * Returns the visibility settings for a team in the workspace
  */
 export const getTeamSettingsOptions = (options: Options<GetTeamSettingsData>) => queryOptions<GetTeamSettingsResponse, DefaultError, GetTeamSettingsResponse, ReturnType<typeof getTeamSettingsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getTeamSettings({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getTeamSettingsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getTeamSettings({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getTeamSettingsQueryKey(options)
 });
 
 /**
@@ -5613,17 +5613,17 @@ export const getTeamSettingsOptions = (options: Options<GetTeamSettingsData>) =>
  * Updates the visibility settings for a team in the workspace
  */
 export const updateTeamSettingsMutation = (options?: Partial<Options<UpdateTeamSettingsData>>): UseMutationOptions<UpdateTeamSettingsResponse, UpdateTeamSettingsError, Options<UpdateTeamSettingsData>> => {
-  const mutationOptions: UseMutationOptions<UpdateTeamSettingsResponse, UpdateTeamSettingsError, Options<UpdateTeamSettingsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateTeamSettings({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateTeamSettingsResponse, UpdateTeamSettingsError, Options<UpdateTeamSettingsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateTeamSettings({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getLabelFiltersQueryKey = (options: Options<GetLabelFiltersData>) => createQueryKey('getLabelFilters', options, false, ['Team Settings']);
@@ -5634,16 +5634,16 @@ export const getLabelFiltersQueryKey = (options: Options<GetLabelFiltersData>) =
  * Returns all labels configured as filters for a team in the workspace
  */
 export const getLabelFiltersOptions = (options: Options<GetLabelFiltersData>) => queryOptions<GetLabelFiltersResponse, DefaultError, GetLabelFiltersResponse, ReturnType<typeof getLabelFiltersQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getLabelFilters({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getLabelFiltersQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getLabelFilters({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getLabelFiltersQueryKey(options)
 });
 
 /**
@@ -5652,17 +5652,17 @@ export const getLabelFiltersOptions = (options: Options<GetLabelFiltersData>) =>
  * Removes a label filter from a team in the workspace
  */
 export const removeLabelFilterMutation = (options?: Partial<Options<RemoveLabelFilterData>>): UseMutationOptions<RemoveLabelFilterResponse, DefaultError, Options<RemoveLabelFilterData>> => {
-  const mutationOptions: UseMutationOptions<RemoveLabelFilterResponse, DefaultError, Options<RemoveLabelFilterData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await removeLabelFilter({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<RemoveLabelFilterResponse, DefaultError, Options<RemoveLabelFilterData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await removeLabelFilter({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
@@ -5671,17 +5671,17 @@ export const removeLabelFilterMutation = (options?: Partial<Options<RemoveLabelF
  * Adds a label as a filter for a team in the workspace
  */
 export const addLabelFilterMutation = (options?: Partial<Options<AddLabelFilterData>>): UseMutationOptions<unknown, DefaultError, Options<AddLabelFilterData>> => {
-  const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AddLabelFilterData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await addLabelFilter({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AddLabelFilterData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await addLabelFilter({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const getRepositorySettingsQueryKey = (options: Options<GetRepositorySettingsData>) => createQueryKey('getRepositorySettings', options, false, ['Team Settings']);
@@ -5692,16 +5692,16 @@ export const getRepositorySettingsQueryKey = (options: Options<GetRepositorySett
  * Returns the contribution visibility settings for a repository in a team
  */
 export const getRepositorySettingsOptions = (options: Options<GetRepositorySettingsData>) => queryOptions<GetRepositorySettingsResponse, DefaultError, GetRepositorySettingsResponse, ReturnType<typeof getRepositorySettingsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getRepositorySettings({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getRepositorySettingsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getRepositorySettings({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getRepositorySettingsQueryKey(options)
 });
 
 /**
@@ -5710,34 +5710,34 @@ export const getRepositorySettingsOptions = (options: Options<GetRepositorySetti
  * Updates the contribution visibility settings for a repository in a team
  */
 export const updateRepositorySettingsMutation = (options?: Partial<Options<UpdateRepositorySettingsData>>): UseMutationOptions<UpdateRepositorySettingsResponse, UpdateRepositorySettingsError, Options<UpdateRepositorySettingsData>> => {
-  const mutationOptions: UseMutationOptions<UpdateRepositorySettingsResponse, UpdateRepositorySettingsError, Options<UpdateRepositorySettingsData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateRepositorySettings({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateRepositorySettingsResponse, UpdateRepositorySettingsError, Options<UpdateRepositorySettingsData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateRepositorySettings({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 /**
  * Update workspace Personal Access Token
  */
 export const updateTokenMutation = (options?: Partial<Options<UpdateTokenData>>): UseMutationOptions<UpdateTokenResponse, DefaultError, Options<UpdateTokenData>> => {
-  const mutationOptions: UseMutationOptions<UpdateTokenResponse, DefaultError, Options<UpdateTokenData>> = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await updateToken({
-        ...options,
-        ...fnOptions,
-        throwOnError: true
-      });
-      return data;
-    }
-  };
-  return mutationOptions;
+    const mutationOptions: UseMutationOptions<UpdateTokenResponse, DefaultError, Options<UpdateTokenData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await updateToken({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
 };
 
 export const listUserViewUsersQueryKey = (options: Options<ListUserViewUsersData>) => createQueryKey('listUserViewUsers', options, false, ['User view']);
@@ -5746,16 +5746,16 @@ export const listUserViewUsersQueryKey = (options: Options<ListUserViewUsersData
  * List workspace users and their linked account status
  */
 export const listUserViewUsersOptions = (options: Options<ListUserViewUsersData>) => queryOptions<ListUserViewUsersResponse, DefaultError, ListUserViewUsersResponse, ReturnType<typeof listUserViewUsersQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await listUserViewUsers({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: listUserViewUsersQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await listUserViewUsers({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: listUserViewUsersQueryKey(options)
 });
 
 export const listUserViewUsersInfiniteQueryKey = (options: Options<ListUserViewUsersData>): QueryKey<Options<ListUserViewUsersData>> => createQueryKey('listUserViewUsers', options, true);
@@ -5764,28 +5764,28 @@ export const listUserViewUsersInfiniteQueryKey = (options: Options<ListUserViewU
  * List workspace users and their linked account status
  */
 export const listUserViewUsersInfiniteOptions = (options: Options<ListUserViewUsersData>) => {
-  const opts = infiniteQueryOptions<ListUserViewUsersResponse, DefaultError, InfiniteData<ListUserViewUsersResponse>, QueryKey<Options<ListUserViewUsersData>>, number | Pick<QueryKey<Options<ListUserViewUsersData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
-  // @ts-ignore
-  {
-    queryFn: async ({ pageParam, queryKey, signal }) => {
-      // @ts-ignore
-      const page: Pick<QueryKey<Options<ListUserViewUsersData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
-        query: {
-          page: pageParam
-        }
-      };
-      const params = createInfiniteParams(queryKey, page);
-      const { data } = await listUserViewUsers({
-        ...options,
-        ...params,
-        signal,
-        throwOnError: true
-      });
-      return data;
-    },
-    queryKey: listUserViewUsersInfiniteQueryKey(options)
-  });
-  return opts as Omit<typeof opts, 'initialData'>;
+    const opts = infiniteQueryOptions<ListUserViewUsersResponse, DefaultError, InfiniteData<ListUserViewUsersResponse>, QueryKey<Options<ListUserViewUsersData>>, number | Pick<QueryKey<Options<ListUserViewUsersData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    // @ts-ignore
+    {
+        queryFn: async ({ pageParam, queryKey, signal }) => {
+            // @ts-ignore
+            const page: Pick<QueryKey<Options<ListUserViewUsersData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
+                query: {
+                    page: pageParam
+                }
+            };
+            const params = createInfiniteParams(queryKey, page);
+            const { data } = await listUserViewUsers({
+                ...options,
+                ...params,
+                signal,
+                throwOnError: true
+            });
+            return data;
+        },
+        queryKey: listUserViewUsersInfiniteQueryKey(options)
+    });
+    return opts as Omit<typeof opts, 'initialData'>;
 };
 
 export const getUserViewUserQueryKey = (options: Options<GetUserViewUserData>) => createQueryKey('getUserViewUser', options, false, ['User view']);
@@ -5794,16 +5794,16 @@ export const getUserViewUserQueryKey = (options: Options<GetUserViewUserData>) =
  * Confirm access to a workspace user
  */
 export const getUserViewUserOptions = (options: Options<GetUserViewUserData>) => queryOptions<GetUserViewUserResponse, DefaultError, GetUserViewUserResponse, ReturnType<typeof getUserViewUserQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getUserViewUser({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getUserViewUserQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getUserViewUser({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getUserViewUserQueryKey(options)
 });
 
 export const getUsersWithTeamsQueryKey = (options: Options<GetUsersWithTeamsData>) => createQueryKey('getUsersWithTeams', options, false, ['workspace']);
@@ -5812,14 +5812,14 @@ export const getUsersWithTeamsQueryKey = (options: Options<GetUsersWithTeamsData
  * List workspace users and the teams they belong to
  */
 export const getUsersWithTeamsOptions = (options: Options<GetUsersWithTeamsData>) => queryOptions<GetUsersWithTeamsResponse, DefaultError, GetUsersWithTeamsResponse, ReturnType<typeof getUsersWithTeamsQueryKey>>({
-  queryFn: async ({ queryKey, signal }) => {
-    const { data } = await getUsersWithTeams({
-      ...options,
-      ...queryKey[0],
-      signal,
-      throwOnError: true
-    });
-    return data;
-  },
-  queryKey: getUsersWithTeamsQueryKey(options)
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await getUsersWithTeams({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: getUsersWithTeamsQueryKey(options)
 });

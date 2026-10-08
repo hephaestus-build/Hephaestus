@@ -5,17 +5,8 @@ import { adminListAuthEvents, listBackfillRuns } from "@/api/sdk.gen";
 import { server } from "@/mocks/server";
 
 /**
- * Guards the one setting that makes the generated `Date` types true: `transformer: true` on the
- * `@hey-api/sdk` plugin in `openapi-ts.config.ts`.
- *
- * The transformers plugin emits `transformers.gen.ts` whether or not anything consumes it, so
- * dropping that setting leaves a client that compiles, exports every hook and still types timestamps
- * as `Date` while handing components the raw ISO string. `typecheck` cannot see the difference. It
- * has shipped that way once, crashing a screen that formatted a timestamp.
- *
- * The assertions go through the real SDK rather than reading `sdk.gen.ts` as text, so they fail for
- * the reason that matters — a caller not getting a `Date` — however the wiring got lost. It lives
- * outside `src/api/` because `openapi-ts` empties that directory on every run.
+ * SDK calls must apply response transformers so their Date values match the generated types.
+ * These tests stay outside src/api because generation empties that directory.
  */
 describe("generated SDK response transformers", () => {
 	it("revives a required date field into a Date", async () => {

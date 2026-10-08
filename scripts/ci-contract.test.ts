@@ -686,8 +686,9 @@ void describe("CI contract", () => {
 		const clients = asArray(filters["api-clients"], "api-clients paths");
 		for (const client of ["webapp", "extension"]) {
 			assert.ok(clients.includes(`${client}/src/api/**`), client);
-			assert.ok(clients.includes(`${client}/openapi-ts.config.ts`), client);
 		}
+		assert.ok(clients.includes("scripts/api-generator/**"));
+		assert.ok(clients.includes("pnpm-workspace.yaml"));
 		for (const [name, location] of [
 			["server-package", ["jobs", "server-package", "if"]],
 			["contracts_changed", ["jobs", "Build", "with", "contracts_changed"]],

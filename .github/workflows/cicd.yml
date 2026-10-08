@@ -368,9 +368,9 @@ jobs:
             # must meet the same drift check a server change does.
             api-clients:
               - 'webapp/src/api/**'
-              - 'webapp/openapi-ts.config.ts'
               - 'extension/src/api/**'
-              - 'extension/openapi-ts.config.ts'
+              - 'scripts/api-generator/**'
+              - 'pnpm-workspace.yaml'
             agent-images:
               - 'docker/agents/**'
             postgres-image:

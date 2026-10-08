@@ -116,6 +116,7 @@ for (const file of [
 	"docs/package.json",
 	"webapp/package.json",
 	"extension/package.json",
+	"scripts/api-generator/package.json",
 	"docker/agents/pi/package.json",
 ]) {
 	const workspaceManifest = asRecord(readJsonFileSync(file), file);
@@ -173,7 +174,7 @@ function expectConfig(name: string, expected: unknown): void {
 		);
 	}
 }
-expectConfig("packages", [".", "webapp", "docs", "extension"]);
+expectConfig("packages", [".", "webapp", "docs", "extension", "scripts/api-generator"]);
 expectConfig("nodeLinker", "isolated");
 expectConfig("hoist", false);
 expectConfig("publicHoistPattern", [

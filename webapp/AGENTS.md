@@ -469,7 +469,7 @@ this reason.
 
 ### Dates from the API
 
-A `format: date-time` field comes back from an SDK call as a real `Date`: `openapi-ts.config.ts` sets
+A `format: date-time` field comes back from an SDK call as a real `Date`: `scripts/api-generator/webapp.config.ts` sets
 `transformer: true` on the `@hey-api/sdk` plugin, which wires the generated response transformers into
 every SDK call. Two consequences:
 
