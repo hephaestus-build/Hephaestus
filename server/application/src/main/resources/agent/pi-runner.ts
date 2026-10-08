@@ -1813,6 +1813,119 @@ const REVIEW_COMPOSER_PROMPT_PATH = `${CWD}/review-composer.md`;
 const FEEDBACK_STYLE_PATH = `${CWD}/feedback-style.md`;
 const PREPARED_FEEDBACK_PATH = INPUT_PATHS.preparedFeedback;
 const COMPOSITION_OBSERVATIONS_PATH = `${CWD}/work/composition/observations.json`;
+const IN_APP_SUPPORT_PATH = `${CWD}/work/composition/in-app-support.json`;
+
+/** One occurrence an IN_APP card may cite, as the server selected it after admission. */
+interface InAppSupportOccurrence {
+	observationId: string;
+	artifactKind: string;
+	artifactId: number;
+	outcome: "NOT_MET";
+	origin: "LIVE" | "MANUAL" | "BACKFILL";
+	summary: string;
+	evidenceRationale: string | null;
+	evidence: unknown;
+	practiceRevisionId: number | null;
+	observedAt: string;
+}
+
+/** The server's dated IN_APP support read; null until admission, and null when it arrived malformed. */
+type InAppSupport =
+	| {
+			state: "COMPLETE";
+			readAt: string;
+			practices: { practiceSlug: string; occurrences: InAppSupportOccurrence[] }[];
+	  }
+	| { state: "UNAVAILABLE" | "REFUSED"; readAt: string; refusal: string | null };
+let inAppSupport: InAppSupport | null = null;
+
+function readSupportOccurrence(value: unknown): InAppSupportOccurrence | null {
+	if (
+		!isRecord(value) ||
+		typeof value.observationId !== "string" ||
+		value.observationId === "" ||
+		typeof value.artifactKind !== "string" ||
+		value.artifactKind === "" ||
+		typeof value.artifactId !== "number" ||
+		!Number.isSafeInteger(value.artifactId) ||
+		value.artifactId <= 0 ||
+		value.outcome !== "NOT_MET" ||
+		(value.origin !== "LIVE" && value.origin !== "MANUAL" && value.origin !== "BACKFILL") ||
+		typeof value.summary !== "string" ||
+		(value.evidenceRationale !== undefined &&
+			value.evidenceRationale !== null &&
+			typeof value.evidenceRationale !== "string") ||
+		(value.practiceRevisionId !== undefined &&
+			value.practiceRevisionId !== null &&
+			(typeof value.practiceRevisionId !== "number" ||
+				!Number.isSafeInteger(value.practiceRevisionId) ||
+				value.practiceRevisionId <= 0)) ||
+		typeof value.observedAt !== "string" ||
+		!Number.isFinite(Date.parse(value.observedAt))
+	) {
+		return null;
+	}
+	return {
+		observationId: value.observationId,
+		artifactKind: value.artifactKind,
+		artifactId: value.artifactId,
+		outcome: value.outcome,
+		origin: value.origin,
+		summary: value.summary,
+		evidenceRationale: value.evidenceRationale ?? null,
+		evidence: value.evidence ?? null,
+		practiceRevisionId: value.practiceRevisionId ?? null,
+		observedAt: value.observedAt,
+	};
+}
+
+/** Validates the support read beside the admission; anything else is no support context at all. */
+function readInAppSupport(
+	value: unknown,
+	current: readonly AdmittedObservation[],
+): InAppSupport | null {
+	if (
+		!isRecord(value) ||
+		typeof value.readAt !== "string" ||
+		!Number.isFinite(Date.parse(value.readAt))
+	) {
+		return null;
+	}
+	if (value.state === "UNAVAILABLE" || value.state === "REFUSED") {
+		if (
+			value.refusal !== undefined &&
+			value.refusal !== null &&
+			typeof value.refusal !== "string"
+		) {
+			return null;
+		}
+		return { state: value.state, readAt: value.readAt, refusal: value.refusal ?? null };
+	}
+	if (value.state !== "COMPLETE" || !Array.isArray(value.practices)) {
+		return null;
+	}
+	const practices: { practiceSlug: string; occurrences: InAppSupportOccurrence[] }[] = [];
+	const expected = new Set(notMetPractices(current));
+	for (const practice of value.practices) {
+		if (
+			!isRecord(practice) ||
+			typeof practice.practiceSlug !== "string" ||
+			!expected.delete(practice.practiceSlug) ||
+			!Array.isArray(practice.occurrences)
+		) {
+			return null;
+		}
+		const occurrences = practice.occurrences.map(readSupportOccurrence);
+		if (!occurrences.every((occurrence) => occurrence !== null)) {
+			return null;
+		}
+		practices.push({ practiceSlug: practice.practiceSlug, occurrences });
+	}
+	if (expected.size > 0) {
+		return null;
+	}
+	return { state: "COMPLETE", readAt: value.readAt, practices };
+}
 const PUBLIC_FEEDBACK_HISTORY_PATH = `${CWD}/work/composition/public-feedback-history.json`;
 let compositionAdmitted = false;
 let admissionDigest: string | null = null;
@@ -2098,11 +2211,11 @@ function buildFeedbackTool(
 		}
 		// IN_APP pattern feedback requires NOT_MET observations on distinct pieces of work.
 		if (unit.channel === "IN_APP" && delivers) {
-			const pieces = negativePiecesOfWork(unit.practiceSlug, observations);
+			const pieces = negativePiecesOfWork(unit.practiceSlug);
 			if (pieces < request.minDistinctArtifacts) {
 				return skipped(
 					`IN_APP needs a pattern across at least ${request.minDistinctArtifacts} pieces of work, and ` +
-						`${unit.practiceSlug} is NOT_MET on ${pieces} (this work and the history); WITHHOLD it ` +
+						`${unit.practiceSlug} has support on ${pieces} (the IN_APP support read); WITHHOLD it ` +
 						`with BELOW_BAR. Skipped.`,
 				);
 			}
@@ -2705,41 +2818,19 @@ const THIS_WORK = ((): string | undefined => {
 
 // Enforce snapshot-dependent constraints here for fast model correction; Java rechecks them.
 /**
- * Count distinct artifacts with NOT_MET observations, including this review. An earlier review of the
- * same work is the same piece, as the server counts it (InAppFeedbackRouter.distinctArtifacts).
+ * Count the distinct pieces of work the server's IN_APP support read selected for the practice. Two occurrences on
+ * one piece of work are one piece, as the server counts it (InAppFeedbackRouter.distinctArtifacts).
  */
-function negativePiecesOfWork(
-	practiceSlug: string,
-	current: readonly AdmittedObservation[],
-): number {
-	const pieces = new Set<string>();
-	if (
-		THIS_WORK !== undefined &&
-		current.some(
-			(observation) =>
-				observation.practiceSlug === practiceSlug && observation.outcome === "NOT_MET",
-		)
-	) {
-		pieces.add(THIS_WORK);
+function negativePiecesOfWork(practiceSlug: string): number {
+	if (inAppSupport?.state !== "COMPLETE") {
+		return 0;
 	}
-	const historyPath = `${nodePath.dirname(PREPARED_FEEDBACK_PATH)}/observations.json`;
-	if (!existsSync(historyPath)) {
-		return pieces.size;
-	}
-	const history = parseJson(readFileSync(historyPath, "utf8"));
-	const entries =
-		isRecord(history) && Array.isArray(history.observations) ? history.observations : [];
-	for (const entry of entries) {
-		if (!isRecord(entry) || entry.practiceSlug !== practiceSlug || entry.outcome !== "NOT_MET") {
-			continue;
-		}
-		const artifact = isRecord(entry.artifact) ? entry.artifact : {};
-		const identity = workIdentity(artifact.kind, artifact.url);
-		if (identity !== undefined) {
-			pieces.add(identity);
-		}
-	}
-	return pieces.size;
+	const support = inAppSupport.practices.find((practice) => practice.practiceSlug === practiceSlug);
+	return new Set(
+		(support?.occurrences ?? []).map(
+			(occurrence) => `${occurrence.artifactKind}:${occurrence.artifactId}`,
+		),
+	).size;
 }
 
 /** The IN_CHAT lane: notes to the mentor, and nothing that would be read out. */
@@ -2985,6 +3076,9 @@ function buildCompositionTurn(
 	const context = [
 		shown("The composition request (lanes, caps, placements)", COMPOSITION_REQUEST_PATH),
 		shown("What earlier reviews recorded about this person", `${historyRoot}/observations.json`),
+		request.channels.IN_APP.enabled
+			? shown("IN_APP support: occurrences a new card may cite at this read", IN_APP_SUPPORT_PATH)
+			: "",
 		priorFeedbackFacts("Recorded delivered feedback", `${historyRoot}/feedback.json`, "feedback"),
 		priorFeedbackFacts(
 			"Prepared feedback (not delivered; supersession targets)",
@@ -3118,6 +3212,32 @@ async function admitObservations() {
 		COMPOSITION_OBSERVATIONS_PATH,
 		JSON.stringify({ observations: admittedObservations }, null, 2),
 	);
+	// The support read is checked only after the admission it accompanies; it never changes what was admitted.
+	inAppSupport = readInAppSupport(admitted.inAppSupport, admittedObservations);
+	if (inAppSupport?.state === "COMPLETE") {
+		writeFileSync(IN_APP_SUPPORT_PATH, JSON.stringify(inAppSupport, null, 2));
+	}
+}
+
+/**
+ * IN_APP rests on the server's support read. Without a complete one the lane closes for this run: a refusal is the
+ * recipient policy's answer, anything else is IN_APP feedback that could not be composed. Other lanes go on.
+ */
+function closeInAppWithoutSupport(request: CompositionRequest): void {
+	if (
+		!request.channels.IN_APP.enabled ||
+		notMetPractices(admittedObservations).length === 0 ||
+		inAppSupport?.state === "COMPLETE"
+	) {
+		return;
+	}
+	request.channels.IN_APP.enabled = false;
+	console.error(
+		`[pi-runner] IN_APP closed for this run: support context ${inAppSupport === null ? "missing or malformed" : inAppSupport.state}`,
+	);
+	if (inAppSupport?.state !== "REFUSED") {
+		recordCompositionFailure("PRIVATE_FEEDBACK", "RUNTIME_ERROR");
+	}
 }
 
 /** One read of the delivered public history; any refusal or bad answer is final, never an older or empty history. */
@@ -3736,19 +3856,6 @@ async function main() {
 	);
 
 	const compositionRequest = loadCompositionRequest();
-	// The private lanes receive authorized history in their own fresh session; the review on
-	// the work gets a session of its own after admission, and this tool never sees it.
-	const privateLanesOpen =
-		compositionRequest !== null &&
-		PRIVATE_CHANNELS.some((channel) => compositionRequest.channels[channel].enabled);
-	const feedbackTool = privateLanesOpen
-		? buildFeedbackTool(
-				composablePracticeSlugs(),
-				compositionRequest,
-				admittedObservations,
-				stagedPreparedTargets(),
-			)
-		: null;
 	const streamUsage = newUsageLedger();
 	let providerFailures = 0;
 	let measuring = true;
@@ -4154,6 +4261,9 @@ async function main() {
 
 	measurementClosed = true;
 	await admitObservations();
+	if (compositionRequest) {
+		closeInAppWithoutSupport(compositionRequest);
+	}
 	persistComposedFeedback();
 	maybeWriteResultFile();
 	if (compositionRequest && admittedObservations.length > 0) {
@@ -4165,7 +4275,10 @@ async function main() {
 			) {
 				recordCompositionFailure("PUBLIC_REVIEW", reason);
 			}
-			if (privateLanesOpen && undecidedPrivatePractices().length > 0) {
+			if (
+				PRIVATE_CHANNELS.some((channel) => compositionRequest.channels[channel].enabled) &&
+				undecidedPrivatePractices().length > 0
+			) {
 				recordCompositionFailure("PRIVATE_FEEDBACK", reason);
 			}
 		};
@@ -4189,7 +4302,7 @@ async function main() {
 				if (compositionRequest.channels.IN_CONTEXT.enabled && reviewable.length > 0) {
 					await composeReview(compositionRequest, reviewable, notReached, safety);
 				}
-				if (feedbackTool && notMetPractices(admittedObservations).length > 0 && !safety.expired()) {
+				if (notMetPractices(admittedObservations).length > 0 && !safety.expired()) {
 					await composePrivately(compositionRequest, safety);
 				}
 			} catch (error) {
@@ -4457,6 +4570,15 @@ async function main() {
 		request: CompositionRequest,
 		safety: ReturnType<typeof scheduleDeadline>,
 	): Promise<void> {
+		if (!PRIVATE_CHANNELS.some((channel) => request.channels[channel].enabled)) {
+			return;
+		}
+		const feedbackTool = buildFeedbackTool(
+			composablePracticeSlugs(),
+			request,
+			admittedObservations,
+			stagedPreparedTargets(),
+		);
 		const privateLoader = new DefaultResourceLoader({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
@@ -4468,7 +4590,8 @@ async function main() {
 		});
 		await privateLoader.reload();
 		composerTool = "report_feedback";
-		if (privateLanesOpen && feedbackTool) {
+		// A lane closed after admission (IN_APP without its support read) leaves only the lanes still open.
+		{
 			currentTurnSlugs = [];
 			const opened = await openSession(
 				[...PRACTICE_TOOLS, "report_feedback"],

@@ -18,6 +18,16 @@ import { isRecord } from "../../../main/resources/agent/pi-observation-normalize
 // The runner reads /workspace and the environment at module scope, so each scenario is a child
 // process: this file re-enters itself with the SDK mocked and drives one review through it.
 
+const supportOccurrence = (artifactKind: string, artifactId: number) => ({
+	observationId: `support-${artifactKind}-${artifactId}`,
+	artifactKind,
+	artifactId,
+	outcome: "NOT_MET",
+	origin: "LIVE",
+	summary: "A selected negative occurrence",
+	observedAt: "2026-10-07T08:00:00Z",
+});
+
 const admittedObservation = {
 	outcome: "NOT_MET",
 	id: "observation-1",
@@ -499,10 +509,63 @@ if (scenario !== undefined && scenario !== "") {
 			assert.ok(typeof init?.body === "string");
 			writeFileSync(nodePath.join(cwd, "admission.json"), init.body);
 		}
+		const rows = admitted();
+		const supportMode = process.env.PI_IN_APP_SUPPORT_MODE;
+
+		let selected: ReturnType<typeof supportOccurrence>[] = [];
+		if (
+			scenario === "compose" ||
+			scenario === "compose-foreign-provider" ||
+			supportMode === "selected"
+		) {
+			selected = [supportOccurrence("scm.pull_request", 3), supportOccurrence("scm.issue", 3)];
+		} else if (supportMode === "duplicate") {
+			selected = [
+				supportOccurrence("scm.pull_request", 3),
+				supportOccurrence("scm.pull_request", 3),
+			];
+		}
+
+		const complete = {
+			state: "COMPLETE",
+			readAt: "2026-10-07T10:00:00Z",
+			practices: [
+				...new Set(
+					rows
+						.filter((row) => isRecord(row) && row.outcome === "NOT_MET")
+						.map((row) => {
+							assert.ok(isRecord(row));
+							return row.practiceSlug;
+						}),
+				),
+			].map((practiceSlug) => ({ practiceSlug, occurrences: selected })),
+		};
+		let support: unknown = complete;
+		if (supportMode === "missing") {
+			support = undefined;
+		} else if (supportMode === "unavailable") {
+			support = { state: "UNAVAILABLE", readAt: complete.readAt };
+		} else if (supportMode === "refused" || supportMode === "refused-only") {
+			support = { state: "REFUSED", readAt: complete.readAt };
+		} else if (supportMode === "malformed") {
+			support = { ...complete, practices: [] };
+		} else if (supportMode === "invalid-optional") {
+			support = {
+				...complete,
+				practices: [
+					{
+						practiceSlug: "test-practice",
+						occurrences: [{ ...supportOccurrence("scm.issue", 1), practiceRevisionId: "unknown" }],
+					},
+				],
+			};
+		}
+
 		return Response.json({
 			schemaVersion: 1,
 			admissionDigest: "admitted-digest",
-			observations: admitted(),
+			observations: rows,
+			inAppSupport: support,
 		});
 	});
 	const manager = {
@@ -1165,6 +1228,53 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							if (text.includes("## This turn")) {
+								if (scenario === "compose-support") {
+									const feedback = tool("report_feedback");
+									const reply = await feedback.execute("support", {
+										units: [
+											{
+												channel: "IN_APP",
+												practiceSlug: "test-practice",
+												basedOn: ["observation-1"],
+												action: "NEW",
+												title: "A repeated problem",
+												body: "The recurring problem",
+												nextStep: "Check the boundary",
+											},
+											{
+												channel: "IN_CHAT",
+												practiceSlug: "test-practice",
+												basedOn: ["observation-1"],
+												action: "NEW",
+												title: "Discuss the boundary",
+												notes: {
+													situation: "Current problem",
+													capability: "Check the boundary",
+													evidenceSummary: "The admitted occurrence",
+													inConversationSignal: "A boundary discussion",
+												},
+											},
+										],
+									});
+									record(`support-units:${JSON.stringify(reply)}`);
+									if (
+										process.env.PI_IN_APP_SUPPORT_MODE === "empty" ||
+										process.env.PI_IN_APP_SUPPORT_MODE === "duplicate"
+									) {
+										await feedback.execute("below", {
+											units: [
+												{
+													channel: "IN_APP",
+													practiceSlug: "test-practice",
+													basedOn: ["observation-1"],
+													action: "WITHHOLD",
+													withholdReason: "BELOW_BAR",
+												},
+											],
+										});
+									}
+									return;
+								}
 								if (scenario === "draft-revision") {
 									assert.ok(
 										!options.customTools.some((item) => item.name === "report_observation"),
@@ -1328,85 +1438,15 @@ if (scenario !== undefined && scenario !== "") {
 								}
 								assert.match(schema, /One of: IN_APP\./u);
 								assert.match(schema, /Required: channel, practiceSlug, basedOn, action\./u);
-								// One occurrence is not a pattern: with no history, the card is refused, and a
-								// call that stored nothing is an error the session must correct.
-								const alone = await feedback
-									.execute("f-0", { units: [card] })
+								const historical = await feedback
+									.execute("historical", {
+										units: [{ ...card, basedOn: ["support-scm.issue-3"] }],
+									})
 									.then(() => "accepted")
 									.catch((error: unknown) =>
 										error instanceof Error ? error.message : String(error),
 									);
-								record(`feedback-alone:${alone}`);
-								mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
-								// An earlier review of this same merge request is the same piece of work, not a second.
-								writeFileSync(
-									nodePath.join(cwd, "history/observations.json"),
-									JSON.stringify({
-										observations: [
-											{
-												practiceSlug: "test-practice",
-												outcome: "NOT_MET",
-												artifact: {
-													kind: "scm.pull_request",
-													container: "group/repo",
-													number: 3,
-													url: "https://gitlab.example/group/repo/-/merge_requests/3",
-													title: "This change, reviewed before",
-												},
-											},
-										],
-									}),
-								);
-								const sameWork = await feedback
-									.execute("f-s", { units: [card] })
-									.then(() => "accepted")
-									.catch((error: unknown) =>
-										error instanceof Error ? error.message : String(error),
-									);
-								record(`feedback-same-work:${sameWork}`);
-								writeFileSync(
-									nodePath.join(cwd, "history/observations.json"),
-									JSON.stringify({
-										observations: [
-											{
-												practiceSlug: "test-practice",
-												outcome: "NOT_MET",
-												artifact: { kind: "scm.issue", number: 7, title: "Unresolved work" },
-											},
-										],
-									}),
-								);
-								const unresolved = await feedback
-									.execute("f-u", { units: [card] })
-									.then(() => "accepted")
-									.catch((error: unknown) =>
-										error instanceof Error ? error.message : String(error),
-									);
-								record(`feedback-unresolved:${unresolved}`);
-								writeFileSync(
-									nodePath.join(cwd, "history/observations.json"),
-									JSON.stringify({
-										observations: [
-											{
-												practiceSlug: "test-practice",
-												outcome: "NOT_MET",
-												artifact: {
-													kind:
-														scenario === "compose-foreign-provider"
-															? "scm.pull_request"
-															: "scm.issue",
-													container: "group/repo",
-													number: 3,
-													url:
-														scenario === "compose-foreign-provider"
-															? "https://github.com/group/repo/pull/3"
-															: "https://gitlab.example/group/repo/-/issues/3",
-													title: "Earlier work",
-												},
-											},
-										],
-									}),
-								);
+								record(`feedback-historical:${historical}`);
 								// Trying to break it: every unit but the first is wrong in its own way, and each
 								// is answered on its own while the first is stored.
 								const reply = await feedback.execute("f-1", {
@@ -2144,6 +2184,15 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-runtime-error",
 		"compose-recovered-error",
 		"compose-complete-error",
+		"compose-support-selected",
+		"compose-support-empty",
+		"compose-support-duplicate",
+		"compose-support-missing",
+		"compose-support-malformed",
+		"compose-support-invalid-optional",
+		"compose-support-unavailable",
+		"compose-support-refused",
+		"compose-support-refused-only",
 		"compose",
 		"compose-fresh-history",
 		"compose-history-invalid",
@@ -2172,6 +2221,15 @@ if (scenario !== undefined && scenario !== "") {
 	]) {
 		const stage =
 			new Map([
+				["compose-support-selected", "compose-support"],
+				["compose-support-empty", "compose-support"],
+				["compose-support-duplicate", "compose-support"],
+				["compose-support-missing", "compose-support"],
+				["compose-support-malformed", "compose-support"],
+				["compose-support-invalid-optional", "compose-support"],
+				["compose-support-unavailable", "compose-support"],
+				["compose-support-refused", "compose-support"],
+				["compose-support-refused-only", "compose-support"],
 				["compose-loop-rejection", "compose-loop"],
 				["compose-fresh-history", "compose"],
 				["compose-history-invalid", "compose"],
@@ -2229,9 +2287,10 @@ if (scenario !== undefined && scenario !== "") {
 				repeat: "nudges a turn that repeats one call and ends it when the call keeps coming",
 				"tree-citation":
 					"verifies a HEAD repository citation against the checkout and finalizes out/",
-				compose: "counts an issue and a merge request with the same number as distinct work",
+				compose:
+					"uses selected native issue and merge request identities while retaining current-only unit grounding",
 				"compose-foreign-provider":
-					"counts matching work numbers at different providers as distinct work",
+					"keeps distinct native work identities separate from provider URL text",
 				"compose-overflow":
 					"compacts the session before a composition prompt that would not fit beside what it holds",
 				"compose-silent":
@@ -2292,6 +2351,32 @@ if (scenario !== undefined && scenario !== "") {
 					if (fixture === "compose-context-unavailable") {
 						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
 					}
+					if (stage === "compose-support") {
+						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
+						writeFileSync(
+							nodePath.join(cwd, "history/observations.json"),
+							JSON.stringify({
+								observations: [
+									{
+										practiceSlug: "test-practice",
+										outcome: "NOT_MET",
+										artifact: {
+											kind: "scm.issue",
+											url: "https://gitlab.example/group/repo/-/issues/1",
+										},
+									},
+									{
+										practiceSlug: "test-practice",
+										outcome: "NOT_MET",
+										artifact: {
+											kind: "scm.issue",
+											url: "https://gitlab.example/group/repo/-/issues/2",
+										},
+									},
+								],
+							}),
+						);
+					}
 					writeFileSync(nodePath.join(cwd, "events"), "");
 					writeFileSync(
 						nodePath.join(cwd, "evidence/metadata.json"),
@@ -2333,6 +2418,14 @@ if (scenario !== undefined && scenario !== "") {
 								channels: {
 									IN_APP: { enabled: true, maxUnits: 1 },
 									IN_CONTEXT: { enabled: true, maxUnits: 1 },
+									...(stage === "compose-support"
+										? {
+												IN_CHAT: {
+													enabled: fixture !== "compose-support-refused-only",
+													maxUnits: 1,
+												},
+											}
+										: {}),
 								},
 								inContextPlacementKinds:
 									stage === "compose" || stage === "compose-foreign-provider"
@@ -2488,6 +2581,9 @@ if (scenario !== undefined && scenario !== "") {
 							env: {
 								...process.env,
 								PI_ORCHESTRATION_SCENARIO: stage,
+								PI_IN_APP_SUPPORT_MODE: fixture.startsWith("compose-support-")
+									? fixture.slice("compose-support-".length)
+									: undefined,
 								PI_UNAVAILABLE_CONTEXT: String(fixture === "compose-context-unavailable"),
 								PI_PUBLIC_HISTORY_MODE: new Map([
 									["compose-fresh-history", "fresh"],
@@ -3202,6 +3298,56 @@ assert.notEqual(outgoing.function.strict, true);`,
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
+						case "compose-support": {
+							assert.equal(child.status, 0, child.stderr);
+							const payload: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(payload) && Array.isArray(payload.units));
+							assert.ok(payload.review !== null);
+							assert.equal(payload.admissionDigest, "admitted-digest");
+							assert.deepEqual(
+								JSON.parse(
+									readFileSync(nodePath.join(cwd, "work/composition/observations.json"), "utf8"),
+								),
+								{ observations: [admittedObservation] },
+							);
+
+							const mode = fixture.slice("compose-support-".length);
+							assert.equal(
+								payload.units.some(
+									(unit: unknown) =>
+										isRecord(unit) && unit.channel === "IN_CHAT" && unit.action === "NEW",
+								),
+								mode !== "refused-only",
+							);
+							assert.deepEqual(
+								payload.units
+									.filter((unit: unknown) => isRecord(unit) && unit.channel === "IN_APP")
+									.map((unit: unknown) => {
+										assert.ok(isRecord(unit));
+										return unit.action;
+									}),
+								new Map<string, string[]>([
+									["selected", ["NEW"]],
+									["empty", ["WITHHOLD"]],
+									["duplicate", ["WITHHOLD"]],
+								]).get(mode) ?? [],
+							);
+							assert.deepEqual(
+								payload.compositionFailures,
+								["missing", "malformed", "unavailable", "invalid-optional"].includes(mode)
+									? [{ phase: "PRIVATE_FEEDBACK", reason: "RUNTIME_ERROR" }]
+									: [],
+							);
+							assert.equal(
+								events.filter(
+									(event) => event.includes("tools=") && event.includes("report_feedback"),
+								).length,
+								mode === "refused-only" ? 0 : 1,
+							);
+							break;
+						}
 						case "compose":
 						case "compose-foreign-provider": {
 							assert.equal(child.status, 0, child.stderr);
@@ -3352,18 +3498,8 @@ assert.notEqual(outgoing.function.strict, true);`,
 								events.join("\n"),
 							);
 							assert.match(
-								events.find((event) => event.startsWith("feedback-alone:")) ?? "",
-								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
-								child.stderr,
-							);
-							assert.match(
-								events.find((event) => event.startsWith("feedback-same-work:")) ?? "",
-								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
-								child.stderr,
-							);
-							assert.match(
-								events.find((event) => event.startsWith("feedback-unresolved:")) ?? "",
-								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
+								events.find((event) => event.startsWith("feedback-historical:")) ?? "",
+								/does not name an admitted observation from this run/u,
 							);
 							const reply = events.find((event) => event.startsWith("feedback:")) ?? "";
 							// The composition turn goes on to its summary; only the retry ends on its last decision.
