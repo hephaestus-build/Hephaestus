@@ -2987,14 +2987,17 @@ function validateUnit(
 		if (!hasText(reason)) {
 			return "WITHHOLD needs a withholdReason; skipped.";
 		}
-		// Semantic sameness stays the composer's judgement; this checks only that the channel and practice have a record.
-		if (
-			[...PRIOR_ADVICE_REASONS].some((prior) => prior === reason) &&
-			!deliveredPractices.has(`${unit.channel}:${unit.practiceSlug}`)
-		) {
+		// The withholding settles each NOT_MET practice in basedOn (undecidedPrivatePractices), so each needs a record here.
+		const unrecorded = notMetPractices(
+			unit.basedOn.flatMap((id) => {
+				const observation = observationsById.get(id);
+				return observation === undefined ? [] : [observation];
+			}),
+		).filter((slug) => !deliveredPractices.has(`${unit.channel}:${slug}`));
+		if ([...PRIOR_ADVICE_REASONS].some((prior) => prior === reason) && unrecorded.length > 0) {
 			return (
-				`${reason} rests on feedback recorded as delivered on ${unit.channel} for ${unit.practiceSlug} in the ` +
-				`delivered-feedback history: current, not withdrawn, with its words. The captured history does not establish that prerequisite; prepared ` +
+				`${reason} rests on feedback recorded as delivered on ${unit.channel} for ${unrecorded.join(", ")} in the ` +
+				`delivered-feedback history: current, not withdrawn, with its words, for each NOT_MET practice in basedOn. The captured history does not establish that prerequisite; prepared ` +
 				`feedback and other channels do not count. Decide this lane on its own evidence: the unit it supports, ` +
 				`or WITHHOLD with BELOW_BAR. Skipped.`
 			);

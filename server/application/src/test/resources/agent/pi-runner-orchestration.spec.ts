@@ -236,14 +236,15 @@ const deliveredRecord = (id: string, channel: string, practiceSlug: string, over
 });
 
 /**
- * One delivered IN_APP card about test-practice and nothing delivered on IN_CHAT about it; second-practice has
- * current IN_CHAT notes, and on IN_APP only a stale, a withdrawn and an undated record.
+ * One delivered IN_APP card about each practice. On IN_CHAT, second-practice has current notes, and test-practice
+ * has only records that do not count: malformed, MET-based, stale, withdrawn and undated.
  */
 const ALREADY_SAID_HISTORY = JSON.stringify({
 	coverage: HISTORY_COVERAGE,
 	recordRole: "RECORDED_DELIVERY",
 	feedback: [
 		deliveredRecord("app-test", "IN_APP", "test-practice"),
+		deliveredRecord("app-second", "IN_APP", "second-practice"),
 		deliveredRecord("context-test", "IN_CONTEXT", "test-practice"),
 		deliveredRecord("chat-second", "IN_CHAT", "second-practice"),
 		deliveredRecord("chat-other", "IN_CHAT", "other-practice"),
@@ -251,17 +252,17 @@ const ALREADY_SAID_HISTORY = JSON.stringify({
 		deliveredRecord("chat-test-met", "IN_CHAT", "test-practice", {
 			basedOn: [{ id: "earlier-met", practiceSlug: "test-practice", outcome: "MET" }],
 		}),
-		deliveredRecord("app-second-stale", "IN_APP", "second-practice", {
+		deliveredRecord("chat-test-stale", "IN_CHAT", "test-practice", {
 			recordedClaimCurrentness: "STALE",
 			bodyRole: undefined,
 			body: undefined,
 		}),
-		deliveredRecord("app-second-withdrawn", "IN_APP", "second-practice", {
+		deliveredRecord("chat-test-withdrawn", "IN_CHAT", "test-practice", {
 			withdrawn: true,
 			bodyRole: undefined,
 			body: undefined,
 		}),
-		deliveredRecord("app-second-undated", "IN_APP", "second-practice", { deliveredAt: null }),
+		deliveredRecord("chat-test-undated", "IN_CHAT", "test-practice", { deliveredAt: null }),
 	],
 });
 
@@ -360,10 +361,15 @@ interface CustomTool {
 	execute: (id: string, input: unknown) => Promise<unknown>;
 }
 
-const withhold = (channel: string, practiceSlug: string, withholdReason: string) => ({
+const withhold = (
+	channel: string,
+	practiceSlug: string,
+	withholdReason: string,
+	basedOn = [practiceSlug === "test-practice" ? "observation-1" : "observation-2"],
+) => ({
 	channel,
 	practiceSlug,
-	basedOn: [practiceSlug === "test-practice" ? "observation-1" : "observation-2"],
+	basedOn,
 	action: "WITHHOLD",
 	withholdReason,
 });
@@ -401,10 +407,23 @@ if (scenario !== undefined && scenario !== "") {
 					publicEligible: true,
 				}));
 			}
+			case "compose-already-said": {
+				// Two NOT_MET practices, and MET counterevidence of another practice without delivered history.
+				return [
+					admittedObservation,
+					{ ...admittedObservation, id: "observation-2", practiceSlug: "second-practice" },
+					{
+						...admittedObservation,
+						id: "observation-3",
+						practiceSlug: "counter-practice",
+						outcome: "MET",
+						severity: null,
+					},
+				];
+			}
 			case "compose-partial-error":
 			case "compose-qualify":
-			case "compose-fold":
-			case "compose-already-said": {
+			case "compose-fold": {
 				return [
 					{ ...admittedObservation, publicEligible: !reviewerOnly },
 					{
@@ -1545,23 +1564,29 @@ if (scenario !== undefined && scenario !== "") {
 								}
 								if (scenario === "compose-already-said") {
 									// A withholding that names earlier feedback needs a delivered record on its own channel
-									// about its own practice; a refused one is stored nowhere and the lane can still be decided.
+									// for every NOT_MET practice it folds in; a refused one is stored nowhere and the lane
+									// can still be decided.
 									const feedback = tool("report_feedback");
-
+									const both = ["observation-1", "observation-2"];
 									const first = await feedback.execute("said", {
 										units: [
-											withhold("IN_APP", "test-practice", "ALREADY_SAID"),
+											withhold("IN_CHAT", "second-practice", "NO_MATERIAL_CHANGE", [
+												"observation-2",
+												"observation-1",
+											]),
 											withhold("IN_CHAT", "test-practice", "ALREADY_SAID"),
-											withhold("IN_CHAT", "second-practice", "NO_MATERIAL_CHANGE"),
-											withhold("IN_APP", "second-practice", "ALREADY_SAID"),
+											withhold("IN_APP", "test-practice", "ALREADY_SAID", both),
 										],
 									});
 									record(`said-first:${JSON.stringify(first)}`);
 									const second = await feedback.execute("said-again", {
 										units: [
 											withhold("IN_CHAT", "test-practice", "NO_MATERIAL_CHANGE"),
+											withhold("IN_CHAT", "second-practice", "NO_MATERIAL_CHANGE", [
+												"observation-2",
+												"observation-3",
+											]),
 											withhold("IN_CHAT", "test-practice", "BELOW_BAR"),
-											withhold("IN_APP", "second-practice", "BELOW_BAR"),
 										],
 									});
 									record(`said-second:${JSON.stringify(second)}`);
@@ -4496,26 +4521,36 @@ assert.notEqual(outgoing.function.strict, true);`,
 						case "compose-already-said": {
 							assert.equal(child.status, 0, child.stderr);
 							const first = events.find((event) => event.startsWith("said-first:")) ?? "";
-							assert.match(first, /#1: stored a IN_APP unit for test-practice \(WITHHOLD\)/u);
-							// Prepared notes, the IN_APP card, the public review, other practices and a MET record all
-							// leave IN_CHAT test-practice without a delivered record.
+							// The primary second-practice has IN_CHAT notes; the folded-in NOT_MET test-practice has none.
 							assert.match(
 								first,
-								/#2: ALREADY_SAID rests on feedback recorded as delivered on IN_CHAT for test-practice/u,
+								/#1: NO_MATERIAL_CHANGE rests on feedback recorded as delivered on IN_CHAT for test-practice in/u,
 							);
-							assert.match(first, /#3: stored a IN_CHAT unit for second-practice \(WITHHOLD\)/u);
-							// Stale, withdrawn and undated records do not count.
+							// Prepared notes, the IN_APP card, the public review, other practices, and malformed,
+							// MET-based, stale, withdrawn and undated IN_CHAT records leave test-practice without one.
 							assert.match(
 								first,
-								/#4: ALREADY_SAID rests on feedback recorded as delivered on IN_APP for second-practice/u,
+								/#2: ALREADY_SAID rests on feedback recorded as delivered on IN_CHAT for test-practice in/u,
+							);
+							// Both NOT_MET practices have an IN_APP card; a withholding uses no slot on its lane.
+							assert.match(
+								first,
+								/#3: stored a IN_APP unit for test-practice \(WITHHOLD\); 0\/1 used on that lane\./u,
 							);
 							const second = events.find((event) => event.startsWith("said-second:")) ?? "";
 							assert.match(
 								second,
-								/#1: NO_MATERIAL_CHANGE rests on feedback recorded as delivered on IN_CHAT for test-practice/u,
+								/#1: NO_MATERIAL_CHANGE rests on feedback recorded as delivered on IN_CHAT for test-practice in/u,
 							);
-							assert.match(second, /#2: stored a IN_CHAT unit for test-practice \(WITHHOLD\)/u);
-							assert.match(second, /#3: stored a IN_APP unit for second-practice \(WITHHOLD\)/u);
+							// The refused grouping left the pair open; MET counterevidence owes no history.
+							assert.match(
+								second,
+								/#2: stored a IN_CHAT unit for second-practice \(WITHHOLD\); 0\/1 used on that lane\./u,
+							);
+							assert.match(
+								second,
+								/#3: stored a IN_CHAT unit for test-practice \(WITHHOLD\); 0\/1 used on that lane\./u,
+							);
 							const payload: unknown = JSON.parse(
 								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
 							);
@@ -4523,13 +4558,13 @@ assert.notEqual(outgoing.function.strict, true);`,
 							assert.deepEqual(
 								payload.units.map((unit: unknown) => {
 									assert.ok(isRecord(unit));
-									return `${String(unit.channel)}:${String(unit.practiceSlug)}:${String(unit.withholdReason)}`;
+									assert.ok(Array.isArray(unit.basedOn));
+									return `${String(unit.channel)}:${String(unit.practiceSlug)}:${String(unit.withholdReason)}:${unit.basedOn.join("+")}`;
 								}),
 								[
-									"IN_APP:test-practice:ALREADY_SAID",
-									"IN_CHAT:second-practice:NO_MATERIAL_CHANGE",
-									"IN_CHAT:test-practice:BELOW_BAR",
-									"IN_APP:second-practice:BELOW_BAR",
+									"IN_APP:test-practice:ALREADY_SAID:observation-1+observation-2",
+									"IN_CHAT:second-practice:NO_MATERIAL_CHANGE:observation-2+observation-3",
+									"IN_CHAT:test-practice:BELOW_BAR:observation-1",
 								],
 							);
 							assert.deepEqual(payload.compositionFailures, []);
