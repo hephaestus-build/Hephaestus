@@ -4532,7 +4532,7 @@ export type ReleaseStatus = {
    */
   running: RunningRelease;
   /**
-   * when this instance started the running release, absent until it is recorded
+   * when this instance started the running release, absent unless the newest start is it
    */
   runningSince?: Date;
   /**

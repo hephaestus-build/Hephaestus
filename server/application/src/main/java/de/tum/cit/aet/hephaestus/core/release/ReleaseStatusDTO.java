@@ -18,7 +18,7 @@ import org.jspecify.annotations.Nullable;
  * @param retryUntil   the wait GitHub named on a rate limit; a manual check before it is refused
  * @param failure      why the last attempt did not complete, when {@code status} is {@code FAILED}
  * @param latest       the newest published release as of {@code lastSuccess}
- * @param runningSince when this instance started the running release, absent until it is recorded
+ * @param runningSince when this instance started the running release, absent unless the newest start is it
  * @param history      the releases this instance ran, newest first
  */
 public record ReleaseStatusDTO(

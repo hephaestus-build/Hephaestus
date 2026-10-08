@@ -16542,8 +16542,8 @@ components:
         runningSince:
           type: string
           format: date-time
-          description: "when this instance started the running release, absent until\
-            \ it is recorded"
+          description: "when this instance started the running release, absent unless\
+            \ the newest start is it"
         status:
           type: string
           description: the verdict an administrator reads first

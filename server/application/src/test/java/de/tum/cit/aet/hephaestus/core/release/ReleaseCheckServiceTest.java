@@ -97,9 +97,12 @@ class ReleaseCheckServiceTest {
     }
 
     @Test
-    void shouldReportNoStartWhenTheRunningReleaseIsNotRecorded() {
+    void shouldReportNoStartWhenTheNewestStartIsAnotherRelease() {
+        // Recording the rollback to 1.2.3 failed, so its earlier run is the only 1.2.3 row.
         when(history.recent())
-                .thenReturn(List.of(ReleaseHistory.startOf(running("1.3.0").get(), NOW)));
+                .thenReturn(List.of(
+                        ReleaseHistory.startOf(running("1.3.0").get(), NOW),
+                        ReleaseHistory.startOf(running("1.2.3").get(), NOW.minus(DAY))));
         assertThat(service("1.2.3", true).status().runningSince()).isNull();
     }
 
