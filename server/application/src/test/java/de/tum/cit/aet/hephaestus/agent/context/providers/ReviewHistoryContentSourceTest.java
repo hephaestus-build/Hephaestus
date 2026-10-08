@@ -1135,6 +1135,57 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         verify(observationRepository, never()).findForPersonHistory(any(), any());
     }
 
+    @Test
+    void shouldKeepStaleDeliveredWordsOnlyInPublicCommunicationHistory() {
+        Feedback mixed = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
+        Feedback withdrawn = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
+        Feedback unreadable = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
+        Feedback ineligible = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
+        Observation hidden = boundObservation(true);
+        boundTo.put(mixed.getId(), List.of(boundObservation(false), boundObservation(true)));
+        boundTo.put(withdrawn.getId(), List.of(boundObservation(true)));
+        boundTo.put(unreadable.getId(), List.of(hidden));
+        boundTo.put(ineligible.getId(), List.of(boundObservation(true)));
+        when(feedbackRepository.findDeliveredForPublicWorkHistory(
+                        WORKSPACE_ID, AUTHOR_ID, ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID))
+                .thenReturn(List.of(mixed, withdrawn, unreadable, ineligible));
+        when(feedbackRepository.findDeliveredForPersonHistory(any(), any())).thenReturn(List.of(mixed));
+        when(publicEligibility.permitsPublicHistory(eq(mixed), any())).thenReturn(true);
+        when(publicEligibility.permitsPublicHistory(eq(withdrawn), any())).thenReturn(true);
+        when(publicEligibility.permitsPublicHistory(eq(ineligible), any())).thenReturn(false);
+        when(visibilityPolicy.permitsShown(anyLong(), any(), eq(SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW)))
+                .thenAnswer(invocation -> {
+                    Collection<Observation> batch = invocation.getArgument(1);
+                    return batch.stream()
+                            .map(Observation::getId)
+                            .filter(id -> !id.equals(hidden.getId()))
+                            .collect(Collectors.toSet());
+                });
+        when(withdrawalRepository.withdrawnAmong(eq(WORKSPACE_ID), any())).thenReturn(Set.of(withdrawn.getId()));
+
+        JsonNode rows = provider.publicSameWorkFeedback(
+                        WORKSPACE_ID, AUTHOR_ID, ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID)
+                .path("feedback");
+        JsonNode privateRow = read(captureFeedbackHistory().files().get("inputs/history/feedback.json"))
+                .get("feedback")
+                .get(0);
+
+        // Unreadable evidence and public ineligibility still exclude a row; staleness only labels the words.
+        assertThat(rows.size()).isEqualTo(2);
+        assertThat(rows.get(0).path("id").asString()).isEqualTo(mixed.getId().toString());
+        assertThat(rows.get(0).path("recordedClaimCurrentness").asString()).isEqualTo("STALE");
+        assertThat(rows.get(0).path("body").asString()).isEqualTo(mixed.getBody());
+        assertThat(rows.get(0).path("bodyRole").asString()).isEqualTo("COMPOSED_GUIDANCE");
+        assertThat(rows.get(1).path("id").asString())
+                .isEqualTo(withdrawn.getId().toString());
+        assertThat(rows.get(1).path("recordedClaimCurrentness").asString()).isEqualTo("STALE");
+        assertThat(rows.get(1).path("withdrawn").asBoolean()).isTrue();
+        assertThat(rows.get(1).has("body")).isFalse();
+        assertThat(privateRow.path("id").asString()).isEqualTo(mixed.getId().toString());
+        assertThat(privateRow.path("recordedClaimCurrentness").asString()).isEqualTo("STALE");
+        assertThat(privateRow.has("body")).isFalse();
+    }
+
     private static Feedback deliveredAgainst(ArtifactKind kind, long artifactId) {
         return Feedback.builder()
                 .id(UUID.randomUUID())

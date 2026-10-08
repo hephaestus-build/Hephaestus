@@ -1461,7 +1461,7 @@ void test("a delivery after work capture informs novelty without becoming advice
 	);
 	for (const change of [
 		{ withdrawn: true },
-		{ recordedClaimCurrentness: "STALE" },
+		{ recordedClaimCurrentness: "UNVERIFIABLE" },
 		{ body: undefined },
 		{ publicEligible: false },
 		{ channel: "IN_CHAT" },
@@ -1475,5 +1475,70 @@ void test("a delivery after work capture informs novelty without becoming advice
 			"2026-10-07T11:00:00Z",
 		);
 		assert.ok(limited.feedback.every((row) => !row.eligibleForAlreadySaid));
+	}
+});
+
+void test("STALE delivered words permit ALREADY_SAID by the read time, not NO_MATERIAL_CHANGE", () => {
+	const artifact = {
+		kind: "scm.pull_request",
+		url: "https://gitlab.example/group/repo/-/merge_requests/3",
+	};
+	const stale = {
+		id: historyFeedbackId(1),
+		channel: "IN_CONTEXT",
+		publicEligible: true,
+		artifact,
+		body: "Handle the failure visibly.",
+		deliveredAt: "2026-10-07T08:00:00Z",
+		recordedClaimCurrentness: "STALE",
+	};
+	const read = (row: Record<string, unknown>, readAt = "2026-10-07T11:00:00Z") =>
+		priorPublicFeedback(
+			{ feedback: [row] },
+			`${artifact.kind}:${artifact.url}`,
+			"2026-10-07T09:00:00Z",
+			undefined,
+			readAt,
+		).feedback;
+	const said = read(stale);
+	// Delivered before the capture, yet stale: a record of what was said, not a current claim.
+	assert.deepEqual(
+		said.map((row) => [
+			row.recordedClaimCurrentness,
+			row.body,
+			row.eligibleForAlreadySaid,
+			row.eligibleForPriorAdvice,
+		]),
+		[["STALE", stale.body, true, false]],
+	);
+	const proof = priorAdviceWitnesses(said, []);
+	const currentRows = new Map<string, ReviewedObservation>([
+		["current", { practiceSlug: "errors", outcome: "NOT_MET", citations: [] }],
+	]);
+	const selected = (reason: string) =>
+		readSelection(
+			{
+				selected: [],
+				withheld: [
+					{ basedOn: ["current"], reason, witnessIds: [`feedback:${historyFeedbackId(1)}`] },
+				],
+			},
+			currentRows,
+			proof,
+		);
+	assert.ok(!("errors" in selected("ALREADY_SAID")));
+	assert.ok("errors" in selected("NO_MATERIAL_CHANGE"));
+	assert.equal(read(stale, "2026-10-07T07:30:00Z")[0]?.eligibleForAlreadySaid, false);
+	for (const change of [
+		{ body: undefined },
+		{ body: " " },
+		{ withdrawn: true },
+		{ recordedClaimCurrentness: undefined },
+	]) {
+		assert.ok(
+			read({ ...stale, ...change }).every(
+				(row) => !row.eligibleForAlreadySaid && !row.eligibleForPriorAdvice,
+			),
+		);
 	}
 });
