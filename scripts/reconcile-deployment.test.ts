@@ -35,6 +35,7 @@ import {
 	parseStacks,
 	readApplied,
 	renderMetrics,
+	requestIdentity,
 	serializeChannel,
 	syncUnits,
 	unlockedImages,
@@ -67,53 +68,89 @@ await test("a channel names an immutable release", () => {
 	assert.throws(() => parseChannel({ release: "v1.2.3", freeze: "yes" }), /must be a boolean/u);
 });
 
-await test("an unchanged channel is a no-op, so most ticks do nothing", () => {
-	assert.deepEqual(decide({ release: "v0.75.2" }, applied, applied.channelCommit, false), {
-		action: "noop",
-		reason: "already running v0.75.2",
-	});
+/** The identity of the signed request `current` applied, and of a request signed after it. */
+const appliedRequest = "1".repeat(64);
+const newRequest = "2".repeat(64);
+const current = { ...applied, channelIdentity: appliedRequest };
+
+await test("an unchanged own request is a no-op, even when another channel moved deploy-state", () => {
+	const unchanged = { action: "noop", reason: "already running v0.75.2" };
+	assert.deepEqual(
+		decide({ release: "v0.75.2" }, current, applied.channelCommit, appliedRequest, false),
+		unchanged,
+	);
+	assert.deepEqual(
+		decide({ release: "v0.75.2" }, current, "c".repeat(40), appliedRequest, true),
+		unchanged,
+	);
+	// The same request in a history that does not descend is still a rewind.
+	assert.equal(
+		decide({ release: "v0.75.2" }, current, "a".repeat(40), appliedRequest, false).action,
+		"refuse",
+	);
 });
 
 await test("re-promoting the release a host already runs re-applies it, so drift converges", () => {
-	assert.deepEqual(decide({ release: applied.release }, applied, "c".repeat(40), true), {
-		action: "apply",
-		release: applied.release,
-	});
+	assert.deepEqual(
+		decide({ release: applied.release }, current, "c".repeat(40), newRequest, true),
+		{ action: "apply", release: applied.release },
+	);
+});
+
+await test("a record from before requests were kept vouches only for its accepted commit", () => {
+	assert.equal(
+		decide({ release: applied.release }, applied, applied.channelCommit, newRequest, true).action,
+		"noop",
+	);
+	assert.equal(
+		decide({ release: applied.release }, applied, "c".repeat(40), appliedRequest, true).action,
+		"apply",
+	);
 });
 
 await test("a descendant channel commit applies", () => {
-	assert.deepEqual(decide({ release: "v0.75.3" }, applied, "c".repeat(40), true), {
+	assert.deepEqual(decide({ release: "v0.75.3" }, current, "c".repeat(40), newRequest, true), {
 		action: "apply",
 		release: "v0.75.3",
 	});
 });
 
 await test("a replay or divergent channel history is refused", () => {
-	const decision = decide({ release: "v0.75.3" }, applied, "a".repeat(40), false);
+	const decision = decide({ release: "v0.75.3" }, current, "a".repeat(40), newRequest, false);
 	assert.equal(decision.action, "refuse");
 });
 
 await test("a downgrade requires an explicit rollback on a new channel commit", () => {
-	assert.equal(decide({ release: "v0.75.1" }, applied, "c".repeat(40), true).action, "refuse");
+	assert.equal(
+		decide({ release: "v0.75.1" }, current, "c".repeat(40), newRequest, true).action,
+		"refuse",
+	);
 	assert.deepEqual(
-		decide({ release: "v0.75.1", allowRollback: true }, applied, "c".repeat(40), true),
+		decide({ release: "v0.75.1", allowRollback: true }, current, "c".repeat(40), newRequest, true),
 		{ action: "apply", release: "v0.75.1" },
 	);
 	assert.equal(
-		decide({ release: "v0.75.1", allowRollback: true }, applied, "a".repeat(40), false).action,
+		decide({ release: "v0.75.1", allowRollback: true }, current, "a".repeat(40), newRequest, false)
+			.action,
 		"refuse",
 	);
 });
 
 await test("a frozen channel holds the host where it is, even against a newer release", () => {
-	assert.deepEqual(decide({ release: "v0.99.0", freeze: true }, applied, "c".repeat(40), true), {
-		action: "noop",
-		reason: "channel is frozen",
-	});
+	assert.deepEqual(
+		decide({ release: "v0.99.0", freeze: true }, current, "c".repeat(40), newRequest, true),
+		{ action: "noop", reason: "channel is frozen" },
+	);
+});
+
+await test("a request is its channel and bundle together, however the bytes are split", () => {
+	assert.notEqual(requestIdentity('{"a":1}', "{}\n"), requestIdentity('{"a":1}{', "}\n"));
+	assert.notEqual(requestIdentity('{"a":1}', "{}\n"), requestIdentity('{"a":1}', "{ }\n"));
+	assert.match(requestIdentity("", ""), /^[0-9a-f]{64}$/u);
 });
 
 await test("a host with no state converges on its first run", () => {
-	assert.deepEqual(decide({ release: "v0.75.2" }, undefined, "a".repeat(40), false), {
+	assert.deepEqual(decide({ release: "v0.75.2" }, undefined, "a".repeat(40), newRequest, false), {
 		action: "apply",
 		release: "v0.75.2",
 	});
@@ -151,6 +188,14 @@ await test("only a missing applied-state file means first run", async () => {
 		assert.deepEqual(await readApplied(withCommit), { ...applied, previous: "v0.75.1" });
 		await writeFile(corrupt, JSON.stringify({ ...applied, previous: "../checkout" }));
 		await assert.rejects(readApplied(corrupt), /applied\.previous must be/u);
+
+		// The applied request is a SHA-256 or absent, never anything a comparison could match by accident.
+		await writeFile(withCommit, JSON.stringify(current));
+		assert.deepEqual(await readApplied(withCommit), current);
+		for (const channelIdentity of [42, null, "", "A".repeat(64), "1".repeat(63)]) {
+			await writeFile(corrupt, JSON.stringify({ ...applied, channelIdentity }));
+			await assert.rejects(readApplied(corrupt), /applied\.channelIdentity must be/u);
+		}
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -275,7 +320,7 @@ await test("the channel the promotion writes is the channel the host reads back"
 await test("a commit is applied even though it cannot be ordered against a release", () => {
 	// Releases compare by version; commits have no order at all. What stops either from moving
 	// backwards is the channel ancestry check, which runs before this.
-	assert.deepEqual(decide({ release: commit, images }, applied, "d".repeat(40), true), {
+	assert.deepEqual(decide({ release: commit, images }, current, "d".repeat(40), newRequest, true), {
 		action: "apply",
 		release: commit,
 	});
@@ -283,7 +328,7 @@ await test("a commit is applied even though it cannot be ordered against a relea
 
 await test("a rewind is still refused when the channel follows a commit", () => {
 	assert.equal(
-		decide({ release: commit, images }, applied, "a".repeat(40), false).action,
+		decide({ release: commit, images }, current, "a".repeat(40), newRequest, false).action,
 		"refuse",
 	);
 });
@@ -439,8 +484,15 @@ await test("a build that finishes late cannot put staging back on an older commi
 	// Two builds of main can finish out of order. The later-finishing older build writes the newer
 	// channel commit, so channel ancestry accepts it — what refuses it is comparing the commit being
 	// asked for against the commit already running.
-	const older = { ...applied, release: "b".repeat(40) };
-	const decision = decide({ release: "a".repeat(40), images }, older, "e".repeat(40), true, true);
+	const older = { ...current, release: "b".repeat(40) };
+	const decision = decide(
+		{ release: "a".repeat(40), images },
+		older,
+		"e".repeat(40),
+		newRequest,
+		true,
+		true,
+	);
 	assert.equal(decision.action, "refuse");
 	assert.match(JSON.stringify(decision), /behind the running/u);
 });
@@ -449,8 +501,9 @@ await test("moving deliberately backwards is still possible", () => {
 	assert.deepEqual(
 		decide(
 			{ release: "a".repeat(40), images, allowRollback: true },
-			{ ...applied, release: "b".repeat(40) },
+			{ ...current, release: "b".repeat(40) },
 			"e".repeat(40),
+			newRequest,
 			true,
 			true,
 		),
@@ -903,6 +956,9 @@ await test(
 			const noop = fixture.run({ cli: true });
 			assert.equal(noop.status, 0, noop.stderr);
 			assert.match(noop.stdout, /No change: already running v1\.0\.0/u);
+			const accepted = await readApplied(path.join(directory, "applied.json"));
+			assert.match(accepted?.channelIdentity ?? "", /^[0-9a-f]{64}$/u);
+			assert.deepEqual(accepted, { ...fixture.record, channelIdentity: accepted?.channelIdentity });
 			assert.match(
 				await readFile(fixture.metricsFile, "utf8"),
 				/^hephaestus_deploy_reconcile_success 1$/mu,
@@ -923,7 +979,7 @@ await test(
 				/^hephaestus_deploy_tooling_pending 1$/mu,
 			);
 			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
-			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), fixture.record);
+			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), accepted);
 			assert.doesNotMatch(await fixture.calls(), /docker|systemctl/u);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
@@ -1201,7 +1257,11 @@ async function followingHost(directory: string) {
 	gitIn(directory, "clone", "--quiet", fixture.origin, publisher);
 	gitIn(publisher, "config", "user.email", "ci@example.invalid");
 	gitIn(publisher, "config", "user.name", "ci");
-	const promote = async (target: string, allowRollback = false): Promise<void> => {
+	let signatures = 0;
+	const promote = async (
+		target: string,
+		{ allowRollback = false, freeze = false } = {},
+	): Promise<void> => {
 		gitIn(publisher, "checkout", "--quiet", "deploy-state");
 		await writeFile(
 			path.join(publisher, "channels/test.json"),
@@ -1209,9 +1269,16 @@ async function followingHost(directory: string) {
 				commit: target,
 				images: { HEPHAESTUS_IMAGE_APP: fixture.image },
 				allowRollback,
+				freeze,
 			}),
 		);
-		gitIn(publisher, "commit", "--quiet", "--allow-empty", "-am", `promote ${target}`);
+		// As `cosign sign-blob` does, every promotion signs anew, even one naming the same target.
+		signatures += 1;
+		await writeFile(
+			path.join(publisher, "channels/test.json.sigstore.json"),
+			`${JSON.stringify({ signature: signatures })}\n`,
+		);
+		gitIn(publisher, "commit", "--quiet", "-am", `promote ${target}`);
 		gitIn(publisher, "push", "--quiet", "origin", "deploy-state");
 	};
 	let builds = 0;
@@ -1230,6 +1297,23 @@ async function followingHost(directory: string) {
 			const built = gitIn(publisher, "rev-parse", "HEAD");
 			await promote(built);
 			return built;
+		},
+		/** Promotes another environment, which moves deploy-state, and returns the commit it made. */
+		promoteElsewhere: async (): Promise<string> => {
+			gitIn(publisher, "checkout", "--quiet", "deploy-state");
+			signatures += 1;
+			await writeFile(
+				path.join(publisher, "channels/production.json"),
+				JSON.stringify({ release: "v1.0.0" }),
+			);
+			await writeFile(
+				path.join(publisher, "channels/production.json.sigstore.json"),
+				`${JSON.stringify({ signature: signatures })}\n`,
+			);
+			gitIn(publisher, "add", "channels");
+			gitIn(publisher, "commit", "--quiet", "-m", "promote production");
+			gitIn(publisher, "push", "--quiet", "origin", "deploy-state");
+			return gitIn(publisher, "rev-parse", "HEAD");
 		},
 		/** Applies what the channel names and returns the output, failing the test if the run failed. */
 		apply: (options: Parameters<typeof fixture.run>[0] = {}) => {
@@ -1318,6 +1402,70 @@ await test(
 );
 
 await test(
+	"a host acts on its own signed request, not on every deploy-state commit",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-request-"));
+		try {
+			const host = await followingHost(directory);
+			const appliedFile = path.join(directory, "applied.json");
+			const built = await host.publish();
+			host.apply();
+			const first = await host.record();
+			assert.ok(first?.channelIdentity !== undefined);
+			/** What the reconciler ran during `tick`. */
+			const callsDuring = async (tick: () => unknown): Promise<string> => {
+				const before = await host.calls();
+				tick();
+				const after = await host.calls();
+				return after.slice(before.length);
+			};
+			const restarts = / up | stop /u;
+
+			// Another environment's promotion is verified and accepted, and restarts nothing.
+			const elsewhere = await host.promoteElsewhere();
+			let calls = await callsDuring(() => {
+				assert.match(host.apply(), /No change: already running/u);
+			});
+			assert.match(calls, /^cosign verify-blob/mu);
+			assert.doesNotMatch(calls, restarts);
+			assert.deepEqual(await host.record(), { ...first, channelCommit: elsewhere });
+			assert.notEqual(host.run({ failVerification: true }).status, 0);
+
+			// Promoting the running commit again is a new request, retried until it applies, then done.
+			await host.promote(built);
+			assert.notEqual(host.run({ unlockedStack: "proxy" }).status, 0);
+			assert.deepEqual(await host.record(), { ...first, channelCommit: elsewhere });
+			assert.match(await callsDuring(() => host.apply()), / up .*--remove-orphans$/mu);
+			const reapplied = await host.record();
+			assert.equal(reapplied?.release, built);
+			assert.notEqual(reapplied.channelIdentity, first.channelIdentity);
+			assert.doesNotMatch(await callsDuring(() => host.apply()), restarts);
+
+			// A record from before requests were kept learns the request at its accepted commit.
+			await writeFile(appliedFile, JSON.stringify({ ...reapplied, channelIdentity: undefined }));
+			calls = await callsDuring(() => {
+				assert.match(host.apply(), /No change: already running/u);
+			});
+			assert.doesNotMatch(calls, restarts);
+			assert.deepEqual(await host.record(), reapplied);
+
+			// A hold is accepted without becoming the request that runs, in a record of either kind.
+			await host.promote(built, { freeze: true });
+			assert.match(host.apply(), /No change: channel is frozen/u);
+			const held = await host.record();
+			assert.deepEqual(held, { ...reapplied, channelCommit: held?.channelCommit });
+			await writeFile(appliedFile, JSON.stringify({ ...held, channelIdentity: undefined }));
+			assert.match(host.apply(), /No change: channel is frozen/u);
+			const stillHeld = await host.record();
+			assert.equal(stillHeld?.channelIdentity, undefined);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
 	"a rollback recreates a pruned tree at the accepted commit and leaves every volume alone",
 	reconcilerSubprocess,
 	async () => {
@@ -1332,7 +1480,7 @@ await test(
 			host.apply();
 			assert.deepEqual(await host.trees(), sorted(second, third));
 
-			await host.promote(first, true);
+			await host.promote(first, { allowRollback: true });
 			host.apply();
 			const tree = path.join(host.releases, first);
 			assert.equal(gitIn(tree, "rev-parse", "HEAD"), first);
