@@ -169,19 +169,27 @@ A merge group uses a synthetic ref, not the Version PR branch name. If its aggre
 It builds every release image on both platforms and must pass release evidence preflight on that exact tree.
 Missing base/version data fails detection rather than silently skipping release validation.
 
-A cancelled run does not suppress the Version PR’s CI dispatch, and neither does an approval-blocked dispatched run.
-If the pull request's own run for the same head awaits approval, nothing is dispatched.
-The two triggers share a concurrency lane, so approval can cancel an active dispatch.
-Approve the pull request's run instead.
-Actual validation failures require an explicit rerun.
-
 The Version PR is maintained after CI/CD succeeds for the current tip of `main`. Failed or
 overtaken main runs do not update it. It carries checks like any other pull request.
 Its updates use `GITHUB_TOKEN`. GitHub creates approval-required workflow runs for
 [`pull_request` opened, synchronize and reopened events triggered by that token](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow).
-When no native pull-request run exists, `version-pr.yml` retains `workflow_dispatch` as its fallback.
+Nothing dispatches CI/CD onto the Version PR automatically.
 
-The dispatched run reports `CI Status Gate` on the branch head, which is the pull request's head commit.
+When GitHub requests approval for the pull request's run, approve that run.
+If a run fails, rerun its failed jobs. Nothing retries a failure automatically.
+
+Maintaining an unchanged head need not start another run.
+If the current head has no run, or only cancelled runs, dispatch one deliberately:
+
+```bash
+gh workflow run cicd.yml --ref changeset-release/main -f release-preflight=true
+```
+
+A cancelled run cannot authorize a release.
+The pull request's run and a dispatch on its branch share one concurrency lane, so a newer run cancels an active one.
+Dispatch only when no run for the head is active or awaiting approval.
+
+Either run reports `CI Status Gate` on the branch head, which is the pull request's head commit, and requires its own release evidence preflight.
 Thus, validation precedes the merge that cuts a release.
 
 `Verify changesets`
@@ -571,7 +579,7 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `cleanup-preview.yml`                 | Label removed, or PR closed                                                   | Removes and verifies resources, then retains a cleanup tombstone                                                                                                                                                                 |
 | `reconcile-previews.yml`              | Nightly, manual                                                               | Re-sends teardown for any preview environment whose pull request is closed or unlabelled                                                                                                                                         |
 | `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests. PR closed                                | Publishes the docs site and its pull-request previews                                                                                                                                                                            |
-| `version-pr.yml`                      | Successful CI/CD completion for the current main tip                          | Maintains the accumulating Version PR (changesets) and selects its CI validation path, release evidence preflight included                                                                                                       |
+| `version-pr.yml`                      | Successful CI/CD completion for the current main tip                          | Maintains the accumulating Version PR (changesets). Its own pull-request CI/CD run, release evidence preflight included, validates it                                                                                           |
 | `release.yml`                         | Successful CI/CD push on `main`                                               | Publishes the release and promotes the moving series and latest image tags                                                                                                                                                       |
 | `release-upgrade.yml`                 | Called by `release.yml`, weekly                                               | Boots the previous stable release with seeded data, then the candidate against the same database                                                                                                                                 |
 | `promote.yml`                         | Manual dispatch, or automatically for staging                                 | Records the GitHub deployment of the promoted source and signs the channel a host follows. Hosts pull and apply it themselves                                                                                                    |
@@ -822,8 +830,7 @@ If no such default-branch commit exists, the run builds every image itself. `det
 - Quality legs run independently. The image matrix in `reusable-docker-build.yml` uses
   `fail-fast: true`.
 - Pull-request runs cancel superseded runs. `release.yml` never cancels. The same-repository
-  Version PR shares a concurrency lane with its dispatch, so a racing trigger replaces redundant
-  validation. Either survivor must pass release preflight. The merge queue separately validates
+  Version PR shares a concurrency lane with a dispatch on its branch. A racing trigger replaces redundant validation. Either survivor must pass release preflight. The merge queue separately validates
   the final merge tree. Ordinary PRs, forks, main pushes and merge groups retain separate lanes.
 - A run on `main` that leaves a per-commit record — `semgrep.yml`, `scorecard.yml`,
   `scorecard-ratchet.yml` — does not cancel an in-progress predecessor when another commit arrives.

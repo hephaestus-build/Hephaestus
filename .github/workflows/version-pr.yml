@@ -21,7 +21,6 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
-      actions: write # dispatch CI/CD on the Version PR's branch
       contents: write
       pull-requests: write
     steps:
@@ -53,9 +52,3 @@ jobs:
           pr-title: "chore(release): version packages"
           commit-message: "chore(release): version packages"
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run CI on the Version PR
-        if: steps.current.outputs.validated == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/dispatch-version-pr-ci.ts

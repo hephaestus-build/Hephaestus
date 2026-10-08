@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -11,7 +11,22 @@ import {
 	latencyBudget,
 	renderLatencyBudget,
 	selectLatencyRuns,
+	versionBranch,
 } from "./report-ci-latency.ts";
+
+void describe("the Version PR's CI branch", () => {
+	void test("follows the base branch changesets is configured with", async () => {
+		assert.equal(versionBranch({ baseBranch: "main" }), "changeset-release/main");
+		assert.equal(versionBranch({ baseBranch: "release/2" }), "changeset-release/release/2");
+		const config: unknown = JSON.parse(await readFile(".changeset/config.json", "utf8"));
+		assert.equal(versionBranch(config), "changeset-release/main");
+	});
+
+	void test("refuses a configuration that names no base branch", () => {
+		assert.throws(() => versionBranch({}), /baseBranch must be a string/u);
+		assert.throws(() => versionBranch({ baseBranch: "" }), /declares no baseBranch/u);
+	});
+});
 
 void test("sampling excludes stale/future, retried, failed and release validation", () => {
 	const now = Date.parse("2026-01-30T00:00:00Z");
