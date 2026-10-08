@@ -16,16 +16,41 @@ export function versionBranch(config: unknown): string {
 export interface WorkflowRun {
 	readonly headSha: string;
 	readonly conclusion: string | null;
+	readonly event: string;
+	/** `owner/name` of the repository the head commit came from; null once that repository is gone. */
+	readonly headRepository: string | null;
 }
 
-// Cancelled and approval-blocked runs provide no verdict; actual failures require an explicit rerun.
-export function needsDispatch(headSha: string, runs: readonly WorkflowRun[]): boolean {
-	return !runs.some(
+export type Disposition = "covered" | "awaiting-approval" | "dispatch";
+
+/**
+ * An authentic same-head pull-request run awaiting approval owns that invocation. Waiting avoids
+ * a competing dispatch in the same concurrency group; actual failures still need an explicit rerun.
+ */
+export function disposition(
+	headSha: string,
+	repository: string,
+	runs: readonly WorkflowRun[],
+): Disposition {
+	if (
+		runs.some(
+			(run) =>
+				run.headSha === headSha &&
+				run.conclusion !== "cancelled" &&
+				run.conclusion !== "action_required",
+		)
+	) {
+		return "covered";
+	}
+	return runs.some(
 		(run) =>
 			run.headSha === headSha &&
-			run.conclusion !== "cancelled" &&
-			run.conclusion !== "action_required",
-	);
+			run.event === "pull_request" &&
+			run.headRepository === repository &&
+			run.conclusion === "action_required",
+	)
+		? "awaiting-approval"
+		: "dispatch";
 }
 
 export function parseRuns(value: unknown): WorkflowRun[] {
@@ -38,6 +63,11 @@ export function parseRuns(value: unknown): WorkflowRun[] {
 					record.conclusion === null
 						? null
 						: asString(record.conclusion, `run ${index} conclusion`),
+				event: asString(record.event, `run ${index} event`),
+				headRepository:
+					record.head_repository === null
+						? null
+						: asString(record.head_repository, `run ${index} head_repository`),
 			};
 		},
 	);
@@ -82,15 +112,27 @@ async function main(): Promise<void> {
 				"api",
 				`repos/${repository}/actions/workflows/${CI_WORKFLOW}/runs?branch=${encodeURIComponent(branch)}&per_page=100`,
 				"--jq",
-				"{workflow_runs: [.workflow_runs[] | {head_sha, conclusion}]}",
+				"{workflow_runs: [.workflow_runs[] | {head_sha, conclusion, event, head_repository: .head_repository.full_name}]}",
 			]),
 		),
 	);
-	if (needsDispatch(headSha, runs)) {
-		await gh(["workflow", "run", CI_WORKFLOW, "--ref", branch, "-f", "release-preflight=true"]);
-		process.stdout.write(`Dispatched CI/CD on ${branch} at ${headSha}.\n`);
-	} else {
-		process.stdout.write(`CI/CD already ran for ${branch} at ${headSha}.\n`);
+	switch (disposition(headSha, repository, runs)) {
+		case "dispatch": {
+			await gh(["workflow", "run", CI_WORKFLOW, "--ref", branch, "-f", "release-preflight=true"]);
+			process.stdout.write(`Dispatched CI/CD on ${branch} at ${headSha}.\n`);
+			break;
+		}
+		case "awaiting-approval": {
+			process.stdout.write(
+				`CI/CD for the ${branch} pull request at ${headSha} awaits approval. ` +
+					"Approve its pull_request run in Actions; no run was dispatched.\n",
+			);
+			break;
+		}
+		case "covered": {
+			process.stdout.write(`CI/CD already ran for ${branch} at ${headSha}.\n`);
+			break;
+		}
 	}
 }
 
