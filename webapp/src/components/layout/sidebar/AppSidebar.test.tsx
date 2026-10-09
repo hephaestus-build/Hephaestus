@@ -17,6 +17,7 @@ vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => true }));
 const workspace = {
 	id: 1,
 	workspaceSlug: "acme",
+	workspaceAddress: "https://hephaestus.build/w/acme",
 	accountLogin: "acme",
 	displayName: "Acme",
 	createdAt: new Date("2026-01-01T00:00:00Z"),

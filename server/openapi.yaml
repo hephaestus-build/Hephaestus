@@ -61,10 +61,10 @@ tags:
   name: Practice review trace
 - description: Instance-wide operator settings
   name: Instance Settings
-- description: Current instance definitions visible to workspace administrators
-  name: Practice Catalog
 - description: Session lifecycle
   name: Auth
+- description: Current instance definitions visible to workspace administrators
+  name: Practice Catalog
 - description: Workspace-scoped practice-review policy
   name: Practice Review Settings
 - description: Instance-admin-only read-only access to users
@@ -2325,6 +2325,21 @@ paths:
       summary: Redeem a sign-in handoff code with its PKCE verifier
       tags:
       - Client session
+  /auth/csrf:
+    get:
+      description: Fetch with credentials after sign-in and sign-out. Send the token
+        in the returned header on unsafe requests.
+      operationId: getCsrfToken
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsrfToken"
+          description: OK
+      summary: Get the raw CSRF token for the current browser
+      tags:
+      - Auth
   /auth/logout:
     post:
       description: An installed-client access token ends its whole session.
@@ -11661,16 +11676,28 @@ components:
           example: https://gitlab.example.com
         workspaceSlug:
           type: string
-          description: URL-friendly identifier for the workspace
+          description: Non-reserved lowercase ASCII DNS label. Consecutive hyphens
+            are prohibited.
           example: my-workspace
+          maxLength: 63
           minLength: 1
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          pattern: "^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
       required:
       - accountLogin
       - accountType
       - displayName
       - kind
       - workspaceSlug
+    CsrfToken:
+      type: object
+      properties:
+        headerName:
+          type: string
+        token:
+          type: string
+      required:
+      - headerName
+      - token
     CuratedCatalog:
       type: object
       properties:
@@ -16574,10 +16601,12 @@ components:
       properties:
         newSlug:
           type: string
-          description: New URL-friendly identifier for the workspace
+          description: Non-reserved lowercase ASCII DNS label. Consecutive hyphens
+            are prohibited.
           example: new-workspace-slug
+          maxLength: 63
           minLength: 1
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          pattern: "^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
       required:
       - newSlug
     ReorderPracticeGroupsRequest:
@@ -19982,6 +20011,10 @@ components:
           type: string
           format: date-time
           description: Timestamp when the workspace was last updated
+        workspaceAddress:
+          type: string
+          description: Canonical workspace address. Uses the apex path when subdomains
+            are off.
         workspaceSlug:
           type: string
           description: URL-friendly identifier for the workspace
@@ -20000,6 +20033,7 @@ components:
       - practicesEnabled
       - status
       - updatedAt
+      - workspaceAddress
       - workspaceSlug
     WorkspaceAiModel:
       type: object
@@ -20149,6 +20183,10 @@ components:
           type: string
           description: "Current lifecycle status of the workspace (PENDING, ACTIVE,\
             \ ARCHIVED)"
+        workspaceAddress:
+          type: string
+          description: Canonical workspace address. Uses the apex path when subdomains
+            are off.
         workspaceSlug:
           type: string
           description: URL-friendly identifier for the workspace
@@ -20160,6 +20198,7 @@ components:
       - id
       - practicesEnabled
       - status
+      - workspaceAddress
       - workspaceSlug
     WorkspaceLlmConnection:
       type: object

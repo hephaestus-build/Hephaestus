@@ -1,0 +1,156 @@
+---
+id: workspace-subdomains
+title: Workspace subdomains
+sidebar_position: 18
+---
+
+Workspace subdomains give each workspace an address such as `https://ls1intum.hephaestus.build`.
+Authentication and the API stay on the apex, `https://hephaestus.build`.
+The instance switch is off by default.
+
+## Configure the server
+
+The server uses these properties:
+
+| Property | Environment variable | Default |
+| --- | --- | --- |
+| `hephaestus.workspace.subdomains.enabled` | `HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED` | `false` |
+| `hephaestus.workspace.subdomains.base-domain` | `HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN` | Empty |
+
+The base domain must use lowercase ASCII.
+It must not contain a scheme, port, or path.
+Its maximum length is 189 characters, to leave space for a full workspace label.
+With the switch on, the webapp URL and auth issuer must use the HTTPS apex.
+The webapp URL must have no final slash.
+
+```yaml
+hephaestus:
+  workspace:
+    subdomains:
+      enabled: true
+      base-domain: hephaestus.build
+  webapp:
+    url: https://hephaestus.build
+  auth:
+    issuer: https://hephaestus.build
+    api-base-path: /api
+```
+
+Keep the switch off until the edge and SPA support tenant hosts.
+The server switch alone does not configure DNS, TLS, redirects, or SPA routes.
+Use DNS-only records and a DNS-01 wildcard certificate, as [ADR 0053](../decisions/0053-workspace-addresses-are-a-presentation-origin.md) requires.
+Cloudflare must not proxy these hosts.
+
+Before you turn it on, configure the edge and deploy the tenant-host SPA.
+To turn it off, set `enabled` to `false` and restart the server.
+Keep the apex workspace paths available.
+
+### Check the same-site precondition
+
+Use a DNS base domain, not an IP address.
+
+The base domain must not be a [public suffix](https://publicsuffix.org/list/).
+Check both the ICANN and PRIVATE sections of the current list.
+Include wildcard and exception entries in the check.
+Check that tenant hosts have the same registrable domain as the apex.
+A public suffix would put the apex and tenant hosts on different sites.
+The unchanged `SameSite` cookies would then prevent the tenant SPA from using the apex session.
+
+The list checked on 2026-10-09 contains `build`, but not `hephaestus.build` or `*.build`.
+It has no more-specific entries below `hephaestus.build`.
+Thus, `hephaestus.build` meets this precondition.
+Repeat the check for each self-hosted base domain and before deployment.
+See [MDN's site definition](https://developer.mozilla.org/en-US/docs/Glossary/Site).
+
+## Register exact OAuth callbacks
+
+Every login provider uses one callback on the configured auth issuer's origin.
+The server adds `api-base-path` and `/login/oauth2/code/<registrationId>`.
+Neither `Host` nor `X-Forwarded-Host` can change that callback.
+Instance administration shows the same callback that authentication uses.
+
+1. Open **Login providers** in instance administration.
+2. Copy each provider's callback URI.
+3. Register only that URI with the provider.
+4. For GitHub, turn off wildcard matching for that callback.
+5. Remove tenant-host callbacks from the provider's configuration.
+
+GitHub, GitLab, Slack sign-in, and Outline use this policy.
+The separate Slack workspace connection uses its configured `hephaestus.integration.slack.redirect-uri`.
+Set that URI to the exact apex `/api/oauth/callback/slack` address.
+GitHub App installations and GitLab token connections do not use a request-derived login callback.
+
+GitHub now supports an optional wildcard setting for each callback.
+Leave it off.
+See [GitHub's callback guidance](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-user-authorization-callback-url).
+Exact callback comparison follows [OAuth Security Best Current Practice](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.1.3).
+
+## Browser access and CSRF
+
+The CORS policy permits exact configured origins and installed extension origins as before.
+With subdomains on, it also permits an exact HTTPS origin with one valid, non-reserved workspace label.
+It checks the entire origin, not a suffix substring.
+The check does not look up a workspace.
+An unknown valid label gets the same CORS response as a current workspace label.
+The `docs` host is never a tenant origin, even if it appears in the configured origins.
+
+Serve only the trusted Hephaestus SPA on tenant hosts.
+Never host uploaded HTML, third-party applications, or workspace-controlled scripts there.
+Reserve each label that another service uses before you enable subdomains.
+A trusted origin can read the browser session through the apex API.
+
+The policy does not grant workspace membership.
+Every API request still passes the existing authorization checks.
+
+Spring's CORS filter sets `Vary: Origin` and allows credentials.
+SSE endpoints use the same HTTP filter.
+
+The worker and sandbox WebSockets are non-browser control channels.
+They retain their separate token authentication and default same-origin browser restriction.
+They do not accept tenant browser sessions.
+
+The tenant SPA cannot read the apex `__Host-XSRF-TOKEN` cookie.
+It must fetch `GET https://<apex>/api/auth/csrf` with credentials.
+The response contains the raw `token` and its `headerName`.
+Send that header on unsafe requests to the apex, with credentials.
+Fetch a new token after sign-in and sign-out.
+OAuth sign-in and browser sign-out clear the previous CSRF cookie through Spring Security.
+
+The endpoint is available before sign-in and sends `Cache-Control: no-store`.
+Do not cache or compress this response at the edge.
+It must not appear in logs.
+
+The endpoint uses the token that Spring Security's filter already loaded.
+It does not disable BREACH masking elsewhere.
+See [Spring Security's SPA CSRF guidance](https://docs.spring.io/spring-security/reference/7.1/servlet/exploits/csrf.html).
+The auth cookies keep the `__Host-` prefix, `Secure`, `Path=/`, and no `Domain`.
+Return paths remain relative-only.
+Workspace detail and list responses expose the canonical `workspaceAddress` for the SPA.
+
+## Workspace names and upgrade
+
+A slug is a lowercase ASCII DNS label with 1 to 63 characters.
+It cannot start or end with a hyphen.
+Consecutive hyphens are prohibited.
+This also excludes `xn--` names.
+This follows [ADR 0053](../decisions/0053-workspace-addresses-are-a-presentation-origin.md).
+
+Infrastructure and application names are reserved.
+These include `www`, `api`, `docs`, `admin`, `auth`, `login`, `mail`, `status`, `staging`, `preview`, and `pr<digits>`.
+The policy also reserves [RFC 2142 mailbox names](https://www.rfc-editor.org/rfc/rfc2142.html) and the application's route names.
+
+The migration preserves valid slugs.
+It replaces an invalid or reserved slug with `workspace-<id>`.
+If that address was already used, it adds a numeric suffix.
+The migration records the old address in slug history.
+Old workspace paths redirect directly to the current slug, with authorization unchanged.
+
+Rename redirects no longer expire or discard old entries.
+A used slug cannot name another workspace, even after workspace deletion.
+Database reservations enforce this across concurrent writes.
+
+Make and verify a database backup before the upgrade.
+Check workspace addresses after the upgrade.
+The database cannot recover history that an earlier version deleted.
+Reservations cover all current slugs and all retained history at upgrade time.
+Restore the verified pre-upgrade backup to reverse the migration.

@@ -16,7 +16,6 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -352,7 +351,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
-    void expiredSlugReturnsGone() {
+    void shouldNotExposePrivateWorkspaceWhenLegacyRedirectHasExpired() {
         User owner = persistUser("redirect-owner-expired");
         Workspace workspace = createWorkspace("old-expired", "Expired", "expired", AccountType.ORG, owner);
 
@@ -372,11 +371,8 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .uri("/workspaces/{workspaceSlug}/context-echo", "old-expired")
                 .exchange()
                 .expectStatus()
-                .isEqualTo(HttpStatus.GONE)
-                .expectBody(ProblemDetail.class)
-                .value(problem -> {
-                    assertThat(problem.getTitle()).containsIgnoringCase("expired");
-                });
+                .isNotFound()
+                .expectBody(Void.class);
     }
 
     private WorkspaceEchoControllers.WorkspaceContextSnapshot requestContextEcho(String slug) {

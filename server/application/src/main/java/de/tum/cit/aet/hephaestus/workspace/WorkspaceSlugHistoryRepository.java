@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,9 +21,7 @@ public interface WorkspaceSlugHistoryRepository extends JpaRepository<WorkspaceS
      */
     Optional<WorkspaceSlugHistory> findFirstByOldSlugOrderByChangedAtDesc(String oldSlug);
 
-    boolean existsByOldSlugAndRedirectExpiresAtIsNull(String slug);
-
-    boolean existsByOldSlugAndRedirectExpiresAtAfter(String slug, Instant now);
+    boolean existsByOldSlug(String slug);
 
     /**
      * Get all history entries for a workspace.

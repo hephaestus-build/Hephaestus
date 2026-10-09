@@ -486,15 +486,14 @@ hephaestus:
     # GitHub App installations are always processed regardless. Mode docs + cross-field
     # validation live on WorkspaceProperties (IDE-surfaced via spring-configuration-processor).
     workspace:
+        subdomains:
+            enabled: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:false}
+            base-domain: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:}
         init-default: true
         # Dev-only convenience: seed ADMIN membership to the first authenticated visitor of a
         # zero-membership workspace (fresh dev DB). MUST stay false in production (prod overrides
         # it) — otherwise it is a privilege-escalation on org-sync-churned empty-membership state.
         auto-seed-membership: true
-        slug:
-            # TTL (days) for slug redirects; 0 disables redirects while preserving history.
-            redirect:
-                ttl-days: 30
         default:
             login: ${GITHUB_PAT_LOGIN:hephaestus-build}
             token: ${GITHUB_PAT:}

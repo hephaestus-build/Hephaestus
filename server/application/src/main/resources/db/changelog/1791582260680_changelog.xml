@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1791582260680-1" author="hephaestus">
+        <createTable tableName="workspace_slug_reservation">
+            <column name="slug" type="VARCHAR(64)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="workspace_slug_reservationPK"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1791582260680-2" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="workspace" columnName="slug"/>
+            <columnExists tableName="workspace_slug_history" columnName="old_slug"/>
+            <columnExists tableName="workspace_slug_history" columnName="new_slug"/>
+            <tableExists tableName="workspace_slug_reservation"/>
+        </preConditions>
+        <comment>Old labels can name infrastructure or fail DNS validation. Preserve their paths and reserve every retained label before assigning safe addresses.</comment>
+        <sql splitStatements="false"><![CDATA[
+LOCK TABLE workspace, workspace_slug_history IN ACCESS EXCLUSIVE MODE;
+
+CREATE FUNCTION workspace_slug_assignable(label text) RETURNS boolean
+LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
+    SELECT length(label) BETWEEN 1 AND 63
+        AND label COLLATE "C" ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+        AND position('--' IN label) = 0
+        AND label !~ '^pr[0-9]+$'
+        AND label NOT IN (
+            'www', 'api', 'docs', 'admin', 'auth', 'login', 'mail', 'status',
+            'staging', 'preview', 'info', 'marketing', 'sales', 'support', 'abuse', 'noc',
+            'security', 'postmaster', 'hostmaster', 'usenet', 'news', 'webmaster', 'uucp', 'ftp',
+            'w', 'settings', 'integrations', 'consent', 'legal', 'privacy', 'terms', 'unsubscribe',
+            'landing', 'oauth', 'oauth2', 'webhooks', 'actuator', 'livez', 'readyz', 'error',
+            'swagger-ui', 'v3', 'identity-providers', 'workspaces', 'workers', 'mentor', 'feedback', 'practices',
+            'activity', 'about', 'imprint', 'audit', 'catalog', 'login-providers', 'models', 'person-data',
+            'surveys', 'usage', 'users', 'onboarding', 'practice-profile', 'practices-across-the-workspace', 'workspace-activity', 'new',
+            'github', 'gitlab', 'members', 'teams', 'outline', 'scm', 'slack', 'releases',
+            'review', 'reviews', 'user', 'observations', 'runs', 'work', 'practice-groups', 'assets',
+            'static', 'cdn', 'traefik', 'grafana', 'prometheus', 'nats', 'postgres', 'registry',
+            'agents', 'config-audit', 'connections', 'contributors', 'internal', 'llm', 'practice-catalog', 'product-feedback',
+            'sync', 'team', 'user-view', 'notifications', 'providers'
+        );
+$$;
+
+INSERT INTO workspace_slug_reservation(slug)
+SELECT slug FROM workspace
+UNION SELECT old_slug FROM workspace_slug_history
+UNION SELECT new_slug FROM workspace_slug_history
+ON CONFLICT DO NOTHING;
+
+DO $$
+DECLARE tenant record; replacement text; attempt integer;
+BEGIN
+    FOR tenant IN SELECT id, slug FROM workspace WHERE NOT workspace_slug_assignable(slug) ORDER BY id LOOP
+        replacement := 'workspace-' || tenant.id;
+        attempt := 0;
+        WHILE EXISTS (SELECT 1 FROM workspace_slug_reservation WHERE slug = replacement) LOOP
+            attempt := attempt + 1;
+            replacement := 'workspace-' || tenant.id || '-' || attempt;
+        END LOOP;
+        INSERT INTO workspace_slug_reservation(slug) VALUES (replacement);
+        INSERT INTO workspace_slug_history(workspace_id, old_slug, new_slug, changed_at, redirect_expires_at)
+            VALUES (tenant.id, tenant.slug, replacement, CURRENT_TIMESTAMP, NULL);
+        UPDATE workspace SET slug = replacement WHERE id = tenant.id;
+    END LOOP;
+END;
+$$;
+
+UPDATE workspace_slug_history SET redirect_expires_at = NULL;
+ALTER TABLE workspace ADD CONSTRAINT chk_workspace_slug_assignable CHECK (workspace_slug_assignable(slug));
+
+CREATE FUNCTION reserve_workspace_slug() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'INSERT' OR NEW.slug IS DISTINCT FROM OLD.slug THEN
+        INSERT INTO workspace_slug_reservation(slug) VALUES (NEW.slug);
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_reserve_workspace_slug BEFORE INSERT OR UPDATE OF slug ON workspace
+    FOR EACH ROW EXECUTE FUNCTION reserve_workspace_slug();
+        ]]></sql>
+        <rollback><stop>Workspace addresses and reservations cannot be undone safely. Restore a verified pre-upgrade database backup.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

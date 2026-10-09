@@ -26,6 +26,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
+import org.springframework.security.web.csrf.CsrfAuthenticationStrategy;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.stereotype.Component;
 
 /**
@@ -50,6 +52,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
     private final ClientSessionService clientSessionService;
     private final InstalledClientRegistry installedClients;
     private final Clock clock;
+    private final CsrfAuthenticationStrategy csrfAuthentication;
 
     /**
      * SPA origin (no trailing slash) prepended to every post-OAuth redirect, so the browser lands on
@@ -68,6 +71,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
             ClientSessionService clientSessionService,
             InstalledClientRegistry installedClients,
             Clock clock,
+            CsrfTokenRepository csrfTokens,
             @Value("${hephaestus.webapp.url:}") String webappBaseUrl) {
         this.provisioningService = provisioningService;
         this.jwtIssuer = jwtIssuer;
@@ -78,6 +82,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
         this.clientSessionService = clientSessionService;
         this.installedClients = installedClients;
         this.clock = clock;
+        this.csrfAuthentication = new CsrfAuthenticationStrategy(csrfTokens);
         this.appBaseUrl = stripTrailingSlash(webappBaseUrl);
     }
 
@@ -218,6 +223,7 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
                     response,
                     issued.value(),
                     issued.expiresAt().getEpochSecond() - clock.instant().getEpochSecond());
+            csrfAuthentication.onAuthentication(authentication, request, response);
         }
 
         // Audit the completed authentication, symmetric with AuthSessionService's LOGOUT. IDENTITY_LINKED

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
+import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceElevationAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
@@ -28,7 +29,6 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -62,8 +62,7 @@ public class WorkspaceContextFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceContextFilter.class);
 
-    private static final Pattern WORKSPACE_PATH_PATTERN =
-            Pattern.compile("^/workspaces/([a-z0-9][a-z0-9-]{2,50})(/.*)?$");
+    private static final Pattern WORKSPACE_PATH_PATTERN = Pattern.compile("^/workspaces/([a-z0-9-]{1,64})(/.*)?$");
 
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMembershipRepository workspaceMembershipRepository;
@@ -75,6 +74,7 @@ public class WorkspaceContextFilter implements Filter {
     private final ObjectMapper objectMapper;
     private final WorkspaceElevationAudit elevationAudit;
     private final WorkspaceActorSelector actorSelector;
+    private final String apiBasePath;
 
     public WorkspaceContextFilter(
             WorkspaceRepository workspaceRepository,
@@ -86,7 +86,8 @@ public class WorkspaceContextFilter implements Filter {
             ConnectionService connectionService,
             ObjectMapper objectMapper,
             WorkspaceElevationAudit elevationAudit,
-            WorkspaceActorSelector actorSelector) {
+            WorkspaceActorSelector actorSelector,
+            AuthProperties authProperties) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.currentAccountUsers = currentAccountUsers;
@@ -97,6 +98,7 @@ public class WorkspaceContextFilter implements Filter {
         this.objectMapper = objectMapper;
         this.elevationAudit = elevationAudit;
         this.actorSelector = actorSelector;
+        this.apiBasePath = authProperties.apiBasePath();
     }
 
     @Override
@@ -128,7 +130,12 @@ public class WorkspaceContextFilter implements Filter {
         var matcher = WORKSPACE_PATH_PATTERN.matcher(path);
 
         if (!matcher.matches()) {
-            sendWorkspaceSlugValidationError(httpResponse, extractInvalidSlug(path));
+            String oldSlug = extractInvalidSlug(path);
+            String remaining = path.substring("/workspaces/".length() + oldSlug.length());
+            if (handleSlugRedirect(httpRequest, httpResponse, oldSlug, remaining)) {
+                return;
+            }
+            sendWorkspaceSlugValidationError(httpResponse, oldSlug);
             return;
         }
 
@@ -308,23 +315,6 @@ public class WorkspaceContextFilter implements Filter {
         }
 
         var history = historyOpt.get();
-        Instant now = Instant.now();
-        if (history.getRedirectExpiresAt() != null
-                && history.getRedirectExpiresAt().isBefore(now)) {
-            log.debug(
-                    "Denied slug redirect: reason=expired, oldSlug={}, expiredAt={}",
-                    LoggingUtils.sanitizeForLog(oldSlug),
-                    history.getRedirectExpiresAt());
-            ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.GONE);
-            problem.setTitle("Workspace slug expired");
-            problem.setDetail("The redirect for this workspace slug has expired.");
-            problem.setProperty("oldSlug", oldSlug);
-            problem.setProperty("expiredAt", history.getRedirectExpiresAt());
-            response.setStatus(HttpStatus.GONE.value());
-            response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-            response.getWriter().write(objectMapper.writeValueAsString(problem));
-            return true;
-        }
         var workspace =
                 workspaceRepository.findById(history.getWorkspace().getId()).orElse(null);
 
@@ -350,10 +340,10 @@ public class WorkspaceContextFilter implements Filter {
             return false;
         }
 
-        String newSlug = history.getNewSlug();
+        String newSlug = workspace.getWorkspaceSlug();
         String suffix = remainingPath == null ? "" : remainingPath;
         String queryString = request.getQueryString();
-        String location = request.getContextPath() + "/workspaces/" + newSlug + suffix;
+        String location = apiBasePath + request.getContextPath() + "/workspaces/" + newSlug + suffix;
         if (queryString != null && !queryString.isBlank()) {
             location += '?' + queryString;
         }
@@ -389,7 +379,7 @@ public class WorkspaceContextFilter implements Filter {
                 "errors",
                 Map.of(
                         "workspaceSlug",
-                        "Slug must be 3 to 51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens"));
+                        "The workspace path must contain a lowercase slug with at most 64 characters."));
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(problem));

@@ -1757,6 +1757,10 @@ erDiagram
         BIGINT workspace_id FK "NOT NULL"
     }
 
+    WorkspaceSlugReservation {
+        VARCHAR(64) slug PK
+    }
+
     WorkspaceTeamLabelFilter {
         BIGINT workspace_id PK,FK
         BIGINT team_id PK,FK

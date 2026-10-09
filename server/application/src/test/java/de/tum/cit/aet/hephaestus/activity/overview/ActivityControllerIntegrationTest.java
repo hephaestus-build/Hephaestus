@@ -155,7 +155,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void seedWorkspace() {
         User caller = persistUser("mentor");
         User owner = persistUser("activity-owner");
-        workspace = createWorkspace("activity", "Activity", "activity-org", AccountType.ORG, owner);
+        workspace = createWorkspace("activity-workspace", "Activity", "activity-org", AccountType.ORG, owner);
         ensureWorkspaceMembership(workspace, caller, WorkspaceRole.MEMBER);
         ada = member("z-ada", "Ada");
         zoe = member("a-zoe", "Zoe");

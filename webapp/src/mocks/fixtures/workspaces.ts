@@ -12,6 +12,7 @@ export function workspaceListItem(
 	return {
 		id: 1,
 		workspaceSlug,
+		workspaceAddress: `https://hephaestus.build/w/${workspaceSlug}`,
 		displayName: workspaceSlug,
 		accountLogin: workspaceSlug,
 		providerType: "GITHUB",

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.workspace.exception.InvalidWorkspaceSlugException;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
@@ -97,10 +98,17 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    void shouldRejectInvalidSlugWhenCallerBypassesDtoValidation() {
+        assertThatThrownBy(
+                        () -> workspaceService.createWorkspace("Acme Org", "Acme Org", "acme", AccountType.ORG, null))
+                .isInstanceOf(InvalidWorkspaceSlugException.class);
+    }
+
+    @Test
     void createWorkspaceAssignsOwnerMembership() {
         User owner = persistUser("OwnerLogin");
 
-        Workspace workspace = createWorkspace("Acme Org", "Acme Org", "acme", AccountType.ORG, owner);
+        Workspace workspace = createWorkspace("acme-org", "Acme Org", "acme", AccountType.ORG, owner);
 
         assertThat(workspace.getWorkspaceSlug()).isEqualTo("acme-org");
         assertThat(workspace.getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
@@ -115,7 +123,7 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void workspaceLifecycleTransitions() {
         User owner = persistUser("lifecycle-owner");
-        Workspace workspace = createWorkspace("Lifecycle", "Lifecycle", "lifecycle", AccountType.ORG, owner);
+        Workspace workspace = createWorkspace("lifecycle", "Lifecycle", "lifecycle", AccountType.ORG, owner);
 
         workspaceLifecycleService.suspendWorkspace(workspace.getWorkspaceSlug());
         Workspace suspended = workspaceRepository.findById(workspace.getId()).orElseThrow();

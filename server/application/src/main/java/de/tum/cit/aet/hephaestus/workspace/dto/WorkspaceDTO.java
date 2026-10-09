@@ -19,6 +19,9 @@ public record WorkspaceDTO(
         @NonNull @Schema(description = "URL-friendly identifier for the workspace", example = "my-workspace")
         String workspaceSlug,
 
+        @NonNull @Schema(description = "Canonical workspace address. Uses the apex path when subdomains are off.")
+        String workspaceAddress,
+
         @NonNull @Schema(description = "Human-readable name of the workspace")
         String displayName,
 
@@ -75,7 +78,7 @@ public record WorkspaceDTO(
         @NonNull @Schema(description = "Whether manual practice reviews triggered through a bot command are enabled")
         Boolean practiceReviewManualTriggerEnabled) {
     /** Builds a DTO pulling integration metadata from the Connection registry. */
-    public static WorkspaceDTO from(Workspace workspace, ConnectionService connectionService) {
+    public static WorkspaceDTO from(Workspace workspace, ConnectionService connectionService, String workspaceAddress) {
         long workspaceId = workspace.getId();
 
         var providerKind = connectionService.findActiveProviderKind(workspaceId);
@@ -116,6 +119,7 @@ public record WorkspaceDTO(
         return new WorkspaceDTO(
                 workspaceId,
                 workspace.getWorkspaceSlug(),
+                workspaceAddress,
                 workspace.getDisplayName(),
                 workspace.getIsPubliclyViewable(),
                 workspace.getStatus().name(),
