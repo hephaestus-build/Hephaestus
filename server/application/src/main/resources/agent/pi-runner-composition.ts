@@ -410,7 +410,7 @@ function standardProblem(
 
 /** ALREADY_SAID needs a recorded communication; NO_MATERIAL_CHANGE also needs advice available at capture. */
 function witnessProblems(
-	reason: WithholdReason | undefined,
+	reason: WithholdReason,
 	witnessIds: readonly string[] | null,
 	witnesses: ReadonlyMap<string, PriorAdviceWitness>,
 ): string[] {
@@ -430,10 +430,10 @@ function witnessProblems(
 	);
 	if (ineligible.length > 0) {
 		problems.push(
-			`witnessIds names ${ineligible.join(", ")}, which is shown as context but cannot stand as advice for ${String(reason)} (${flag} is false)`,
+			`witnessIds names ${ineligible.join(", ")}, which is shown as context but cannot stand as advice for ${reason} (${flag} is false)`,
 		);
 	}
-	if (reason !== undefined && PRIOR_ADVICE_REASONS.has(reason) && witnessIds.length === 0) {
+	if (PRIOR_ADVICE_REASONS.has(reason) && witnessIds.length === 0) {
 		problems.push(
 			`${reason} names in witnessIds where this work already received the advice: the witnessId of a statement marked ${flag}; without one, raise it or choose another reason`,
 		);
