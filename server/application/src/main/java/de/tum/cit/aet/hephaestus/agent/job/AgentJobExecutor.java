@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionRe
 import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
@@ -135,7 +136,7 @@ public class AgentJobExecutor {
 
     /**
      * When the terminal accounting write is worth re-attempting. NOT the same question as
-     * {@link #isRetryableInfraFailure}, which requeues the whole JOB — conflating the two would charge
+     * {@link #isRetryableExecutionFailure}, which requeues the whole JOB — conflating the two would charge
      * twice for a job that already spent money. {@code includes} matches nested causes, which is what
      * makes these usable directly against JPA's and {@code TransactionTemplate}'s wrapping.
      */
@@ -246,7 +247,7 @@ public class AgentJobExecutor {
                 .description("Time between a job becoming available (available_at) and being claimed")
                 .register(meterRegistry);
         this.infraRetryRequeued = Counter.builder(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED)
-                .description("Jobs requeued (not failed) after a classified sandbox-infrastructure failure")
+                .description("Jobs requeued (not failed) after a retryable preparation or infrastructure failure")
                 .register(meterRegistry);
     }
 
@@ -1116,18 +1117,23 @@ public class AgentJobExecutor {
         String errorMessage = truncateErrorMessage(e.getMessage());
         log.error("Agent job failed: jobId={}, error={}", jobId, errorMessage, e);
 
-        if (workerId != null && isRetryableInfraFailure(e)) {
+        if (workerId != null && isRetryableExecutionFailure(e)) {
             int currentRetryCount = job.getRetryCount();
-            if (requeueForAnotherAttempt(jobId, job, "infra-failure", sandboxExecutionStarted, null)) {
+            if (requeueForAnotherAttempt(
+                    jobId,
+                    job,
+                    e instanceof ReviewSourceNotReadyException ? "source-not-ready" : "infra-failure",
+                    sandboxExecutionStarted,
+                    null)) {
                 log.warn(
-                        "Requeuing job {} after classified sandbox-infrastructure failure (attempt {}): {}",
+                        "Requeuing job {} after retryable preparation or infrastructure failure (attempt {}): {}",
                         jobId,
                         currentRetryCount + 1,
                         errorMessage);
                 return "REQUEUED";
             }
             log.warn(
-                    "Job {} hit an infra failure but could not be requeued (retry cap exhausted or fence lost) — failing terminally",
+                    "Job {} hit a retryable failure but could not be requeued (retry cap exhausted or fence lost) — failing terminally",
                     jobId);
         }
 
@@ -1144,8 +1150,10 @@ public class AgentJobExecutor {
      * validation/config failures and a catch-all wrap of an unknown defect: retrying either would burn
      * the retry budget on a failure that was never going to resolve itself.
      */
-    static boolean isRetryableInfraFailure(Exception e) {
-        return e instanceof SandboxInfrastructureException || e instanceof IOException;
+    static boolean isRetryableExecutionFailure(Exception e) {
+        return e instanceof ReviewSourceNotReadyException
+                || e instanceof SandboxInfrastructureException
+                || e instanceof IOException;
     }
 
     /**

@@ -24,7 +24,8 @@ import org.springframework.stereotype.Service;
  * Reads one merge request's merge readiness from GitLab: its head, merge status, head pipeline, reviewers and
  * approvers. A webhook stores what it carries and none of these, so the message handler reads them after the event,
  * outside its transaction, and the processor applies them only while they still describe the stored head
- * ({@link GitLabMergeRequestProcessor#applyReadiness}).
+ * ({@link GitLabMergeRequestProcessor#applyReadiness}). Review preparation also reads the paired diff refs when
+ * GitLab has not provided the diff base yet.
  */
 @Service
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
@@ -75,7 +76,39 @@ public class GitLabMergeRequestReadinessReader {
             @Nullable List<GitLabMergeRequestProcessor.SyncReviewerData> reviewers,
             @Nullable List<GitLabMergeRequestProcessor.SyncUserData> approvers,
             Merge merge,
-            GitLabApprovalClient.@Nullable Snapshot approvalRows) {
+            GitLabApprovalClient.@Nullable Snapshot approvalRows,
+            @Nullable DiffRefs diffRefs) {
+        public Facts(
+                long projectNativeId,
+                long mergeRequestNativeId,
+                String state,
+                Instant updatedAt,
+                String headSha,
+                @Nullable Boolean mergeable,
+                @Nullable String detailedMergeStatus,
+                @Nullable Boolean approved,
+                GitLabHeadPipeline headPipeline,
+                @Nullable List<GitLabMergeRequestProcessor.SyncReviewerData> reviewers,
+                @Nullable List<GitLabMergeRequestProcessor.SyncUserData> approvers,
+                Merge merge,
+                GitLabApprovalClient.@Nullable Snapshot approvalRows) {
+            this(
+                    projectNativeId,
+                    mergeRequestNativeId,
+                    state,
+                    updatedAt,
+                    headSha,
+                    mergeable,
+                    detailedMergeStatus,
+                    approved,
+                    headPipeline,
+                    reviewers,
+                    approvers,
+                    merge,
+                    approvalRows,
+                    null);
+        }
+
         Facts withApprovalRows(GitLabApprovalClient.@Nullable Snapshot rows) {
             return new Facts(
                     projectNativeId,
@@ -90,9 +123,13 @@ public class GitLabMergeRequestReadinessReader {
                     reviewers,
                     approvers,
                     merge,
-                    rows);
+                    rows,
+                    diffRefs);
         }
     }
+
+    /** The immutable head and base from one GitLab diff version. */
+    public record DiffRefs(String head, String base) {}
 
     /**
      * What GitLab says about a merged merge request's merge: who merged it, when, and the commit it left. Each is
@@ -212,7 +249,21 @@ public class GitLabMergeRequestReadinessReader {
                 GitLabMergeRequestFields.wholePage(
                         response, MERGE_REQUEST, node, "approvedBy", GitLabMergeRequestFields::user),
                 merge(response, node),
-                null);
+                null,
+                diffRefs(response, node, headSha));
+    }
+
+    private static @Nullable DiffRefs diffRefs(ClientGraphQlResponse response, Map<String, Object> node, String head) {
+        String path = MERGE_REQUEST + ".diffRefs";
+        if (GitLabMergeRequestFields.failed(response, path)
+                || GitLabMergeRequestFields.failed(response, path + ".headSha")
+                || GitLabMergeRequestFields.failed(response, path + ".baseSha")
+                || !(node.get("diffRefs") instanceof Map<?, ?> refs)
+                || !(refs.get("headSha") instanceof String pairedHead)
+                || !head.equals(pairedHead)
+                || !(refs.get("baseSha") instanceof String base)
+                || base.isBlank()) return null;
+        return new DiffRefs(pairedHead, base);
     }
 
     /** The merge's facts, each read without an error or left unknown. */

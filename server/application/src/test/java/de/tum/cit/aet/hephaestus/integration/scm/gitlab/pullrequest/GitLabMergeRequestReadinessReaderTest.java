@@ -55,6 +55,24 @@ class GitLabMergeRequestReadinessReaderTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReadOneCompleteDiffPairWithoutInferringABaseWhenGitLabIsStillPreparingIt() {
+        var ready = mergeRequest();
+        ready.put("diffRefs", Map.of("headSha", HEAD, "baseSha", "b".repeat(40)));
+        assertThat(decode(ready, List.of()).diffRefs())
+                .isEqualTo(new GitLabMergeRequestReadinessReader.DiffRefs(HEAD, "b".repeat(40)));
+        var pending = mergeRequest();
+        pending.put("diffRefs", null);
+        assertThat(decode(pending, List.of()).diffRefs()).isNull();
+        var unpaired = mergeRequest();
+        unpaired.put("diffRefs", Map.of("headSha", "c".repeat(40), "baseSha", "b".repeat(40)));
+        assertThat(decode(unpaired, List.of()).diffRefs()).isNull();
+        var failed = mergeRequest();
+        failed.put("diffRefs", Map.of("headSha", HEAD, "baseSha", "b".repeat(40)));
+        assertThat(decode(failed, List.of(error("diffRefs", "baseSha"))).diffRefs())
+                .isNull();
+    }
+
+    @Test
     void shouldCarryGitLabsBotFlagOfEachApproverAndLeaveItUnknownWhereTheReadLacksIt() {
         Map<String, @Nullable Object> node = mergeRequest();
         Map<String, @Nullable Object> tutor = user(90393, "heph_introcourse_tutor_e2e");

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.providers.WorkspaceFolderRenderer;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
@@ -219,6 +220,51 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     // The shape a repository actually throws, and the reason the catch cannot be narrowed to
                     // the declared one: letting it escape would abort every source that had already succeeded.
                     new QueryTimeoutException("statement timed out"));
+        }
+
+        static Stream<JobPreparationException> wholeReviewPreparationFailures() {
+            return Stream.of(
+                    new ReviewSourceNotReadyException("Diff range pending"),
+                    new JobPreparationException("Recorded revision no longer matches the queued head"));
+        }
+
+        @ParameterizedTest
+        @MethodSource("wholeReviewPreparationFailures")
+        void shouldRejectInvalidOrPendingReviewPreparationInsteadOfCompletingWithPartialSources(
+                JobPreparationException failure) {
+            var core = new SourceKind("scm.pull-request.core");
+            EvidenceSource source = new EvidenceSource() {
+                @Override
+                public boolean supports(ContextRequest request) {
+                    return true;
+                }
+
+                @Override
+                public Set<SourceKind> sourceKinds() {
+                    return Set.of(core);
+                }
+
+                @Override
+                public SourceKind sourceKindFor(String path) {
+                    return core;
+                }
+
+                @Override
+                public void contribute(ContextRequest request, Map<String, byte[]> files) {
+                    throw failure;
+                }
+            };
+            var mapper = JsonMapper.builder().build();
+            var manifest = new JobFolderIndexBuilder(
+                    mapper,
+                    new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
+                    new PracticePreconditionEvaluator(mapper),
+                    new AutomatedReviewFence(Map.of()),
+                    Clock.systemUTC());
+            var builder = new WorkspaceContextBuilder(List.of(source), new SimpleMeterRegistry(), manifest);
+            var plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST);
+
+            assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan)).isSameAs(failure);
         }
 
         /**

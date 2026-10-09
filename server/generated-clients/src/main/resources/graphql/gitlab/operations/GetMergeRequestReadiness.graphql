@@ -8,6 +8,10 @@ query GetMergeRequestReadiness($fullPath: ID!, $iid: String!) {
             state
             updatedAt
             diffHeadSha
+            diffRefs {
+                headSha
+                baseSha
+            }
             mergeable
             detailedMergeStatus
             approved
