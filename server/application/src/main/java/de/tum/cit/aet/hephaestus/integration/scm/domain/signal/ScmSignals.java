@@ -63,8 +63,8 @@ public final class ScmSignals {
     public static final SignalName ISSUE_MANUAL_REVIEW = SignalName.of("scm.issue.manual_review");
 
     /**
-     * The field an issue update names when only a closed issue's discussion moved. No provider sends it; the comment
-     * events of a closed issue are translated into it.
+     * The field an issue update names when only an issue's discussion moved. No provider sends it; the comment
+     * events of an issue are translated into it.
      */
     public static final String ISSUE_DISCUSSION_FIELD = "discussion";
 
@@ -215,7 +215,7 @@ public final class ScmSignals {
 
     /**
      * The issue's own evidence identity. Occasion discovery and the capture fence read it through {@link
-     * IssueEvidenceRevision}, which adds a closed issue's discussion.
+     * IssueEvidenceRevision}, which adds the issue's discussion.
      */
     public static SignalRevision issueUpdatedRevision(ScmEventPayload.IssueData issue) {
         return issueUpdatedRevision(issue, List.of());

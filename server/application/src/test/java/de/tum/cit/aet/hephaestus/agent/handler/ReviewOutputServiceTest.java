@@ -1746,7 +1746,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         }
 
         @ParameterizedTest
-        @ValueSource(strings = {"scm.issue.opened", "scm.issue.closed"})
+        @ValueSource(strings = {"scm.issue.opened", "scm.issue.closed", "scm.issue.updated", "scm.issue.manual_review"})
         void shouldRefuseWhenTheIssueSnapshotChangesAfterPreparation(String signal) {
             when(reviewTargets.findIssue(999L))
                     .thenReturn(Optional.of(new ReviewTargetQuery.Target(123L, "owner/repo", 12, 789L, false)));

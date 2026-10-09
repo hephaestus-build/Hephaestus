@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.signal;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.StoredComment;
@@ -18,9 +17,8 @@ import org.springframework.stereotype.Component;
  * The evidence identity of an issue update, one rule for every owner that keys, admits, coalesces, supersedes or
  * captures it.
  *
- * <p>An open issue is identified by its own fields, as before. A closed issue's discussion is part of its identity
- * too: a comment can record what was done and what moved elsewhere, so a comment written, edited or removed after
- * the close is new evidence. Comments identified by recorded delivery provenance are never evidence, so a posted piece of
+ * <p>An issue's fields and discussion form its identity: a comment can clarify the current request or record
+ * what was done and what moved elsewhere. A comment written, edited or removed is new evidence. Comments identified by recorded delivery provenance are never evidence, so a posted piece of
  * feedback does not occasion a review of itself.
  */
 @Component
@@ -43,7 +41,7 @@ public class IssueEvidenceRevision {
     }
 
     public SignalRevision of(ScmEventPayload.IssueData issue) {
-        if (issue.isPullRequest() || issue.state() != Issue.State.CLOSED) {
+        if (issue.isPullRequest()) {
             return ScmSignals.issueUpdatedRevision(issue);
         }
         List<@Nullable String> discussion = new ArrayList<>();
