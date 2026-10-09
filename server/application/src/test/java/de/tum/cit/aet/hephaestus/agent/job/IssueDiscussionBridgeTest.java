@@ -17,21 +17,25 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Optional;
 import java.util.Set;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-class ClosedIssueDiscussionBridgeTest extends BaseUnitTest {
-    @Test
-    void shouldReadTheDiscussionOnceAfterAllSyncCommentsAreWritten() {
+class IssueDiscussionBridgeTest extends BaseUnitTest {
+    @ParameterizedTest
+    @EnumSource(
+            value = Issue.State.class,
+            names = {"OPEN", "CLOSED"})
+    void shouldReadTheDiscussionOnceAfterAllSyncCommentsAreWritten(Issue.State state) {
         LockedIssueRow row = mock(LockedIssueRow.class);
         IssueEvidenceRevision revisions = mock(IssueEvidenceRevision.class);
         IssueObservationSuperseder superseder = mock(IssueObservationSuperseder.class);
         IssueAgentJobEventListener listener = mock(IssueAgentJobEventListener.class);
         StaticListableBeanFactory beans = new StaticListableBeanFactory();
         beans.addBean("listener", listener);
-        ClosedIssueDiscussionBridge bridge = new ClosedIssueDiscussionBridge(
+        IssueDiscussionBridge bridge = new IssueDiscussionBridge(
                 row, revisions, superseder, beans.getBeanProvider(IssueAgentJobEventListener.class));
         Repository repository = new Repository();
         repository.setId(1L);
@@ -40,7 +44,7 @@ class ClosedIssueDiscussionBridgeTest extends BaseUnitTest {
         issue.setId(42L);
         issue.setNumber(7);
         issue.setTitle("Export");
-        issue.setState(Issue.State.CLOSED);
+        issue.setState(state);
         issue.setRepository(repository);
         var data = ScmEventPayload.IssueData.from(issue);
         var revision = ScmSignals.issueUpdatedRevision(data);

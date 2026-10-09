@@ -19,17 +19,17 @@ import org.springframework.transaction.support.ResourceHolderSupport;
 import org.springframework.transaction.support.ResourceHolderSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/** Updates closed-issue evidence in the comment transaction, once per issue for a sync batch. */
+/** Updates issue evidence in the comment transaction, once per issue for a sync batch. */
 @Component
 @ConditionalOnServerRole
-public class ClosedIssueDiscussionBridge {
+public class IssueDiscussionBridge {
 
     private final LockedIssueRow lockedRow;
     private final IssueEvidenceRevision revisions;
     private final IssueObservationSuperseder superseder;
     private final ObjectProvider<IssueAgentJobEventListener> listener;
 
-    ClosedIssueDiscussionBridge(
+    IssueDiscussionBridge(
             LockedIssueRow lockedRow,
             IssueEvidenceRevision revisions,
             IssueObservationSuperseder superseder,
@@ -74,10 +74,10 @@ public class ClosedIssueDiscussionBridge {
             TransactionSynchronizationManager.bindResource(this, batch);
             PendingBatch pending = batch;
             TransactionSynchronizationManager.registerSynchronization(
-                    new ResourceHolderSynchronization<PendingBatch, ClosedIssueDiscussionBridge>(batch, this) {
+                    new ResourceHolderSynchronization<PendingBatch, IssueDiscussionBridge>(batch, this) {
                         @Override
                         public void beforeCommit(boolean readOnly) {
-                            pending.issues.forEach(ClosedIssueDiscussionBridge.this::update);
+                            pending.issues.forEach(IssueDiscussionBridge.this::update);
                         }
                     });
         }
@@ -90,11 +90,7 @@ public class ClosedIssueDiscussionBridge {
 
     private void update(long issueId, EventContext context) {
         Issue issue = lockedRow.lockAndRead(issueId).orElse(null);
-        if (issue == null
-                || issue.isPullRequest()
-                || issue.getRepository() == null
-                || issue.getDeletedAt() != null
-                || issue.getState() != Issue.State.CLOSED) {
+        if (issue == null || issue.isPullRequest() || issue.getRepository() == null || issue.getDeletedAt() != null) {
             return;
         }
         ScmEventPayload.IssueData current = ScmEventPayload.IssueData.from(issue);

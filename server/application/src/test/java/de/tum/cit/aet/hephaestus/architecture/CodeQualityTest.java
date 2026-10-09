@@ -462,7 +462,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "OutlineConnectionSyncStateProvider", // Rate-limit tracker (OutlineRateLimitTracker) is
                     // @ConditionalOnProperty(outline.enabled) — same
                     // optional-bean break as the GitLab provider
-                    "ClosedIssueDiscussionBridge", // Snapshots advance even when the review listener is absent
+                    "IssueDiscussionBridge", // Snapshots advance even when the review listener is absent
                     // because hephaestus.agent.enabled is false.
                     "OutlineDocumentSyncService", // DocumentReviewTrigger's sole impl is
                     // gated on hephaestus.agent.enabled; the mirror

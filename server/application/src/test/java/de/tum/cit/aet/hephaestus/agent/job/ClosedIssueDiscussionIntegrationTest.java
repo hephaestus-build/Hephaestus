@@ -81,7 +81,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
@@ -97,9 +99,9 @@ import reactor.core.publisher.Mono;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * A closed issue's discussion is part of the evidence its review reads: written, edited and removed comments
+ * An issue's discussion is part of the evidence its review reads: written, edited and removed comments
  * move its snapshot and occasion an update, Hephaestus's own feedback does not, a synced comment retires claims
- * without occasioning a live review, and a reopened issue is no longer that closed record.
+ * without occasioning a live review, and reopened issues retain their discussion evidence.
  */
 @Import(DeferredIssueEventIntegrationTest.Configuration.class)
 class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
@@ -233,8 +235,14 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
                 ScmEventPayload.IssueData.from(issues.findById(issueId).orElseThrow()), "completed", webhook())));
     }
 
-    @Test
-    void shouldTreatAWrittenEditedOrRemovedCommentOnAClosedIssueAsNewEvidence() {
+    @ParameterizedTest
+    @EnumSource(
+            value = Issue.State.class,
+            names = {"OPEN", "CLOSED"})
+    void shouldTreatAWrittenEditedOrRemovedCommentAsNewEvidence(Issue.State state) {
+        if (state == Issue.State.OPEN) reopenIssue();
+        commenter =
+                Objects.requireNonNull(issues.findById(issueId).orElseThrow().getAuthor());
         UUID observation = recordObservation();
         String closedRecord = storedDigest();
         UUID closedSnapshot = storedSnapshot();
@@ -260,10 +268,9 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(
-            value = IdentityProviderType.class,
-            names = {"GITHUB", "GITLAB"})
-    void shouldKeepHumanMarkerQuotesAndExcludeRecordedDeliveries(IdentityProviderType type) {
+    @CsvSource({"GITHUB, OPEN", "GITHUB, CLOSED", "GITLAB, OPEN", "GITLAB, CLOSED"})
+    void shouldKeepHumanMarkerQuotesAndExcludeRecordedDeliveries(IdentityProviderType type, Issue.State state) {
+        if (state == Issue.State.OPEN) reopenIssue();
         if (type == IdentityProviderType.GITLAB) {
             provider = providers.save(new IdentityProvider(type, "https://gitlab.example.com"));
             repository.setProvider(provider);
@@ -358,6 +365,70 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
         assertThat(deferredUpdateRevisions()).contains(currentRevision());
     }
 
+    @Test
+    void shouldNotAdvanceAnOpenSnapshotForAnUnchangedCommentRedelivery() {
+        reopenIssue();
+        long id = comment(810L, "The CSV export remains requested.", webhook());
+        UUID snapshot = storedSnapshot();
+        String digest = storedDigest();
+        int before = updates().size();
+        transactions.executeWithoutResult(status -> {
+            IssueComment existing = comments.findById(id).orElseThrow();
+            events.publishEvent(new ScmDomainEvent.CommentUpdated(
+                    ScmEventPayload.CommentData.from(existing), issueId, Set.of("body"), webhook()));
+        });
+        assertThat(storedSnapshot()).isEqualTo(snapshot);
+        assertThat(storedDigest()).isEqualTo(digest);
+        assertThat(updates()).hasSize(before);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"scm.issue.opened", "scm.issue.updated"})
+    void shouldRefuseOldOpenEvidenceAfterACommentClarifiesTheRequest(String signal) {
+        reopenIssue();
+        var mapper = new ObjectMapper();
+        AgentJob capture = new AgentJob();
+        capture.setId(UUID.randomUUID());
+        var metadata = mapper.createObjectNode();
+        metadata.put("issue_id", issueId);
+        metadata.put("signal", signal);
+        metadata.put("signal_revision", currentRevision());
+        metadata.put("review_snapshot_id", storedSnapshot().toString());
+        capture.setMetadata(metadata);
+        Set<SourceKind> selected = Set.of(new SourceKind("scm.issue.core"), new SourceKind("scm.issue.comments"));
+        assertThat(contentSource
+                        .capture(new ContextRequest.IssueReviewRequest(capture), selected)
+                        .files())
+                .containsKeys("context/metadata.json", "context/comments.json");
+
+        commenter =
+                Objects.requireNonNull(issues.findById(issueId).orElseThrow().getAuthor());
+        comment(811L, "Withdraw the CSV export; only JSON remains requested.", webhook());
+
+        assertThat(contentSource
+                        .capture(new ContextRequest.IssueReviewRequest(capture), selected)
+                        .files())
+                .isEmpty();
+        metadata.put("signal_revision", currentRevision());
+        metadata.put("review_snapshot_id", storedSnapshot().toString());
+        var fresh = contentSource.capture(new ContextRequest.IssueReviewRequest(capture), selected);
+        assertThat(new String(
+                        Objects.requireNonNull(fresh.files().get("context/comments.json")), StandardCharsets.UTF_8))
+                .contains("Withdraw the CSV export; only JSON remains requested.");
+    }
+
+    private void reopenIssue() {
+        transactions.executeWithoutResult(status -> {
+            Issue issue = issues.findById(issueId).orElseThrow();
+            issue.setState(Issue.State.OPEN);
+            issue.setStateReason(null);
+            issue.setClosedAt(null);
+            issues.save(issue);
+            events.publishEvent(
+                    new ScmDomainEvent.IssueUpdated(ScmEventPayload.IssueData.from(issue), Set.of("state"), webhook()));
+        });
+    }
+
     private List<String> reviewedBodies() {
         return revisions.reviewedComments(issueId).stream()
                 .map(IssueCommentRepository.StoredComment::getBody)
@@ -406,8 +477,12 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
                 + nativeId;
     }
 
-    @Test
-    void shouldRetireClaimsForASyncedCommentWithoutOccasioningALiveReview() {
+    @ParameterizedTest
+    @EnumSource(
+            value = Issue.State.class,
+            names = {"OPEN", "CLOSED"})
+    void shouldRetireClaimsForASyncedCommentWithoutOccasioningALiveReview(Issue.State state) {
+        if (state == Issue.State.OPEN) reopenIssue();
         UUID observation = recordObservation();
 
         comment(700L, "Not doing the CSV export; out of scope for this release.", sync());
@@ -423,8 +498,12 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
                 });
     }
 
-    @Test
-    void shouldRecordOnlyTheFinalDiscussionRevisionForASyncBatch() {
+    @ParameterizedTest
+    @EnumSource(
+            value = Issue.State.class,
+            names = {"OPEN", "CLOSED"})
+    void shouldRecordOnlyTheFinalDiscussionRevisionForASyncBatch(Issue.State state) {
+        if (state == Issue.State.OPEN) reopenIssue();
         UUID observation = recordObservation();
         int before = updates().size();
         transactions.executeWithoutResult(status -> {
@@ -445,8 +524,12 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
                 });
     }
 
-    @Test
-    void shouldNotAdvanceTheSnapshotWhenASyncBatchRollsBack() {
+    @ParameterizedTest
+    @EnumSource(
+            value = Issue.State.class,
+            names = {"OPEN", "CLOSED"})
+    void shouldNotAdvanceTheSnapshotWhenASyncBatchRollsBack(Issue.State state) {
+        if (state == Issue.State.OPEN) reopenIssue();
         UUID snapshot = storedSnapshot();
         String digest = storedDigest();
         int before = updates().size();
@@ -508,7 +591,7 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldStopReadingTheClosedRecordOnReopenAndReadItAgainUnderASecondClose() {
+    void shouldRetainDiscussionEvidenceOnReopenAndReadItUnderASecondClose() {
         UUID observation = recordObservation();
 
         transactions.executeWithoutResult(status -> {
@@ -524,7 +607,8 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
         UUID reopened = storedSnapshot();
 
         comment(800L, "CSV export moved to #12.", webhook());
-        assertThat(storedSnapshot()).isEqualTo(reopened);
+        assertThat(storedSnapshot()).isNotEqualTo(reopened);
+        assertThat(storedDigest()).isEqualTo(currentRevision());
 
         Instant secondClose = closedAt.plusSeconds(7200);
         transactions.executeWithoutResult(status -> {
