@@ -563,6 +563,8 @@ export interface CapturedDiscussionSource {
 
 export interface PublicReviewHistory {
 	capturedAt: string | null;
+	/** The code head in the same-work core record; no identity for its description or discussion. */
+	reviewedRevision?: string | null;
 	/** The captured work author; unknown when their identity is not shown. */
 	recipient: { author: string | null; authorId: string | null };
 	sources: CapturedDiscussionSource[];
@@ -775,12 +777,13 @@ export function buildPublicReviewHistory(
 ): PublicReviewHistory {
 	const recipient: PublicReviewHistory["recipient"] = { author: null, authorId: null };
 	if (!isRecord(folderIndex) || typeof folderIndex.artifactKind !== "string") {
-		return { capturedAt: null, recipient, sources: [], statements: [] };
+		return { capturedAt: null, reviewedRevision: null, recipient, sources: [], statements: [] };
 	}
 	const index = folderIndex;
 	const capturedAt = instantOf(index.capturedAt);
 	const coreKind = CORE_SOURCE.get(folderIndex.artifactKind);
 	let otherWork: string | null = null;
+	let reviewedRevision: string | null = null;
 	if (coreKind !== undefined) {
 		const metadataPath = `${contextRoot}/metadata.json`;
 		const capture = captureOf(index, coreKind, metadataPath);
@@ -791,6 +794,9 @@ export function buildPublicReviewHistory(
 			if (otherWork === null) {
 				recipient.author = textOf(core.shown.author);
 				recipient.authorId = idOf(core.shown.author_id);
+				if (folderIndex.artifactKind === "scm.pull_request") {
+					reviewedRevision = textOf(core.shown.commit_sha);
+				}
 			}
 		}
 	}
@@ -839,7 +845,7 @@ export function buildPublicReviewHistory(
 		}
 	}
 	const totalChars = limits.totalChars ?? SAME_WORK_LIMITS.totalChars;
-	const history = { capturedAt, recipient, sources, statements };
+	const history = { capturedAt, reviewedRevision, recipient, sources, statements };
 	for (let sourceIndex = sources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
 		const source = sources.at(sourceIndex);
 		if (source === undefined) {
@@ -859,6 +865,7 @@ export function buildPublicReviewHistory(
 		? history
 		: {
 				capturedAt,
+				reviewedRevision,
 				recipient,
 				sources: [],
 				statements: [],

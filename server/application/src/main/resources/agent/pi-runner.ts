@@ -2537,7 +2537,11 @@ const REVIEW_FINAL = "The review on this work is final; this composition accepts
 function buildPracticeTool(
 	reviewable: readonly Record<string, unknown>[],
 	standardOf: (slug: string) => { text: string; whole: boolean },
-	context: { practices: readonly ReviewPractice[]; history: readonly OwnPriorFeedback[] },
+	context: {
+		practices: readonly ReviewPractice[];
+		history: readonly OwnPriorFeedback[];
+		reviewedRevision: string | null;
+	},
 	state: PublicReviewState,
 	restore: () => string,
 ) {
@@ -2577,6 +2581,7 @@ function buildPracticeTool(
 				reviewable,
 				context.practices,
 				context.history,
+				context.reviewedRevision,
 			);
 			if (standard.whole) {
 				state.consulted.set(slug, consulted);
@@ -4632,7 +4637,11 @@ async function main() {
 								}
 							: standard;
 					},
-					{ practices, history: alreadySaid.feedback },
+					{
+						practices,
+						history: alreadySaid.feedback,
+						reviewedRevision: captured.reviewedRevision ?? null,
+					},
 					state,
 					restore,
 				),

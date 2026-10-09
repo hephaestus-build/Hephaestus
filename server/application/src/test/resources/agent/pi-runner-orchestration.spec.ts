@@ -2775,6 +2775,7 @@ if (scenario !== undefined && scenario !== "") {
 						nodePath.join(cwd, "evidence/metadata.json"),
 						JSON.stringify({
 							title: "Add login",
+							commit_sha: "a".repeat(40),
 							pr_url: "https://gitlab.example/group/repo/-/merge_requests/3",
 						}),
 					);
@@ -4636,6 +4637,7 @@ for (const item of nullableCases) {
 									/The recorded MET observations of `test-practice`:[\s\S]*observation-2/u,
 								);
 								assert.ok(refused.includes(reviewTurn), refused);
+								assert.ok(refused.includes(`"reviewedRevision": "${"a".repeat(40)}"`), refused);
 								// A restored standard keeps what it is for.
 								assert.ok(
 									refused.includes(
