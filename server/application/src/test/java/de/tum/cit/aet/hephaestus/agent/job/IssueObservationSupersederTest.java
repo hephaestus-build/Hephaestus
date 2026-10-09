@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredIssueCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -38,7 +39,8 @@ class IssueObservationSupersederTest extends BaseUnitTest {
             issues,
             observations,
             new IssueEvidenceRevision(
-                    mock(IssueCommentRepository.class), new IssueCommentProvenance(issueId -> List.of())),
+                    mock(IssueCommentRepository.class),
+                    new IssueCommentProvenance(mock(DeliveredIssueCommentLookup.class))),
             lockedRow);
 
     @Test

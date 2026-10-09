@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
@@ -46,6 +47,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettings;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState.Available;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig;
@@ -374,6 +376,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         metadata.put("commit_sha", "pipelinesha");
         metadata.put("source_branch", "feature/pipeline");
         metadata.put("target_branch", "main");
+        metadata.put("title", "Pipeline Test PR");
+        metadata.put("body", "Test body");
         agentJob.setMetadata(metadata);
         agentJob.setEvidenceSnapshot(evidenceSnapshot(description, errors));
         agentJob = agentJobRepository.save(agentJob);
@@ -537,7 +541,11 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 .put("repository_id", otherId)
                 .put("repository_full_name", "org/other-repo")
                 .put("pr_number", 51)
-                .put("commit_sha", HEAD_SHA);
+                .put("pr_url", "https://github.com/org/other-repo/pull/51")
+                .put("commit_sha", HEAD_SHA)
+                .put("source_branch", "feature/fresh")
+                .put("title", "Just committed")
+                .put("body", "Fresh pull request body");
         next.setMetadata(nextMetadata);
         next = agentJobRepository.save(next);
         UUID claimId = next.getId();
@@ -565,39 +573,46 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 })
                 .when(documentProjection)
                 .documentsForWorkspace(workspace.getId());
-        evidenceFiles.beginPersonCapture(next);
-        var raw = folderBuilder.prepare(
-                new ContextRequest.PracticeReviewRequest(next), EvidencePlan.compile(List.of(practice)));
-        var index = Objects.requireNonNull(raw.manifest());
-        assertThat(folderBuilder
-                        .prepareAutomatedReviewReadiness(
-                                index, List.of(practice), next.getCreatedAt(), raw.files(), null)
-                        .readyPractices())
-                .containsExactly(practice);
-
-        for (String workspaceSource : List.of("outline.documents", "workspace.project-inventory")) {
-            assertThat(index.sources())
-                    .filteredOn(source -> source.kind().value().equals(workspaceSource))
-                    .singleElement()
-                    .satisfies(source -> assertThat(source.state()).isInstanceOf(Available.class));
-        }
-
-        assertThat(index.artifacts().stream().filter(a -> a.artifact().path().startsWith("context/docs/")))
-                .hasSize(21);
+        JobFolderIndex index;
         var snapshot = OBJECT_MAPPER.createObjectNode();
-        snapshot.set("manifest", OBJECT_MAPPER.valueToTree(index));
-        snapshot.putArray("practices")
-                .addObject()
-                .put("slug", practice.getSlug())
-                .put(
-                        "revisionId",
-                        Objects.requireNonNull(practice.getCurrentRevision().getId()));
-        next.setEvidenceSnapshot(snapshot);
-        next = agentJobRepository.save(next);
-        var prepared = evidenceFiles.prepare(
-                next,
-                new PreparedEvidence(raw.files(), raw.filesOnDisk(), raw.cleanups(), null, raw.directories()),
-                null);
+        PreparedJobInputs prepared;
+        evidenceFiles.beginPersonCapture(next);
+        try (var raw = folderBuilder.prepare(
+                new ContextRequest.PracticeReviewRequest(next), EvidencePlan.compile(List.of(practice)))) {
+            index = Objects.requireNonNull(raw.manifest());
+            assertThat(folderBuilder
+                            .prepareAutomatedReviewReadiness(
+                                    index, List.of(practice), next.getCreatedAt(), raw.files(), null)
+                            .readyPractices())
+                    .containsExactly(practice);
+
+            for (String workspaceSource : List.of("outline.documents", "workspace.project-inventory")) {
+                assertThat(index.sources())
+                        .filteredOn(source -> source.kind().value().equals(workspaceSource))
+                        .singleElement()
+                        .satisfies(source -> assertThat(source.state()).isInstanceOf(Available.class));
+            }
+
+            assertThat(index.artifacts().stream()
+                            .filter(a -> a.artifact().path().startsWith("context/docs/")))
+                    .hasSize(21);
+
+            snapshot.set("manifest", OBJECT_MAPPER.valueToTree(index));
+            snapshot.putArray("practices")
+                    .addObject()
+                    .put("slug", practice.getSlug())
+                    .put(
+                            "revisionId",
+                            Objects.requireNonNull(practice.getCurrentRevision().getId()));
+            next.setEvidenceSnapshot(snapshot);
+            next = agentJobRepository.save(next);
+            prepared = evidenceFiles.prepare(
+                    next,
+                    new PreparedEvidence(raw.files(), raw.filesOnDisk(), raw.cleanups(), null, raw.directories()),
+                    null);
+        } finally {
+            evidenceFiles.abortPersonCapture(next);
+        }
         preparedEvidence.add(prepared);
         preparedJobIds.add(next.getId());
         assertThat(Files.readString(prepared.filesOnDisk().get("context/scm/reviewed/pulls/51/record.json")))
@@ -697,6 +712,56 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                         .path("manifest")
                         .path("artifacts"))
                 .isEmpty();
+    }
+
+    @Test
+    void shouldWithholdRequiredCoreReadinessWhenAdmittedWordsAreUnknownDespiteKnownMirrorWords() throws Exception {
+        var practice = createPractice("retained-core", "Retain the admitted description");
+        practice.setEvidenceRequirements(
+                List.of(new PracticeEvidenceRequirement(PullRequestContentSource.CORE, EvidenceStance.REQUIRED)));
+        practice.setReviewWhen(Map.of());
+        practice.setSubject(ActorRole.AUTHOR);
+        practice.setPrecondition(null);
+        practice = practiceRepository.saveAndFlush(practice);
+        var unknown = new AgentJob();
+        unknown.setWorkspace(workspace);
+        unknown.setWorkerId("test-worker");
+        unknown.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        unknown.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        unknown.setArtifactKind(ArtifactKinds.PULL_REQUEST);
+        unknown.setStatus(AgentJobStatus.RUNNING);
+        unknown.setConfigSnapshot(agentJob.getConfigSnapshot());
+        var metadata =
+                (ObjectNode) Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
+        metadata.remove(List.of("title", "body", ObservationAdmissionService.DIGEST_METADATA_KEY));
+        unknown.setMetadata(metadata);
+        unknown = agentJobRepository.saveAndFlush(unknown);
+
+        evidenceFiles.beginPersonCapture(unknown);
+        try (var raw = folderBuilder.prepare(
+                new ContextRequest.PracticeReviewRequest(unknown), EvidencePlan.compile(List.of(practice)))) {
+            var index = Objects.requireNonNull(raw.manifest());
+            assertThat(folderBuilder
+                            .prepareAutomatedReviewReadiness(
+                                    index, List.of(practice), unknown.getCreatedAt(), raw.files(), null)
+                            .readyPractices())
+                    .isEmpty();
+            var core = index.sources().stream()
+                    .filter(source -> source.kind().equals(PullRequestContentSource.CORE))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(core.state()).isInstanceOfSatisfying(Available.class, available -> {
+                assertThat(available.completeness()).isEqualTo(SourceCompleteness.PARTIAL);
+                assertThat(available.limitations())
+                        .containsExactlyInAnyOrder("RETAINED_TITLE_UNKNOWN", "RETAINED_BODY_UNKNOWN");
+            });
+            var captured = OBJECT_MAPPER.readTree(raw.files().get("context/metadata.json"));
+            assertThat(captured.has("title")).isFalse();
+            assertThat(captured.has("body")).isFalse();
+            assertThat(raw.files()).doesNotContainKey(PullRequestContentSource.DESCRIPTION_FILE);
+        } finally {
+            evidenceFiles.abortPersonCapture(unknown);
+        }
     }
 
     private Practice createPractice(String slug, String name) {
