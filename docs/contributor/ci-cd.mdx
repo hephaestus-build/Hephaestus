@@ -132,9 +132,10 @@ still reports `skipped`, not `success`. A workflow that never triggers reports n
 A pending required context blocks the queue indefinitely.
 `merge_group` supports no `paths:` filter, so each job's `if` supplies the filter.
 
-The queue builds up to
-`max_entries_to_build: 2` groups speculatively, a repository-ruleset field rather than a file here,
-and each group starts a `CI/CD` run. GitHub's
+The repository ruleset controls how many merge groups the queue builds in parallel through
+`max_entries_to_build`. Read the active value in the ruleset's
+[merge queue configuration](https://github.com/hephaestus-build/Hephaestus/rules).
+Each group starts a `CI/CD` run. GitHub's
 [runner concurrency limits](https://docs.github.com/en/actions/reference/limits#job-concurrency-limits-for-github-hosted-runners)
 apply across workflows, so queue parallelism competes with pull-request validation for capacity.
 
