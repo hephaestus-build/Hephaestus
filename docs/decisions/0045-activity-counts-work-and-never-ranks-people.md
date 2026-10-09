@@ -1,6 +1,6 @@
 # ADR 0045: Activity counts and lists work; it never scores or ranks people
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-10-09 — sorting, the Contributions total and the public page superseded by [ADR 0052](0052-activity-sorts-by-contributions-and-can-be-public.md))
 **Date:** 2026-09-27
 **Authors:** Felix T.J. Dietrich
 
@@ -129,3 +129,22 @@ Activity counts and lists work, for one developer (**Activity**) and for a works
 Evidence from Hephaestus's own users that a count on Activity is being used as a target or a ranking
 — for example, members asking to sort by it or reports of it being used in performance reviews — or
 a request for a comparison between members that cannot be met without ordering people by a number.
+
+## Update — 2026-10-09 (sorting and the public page)
+
+The revisit trigger fired: the lead of a large open-source project asked to sort people, choose a
+date range, and show activity without sign-in. [ADR 0052](0052-activity-sorts-by-contributions-and-can-be-public.md)
+records the new decision. These parts above are superseded and stay as the record of why they were
+chosen:
+
+- **Considered option 2**, a sortable table by count, is now the chosen path, with one unweighted
+  total, **Contributions**, as the default sort and a position number.
+- **Counts, no score.** One total now exists. It adds pull requests opened, pull requests reviewed and
+  issues opened, with no weights. There is still no score.
+- **Members by name.** People sort by every count column. A name sort is one of the choices.
+- **For the workspace only** and the driver *Activity is for the people in the workspace, never for a
+  public read.* A workspace can publish an opt-out public activity page for its public repositories.
+
+Everything else stands: every count opens its list, one metric for each chart, no calendar, the
+timeline grouped by the work, **Needs you**, covered and team review requests, and outcomes that
+belong to the author.

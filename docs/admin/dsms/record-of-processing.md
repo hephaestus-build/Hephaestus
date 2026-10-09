@@ -53,7 +53,9 @@ The conversational mentor is an in-app chat where contributors can ask follow-up
 
 Contributors who sign in with their GitHub or LRZ-GitLab account get a personal dashboard that summarizes their observations and activity. They get access to the conversational mentor and their account preferences. Sign-in adds the federated user identifier, username, display name, email, and avatar URL to what Hephaestus holds about that contributor.
 
-Everyone with a role in the workspace also sees Activity. Activity shows counts and lists of pull/merge requests, reviews, issues and comments that members did in the workspace's repositories. It also shows each member's open work (review requests, assigned issues), with each reviewer's review state. Members see this for themselves and for the workspace. Members appear by name, with no scores or ranks.
+Everyone with a role in the workspace also sees Activity. Activity shows counts and lists of pull/merge requests, reviews, issues and comments that members did in the workspace's repositories. It also shows each member's open work (review requests, assigned issues), with each reviewer's review state. Members see this for themselves and for the workspace. Workspace activity can sort people by each count. The default sort is Contributions: pull/merge requests opened, pull/merge requests reviewed (each once, never one's own) and issues opened, with no weights. A sorted table shows a position number (ADR 0052). Activity never shows a score, practices or standings.
+
+A workspace administrator can publish a public activity page when the instance allows it. Anyone can read it without sign-in. It shows the counts and links of the work in the workspace's public repositories, for members and outside contributors. It never shows practices, feedback, observations, Slack, Outline or AI review content. Each person can hide at once with Show me on public activity pages. A hidden person leaves every total. A person without an account can object through the privacy contact. The maintainer reassessed this audience on 2026-10-09. The TUM data-protection coordinator confirms it before the first TUM workspace goes public (`dpia-prescreen.md` § 6).
 
 Members also see Practices across the workspace (ADR 0051). It counts how many developers are at each practice standing in each practice group and practice. It also shows the middle half of the reviewed work, the practices going well, the practices needing attention and the open feedback of the developers counted. It names nobody and has no smallest count. Thus, a small count can tell the members of a workspace the standing of one developer. Hidden members are not counted. The maintainer reassessed this audience on 2026-10-07 with a low residual risk. The full DPIA confirms it (`dpia-prescreen.md` § 6).
 
@@ -190,6 +192,10 @@ Research recipients (only for participants with a current research grant):
 
 - The public and other researchers receive only anonymized datasets. A dataset that the team cannot anonymize stays inside the team.
 
+The public, only for a workspace that publishes its public activity page:
+
+- Anyone can read the counts and links of the work in the workspace's public repositories, for each person who has not hidden. Search engines get noindex unless an administrator allows them.
+
 Separate controller (not an Art. 28 processor):
 
 - Leibniz-Rechenzentrum (LRZ) der BAdW operates gitlab.lrz.de. The platform receives the contributor's identity from gitlab.lrz.de OIDC and syncs connected gitlab.lrz.de repositories. Inter-public-body transmission falls under Art. 5(1) Nr. 1 BayDSG.
@@ -275,6 +281,10 @@ After projection of a package into the practice-feedback ledger, a terminal deli
 Workspace memberships, AI conversations, and activity records
 
 Hephaestus retains these with the relevant workspace records. Removal occurs when those records or the workspace are purged, or through the instance-admin Person data job on verified erasure. Disconnect or workspace purge removes the active PostgreSQL mirror of Slack and Outline content. Materialized diagnostic output, worker-input copies, and broker messages expire under the bounded windows below.
+
+Public activity page
+
+The page holds no copy. Each request computes it from the activity records above. HTTP caches can keep a response for up to 60 seconds. A person who hides leaves the page at once. Copies that third parties made before cannot be recalled.
 
 Research data
 
@@ -589,6 +599,8 @@ Account erasure removes the ledger's account reference. The resulting non-accoun
 
 Product feedback and product-purpose surveys improve the TUM-operated instance under Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG and Art. 4(1) BayDSG. Responses are not reused for research.
 
+Public activity page: the publication is a transfer to the public under Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG and Art. 5(1) Satz 1 Nr. 1 BayDSG. It must be necessary for the task of an open-source project in teaching and research. Each person can object under Art. 21 GDPR with the switch Show me on public activity pages, which stops the publication at once, or through the privacy contact. Course workspaces stay private.
+
 Research-purpose surveys: Art. 6(1)(a) GDPR under the research participation above. Such a survey reaches only accounts whose latest research decision is a grant for the current notice version and for the organization it names. The screen labels it as research.
 
 Its answers are research data, rather than product feedback. They stay in the same database. Instance administrators who read them act on behalf of the research.
@@ -655,6 +667,14 @@ In the DSMS multi-select:
 
 Markdown source under `webapp/public/legal/profiles/tumaet/`.
 
+For the public activity page, three more layers inform people:
+
+1. A workspace onboarding step opens at a signed-in member's first visit to a workspace with a public activity page. It says that the page is public and what it shows. It offers Show me and Hide me with equal weight.
+2. The public page says what it shows and how to hide.
+3. For outside contributors with no contact data, the privacy notice makes the information public (Art. 14(5)(b) GDPR).
+
+The [notice change list](./tum-privacy-notice-changes.md) gives the changes to the public notice for the legal review.
+
 ## Other Remarks (DSMS form vendor-pool comment)
 
 ```text
@@ -707,8 +727,13 @@ Practice profiles and their feedback text are private to the developer. Workspac
 observations, delivery metadata and dispute explanations, but not practice-page or conversation
 feedback text through ordinary administration. Ratings and other private response notes stay private.
 Instance-admin **View as user** is a separate read-only, reasoned and audited access path. External
-feedback follows the destination's audience. A public workspace exposes its directory and practices,
-not Activity, practice profiles, feedback or conversations.
+feedback follows the destination's audience.
+
+Every workspace page needs sign-in. The opt-out public activity page described above is the only
+public view of a workspace. It replaces an older public flag that a workspace admin can set only
+through the API. With that flag, anonymous API reads see the workspace's members, teams, repositories
+and practices, never Activity, practice profiles, feedback or conversations. ADR 0052 removes the flag
+before the first public activity page goes live.
 
 Disputes hold back the same point in later reviews while they stand. Withdrawal of the dispute
 allows it again, with the committed-secret exception. Admin withdrawal preserves feedback and its
