@@ -134,7 +134,7 @@ A pending required context blocks the queue indefinitely.
 
 The repository ruleset controls how many merge groups the queue builds in parallel through
 `max_entries_to_build`. Read the active value in the ruleset's
-[merge queue configuration](https://github.com/hephaestus-build/Hephaestus/settings/rules).
+[merge queue configuration](https://github.com/hephaestus-build/Hephaestus/rules).
 Each group starts a `CI/CD` run. GitHub's
 [runner concurrency limits](https://docs.github.com/en/actions/reference/limits#job-concurrency-limits-for-github-hosted-runners)
 apply across workflows, so queue parallelism competes with pull-request validation for capacity.
