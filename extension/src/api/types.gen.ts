@@ -45,20 +45,6 @@ export type ActivityAction = {
     kind: 'PULL_REQUEST_OPENED' | 'PULL_REQUEST_MERGED' | 'PULL_REQUEST_CLOSED' | 'REVIEW_APPROVED' | 'REVIEW_CHANGES_REQUESTED' | 'REVIEW_COMMENTED' | 'COMMENTED' | 'CODE_COMMENTED' | 'ISSUE_OPENED' | 'ISSUE_CLOSED';
 };
 
-/**
- * Activity in one time bucket of a range
- */
-export type ActivityBucket = {
-    /**
-     * When the bucket starts: midnight of its day, of its week's Monday or of its month's first day, in the requested time zone. The first bucket may start before the range.
-     */
-    start: string;
-    /**
-     * The activity in the bucket that falls within the range
-     */
-    summary: ActivitySummary;
-};
-
 export type ActivityCounts = {
     activeWeeks: number;
     comments: number;
@@ -87,29 +73,16 @@ export type ActivityHighlights = {
     mostPeopleHelped: Array<number>;
 };
 
-/**
- * Activity in a time range, in total and over time
- */
-export type ActivityOverview = {
-    /**
-     * How long each bucket is
-     */
-    bucket: TimeBucketSize;
-    /**
-     * Every bucket the range touches, oldest first, including those without activity
-     */
-    buckets: Array<ActivityBucket>;
-    /**
-     * The activity in the range; the buckets' summaries add up to it
-     */
-    summary: ActivitySummary;
-};
-
 export type ActivityPeople = {
     automation: Array<ActivityPerson>;
     coverage: ActivityCoverage;
     from: string;
     highlights: ActivityHighlights;
+    historyStart?: string;
+    /**
+     * Maximum range width in days
+     */
+    maxRangeDays: number;
     people: Array<ActivityPerson>;
     repositories: Array<ActivityRepository>;
     teams: Array<ActivityTeam>;
@@ -118,10 +91,18 @@ export type ActivityPeople = {
 
 export type ActivityPerson = {
     automation: boolean;
+    breakdown: ActivitySummary;
     counts: ActivityCounts;
     firstContributionAt?: string;
     person: UserInfo;
     weeks: Array<ActivityWeek>;
+};
+
+export type ActivityPersonDetail = {
+    activity: ActivityPerson;
+    from: string;
+    repositories: Array<ActivityRepositoryCounts>;
+    to: string;
 };
 
 /**
@@ -133,8 +114,14 @@ export type ActivityRepository = {
     name: string;
 };
 
+export type ActivityRepositoryCounts = {
+    breakdown: ActivitySummary;
+    counts: ActivityCounts;
+    repository: ActivityRepository;
+};
+
 /**
- * Counts of activity in a time range. Each count is the sum of that kind's counts in the work list for the same scope and range.
+ * Activity counts by type. Review counts describe submissions by state, not distinct pull requests reviewed.
  */
 export type ActivitySummary = {
     /**
@@ -186,6 +173,7 @@ export type ActivityTeam = {
 };
 
 export type ActivityWeek = {
+    breakdown: ActivitySummary;
     counts: ActivityCounts;
     start: string;
 };
@@ -2777,20 +2765,6 @@ export type LoginProviderView = {
     seededFromEnv?: boolean;
     type: string;
     updatedAt: string;
-};
-
-/**
- * One member and their activity in a time range
- */
-export type MemberActivity = {
-    /**
-     * The member's activity
-     */
-    summary: ActivitySummary;
-    /**
-     * The member
-     */
-    user: UserInfo;
 };
 
 export type MemberAiChoiceRequest = {
@@ -9819,57 +9793,6 @@ export type GetWorkspaceResponses = {
 
 export type GetWorkspaceResponse = GetWorkspaceResponses[keyof GetWorkspaceResponses];
 
-export type ListMemberActivityData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-    };
-    query?: {
-        /**
-         * A team, with its visible sub-teams; omit for everyone
-         */
-        teamId?: number;
-        /**
-         * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
-         */
-        from?: string;
-        /**
-         * Exclusive upper bound; defaults to now
-         */
-        to?: string;
-    };
-    url: '/workspaces/{workspaceSlug}/activity/members';
-};
-
-export type ListMemberActivityErrors = {
-    /**
-     * Invalid range
-     */
-    400: ProblemDetail;
-    /**
-     * The caller is not a member of the workspace
-     */
-    403: ProblemDetail;
-    /**
-     * Team not found
-     */
-    404: ProblemDetail;
-};
-
-export type ListMemberActivityError = ListMemberActivityErrors[keyof ListMemberActivityErrors];
-
-export type ListMemberActivityResponses = {
-    /**
-     * Members listed
-     */
-    200: Array<MemberActivity>;
-};
-
-export type ListMemberActivityResponse = ListMemberActivityResponses[keyof ListMemberActivityResponses];
-
 export type GetOpenWorkData = {
     body?: never;
     path: {
@@ -9888,11 +9811,15 @@ export type GetOpenWorkData = {
 
 export type GetOpenWorkErrors = {
     /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
      * The caller is not a member of the workspace
      */
     403: ProblemDetail;
     /**
-     * Member not found
+     * Workspace, contributor, team or repository not found
      */
     404: ProblemDetail;
 };
@@ -9932,9 +9859,17 @@ export type GetActivityPeopleData = {
 
 export type GetActivityPeopleErrors = {
     /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
      * The caller is not a member of the workspace
      */
     403: ProblemDetail;
+    /**
+     * Workspace, contributor, team or repository not found
+     */
+    404: ProblemDetail;
 };
 
 export type GetActivityPeopleError = GetActivityPeopleErrors[keyof GetActivityPeopleErrors];
@@ -9947,6 +9882,54 @@ export type GetActivityPeopleResponses = {
 };
 
 export type GetActivityPeopleResponse = GetActivityPeopleResponses[keyof GetActivityPeopleResponses];
+
+export type GetActivityPersonData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        userId: number;
+    };
+    query?: {
+        /**
+         * 30d, 90d (default), 1y, all, or custom
+         */
+        range?: string;
+        from?: string;
+        to?: string;
+        team?: string;
+        repo?: Array<string>;
+    };
+    url: '/workspaces/{workspaceSlug}/activity/people/{userId}';
+};
+
+export type GetActivityPersonErrors = {
+    /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
+     * The caller is not a member of the workspace
+     */
+    403: ProblemDetail;
+    /**
+     * Workspace, contributor, team or repository not found
+     */
+    404: ProblemDetail;
+};
+
+export type GetActivityPersonError = GetActivityPersonErrors[keyof GetActivityPersonErrors];
+
+export type GetActivityPersonResponses = {
+    /**
+     * Contributor activity counted
+     */
+    200: ActivityPersonDetail;
+};
+
+export type GetActivityPersonResponse = GetActivityPersonResponses[keyof GetActivityPersonResponses];
 
 export type UpdateActivityAutomationData = {
     body?: never;
@@ -9965,9 +9948,17 @@ export type UpdateActivityAutomationData = {
 
 export type UpdateActivityAutomationErrors = {
     /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
      * The caller is not a member of the workspace
      */
     403: ProblemDetail;
+    /**
+     * Workspace, contributor, team or repository not found
+     */
+    404: ProblemDetail;
 };
 
 export type UpdateActivityAutomationError = UpdateActivityAutomationErrors[keyof UpdateActivityAutomationErrors];
@@ -9981,42 +9972,43 @@ export type UpdateActivityAutomationResponses = {
 
 export type UpdateActivityAutomationResponse = UpdateActivityAutomationResponses[keyof UpdateActivityAutomationResponses];
 
-export type GetActivitySummaryData = {
+export type GetActivityPersonWorkData = {
     body?: never;
     path: {
         /**
          * Workspace slug
          */
         workspaceSlug: string;
+        userId: number;
     };
     query?: {
         /**
-         * The member; omit for everyone
+         * 30d, 90d (default), 1y, all, or custom
          */
-        login?: string;
-        /**
-         * A team, with its visible sub-teams; omit for the workspace
-         */
-        teamId?: number;
-        /**
-         * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
-         */
+        range?: string;
         from?: string;
-        /**
-         * Exclusive upper bound; defaults to now
-         */
         to?: string;
+        team?: string;
+        repo?: Array<string>;
         /**
-         * The IANA time zone whose midnights start the buckets, such as Europe/Berlin
+         * Kinds of activity to list (repeatable); omit for every kind
          */
-        zone?: string;
+        kinds?: Array<'PULL_REQUEST_OPENED' | 'PULL_REQUEST_MERGED' | 'PULL_REQUEST_CLOSED' | 'REVIEW_APPROVED' | 'REVIEW_CHANGES_REQUESTED' | 'REVIEW_COMMENTED' | 'COMMENTED' | 'CODE_COMMENTED' | 'ISSUE_OPENED' | 'ISSUE_CLOSED'>;
+        /**
+         * The previous page's nextCursor; omit for the first page
+         */
+        cursor?: string;
+        /**
+         * Page size from 1 to 100; defaults to 30
+         */
+        size?: number;
     };
-    url: '/workspaces/{workspaceSlug}/activity/summary';
+    url: '/workspaces/{workspaceSlug}/activity/people/{userId}/work';
 };
 
-export type GetActivitySummaryErrors = {
+export type GetActivityPersonWorkErrors = {
     /**
-     * Invalid range or time zone
+     * A request parameter is not valid
      */
     400: ProblemDetail;
     /**
@@ -10024,21 +10016,21 @@ export type GetActivitySummaryErrors = {
      */
     403: ProblemDetail;
     /**
-     * Member or team not found
+     * Workspace, contributor, team or repository not found
      */
     404: ProblemDetail;
 };
 
-export type GetActivitySummaryError = GetActivitySummaryErrors[keyof GetActivitySummaryErrors];
+export type GetActivityPersonWorkError = GetActivityPersonWorkErrors[keyof GetActivityPersonWorkErrors];
 
-export type GetActivitySummaryResponses = {
+export type GetActivityPersonWorkResponses = {
     /**
-     * Activity counted
+     * One page of contributor work
      */
-    200: ActivityOverview;
+    200: ActivityWorkPage;
 };
 
-export type GetActivitySummaryResponse = GetActivitySummaryResponses[keyof GetActivitySummaryResponses];
+export type GetActivityPersonWorkResponse = GetActivityPersonWorkResponses[keyof GetActivityPersonWorkResponses];
 
 export type GetActivityWorkData = {
     body?: never;
@@ -10049,21 +10041,14 @@ export type GetActivityWorkData = {
         workspaceSlug: string;
     };
     query?: {
-        /**
-         * The member; omit for everyone
-         */
         login?: string;
+        team?: string;
+        repo?: Array<string>;
         /**
-         * A team, with its visible sub-teams; omit for the workspace
+         * 30d, 90d (default), 1y, all, or custom
          */
-        teamId?: number;
-        /**
-         * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
-         */
+        range?: string;
         from?: string;
-        /**
-         * Exclusive upper bound; defaults to now
-         */
         to?: string;
         /**
          * Kinds of activity to list (repeatable); omit for every kind
@@ -10083,7 +10068,7 @@ export type GetActivityWorkData = {
 
 export type GetActivityWorkErrors = {
     /**
-     * Invalid range, kind, cursor or size
+     * A request parameter is not valid
      */
     400: ProblemDetail;
     /**
@@ -10091,7 +10076,7 @@ export type GetActivityWorkErrors = {
      */
     403: ProblemDetail;
     /**
-     * Member or team not found
+     * Workspace, contributor, team or repository not found
      */
     404: ProblemDetail;
 };

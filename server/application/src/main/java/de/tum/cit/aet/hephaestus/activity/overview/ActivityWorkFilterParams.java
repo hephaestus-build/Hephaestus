@@ -2,11 +2,11 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
 import de.tum.cit.aet.hephaestus.core.time.TimeRange;
-import de.tum.cit.aet.hephaestus.core.time.TimeRangeFilterParams;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Limit;
@@ -37,11 +37,11 @@ public record ActivityWorkFilterParams(
     }
 
     /** The range the page is read in: a later page keeps the end the first page had. */
-    TimeRange range(TimeRangeFilterParams range, Clock clock) {
+    TimeRange range(ActivityPeopleRangeParams range, Clock clock, Instant earliest) {
         return (cursor == null
                         ? range
                         : range.endingAt(ActivityWorkCursor.decode(cursor).to()))
-                .toRange(clock);
+                .resolve(clock, earliest);
     }
 
     /** Where the page starts; an unreadable cursor is rejected. */

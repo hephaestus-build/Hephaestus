@@ -11,11 +11,8 @@ import {
 
 import type {
 	ActivityAction,
-	ActivityBucket,
-	ActivityOverview,
 	ActivitySummary,
 	ActivityWork,
-	MemberActivity,
 	OpenWork,
 	RepositoryInfo,
 	Reviewer,
@@ -25,6 +22,11 @@ import type {
 } from "@/api/types.gen";
 import type { ActivityOverviewState, DateSpan } from "@/components/activity/activity-buckets";
 import { ACTIVITY_RANGE_DEFS, rangeStart } from "@/components/activity/activity-range";
+import type {
+	ActivityBucket,
+	ActivityOverview,
+	MemberActivity,
+} from "@/components/activity/activity-view";
 import type { MemberActivityState } from "@/components/activity/MemberActivityTable";
 
 import { daysBefore, hoursBefore, minutesBefore, STORY_NOW } from "./story-clock";
@@ -464,7 +466,7 @@ function spread(summary: ActivitySummary, count: number): ActivitySummary[] {
 	return buckets;
 }
 
-/** An overview of `summary` over `range`, dense and adding up, as `GET /activity/summary` returns it. */
+/** An overview of `summary` over `range`, dense and adding up, for a presentational chart. */
 export function overviewOf(summary: ActivitySummary, range: StoryRange): ActivityOverview {
 	const { bucket, starts } = bucketStarts(range);
 	const summaries = spread(summary, starts.length);

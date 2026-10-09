@@ -1,7 +1,7 @@
 import { useId } from "react";
 
 import { cn } from "cn";
-import type { ActivityOverview } from "@/api/types.gen";
+import type { ActivityOverview } from "@/components/activity/activity-view";
 import { FOCUS_RING } from "@/components/common/focus";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { STAT_TILE_GRID, StatTile, StatTileSkeleton } from "@/components/common/StatTile";

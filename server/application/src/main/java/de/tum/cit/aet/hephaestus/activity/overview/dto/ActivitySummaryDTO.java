@@ -4,8 +4,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 
 @Schema(
-        description = "Counts of activity in a time range. Each count is the sum of that kind's counts in the work"
-                + " list for the same scope and range.")
+        description = "Activity counts by type. Review counts describe submissions by state, not distinct"
+                + " pull requests reviewed.")
 public record ActivitySummaryDTO(
         @NonNull @Schema(description = "Pull requests opened", example = "4")
         Integer pullRequestsOpened,

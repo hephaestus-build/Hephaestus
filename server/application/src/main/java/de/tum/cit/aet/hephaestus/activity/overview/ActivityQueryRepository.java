@@ -13,25 +13,22 @@ import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 /**
- * Counts and lists ledger events for the Activity pages. Counting and listing share one predicate, so a
- * count always matches the list behind it. Time ranges are half-open: {@code [from, to)}.
+ * Lists ledger events grouped by work. The page selects latest timestamps before counting its groups.
+ * Time ranges are half-open: {@code [from, to)}.
  */
 @org.springframework.stereotype.Repository
 public interface ActivityQueryRepository extends Repository<ActivityEvent, UUID> {
 
-    /** What counts: human actors in scope, the event types asked for, and never a review of one's own work. */
+    /** What counts: actors in scope, the event types asked for, and never a review of one's own work. */
     String COUNTED = """
             e.workspace.id = :#{#scope.workspaceId()}
             AND e.actor.id IN :#{#scope.actorIds()}
-            AND e.actor.type = de.tum.cit.aet.hephaestus.integration.scm.domain.user.User$Type.USER
+            AND (:#{#scope.repositoryIds().isEmpty()} = true OR e.repository.id IN :#{#scope.repositoryIds()})
             AND e.eventType IN :eventTypes
             AND e.occurredAt >= :#{#range.from()}
             AND e.occurredAt < :#{#range.to()}
-            AND NOT (e.targetType = 'review' AND EXISTS (
-                SELECT 1 FROM PullRequestReview ownReview
-                WHERE ownReview.id = e.targetId
-                AND ownReview.pullRequest.author.id = e.actor.id
-            ))
+            AND (e.targetType <> 'review' OR reviewedWork.author.id IS NULL
+                OR reviewedWork.author.id <> e.actor.id)
             """;
 
     /**
@@ -73,24 +70,6 @@ public interface ActivityQueryRepository extends Repository<ActivityEvent, UUID>
             ))
             """;
 
-    String COUNT_BY_ACTOR_AND_TYPE = "SELECT e.actor.id AS actorId, e.eventType AS eventType, COUNT(e) AS count"
-            + " FROM ActivityEvent e WHERE ";
-    String GROUP_BY_ACTOR_AND_TYPE = " GROUP BY e.actor.id, e.eventType";
-
-    /**
-     * Counts by bucket, numbered from 1 as {@link de.tum.cit.aet.hephaestus.core.time.TimeBuckets#epochSeconds()}
-     * describes. The grouping sits outside the {@code width_bucket} call because PostgreSQL does not take two
-     * parameterised calls for the same expression.
-     */
-    String COUNT_BY_BUCKET_AND_TYPE = """
-            SELECT counted.bucket AS bucket, counted.eventType AS eventType, COUNT(*) AS count FROM (
-                SELECT cast(sql('width_bucket(extract(epoch from ?), ?)', e.occurredAt, :starts) AS Integer) AS bucket,
-                    e.eventType AS eventType
-                FROM ActivityEvent e WHERE
-            """;
-
-    String GROUP_BY_BUCKET_AND_TYPE = ") counted GROUP BY counted.bucket, counted.eventType";
-
     /**
      * The pull request or issue an event happened on: its target, or the pull request or issue its review or
      * comment belongs to; null when that is not known.
@@ -112,6 +91,7 @@ public interface ActivityQueryRepository extends Repository<ActivityEvent, UUID>
                 e.occurredAt AS occurredAt, e.eventType AS eventType, e.actor.id AS actorId
             FROM ActivityEvent e
             LEFT JOIN PullRequestReview review ON e.targetType = 'review' AND review.id = e.targetId
+            LEFT JOIN Issue reviewedWork ON reviewedWork.id = review.pullRequest.id
             LEFT JOIN IssueComment comment ON e.targetType = 'issue_comment' AND comment.id = e.targetId
             LEFT JOIN PullRequestReviewComment codeComment
                 ON e.targetType = 'review_comment' AND codeComment.id = e.targetId
@@ -137,74 +117,40 @@ public interface ActivityQueryRepository extends Repository<ActivityEvent, UUID>
             + " COUNT(*) FILTER (WHERE grouped.eventType = " + EVENT + "ISSUE_CREATED) AS issuesOpened,"
             + " COUNT(*) FILTER (WHERE grouped.eventType = " + EVENT + "ISSUE_CLOSED) AS issuesClosed,"
             + " LISTAGG(DISTINCT cast(grouped.actorId AS String), ',') AS actorIds"
-            + " FROM (" + GROUPED;
+            + " FROM grouped grouped JOIN page page ON page.id = grouped.id ";
 
-    String AFTER_CURSOR = """
-            ) grouped
+    String PAGE_END = """
             GROUP BY grouped.id
-            HAVING MAX(grouped.occurredAt) < :#{#after.lastOccurredAt()}
-                OR (MAX(grouped.occurredAt) = :#{#after.lastOccurredAt()} AND grouped.id < :#{#after.id()})
             ORDER BY MAX(grouped.occurredAt) DESC, grouped.id DESC
             """;
 
-    @Query(COUNT_BY_ACTOR_AND_TYPE + COUNTED + GROUP_BY_ACTOR_AND_TYPE)
-    List<TypeCount> countByActorAndType(
-            @Param("scope") ActivityScope scope,
-            @Param("eventTypes") Collection<ActivityEventType> eventTypes,
-            @Param("range") TimeRange range);
+    String CANDIDATES = "WITH grouped AS MATERIALIZED (" + GROUPED;
+    String SELECT_PAGE = """
+            ), page AS (
+                SELECT grouped.id AS id, MAX(grouped.occurredAt) AS lastOccurredAt FROM grouped grouped
+                GROUP BY grouped.id
+                HAVING MAX(grouped.occurredAt) < :#{#after.lastOccurredAt()}
+                    OR (MAX(grouped.occurredAt) = :#{#after.lastOccurredAt()} AND grouped.id < :#{#after.id()})
+                ORDER BY MAX(grouped.occurredAt) DESC, grouped.id DESC
+                LIMIT :#{#limit.max()}
+            )
+            """;
 
-    @Query(COUNT_BY_ACTOR_AND_TYPE + COUNTED + IN_TEAMS + GROUP_BY_ACTOR_AND_TYPE)
-    List<TypeCount> countByActorAndTypeInTeams(
-            @Param("scope") ActivityScope scope,
-            @Param("eventTypes") Collection<ActivityEventType> eventTypes,
-            @Param("range") TimeRange range);
-
-    @Query(COUNT_BY_BUCKET_AND_TYPE + COUNTED + GROUP_BY_BUCKET_AND_TYPE)
-    List<BucketCount> countByBucketAndType(
-            @Param("scope") ActivityScope scope,
-            @Param("eventTypes") Collection<ActivityEventType> eventTypes,
-            @Param("range") TimeRange range,
-            @Param("starts") Long[] starts);
-
-    @Query(COUNT_BY_BUCKET_AND_TYPE + COUNTED + IN_TEAMS + GROUP_BY_BUCKET_AND_TYPE)
-    List<BucketCount> countByBucketAndTypeInTeams(
-            @Param("scope") ActivityScope scope,
-            @Param("eventTypes") Collection<ActivityEventType> eventTypes,
-            @Param("range") TimeRange range,
-            @Param("starts") Long[] starts);
-
-    @Query(WORK_PAGE + COUNTED + AFTER_CURSOR)
+    @Query(CANDIDATES + COUNTED + SELECT_PAGE + WORK_PAGE + PAGE_END)
     List<WorkGroup> findWork(
             @Param("scope") ActivityScope scope,
             @Param("eventTypes") Collection<ActivityEventType> eventTypes,
             @Param("range") TimeRange range,
             @Param("after") ActivityWorkCursor after,
-            Limit limit);
+            @Param("limit") Limit limit);
 
-    @Query(WORK_PAGE + COUNTED + IN_TEAMS + AFTER_CURSOR)
+    @Query(CANDIDATES + COUNTED + IN_TEAMS + SELECT_PAGE + WORK_PAGE + PAGE_END)
     List<WorkGroup> findWorkInTeams(
             @Param("scope") ActivityScope scope,
             @Param("eventTypes") Collection<ActivityEventType> eventTypes,
             @Param("range") TimeRange range,
             @Param("after") ActivityWorkCursor after,
-            Limit limit);
-
-    interface TypeCount {
-        Long getActorId();
-
-        ActivityEventType getEventType();
-
-        Long getCount();
-    }
-
-    interface BucketCount {
-        /** The bucket's position, from 1. */
-        Integer getBucket();
-
-        ActivityEventType getEventType();
-
-        Long getCount();
-    }
+            @Param("limit") Limit limit);
 
     interface WorkGroup {
         String getId();

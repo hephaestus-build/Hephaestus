@@ -138,6 +138,32 @@ class ProductionSchemaContractIntegrationTest {
     private IdentityProviderRepository identityProviderRepository;
 
     @Test
+    void shouldKeepTheActivityCoveringIndexAndRemoveItsRedundantBaseline() {
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT indnkeyatts FROM pg_index
+                WHERE indexrelid = 'public.idx_activity_event_workspace_covering'::regclass
+                """, Integer.class)).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT a.attname FROM pg_index i
+                CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS columns(number, position)
+                JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = columns.number
+                WHERE i.indexrelid = 'public.idx_activity_event_workspace_covering'::regclass
+                ORDER BY columns.position
+                """, String.class))
+                .containsExactly(
+                        "workspace_id",
+                        "occurred_at",
+                        "actor_id",
+                        "event_type",
+                        "target_type",
+                        "target_id",
+                        "repository_id");
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT to_regclass('public.idx_activity_event_workspace_occurred')::text", String.class))
+                .isNull();
+    }
+
+    @Test
     void shouldAcquireAndReleaseSchedulerLocksAgainstTheMigratedSchema() {
         String name = "schema-" + UUID.randomUUID();
         var configuration = new LockConfiguration(Instant.now(), name, Duration.ofMinutes(1), Duration.ZERO);

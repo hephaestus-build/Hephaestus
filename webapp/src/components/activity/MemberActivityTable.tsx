@@ -2,7 +2,7 @@ import { PeopleIcon, SearchIcon } from "@primer/octicons-react";
 import { useState } from "react";
 
 import { cn } from "cn";
-import type { MemberActivity } from "@/api/types.gen";
+import type { MemberActivity } from "@/components/activity/activity-view";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";

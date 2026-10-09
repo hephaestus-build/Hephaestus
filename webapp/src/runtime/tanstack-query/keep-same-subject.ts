@@ -9,6 +9,7 @@ interface Subject {
 	workspaceSlug: string;
 	login?: string;
 	teamId?: number;
+	team?: string;
 	kinds?: readonly string[];
 }
 
@@ -17,7 +18,7 @@ interface Subject {
  * page. Only the same subject's figures may stand in: another workspace's, team's, member's or
  * category's never do, and the region shows its skeleton instead.
  */
-export function keepSameSubject({ workspaceSlug, login, teamId, kinds = [] }: Subject) {
+export function keepSameSubject({ workspaceSlug, login, teamId, team, kinds = [] }: Subject) {
 	return <TData>(previous: TData | undefined, previousQuery: SubjectKey | undefined) => {
 		const key = previousQuery?.queryKey[0];
 		const query = isRecord(key?.query) ? key.query : {};
@@ -25,6 +26,7 @@ export function keepSameSubject({ workspaceSlug, login, teamId, kinds = [] }: Su
 			key?.path?.workspaceSlug === workspaceSlug &&
 			query.login === login &&
 			query.teamId === teamId &&
+			query.team === team &&
 			(Array.isArray(query.kinds) ? query.kinds : []).join(",") === kinds.join(",");
 		return same ? previous : undefined;
 	};

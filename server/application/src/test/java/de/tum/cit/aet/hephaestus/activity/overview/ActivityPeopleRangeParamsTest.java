@@ -51,6 +51,16 @@ class ActivityPeopleRangeParamsTest {
     }
 
     @Test
+    void shouldAcceptTheMeasuredBoundaryWithoutChangingTheRequestedDates() {
+        Instant from = NOW.minus(Duration.ofDays(ActivityPeopleRangeParams.MAX_DAYS));
+        var range = new ActivityPeopleRangeParams("custom", from, NOW).resolve(CLOCK, from);
+        assertThat(range.from()).isEqualTo(from);
+        assertThat(range.to()).isEqualTo(NOW);
+        assertThatThrownBy(() -> new ActivityPeopleRangeParams("custom", from.minusNanos(1), NOW).resolve(CLOCK, from))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
     void shouldUseHalfOpenCustomBoundsWhenProvided() {
         Instant from = NOW.minusSeconds(60);
         var range = new ActivityPeopleRangeParams("custom", from, NOW).resolve(CLOCK, NOW);

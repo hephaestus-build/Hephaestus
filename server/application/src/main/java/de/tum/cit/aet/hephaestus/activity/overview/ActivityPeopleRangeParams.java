@@ -20,7 +20,7 @@ public record ActivityPeopleRangeParams(
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) @Nullable
         Instant to) {
 
-    static final int MAX_DAYS = 3653;
+    static final int MAX_DAYS = 731;
 
     public TimeRange resolve(Clock clock, Instant earliest) {
         Instant end = to == null ? clock.instant() : to;
@@ -49,6 +49,10 @@ public record ActivityPeopleRangeParams(
             throw invalid("A range spans at most " + MAX_DAYS + " days.");
         }
         return new TimeRange(start, end);
+    }
+
+    ActivityPeopleRangeParams endingAt(Instant end) {
+        return new ActivityPeopleRangeParams(range, from, end);
     }
 
     private static ResponseStatusException invalid(String reason) {

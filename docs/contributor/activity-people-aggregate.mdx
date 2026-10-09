@@ -39,43 +39,102 @@ Repository keys use the full provider path, such as `ls1intum/Artemis`.
 The full path distinguishes repositories with the same name.
 The response supplies both sets of keys and display names.
 Unknown filter keys are rejected.
+Aggregate, detail and work reads use one repeatable-read snapshot per request.
+Counts, filter metadata and coverage cannot mix states from concurrent repository changes or backfill commits.
+Work lists use the same currently connected repository set, including when no repository filter is supplied.
 
 A workspace's automation classification grants no membership or permission.
 An admin can set or reset it.
 A provider bot remains automation after a reset.
 The classification is workspace-scoped and participates in person erasure and workspace purge.
+Classification writes take the shared person-data capture fence before the workspace lock.
+Thus, they cannot recreate a classification during person erasure.
 
 ## Range and query cost
 
 Ranges are half-open: `[from, to)`.
 The default is 90 days.
 The other presets are 30 days, 365 days, and all available history.
-Custom ranges and all-time ranges span at most 3,653 days.
+Custom ranges and all-time ranges span at most 731 days.
+The people response supplies `maxRangeDays` and `historyStart`.
+All time is available only when the history fits the cap.
+A longer range is rejected, not silently shortened.
+Custom windows can read earlier history within the same width limit.
 
-An isolated PostgreSQL 18 fixture measured the aggregate with these inputs:
+## Measured history and paging
 
-- 1 million ledger events over ten years.
-- 300 contributors and 30 repositories.
-- 300,000 reviews and 100,000 pull requests.
+The measurement used an isolated PostgreSQL 18 container on a shared development host.
+Each fixture was vacuumed and analyzed before `EXPLAIN (ANALYZE, BUFFERS)`.
+The large-workspace estimate was 30 repositories, 300 contributors, 75,000 events over four years,
+45,000 review rows, and 15,000 pull request rows.
+It is an estimate, not a copy of the production ls1intum workspace.
 
-The first all-time plan took 15.95 seconds.
-A repository check ran once per event.
-First-contribution reads repeatedly scanned the review table.
-The revised count plan took 3.58 seconds.
+The full four-year query first took 629 milliseconds.
+Three later runs took 1,108, 1,190, and 1,366 milliseconds.
+A version without repository grouping did not improve the earlier runs.
+The final query keeps repository grouping shared with the person detail.
+One-year windows took 185, 175, and 158 milliseconds.
+Two-year windows took 375, 500, and 400 milliseconds.
+Final two-year runs with the connected-repository bindings and explicit first-review target type
+took 1,299, 891, and 752 milliseconds.
+The earlier samples preceded those final bindings.
+Shared-host load varied; these samples are not a latency guarantee.
+Thus, the range cap is 731 days, the measured two-year window.
+A million-event, ten-year stress fixture took 3.58 seconds before the type-breakdown extension.
 Its 90-day plan took 254 milliseconds.
-These are synthetic-data SQL measurements, not production latency guarantees.
-They exclude HTTP serialization and transfer.
+The cap bounds history width, not event volume.
+Large event volumes can still exceed interactive latency.
+These numbers exclude serialization, HTTP transfer, and browser work.
+
+The old timeline query counted every group's types and actors before its page limit.
+On the four-year fixture, the first page took 2,145 milliseconds and a later page took 1,726 milliseconds.
+The new query selects page identifiers and timestamps first.
+Only those groups enter the type and actor aggregation.
+The range's latest-work selection still reads the range; there is no rollup table.
+A materialized HQL common table expression keeps the normalized event read shared.
+The existing review join excludes self-reviews without a separate correlated lookup.
+The first page took 299 milliseconds and the later page took 283 milliseconds.
+The first-page buffers changed from 76,445 shared hits, 300 reads, and 1,051/1,053 temporary reads/writes
+to 1,633 shared hits and 575/575 temporary reads/writes.
+On the million-event fixture, first/later pages changed from 18,974/13,189 milliseconds
+to 1,433/1,367 milliseconds.
+
+## Contributor details
+
+`/activity/people/{userId}` returns range totals, sparse UTC weeks, type counts, and repository counts.
+A visible contributor with no activity in the range has zero counts and empty lists.
+Hidden and unrelated people return not found.
+`/activity/people/{userId}/work` accepts the same range and readable filters.
+It uses the existing opaque cursor and page-size bounds.
+Each later page keeps the first page's range end.
+It checks contributor visibility without recomputing their range aggregate.
+
+Type counts describe review submissions by state.
+They are not the distinct pull requests reviewed count.
+The bundled webapp keeps its presentational view types and derives them from the people response.
+Its member pages request `membersOnly=true`; the new activity UI owns the all-contributor presentation.
+The old summary and member-list endpoints and their wire DTOs are removed.
 
 The covering index has the keys `(workspace_id, occurred_at)`.
 It includes actor, event type, target type, target identifier, and repository identifier.
 The workspace-and-actor index remains useful for first-contribution reads.
 The global actor and target indexes serve other ledger operations.
 Only the old index with the same workspace-and-time keys is redundant.
+Liquibase's Hibernate comparison does not retain `INCLUDE` columns.
+The covering index is excluded from that comparison by its exact name.
+The production schema contract verifies its key columns, included columns, and removal of the baseline index.
 
 ## Sources
 
 - [PostgreSQL: covering indexes](https://www.postgresql.org/docs/current/indexes-index-only-scans.html).
 - [PostgreSQL: execution plans and buffers](https://www.postgresql.org/docs/current/using-explain.html).
 - [PostgreSQL: aggregate grouping sets and filters](https://www.postgresql.org/docs/18/sql-select.html).
-- [Spring: JDBC access](https://docs.spring.io/spring-framework/reference/data-access/jdbc/choose-style.html).
+- [Liquibase: object filters](https://docs.liquibase.com/community/user-guide-5-0/how-do-i-include-and-exclude-database-objects).
+- [Spring Data: native query projections](https://docs.spring.io/spring-data/jpa/reference/repositories/projections.html).
 - [OWASP: authorization checks](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html).
+
+- [PostgreSQL: CTE materialization](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION).
+- [Hibernate: HQL common table expressions](https://docs.hibernate.org/orm/7.4/querylanguage/html_single/).
+- [Spring Data: keyset scrolling limits](https://docs.spring.io/spring-data/jpa/reference/jpa/query-methods.html#jpa.query-methods.scroll).
+
+- [PostgreSQL: transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html).

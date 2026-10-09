@@ -7,11 +7,10 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,17 +20,15 @@ class ActivityAutomationService {
     private final ActivityAutomationRepository automation;
     private final WorkspaceRepository workspaces;
     private final UserRepository users;
-    private final NamedParameterJdbcTemplate jdbc;
+    private final ActivityPeopleQueryRepository people;
     private final ConfigAuditPort audit;
+    private final PersonDataCopyFence fence;
 
     @Transactional
     public void classify(long workspaceId, long userId, boolean treatAsAutomation) {
+        fence.holdForCapture();
         var workspace = workspaces.findByIdForUpdate(workspaceId).orElseThrow();
-        boolean visible = Boolean.TRUE.equals(
-                jdbc.queryForObject("""
-                SELECT EXISTS (SELECT 1 FROM activity_event e WHERE e.workspace_id = :workspace AND e.actor_id = :person)
-                    OR EXISTS (SELECT 1 FROM workspace_membership m WHERE m.workspace_id = :workspace AND m.user_id = :person)
-                """, Map.of("workspace", workspaceId, "person", userId), Boolean.class));
+        boolean visible = people.canClassify(workspaceId, userId);
         if (!visible) {
             throw new EntityNotFoundException("Contributor", userId);
         }

@@ -4,7 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.MemberActivityDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDTO;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
@@ -12,6 +13,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
@@ -43,7 +46,9 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -107,6 +112,14 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private RepositoryRepository repositoryRepository;
+
+    @Autowired
+    private RepositoryToMonitorRepository monitorRepository;
+
+    private static final AtomicLong repositoryIds = new AtomicLong(9700000);
 
     private User overlapUser;
     private User bobOnlyB;
@@ -524,12 +537,22 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         @Test
         @WithMentorUser
-        void rosterIsScopedToWorkspaceMembership() {
+        void shouldListOnlyWorkspaceContributorsWhenOrganizationsOverlap() {
             Team sharedTeam = seedTeam("shared-team", 900_100L, SHARED_LOGIN, ensureGitHubProvider());
             teamMembershipRepository.save(new TeamMembership(sharedTeam, bobOnlyB, TeamMembership.Role.MEMBER));
 
+            seedActivity(
+                    workspaceA,
+                    userRepository
+                            .findByLoginAndProviderId(
+                                    "alice-only-a",
+                                    Objects.requireNonNull(
+                                            ensureGitHubProvider().getId()))
+                            .orElseThrow(),
+                    1);
+            seedActivity(workspaceB, bobOnlyB, 1);
             List<String> logins = memberActivity(workspaceA).stream()
-                    .map(member -> member.user().login())
+                    .map(member -> member.person().login())
                     .toList();
 
             assertThat(logins).contains("alice-only-a").doesNotContain("bob-only-b");
@@ -541,12 +564,12 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
             seedActivity(workspaceA, overlapUser, 1);
             seedActivity(workspaceB, overlapUser, 3);
 
-            MemberActivityDTO mentor = memberActivity(workspaceA).stream()
-                    .filter(member -> member.user().login().equals("mentor"))
+            ActivityPersonDTO mentor = memberActivity(workspaceA).stream()
+                    .filter(member -> member.person().login().equals("mentor"))
                     .findFirst()
                     .orElseThrow();
 
-            assertThat(mentor.summary().commentReviews()).isEqualTo(1);
+            assertThat(mentor.counts().issuesOpened()).isEqualTo(1);
         }
     }
 
@@ -688,33 +711,44 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     private void seedActivity(Workspace ws, User actor, int count) {
+        var repository = new Repository();
+        long nativeId = repositoryIds.incrementAndGet();
+        repository.setNativeId(nativeId);
+        repository.setProvider(ensureGitHubProvider());
+        repository.setName("activity-" + nativeId);
+        repository.setNameWithOwner(SHARED_LOGIN + "/activity-" + nativeId);
+        repository.setHtmlUrl("https://github.com/" + repository.getNameWithOwner());
+        repository = repositoryRepository.save(repository);
+        var monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(ws);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitorRepository.save(monitor);
         for (int i = 0; i < count; i++) {
             UUID id = UUID.randomUUID();
             activityEventRepository.insertIfAbsent(
                     id,
                     "evt-" + id,
-                    ActivityEventType.REVIEW_COMMENTED.name(),
+                    ActivityEventType.ISSUE_CREATED.name(),
                     Instant.now().minusSeconds(60),
                     actor.getId(),
                     ws.getId(),
-                    null,
-                    "pull_request",
-                    1L);
+                    repository.getId(),
+                    "issue",
+                    (long) i);
         }
     }
 
-    private List<MemberActivityDTO> memberActivity(Workspace workspace) {
-        List<MemberActivityDTO> members = webTestClient
+    private List<ActivityPersonDTO> memberActivity(Workspace workspace) {
+        var response = webTestClient
                 .get()
-                .uri("/workspaces/{slug}/activity/members", workspace.getWorkspaceSlug())
+                .uri("/workspaces/{slug}/activity/people", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
                 .isOk()
-                .expectBodyList(MemberActivityDTO.class)
+                .expectBody(ActivityPeopleDTO.class)
                 .returnResult()
                 .getResponseBody();
-        assertThat(members).isNotNull();
-        return members;
+        return Objects.requireNonNull(response).people();
     }
 }

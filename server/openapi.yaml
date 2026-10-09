@@ -102,8 +102,6 @@ tags:
   name: Admin
 - description: Per-workspace Slack channel consent + activation
   name: Slack channel activation
-- description: What members did and what is open for them
-  name: Activity
 - description: "Sign-in, refresh and sign-out for installed clients"
   name: Client session
 - description: |-
@@ -153,6 +151,8 @@ tags:
   name: Practice Catalog
 - description: Workspace-scoped team settings management
   name: Team Settings
+- description: Repository contributions and open work
+  name: Activity
 - description: Integration sync observability and manual controls
   name: Sync
 - description: "Current user identity, linked accounts, deletion"
@@ -3012,71 +3012,6 @@ paths:
       summary: Fetch a workspace by slug
       tags:
       - workspace
-  /workspaces/{workspaceSlug}/activity/members:
-    get:
-      description: "Members shown in workspace activity, or one team's, ordered by\
-        \ name."
-      operationId: listMemberActivity
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: "A team, with its visible sub-teams; omit for everyone"
-        in: query
-        name: teamId
-        required: false
-        schema:
-          type: integer
-          format: int64
-      - description: Inclusive lower bound; defaults to seven days before to. A range
-          spans at most 400 days.
-        in: query
-        name: from
-        required: false
-        schema:
-          type: string
-          format: date-time
-      - description: Exclusive upper bound; defaults to now
-        in: query
-        name: to
-        required: false
-        schema:
-          type: string
-          format: date-time
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/MemberActivity"
-          description: Members listed
-        "400":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: Invalid range
-        "403":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: The caller is not a member of the workspace
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: Team not found
-      summary: List members with their activity in a time range
-      tags:
-      - Activity
   /workspaces/{workspaceSlug}/activity/members/{login}/open-work:
     get:
       description: "Review requests, open pull requests and assigned issues, most\
@@ -3103,6 +3038,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/OpenWork"
           description: Open work listed
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A request parameter is not valid
         "403":
           content:
             application/problem+json:
@@ -3114,7 +3055,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Member not found
+          description: "Workspace, contributor, team or repository not found"
       summary: List what is open for a member
       tags:
       - Activity
@@ -3173,13 +3114,101 @@ paths:
               schema:
                 $ref: "#/components/schemas/ActivityPeople"
           description: Contributors counted
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A request parameter is not valid
         "403":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
           description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Workspace, contributor, team or repository not found"
       summary: Count each contributor and automation account in one response
+      tags:
+      - Activity
+  /workspaces/{workspaceSlug}/activity/people/{userId}:
+    get:
+      operationId: getActivityPerson
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - description: "30d, 90d (default), 1y, all, or custom"
+        in: query
+        name: range
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: team
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: repo
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPersonDetail"
+          description: Contributor activity counted
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A request parameter is not valid
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Workspace, contributor, team or repository not found"
+      summary: "Count a contributor by week, type and repository"
       tags:
       - Activity
   /workspaces/{workspaceSlug}/activity/people/{userId}/automation:
@@ -3207,79 +3236,12 @@ paths:
       responses:
         "204":
           description: Automation classification updated
-        "403":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-          description: The caller is not a member of the workspace
-      summary: "Treat a contributor as automation, or reset the classification"
-      tags:
-      - Activity
-  /workspaces/{workspaceSlug}/activity/summary:
-    get:
-      description: "One member's activity when login is given, otherwise everyone's\
-        \ in the workspace or the team. With both, the member's activity within the\
-        \ team's scope. The range is split into days, weeks or months, by its length,\
-        \ in the given time zone."
-      operationId: getActivitySummary
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: The member; omit for everyone
-        in: query
-        name: login
-        required: false
-        schema:
-          type: string
-      - description: "A team, with its visible sub-teams; omit for the workspace"
-        in: query
-        name: teamId
-        required: false
-        schema:
-          type: integer
-          format: int64
-      - description: Inclusive lower bound; defaults to seven days before to. A range
-          spans at most 400 days.
-        in: query
-        name: from
-        required: false
-        schema:
-          type: string
-          format: date-time
-      - description: Exclusive upper bound; defaults to now
-        in: query
-        name: to
-        required: false
-        schema:
-          type: string
-          format: date-time
-      - description: "The IANA time zone whose midnights start the buckets, such as\
-          \ Europe/Berlin"
-        in: query
-        name: zone
-        required: false
-        schema:
-          type: string
-          default: UTC
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ActivityOverview"
-          description: Activity counted
         "400":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Invalid range or time zone
+          description: A request parameter is not valid
         "403":
           content:
             application/problem+json:
@@ -3291,8 +3253,119 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Member or team not found
-      summary: "Count activity in a time range, in total and over time"
+          description: "Workspace, contributor, team or repository not found"
+      summary: "Treat a contributor as automation, or reset the classification"
+      tags:
+      - Activity
+  /workspaces/{workspaceSlug}/activity/people/{userId}/work:
+    get:
+      operationId: getActivityPersonWork
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - description: "30d, 90d (default), 1y, all, or custom"
+        in: query
+        name: range
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: team
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: repo
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+      - description: Kinds of activity to list (repeatable); omit for every kind
+        in: query
+        name: kinds
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - PULL_REQUEST_OPENED
+            - PULL_REQUEST_MERGED
+            - PULL_REQUEST_CLOSED
+            - REVIEW_APPROVED
+            - REVIEW_CHANGES_REQUESTED
+            - REVIEW_COMMENTED
+            - COMMENTED
+            - CODE_COMMENTED
+            - ISSUE_OPENED
+            - ISSUE_CLOSED
+          uniqueItems: true
+      - description: The previous page's nextCursor; omit for the first page
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - description: Page size from 1 to 100; defaults to 30
+        in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 100
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityWorkPage"
+          description: One page of contributor work
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A request parameter is not valid
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Workspace, contributor, team or repository not found"
+      summary: List a contributor's work one page at a time
       tags:
       - Activity
   /workspaces/{workspaceSlug}/activity/work:
@@ -3310,29 +3383,37 @@ paths:
         schema:
           type: string
           pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: The member; omit for everyone
-        in: query
+      - in: query
         name: login
         required: false
         schema:
           type: string
-      - description: "A team, with its visible sub-teams; omit for the workspace"
-        in: query
-        name: teamId
+      - in: query
+        name: team
         required: false
         schema:
-          type: integer
-          format: int64
-      - description: Inclusive lower bound; defaults to seven days before to. A range
-          spans at most 400 days.
+          type: string
+      - in: query
+        name: repo
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+      - description: "30d, 90d (default), 1y, all, or custom"
         in: query
+        name: range
+        required: false
+        schema:
+          type: string
+      - in: query
         name: from
         required: false
         schema:
           type: string
           format: date-time
-      - description: Exclusive upper bound; defaults to now
-        in: query
+      - in: query
         name: to
         required: false
         schema:
@@ -3385,7 +3466,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: "Invalid range, kind, cursor or size"
+          description: A request parameter is not valid
         "403":
           content:
             application/problem+json:
@@ -3397,7 +3478,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Member or team not found
+          description: "Workspace, contributor, team or repository not found"
       summary: "List activity by the pull request or issue it happened on, one page\
         \ at a time"
       tags:
@@ -9442,22 +9523,6 @@ components:
       required:
       - count
       - kind
-    ActivityBucket:
-      type: object
-      description: Activity in one time bucket of a range
-      properties:
-        start:
-          type: string
-          format: date-time
-          description: "When the bucket starts: midnight of its day, of its week's\
-            \ Monday or of its month's first day, in the requested time zone. The\
-            \ first bucket may start before the range."
-        summary:
-          $ref: "#/components/schemas/ActivitySummary"
-          description: The activity in the bucket that falls within the range
-      required:
-      - start
-      - summary
     ActivityCounts:
       type: object
       properties:
@@ -9528,27 +9593,6 @@ components:
       required:
       - firstContributors
       - mostPeopleHelped
-    ActivityOverview:
-      type: object
-      description: "Activity in a time range, in total and over time"
-      properties:
-        bucket:
-          $ref: "#/components/schemas/TimeBucketSize"
-          description: How long each bucket is
-        buckets:
-          type: array
-          description: "Every bucket the range touches, oldest first, including those\
-            \ without activity"
-          items:
-            $ref: "#/components/schemas/ActivityBucket"
-        summary:
-          $ref: "#/components/schemas/ActivitySummary"
-          description: The activity in the range; the buckets' summaries add up to
-            it
-      required:
-      - bucket
-      - buckets
-      - summary
     ActivityPeople:
       type: object
       properties:
@@ -9563,6 +9607,13 @@ components:
           format: date-time
         highlights:
           $ref: "#/components/schemas/ActivityHighlights"
+        historyStart:
+          type: string
+          format: date-time
+        maxRangeDays:
+          type: integer
+          format: int32
+          description: Maximum range width in days
         people:
           type: array
           items:
@@ -9583,6 +9634,7 @@ components:
       - coverage
       - from
       - highlights
+      - maxRangeDays
       - people
       - repositories
       - teams
@@ -9592,6 +9644,8 @@ components:
       properties:
         automation:
           type: boolean
+        breakdown:
+          $ref: "#/components/schemas/ActivitySummary"
         counts:
           $ref: "#/components/schemas/ActivityCounts"
         firstContributionAt:
@@ -9605,9 +9659,30 @@ components:
             $ref: "#/components/schemas/ActivityWeek"
       required:
       - automation
+      - breakdown
       - counts
       - person
       - weeks
+    ActivityPersonDetail:
+      type: object
+      properties:
+        activity:
+          $ref: "#/components/schemas/ActivityPerson"
+        from:
+          type: string
+          format: date-time
+        repositories:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityRepositoryCounts"
+        to:
+          type: string
+          format: date-time
+      required:
+      - activity
+      - from
+      - repositories
+      - to
     ActivityRepository:
       type: object
       description: The full provider path avoids collisions between repositories with
@@ -9624,10 +9699,23 @@ components:
       - id
       - key
       - name
+    ActivityRepositoryCounts:
+      type: object
+      properties:
+        breakdown:
+          $ref: "#/components/schemas/ActivitySummary"
+        counts:
+          $ref: "#/components/schemas/ActivityCounts"
+        repository:
+          $ref: "#/components/schemas/ActivityRepository"
+      required:
+      - breakdown
+      - counts
+      - repository
     ActivitySummary:
       type: object
-      description: Counts of activity in a time range. Each count is the sum of that
-        kind's counts in the work list for the same scope and range.
+      description: "Activity counts by type. Review counts describe submissions by\
+        \ state, not distinct pull requests reviewed."
       properties:
         approvals:
           type: integer
@@ -9708,12 +9796,15 @@ components:
     ActivityWeek:
       type: object
       properties:
+        breakdown:
+          $ref: "#/components/schemas/ActivitySummary"
         counts:
           $ref: "#/components/schemas/ActivityCounts"
         start:
           type: string
           format: date-time
       required:
+      - breakdown
       - counts
       - start
     ActivityWork:
@@ -14005,19 +14096,6 @@ components:
       - scopes
       - type
       - updatedAt
-    MemberActivity:
-      type: object
-      description: One member and their activity in a time range
-      properties:
-        summary:
-          $ref: "#/components/schemas/ActivitySummary"
-          description: The member's activity
-        user:
-          $ref: "#/components/schemas/UserInfo"
-          description: The member
-      required:
-      - summary
-      - user
     MemberAiChoiceRequest:
       type: object
       properties:
