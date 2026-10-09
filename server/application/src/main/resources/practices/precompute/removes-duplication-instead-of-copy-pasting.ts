@@ -39,7 +39,7 @@ export default function removesDuplicationInsteadOfCopyPasting(
 					`No two runs of ${String(MIN_RUN_LINES)} or more added lines share a shape once names and literals are set aside. A copy this pairing cannot see — the same computation spelled with different statements, or shorter than ${String(MIN_RUN_LINES)} lines — is still yours to read for.`,
 				]
 			: [
-					`${String(pairs.length)} pair(s) of added blocks with the same line shapes, one row each with both spans and the names that differ. A pair is a copy when the run is one unit of knowledge — a computation, a mapping, a view body — repeated with names changed; it is not when the platform dictates the shape (a modifier chain, a switch arm, a registration) or the blocks are test fixtures. Quote both spans.`,
+					`${String(pairs.length)} pair(s) of added blocks with the same line shapes, one row each with both spans and the names that differ. These are structural candidates, not established copies of maintained knowledge. Assess them under the practice standard.`,
 				];
 	return {
 		hints,

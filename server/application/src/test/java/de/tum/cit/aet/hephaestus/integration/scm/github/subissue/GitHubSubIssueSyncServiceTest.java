@@ -131,6 +131,43 @@ class GitHubSubIssueSyncServiceTest extends BaseUnitTest {
         verify(issueProcessor, never()).processStub(any(), any());
     }
 
+    @Test
+    void shouldReplaceAnOutdatedPositiveRollupWhenGitHubReportsNoChildren() {
+        parent.setSubIssuesTotal(4);
+        parent.setSubIssuesCompleted(3);
+        parent.setSubIssuesPercentCompleted(75);
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 19)).thenReturn(Optional.of(parent));
+        GHIssue node = issueNode(PARENT_GITHUB_ID, 19);
+        GHSubIssuesSummary summary = new GHSubIssuesSummary();
+        summary.setTotal(0);
+        summary.setCompleted(0);
+        summary.setPercentCompleted(0);
+        node.setSubIssuesSummary(summary);
+        GHIssueConnection page = new GHIssueConnection();
+        page.setNodes(List.of(node));
+
+        service.processIssueNodes(page, repository, 1L);
+
+        assertThat(parent.getSubIssuesTotal()).isZero();
+        assertThat(parent.getSubIssuesCompleted()).isZero();
+        assertThat(parent.getSubIssuesPercentCompleted()).isZero();
+        verify(issueRepository).save(parent);
+    }
+
+    @Test
+    void shouldPreserveThePriorRollupWhenGitHubSuppliesNoSummary() {
+        parent.setSubIssuesTotal(4);
+        parent.setSubIssuesCompleted(3);
+        GHIssueConnection page = new GHIssueConnection();
+        page.setNodes(List.of(issueNode(PARENT_GITHUB_ID, 19)));
+
+        service.processIssueNodes(page, repository, 1L);
+
+        assertThat(parent.getSubIssuesTotal()).isEqualTo(4);
+        assertThat(parent.getSubIssuesCompleted()).isEqualTo(3);
+        verify(issueRepository, never()).save(parent);
+    }
+
     private static GHIssue issueNode(BigInteger fullDatabaseId, int number) {
         GHIssue node = new GHIssue();
         node.setFullDatabaseId(fullDatabaseId);

@@ -516,7 +516,9 @@
 	},
 	{
 		"id": "issue-link-in-body-without-commit-capture",
-		"omit": ["context/commits.json"],
+		"omit": [
+			"context/commits.json"
+		],
 		"expected": {
 			"links-the-change-to-its-issue": "MET"
 		},
@@ -561,7 +563,9 @@
 	},
 	{
 		"id": "resolved-review-request-without-commit-capture",
-		"omit": ["context/commits.json"],
+		"omit": [
+			"context/commits.json"
+		],
 		"expected": {
 			"engaging-with-inline-review-comments": "MET"
 		},
@@ -1005,6 +1009,28 @@
 		},
 		"reason": "Both subjects name specific actions and objects. A conjunction does not make a subject vague, and subject clarity does not assess commit accuracy or cohesion.",
 		"workType": "pull_request"
+	},
+	{
+		"id": "independent-enum-pickers",
+		"workType": "pull_request",
+		"expected": {
+			"removes-duplication-instead-of-copy-pasting": "MET"
+		},
+		"files": {
+			"repo/ChoicesView.swift": "import SwiftUI\nenum SortOrder: String, CaseIterable, Identifiable {\n    case newest, oldest\n    var id: Self { self }\n}\nenum DisplayMode: String, CaseIterable, Identifiable {\n    case list, grid\n    var id: Self { self }\n}\nstruct ChoicesView: View {\n    @State var sort = SortOrder.newest\n    @State var display = DisplayMode.list\n    var body: some View {\n        Form {\n            Picker(\"Sort order\", selection: $sort) {\n                ForEach(SortOrder.allCases) { value in\n                    Text(value.rawValue).tag(value)\n                }\n            }\n            Picker(\"Display mode\", selection: $display) {\n                ForEach(DisplayMode.allCases) { value in\n                    Text(value.rawValue).tag(value)\n                }\n            }\n        }\n    }\n}\n"
+		},
+		"reason": "Independent enum choices repeat the framework option-rendering idiom without duplicating a maintained domain rule."
+	},
+	{
+		"id": "repeated-invoice-total",
+		"workType": "pull_request",
+		"expected": {
+			"removes-duplication-instead-of-copy-pasting": "NOT_MET"
+		},
+		"files": {
+			"repo/Invoice.swift": "import Foundation\nstruct Invoice {\n    let amounts: [Decimal]\n    let deliveryFee: Decimal\n    func totalForCheckout() -> Decimal {\n        let subtotal = amounts.reduce(0, +)\n        let delivery = subtotal >= 100 ? Decimal(0) : deliveryFee\n        let tax = subtotal * Decimal(string: \"0.19\")!\n        return subtotal + delivery + tax\n    }\n    func totalForReceipt() -> Decimal {\n        let subtotal = amounts.reduce(0, +)\n        let delivery = subtotal >= 100 ? Decimal(0) : deliveryFee\n        let tax = subtotal * Decimal(string: \"0.19\")!\n        return subtotal + delivery + tax\n    }\n}\n"
+		},
+		"reason": "Checkout and receipt independently repeat the same invoice shipping and tax calculation; changing that calculation requires matching corrections."
 	},
 	{
 		"id": "large-work-with-unknown-child-rollup",

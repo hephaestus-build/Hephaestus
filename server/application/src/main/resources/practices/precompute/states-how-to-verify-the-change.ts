@@ -2,6 +2,7 @@ import {
 	branchIssueReferences,
 	closingReferences,
 	issueNumberReferences,
+	withoutHtmlComments,
 } from "../lib/references.ts";
 // Precompute FACTS for states-how-to-verify-the-change: what kind of change this is, and where
 // guidance-shaped text sits. The occasion gate is where a small model slips most (a diagram or a
@@ -51,10 +52,7 @@ function testingSection(body: string): { heading: string; content: string } | nu
 			}
 			content.push(candidate);
 		}
-		const text = content
-			.join("\n")
-			.replaceAll(/<!--[\s\S]*?-->/gu, "")
-			.trim();
+		const text = withoutHtmlComments(content.join("\n")).trim();
 		return { heading: line.trim(), content: text };
 	}
 	return null;

@@ -689,30 +689,55 @@ export function publicObservations(
 			return {
 				...rest,
 				...(Object.keys(branches).length > 0 ? { evidence: branches } : {}),
-				citations: (Array.isArray(citations) ? citations : []).map((citation: unknown) => {
-					if (!isObject(citation)) {
-						return citation;
-					}
-					const { verification: _verification, ...shown } = citation;
-					return shown;
-				}),
+				citations: withoutDigests(citations),
 			};
 		});
 }
 
+/** Citations as a public reference shows them: quoted lines and coordinates, without verification digests. */
+function withoutDigests(citations: unknown): unknown[] {
+	return (Array.isArray(citations) ? citations : []).map((citation: unknown) => {
+		if (!isObject(citation)) {
+			return citation;
+		}
+		const { verification: _verification, ...shown } = citation;
+		return shown;
+	});
+}
+
+/** The native outcome-specific grounds of an abstention; generic prose is not a decided assessment. */
+export function qualificationEvidence(observation: {
+	outcome: unknown;
+	evidence?: unknown;
+}): Record<string, unknown> {
+	const branch = observation.outcome === "UNDETERMINED" ? "undecidability" : "inapplicability";
+	const evidence = isObject(observation.evidence) ? observation.evidence : {};
+	return { [branch]: evidence[branch] };
+}
+
 /**
- * The practices this review looked at and could not decide, by slug and outcome only: a bound on what the review
- * may claim, distinct from the practices it never reached. Their prose and citations stay out, since they support
- * no claim about the work.
+ * The abstentions admission marked publicEligible, each as the limit it recorded with the lines it cited: a bound on
+ * what the review may claim, distinct from the practices it never reached. They carry no id: no text rests on them,
+ * and the review decides nothing about them.
  */
-export function uncertainOutcomes(
+export function publicQualifications(
 	observations: readonly Record<string, unknown>[],
-): { practiceSlug: string; outcome: string }[] {
-	return observations.flatMap((observation) =>
-		observation.outcome === "NOT_APPLICABLE" || observation.outcome === "UNDETERMINED"
-			? [{ practiceSlug: String(observation.practiceSlug), outcome: observation.outcome }]
-			: [],
-	);
+): Record<string, unknown>[] {
+	return observations
+		.filter(
+			(observation) =>
+				observation.publicEligible === true &&
+				(observation.outcome === "NOT_APPLICABLE" || observation.outcome === "UNDETERMINED"),
+		)
+		.map((observation) => ({
+			practiceSlug: observation.practiceSlug,
+			outcome: observation.outcome,
+			evidence: qualificationEvidence({
+				outcome: observation.outcome,
+				evidence: observation.evidence,
+			}),
+			citations: withoutDigests(observation.citations),
+		}));
 }
 
 export interface OwnPriorFeedback {
@@ -936,13 +961,14 @@ export function notMetReference(
 	stagedCriteria: (practiceSlug: string) => string | null,
 	practices: readonly ReviewPractice[] = [],
 	history: readonly OwnPriorFeedback[] = [],
+	reviewedRevision: string | null = null,
 ): string {
 	const concerns = notMetPractices(reviewable).map((slug) => {
 		const observations = reviewable.filter(
 			(entry) =>
 				entry.publicEligible === true && entry.outcome === "NOT_MET" && entry.practiceSlug === slug,
 		);
-		return `${practiceStandard(slug, stagedCriteria).text}${practiceReference(slug, observations, practices, history)}`;
+		return `${practiceStandard(slug, stagedCriteria).text}${practiceReference(slug, observations, practices, history, reviewedRevision)}`;
 	});
 	return concerns.length === 0
 		? "No public NOT_MET observation was admitted.\n"
@@ -955,6 +981,7 @@ function practiceReference(
 	observations: readonly Record<string, unknown>[],
 	practices: readonly ReviewPractice[],
 	history: readonly OwnPriorFeedback[],
+	reviewedRevision: string | null,
 ): string {
 	const practice = practices.find((entry) => entry.slug === slug);
 	const candidatePriorWitnesses = history.flatMap((entry) => {
@@ -969,6 +996,11 @@ function practiceReference(
 		return [
 			{
 				witnessId: entry.witnessId,
+				reviewedRevision:
+					typeof entry.reviewedRevision === "string" ? entry.reviewedRevision : null,
+				basedOn: entry.basedOn.filter(
+					(support: unknown) => isObject(support) && support.practiceSlug === slug,
+				),
 				eligibleForAlreadySaid: entry.eligibleForAlreadySaid,
 				eligibleForPriorAdvice: entry.eligibleForPriorAdvice,
 			},
@@ -976,6 +1008,7 @@ function practiceReference(
 	});
 	return `\`\`\`json\n${JSON.stringify(
 		{
+			reviewedRevision,
 			...(practice === undefined
 				? {}
 				: {
@@ -1001,6 +1034,7 @@ export function consultedStandard(
 	reviewable: readonly Record<string, unknown>[],
 	practices: readonly ReviewPractice[] = [],
 	history: readonly OwnPriorFeedback[] = [],
+	reviewedRevision: string | null = null,
 ): string {
 	const grounds = reviewable.filter(
 		(observation) =>
@@ -1008,7 +1042,7 @@ export function consultedStandard(
 			observation.outcome === "MET" &&
 			observation.practiceSlug === slug,
 	);
-	return `${standardText}The recorded MET observations of \`${slug}\`:\n${practiceReference(slug, grounds, practices, history)}`;
+	return `${standardText}The recorded MET observations of \`${slug}\`:\n${practiceReference(slug, grounds, practices, history, reviewedRevision)}`;
 }
 
 /** The practices read_practice may show: those with a public MET observation. */
@@ -1225,8 +1259,8 @@ export interface ReviewTurnInput {
 	sameWork: string;
 	/** The decided observations of this work the review may rest on, whole, from publicObservations. */
 	observations: readonly Record<string, unknown>[];
-	/** The practices looked at and not decided, by slug and outcome, from uncertainOutcomes. */
-	undecided: readonly { practiceSlug: string; outcome: string }[];
+	/** The limits recorded by the abstentions of this work, from publicQualifications: context, never support. */
+	qualifications: readonly Record<string, unknown>[];
 	/** What Hephaestus already said on this same work, from priorPublicFeedback. */
 	alreadySaid: readonly OwnPriorFeedback[];
 	ownHistoryOmissions?: OwnHistoryOmissions;
@@ -1244,7 +1278,10 @@ export interface ReviewTurnInput {
 	stagedCriteria: (practiceSlug: string) => string | null;
 }
 
-/** The opening reference: whole work and communication, full concerns, and an index of optional recognition. */
+/**
+ * The opening reference: whole work and communication, full concerns, an index of optional recognition, and the limits
+ * the abstentions recorded.
+ */
 export function buildReviewTurn(input: ReviewTurnInput): string {
 	const own = ownHistoryText(input.alreadySaid, input.ownHistoryOmissions, input.ownHistoryReadAt);
 	const others =
@@ -1253,12 +1290,15 @@ export function buildReviewTurn(input: ReviewTurnInput): string {
 			: `Captured public discussion on this work; omitted sources remain unknown:\n\`\`\`json\n${JSON.stringify(input.captured, null, 1)}\n\`\`\`\n`;
 	const said = `${own}${others}An \`ALREADY_SAID\` decision names the \`witnessId\` of a statement marked \`eligibleForAlreadySaid\`; a \`NO_MATERIAL_CHANGE\` decision one marked \`eligibleForPriorAdvice\`; any other statement is context only. \`eligibleForAlreadySaid\` alone establishes communication by the read time, not that the captured work received or responded to it.\n`;
 
-	const undecided =
-		input.undecided.length === 0
+	const qualifications =
+		input.qualifications.length === 0
 			? ""
-			: `\nLooked at and not decided, so they support no claim either way: ${input.undecided
-					.map((entry) => `${entry.practiceSlug} (${entry.outcome})`)
-					.join(", ")}.\n`;
+			: `### Recorded limits of this review
+Practices this review looked at and did not decide, or found not applicable, each with the limit it recorded and the lines it cited. They bound what the review may claim. They are not concerns or recognition: no text rests on them, and nothing is decided about them here.
+\`\`\`json
+${JSON.stringify({ observations: input.qualifications }, null, 1)}
+\`\`\`
+`;
 	const placement = input.lineNotes
 		? "- Line notes: a note sits on one citation marked `anchorable`, named by `observationId` and " +
 			"`citationIndex`. On GitHub it is a review comment on that line; on GitLab it is its own comment " +
@@ -1283,6 +1323,7 @@ export function buildReviewTurn(input: ReviewTurnInput): string {
 		input.stagedCriteria,
 		input.practices,
 		input.alreadySaid,
+		input.captured.reviewedRevision ?? null,
 	);
 	const recognition = input.observations
 		.filter((entry) => entry.publicEligible === true && entry.outcome === "MET")
@@ -1301,7 +1342,7 @@ ${concerns}
 \`\`\`json
 ${JSON.stringify({ observations: recognition }, null, 1)}
 \`\`\`
-${undecided}
+${qualifications}
 ### Where the words go
 - The summary: one comment on the work.
 ${placement}

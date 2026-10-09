@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.github.bucket4j.Bucket;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.servlet.http.Cookie;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -152,6 +153,28 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @Test
     void answersACapabilityCallWithNoCredentialAsUnauthenticated() throws Exception {
         assertThat(answerTo("POST", "/internal/llm/responses", GATEWAY_PORT)).isEqualTo(401);
+    }
+
+    @Test
+    void shouldRejectCookieAndQueryCredentialsWhenNoBearerHeaderIsPresent() throws Exception {
+        AgentJob job = runningJobOnAttempt(1);
+        when(jobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+        when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
+        assertThat(answerToTokenCall("current-attempt")).isEqualTo(200);
+
+        for (String path : List.of(
+                "/internal/llm/responses",
+                "/internal/llm/chat/completions",
+                "/internal/llm/admit-observations",
+                "/internal/llm/public-feedback-history")) {
+            MockHttpServletRequest request = request("POST", path, GATEWAY_PORT);
+            request.setCookies(
+                    new Cookie("__Host-HEPHAESTUS_AT", "current-attempt"), new Cookie("JSESSIONID", "current-attempt"));
+            request.addParameter("access_token", "current-attempt");
+            assertThat(answerTo(request)).isEqualTo(401);
+            assertThat(servedAs.get()).isNull();
+            assertThat(request.getSession(false)).isNull();
+        }
     }
 
     /**

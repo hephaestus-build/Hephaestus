@@ -328,8 +328,13 @@ const DESCRIPTION_TEMPLATE_PATH =
  * tick removed, so a template item the author ticked is still the template's line.
  */
 function comparable(line: string): string {
-	return line
-		.replaceAll(/<!--[\s\S]*?-->/gu, "")
+	let text = line;
+	let previous;
+	do {
+		previous = text;
+		text = text.replaceAll(/<!--[\s\S]*?-->/gu, " ");
+	} while (text !== previous);
+	return text
 		.trim()
 		.replaceAll(/\s+/gu, " ")
 		.replace(/^(?<marker>[-*+]\s*)\[[ xX]\]/u, "$<marker>[ ]");

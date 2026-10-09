@@ -92,6 +92,15 @@ void test("the author's lines are told apart from the template's, comments and t
 	);
 });
 
+void test("template comparison keeps text separated by comments apart", () => {
+	const view = authoredDescription(
+		"Run<!-- template -->tests",
+		new Map([["template.md", "Runtests"]]),
+	);
+	assert.equal(view.template, null);
+	assert.deepEqual(view.authored, [1]);
+});
+
 function git(repository: string, ...args: string[]): string {
 	return execFileSync("git", ["-C", repository, ...args], {
 		encoding: "utf8",

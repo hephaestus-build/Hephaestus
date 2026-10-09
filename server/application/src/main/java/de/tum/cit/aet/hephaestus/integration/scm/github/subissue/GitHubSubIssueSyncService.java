@@ -688,7 +688,7 @@ public class GitHubSubIssueSyncService {
      */
     private void processSubIssuesSummary(GHIssue graphQlIssue, Repository repository, Long scopeId) {
         GHSubIssuesSummary summary = graphQlIssue.getSubIssuesSummary();
-        if (summary == null || summary.getTotal() == 0) {
+        if (summary == null) {
             return;
         }
 
