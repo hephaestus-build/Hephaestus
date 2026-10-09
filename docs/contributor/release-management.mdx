@@ -223,7 +223,9 @@ from the image either way.
 The [release image lock](../admin/release-image-lock) is the canonical verification procedure. It
 verifies the lock signer and release identity before Compose consumes any digest. The remaining
 release assets provide the per-platform SBOM, vulnerability, license, and index-membership evidence.
-`SHA256SUMS` covers that evidence set.
+From v0.86.2, `SHA256SUMS` covers that evidence set and is signed with the release workflow identity.
+The archived evidence reader verifies its Cosign bundle before checking the bytes or evaluating native file identities, advisory snapshots and policy.
+Trusted capture validation runs before signing and does not authenticate an archive.
 
 ## Current migration-guide instructions
 

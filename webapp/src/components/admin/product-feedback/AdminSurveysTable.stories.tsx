@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor } from "storybook/test";
 
 import type { Survey } from "@/api/types.gen";
 import {
@@ -10,6 +10,7 @@ import {
 	scheduledSurvey,
 } from "@/components/product-feedback/fixtures";
 import { withStandardPage } from "@/stories/decorators";
+import { expectSettledVisible } from "@/stories/overlay";
 import { STORY_NOW } from "@/stories/story-clock";
 
 import { AdminSurveysTable } from "./AdminSurveysTable";
@@ -65,12 +66,13 @@ export const Default: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Actions for Mentor conversations" }));
 		await userEvent.click(await screen.findByRole("menuitem", { name: "Resume" }));
 		await expect(args.onToggleActive).toHaveBeenCalledWith(pausedSurvey, true);
+		await waitFor(async () => expect(screen.queryByRole("menu")).toBeNull());
 
 		// An ended survey can neither be paused nor ended again; it can only be deleted.
 		await userEvent.click(
 			canvas.getByRole("button", { name: "Actions for Release 0.70 retrospective" }),
 		);
-		await expect(await screen.findByRole("menuitem", { name: "Delete" })).toBeVisible();
+		await expectSettledVisible(await screen.findByRole("menuitem", { name: "Delete" }));
 		await expect(screen.queryByRole("menuitem", { name: "End now" })).not.toBeInTheDocument();
 		await expect(screen.queryByRole("menuitem", { name: "Pause" })).not.toBeInTheDocument();
 		await userEvent.keyboard("{Escape}");

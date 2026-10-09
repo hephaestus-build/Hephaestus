@@ -69,15 +69,16 @@ await test("release upgrade runs the server topology without optional infrastruc
 
 await test("verification identity is the release's own: run context now, the map for history", () => {
 	const rescan = readFileSync(".github/workflows/rescan-release-images.yml", "utf8");
+	const rescanSource = readFileSync("scripts/rescan-release-images.ts", "utf8");
 	const prepareLock = readFileSync("scripts/prepare-release-lock.ts", "utf8");
 	const derivedIdentity =
 		/\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/\.github\/workflows\/release\.yml@refs\/heads\/main/u;
 
 	assert.match(release, derivedIdentity);
-	assert.match(rescan, /resolve-release-identity\.ts.*certificate-identity/u);
+	assert.match(rescanSource, /releaseCertificateIdentity\(release, process\.env\)/u);
 	assert.match(prepareLock, /releaseCertificateIdentity\(release, process\.env\)/u);
 	assert.match(prepareLock, /releaseRepository\(release, process\.env\)/u);
-	for (const contents of [release, reconciler, rescan, prepareLock]) {
+	for (const contents of [release, reconciler, rescan, rescanSource, prepareLock]) {
 		assert.doesNotMatch(contents, /certificate-identity[^\n]*\n?[^\n]*ls1intum\/Hephaestus/u);
 		assert.doesNotMatch(
 			contents,

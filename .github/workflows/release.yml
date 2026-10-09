@@ -170,6 +170,7 @@ jobs:
             cosign attest --yes --type spdxjson --predicate "evidence/$image-$suffix.spdx.json" "$repository@$digest"
           done
           (cd evidence && sha256sum -- * > SHA256SUMS)
+          cosign sign-blob --yes --bundle evidence/SHA256SUMS.sigstore.json evidence/SHA256SUMS
 
       - name: Verify evidence from registry subjects
         env:
@@ -479,7 +480,6 @@ jobs:
           set -euo pipefail
           mkdir evidence
           gh release download "$TAG_NAME" --repo "${{ github.repository }}" --dir evidence
-          (cd evidence && sha256sum -c SHA256SUMS)
           lock="release-${TAG_NAME}.json"
           cosign verify-blob \
             --bundle "evidence/$lock.sigstore.json" \
