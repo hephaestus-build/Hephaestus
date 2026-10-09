@@ -12,11 +12,14 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ScmReviewRangeSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -27,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -35,6 +39,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -54,6 +60,12 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
     @Mock
     ScmTokenSource tokens;
 
+    @Mock
+    ScmReviewRangeSource ranges;
+
+    @Mock
+    PlatformTransactionManager transactions;
+
     private ReviewRepositoryPreparer preparer;
     private AgentJob job;
     private Repository repository;
@@ -68,7 +80,14 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
                 .when(git.reviewBase(any(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
         preparer = new ReviewRepositoryPreparer(
-                git, pullRequests, monitors, connections, List.of(tokens), mock(RepositoryRepository.class));
+                git,
+                pullRequests,
+                monitors,
+                connections,
+                List.of(tokens),
+                mock(RepositoryRepository.class),
+                List.of(ranges),
+                transactions);
         var workspace = new Workspace();
         workspace.setId(1L);
         job = new AgentJob();
@@ -90,6 +109,10 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         provider.setServerUrl("https://scm.example");
         repository.setProvider(provider);
         pullRequest = new PullRequest();
+        pullRequest.setId(3L);
+        pullRequest.setNativeId(30L);
+        pullRequest.setUpdatedAt(Instant.parse("2026-10-01T12:00:00.123Z"));
+        repository.setNativeId(20L);
         pullRequest.setRepository(repository);
         pullRequest.setNumber(42);
         pullRequest.setHeadRefOid(HEAD);
@@ -213,6 +236,7 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         when(git.commitExists(KEY, HEAD)).thenReturn(true);
         when(git.commitExists(KEY, base)).thenReturn(true);
         assertThat(preparer.prepare(job).target()).isEqualTo(base);
+        verifyNoInteractions(ranges, transactions);
         verify(git, never()).reviewBase(any(), anyString(), anyString());
     }
 
@@ -234,16 +258,88 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         if (stale) verifyNoInteractions(git);
     }
 
-    @Test
-    void shouldNotSubstituteAQueuedBaseWhenTheProviderDiffBaseIsMissing() {
+    private void authorizeHydration() {
         authorize();
         when(tokens.recordsReviewDiffBase()).thenReturn(true);
+        when(ranges.kind()).thenReturn(IntegrationKind.GITLAB);
+        var connection = mock(Connection.class);
+        when(connection.getId()).thenReturn(10L);
+        when(connections.findActive(1L, IntegrationKind.GITLAB)).thenReturn(Optional.of(connection));
+        lenient().when(transactions.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        lenient()
+                .when(pullRequests.findForUpdateByRepositoryIdAndNumber(2L, 42))
+                .thenReturn(Optional.of(pullRequest));
+    }
+
+    @Test
+    void shouldNotSubstituteAQueuedBaseWhenTheProviderDiffBaseIsMissing() {
+        authorizeHydration();
+        when(ranges.read(1L, "owner/repo", 42)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> preparer.prepare(job))
-                .isInstanceOf(JobPreparationException.class)
-                .hasMessageContaining("Recorded merge request base commit is unavailable");
+                .isInstanceOf(ReviewSourceNotReadyException.class)
+                .hasMessageContaining("not prepared");
 
         verify(tokens, never()).accessToken(1);
+        verifyNoInteractions(git);
+    }
+
+    @Test
+    void shouldPrepareTheOriginalJobWhenGitLabProvidesItsPairOnALaterAttempt() {
+        authorizeHydration();
+        var metadata = Objects.requireNonNull(job.getMetadata()).deepCopy();
+        var pair = new ScmReviewRangeSource.ReviewRange(20L, 30L, HEAD, "c".repeat(40));
+        when(ranges.read(1L, "owner/repo", 42))
+                .thenAnswer(invocation -> {
+                    return Optional.empty();
+                })
+                .thenReturn(Optional.of(pair));
+        assertThatThrownBy(() -> preparer.prepare(job)).isInstanceOf(ReviewSourceNotReadyException.class);
+        verifyNoInteractions(git);
+        when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
+        when(git.commitExists(KEY, HEAD)).thenReturn(true);
+        when(git.commitExists(KEY, pair.base())).thenReturn(true);
+
+        assertThat(preparer.prepare(job))
+                .isEqualTo(new ReviewRepositoryPreparer.PreparedReview(KEY, HEAD, pair.base()));
+        assertThat(pullRequest.getBaseRefOid()).isEqualTo(pair.base());
+        assertThat(job.getMetadata()).isEqualTo(metadata);
+        verify(git, never()).reviewBase(any(), anyString(), anyString());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"head", "version", "connection", "repository"})
+    void shouldRefuseHydrationWhenTheCapturedIdentityChangesDuringTheRead(String changed) {
+        authorizeHydration();
+        when(ranges.read(1L, "owner/repo", 42)).thenAnswer(invocation -> {
+            switch (changed) {
+                case "head" -> pullRequest.setHeadRefOid("d".repeat(40));
+                case "version" -> pullRequest.setUpdatedAt(Instant.parse("2026-10-01T12:00:01Z"));
+                case "repository" -> repository.setNameWithOwner("other/repo");
+                case "connection" -> {
+                    var connection = mock(Connection.class);
+                    when(connection.getId()).thenReturn(11L);
+                    when(connections.findActive(1L, IntegrationKind.GITLAB)).thenReturn(Optional.of(connection));
+                }
+                default -> throw new IllegalArgumentException(changed);
+            }
+            return Optional.of(new ScmReviewRangeSource.ReviewRange(20L, 30L, HEAD, "c".repeat(40)));
+        });
+        assertThatThrownBy(() -> preparer.prepare(job)).isInstanceOf(JobPreparationException.class);
+        assertThat(pullRequest.getBaseRefOid()).isNull();
+        verifyNoInteractions(git);
+        verify(pullRequests, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldRejectAProviderPairForAnotherProjectOrMergeRequest(boolean project) {
+        authorizeHydration();
+        when(ranges.read(1L, "owner/repo", 42))
+                .thenReturn(Optional.of(new ScmReviewRangeSource.ReviewRange(
+                        project ? 21L : 20L, project ? 30L : 31L, HEAD, "c".repeat(40))));
+        assertThatThrownBy(() -> preparer.prepare(job)).isInstanceOf(JobPreparationException.class);
+        assertThat(pullRequest.getBaseRefOid()).isNull();
         verifyNoInteractions(git);
     }
 

@@ -1081,8 +1081,7 @@ void describe("CI contract", () => {
 		}
 		assert.match(job(build, "server-database"), /:application:databaseTest -PpackagedServer=true/u);
 		assert.match(job(build, "server-api"), /HEPHAESTUS_APPLICATION_JAR/u);
-		// Background steps prepare each consumer and run no command, and one `wait-all` holds them, so
-		// the job's single Gradle invocation or suite starts only after every export is held.
+		// docs/contributor/ci-cd.mdx § Parallelism and concurrency owns action-context setup ordering.
 		for (const [file, names] of [
 			[
 				".github/workflows/ci-build.yml",
@@ -1094,31 +1093,25 @@ void describe("CI contract", () => {
 			for (const name of names) {
 				const steps = workflow.getIn(["jobs", name, "steps"]);
 				assert.ok(isSeq(steps));
-				const join = steps.items.findIndex((item) => isMap(item) && item.get("wait-all") === true);
-				assert.ok(join > 0, `${name} joins its preparation with wait-all`);
-				const prepared = steps.items.filter(
-					(item): item is YAMLMap => isMap(item) && item.get("background") === true,
-				);
-				assert.ok(prepared.length > 1, `${name} has nothing to overlap`);
+				const firstCommand = steps.items.findIndex((item) => isMap(item) && item.has("run"));
+				assert.ok(firstCommand > 0, `${name} prepares its consumer before running it`);
+				const preparation = steps.items.slice(0, firstCommand);
 				assert.ok(
-					prepared.every((item) => steps.items.indexOf(item) < join && !item.has("run")),
-					`${name} runs a command in the background or after its join`,
+					preparation.every(
+						(item) => isMap(item) && item.has("uses") && item.get("background") !== true,
+					),
+					`${name} must finish each action before starting the next`,
 				);
-				const earlier = steps.items.slice(0, join);
-				assert.ok(
-					earlier.every((item) => isMap(item) && !item.has("run")),
-					`${name} runs a command before its preparation is held`,
-				);
-				const uses = prepared.map((item) => String(item.get("uses")));
+				const uses = preparation.map((item) => {
+					assert.ok(isMap(item));
+					return String(item.get("uses"));
+				});
 				if (uses.includes("./.github/actions/setup-browsers")) {
 					assert.ok(
-						earlier.some(
-							(item) =>
-								isMap(item) &&
-								item.get("uses") === "./.github/actions/setup-toolchain" &&
-								item.get("background") !== true,
-						),
-						`${name} installs browsers before the toolchain they run on`,
+						uses.indexOf("./.github/actions/setup-toolchain") <
+							uses.indexOf("./.github/actions/setup-browsers") &&
+							uses.includes("./.github/actions/setup-toolchain"),
+						`${name} installs its toolchain before browsers`,
 					);
 				}
 				if (file.endsWith("ci-build.yml")) {
@@ -1133,6 +1126,7 @@ void describe("CI contract", () => {
 				}
 			}
 		}
+
 		for (const name of ["webapp-e2e", "extension-e2e"]) {
 			const e2e = job(build, name);
 			assert.doesNotMatch(e2e, /needs:/u);

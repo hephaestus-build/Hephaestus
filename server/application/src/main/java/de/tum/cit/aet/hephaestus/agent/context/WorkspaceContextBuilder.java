@@ -374,7 +374,7 @@ public class WorkspaceContextBuilder {
             try {
                 contribution = source.capture(request, collecting);
             } catch (RuntimeException e) {
-                if (e instanceof WorkspaceBudgetExceededException) throw e;
+                if (e instanceof WorkspaceBudgetExceededException || e instanceof JobPreparationException) throw e;
                 if (folder) throw new JobPreparationException("Workspace folder rendering failed", e);
                 // Collector failures affect only their source; contribution validation failures propagate.
                 stateOverrides.put(kind, new SourceCaptureState.CollectionError(SourceAbsenceReason.PROVIDER_FAILURE));

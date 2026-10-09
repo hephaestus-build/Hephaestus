@@ -4,9 +4,11 @@ import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requ
 import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requireText;
 
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ScmReviewRangeSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -15,11 +17,16 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import java.net.URI;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /** Authorizes repository identity before provider credentials cross into trusted Git preparation. */
@@ -32,14 +39,24 @@ public class ReviewRepositoryPreparer {
     private final ConnectionService connections;
     private final List<ScmTokenSource> tokenSources;
     private final RepositoryRepository repositories;
+    private final List<ScmReviewRangeSource> rangeSources;
+    private final PlatformTransactionManager transactionManager;
 
     private record AuthorizedRepository(
             RepositoryKey key,
             String cloneUrl,
             ScmTokenSource source,
             int number,
+            String repositoryPath,
+            ReviewIdentity identity,
             @Nullable String head,
             @Nullable String base) {}
+
+    private record ReviewIdentity(
+            long pullRequestId,
+            long repositoryNativeId,
+            long pullRequestNativeId,
+            @Nullable Instant updatedAt) {}
 
     public RepositoryKey authorize(AgentJob job) {
         return authorizedRepository(job).key();
@@ -115,8 +132,73 @@ public class ReviewRepositoryPreparer {
                 cloneUrl,
                 source,
                 pullRequest.getNumber(),
+                repository.getNameWithOwner(),
+                new ReviewIdentity(
+                        pullRequest.getId(),
+                        repository.getNativeId(),
+                        pullRequest.getNativeId(),
+                        pullRequest.getUpdatedAt()),
                 pullRequest.getHeadRefOid(),
                 pullRequest.getBaseRefOid());
+    }
+
+    private long activeConnectionId(AgentJob job, IntegrationKind kind) {
+        return connections
+                .findActive(job.getWorkspace().getId(), kind)
+                .map(connection -> connection.getId())
+                .orElseThrow(() -> new JobPreparationException("Workspace has no active SCM connection"));
+    }
+
+    private AuthorizedRepository hydrateReviewRange(AgentJob job, AuthorizedRepository original, String head) {
+        var rangeSource = rangeSources.stream()
+                .filter(candidate -> candidate.kind() == original.source().kind())
+                .findFirst()
+                .orElseThrow(() -> new JobPreparationException("SCM review range preparation is unavailable"));
+        long connectionId = activeConnectionId(job, original.source().kind());
+        var read = new TransactionTemplate(transactionManager);
+        read.setPropagationBehavior(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
+        var range = Objects.requireNonNull(read.execute(status ->
+                        rangeSource.read(original.key().workspaceId(), original.repositoryPath(), original.number())))
+                .orElseThrow(() ->
+                        new ReviewSourceNotReadyException("GitLab has not prepared the merge request diff range"));
+        if (range.repositoryNativeId() != original.identity().repositoryNativeId()
+                || range.pullRequestNativeId() != original.identity().pullRequestNativeId()
+                || !head.equals(range.head())
+                || range.base().isBlank()) {
+            throw new JobPreparationException("Provider review range does not match the queued merge request");
+        }
+        var transaction = new TransactionTemplate(transactionManager);
+        transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return Objects.requireNonNull(transaction.execute(status -> {
+            // Lock before re-reading: JPA must not hand back a snapshot loaded before a concurrent hook committed.
+            var locked = pullRequests
+                    .findForUpdateByRepositoryIdAndNumber(original.key().repositoryId(), original.number())
+                    .orElseThrow(() -> new JobPreparationException("Reviewed pull request is unavailable"));
+            var current = authorizedRepository(job);
+            if (original.identity().pullRequestId() != current.identity().pullRequestId()
+                    || original.identity().repositoryNativeId()
+                            != current.identity().repositoryNativeId()
+                    || original.identity().pullRequestNativeId()
+                            != current.identity().pullRequestNativeId()
+                    || !Objects.equals(head, current.head())
+                    || !original.key().equals(current.key())
+                    || !original.cloneUrl().equals(current.cloneUrl())
+                    || original.source().kind() != current.source().kind()
+                    || connectionId != activeConnectionId(job, current.source().kind())) {
+                throw new JobPreparationException("Review source no longer matches the queued merge request");
+            }
+            if (!Objects.equals(
+                    original.identity().updatedAt(), current.identity().updatedAt())) {
+                throw new ReviewSourceNotReadyException(
+                        "Review source changed while its diff range was being prepared");
+            }
+            if (locked.getBaseRefOid() == null || locked.getBaseRefOid().isBlank()) {
+                locked.setBaseRefOid(range.base());
+                pullRequests.save(locked);
+            }
+            // Return the locked snapshot, not the suspended capture transaction's older JPA entity.
+            return authorizedRepository(job);
+        }));
     }
 
     /** A pinned review range: target is the recorded diff base or the resolved merge base. */
@@ -124,22 +206,29 @@ public class ReviewRepositoryPreparer {
 
     public PreparedReview prepare(AgentJob job) {
         var authorized = authorizedRepository(job);
-        var key = authorized.key();
-        var source = authorized.source();
-        String cloneUrl = authorized.cloneUrl();
         var metadata = job.getMetadata();
         if (metadata == null) throw new JobPreparationException("Review job has no metadata");
         String head = requireText(metadata, "commit_sha");
         String recordedBase = null;
-        if (source.recordsReviewDiffBase()) {
+        if (authorized.source().recordsReviewDiffBase()) {
             if (!head.equals(authorized.head())) {
                 throw new JobPreparationException("Recorded merge request revision does not match the queued head");
             }
             recordedBase = authorized.base();
             if (recordedBase == null || recordedBase.isBlank()) {
-                throw new JobPreparationException("Recorded merge request base commit is unavailable");
+                authorized = hydrateReviewRange(job, authorized, head);
+                if (!head.equals(authorized.head())) {
+                    throw new JobPreparationException("Recorded merge request revision does not match the queued head");
+                }
+                recordedBase = authorized.base();
+                if (recordedBase == null || recordedBase.isBlank()) {
+                    throw new ReviewSourceNotReadyException("Recorded merge request base commit is not ready");
+                }
             }
         }
+        var key = authorized.key();
+        var source = authorized.source();
+        String cloneUrl = authorized.cloneUrl();
         String token = source.accessToken(key.workspaceId())
                 .orElseThrow(() -> new JobPreparationException("SCM credentials are unavailable"));
         git.ensureRepository(key, cloneUrl, token);

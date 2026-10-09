@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
@@ -1485,6 +1486,10 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             "provably-transient infrastructure"),
                     Arguments.of(new IOException("connection reset"), true, "a bare IOException is network-ish"),
                     Arguments.of(
+                            new ReviewSourceNotReadyException("range pending"),
+                            true,
+                            "provider preparation is asynchronous"),
+                    Arguments.of(
                             new SandboxException("path traversal detected"),
                             false,
                             "a plain SandboxException is validation/config/unexpected, deterministic across retries"),
@@ -1498,15 +1503,14 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @ParameterizedTest(name = "{2}")
         @MethodSource("failures")
         void classifiesRetryableInfraFailures(Exception failure, boolean expected, String why) {
-            assertThat(AgentJobExecutor.isRetryableInfraFailure(failure))
+            assertThat(AgentJobExecutor.isRetryableExecutionFailure(failure))
                     .as(why)
                     .isEqualTo(expected);
         }
 
-        @Test
-        @DisplayName(
-                "a classified infra failure is requeued (not failed) with backoff + a rotated token, fenced to this worker")
-        void infraFailureIsRequeuedNotFailed() {
+        @ParameterizedTest
+        @ValueSource(booleans = {true, false})
+        void shouldRequeueInfrastructureOrPendingSourceWithBackoffAndTheOriginalJob(boolean sourcePending) {
             executor = new AgentJobExecutor(
                     AGENT_PROPS,
                     jobRepository,
@@ -1538,9 +1542,29 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(jobId), eq("infra-retry-worker"), eq(AGENT_PROPS.maxRetries()), any(), any(), any()))
                     .thenReturn(1);
 
-            setupFullExecutionWithException(new SandboxInfrastructureException("image pull failed"));
+            job.setMetadata(objectMapper
+                    .createObjectNode()
+                    .put("pull_request_id", 42L)
+                    .put("commit_sha", HEAD_SHA)
+                    .put("signal", "scm.pull_request.opened"));
+            var metadata = requireNonNull(job.getMetadata()).deepCopy();
+            if (sourcePending) {
+                var handler = mock(JobTypeHandler.class);
+                when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW))
+                        .thenReturn(handler);
+                when(handler.prepareInputs(any())).thenThrow(new ReviewSourceNotReadyException("range pending"));
+            } else {
+                setupFullExecutionWithException(new SandboxInfrastructureException("image pull failed"));
+            }
 
             executor.processJob(jobId);
+            assertThat(job.getMetadata()).isEqualTo(metadata);
+            if (sourcePending) {
+                verify(sandboxManager, never()).execute(any());
+                verify(usageRecorder, never()).record(any(), any());
+                verify(usageRecorder, never()).recordUnverifiable(any(), any());
+                verify(jobRepository, never()).markExecutionStarted(any(), any(), any());
+            }
 
             var availableAt = ArgumentCaptor.forClass(Instant.class);
             var newToken = ArgumentCaptor.forClass(String.class);
