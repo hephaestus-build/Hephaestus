@@ -74,7 +74,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      * {@code TYPE(i) = Issue} keeps a pull request out of the count even if one ever carried a parent.
      */
     @Query("SELECT COUNT(i) AS total, COALESCE(SUM(CASE WHEN i.state = :closed THEN 1 ELSE 0 END), 0) AS completed "
-            + "FROM Issue i WHERE TYPE(i) = Issue AND i.parentIssue.id = :parentIssueId")
+            + "FROM Issue i WHERE TYPE(i) = Issue AND i.parentIssue.id = :parentIssueId AND i.deletedAt IS NULL")
     ChildRollup countChildrenByParentIssueId(
             @Param("parentIssueId") long parentIssueId, @Param("closed") Issue.State closed);
 
