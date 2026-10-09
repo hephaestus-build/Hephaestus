@@ -406,6 +406,19 @@ if (scenario !== undefined && scenario !== "") {
 					},
 				];
 			}
+			case "compose-repeat-select":
+			case "compose-reselect": {
+				return [
+					admittedObservation,
+					{
+						...admittedObservation,
+						id: "observation-2",
+						practiceSlug: "second-practice",
+						outcome: "MET",
+						severity: null,
+					},
+				];
+			}
 			case "compose-partial-error":
 			case "compose-qualify":
 			case "compose-fold": {
@@ -1115,10 +1128,16 @@ if (scenario !== undefined && scenario !== "") {
 							) {
 								// The review composition, in its own session: choosing and storing the review is all it
 								// can do.
-								assert.deepEqual(options.tools, ["read_practice", "report_review"]);
+								// read_practice is offered only when a public MET observation has a reference to show.
+								const offered = admitted().some(
+									(row) => isRecord(row) && row.publicEligible === true && row.outcome === "MET",
+								)
+									? ["read_practice", "report_review"]
+									: ["report_review"];
+								assert.deepEqual(options.tools, offered);
 								assert.deepEqual(
 									options.customTools.map((custom) => custom.name),
-									["read_practice", "report_review"],
+									offered,
 								);
 								if (scenario === "compose-public-error" || scenario === "compose-recovered-error") {
 									emit({
@@ -1145,7 +1164,6 @@ if (scenario !== undefined && scenario !== "") {
 									});
 								}
 								const review = tool("report_review");
-								const practiceTool = tool("read_practice");
 								if (
 									text.includes("The review leaves") ||
 									text.includes("The review on this work is not final yet")
@@ -1155,7 +1173,7 @@ if (scenario !== undefined && scenario !== "") {
 								}
 								const read = async (id: string, args: unknown) => {
 									try {
-										return JSON.stringify(await practiceTool.execute(id, args));
+										return JSON.stringify(await tool("read_practice").execute(id, args));
 									} catch (error) {
 										return JSON.stringify(error instanceof Error ? error.message : String(error));
 									}
@@ -1361,7 +1379,7 @@ if (scenario !== undefined && scenario !== "") {
 									record(`reselect-drained:${this.pendingMessageCount}`);
 									// One response can carry more calls after the final one; none of them is accepted.
 									record(
-										`reselect-after-read:${await read("s-5", { practiceSlug: "test-practice" })}`,
+										`reselect-after-read:${await read("s-5", { practiceSlug: "second-practice" })}`,
 									);
 									record(`reselect-after-review:${await attempt("r-3", said)}`);
 									return;
@@ -1431,8 +1449,11 @@ if (scenario !== undefined && scenario !== "") {
 									return;
 								}
 								if (scenario === "compose" || scenario === "compose-foreign-provider") {
-									// The practice has only a problem here, and its private row is not the tool's to show.
-									record(`review-read:${await read("s-1", { practiceSlug: "test-practice" })}`);
+									// The practice has only a problem here and its MET-history row is private, so nothing is
+									// offered to read.
+									record(
+										`review-read:${options.customTools.some((custom) => custom.name === "read_practice") ? "offered" : "not offered"}`,
+									);
 									record(
 										`review-refused:${await attempt("r-1", {
 											decisions: [{ observationId: "observation-1", disposition: "RAISE" }],
@@ -3013,6 +3034,8 @@ if (scenario !== undefined && scenario !== "") {
 						stage === "compose-fold" ||
 						stage === "compose-already-said" ||
 						stage === "compose-qualify" ||
+						stage === "compose-repeat-select" ||
+						stage === "compose-reselect" ||
 						stage === "compose-abstention"
 					) {
 						index = [
@@ -4129,13 +4152,13 @@ for (const item of nullableCases) {
 							assert.deepEqual(
 								events
 									.filter((event) => event.startsWith("create:"))
-									.map((event) => event.endsWith("tools=read_practice,report_review")),
+									.map((event) => event.endsWith("tools=report_review")),
 								[false, true, false],
 							);
-							// A practice with only a problem here has no standard the tool may show.
-							assert.match(
-								events.find((event) => event.startsWith("review-read:")) ?? "",
-								/test-practice is not a practice with a MET observation this review may acknowledge/u,
+							// A practice with only a problem here, and a private MET-history row, offer nothing to read.
+							assert.equal(
+								events.find((event) => event.startsWith("review-read:")),
+								"review-read:not offered",
 							);
 							assert.ok(events.includes("review-loader extensions=0"), events.join("\n"));
 							assert.equal(
@@ -4580,11 +4603,11 @@ for (const item of nullableCases) {
 							// The nudge points at the final review, and at a read only where a strength needs one.
 							const nudge = JSON.stringify([["read_practice", "report_review"]]);
 							if (stage === "compose-repeat-select") {
-								// A practice with no MET observation here has no standard to show, however often asked.
+								// Only the independent MET practice has a standard to show, however often this problem's is asked.
 								for (const label of ["repeat-refused", "repeat-again"]) {
 									assert.match(
 										said(label),
-										/test-practice is not a practice with a MET observation this review may acknowledge; read_practice shows only: none/u,
+										/test-practice is not a practice with a MET observation this review may acknowledge; read_practice shows only: second-practice/u,
 									);
 								}
 								assert.equal(said("repeat-nudge"), `repeat-nudge:${nudge}`);

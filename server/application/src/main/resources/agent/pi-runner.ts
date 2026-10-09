@@ -1754,7 +1754,7 @@ const REVIEW_NUDGE =
 	`Everything this review may rest on is in this session. Store the final review now with one report_review call: ` +
 	`first one decision for each NOT_MET observation, RAISE or a withholding reason, then the complete summary and ` +
 	`any line notes, which speak about each raised observation and no withheld one. ` +
-	`Read a MET practice's complete reference with read_practice first only if the review acknowledges it and that ` +
+	`When read_practice is available, read a MET practice's complete reference first only if the review acknowledges it and that ` +
 	`reference is not yet in view. No prose outside the calls.`;
 
 /** Calls a composition may make before its first recording call; at this one it is nudged to persist. */
@@ -4618,36 +4618,42 @@ async function main() {
 			}
 			return reference();
 		};
+		// read_practice shows only a public MET reference; with none it could only refuse, so it is not offered.
+		const offersRead = readablePractices(reviewable).length > 0;
 		const { session: reviewSession } = await createAgentSession({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
-			tools: PUBLIC_REVIEW_TOOLS,
+			tools: PUBLIC_REVIEW_TOOLS.filter((name) => offersRead || name !== "read_practice"),
 			customTools: [
-				buildPracticeTool(
-					reviewable,
-					(slug) => {
-						const standard = practiceStandard(slug, stagedOnce);
-						const opening = reviewable.some(
-							(entry) =>
-								entry.publicEligible === true &&
-								entry.outcome === "NOT_MET" &&
-								entry.practiceSlug === slug,
-						);
-						return standard.whole && opening
-							? {
-									text: `The whole standard of \`${slug}\` is shown with its concern in the opening reference.\n`,
-									whole: true,
-								}
-							: standard;
-					},
-					{
-						practices,
-						history: alreadySaid.feedback,
-						reviewedRevision: captured.reviewedRevision ?? null,
-					},
-					state,
-					restore,
-				),
+				...(offersRead
+					? [
+							buildPracticeTool(
+								reviewable,
+								(slug) => {
+									const standard = practiceStandard(slug, stagedOnce);
+									const opening = reviewable.some(
+										(entry) =>
+											entry.publicEligible === true &&
+											entry.outcome === "NOT_MET" &&
+											entry.practiceSlug === slug,
+									);
+									return standard.whole && opening
+										? {
+												text: `The whole standard of \`${slug}\` is shown with its concern in the opening reference.\n`,
+												whole: true,
+											}
+										: standard;
+								},
+								{
+									practices,
+									history: alreadySaid.feedback,
+									reviewedRevision: captured.reviewedRevision ?? null,
+								},
+								state,
+								restore,
+							),
+						]
+					: []),
 				buildReviewTool(
 					lineNotes,
 					restable,

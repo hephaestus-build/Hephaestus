@@ -1300,7 +1300,7 @@ ${JSON.stringify({ observations: input.qualifications }, null, 1)}
 \`\`\`
 `;
 	const placement = input.lineNotes
-		? "- Line notes: a note sits on one citation marked `anchorable`, named by `observationId` and " +
+		? "- Line notes: a note's `anchor` names one citation marked `anchorable` by its `observationId` and " +
 			"`citationIndex`. On GitHub it is a review comment on that line; on GitLab it is its own comment " +
 			"headed by a link to the line. Each body stands on its own, and each placement can fail independently.\n"
 		: "- This work has no lines a note can sit on; everything goes in the summary.\n";
@@ -1346,7 +1346,7 @@ ${qualifications}
 ### Where the words go
 - The summary: one comment on the work.
 ${placement}
-${sameLinesNote(cited)}${notReachedNote(input.notReached)}Before the review acknowledges a MET observation, use read_practice for its complete grounds and reference, including when its standard is already shown with a concern. A read is in view from your next turn. Then store the whole review with one report_review call. It decides first: each NOT_MET observation is RAISE, and a text speaks about it, or withheld with its reason, and no text speaks about it. Writing nothing for the work is a decision too: it is still one final report_review call.
+${sameLinesNote(cited)}${notReachedNote(input.notReached)}${recognition.length > 0 ? "Before the review acknowledges a MET observation, use read_practice for its complete grounds and reference, including when its standard is already shown with a concern. A read is in view from your next turn. Then store" : "Store"} the whole review with one report_review call. It decides first: each NOT_MET observation is RAISE, and a text speaks about it, or withheld with its reason, and no text speaks about it. Writing nothing for the work is a decision too: it is still one final report_review call.
 
 ${WRITE_CONTRACT}`;
 }
