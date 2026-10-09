@@ -1,8 +1,9 @@
 # ADR 0051: Practices across the workspace counts developers and never names one
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-02
 **Amended:** 2026-10-07, accepted. The page has no smallest count. *Amendment of 2026-10-07* gives the change.
+2026-10-09: standings and practices stay out of sorting and the public page. *Note of 2026-10-09* gives the limit.
 **Authors:** Valentin Grüner
 **Builds on:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md) (no score, no rank),
 [ADR 0047](0047-the-practice-profile-has-one-reader.md) (the Practice profile has one reader)
@@ -146,6 +147,15 @@ The page has no smallest count, so it does not guard a count, a difference betwe
 ## Open decisions
 
 - **Source use.** The page reads observations of other developers under `PRACTICE_FEEDBACK_DELIVERY`. The maintainer and the controller decide if a count needs its own purpose. See `docs/admin/dsms/artifact-source-governance.md`.
+
+### Note of 2026-10-09: sorting and the public page
+
+[ADR 0052](0052-activity-sorts-by-contributions-and-can-be-public.md) lets Workspace activity sort people by their counts.
+It also adds a public activity page.
+This page stays out of both.
+Standings and practices never sort people.
+They never appear on a public page.
+The decision drivers above are unchanged.
 
 ## Revisit trigger
 

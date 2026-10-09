@@ -15,6 +15,7 @@ For a specific task:
 
 - [Change your AI choice](#your-ai-choice).
 - [Stop comments or control Slack messages](#your-choices-and-right-to-object).
+- [Hide yourself from public activity pages](#public-activity-pages).
 - [Get a copy of your data](#get-a-copy-of-your-data).
 - [Delete your account or request wider erasure](#delete-your-account-or-request-wider-erasure).
 
@@ -108,7 +109,8 @@ These sources supply context for practice reviews and the mentor.
 Hephaestus records **observations and practice feedback**, including observations that never become comments.
 [Activity](./activity) counts and lists your pull requests, reviews, issues, and comments in workspace repositories.
 It also lists your open work, such as review requests and assigned issues.
-It lists members by name and never ranks them.
+Workspace activity can sort people by these counts and show their position.
+It never shows a score.
 
 Your sign-in details, connected accounts, memberships, preferences, chats, and feedback reactions support your account and conversations.
 Product-feedback submissions support product improvement, as do survey invitations, answers, and declines.
@@ -179,7 +181,8 @@ Practice feedback is guidance, not a grade or a replacement for human review.
 Access differs by role and destination:
 
 - Members can read [Activity](./activity) without individual source-platform permission checks. Normal member access keeps your Practice profile, its feedback, and Heph conversations private. Other members see your standings only inside the counts of [Practices across the workspace](./practice-profile#practices-across-the-workspace), which never name anyone. The page shows every count, also a count of one, so other members can sometimes tell where you stand. [Small counts](./practice-profile#small-counts) lists when. Workspace admins can read observations, delivery metadata, and dispute explanations. They cannot read private practice-page or conversation feedback text, ratings, or other private response notes.
-- A publicly viewable workspace shows members, teams, repositories, and practices to anyone without sign-in. Activity, practice pages, feedback, and Heph conversations are not public. Your instance’s contributor list is also public.
+- Every workspace page needs sign-in, except a public activity page. If your workspace publishes one, anyone can see your counts of work in its public repositories. It never shows practices, feedback, or Heph conversations. You can [hide yourself](#public-activity-pages).
+- The About page lists the people who contribute to the Hephaestus open-source project, as GitHub shows them.
 - Feedback on GitHub, GitLab, or Slack is visible to that destination’s audience.
 - Instance admins can use **View as user** to read activity, practice pages, feedback, and existing Heph conversations. This includes access before your first Hephaestus sign-in. Each read has a recorded reason. This access cannot send messages, answer questions, or make choices for you. It does not count as you seeing feedback. Workspace admins do not have this access.
 - Instance operators can access stored data for operation and privacy requests. Instance admins can read product-feedback and survey submissions.
@@ -203,6 +206,26 @@ Neither action removes existing comments.
 The first action stops collection and erases collected channel messages and related conversation observations and feedback.
 The second does not restore deleted data.
 Neither erases mentor DMs, unrelated repository feedback, Slack’s copy, or [separately retained copies](#copies-outside-active-records).
+
+### Public activity pages
+
+A workspace admin can publish a public activity page, if your instance allows it.
+It shows your name and avatar, with the counts and links of your work in the workspace’s public repositories.
+Anyone can read it without sign-in.
+
+When you first open a public workspace, Hephaestus asks if you want to appear.
+Select **Show me** or **Hide me**.
+To change your answer later:
+
+1. Open **User settings**.
+2. Turn off **Show me on public activity pages** to hide yourself.
+3. To appear again, turn it on.
+
+Your answer works at once, on every public activity page of your instance.
+When you hide, you also leave every total on the page.
+Workspace admins see how many people are hidden.
+Hiding is from the public, not from your workspace: members still see your activity.
+Without an account, ask your instance’s privacy contact to hide you.
 
 ### Research participation
 

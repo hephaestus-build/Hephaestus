@@ -321,6 +321,8 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
 - **Server logs** — IP address and request metadata.
 - **Error telemetry** — if you run a Sentry or equivalent instance, the notice must explicitly state this.
   It must link to the instance's retention policy.
+- **Public activity page** — if you allow it, use the [template below](#the-public-activity-page).
+- **Workspace addresses** — if you turn them on, use the [template below](#workspace-addresses).
 
 Determine a lawful basis for each processing purpose with your data-protection adviser.
 Neither self-hosting nor acceptance of terms supplies one automatically. Art. 6(1)(f) GDPR does not apply to public
@@ -329,6 +331,56 @@ authorities processing data in the performance of their tasks.
 For international transfers, document the applicable Chapter V safeguard for the actual recipient,
 service and destination. Verify current adequacy decisions, certification scope where relevant, and
 contractual safeguards rather than inferring coverage from a provider's brand.
+
+### The public activity page
+
+**Allow public activity pages** is off by default.
+When it is on, a workspace admin can publish the activity of the workspace's public repositories to anyone.
+The page lists members and outside contributors who never signed in.
+Each person can hide.
+The [DPIA pre-screen](./dsms/dpia-prescreen.md#reassessment-the-public-activity-page) gives the TUM reasoning.
+
+Before you turn on the setting:
+
+1. Determine a lawful basis for the publication with your data-protection adviser.
+2. If you are a public body, record the task for which the publication is necessary.
+3. In the German private sector, check entries 7 and 8 of the [DSK list](https://www.datenschutzkonferenz-online.de/media/ah/20181017_ah_DSK_DSFA_Muss-Liste_Version_1.1_Deutsch.pdf).
+4. If the people on the page are employees, check employment law. In Germany, a works council co-determines it ([§ 87(1) no. 6 BetrVG](https://www.gesetze-im-internet.de/betrvg/__87.html)).
+5. Add the text below to your privacy notice.
+6. Tell workspace admins to keep course workspaces private.
+7. Give your privacy contact a way to hide a person who has no account.
+
+```md
+### Public activity page
+
+If a workspace administrator publishes a public activity page, anyone can read it without sign-in.
+For each person who contributed to the workspace's public repositories, it shows the display name,
+login and avatar; the pull requests opened, merged and reviewed, the issues opened and the active weeks
+in a selected period; a Contributions total, a position number and links to the work. It never shows
+practices, feedback or AI review content.
+
+Purpose: [purpose]. Legal basis: [legal basis]. The page is computed on each request and holds no
+copy. Responses can be cached for up to 60 seconds.
+
+**Right to object.** You can object at any time to your appearance on public activity pages. Turn off
+**Show me on public activity pages** in User settings, or select **Hide me** when a public workspace
+asks. Without an account, contact [privacy contact]. We stop at once, and you also leave every total
+on the page.
+```
+
+### Workspace addresses
+
+With workspace addresses on, each workspace has its own host, such as `team.example.org`.
+Sign-in and its cookies stay on the instance host.
+Each workspace host keeps its own cookie choice and theme in the browser.
+A proxy or CDN in front of the hosts is a recipient.
+Name it in the notice.
+
+```md
+A workspace can have its own address, such as [team.example.org]. Sign-in and its cookies stay on
+[example.org]. Each workspace address stores its own cookie choice and theme in your browser, so it
+asks for your cookie choice once. [Proxy or CDN provider, its role and transfer basis.]
+```
 
 ## Verifying the configuration
 

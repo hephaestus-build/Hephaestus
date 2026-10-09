@@ -83,13 +83,14 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0042](0042-hosts-pull-their-own-releases.md) | Hosts pull their own releases | Accepted. Replaces the CI-driven SSH push deployment, which no ADR had recorded; the release evidence and image-lock decisions it builds on ([0034](0034-signed-release-image-lock.md)) are unchanged. |
 | [0043](0043-gradle-java-build.md) | Gradle owns the Java build | Accepted |
 | [0044](0044-email-is-a-notification-transport.md) | Email is a notification transport, delivered through the event publication registry | Accepted |
-| [0045](0045-activity-counts-work-and-never-ranks-people.md) | Activity counts and lists work; it never scores or ranks people | Accepted |
+| [0045](0045-activity-counts-work-and-never-ranks-people.md) | Activity counts and lists work; it never scores or ranks people | Accepted (amended 2026-10-09 — sorting, the Contributions total and the public page superseded by [0052](0052-activity-sorts-by-contributions-and-can-be-public.md)) |
 | [0046](0046-heph-follows-its-model-not-a-workspace-switch.md) | Heph follows its model, not a workspace switch | Accepted |
 | [0047](0047-the-practice-profile-has-one-reader.md) | The Practice profile has one reader | Accepted |
-
 | [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) | Installed clients sign in with a PKCE handoff to their own revocable session | Accepted. Amends [0017](0017-replace-keycloak-with-spring-native-auth.md) for clients that cannot hold the cookie. |
 | [0049](0049-browser-extension-report-in-the-page.md) | The browser extension shows its report in the page and confirms changes in its own window | Accepted |
 | [0050](0050-one-practice-standard-one-outcome.md) | One practice standard, one outcome | Accepted |
-| [0051](0051-practices-across-the-workspace-counts-developers.md) | Practices across the workspace counts developers and never names one | Proposed. Builds on [0045](0045-activity-counts-work-and-never-ranks-people.md) and [0047](0047-the-practice-profile-has-one-reader.md). |
+| [0051](0051-practices-across-the-workspace-counts-developers.md) | Practices across the workspace counts developers and never names one | Accepted (amended 2026-10-07 — no smallest count; 2026-10-09 — stays out of sorting and the public page). Builds on [0045](0045-activity-counts-work-and-never-ranks-people.md) and [0047](0047-the-practice-profile-has-one-reader.md). |
+| [0052](0052-activity-sorts-by-contributions-and-can-be-public.md) | Workspace activity sorts people by plain counts, and a workspace can publish it | Accepted. Supersedes parts of [0045](0045-activity-counts-work-and-never-ranks-people.md). |
+| [0053](0053-workspace-subdomains-are-a-presentation-origin.md) | A workspace subdomain is a presentation origin, and sign-in stays on the apex | Accepted. Builds on [0017](0017-replace-keycloak-with-spring-native-auth.md) and [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md). |
 
 Template: [0000-template.md](0000-template.md).
