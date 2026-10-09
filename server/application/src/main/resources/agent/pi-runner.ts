@@ -1752,8 +1752,8 @@ const COMPOSITION_NUDGE =
 /** What the composer of the review on the work is told near its budget's end. */
 const REVIEW_NUDGE =
 	`Everything this review may rest on is in this session. Store the final review now with one report_review call: ` +
-	`first one decision for each NOT_MET observation, RAISE or a withholding reason, then any line notes and the ` +
-	`complete summary, which together speak about each raised observation and no withheld one. ` +
+	`first one decision for each NOT_MET observation, RAISE or a withholding reason, then the complete summary and ` +
+	`any line notes, which speak about each raised observation and no withheld one. ` +
 	`When read_practice is available, read a MET practice's complete reference first only if the review acknowledges it and that ` +
 	`reference is not yet in view. No prose outside the calls.`;
 

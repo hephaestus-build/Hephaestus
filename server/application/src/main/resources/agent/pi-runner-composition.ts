@@ -898,9 +898,9 @@ export const READ_PRACTICE_TOOL_DESCRIPTION =
 /** What report_review tells the model it does. The rules are applied by readReview, with every reason at once. */
 export const REVIEW_TOOL_DESCRIPTION =
 	"Store the final review on this piece of work. First decide each NOT_MET observation: RAISE it, or withhold it " +
-	"with your reason and, for advice this work already received, the statement that gave it. Then write any notes " +
-	"placed on lines of the change and the summary comment: together they speak about every raised observation " +
-	"and no withheld one. Each body is published whole as written, with provider safety formatting and a fixed disclosure; nothing is " +
+	"with your reason and, for advice this work already received, the statement that gave it. Then write the summary " +
+	"comment and any notes placed on lines of the change: they speak about every raised observation and no withheld " +
+	"one. Each body is published whole as written, with provider safety formatting and a fixed disclosure; nothing is " +
 	"assembled from fragments. An accepted call is final and ends the composition. A missing or contradicted decision, " +
 	"invalid support, eligibility or placement, a witness that cannot stand as the advice, or an acknowledgement " +
 	"written without its practice's complete MET reference in view refuses the whole review, with every reason, so it can be " +
@@ -912,26 +912,24 @@ export const REVIEW_TOOL_DESCRIPTION =
  */
 export const WRITE_CONTRACT =
 	"## Writing the review\n" +
-	"Write from the observations each text rests on, within their qualifications. Code read from source supports what it " +
-	"would do under the conditions it shows, and a declared affordance its bounded benefit; neither is an observed " +
-	"runtime, interface or test outcome. Keep each remedy on its recorded gap and leave unrelated " +
+	"Write from the observations each text rests on, within their qualifications. A declared affordance supports its bounded " +
+	"benefit, not an unobserved runtime or test outcome. Keep each remedy on its recorded gap and leave unrelated " +
 	"behavior as it is; make another change a prerequisite only when the evidence establishes that dependency. " +
 	"You are not told whether the work is ready, so do not approve it, call it ready or blocked, or set conditions " +
 	"for merging it. Timing the evidence itself warrants is fine: a committed secret is removed and rotated before " +
 	"anyone relies on the history.\n\n" +
-	"Compose the summary and line notes as one review. Give each complete point one useful home:\n" +
+	"Make each point fully once in this review:\n" +
 	"- A line note is one self-contained point about the code at its anchor: that local concern with its action and " +
 	"evidence, or that local acknowledgement. It is read alone, so it says its point completely. Several practices " +
 	"may support it when they describe that one event; it does not collect the review's other points.\n" +
-	"- The summary orients the reader across the review, most important first, and selectively names a useful choice " +
-	"or repair the evidence shows. It makes completely every point no line note makes: an ask that is not about one " +
-	"place in the code, such as the description, a reply to a reviewer or a work-wide change, and a local point " +
-	"without a useful note. For a point a line note makes, it may name or locate the topic and then names that " +
-	"note's observations in basedOn; the diagnosis, action and acknowledgement stay in the note. If the notes already " +
-	"give the whole useful review, send null rather than adding a summary that repeats them.\n" +
+	"- The summary orients the reader: the guidance its NOT_MET observations warrant, most important first, and, " +
+	"selectively, a useful choice or repair the evidence shows. It carries every ask that is not " +
+	"about one place in the code, such as the description, a reply to a reviewer or a work-wide change, unless it " +
+	"forms one point with the code at a line. When a point has no useful line note, the summary carries that point " +
+	"completely. It may name or locate a line note's topic, and then names that note's " +
+	"observations in basedOn, but it does not restate the note's diagnosis, action or acknowledgement.\n" +
 	"- An acknowledgement appears once, in the summary or on its line, and says briefly what the choice provides. It " +
-	"is never required, counted or used to cushion a concern. Choose the summary or a note, not both, for the same " +
-	"acknowledgement; when nothing calls for action, the summary may describe " +
+	"is never required, counted or used to cushion a concern; when nothing calls for action, the summary may describe " +
 	"that bounded result, or the review may say nothing.\n\n" +
 	"One observation may support notes at several places, and also the summary's overview of them.";
 
@@ -1115,9 +1113,7 @@ function idList(ids: readonly string[], description: string) {
 /**
  * The parameters of report_review for one run, built from the same observations readReview checks against: one
  * decision for each NOT_MET observation comes first, each text names only decided observations of this run, and a
- * note sits only on one with a line of this change. Presenting notes before the summary lets the writer account for
- * their complete points when writing the overview. This presentation does not enforce generation order.
- * A list with nothing it could name takes no items. The required
+ * note sits only on one with a line of this change. A list with nothing it could name takes no items. The required
  * fields of each part are required here, so a missing one is answered by the provider's own validation; the texts
  * use null for no summary and an empty array for no notes. readReview stays the final check and answers each part by name.
  *
@@ -1176,6 +1172,26 @@ export function reviewToolParameters(
 					},
 				},
 			},
+			summary: {
+				type: ["object", "null"],
+				required: ["basedOn", "body"],
+				description:
+					"The one overview comment on the work: the guidance its NOT_MET observations warrant, a useful " +
+					"choice or repair the evidence shows, and points not carried by line notes. Send null when nothing " +
+					"on this work earns a comment of its own.",
+				properties: {
+					basedOn: idList(
+						decided,
+						`${SUPPORT_FIRST} If any of them may not go out, the whole comment stays unsaid.`,
+					),
+					body: {
+						type: "string",
+						minLength: 1,
+						maxLength: REVIEW_LIMITS.summaryChars,
+						description: "The whole comment in Markdown, written from the observations in basedOn.",
+					},
+				},
+			},
 			inline: {
 				type: "array",
 				maxItems: anchorable.length > 0 ? REVIEW_LIMITS.inlineNotes : 0,
@@ -1204,26 +1220,6 @@ export function reviewToolParameters(
 								citationIndex: { type: "integer", minimum: 0 },
 							},
 						},
-					},
-				},
-			},
-			summary: {
-				type: ["object", "null"],
-				required: ["basedOn", "body"],
-				description:
-					"The one overview comment on the work. It makes completely every point the line notes do not make, " +
-					"and for a point a note makes it at most names or locates it. Send null when nothing on this work " +
-					"earns a comment of its own, including when the notes already give the whole useful review.",
-				properties: {
-					basedOn: idList(
-						decided,
-						`${SUPPORT_FIRST} If any of them may not go out, the whole comment stays unsaid.`,
-					),
-					body: {
-						type: "string",
-						minLength: 1,
-						maxLength: REVIEW_LIMITS.summaryChars,
-						description: "The whole comment in Markdown, written from the observations in basedOn.",
 					},
 				},
 			},
@@ -1348,8 +1344,8 @@ ${JSON.stringify({ observations: recognition }, null, 1)}
 \`\`\`
 ${qualifications}
 ### Where the words go
-${placement}- The summary: one comment on the work.
-
+- The summary: one comment on the work.
+${placement}
 ${sameLinesNote(cited)}${notReachedNote(input.notReached)}${recognition.length > 0 ? "Before the review acknowledges a MET observation, use read_practice for its complete grounds and reference, including when its standard is already shown with a concern. A read is in view from your next turn. Then store" : "Store"} the whole review with one report_review call. It decides first: each NOT_MET observation is RAISE, and a text speaks about it, or withheld with its reason, and no text speaks about it. Writing nothing for the work is a decision too: it is still one final report_review call.
 
 ${WRITE_CONTRACT}`;

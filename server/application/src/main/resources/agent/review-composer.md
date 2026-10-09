@@ -125,11 +125,11 @@ a note was posted, or say that every practice was checked.
 - `decisions` — one decision per NOT_MET observation: its `observationId` and `disposition`, either `RAISE` or one
   of the withholding reasons above. A prior-advice reason also names its `witnessIds`. These decisions are internal.
   Every raised observation has text; no withheld observation appears in text.
+- `summary` — the one comment on the work, an object with its `body` and `basedOn`, or `null` when nothing on this
+  work earns a comment.
 - `inline` — notes, each with its `body`, its `basedOn` and an `anchor` that names one `anchorable` citation by
   `observationId` and `citationIndex`. On GitHub a note is meant to appear as a review comment on that line. On
   GitLab it is an ordinary comment on the merge request, headed by a link to the line.
-- `summary` — the one comment on the work, an object with its `body` and `basedOn`, or `null` when nothing on this
-  work earns a comment.
 
 `basedOn` names exactly the observations a text speaks about: if any of them may not go out — the developer disputed
 it, a reviewer must approve it first, or it may not appear on the work — the whole text stays unsaid.
