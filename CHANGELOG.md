@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.86.1
+
+### Patch Changes
+
+- Reviews that receive model replies but record no observations no longer repeat as if the provider never answered. Failed recording remains a failed review with its unreached practices preserved.
+- Reviews no longer treat a description that was not captured as a missing description. An unknown description stays unknown. Reviews also distinguish details saved when the review was requested from details read later.
+- Worker cleanup, review admission and person erasure no longer remove the same review evidence folder at the same time. Admission still deletes the verified evidence as soon as it is recorded, and cleanup retries a folder that another removal holds on its next pass.
+- Practice reviews now distinguish a first observation from a correction with an explicit draft reference. Invalid corrections leave the recorded observation unchanged.
+- GitLab practice reviews wait for the merge request's diff range before assessing its code. If GitLab is still preparing it, the original review retries automatically.
+
+  With local Git storage disabled, reviews can still assess captured metadata. Code evidence is recorded as not collected.
+
+- Release validation runs database upgrade and baseline checks with provider and startup checks.
+- Heph and the practice pages stay quiet about a practice as already said only when feedback about that practice was delivered on that same channel. When one decision covers concerns about several practices, each practice needs such feedback. A card on the practice pages no longer counts as a mentor conversation, and feedback that was only prepared counts as neither.
+- Delayed pull request and merge request reviews keep the title and description saved when the review was accepted. Later status and checks are labelled as current context. Missing saved text remains unknown.
+- Reviews on pull requests and merge requests are now written and checked as one whole. Concerns are shown beside their standards, limits and references to earlier feedback. A review reads a strength's complete evidence and standard before acknowledging it. It still decides on every problem: it raises it or deliberately holds it back. Earlier comments on the same work count as a record of what was said, not as proof of the current work or as wording to repeat. Recognition considers whether the same choice was already acknowledged and whether the current evidence adds anything new.
+- Practice review preparation now reads a repository's comments, reviews, threads and delivered feedback records in batches. It keeps the same captured evidence without repeating queries for each issue or pull request.
+- Build validation prepares GitHub actions sequentially so they do not share concurrent writes to event data. Independent jobs and test shards still run concurrently.
+- Retried practice reviews can reclaim sandboxes from recorded earlier attempts before they start. Sandboxes without a matching earlier attempt remain protected.
+- Practice reviews can record observations when the selected model supplies unused evidence fields as null, without accepting evidence for the wrong outcome.
+- Feedback and observation counts on reviewed work now refresh when review results finish processing. This also works when you open the work after the review finishes.
+
 ## 0.86.0
 
 ### Minor Changes
