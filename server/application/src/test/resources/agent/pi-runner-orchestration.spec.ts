@@ -290,6 +290,7 @@ const REVIEW_SUMMARY =
 
 function observation(slug: string, summary: string, citation: unknown = changeCitation) {
 	return {
+		revises: null,
 		practiceSlug: slug,
 		summary,
 		outcome: "NOT_MET",
@@ -301,6 +302,7 @@ function observation(slug: string, summary: string, citation: unknown = changeCi
 
 /** An observation that decides nothing; for a practice that reads the change, it must show it read it. */
 const undecided = (consulted: string[]) => ({
+	revises: null,
 	practiceSlug: "test-practice",
 	summary: "Nothing to assess in this change",
 	outcome: "NOT_APPLICABLE",
@@ -600,7 +602,11 @@ if (scenario !== undefined && scenario !== "") {
 				},
 			});
 		}
-		if (scenario === "draft-revision" || scenario === "compose-abstention") {
+		if (
+			scenario.startsWith("provider-reply-") ||
+			scenario === "draft-revision" ||
+			scenario === "compose-abstention"
+		) {
 			assert.ok(typeof init?.body === "string");
 			writeFileSync(nodePath.join(cwd, "admission.json"), init.body);
 		}
@@ -906,6 +912,75 @@ if (scenario !== undefined && scenario !== "") {
 							prompts += 1;
 							record(`prompt:${prompts}`);
 							writeFileSync(nodePath.join(cwd, `prompt-${prompts}.md`), text);
+							if (scenario.startsWith("provider-reply-")) {
+								const mode = scenario.slice("provider-reply-".length);
+								if (prompts === 1) {
+									if (mode === "refused-error" || mode === "refused-stall") {
+										emit({
+											type: "tool_execution_start",
+											toolCallId: "refused",
+											toolName: "report_observation",
+											args: {},
+										});
+										await assert.rejects(tool("report_observation").execute("refused", {}));
+										record("answered-refusal");
+									} else if (mode === "stored-error") {
+										await tool("report_observation").execute(
+											"stored",
+											observation("test-practice", "Recorded before the provider failed"),
+										);
+									} else if (mode === "empty-error") {
+										emit({
+											type: "message_end",
+											message: { role: "assistant", stopReason: "stop", content: [] },
+										});
+										return;
+									} else if (mode === "partial-error" || mode === "partial-abort") {
+										emit({
+											type: "message_end",
+											message: {
+												role: "assistant",
+												stopReason: mode === "partial-error" ? "error" : "aborted",
+												content:
+													mode === "partial-error"
+														? [{ type: "text", text: "The changed authentication call" }]
+														: [
+																{
+																	type: "toolCall",
+																	id: "partial",
+																	name: "report_observation",
+																	arguments: {},
+																},
+															],
+											},
+										});
+									} else if (mode === "abort-only") {
+										emit({
+											type: "message_end",
+											message: { role: "assistant", stopReason: "aborted", content: [] },
+										});
+									}
+								}
+								if (mode.endsWith("stall")) {
+									now += 301_000;
+									const inFlight = Promise.withResolvers<undefined>();
+									releasePrompt = () => inFlight.resolve(undefined);
+									await inFlight.promise;
+									releasePrompt = undefined;
+									settleIdle();
+								} else {
+									emit({
+										type: "message_end",
+										message: {
+											role: "assistant",
+											stopReason: "error",
+											content: mode === "blank-error" ? [{ type: "text", text: "  " }] : [],
+											errorMessage: "Provider unavailable",
+										},
+									});
+								}
+								return;
+							}
 							if (scenario === "provider-error") {
 								// The provider answers every call with an error the SDK does not retry.
 								emit({
@@ -2093,23 +2168,17 @@ if (scenario !== undefined && scenario !== "") {
 								const negative = observation("test-practice", "Authentication call");
 								const readState = () =>
 									readObservations(nodePath.join(cwd, "out/review-state.json"));
-								// No draft exists yet, so there is no reference to name: the answer says to omit it.
-								await assert.rejects(
-									report.execute("wrong-draft", { ...positive, revises: "second-practice" }),
-									/revises must name[\s\S]*omit revises for its first observation/u,
-								);
-								// A null or empty reference that reaches the recorder is not an omitted one: both are refused
-								// and nothing is stored. (Pi's own validation drops a null one first; argument-repairs shows it.)
-								for (const revises of [null, ""]) {
+								// Before the first draft, even the practice's own slug is not an issued reference.
+								for (const revises of ["second-practice", "test-practice", ""]) {
 									await assert.rejects(
-										report.execute("blank-draft", { ...positive, revises }),
-										/omit revises for its first observation/u,
+										report.execute("unissued-draft", { ...positive, revises }),
+										/No draft reference has been issued[\s\S]*revises: null/u,
 									);
 								}
 								await assert.rejects(
 									report.execute("invalid-first", {
 										...positive,
-										revises: "test-practice",
+										revises: null,
 										evidence: {
 											citations: [{ ...changeCitation, quote: "notInTheDiff();" }],
 										},
@@ -2119,7 +2188,7 @@ if (scenario !== undefined && scenario !== "") {
 								assert.equal(existsSync(nodePath.join(cwd, "out/review-state.json")), false);
 								const first = await report.execute("first", {
 									...positive,
-									revises: "test-practice",
+									revises: null,
 								});
 								record(`draft-first:${JSON.stringify(first)}`);
 								assert.ok(isRecord(first) && isRecord(first.details));
@@ -2168,6 +2237,20 @@ if (scenario !== undefined && scenario !== "") {
 								assert.equal(corrected.details.inserted, 0);
 								assert.equal(corrected.details.totalObservations, 1);
 								record(`draft-corrected:${JSON.stringify(corrected)}`);
+								const { revises: noCorrection, ...omittedReference } = positive;
+								assert.equal(noCorrection, null);
+								const correctedState = readFileSync(
+									nodePath.join(cwd, "out/review-state.json"),
+									"utf8",
+								);
+								await assert.rejects(
+									report.execute("omitted-reference", omittedReference),
+									/resend the complete observation with revises/u,
+								);
+								assert.equal(
+									readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
+									correctedState,
+								);
 								const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
 								await assert.rejects(
 									report.execute(
@@ -2298,8 +2381,8 @@ if (scenario !== undefined && scenario !== "") {
 								undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
 							);
 							const revise = (summary: string, citation: unknown = changeCitation) => ({
-								revises: "test-practice",
 								...observation("test-practice", summary, citation),
+								revises: "test-practice",
 							});
 							const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
 							await assert.rejects(
@@ -2422,6 +2505,15 @@ if (scenario !== undefined && scenario !== "") {
 		"settle-safety",
 		"compose-settle-deadline",
 		"provider-error",
+		"provider-reply-unanswered-stall",
+		"provider-reply-refused-error",
+		"provider-reply-refused-stall",
+		"provider-reply-empty-error",
+		"provider-reply-partial-error",
+		"provider-reply-partial-abort",
+		"provider-reply-blank-error",
+		"provider-reply-abort-only",
+		"provider-reply-stored-error",
 		"batch",
 		"replacement-witness",
 		"comment-undecided",
@@ -2534,6 +2626,22 @@ if (scenario !== undefined && scenario !== "") {
 				"settle-safety": "does not start a measuring turn once settling reaches the safety line",
 				"compose-settle-deadline":
 					"does not ask the composer once more after the run reaches its safety ceiling",
+				"provider-reply-unanswered-stall":
+					"retries only when no model or tool answer preceded a stall",
+				"provider-reply-refused-error":
+					"does not retry the whole review after a refused report and a provider error",
+				"provider-reply-refused-stall":
+					"does not retry the whole review after a refused report and a stall",
+				"provider-reply-empty-error":
+					"counts a normal empty assistant stop as a received reply before a provider error",
+				"provider-reply-partial-error":
+					"counts meaningful partial text on an error as a received reply",
+				"provider-reply-partial-abort":
+					"counts a partial tool call on an abort as a received reply",
+				"provider-reply-blank-error":
+					"does not count blank text on a provider error as a received reply",
+				"provider-reply-abort-only": "does not count an empty abort as a received reply",
+				"provider-reply-stored-error": "admits a stored result despite a later provider error",
 				"provider-error":
 					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
 				"argument-repairs":
@@ -2678,6 +2786,10 @@ if (scenario !== undefined && scenario !== "") {
 						"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,0 +10,1 @@\n[L10] + insecure();\n",
 					);
 					let practiceCriteria = "# Test practice\nCriteria.";
+					if (stage.startsWith("provider-reply-")) {
+						practiceCriteria =
+							"# Uses secure authentication\n\n## Standard\nAdded authentication calls use checked(), not insecure().\n\n## Occasion\nAn authentication call was added.\n\n## Judge\nMET for checked(); NOT_MET for insecure().\n\n## Grounding\nCite the added call in the captured change.\n\n## Severity\nMAJOR for an added insecure() call.\n\n## Defer\nOther code is outside this practice.";
+					}
 					if (stage === "measure-context-compact") {
 						practiceCriteria =
 							"    let answer = qualified(work)\n\n# Standard\nBounded criterion.  \n\n## Occasion\nOnly captured work.\n\n## Judge\nQualify the outcome.\n\n## Defer\nUnknown remains unknown.  \n\n";
@@ -2869,7 +2981,7 @@ if (scenario !== undefined && scenario !== "") {
 						}),
 					);
 					let budgetMs = "10000";
-					if (stage === "stall") {
+					if (stage === "stall" || stage.endsWith("-stall")) {
 						budgetMs = "3600000";
 					} else if (stage === "compose-settle-deadline") {
 						budgetMs = "200";
@@ -3221,6 +3333,41 @@ if (scenario !== undefined && scenario !== "") {
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
+						case "provider-reply-unanswered-stall":
+						case "provider-reply-refused-error":
+						case "provider-reply-refused-stall":
+						case "provider-reply-empty-error":
+						case "provider-reply-partial-error":
+						case "provider-reply-partial-abort":
+						case "provider-reply-blank-error":
+						case "provider-reply-abort-only":
+						case "provider-reply-stored-error": {
+							const stored = stage === "provider-reply-stored-error";
+							const unanswered = [
+								"provider-reply-unanswered-stall",
+								"provider-reply-blank-error",
+								"provider-reply-abort-only",
+							].includes(stage);
+							const answeredExit = stored ? 0 : 1;
+							assert.equal(child.status, unanswered ? 76 : answeredExit, child.stderr);
+							reached({ "test-practice": stored ? "EVALUATED" : "NOT_REACHED" });
+							if (stored) {
+								assert.equal(readObservations(nodePath.join(cwd, "out/result.json")).length, 1);
+								assert.equal(readObservations(nodePath.join(cwd, "admission.json")).length, 1);
+							} else {
+								assert.equal(existsSync(nodePath.join(cwd, "out/result.json")), false);
+								assert.equal(existsSync(nodePath.join(cwd, "admission.json")), false);
+							}
+							if (unanswered) {
+								assert.match(child.stderr, /UNREACHABLE/u);
+							} else {
+								assert.doesNotMatch(child.stderr, /UNREACHABLE/u);
+							}
+							if (stage.includes("refused")) {
+								assert.ok(events.includes("answered-refusal"));
+							}
+							break;
+						}
 						case "provider-error": {
 							// Exit 76: the server queues the review again instead of recording a failure.
 							assert.equal(child.status, 76, child.stderr);
@@ -3304,10 +3451,12 @@ for (const item of [
 ]) {
   assert.deepEqual(validate(item), item);
 }
-// Pi drops a null revises before the tool runs, so it arrives omitted. An empty or wrong string keeps the shape and
-// reaches the recorder, which refuses it.
-assert.deepEqual(validate({ ...base, revises: null }), base);
-for (const revises of ["", "another-practice"]) {
+// Required nullable references survive native SDK preparation and validation unchanged.
+assert.equal(validate({ ...base, revises: null }).revises, null);
+assert.throws(() => validate(without(base, "revises")));
+assert.throws(() => validate({ ...base, revises: "" }));
+// Nonempty references are shape-valid; the recorder owns whether they were issued.
+for (const revises of ["test-practice", "another-practice"]) {
   assert.deepEqual(validate({ ...base, revises }), { ...base, revises });
 }
 // The declaration leaves the SDK unchanged for an OpenAI-compatible endpoint: same model, no forced strict mode.

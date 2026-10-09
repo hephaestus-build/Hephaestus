@@ -743,12 +743,21 @@ const evidenceSchema = {
 const observationSchema: ToolDefinition["parameters"] = {
 	type: "object",
 	additionalProperties: false,
-	required: ["practiceSlug", "summary", "outcome", "severity", "evidence", "evidenceRationale"],
+	required: [
+		"revises",
+		"practiceSlug",
+		"summary",
+		"outcome",
+		"severity",
+		"evidence",
+		"evidenceRationale",
+	],
 	properties: {
 		revises: {
-			type: "string",
+			type: ["string", "null"],
+			minLength: 1,
 			description:
-				"To correct a draft already recorded in this review, copy its returned draft reference here and resend the complete observation. Omit for a new draft. A refused correction leaves the previous draft unchanged.",
+				"Use null for the first draft. To correct a draft already recorded in this review, copy its returned draft reference here and resend the complete observation. A refused correction leaves the previous draft unchanged.",
 		},
 		practiceSlug: { type: "string", minLength: 1 },
 		summary: {
@@ -1403,7 +1412,9 @@ function record(raw: unknown): Recorded {
 	}
 	const revises = isRecord(raw) ? raw.revises : undefined;
 	const index = reviewState.observations.findIndex((draft) => draft.practiceSlug === slug);
-	if (isRecord(raw) && Object.hasOwn(raw, "revises") && revises !== slug) {
+	if (
+		index === -1 ? revises !== null : revises !== null && revises !== undefined && revises !== slug
+	) {
 		countRefusal(slug);
 		return {
 			kind: "refused",
@@ -1411,7 +1422,7 @@ function record(raw: unknown): Recorded {
 			// Before a first draft no reference was ever returned, so naming one cannot be the correction.
 			reason:
 				index === -1
-					? `revises must name a recorded draft, and '${slug}' has none yet: omit revises for its first observation.`
+					? `No draft reference has been issued for '${slug}': use revises: null for its first observation.`
 					: `revises must name this practice's draft reference, '${slug}'.`,
 		};
 	}
@@ -1429,14 +1440,11 @@ function record(raw: unknown): Recorded {
 		return { kind: "refused", slug, reason };
 	}
 	const { observation, notes } = validated;
-	if (index === -1 && revises !== undefined) {
-		notes.push(`no draft '${slug}' existed to revise; stored as its first draft`);
-	}
 	const previous = reviewState.observations[index];
 	if (previous !== undefined && isDeepStrictEqual(previous, observation)) {
 		return { kind: "duplicate", slug };
 	}
-	if (previous !== undefined && revises === undefined) {
+	if (previous !== undefined && revises !== slug) {
 		countRefusal(slug);
 		return {
 			kind: "refused",
@@ -3699,6 +3707,7 @@ const OBSERVATION_EXAMPLE = (() => {
 	const context = taskEnvelope.paths.contextRoot;
 	const example = [
 		{
+			revises: null,
 			practiceSlug: "<the practice's slug>",
 			summary: "Added test asserts that malformed date input is rejected",
 			outcome: "MET",
@@ -3720,6 +3729,7 @@ const OBSERVATION_EXAMPLE = (() => {
 			},
 		},
 		{
+			revises: null,
 			practiceSlug: "<the practice's slug>",
 			summary: "New error branch of the parser ships without a test",
 			outcome: "NOT_MET",
@@ -3746,6 +3756,7 @@ const OBSERVATION_EXAMPLE = (() => {
 			},
 		},
 		{
+			revises: null,
 			practiceSlug: "<the practice's slug>",
 			summary: "No completed merge is recorded",
 			outcome: "NOT_APPLICABLE",
@@ -3973,6 +3984,7 @@ async function main() {
 	const compositionRequest = loadCompositionRequest();
 	const streamUsage = newUsageLedger();
 	let providerFailures = 0;
+	const measurementReply = { received: false };
 	let measuring = true;
 	const subscribeSession = (trackedSession: AgentSession) =>
 		trackedSession.subscribe((event: AgentSessionEvent) => {
@@ -3982,6 +3994,9 @@ async function main() {
 				// A call a codemode script makes is the script's work, not a call the model sent: the loop
 				// guards count only the latter, and the trace keeps the former apart.
 				if (event.parentToolCallId === undefined) {
+					if (measuring) {
+						measurementReply.received = true;
+					}
 					console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 					if (currentTurn) {
 						noteToolCall(currentTurn, event.toolName, event.args, measuring);
@@ -4048,13 +4063,25 @@ async function main() {
 			if (event.type === "message_end" && event.message.role === "assistant") {
 				addAssistantUsage(streamUsage, event.message);
 				const { stopReason } = event.message;
+				// An error or abort alone is not a reply; meaningful partial output is. Once answered,
+				// later provider failures cannot turn a recording failure into a wholly unreachable review.
+				if (
+					measuring &&
+					((stopReason !== "error" && stopReason !== "aborted") ||
+						event.message.content.some(
+							(content) =>
+								content.type === "toolCall" || (content.type === "text" && !isBlank(content.text)),
+						))
+				) {
+					measurementReply.received = true;
+				}
 				if (currentTurn) {
 					currentTurn.modelError = stopReason === "error";
 				}
 				const types = listOrEmpty(event.message.content).map((c) => c.type);
 				const toolCalls = types.filter((t) => t === "toolCall").length;
 				const { rawStopReason } = event.message;
-				// Non-retryable provider errors also require a retry outcome if no practice was recorded.
+				// An error can leave a review unanswered even when the SDK does not retry it.
 				if (stopReason === "error" && measuring) {
 					providerFailures += 1;
 				}
@@ -4397,7 +4424,7 @@ async function main() {
 	}
 
 	if (!maybeWriteResultFile()) {
-		if (providerFailures > 0) {
+		if (providerFailures > 0 && !measurementReply.received) {
 			console.error(
 				`[pi-runner] UNREACHABLE: this review reached no practice, and ${providerFailures} model call(s) ` +
 					`went unanswered — the provider, not the work, is what this run could not read`,

@@ -10,6 +10,7 @@ import {
 	type PinnedBlob,
 	type PinnedDiff,
 } from "../../../main/resources/agent/pi-change.ts";
+import { isRecord } from "../../../main/resources/agent/pi-observation-normalize.ts";
 import {
 	buildBrief,
 	buildPrimarySourceReference,
@@ -509,6 +510,112 @@ void test("the review is told what the same work is, from its exact core and lin
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
+});
+
+function shownRecord(context: string): unknown {
+	return JSON.parse(
+		/```json\n(?<record>\{[\s\S]*?\n\})\n```/u.exec(context)?.groups?.record ?? "null",
+	);
+}
+
+void test("the record says when each part was read, and an unknown description is never read as none", (t) => {
+	const roots: string[] = [];
+	t.after(() => {
+		for (const root of roots) {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+	const recorded = {
+		title: "Add login",
+		pr_url: "https://gitlab.example/group/repo/-/merge_requests/7",
+		repository_full_name: "group/repo",
+		pr_number: 7,
+		state: "OPEN",
+	};
+	const contextOf = (record: Record<string, unknown>, framing = FRAMING) => {
+		const root = workspace({ "context/metadata.json": JSON.stringify(record) });
+		roots.push(root);
+		return buildSameWorkContext(
+			root,
+			"context",
+			pullRequestIndex({ availability: "AVAILABLE", completeness: "COMPLETE" }),
+			framing,
+		);
+	};
+	// The words retained at admission and the status the capture read keep their own times; only fields the block
+	// shows are named, and the status stays as recorded.
+	const dated = contextOf({
+		...recorded,
+		body: "Adds the login screen.",
+		basis: {
+			admission_fields: ["pr_number", "title", "body", "subject_role", "author"],
+			admitted_at: "2026-10-01T09:00:00Z",
+			other_fields: "CAPTURE",
+			mirror_synced_at: "2026-10-01T09:30:00Z",
+		},
+	});
+	const shown = shownRecord(dated);
+	assert.ok(isRecord(shown), dated);
+	assert.deepEqual(shown.basis, {
+		admission_fields: ["pr_number", "title", "body"],
+		admitted_at: "2026-10-01T09:00:00Z",
+		other_fields: "CAPTURE",
+		mirror_synced_at: "2026-10-01T09:30:00Z",
+	});
+	assert.equal(shown.state, "OPEN");
+	assert.match(dated, /Its description, as written:\n```markdown\nAdds the login screen\.\n```/u);
+
+	// A malformed part stays unstated: no time or field is invented for it.
+	const malformed = contextOf({
+		...recorded,
+		body: null,
+		basis: {
+			admission_fields: ["title", 7],
+			admitted_at: "yesterday",
+			other_fields: "NOW",
+			mirror_synced_at: 5,
+		},
+	});
+	const unstated = shownRecord(malformed);
+	assert.ok(isRecord(unstated), malformed);
+	assert.equal(unstated.basis, undefined);
+	assert.doesNotMatch(malformed, /yesterday|"NOW"/u);
+
+	// A stated empty description is none; an omitted or malformed one is unknown, never none.
+	for (const body of [null, ""]) {
+		assert.match(contextOf({ ...recorded, body }), /The record states no description\./u);
+	}
+	for (const record of [recorded, { ...recorded, body: 42 }]) {
+		const unknown = contextOf({
+			...record,
+			title: 42,
+			basis: {
+				admission_fields: ["pr_number", "title", "body"],
+				admitted_at: "2026-10-01T09:00:00Z",
+			},
+		});
+		assert.match(
+			unknown,
+			/The capture does not state the description: it is unknown, not empty\./u,
+		);
+		assert.doesNotMatch(unknown, /states no description/u);
+		const shownUnknown = shownRecord(unknown);
+		assert.ok(isRecord(shownUnknown), unknown);
+		assert.deepEqual(shownUnknown.basis, {
+			admission_fields: ["pr_number"],
+			admitted_at: "2026-10-01T09:00:00Z",
+		});
+		assert.ok(Array.isArray(shownUnknown.notInCapture));
+		assert.ok(shownUnknown.notInCapture.includes("title"));
+	}
+
+	// A record of other work is still left out whole, its times included.
+	const other = contextOf(
+		{ ...recorded, body: null, basis: { admitted_at: "2026-10-01T09:00:00Z" } },
+		{ repositoryFullName: "group/repo", pullRequestNumber: 8 },
+	);
+	assert.match(other, /metadata\.json[^\n]*another pull request than the task/u);
+	assert.doesNotMatch(other, /admitted_at|states no description/u);
 });
 
 void test("a record that is not shown is named with why, never cut or read as empty", (t) => {

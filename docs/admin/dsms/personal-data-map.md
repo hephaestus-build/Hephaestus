@@ -275,7 +275,8 @@ at the source repository by its owner. Sync can still mirror records that remain
 Hephaestus erases its own person records, derived data and collected copies. Person erasure cancels
 affected in-flight attempts and deletes their evidence folders through the evidence-erasure hook.
 The job-folder contract does not change: admission deletes the verified folder, ended attempts have
-a one-hour cleanup grace, and restart cleanup removes abandoned folders. Repository history is not
+a one-hour cleanup grace, and restart cleanup removes abandoned folders. One owner at a time removes a job's
+folders, and cleanup retries a job that another owner holds on its next pass. Repository history is not
 exported as an unfiltered Git object archive.
 
 Workspace purge queues removal of all mounted attempt copies before deleting job rows. The request
