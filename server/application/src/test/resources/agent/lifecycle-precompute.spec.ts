@@ -686,16 +686,21 @@ void test("every authored commit is one record row, however many there are", asy
 			assert.equal(first.context, "0000000 Add step 0 and wire it");
 			// The row cites the line of commits.json that carries the commit's sha.
 			assert.ok(first.line > 0);
-			assert.deepEqual(first.flags, {
-				bare: false,
-				repeat: false,
-				joinedClauses: true,
-				cutOff: false,
-				bodyLines: 0,
-				files: 2,
-				moved: 0,
-				paths: "App/Step0.swift, README.md",
-			});
+			assert.deepEqual(
+				first.flags,
+				slug === "commit-subjects-explain-each-change"
+					? { bare: false, repeat: false, cutOff: false }
+					: {
+							bare: false,
+							repeat: false,
+							joinedClauses: true,
+							cutOff: false,
+							bodyLines: 0,
+							files: 2,
+							moved: 0,
+							paths: "App/Step0.swift, README.md",
+						},
+			);
 			assert.equal(bare.flags.bare, true);
 		} finally {
 			rmSync(root, { recursive: true, force: true });

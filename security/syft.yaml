@@ -1,0 +1,7 @@
+# Owner: scripts/check-release-sbom.ts (SYFT_CONFIG).
+check-for-app-update: false
+file:
+  metadata:
+    selection: all
+    digests:
+      - sha256

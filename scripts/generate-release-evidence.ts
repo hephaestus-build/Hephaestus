@@ -5,6 +5,12 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { syftImageArguments } from "./check-release-sbom.ts";
+import {
+	advisoryFile,
+	componentAdvisories,
+	fetchGoAdvisory,
+} from "./check-release-vulnerabilities.ts";
 import { isSet } from "./lib/env.ts";
 import { isImageIndex, selectPlatformDigest } from "./lib/image-scan.ts";
 import { asRecord, asString, readJsonFile } from "./lib/json.ts";
@@ -175,17 +181,9 @@ export async function captureSubject(subject: Subject, directory: string): Promi
 		}
 	};
 	try {
-		// Scan the registry artefact, never a daemon copy of it: a daemon pull re-serializes an OCI
-		// manifest as Docker schema 2, so the SBOM would record a locally computed manifestDigest instead
-		// of the released one. `--platform` makes Syft fail loudly if the digest is not this platform's.
+		// Every default package cataloguer, plus the file digests component-bound exceptions read.
 		await scan("syft", [
-			"--from",
-			"registry",
-			reference,
-			"--platform",
-			subject.platform,
-			"--scope",
-			"squashed",
+			...syftImageArguments(reference, subject.platform),
 			"-o",
 			`syft-json=${stem}.syft.json`,
 			"-o",
@@ -275,6 +273,11 @@ export async function generateReleaseEvidence(options: {
 		path.join(directory, "vulnerability-policy.json"),
 	);
 	await copyFile(inventoryPath, path.join(directory, "release-images.json"));
+	// Each official Go advisory a component-bound exception names is fetched once for the whole release
+	// and archived, so every subject is judged against the same bytes the bundle keeps.
+	for (const id of componentAdvisories(await readJsonFile("security/vulnerability-policy.json"))) {
+		await writeFile(path.join(directory, advisoryFile(id)), await fetchGoAdvisory(id));
+	}
 	return manifest;
 }
 

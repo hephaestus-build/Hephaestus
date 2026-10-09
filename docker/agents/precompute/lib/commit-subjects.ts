@@ -82,6 +82,20 @@ export function subjectFacts(commits: readonly ChangeCommit[]): SubjectFacts[] {
 	return facts;
 }
 
+/** Subject clarity uses the words and their shapes, not a commit's code or scope. */
+export function subjectRows(facts: readonly SubjectFacts[], contextReference: string): Hint[] {
+	return facts
+		.filter((fact) => !fact.merge)
+		.map((fact) => ({
+			file: contextFile(contextReference, "commits.json"),
+			line: fact.line,
+			pattern: "commit",
+			context: `${fact.sha} ${fact.subject}`,
+			inDiff: false,
+			flags: { bare: fact.bare, repeat: fact.repeat, cutOff: fact.cutOff },
+		}));
+}
+
 /** Shown per commit; the rest are counted, so a long rename cannot push the edited files out of view. */
 const LISTED_FILES = 8;
 
