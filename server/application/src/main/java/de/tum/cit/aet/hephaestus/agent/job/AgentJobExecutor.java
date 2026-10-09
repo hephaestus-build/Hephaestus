@@ -888,7 +888,8 @@ public class AgentJobExecutor {
                     preparedInputs.directories(),
                     agentSpec,
                     snapshot,
-                    workDeadline);
+                    workDeadline,
+                    job.getRetryCount());
             persistProvenanceDigests(
                     jobId,
                     agentSpec.promptDigest(),
@@ -1031,7 +1032,8 @@ public class AgentJobExecutor {
             List<EvidenceDirectory> handlerDirectories,
             PracticeSandboxSpec agentSpec,
             ConfigSnapshot snapshot,
-            Instant workDeadline) {
+            Instant workDeadline,
+            int attempt) {
         Map<String, byte[]> allInputFiles = new HashMap<>(handlerFiles);
         allInputFiles.putAll(agentSpec.inputFiles());
         Map<String, String> environment = new HashMap<>(agentSpec.environment());
@@ -1054,7 +1056,8 @@ public class AgentJobExecutor {
                 allInputFiles,
                 handlerFilesOnDisk,
                 handlerDirectories,
-                agentSpec.outputPath());
+                agentSpec.outputPath(),
+                attempt);
     }
 
     private boolean handleCancellation(UUID jobId, AgentJob job) {

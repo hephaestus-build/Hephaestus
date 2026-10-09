@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
@@ -36,6 +38,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -213,6 +216,143 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             }
         }
         return bytes.toByteArray();
+    }
+
+    @Nested
+    class SupersededAttempts {
+
+        private static final String OWNER = "default";
+
+        private static DockerOperations.ContainerInfo container(String id, Map<String, String> labels) {
+            return new DockerOperations.ContainerInfo(id, id, labels, "running", null);
+        }
+
+        private static Map<String, String> attemptLabels(String jobId, String attempt) {
+            return Map.of(SandboxLabels.OWNER, OWNER, SandboxLabels.JOB_ID, jobId, SandboxLabels.JOB_ATTEMPT, attempt);
+        }
+
+        private SandboxSpec attemptSpec(int attempt) {
+            SandboxSpec spec = createSpec();
+            return new SandboxSpec(
+                    spec.jobId(),
+                    spec.image(),
+                    spec.command(),
+                    spec.environment(),
+                    spec.networkPolicy(),
+                    spec.resourceLimits(),
+                    spec.securityProfile(),
+                    spec.inputFiles(),
+                    spec.inputFilesOnDisk(),
+                    spec.inputDirectories(),
+                    spec.outputPath(),
+                    attempt);
+        }
+
+        @Test
+        void shouldRemoveOnlyEarlierAttemptsOfThisJobBeforeCreatingItsNetwork() throws Exception {
+            String job = JOB_ID.toString();
+            Map<String, String> sessionLabels = new HashMap<>(attemptLabels(job, "1"));
+            sessionLabels.put(SandboxLabels.SESSION_ID, UUID.randomUUID().toString());
+            Map<String, String> interactiveLabels = new HashMap<>(attemptLabels(job, "1"));
+            interactiveLabels.put(SandboxLabels.KIND, SandboxLabels.KIND_INTERACTIVE);
+            when(containerManager.listManagedContainers())
+                    .thenReturn(List.of(
+                            container("earlier", attemptLabels(job, "1")),
+                            container("current", attemptLabels(job, "2")),
+                            container("newer", attemptLabels(job, "3")),
+                            container("legacy", Map.of(SandboxLabels.OWNER, OWNER, SandboxLabels.JOB_ID, job)),
+                            container("malformed", attemptLabels(job, "1x")),
+                            container("negative", attemptLabels(job, "-1")),
+                            container("overflow", attemptLabels(job, "99999999999")),
+                            container(
+                                    "other-job", attemptLabels(UUID.randomUUID().toString(), "1")),
+                            container(
+                                    "other-owner",
+                                    Map.of(
+                                            SandboxLabels.OWNER,
+                                            "other",
+                                            SandboxLabels.JOB_ID,
+                                            job,
+                                            SandboxLabels.JOB_ATTEMPT,
+                                            "1")),
+                            container("session", sessionLabels),
+                            container("interactive", interactiveLabels)));
+            Map<String, String> labels = attemptLabels(job, "2");
+            when(securityPolicy.buildLabels(JOB_ID, 2)).thenReturn(labels);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
+            when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
+            when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
+            stubContainers();
+            stubRuntimeExit(0, false, Map.of("result.json", "{}".getBytes(UTF_8)));
+            when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
+
+            sandboxAdapter.execute(attemptSpec(2));
+
+            InOrder order = inOrder(containerManager, networkManager);
+            order.verify(containerManager).forceRemove("earlier");
+            order.verify(networkManager).createJobNetwork(JOB_ID, false, labels);
+            for (String protectedId : List.of(
+                    "current",
+                    "newer",
+                    "legacy",
+                    "malformed",
+                    "negative",
+                    "overflow",
+                    "other-job",
+                    "other-owner",
+                    "session",
+                    "interactive")) {
+                verify(containerManager, never()).forceRemove(protectedId);
+            }
+            assertThat(runtimeContainer.get().labels()).containsEntry(SandboxLabels.JOB_ATTEMPT, "2");
+        }
+
+        @Test
+        void shouldFailTheAttemptWithoutANetworkWhenAnEarlierAttemptCannotBeRemoved() {
+            when(securityPolicy.buildLabels(JOB_ID, 2)).thenReturn(attemptLabels(JOB_ID.toString(), "2"));
+            when(containerManager.listManagedContainers())
+                    .thenReturn(List.of(container("earlier", attemptLabels(JOB_ID.toString(), "1"))));
+            doThrow(new IllegalStateException("daemon refused"))
+                    .when(containerManager)
+                    .forceRemove("earlier");
+
+            assertThatThrownBy(() -> sandboxAdapter.execute(attemptSpec(2))).isInstanceOf(SandboxException.class);
+
+            verify(networkManager, never()).createJobNetwork(any(), anyBoolean(), any());
+            verify(containerManager, never()).createContainer(any());
+        }
+
+        @Test
+        void shouldLeaveOtherContainersAloneWhenTheRequestHoldsNoClaim() throws Exception {
+            setupHappyPath();
+
+            sandboxAdapter.execute(createSpec());
+
+            verify(containerManager, never()).listManagedContainers();
+        }
+
+        @Test
+        void shouldSkipReclamationWhenTheClaimIsTheFirstAttempt() throws Exception {
+            when(securityPolicy.buildLabels(JOB_ID, 0)).thenReturn(attemptLabels(JOB_ID.toString(), "0"));
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
+            when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
+            when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
+            stubContainers();
+            stubRuntimeExit(0, false, Map.of("result.json", "{}".getBytes(UTF_8)));
+            when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
+
+            sandboxAdapter.execute(attemptSpec(0));
+
+            verify(containerManager, never()).listManagedContainers();
+            assertThat(runtimeContainer.get().labels()).containsEntry(SandboxLabels.JOB_ATTEMPT, "0");
+        }
+
+        @Test
+        void shouldRejectANegativeClaimBeforeTouchingDocker() {
+            assertThatThrownBy(() -> attemptSpec(-1)).isInstanceOf(IllegalArgumentException.class);
+
+            verifyNoInteractions(containerManager, networkManager);
+        }
     }
 
     @Nested

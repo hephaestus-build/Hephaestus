@@ -168,6 +168,10 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
             assertThat(labels).containsEntry("hephaestus.sandbox-owner", "default");
             assertThat(labels).doesNotContainKey("hephaestus.managed");
             assertThat(labels).containsEntry("hephaestus.job-id", jobId.toString());
+            assertThat(labels).doesNotContainKey(SandboxLabels.JOB_ATTEMPT);
+            assertThat(securityPolicy.buildLabels(jobId, 3))
+                    .containsEntry("hephaestus.job-id", jobId.toString())
+                    .containsEntry(SandboxLabels.JOB_ATTEMPT, "3");
         }
     }
 
