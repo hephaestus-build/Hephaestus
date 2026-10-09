@@ -33,7 +33,7 @@ RUN --mount=type=secret,id=sentry_auth_token,required=false \
     find webapp/dist -name '*.map' -delete && \
     ! find webapp/dist -name '*.map' -print -quit | grep -q .
 
-FROM nginx:stable-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c AS os-packages
+FROM nginx:1.30.5-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94 AS os-packages
 # nginx's upstream package repository is not persisted, so this upgrades distribution packages only.
 RUN apk upgrade --no-cache && apk add --no-cache bash sed grep curl
 

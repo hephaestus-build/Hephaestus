@@ -51,6 +51,11 @@ function compare(left: [number, number, number], right: [number, number, number]
 	return 0;
 }
 
+/** Compare release cores, including prereleases of a new evidence contract. */
+export function releaseAtLeast(release: string, firstRelease: string): boolean {
+	return compare(versionCore(release), versionCore(firstRelease)) >= 0;
+}
+
 export function parseReleaseIdentities(value: unknown): ReleaseIdentity[] {
 	const document = asRecord(value, "release identities");
 	if (document.schemaVersion !== 1) {

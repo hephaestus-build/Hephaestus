@@ -432,7 +432,9 @@ jobs:
               # re-derives from the imports and asserts against this list.
               - 'security/release-images.json'
               - 'security/vulnerability-policy.json'
+              - 'security/syft.yaml'
               - 'scripts/scan-upstream-images.ts'
+              - 'scripts/check-release-sbom.ts'
               - 'scripts/check-release-vulnerabilities.ts'
               - 'scripts/lib/env.ts'
               - 'scripts/lib/image-scan.ts'
@@ -497,7 +499,6 @@ jobs:
         needs.detect-changes.outputs.unfiltered == 'true'
       )
     permissions:
-      checks: write
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -523,7 +524,7 @@ jobs:
           actionlint_flags: ${{ steps.native.outputs.compatible }}
           fail_level: error
           filter_mode: nofilter
-          reporter: github-check
+          reporter: github-annotations
 
   # A required context as well; the note above `workflow-lint` says why filtering one is safe.
   zizmor:
@@ -771,7 +772,7 @@ jobs:
 
       - uses: ./.github/actions/setup-release-security-tools
         with:
-          install-syft: "false"
+          install-syft: "true"
 
       # A blocking gate inherits Trivy's database availability as a hard dependency, so the
       # retries and the mirror fallback live in one action rather than in each caller.
@@ -994,7 +995,7 @@ jobs:
           node scripts/verify-release-evidence.ts evidence --write-validation
           # Again without --write-validation, which re-derives the validation documents and fails if
           # they changed: the release runs the verifier twice for the same reason.
-          node scripts/verify-release-evidence.ts evidence
+          node scripts/verify-release-evidence.ts evidence --verify-capture
 
       # An exit status cannot say which subject carries which finding.
       - name: Upload the evidence bundle
