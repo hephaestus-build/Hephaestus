@@ -110,7 +110,12 @@ import {
 	outputTokensOf,
 	type UsageReport,
 } from "./pi-runner-usage.ts";
-import { stopSession } from "./pi-session-lifecycle.ts";
+import {
+	REVIEW_SESSION_ENTRY,
+	type ReviewSessionBinding,
+	type SessionPhase,
+	stopSession,
+} from "./pi-session-lifecycle.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 import { hasText, isBlank } from "./pi-text.ts";
 import { prepareObservationArguments } from "./pi-tool-arguments.ts";
@@ -3992,6 +3997,26 @@ async function main() {
 		`[pi-runner] reasoning effort: ${providerConfig.reasoningEffort?.toLowerCase() ?? "provider default"}`,
 	);
 
+	/**
+	 * A native session file under .sessions, bound to what it reviewed by one custom entry. The SDK keeps custom
+	 * entries out of the model's context; the worker retains the file for a day as a debug transcript.
+	 */
+	function nativeSessionManager(phase: SessionPhase, practiceSlug: string | null) {
+		const manager = SessionManager.create(CWD, `${CWD}/.sessions`);
+		const binding: ReviewSessionBinding = {
+			phase,
+			practiceSlug,
+			practiceRevisionId:
+				practiceIndex.find((practice) => practice.slug === practiceSlug)?.revisionId ?? null,
+			model: model.id,
+			jobId: typeof taskEnvelope.jobId === "string" ? taskEnvelope.jobId : null,
+			workspaceId: typeof taskEnvelope.workspaceId === "number" ? taskEnvelope.workspaceId : null,
+			openedAt: new Date().toISOString(),
+		};
+		manager.appendCustomEntry(REVIEW_SESSION_ENTRY, binding);
+		return manager;
+	}
+
 	const compositionRequest = loadCompositionRequest();
 	const streamUsage = newUsageLedger();
 	let providerFailures = 0;
@@ -4165,6 +4190,7 @@ async function main() {
 	 * tool. Reported native assistant usage events go to one stream ledger across these sessions.
 	 */
 	async function openSession(
+		phase: SessionPhase,
 		tools: string[],
 		customTools: SessionOptions["customTools"],
 		resourceLoader?: SessionOptions["resourceLoader"],
@@ -4174,7 +4200,7 @@ async function main() {
 			agentDir: AGENT_DIR,
 			tools,
 			customTools,
-			sessionManager: SessionManager.create(CWD, `${CWD}/.sessions`),
+			sessionManager: nativeSessionManager(phase, activePractice),
 			settingsManager,
 			resourceLoader: resourceLoader ?? (await assessmentLoader()),
 			modelRuntime,
@@ -4335,6 +4361,7 @@ async function main() {
 				// The nudge names the session's practice, so a later session may be told again.
 				trace.askedToRecord = false;
 				const opened = await openSession(
+					"practice",
 					[...PRACTICE_TOOLS, "report_observation"],
 					[reportObservationTool],
 				);
@@ -4662,7 +4689,7 @@ async function main() {
 					restore,
 				),
 			],
-			sessionManager: SessionManager.create(CWD, `${CWD}/.sessions`),
+			sessionManager: nativeSessionManager("public-review", null),
 			settingsManager,
 			resourceLoader: reviewLoader,
 			modelRuntime,
@@ -4889,6 +4916,7 @@ async function main() {
 		{
 			currentTurnSlugs = [];
 			const opened = await openSession(
+				"private-feedback",
 				[...PRACTICE_TOOLS, "report_feedback"],
 				[feedbackTool],
 				privateLoader,

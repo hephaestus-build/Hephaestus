@@ -23,14 +23,19 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
@@ -38,6 +43,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Component;
@@ -59,6 +65,13 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     private final ObjectProvider<AgentJobExecutor> executor;
     private final ObjectProvider<AgentJobLifecycleService> lifecycles;
     private static final ThreadLocal<ActiveCapture> ACTIVE = new ThreadLocal<>();
+    /** Whether a receipt indexes the receipts of every job whose rows its capture copied. */
+    private static final String DEPENDENCIES = "dependencies";
+
+    private static final String COMPLETE = "COMPLETE";
+    private static final String UNKNOWN = "UNKNOWN";
+    private static final RowMapper<CopiedRow> COPIED_ROW_MAPPER = (rs, row) ->
+            new CopiedRow(Objects.requireNonNull(rs.getObject(1, UUID.class)), rs.getLong(2), rs.getLong(3));
     private @Nullable UUID localStoreId;
 
     public EvidenceFolderPersonDataCatalog(
@@ -157,6 +170,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     if (discarded != 1) throw new IllegalStateException("Evidence capture ownership changed");
                     throw new IllegalStateException("Copied evidence contains an erased native identity");
                 }
+                indexDependencies(capture);
                 updateReceipt(capture);
                 capture.lease().shareWithRemovals();
             }
@@ -185,10 +199,167 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     .set("identities", mapper.valueToTree(capture.provenance().identities()));
             capture.receipt()
                     .set("repositories", mapper.valueToTree(capture.provenance().repositoryIds()));
+            indexDependencies(capture);
             updateReceipt(capture);
         } finally {
             ACTIVE.remove();
         }
+    }
+
+    /**
+     * Unions the receipts of the jobs whose rows this capture copied. Only a receipt that itself indexed every job it
+     * copied stands for its dependencies; a legacy, missing, erased or unfinished one leaves this receipt UNKNOWN and
+     * is never upgraded later. The identities found here index erasure only: capture refusal stays on direct copies.
+     */
+    private void indexDependencies(ActiveCapture capture) {
+        var sources = capture.provenance().copiedJobIds().stream()
+                .filter(job -> !job.equals(capture.jobId()))
+                .toList();
+        var dependencies = dependencies(capture.admission().jdbc(), capture.workspaceId(), sources);
+        var identities = new LinkedHashSet<JsonNode>();
+        capture.receipt().path("identities").forEach(identities::add);
+        identities.addAll(dependencies.identities());
+        var repositories = new LinkedHashSet<JsonNode>();
+        capture.receipt().path("repositories").forEach(repositories::add);
+        repositories.addAll(dependencies.repositories());
+        capture.receipt().set("identities", mapper.valueToTree(identities));
+        capture.receipt().set("repositories", mapper.valueToTree(repositories));
+        capture.receipt().set("copiedJobs", mapper.valueToTree(sources));
+        capture.receipt().put(DEPENDENCIES, dependencies.complete() ? COMPLETE : UNKNOWN);
+    }
+
+    private record Dependencies(boolean complete, List<JsonNode> identities, List<JsonNode> repositories) {}
+
+    private Dependencies dependencies(JdbcOperations controls, long workspaceId, Collection<UUID> sources) {
+        if (sources.isEmpty()) return new Dependencies(true, List.of(), List.of());
+        var receipts = controls.query(
+                """
+            SELECT job_id,state,payload::text FROM person_evidence_copy
+            WHERE workspace_id=? AND job_id=ANY(?)
+            """,
+                (rs, row) -> new SourceReceipt(
+                        Objects.requireNonNull(rs.getObject(1, UUID.class)),
+                        Objects.requireNonNull(rs.getString(2)),
+                        mapper.readTree(Objects.requireNonNull(rs.getString(3)))),
+                workspaceId,
+                new SqlArrayValue("uuid", sources.toArray()));
+        boolean complete = receipts.stream()
+                        .map(SourceReceipt::jobId)
+                        .collect(Collectors.toSet())
+                        .containsAll(sources)
+                && receipts.stream()
+                        .allMatch(receipt -> receipt.state().equals("READY")
+                                && COMPLETE.equals(
+                                        receipt.payload().path(DEPENDENCIES).asString()));
+        var identities = new ArrayList<JsonNode>();
+        var repositories = new ArrayList<JsonNode>();
+        for (var receipt : receipts) {
+            receipt.payload().path("identities").forEach(identities::add);
+            receipt.payload().path("repositories").forEach(repositories::add);
+        }
+        return new Dependencies(complete, identities, repositories);
+    }
+
+    private record SourceReceipt(UUID jobId, String state, JsonNode payload) {}
+
+    private record CopiedRow(UUID sourceJob, long recipient, long about) {}
+
+    /**
+     * A read that the runtime receives after its capture was frozen. Copy admission is held from before the read
+     * selects its rows until their people and source receipts are unioned into the attempt's READY receipt, so an
+     * erasure either precedes the read or finds this job. A receipt that is no longer READY is never revived; the read
+     * is answered as before and the attempt keeps no transcript.
+     */
+    public <T> T indexLateRead(
+            UUID jobId,
+            long workspaceId,
+            int attempt,
+            Supplier<T> read,
+            Function<T, Set<UUID>> observationIds,
+            Function<T, Set<UUID>> feedbackIds) {
+        try (var admission = fence.capture()) {
+            T result = read.get();
+            var observations = observationIds.apply(result);
+            var feedback = feedbackIds.apply(result);
+            var controls = admission.jdbc();
+            var rows = new ArrayList<CopiedRow>();
+            if (!observations.isEmpty())
+                rows.addAll(controls.query(
+                        "SELECT agent_job_id,about_user_id,about_user_id FROM observation WHERE workspace_id=? AND id=ANY(?)",
+                        COPIED_ROW_MAPPER,
+                        workspaceId,
+                        new SqlArrayValue("uuid", observations.toArray())));
+            if (!feedback.isEmpty())
+                rows.addAll(controls.query(
+                        "SELECT agent_job_id,recipient_user_id,about_user_id FROM feedback WHERE workspace_id=? AND id=ANY(?)",
+                        COPIED_ROW_MAPPER,
+                        workspaceId,
+                        new SqlArrayValue("uuid", feedback.toArray())));
+            int found = rows.size();
+            var sources = new HashSet<UUID>();
+            var users = new HashSet<Long>();
+            for (var row : rows) {
+                sources.add(row.sourceJob());
+                users.add(row.recipient());
+                users.add(row.about());
+            }
+            sources.remove(jobId);
+            var dependencies = dependencies(controls, workspaceId, sources);
+            List<PersonCopyIdentity> direct;
+            try (var frame = recorder.begin()) {
+                users.forEach(recorder::recordUser);
+                direct = frame.identities();
+            }
+            var identities = new ArrayList<JsonNode>(dependencies.identities());
+            direct.forEach(identity -> identities.add(mapper.valueToTree(identity)));
+            // A row the read returned that this lookup no longer finds has no provenance to vouch for it.
+            boolean complete = dependencies.complete() && found == observations.size() + feedback.size();
+            // One statement: concurrent unions serialize on the row, and a receipt only ever gains people.
+            controls.update(
+                    """
+                UPDATE person_evidence_copy SET payload=jsonb_set(jsonb_set(jsonb_set(jsonb_set(payload,
+                    '{identities}',(SELECT COALESCE(jsonb_agg(DISTINCT e),'[]'::jsonb) FROM jsonb_array_elements(
+                        COALESCE(payload->'identities','[]'::jsonb) || CAST(? AS jsonb)) e)),
+                    '{repositories}',(SELECT COALESCE(jsonb_agg(DISTINCT e),'[]'::jsonb) FROM jsonb_array_elements(
+                        COALESCE(payload->'repositories','[]'::jsonb) || CAST(? AS jsonb)) e)),
+                    '{copiedJobs}',(SELECT COALESCE(jsonb_agg(DISTINCT e),'[]'::jsonb) FROM jsonb_array_elements(
+                        COALESCE(payload->'copiedJobs','[]'::jsonb) || CAST(? AS jsonb)) e)),
+                    '{dependencies}',CASE WHEN ? AND payload->>'dependencies'='COMPLETE'
+                        THEN '"COMPLETE"'::jsonb ELSE '"UNKNOWN"'::jsonb END)
+                WHERE job_id=? AND workspace_id=? AND store_id=CAST(? AS uuid) AND state='READY'
+                  AND payload->>'attempt'=?
+                """,
+                    mapper.writeValueAsString(identities),
+                    mapper.writeValueAsString(dependencies.repositories()),
+                    mapper.writeValueAsString(sources.stream().sorted().toList()),
+                    complete,
+                    jobId,
+                    workspaceId,
+                    storeId().toString(),
+                    Integer.toString(attempt));
+            return result;
+        }
+    }
+
+    /** Whether this store may keep the attempt's debug transcript. */
+    public enum TraceCustody {
+        /** The attempt's READY receipt indexes every person its copied rows may name. */
+        INDEXED,
+        /** The receipt is READY, but a copied row depends on a receipt that cannot vouch for its own copies. */
+        UNINDEXED_DEPENDENCY,
+        /** This store holds no READY receipt for the attempt: it was erased, purged, or belongs elsewhere. */
+        NOT_HELD
+    }
+
+    public TraceCustody traceCustody(UUID jobId, long workspaceId, int attempt) {
+        if (!Files.exists(layout.root().resolve(".person-evidence-store-id"))) return TraceCustody.NOT_HELD;
+        var dependencies = jdbc.queryForList(
+                """
+            SELECT COALESCE(payload->>'dependencies','') FROM person_evidence_copy
+            WHERE job_id=? AND workspace_id=? AND store_id=CAST(? AS uuid) AND state='READY' AND payload->>'attempt'=?
+            """, String.class, jobId, workspaceId, storeId().toString(), Integer.toString(attempt));
+        if (dependencies.size() != 1) return TraceCustody.NOT_HELD;
+        return COMPLETE.equals(dependencies.getFirst()) ? TraceCustody.INDEXED : TraceCustody.UNINDEXED_DEPENDENCY;
     }
 
     private ActiveCapture requireCapture(AgentJob job) {

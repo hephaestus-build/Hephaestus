@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicReviewEligibility;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
@@ -88,6 +89,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     private final StagedArtifactNames artifactNames;
     private final ObjectMapper objectMapper;
     private final PublicReviewEligibility publicReviewEligibility;
+    private final PersonDataCopyRecorder personCopies;
 
     public ReviewHistoryContentSource(
             ObservationRepository observationRepository,
@@ -100,7 +102,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             IssueRepository issueRepository,
             StagedArtifactNames artifactNames,
             ObjectMapper objectMapper,
-            PublicReviewEligibility publicReviewEligibility) {
+            PublicReviewEligibility publicReviewEligibility,
+            PersonDataCopyRecorder personCopies) {
         this.observationRepository = observationRepository;
         this.feedbackRepository = feedbackRepository;
         this.feedbackObservationRepository = feedbackObservationRepository;
@@ -112,6 +115,18 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         this.artifactNames = artifactNames;
         this.objectMapper = objectMapper;
         this.publicReviewEligibility = publicReviewEligibility;
+        this.personCopies = personCopies;
+    }
+
+    /**
+     * A copied row speaks about its people and may quote whoever its source job copied; that job's own receipt indexes
+     * them. Recorded before the row is formatted.
+     */
+    private void recordCopy(UUID sourceJob, @Nullable Long... people) {
+        personCopies.recordCopiedJob(sourceJob);
+        for (Long person : people) {
+            if (person != null) personCopies.recordUser(person);
+        }
     }
 
     @Override
@@ -571,6 +586,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                                 (first, second) -> first));
         ArrayNode items = root.putArray("prepared");
         for (Feedback f : queued) {
+            recordCopy(f.getAgentJobId(), f.getRecipientUserId(), f.getAboutUserId());
             ObjectNode node = items.addObject();
             node.put("threadKey", f.getThreadKey());
             node.put("practiceSlug", practices.get(f.getId()));
@@ -597,6 +613,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                         .toList());
         ArrayNode items = root.putArray("observations");
         for (Observation o : observations) {
+            recordCopy(o.getAgentJobId(), o.getAboutUserId());
             ObjectNode node = items.addObject();
             // The handle delivered feedback's basedOn names; a trace, not evidence that two observations agree.
             node.put("id", o.getId().toString());
@@ -638,6 +655,10 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                 delivered.stream().map(ReviewHistoryContentSource::referenceOf).toList());
         ArrayNode items = root.putArray("feedback");
         for (Feedback f : delivered) {
+            recordCopy(f.getAgentJobId(), f.getRecipientUserId(), f.getAboutUserId());
+            for (Observation o : shown.basedOn().getOrDefault(f.getId(), List.of())) {
+                recordCopy(o.getAgentJobId(), o.getAboutUserId());
+            }
             ObjectNode node = items.addObject();
             node.put("id", f.getId().toString());
             node.put("channel", f.getChannel() == null ? null : f.getChannel().name());

@@ -54,6 +54,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -116,6 +117,11 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
         lenient()
                 .when(transactionManager.getTransaction(any()))
                 .thenAnswer(invocation -> new SimpleTransactionStatus());
+        // The index of a late read is the catalog's (EvidenceFolderPersonErasureIntegrationTest); here it answers the
+        // read.
+        lenient()
+                .when(evidenceFiles.indexLateRead(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.<Supplier<?>>getArgument(1).get());
         for (AgentJobType type : AgentJobType.values()) {
             JobTypeHandler handler = mock(JobTypeHandler.class);
             lenient().when(handler.jobType()).thenReturn(type);

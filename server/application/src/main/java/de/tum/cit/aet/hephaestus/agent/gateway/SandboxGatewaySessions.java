@@ -11,17 +11,23 @@ import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -30,17 +36,29 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 @ConditionalOnWorkerRole
 public class SandboxGatewaySessions {
+    private static final Logger log = LoggerFactory.getLogger(SandboxGatewaySessions.class);
+
     public static final long WORKSPACE_BYTE_BUDGET = 512L * 1024 * 1024;
     private final long workspaceByteBudget;
+    private final List<SandboxResultListener> listeners;
+
+    public SandboxGatewaySessions() {
+        this(WORKSPACE_BYTE_BUDGET, List.of());
+    }
 
     @Autowired
-    public SandboxGatewaySessions() {
-        this(WORKSPACE_BYTE_BUDGET);
+    public SandboxGatewaySessions(ObjectProvider<SandboxResultListener> listeners) {
+        this(WORKSPACE_BYTE_BUDGET, listeners.orderedStream().toList());
     }
 
     SandboxGatewaySessions(long workspaceByteBudget) {
+        this(workspaceByteBudget, List.of());
+    }
+
+    SandboxGatewaySessions(long workspaceByteBudget, List<SandboxResultListener> listeners) {
         if (workspaceByteBudget <= 0) throw new IllegalArgumentException("Workspace budget must be positive");
         this.workspaceByteBudget = workspaceByteBudget;
+        this.listeners = List.copyOf(listeners);
     }
 
     public long workspaceByteBudget() {
@@ -55,7 +73,33 @@ public class SandboxGatewaySessions {
     }
 
     public Session register(UUID id, String token, Path inputTar, String outputRoot) throws IOException {
-        var session = new Session(id, token, inputTar, outputRoot);
+        return register(id, token, inputTar, outputRoot, List.of());
+    }
+
+    /**
+     * A review attempt's session. Each listener binds the attempt now, before its sandbox exists, so an upload is only
+     * ever handled as the attempt it was launched for. A listener that cannot bind does not stop the launch.
+     */
+    public Session registerAttempt(
+            UUID jobId, int attempt, String image, String token, Path inputTar, String outputRoot) throws IOException {
+        var bound = new ArrayList<Consumer<Map<String, byte[]>>>();
+        for (SandboxResultListener listener : listeners) {
+            try {
+                bound.add(listener.bind(jobId, attempt, image));
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "A result listener could not bind job {}: {}",
+                        jobId,
+                        exception.getClass().getSimpleName());
+            }
+        }
+        return register(jobId, token, inputTar, outputRoot, bound);
+    }
+
+    private Session register(
+            UUID id, String token, Path inputTar, String outputRoot, List<Consumer<Map<String, byte[]>>> admitted)
+            throws IOException {
+        var session = new Session(id, token, inputTar, outputRoot, admitted);
         if (sessions.putIfAbsent(id, session) != null) {
             throw new IllegalStateException("Gateway session already exists for this job");
         }
@@ -100,9 +144,13 @@ public class SandboxGatewaySessions {
         private @Nullable GatewayInteractiveChannel interactive;
         private @Nullable Map<String, byte[]> result;
         private byte @Nullable [] resultDigest;
+        private final List<Consumer<Map<String, byte[]>>> admitted;
 
-        private Session(UUID id, String token, Path inputTar, String outputRoot) throws IOException {
+        private Session(
+                UUID id, String token, Path inputTar, String outputRoot, List<Consumer<Map<String, byte[]>>> admitted)
+                throws IOException {
             this.id = id;
+            this.admitted = List.copyOf(admitted);
             this.tokenHash = tokenHash(token);
             this.inputTar = inputTar;
             this.outputRoot = outputRoot;
@@ -238,8 +286,19 @@ public class SandboxGatewaySessions {
                     }
                     result = files;
                     resultDigest = actualDigest;
-                    return new UploadResult(true, etag(actualDigest));
                 }
+                // Before the sandbox is answered, so whatever a listener keeps exists before the attempt can end.
+                for (var listener : admitted) {
+                    try {
+                        listener.accept(files);
+                    } catch (RuntimeException exception) {
+                        log.warn(
+                                "A result listener failed for session {}: {}",
+                                id,
+                                exception.getClass().getSimpleName());
+                    }
+                }
+                return new UploadResult(true, etag(actualDigest));
             } finally {
                 synchronized (this) {
                     uploading = false;

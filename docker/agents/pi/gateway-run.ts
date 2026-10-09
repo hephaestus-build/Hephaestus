@@ -1,10 +1,12 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createReadStream, openAsBlob } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { createReadStream, constants as fsConstants, openAsBlob } from "node:fs";
+import { lstat, mkdir, mkdtemp, open, opendir, rm, writeFile } from "node:fs/promises";
 import { constants, tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+
+import { type FileEntry, parseSessionEntries } from "@earendil-works/pi-coding-agent";
 
 import { present } from "./gateway-capabilities.ts";
 
@@ -104,6 +106,371 @@ export async function upload(
 	}
 }
 
+const BLOCK = 512;
+/** The server refuses a whole result past these (SandboxOutputArchive); a transcript must never cost the result. */
+const RESULT_BYTES = 50 * 1024 * 1024;
+const RESULT_ENTRIES = 10_000;
+const TRACE_BYTES = 7 * 1024 * 1024;
+const TRACE_FILE_BYTES = 2 * 1024 * 1024;
+/** Room kept for the trace directory, its manifest and the end of the archive. */
+const TRACE_RESERVE = 1024 * 1024;
+const REDACTED = Buffer.from("[attempt-credential]", "utf8");
+/** The runner's REVIEW_SESSION_ENTRY (pi-session-lifecycle.ts); the runner sources are not in this image. */
+const REVIEW_SESSION_ENTRY = "hephaestus.review-session";
+const PHASES = new Set(["practice", "public-review", "private-feedback"]);
+const STOP_REASONS = new Set(["stop", "length", "toolUse", "error", "aborted"]);
+/** The tools a review session is given (pi-runner.ts); any other name is counted as "other". */
+const TOOL_NAMES = new Set([
+	"read",
+	"grep",
+	"find",
+	"ls",
+	"bash",
+	"codemode",
+	"read_practice",
+	"report_observation",
+	"report_feedback",
+	"report_review",
+]);
+
+/**
+ * What one session did, as enums and numbers only. The worker keeps this alone when it cannot index every person a
+ * transcript may name, so nothing here is text the session wrote: no arguments, results, prose, paths or error text.
+ */
+export interface SessionSummary {
+	phase: string | null;
+	practiceRevisionId: number | null;
+	entries: number;
+	assistantCalls: number;
+	stopReasons: Record<string, number>;
+	usage: { input: number; output: number; cacheRead: number; cacheWrite: number };
+	toolCalls: Record<string, number>;
+	toolErrors: number;
+	compactions: number;
+}
+
+export interface TraceManifest {
+	schemaVersion: 1;
+	budgetBytes: number;
+	sessionScanTruncated: boolean;
+	sessions: {
+		file: string | null;
+		bytes: number;
+		redacted: boolean;
+		partialLineDropped: boolean;
+		omitted: "oversize" | "budget" | "unreadable" | null;
+		summary: SessionSummary | null;
+	}[];
+}
+
+function count(counts: Record<string, number>, key: string): void {
+	counts[key] = (counts[key] ?? 0) + 1;
+}
+
+/** A sum of the file's token counts that stays an exact integer, whatever the file claims. */
+function addTokens(total: number, value: unknown): number {
+	const tokens = typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+	return Math.min(Number.MAX_SAFE_INTEGER, total + tokens);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** No custom entry's free-form fields enter a summary. */
+function sessionBinding(data: unknown): {
+	phase: string | null;
+	practiceRevisionId: number | null;
+} {
+	if (typeof data !== "object" || data === null) {
+		return { phase: null, practiceRevisionId: null };
+	}
+	const phase = "phase" in data ? data.phase : null;
+	const revision = "practiceRevisionId" in data ? data.practiceRevisionId : null;
+	return {
+		phase: typeof phase === "string" && PHASES.has(phase) ? phase : null,
+		practiceRevisionId:
+			typeof revision === "number" && Number.isSafeInteger(revision) && revision > 0
+				? revision
+				: null,
+	};
+}
+
+function addUsage(totals: SessionSummary["usage"], usage: unknown): void {
+	if (!isRecord(usage)) {
+		return;
+	}
+	for (const bucket of ["input", "output", "cacheRead", "cacheWrite"] as const) {
+		totals[bucket] = addTokens(totals[bucket], bucket in usage ? usage[bucket] : 0);
+	}
+}
+
+function toolNames(contents: unknown): string[] {
+	const list: unknown[] = Array.isArray(contents) ? contents : [];
+	return list.flatMap((content) => {
+		if (
+			typeof content !== "object" ||
+			content === null ||
+			!("type" in content) ||
+			content.type !== "toolCall"
+		) {
+			return [];
+		}
+		const name = "name" in content ? content.name : null;
+		return [typeof name === "string" && TOOL_NAMES.has(name) ? name : "other"];
+	});
+}
+
+/** Reads the native entries through the SDK's own parser; every value kept is an allowlisted enum or a number. */
+export function summarize(entries: FileEntry[]): SessionSummary {
+	const summary: SessionSummary = {
+		phase: null,
+		practiceRevisionId: null,
+		entries: entries.length,
+		assistantCalls: 0,
+		stopReasons: {},
+		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		toolCalls: {},
+		toolErrors: 0,
+		compactions: 0,
+	};
+	for (const entry of entries) {
+		if (entry.type === "custom" && entry.customType === REVIEW_SESSION_ENTRY) {
+			const binding = sessionBinding(entry.data);
+			summary.phase = binding.phase;
+			summary.practiceRevisionId = binding.practiceRevisionId;
+		} else if (entry.type === "compaction") {
+			summary.compactions += 1;
+		} else if (entry.type === "message") {
+			const { message } = entry;
+			if (message.role === "assistant") {
+				summary.assistantCalls += 1;
+				const reason: unknown = message.stopReason;
+				count(
+					summary.stopReasons,
+					typeof reason === "string" && STOP_REASONS.has(reason) ? reason : "other",
+				);
+				addUsage(summary.usage, message.usage);
+				for (const name of toolNames(message.content)) {
+					count(summary.toolCalls, name);
+				}
+			} else if (message.role === "toolResult" && message.isError) {
+				summary.toolErrors += 1;
+			}
+		}
+	}
+	return summary;
+}
+
+function tarBytes(size: number): number {
+	return BLOCK + Math.ceil(size / BLOCK) * BLOCK;
+}
+
+/** What `tar --format=ustar --blocking-factor=1` writes for the directory, end records included. */
+async function footprint(directory: string): Promise<{ bytes: number; entries: number }> {
+	let bytes = 2 * BLOCK;
+	let entries = 0;
+	const visit = async (folder: string) => {
+		bytes += BLOCK;
+		entries += 1;
+		const children = await opendir(folder);
+		for await (const entry of children) {
+			if (bytes >= RESULT_BYTES || entries >= RESULT_ENTRIES) {
+				break;
+			}
+			const child = path.join(folder, entry.name);
+			if (entry.isDirectory()) {
+				await visit(child);
+			} else {
+				const size = entry.isFile() ? await lstat(child) : null;
+				bytes += tarBytes(size?.size ?? 0);
+				entries += 1;
+			}
+		}
+	};
+	await visit(directory);
+	return { bytes, entries };
+}
+
+/** Bounds directory work too: anything beyond the scan is explicitly unknown. */
+const MAX_SESSION_ENTRIES = 1000;
+
+async function sessionFiles(directory: string): Promise<{ files: string[]; truncated: boolean }> {
+	const found: string[] = [];
+	let visited = 0;
+	let truncated = false;
+	const visit = async (folder: string, depth: number) => {
+		const attributes = await lstat(folder).catch(() => null);
+		const entries =
+			attributes !== null && attributes.isDirectory()
+				? await opendir(folder).catch(() => null)
+				: null;
+		if (entries === null) {
+			truncated = true;
+			return;
+		}
+		for await (const entry of entries) {
+			if (visited >= MAX_SESSION_ENTRIES) {
+				truncated = true;
+				break;
+			}
+			visited += 1;
+			const child = path.join(folder, entry.name);
+			if (entry.isDirectory() && depth < 2) {
+				await visit(child, depth + 1);
+			} else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
+				found.push(child);
+			}
+			if (truncated) {
+				break;
+			}
+		}
+	};
+	await visit(directory, 0);
+	return { files: found.toSorted(), truncated };
+}
+
+/** A regular file read whole, never through a link, or "oversize" past the limit. */
+async function readBounded(file: string, limit: number): Promise<Buffer | "oversize"> {
+	const handle = await open(file, fsConstants.O_NOFOLLOW);
+	try {
+		const stat = await handle.stat();
+		if (!stat.isFile()) {
+			throw new Error("not a regular file");
+		}
+		if (stat.size > limit) {
+			return "oversize";
+		}
+		// One read may return fewer bytes than asked for; read until the end or one byte past the limit.
+		const buffer = Buffer.alloc(limit + 1);
+		let filled = 0;
+		while (filled <= limit) {
+			const { bytesRead } = await handle.read(buffer, filled, limit + 1 - filled, filled);
+			if (bytesRead === 0) {
+				break;
+			}
+			filled += bytesRead;
+		}
+		return filled > limit ? "oversize" : buffer.subarray(0, filled);
+	} finally {
+		await handle.close();
+	}
+}
+
+/** Every literal occurrence of the attempt credential replaced, byte for byte elsewhere. */
+function redact(bytes: Buffer, secret: Buffer): { bytes: Buffer; redacted: boolean } {
+	const parts: Buffer[] = [];
+	let from = 0;
+	for (let at = bytes.indexOf(secret, from); at !== -1; at = bytes.indexOf(secret, from)) {
+		parts.push(bytes.subarray(from, at), REDACTED);
+		from = at + secret.length;
+	}
+	if (from === 0) {
+		return { bytes, redacted: false };
+	}
+	parts.push(bytes.subarray(from));
+	return { bytes: Buffer.concat(parts), redacted: true };
+}
+
+/** A process stopped mid-write leaves a torn last line; only whole native entries are kept. */
+function wholeLines(bytes: Buffer): { bytes: Buffer; dropped: boolean } {
+	if (bytes.length === 0 || bytes.at(-1) === 0x0a) {
+		return { bytes, dropped: false };
+	}
+	return { bytes: bytes.subarray(0, bytes.lastIndexOf(0x0a) + 1), dropped: true };
+}
+
+/**
+ * Copies the native session files into out/traces within what the result archive has left, with a manifest of what
+ * was copied, omitted and summarized. Never throws: on any failure out/traces is removed and the result goes as is.
+ */
+export async function collectTraces(
+	sessionsDirectory: string,
+	outDirectory: string,
+	secret: string,
+): Promise<void> {
+	const tracesDirectory = path.join(outDirectory, "traces");
+	try {
+		// Anything already there was written in the sandbox, not by this collector.
+		await rm(tracesDirectory, { recursive: true, force: true });
+		const used = await footprint(outDirectory);
+		const room = RESULT_BYTES - used.bytes - TRACE_RESERVE;
+		const maxFiles = RESULT_ENTRIES - used.entries - 2;
+		if (room <= 0 || maxFiles <= 0) {
+			return;
+		}
+		const budgetBytes = Math.min(TRACE_BYTES, room);
+		await mkdir(tracesDirectory);
+		const secretBytes = Buffer.from(secret, "utf8");
+		const found = await sessionFiles(sessionsDirectory);
+		const manifest: TraceManifest = {
+			schemaVersion: 1,
+			budgetBytes,
+			sessionScanTruncated: found.truncated,
+			sessions: [],
+		};
+		let spent = 0;
+		let copied = 0;
+		for (const file of found.files) {
+			let read: Buffer | "oversize";
+			try {
+				read = await readBounded(file, TRACE_FILE_BYTES);
+			} catch {
+				manifest.sessions.push({
+					file: null,
+					bytes: 0,
+					redacted: false,
+					partialLineDropped: false,
+					omitted: "unreadable",
+					summary: null,
+				});
+				continue;
+			}
+			if (read === "oversize") {
+				const details = await lstat(file);
+				manifest.sessions.push({
+					file: null,
+					bytes: details.size,
+					redacted: false,
+					partialLineDropped: false,
+					omitted: "oversize",
+					summary: null,
+				});
+				continue;
+			}
+			const whole = wholeLines(read);
+			const guarded = redact(whole.bytes, secretBytes);
+			const summary = summarize(parseSessionEntries(guarded.bytes.toString("utf8")));
+			const fits = copied < maxFiles && spent + tarBytes(guarded.bytes.length) <= budgetBytes;
+			const name = fits ? `${String(copied + 1).padStart(4, "0")}.jsonl` : null;
+			if (name !== null) {
+				await writeFile(path.join(tracesDirectory, name), guarded.bytes, { flag: "wx" });
+				spent += tarBytes(guarded.bytes.length);
+				copied += 1;
+			}
+			manifest.sessions.push({
+				file: name,
+				bytes: read.length,
+				redacted: guarded.redacted,
+				partialLineDropped: whole.dropped,
+				omitted: name === null ? "budget" : null,
+				summary,
+			});
+		}
+		const text = JSON.stringify(manifest);
+		if (tarBytes(Buffer.byteLength(text)) + BLOCK > TRACE_RESERVE) {
+			throw new Error("the transcript manifest exceeds its reserve");
+		}
+		await writeFile(path.join(tracesDirectory, "manifest.json"), text, { flag: "wx" });
+	} catch (error) {
+		// The kind of failure only: a message may quote a path or a session's bytes.
+		console.error(
+			`session transcripts were not collected: ${error instanceof Error ? error.name : "unknown error"}`,
+		);
+		await rm(tracesDirectory, { recursive: true, force: true }).catch(() => undefined);
+	}
+}
+
 async function main() {
 	const [command, ...args] = process.argv.slice(2);
 	const endpoint = process.env.SANDBOX_RUNTIME_URL;
@@ -141,6 +508,7 @@ async function main() {
 	});
 	const exitCode = await exited(child);
 	clearTimeout(deadlineTimer);
+	await collectTraces("/workspace/.sessions", "/workspace/out", token);
 	const directory = await mkdtemp(path.join(tmpdir(), "gateway-output-"));
 	try {
 		const archive = path.join(directory, "result.tar");
