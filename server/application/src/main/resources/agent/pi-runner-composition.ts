@@ -961,13 +961,14 @@ export function notMetReference(
 	stagedCriteria: (practiceSlug: string) => string | null,
 	practices: readonly ReviewPractice[] = [],
 	history: readonly OwnPriorFeedback[] = [],
+	reviewedRevision: string | null = null,
 ): string {
 	const concerns = notMetPractices(reviewable).map((slug) => {
 		const observations = reviewable.filter(
 			(entry) =>
 				entry.publicEligible === true && entry.outcome === "NOT_MET" && entry.practiceSlug === slug,
 		);
-		return `${practiceStandard(slug, stagedCriteria).text}${practiceReference(slug, observations, practices, history)}`;
+		return `${practiceStandard(slug, stagedCriteria).text}${practiceReference(slug, observations, practices, history, reviewedRevision)}`;
 	});
 	return concerns.length === 0
 		? "No public NOT_MET observation was admitted.\n"
@@ -980,6 +981,7 @@ function practiceReference(
 	observations: readonly Record<string, unknown>[],
 	practices: readonly ReviewPractice[],
 	history: readonly OwnPriorFeedback[],
+	reviewedRevision: string | null,
 ): string {
 	const practice = practices.find((entry) => entry.slug === slug);
 	const candidatePriorWitnesses = history.flatMap((entry) => {
@@ -994,6 +996,11 @@ function practiceReference(
 		return [
 			{
 				witnessId: entry.witnessId,
+				reviewedRevision:
+					typeof entry.reviewedRevision === "string" ? entry.reviewedRevision : null,
+				basedOn: entry.basedOn.filter(
+					(support: unknown) => isObject(support) && support.practiceSlug === slug,
+				),
 				eligibleForAlreadySaid: entry.eligibleForAlreadySaid,
 				eligibleForPriorAdvice: entry.eligibleForPriorAdvice,
 			},
@@ -1001,6 +1008,7 @@ function practiceReference(
 	});
 	return `\`\`\`json\n${JSON.stringify(
 		{
+			reviewedRevision,
 			...(practice === undefined
 				? {}
 				: {
@@ -1026,6 +1034,7 @@ export function consultedStandard(
 	reviewable: readonly Record<string, unknown>[],
 	practices: readonly ReviewPractice[] = [],
 	history: readonly OwnPriorFeedback[] = [],
+	reviewedRevision: string | null = null,
 ): string {
 	const grounds = reviewable.filter(
 		(observation) =>
@@ -1033,7 +1042,7 @@ export function consultedStandard(
 			observation.outcome === "MET" &&
 			observation.practiceSlug === slug,
 	);
-	return `${standardText}The recorded MET observations of \`${slug}\`:\n${practiceReference(slug, grounds, practices, history)}`;
+	return `${standardText}The recorded MET observations of \`${slug}\`:\n${practiceReference(slug, grounds, practices, history, reviewedRevision)}`;
 }
 
 /** The practices read_practice may show: those with a public MET observation. */
@@ -1314,6 +1323,7 @@ ${JSON.stringify({ observations: input.qualifications }, null, 1)}
 		input.stagedCriteria,
 		input.practices,
 		input.alreadySaid,
+		input.captured.reviewedRevision ?? null,
 	);
 	const recognition = input.observations
 		.filter((entry) => entry.publicEligible === true && entry.outcome === "MET")

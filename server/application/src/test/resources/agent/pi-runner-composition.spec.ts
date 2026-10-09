@@ -1388,7 +1388,11 @@ void test("a consulted full standard carries only its original permitted MET gro
 	const grounded = /```json\n(?<body>[\s\S]*?)\n```/u.exec(text);
 	assert.ok(grounded !== null);
 	const decoded: unknown = JSON.parse(grounded.groups?.body ?? "");
-	assert.deepEqual(decoded, { observations: [original[0]], candidatePriorWitnesses: [] });
+	assert.deepEqual(decoded, {
+		reviewedRevision: null,
+		observations: [original[0]],
+		candidatePriorWitnesses: [],
+	});
 	assert.equal(JSON.stringify(original), before);
 	assert.ok(!text.includes(PRIVATE_SENTENCE));
 });
@@ -1492,6 +1496,8 @@ void test("concern projection preserves new same-practice grounds and wrong old 
 	assert.deepEqual(Reflect.get(concern, "candidatePriorWitnesses"), [
 		{
 			witnessId: `feedback:${historyFeedbackId(1)}`,
+			reviewedRevision: null,
+			basedOn: old.basedOn,
 			eligibleForAlreadySaid: true,
 			eligibleForPriorAdvice: true,
 		},
@@ -1523,6 +1529,74 @@ void test("concern projection preserves new same-practice grounds and wrong old 
 		{ witnesses: priorAdviceWitnesses(history, []), standardsInView: new Set() },
 	);
 	assert.ok(!("errors" in decision));
+});
+
+void test("practice references pair recorded assessment coordinates without inferring progress", () => {
+	const head = "a".repeat(40);
+	const artifact = { kind: "scm.pull_request", url: "https://example.test/pull/1" };
+	const current = [
+		{
+			id: "current",
+			practiceSlug: "subjects",
+			outcome: "MET",
+			publicEligible: true,
+			summary: "The unchanged subjects identify the changes.",
+			citations: [],
+		},
+	];
+	const priorSupport = {
+		id: "earlier",
+		practiceSlug: "subjects",
+		practiceRevision: { id: "10", number: 2 },
+		outcome: "NOT_MET",
+	};
+	for (const priorHead of [head, "b".repeat(40), undefined]) {
+		const history = priorPublicFeedback(
+			{
+				feedback: [
+					{
+						channel: "IN_CONTEXT",
+						publicEligible: true,
+						artifact,
+						id: historyFeedbackId(1),
+						reviewedRevision: priorHead,
+						deliveredAt: "2026-10-05T09:00:00Z",
+						recordedClaimCurrentness: "STALE",
+						body: "Explain what the subject changes.",
+						basedOn: [priorSupport, { practiceSlug: "other", outcome: "MET" }],
+					},
+				],
+			},
+			`${artifact.kind}:${artifact.url}`,
+			"2026-10-06T09:00:00Z",
+		).feedback;
+		const text = consultedStandard(
+			"The whole subject standard.\n",
+			"subjects",
+			current,
+			[{ slug: "subjects", name: "Commit subjects", revisionId: 11, knownLimitations: [] }],
+			history,
+			head,
+		);
+		const body = /```json\n(?<body>[\s\S]*?)\n```/u.exec(text)?.groups?.body;
+		assert.ok(body !== undefined);
+		const shown: unknown = JSON.parse(body);
+		assert.deepEqual(shown, {
+			reviewedRevision: head,
+			practice: { slug: "subjects", name: "Commit subjects", revisionId: 11, knownLimitations: [] },
+			observations: current,
+			candidatePriorWitnesses: [
+				{
+					witnessId: `feedback:${historyFeedbackId(1)}`,
+					reviewedRevision: priorHead ?? null,
+					basedOn: [priorSupport],
+					eligibleForAlreadySaid: true,
+					eligibleForPriorAdvice: false,
+				},
+			],
+		});
+		assert.equal(history[0]?.reviewedRevision, priorHead);
+	}
 });
 
 const ENGAGEMENT_CRITERIA =

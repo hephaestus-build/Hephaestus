@@ -981,6 +981,7 @@ function discussionMetadata() {
 		pr_number: 7,
 		author: "owner",
 		author_id: 11,
+		commit_sha: "a".repeat(40),
 	});
 }
 
@@ -1025,6 +1026,7 @@ void test("captured advice keeps native identity, edits and attribution while se
 	const index = discussionIndex("scm.general-review-comments", GENERAL_PATH);
 	const history = buildPublicReviewHistory(root, "context", index, FRAMING);
 	assert.equal(history.capturedAt, DISCUSSION_CUTOFF);
+	assert.equal(history.reviewedRevision, "a".repeat(40));
 	assert.deepEqual(history.recipient, { author: "owner", authorId: "11" });
 	assert.deepEqual(
 		history.statements.map((row) => row.eligibleForPriorAdvice),
@@ -1191,12 +1193,50 @@ void test("unlisted, unavailable, malformed and oversized discussion never becom
 	);
 });
 
+void test("an incomplete work identity, missing code head or unavailable core supplies no revision coordinate", (t) => {
+	const root = workspace({ "context/metadata.json": discussionMetadata() });
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	const index = discussionIndex("scm.general-review-comments", GENERAL_PATH);
+	for (const commit of [undefined, null, {}, ""]) {
+		writeFileSync(
+			nodePath.join(root, "context/metadata.json"),
+			JSON.stringify({ repository_full_name: "group/repo", pr_number: 7, commit_sha: commit }),
+		);
+		assert.equal(buildPublicReviewHistory(root, "context", index, FRAMING).reviewedRevision, null);
+	}
+	for (const identity of [
+		{ pr_number: 7 },
+		{ repository_full_name: "group/repo" },
+		{ repository_full_name: null, pr_number: 7 },
+		{ repository_full_name: "group/repo", pr_number: "7" },
+	]) {
+		writeFileSync(
+			nodePath.join(root, "context/metadata.json"),
+			JSON.stringify({ ...identity, commit_sha: "a".repeat(40) }),
+		);
+		assert.equal(buildPublicReviewHistory(root, "context", index, FRAMING).reviewedRevision, null);
+	}
+	writeFileSync(nodePath.join(root, "context/metadata.json"), discussionMetadata());
+	for (const framing of [
+		{ repositoryFullName: undefined, pullRequestNumber: 7 },
+		{ repositoryFullName: "group/repo", pullRequestNumber: undefined },
+	]) {
+		assert.equal(buildPublicReviewHistory(root, "context", index, framing).reviewedRevision, null);
+	}
+	const missing = {
+		...index,
+		sources: index.sources.filter((source) => source.kind !== "scm.pull-request.core"),
+	};
+	assert.equal(buildPublicReviewHistory(root, "context", missing, FRAMING).reviewedRevision, null);
+});
+
 void test("a positively mismatching core cannot lend its discussion to this work", (t) => {
 	const root = workspace({
 		"context/metadata.json": JSON.stringify({
 			repository_full_name: "group/other",
 			pr_number: 7,
 			author_id: 11,
+			commit_sha: "b".repeat(40),
 		}),
 		[GENERAL_PATH]: JSON.stringify({
 			comments: [
@@ -1213,6 +1253,7 @@ void test("a positively mismatching core cannot lend its discussion to this work
 	);
 	assert.equal(history.statements.length, 0);
 	assert.equal(history.recipient.authorId, null);
+	assert.equal(history.reviewedRevision, null);
 	assert.match(
 		history.sources.find((source) => source.path === GENERAL_PATH)?.omitted ?? "",
 		/other reviewed work/u,
