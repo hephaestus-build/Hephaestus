@@ -14,7 +14,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { asRecord, isRecord } from "./json.ts";
-import { output, run, succeeds } from "./process.ts";
+import { output, run } from "./process.ts";
 
 /** The platform a caller gets when it names none. Callers that must match the release evidence
  * gate, which is keyed per platform, name both — see `scan-upstream-images.ts`. */
@@ -123,11 +123,8 @@ export function reportStem(image: string, platform: string): string {
 }
 
 async function evaluatorPassed(evaluator: string[], annotate: boolean): Promise<boolean> {
-	if (!annotate) {
-		return succeeds("node", evaluator);
-	}
 	try {
-		await run("node", evaluator);
+		await run("node", annotate ? evaluator : [...evaluator, "--no-annotations"]);
 		return true;
 	} catch {
 		return false;
@@ -169,10 +166,7 @@ async function scan(
 		return { image: subject.image, passed: true, platform };
 	}
 	if (!existsSync(result)) {
-		// It threw before writing anything — a malformed report or policy, not a finding. Re-run so
-		// the reason reaches the log, then fail: this is an infrastructure failure, and unlike a CVE
-		// it is fixed by a commit.
-		await run("node", evaluator);
+		// Native acquisition errors already reached stderr on the first invocation. Never repeat a scan.
 		throw new Error(`vulnerability policy evaluation produced no result for ${subject.image}`);
 	}
 	return { image: subject.image, passed: false, platform };

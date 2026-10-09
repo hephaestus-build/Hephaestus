@@ -3,8 +3,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-import { validateReleaseSbom } from "./check-release-sbom.ts";
-import { evaluate } from "./check-release-vulnerabilities.ts";
+import { componentEvidence, validateReleaseSbom } from "./check-release-sbom.ts";
+import { advisoryFile, componentAdvisories, evaluate } from "./check-release-vulnerabilities.ts";
 import { readJsonFileSync } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
@@ -303,11 +303,15 @@ export function verifyReleaseEvidence(
 		releaseIdentityFor(release).namespace,
 	);
 	const policy = readJsonFileSync(path.join(directory, "vulnerability-policy.json"));
+	// A stored schema 2 policy is read only to verify this signed bundle, each exception bound to its own
+	// digest; writing a validation always holds the bundle to the current schema.
+	const historical = mode !== "write-validation";
 	for (const subject of manifest.subjects) {
 		const suffix = subject.platform.replace("/", "-");
 		const prefix = path.join(directory, `${subject.image}-${suffix}`);
+		const syft = readJsonFileSync(`${prefix}.syft.json`);
 		const sbom = validateReleaseSbom(
-			readJsonFileSync(`${prefix}.syft.json`),
+			syft,
 			readJsonFileSync(`${prefix}.spdx.json`),
 			readJsonFileSync(`${prefix}.cdx.json`),
 			subject,
@@ -315,6 +319,8 @@ export function verifyReleaseEvidence(
 		persistOrVerify(`${prefix}.sbom-validation.json`, sbom, mode === "write-validation");
 		const reference = `${subject.repository}@${subject.digest}`;
 		validateLicenseReport(readJsonFileSync(`${prefix}.license.json`), reference);
+		// The bundle carries the advisory bytes the release was judged against; verification never fetches.
+		const advisoryIds = componentAdvisories(policy, subject, historical);
 		const result = evaluate(
 			subject.image,
 			readJsonFileSync(`${prefix}.trivy.json`),
@@ -324,6 +330,13 @@ export function verifyReleaseEvidence(
 				digest: subject.digest,
 				platform: subject.platform,
 				reference,
+			},
+			{
+				historical,
+				advisories: new Map(
+					advisoryIds.map((id) => [id, readFileSync(path.join(directory, advisoryFile(id)))]),
+				),
+				evidence: advisoryIds.length > 0 ? componentEvidence(syft, subject) : undefined,
 			},
 		);
 		const policyResult = {

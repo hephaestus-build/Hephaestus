@@ -23,7 +23,7 @@ jobs:
           install: "none"
       - uses: ./.github/actions/setup-release-security-tools
         with:
-          install-syft: "false"
+          install-syft: "true"
       - name: Download and verify latest supported release evidence
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,6 +54,9 @@ jobs:
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          SYFT_REGISTRY_AUTH_AUTHORITY: ghcr.io
+          SYFT_REGISTRY_AUTH_USERNAME: ${{ github.actor }}
+          SYFT_REGISTRY_AUTH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           jq -er '.subjects[] | [.image, .platform, .digest, .repository] | @tsv' release-evidence/manifest.json |

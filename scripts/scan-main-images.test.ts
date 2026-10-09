@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, test } from "node:test";
 
 import { isImageIndex, PLATFORM, reportStem, selectPlatformDigest } from "./lib/image-scan.ts";
@@ -132,4 +135,45 @@ void describe("isImageIndex", () => {
 
 void test("reportStem names files after the image and platform", () => {
 	assert.equal(reportStem("webapp", PLATFORM), "webapp-linux-amd64");
+});
+
+void test("a native policy acquisition failure is logged once and never rerun", async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), "scan-error-"));
+	const bin = path.join(directory, "bin");
+	await mkdir(bin);
+	await writeFile(
+		path.join(bin, "docker"),
+		`#!/bin/sh
+printf '%s' '${JSON.stringify({ manifests: [{ digest: DIGEST, platform: { os: "linux", architecture: "amd64" } }] })}'
+`,
+		{ mode: 0o755 },
+	);
+	await writeFile(path.join(bin, "trivy"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+	await writeFile(
+		path.join(bin, "node"),
+		`#!/bin/sh
+printf x >> '${directory}/invocations'
+printf '%s\\n' "$@" > '${directory}/arguments'
+printf '%s\\n' 'native identity acquisition failed' >&2
+exit 3
+`,
+		{ mode: 0o755 },
+	);
+	const child = spawnSync(
+		process.execPath,
+		[
+			"--input-type=module",
+			"-e",
+			`
+import { scanAll } from ${JSON.stringify(new URL("lib/image-scan.ts", import.meta.url).href)};
+await scanAll([{ image: "server", reference: "registry.example/server:main", repository: "registry.example/server" }], ${JSON.stringify(directory)}, { annotate: false });
+`,
+		],
+		{ encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` } },
+	);
+	assert.notEqual(child.status, 0);
+	assert.match(child.stderr, /native identity acquisition failed/u);
+	assert.match(child.stderr, /produced no result/u);
+	assert.equal(await readFile(path.join(directory, "invocations"), "utf8"), "x");
+	assert.match(await readFile(path.join(directory, "arguments"), "utf8"), /--no-annotations/u);
 });

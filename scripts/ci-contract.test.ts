@@ -1920,6 +1920,40 @@ void describe("CI contract", () => {
 		// verify-release-evidence.ts and the main rescan through scan-main-images.ts, both of which
 		// reach the same evaluator without a workflow-level call site.
 		assert.equal(callSites, 2);
+
+		// The evaluator runs Syft itself for a subject an exception binds by component inventory
+		// (check-release-vulnerabilities.ts), so every job that reaches it installs the pinned Syft. Only
+		// the advisory snapshot job does not.
+		const cicd = await readFile(".github/workflows/cicd.yml", "utf8");
+		const evaluatorJobs: [string, string][] = [
+			[".github/workflows/reusable-docker-build.yml", scan],
+			[".github/workflows/cicd.yml", job(cicd, "upstream-images")],
+			[
+				".github/workflows/rescan-main-images.yml",
+				await readFile(".github/workflows/rescan-main-images.yml", "utf8"),
+			],
+			[
+				".github/workflows/rescan-release-images.yml",
+				await readFile(".github/workflows/rescan-release-images.yml", "utf8"),
+			],
+		];
+		for (const [file, section] of evaluatorJobs) {
+			assert.match(
+				section,
+				/setup-release-security-tools\n\s+with:\n\s+install-syft: "true"/u,
+				file,
+			);
+		}
+		assert.match(
+			job(cicd, "vulnerability-database"),
+			/install-syft: "false"/u,
+			"the advisory snapshot job needs no Syft",
+		);
+		// Syft 1.51.1 reads GHCR through its native registry authentication.
+		assert.match(
+			await readFile(".github/workflows/rescan-release-images.yml", "utf8"),
+			/SYFT_REGISTRY_AUTH_AUTHORITY: ghcr\.io[\s\S]*SYFT_REGISTRY_AUTH_USERNAME:[\s\S]*SYFT_REGISTRY_AUTH_PASSWORD:/u,
+		);
 	});
 
 	void test("keeps one release vulnerability policy behind every scan", async () => {
@@ -2018,6 +2052,11 @@ void describe("CI contract", () => {
 		assert.match(
 			filter,
 			/- 'security\/release-images\.json'[\s\S]*- 'security\/vulnerability-policy\.json'/u,
+		);
+		// The Syft configuration is data the gate reads, not an import the closure below finds.
+		assert.ok(
+			filter.includes("- 'security/syft.yaml'"),
+			"release-images must trigger on the Syft config",
 		);
 		// The trigger is derived, not trusted: a filter that lists the entry point but not the module
 		// it parses JSON with skips the gate on the pull request that breaks the parser. Re-walk the
