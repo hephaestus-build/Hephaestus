@@ -809,9 +809,10 @@ If no such default-branch commit exists, the run builds every image itself. `det
 - `Quality` legs and `Test` suites start from source. `Build` gates start when `App Server: Package`
   uploads its artifact.
 - `App Server: Integration` has two shards: `providers-and-startup` selects the `integration`
-  package and `StartupBudgetIntegrationTest`. `application` excludes both. Both retain the
-  `integration` tag filter and run in separate JVMs and Testcontainers databases. The startup test
-  owns a database separate from other Spring contexts. Gradle's native test filters partition
+  package, `StartupBudgetIntegrationTest`, and the database upgrade and bootstrap tests in
+  `core.database`. `application` excludes all three. Both shards retain the `integration` tag
+  filter and run in separate JVMs and Testcontainers databases. The startup test and the
+  `core.database` tests own databases separate from other Spring contexts. Gradle's native test filters partition
   the tier. `vp run test:server:selection` checks coverage through JUnit dry-run reports before
   unit/architecture verification. Discovery reports stay separate from execution results.
   Both shards use `fail-fast: false`. `CI Status Gate` requires their aggregate result. Locally
