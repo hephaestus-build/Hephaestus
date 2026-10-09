@@ -201,13 +201,15 @@ Hephaestus processes the activity under Art. 6(1)(e) and (3) GDPR i.V.m. Art. 2 
 The publication is a transfer to the public.
 The BayLfD bases a publication on Art. 5(1) sentence 1 no. 1 BayDSG.
 The publication must be necessary for a task of TUM, and "mere usefulness" is not sufficient.
-The task is an open-source project in teaching and research that credits its contributors in public.
+
+The task is teaching and research under Art. 2 BayHIG, and knowledge transfer under Art. 2(2) sentence 3 BayHIG.
+An open-source project of TUM transfers its work in public and credits the people who contribute to it.
 
 Less intrusive options do not serve this task:
 
 - A page for members only does not reach the public or the outside contributors.
 - An opt-in leaves out most contributors, because most never sign in.
-- Counts without positions still let every reader sort the people by eye. Positions make ties fair and visible.
+- A page without positions publishes the same data. Anyone can derive a position from the published counts.
 
 The coordinator confirms this necessity.
 
@@ -289,8 +291,11 @@ The [operator obligations](../legal-pages.mdx#the-public-activity-page) list the
 Workspace addresses change no data category, purpose or audience.
 Sign-in, the session cookies and the API stay on `hephaestus.build`, which Cloudflare does not proxy.
 A workspace host keeps its own cookie choice and theme.
+
 Cloudflare proxies only the workspace hosts.
-It processes the IP address, the request metadata and the static web app of each workspace host.
+It processes the IP address and the request metadata of each workspace host.
+It also serves the web app that calls the API, so the processor agreement must cover the integrity of that code.
+Cloudflare features that change content stay off.
 The [processor checklist](./processor-checklist.md) records Cloudflare and its transfer to the USA.
 
 The source-specific decision and test checklist lives in

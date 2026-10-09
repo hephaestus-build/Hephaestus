@@ -48,6 +48,7 @@ Option 6.
 
 - When the instance switch is on, `<slug>.<base domain>` is the main workspace address.
   `/w/<slug>` sends a 308 redirect to it.
+  The redirect does not depend on whether the slug exists.
   When the switch is off, `/w/<slug>` is the only address.
 - A workspace host serves only the web app. It has no `/api`.
   The web app calls `https://<apex>/api` with credentials.
@@ -70,8 +71,11 @@ Option 6.
 - The base domain must not be on the Public Suffix List.
   If it is, the workspace host and the apex are different sites.
   The browser then does not send the session cookie.
+- Only Hephaestus serves hosts under the base domain.
+  Each other host under it must be a reserved name, because CORS trusts every other label.
 - hephaestus.build sends only the workspace hosts through a Cloudflare proxy.
-  The apex stays direct, so sign-in, the session cookies and the API never pass Cloudflare.
+  The apex stays direct, so sign-in, the session cookies and the API traffic never pass Cloudflare.
+  Cloudflare features that change content stay off, for example Rocket Loader, Zaraz, Email Obfuscation and Workers.
   The [processor checklist](../admin/dsms/processor-checklist.md) records Cloudflare before it carries traffic.
 - The browser extension maps a pasted workspace host URL to the apex.
 
@@ -84,8 +88,9 @@ Option 6.
   A host that another service runs must become a reserved name first.
 - All workspace hosts are the same site as the apex.
   Thus, `SameSite` gives no protection between them, and the CSRF token stays necessary.
-- Cloudflare sees the IP address, the request metadata and the static web app of each workspace host.
-  It does not see the session or the API content.
+- Cloudflare sees the IP address and the request metadata of each workspace host.
+  It also serves the web app that calls the API.
+  Thus, Hephaestus trusts Cloudflare for the integrity of that code, under a processor agreement.
 - A reader answers the cookie choice once on each workspace host.
 - The decision is reversible.
   Turn off the instance switch, and `/w/<slug>` is the address again.

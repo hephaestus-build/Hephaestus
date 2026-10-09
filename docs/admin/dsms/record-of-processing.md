@@ -201,7 +201,7 @@ Separate controller (not an Art. 28 processor):
 - Leibniz-Rechenzentrum (LRZ) der BAdW operates gitlab.lrz.de. The platform receives the contributor's identity from gitlab.lrz.de OIDC and syncs connected gitlab.lrz.de repositories. Inter-public-body transmission falls under Art. 5(1) Nr. 1 BayDSG.
 ```
 
-When workspace addresses are on, Cloudflare, Inc. (USA) proxies the workspace hosts, not `hephaestus.build` itself. It processes the IP address, the request metadata and the static web app of each workspace host. Sign-in, session cookies and API content do not pass it. It is not engaged yet. The [processor checklist](./processor-checklist.md) records it, and this section lists it, before the proxy carries traffic.
+When workspace addresses are on, Cloudflare, Inc. (USA) proxies the workspace hosts, not `hephaestus.build` itself. It processes the IP address and the request metadata of each workspace host. It also serves the web app that calls the API, so it is trusted for the integrity of that code. Sign-in, session cookies and API traffic do not pass it. It is not engaged yet. The [processor checklist](./processor-checklist.md) records it, and this section lists it, before the proxy carries traffic.
 
 When SMTP is enabled, the configured mail relay receives recipient addresses, notification types and
 links for account-security/deletion email and opted-in notifications. Product-feedback bodies and

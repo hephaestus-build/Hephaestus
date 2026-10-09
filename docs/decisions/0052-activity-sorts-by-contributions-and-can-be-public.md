@@ -159,7 +159,8 @@ There is no email, no banner and no notice period.
 - Only that endpoint sends `Cache-Control: public, max-age=60`.
   It is rate-limited.
   It sends `noindex` unless an admin turns on **Allow search engines**.
-- A workspace goes public only after the activity data runbook's comparison with the provider passes for its repositories.
+- The instance operator runs the provider comparison of the activity data runbook.
+  A workspace goes public only after it passes for the workspace's repositories.
 - The docs advise course workspaces to stay private. Hephaestus does not enforce it.
 
 ## Consequences
