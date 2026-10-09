@@ -4,7 +4,7 @@
 > These safeguards do not negate evaluation, systematic monitoring, dataset combination, or the student/employee power imbalance. This engineering screen is not the
 > controller's Art. 35 determination.
 >
-> **Review owner:** TUM/AET data-protection coordinator. **Engineering review:** 2026-10-04. **Next review:** before
+> **Review owner:** TUM/AET data-protection coordinator. **Engineering review:** 2026-10-09. **Next review:** before
 > release of the expanded processing scope or 2026-11-04, whichever comes first. **Controller decision reference:** pending.
 
 Records whether a full Data Protection Impact Assessment is required for the TUM-operated Hephaestus deployment. The high-risk test in Art. 35(1) applies to TUM as a Bavarian public body, together with the Art. 35(3) examples and the Bavarian Blacklist under Art. 35(4). The DSK list (which addresses the non-public sector) is referenced only as a cross-check.
@@ -148,6 +148,7 @@ As a deployment governance requirement, reassess the DPIA and amend it where the
 - A proposed change has no coverage in the recorded decision.
   This includes a new artifact source, source combination, private-conversation use or repository-history use.
   It also includes research/evaluation reuse, retention extension or a developer/admin audience.
+- The public activity page shows more than counts of work in public repositories, or it goes on by default.
 
 ### Reassessment: Practices across the workspace without a smallest count
 
@@ -177,6 +178,122 @@ The reasons:
   The admin docs say that standings must not be used to grade or assess a person.
 
 The TUM/AET data-protection coordinator confirms this reassessment in the full DPIA, which the current scope needs anyway.
+
+### Reassessment: the public activity page
+
+**Date:** 2026-10-09. **Trigger:** a new audience, the public. **Change:** [ADR 0052](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0052-activity-sorts-by-contributions-and-can-be-public.md).
+
+**Proposed by:** the maintainer, as product owner. **Proposed residual risk:** low for open-source project workspaces.
+**Controller decision:** pending. The TUM/AET data-protection coordinator confirms this reassessment before the first TUM workspace goes public.
+
+A workspace admin can publish the activity of the workspace's public repositories.
+For each person on the page, the public sees this data:
+
+- Display name, login and avatar.
+- For the selected range: pull requests opened and merged, pull requests reviewed and their authors, issues opened, and active weeks.
+- The weekly trend, the **Contributions** total, the position, and links to the work.
+
+The page shows no practices, feedback, observations, Slack, Outline or AI review content.
+
+**Lawful basis for TUM.**
+Hephaestus processes the activity under Art. 6(1)(e) and (3) GDPR i.V.m. Art. 2 BayHIG and Art. 4(1) BayDSG, as for Activity.
+
+The publication is a transfer to the public.
+The BayLfD bases a publication on Art. 5(1) sentence 1 no. 1 BayDSG.
+The publication must be necessary for a task of TUM, and "mere usefulness" is not sufficient.
+
+The task is teaching and research under Art. 2 BayHIG, and knowledge transfer under Art. 2(2) sentence 3 BayHIG.
+An open-source project of TUM transfers its work in public and credits the people who contribute to it.
+
+Less intrusive options do not serve this task:
+
+- A page for members only does not reach the public or the outside contributors.
+- An opt-in leaves out most contributors, because most never sign in.
+- A page without positions publishes the same data. Anyone can derive a position from the published counts.
+
+The coordinator confirms this necessity.
+
+**Objection (Art. 21 GDPR).**
+The opt-out is the objection to this processing.
+**Show me on public activity pages** stops the publication at once, and nobody asks for reasons.
+
+A person without an account objects through the privacy contact.
+The operator then applies the same hide to the verified provider identity.
+The onboarding step, the page notice and the privacy notice state this right separately from other information (Art. 21(4)).
+
+**Information (Arts. 13 and 14 GDPR).**
+The data comes from the provider, so Art. 14 applies.
+
+- A signed-in member gets the onboarding step at the first visit to a workspace with a public activity page. It offers **Show me** and **Hide me** with equal weight.
+- The public page says what it shows and how to hide.
+- The privacy notice describes the page, the basis and the objection.
+- Outside contributors have no contact data in Hephaestus.
+  For them, the controller makes the information public under Art. 14(5)(b).
+
+There is no email, no banner and no notice period.
+The workspace admin briefing asks the admin to tell the members before they publish the page.
+
+**Open for the coordinator:** Art. 14(3)(c) requires the information at the latest at the first disclosure.
+A member who does not open the workspace gets no individual notice from Hephaestus before the first publication.
+The privacy notice and the page notice inform people in public from the first moment.
+The coordinator decides if this meets Art. 14(3)(c) for members.
+
+**Course workspaces stay private.**
+Students in a course are graded by the people who run it.
+A public order of students adds pressure that the course does not need.
+The workspace admin briefing (privacy §10) says to keep course workspaces private.
+Hephaestus does not enforce it.
+
+**Screening criteria.**
+The page orders people by counts of their work.
+It does not assess the work, but a reader can use it to compare people.
+Thus, it adds weight to *evaluation or scoring* and *vulnerable data subjects* in § 2.
+The Bavarian Blacklist has no entry for a publication of this kind.
+The full DPIA stays indicated, as before.
+
+The reasons for a low residual risk:
+
+- The page shows only work that the provider already publishes.
+  GitHub shows a contributors graph of each public repository.
+  Hephaestus checks the repository visibility at query time.
+- It shows counts of work, never a judgment of the work.
+- A person can hide at once.
+  A hidden person leaves every total, and no position has a gap for them.
+- Three switches must be on.
+  The instance switch is off by default.
+  Search engines get `noindex` unless an admin allows them, and the response cache lasts 60 seconds.
+- An unknown workspace and a private workspace give the same response.
+
+Risks for the full DPIA:
+
+- A copy made before a person hides stays with whoever made it.
+- Outside contributors who never heard of Hephaestus appear on the page.
+- An admin can compare the member view with the public page and find who is hidden.
+  The opt-out hides a person from the public, not from the workspace.
+- An employer or a teacher reads the page as a measure of performance.
+  ADR 0052 and the admin docs say that the counts are not one.
+
+**Private self-hosters.**
+The DSK list addresses the non-public sector (§ 3).
+A private operator that publishes this page checks DSK list entries 7 and 8.
+Entry 7 covers a large-scale publication of data that evaluates the behavior of people.
+It applies when third parties can use the data for decisions with legal or similar effects.
+Entry 8 covers large-scale data about employee behavior that can evaluate their work with such effects.
+
+In Germany, a works council co-determines a technical system that can monitor employee behavior or performance (§ 87(1) no. 6 BetrVG).
+The [operator obligations](../legal-pages.mdx#the-public-activity-page) list the steps.
+
+### Reassessment: workspace addresses
+
+**Date:** 2026-10-09. **Trigger:** new hosts for the web app. **Change:** [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md).
+**Residual risk:** unchanged.
+
+Workspace addresses change no data category, purpose, audience or recipient.
+Sign-in, the session cookies and the API stay on `hephaestus.build`.
+A workspace host keeps its own cookie choice and theme.
+
+Every host ends TLS at the instance's own Traefik, with a `Let's Encrypt` wildcard certificate from the DNS-01 challenge.
+Cloudflare is only the DNS provider of hephaestus.build. It carries no request and is not a processor for request data.
 
 The source-specific decision and test checklist lives in
 [`artifact-source-governance.md`](./artifact-source-governance.md). The controller's decision identifier and date
@@ -255,6 +372,12 @@ controller's assessment. In particular, the maintainer approval in
 - EDPB Guidelines 3/2022 on deceptive design patterns: equal-weight answers and no emotional steering.
 - EDPB Guidelines 01/2025 on pseudonymisation: pseudonymized data is still personal data.
 - GDPR Recitals 26, 33 and 43, and Arts. 7, 89: anonymous data, broad consent, imbalance, consent conditions and research safeguards.
+- [GDPR Arts. 14 and 21](https://gdpr-info.eu/art-21-gdpr/): information for data from another source, and the objection to Art. 6(1)(e) processing.
+- [BayDSG Art. 4](https://www.gesetze-bayern.de/Content/Document/BayDSG-4) and [Art. 5](https://www.gesetze-bayern.de/Content/Document/BayDSG-5), [BayHIG Art. 2](https://www.gesetze-bayern.de/Content/Document/BayHIG-2): the TUM task and the transfer to the public.
+- [BayLfD 34th activity report, no. 5.4](https://www.datenschutz-bayern.de/tbs/tb34/k5.html): a publication on the internet rests on Art. 5(1) sentence 1 no. 1 BayDSG and must be necessary.
+- [WP29 transparency guidelines, WP260 rev.01](https://ec.europa.eu/newsroom/article29/items/622227): layered notices, and public information under Art. 14(5)(b).
+- [GitHub Docs, contributors graph](https://docs.github.com/en/repositories/viewing-activity-and-data-for-your-repository/viewing-a-projects-contributors): the provider's own public view of contributors.
+- [§ 87 BetrVG](https://www.gesetze-im-internet.de/betrvg/__87.html): works council co-determination for technical monitoring.
 - [DSK mandatory DPIA list, version 1.1](https://www.datenschutzkonferenz-online.de/media/ah/20181017_ah_DSK_DSFA_Muss-Liste_Version_1.1_Deutsch.pdf): cross-check evaluation and monitoring in employment. Non-public operators must check its direct applicability.
 
 Adversarial cases for the full assessment include:
