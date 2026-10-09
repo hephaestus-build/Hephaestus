@@ -276,7 +276,8 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         result.put("repository_full_name", requireText(jobMetadata, "repository_full_name"));
         result.put("source_branch", requireText(jobMetadata, "source_branch"));
         result.put("target_branch", requireText(jobMetadata, "target_branch"));
-        result.put("commit_sha", requireText(jobMetadata, "commit_sha"));
+        String reviewedHead = requireText(jobMetadata, "commit_sha");
+        result.put("commit_sha", reviewedHead);
         result.put(
                 "subject_role",
                 "REVIEWER".equals(MetaJson.optString(jobMetadata, "subject_role")) ? "REVIEWER" : "AUTHOR");
@@ -328,11 +329,10 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         if (pullRequest.getReviewDecision() != null) {
             result.put("review_decision", pullRequest.getReviewDecision().name());
         }
-        // What the checks said about this head; a state observed for an earlier head is not the
-        // current one and is left out, as is a head no sync or event has reported on.
-        if (pullRequest.getHeadCheckState() != null
-                && pullRequest.getHeadCheckSha() != null
-                && pullRequest.getHeadCheckSha().equals(pullRequest.getHeadRefOid())) {
+        // What the checks said about the reviewed head, as last observed. A state observed for any other commit,
+        // the current mirror head included, is not about the reviewed change and is left out, as is a head no sync
+        // or event has reported on.
+        if (pullRequest.getHeadCheckState() != null && reviewedHead.equals(pullRequest.getHeadCheckSha())) {
             result.put("head_checks", pullRequest.getHeadCheckState().name());
         }
 

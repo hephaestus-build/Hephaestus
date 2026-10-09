@@ -399,20 +399,34 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldWriteTheHeadChecksOnlyWhenTheyWereObservedForTheCurrentHead() throws Exception {
-            PullRequest current = new PullRequest();
-            current.setHeadRefOid(HEAD);
-            current.observeHeadChecks(HEAD, CheckState.FAILURE, true);
+        void shouldWriteTheHeadChecksOnlyWhenTheyWereObservedForTheReviewedHead() throws Exception {
+            String newer = "f".repeat(40);
+            // The mirror moved on after admission; the checks it measured belong to the reviewed head.
+            PullRequest reviewed = new PullRequest();
+            reviewed.setHeadRefOid(newer);
+            reviewed.observeHeadChecks(HEAD, CheckState.FAILURE, true);
+            // The checks of the newer mirror head say nothing about the reviewed one.
+            PullRequest moved = new PullRequest();
+            moved.setHeadRefOid(newer);
+            moved.observeHeadChecks(newer, CheckState.SUCCESS, true);
             PullRequest stale = new PullRequest();
             stale.setHeadRefOid(HEAD);
             stale.observeHeadChecks("e".repeat(40), CheckState.SUCCESS, true);
             stubGit();
 
-            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(current));
+            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(reviewed));
             JsonNode fresh = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
                     .files()
                     .get("context/metadata.json"));
+            assertThat(fresh.get("commit_sha").asString()).isEqualTo(HEAD);
             assertThat(fresh.get("head_checks").asString()).isEqualTo("FAILURE");
+
+            when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(moved));
+            JsonNode newerHead = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+                    .files()
+                    .get("context/metadata.json"));
+            assertThat(newerHead.get("commit_sha").asString()).isEqualTo(HEAD);
+            assertThat(newerHead.has("head_checks")).isFalse();
 
             when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(stale));
             JsonNode outdated = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
