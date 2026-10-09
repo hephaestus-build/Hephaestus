@@ -1,15 +1,26 @@
-import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	queryOptions,
+	skipToken,
+	useQueries,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 import {
+	getAgentJobOptions,
+	getAgentJobQueryKey,
 	getArtifactTraceOptions,
+	getArtifactTraceQueryKey,
 	listGroupsOptions,
 	listPracticeReviewFeedbackOptions,
+	listPracticeReviewFeedbackQueryKey,
 	listPracticeReviewObservationsOptions,
+	listPracticeReviewObservationsQueryKey,
 	listPracticesOptions,
 } from "@/api/@tanstack/react-query.gen";
-import type { ArtifactTrace, Practice } from "@/api/types.gen";
+import type { AgentJob, ArtifactTrace, Practice, TracedSignal } from "@/api/types.gen";
 import {
 	ACTIVITY_RANGE_DEFS,
 	type ActivityRange,
@@ -268,22 +279,84 @@ function WorkLevelRead({
 		// A 404 is work nothing was ever recorded about: asking again answers the same.
 		retry: (failureCount, error) =>
 			sessionRetriesQueries() && problemStatusOf(error) !== 404 && failureCount < QUERY_RETRIES,
-		// A review asked for from here lands as a waiting practice; the trace is asked again until
-		// every practice has its answer.
+		// Current practices or latest occasions waiting for admission keep the trace discoverable.
 		refetchInterval: (result) => (reviewing(result.state.data) ? ACTIVE_REVIEW_POLL_MS : false),
 	});
-	// What the review said lands with its last answer, so the review settling reads it once more.
-	const queryClient = useQueryClient();
-	const running = reviewing(trace.data);
-	const wasRunning = useRef(running);
-	useEffect(() => {
-		const before = wasRunning.current;
-		wasRunning.current = running;
-		if (before && !running) {
-			void queryClient.invalidateQueries({ queryKey: feedbackOptions.queryKey });
-			void queryClient.invalidateQueries({ queryKey: observationOptions.queryKey });
-		}
+	// An observation can settle before composition and result processing finish. Follow the runs
+	// that own current answers and the latest admitted occasions, even when older observations mask them.
+	const reviewIds = [
+		...new Set(
+			[
+				...(trace.data?.practices ?? []),
+				...latestSignals(trace.data?.signals.filter((entry) => entry.reviewId !== undefined) ?? []),
+			].flatMap((entry) => (entry.reviewId === undefined ? [] : [entry.reviewId])),
+		),
+	].sort();
+	const reviewProgress = useQueries({
+		queries: reviewIds.map((jobId) =>
+			queryOptions({
+				...getAgentJobOptions({ path: { ...path, jobId } }),
+				refetchOnMount: "always",
+				refetchInterval: (result) =>
+					processingReview(result.state.data) ? ACTIVE_REVIEW_POLL_MS : false,
+			}),
+		),
+		combine: (results) => ({
+			active: results.some((result) => processingReview(result.data)),
+			settled: results
+				.flatMap((result) =>
+					result.isSuccess && result.isFetchedAfterMount && !processingReview(result.data)
+						? [
+								`${result.data.id}:${result.data.status}:${result.data.deliveryStatus ?? ""}:${result.data.retryCount}:${result.data.completedAt?.getTime() ?? ""}`,
+							]
+						: [],
+				)
+				.sort()
+				.join(","),
+		}),
 	});
+	const { settled: settledRuns, active } = reviewProgress;
+	const processing = active || reviewing(trace.data);
+	const queryClient = useQueryClient();
+	const { workspaceSlug } = props;
+	const artifactKind = work?.artifactKind;
+	const artifactId = work?.artifactId;
+	const reviewIdsKey = reviewIds.join(",");
+	const assessmentVersion = trace.data?.practices
+		.map(
+			(entry) =>
+				`${entry.practiceSlug}:${entry.reviewId ?? ""}:${entry.outcome}:${entry.decidedAt?.getTime() ?? ""}`,
+		)
+		.sort()
+		.join("|");
+	// A retry can reuse a settled run's ID. Compare assessment values, not the DTO's Date objects,
+	// so a refreshed but unchanged trace does not refresh its jobs in a cycle.
+	useEffect(() => {
+		if (assessmentVersion === undefined || assessmentVersion === "" || reviewIdsKey === "") {
+			return;
+		}
+		for (const jobId of reviewIdsKey.split(",")) {
+			void queryClient.invalidateQueries({
+				queryKey: getAgentJobQueryKey({ path: { workspaceSlug, jobId } }),
+			});
+		}
+	}, [assessmentVersion, reviewIdsKey, queryClient, workspaceSlug]);
+	useEffect(() => {
+		if (!settledRuns || artifactKind === undefined || artifactId === undefined) {
+			return;
+		}
+		const scope = {
+			path: { workspaceSlug },
+			query: { artifactKind, artifactId, size: REVIEW_PREVIEW_SIZE },
+		};
+		void queryClient.invalidateQueries({ queryKey: listPracticeReviewFeedbackQueryKey(scope) });
+		void queryClient.invalidateQueries({ queryKey: listPracticeReviewObservationsQueryKey(scope) });
+		void queryClient.invalidateQueries({
+			queryKey: getArtifactTraceQueryKey({
+				path: { workspaceSlug, artifactKind, artifactId },
+			}),
+		});
+	}, [settledRuns, queryClient, workspaceSlug, artifactKind, artifactId]);
 	const groups = useQuery({
 		...listGroupsOptions({ path }),
 		enabled: work !== undefined,
@@ -309,8 +382,8 @@ function WorkLevelRead({
 		<ReviewedWorkLevel
 			{...props}
 			{...work}
-			feedback={toSectionState(feedback)}
-			observations={toSectionState(observations)}
+			feedback={toSectionState(feedback, processing)}
+			observations={toSectionState(observations, processing)}
 			trace={
 				problemStatusOf(trace.error) === 404
 					? { status: "none" }
@@ -372,10 +445,34 @@ function PracticeLevelRead({
 	);
 }
 
-/** Some practice on the work is still waiting for, or working on, its answer. */
+/** Follow current assessments and latest occasions still waiting for a review to be admitted. */
 function reviewing(trace: ArtifactTrace | undefined): boolean {
 	return (
 		trace?.practices.some((entry) => entry.outcome === "PENDING" || entry.outcome === "RUNNING") ===
-		true
+			true ||
+		latestSignals(trace?.signals ?? []).some(
+			(entry) =>
+				entry.state === "RECORDED" || entry.state === "PENDING" || entry.state === "DEFERRED",
+		)
 	);
+}
+
+/** Keep every tie: provider timestamps can have less precision than separate review occasions. */
+function latestSignals(signals: TracedSignal[]): TracedSignal[] {
+	const latest = new Map<string, TracedSignal[]>();
+	for (const signal of signals) {
+		const existing = latest.get(signal.signal);
+		const at = signal.occurredAt.getTime();
+		const previous = existing?.[0]?.occurredAt.getTime();
+		if (previous === undefined || at > previous) {
+			latest.set(signal.signal, [signal]);
+		} else if (at === previous) {
+			existing?.push(signal);
+		}
+	}
+	return [...latest.values()].flat();
+}
+
+function processingReview(job: AgentJob | undefined): boolean {
+	return job?.status === "QUEUED" || job?.status === "RUNNING" || job?.deliveryStatus === "PENDING";
 }
