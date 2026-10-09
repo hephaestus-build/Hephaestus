@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxResultListener;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
@@ -42,25 +43,54 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 @Component
-public class JobEvidenceFiles {
+public class JobEvidenceFiles implements SandboxResultListener {
     private static final Logger log = LoggerFactory.getLogger(JobEvidenceFiles.class);
 
     /** Invalid UTF-8 cannot match a quote: this lone surrogate is rejected by quoteDigest. */
     private static final String UNDECODABLE = "\uDC00";
 
     static final Duration RETENTION_GRACE = Duration.ofHours(1);
+
+    /** How long an attempt's debug transcript stays for next-day investigation. */
+    static final Duration TRACE_RETENTION = Duration.ofHours(24);
+
+    /** Where the gateway runner puts the native session transcripts in a result. */
+    private static final String TRACES = "traces/";
+
+    private static final String TRACE_SUFFIX = ".trace";
+    private static final String TRACE_RECORD = "record.json";
+
+    /**
+     * The collector's manifest (gateway-run.ts). It is sandbox output: a METADATA_ONLY record keeps only what
+     * {@link TraceSummary} rebuilds from it.
+     */
+    private static final String TRACE_MANIFEST = "manifest.json";
+
+    private static final long TRACE_BYTE_BUDGET = 8L * 1024 * 1024;
+    private static final int TRACE_FILE_BUDGET = 2 * 1024 * 1024;
 
     private final FabricLayout layout;
     private final AgentJobRepository jobs;
@@ -375,6 +405,149 @@ public class JobEvidenceFiles {
         }
     }
 
+    /** The exact rows a read during runtime returned, by the tables that own them. */
+    public record LateCopies(Set<UUID> observationIds, Set<UUID> feedbackIds) {}
+
+    /** See {@link EvidenceFolderPersonDataCatalog#indexLateRead}. */
+    public <T> T indexLateRead(
+            ObservationAdmissionService.AdmissionIdentity identity, Supplier<T> read, Function<T, LateCopies> copies) {
+        return personCopies.indexLateRead(
+                identity.jobId(),
+                identity.workspaceId(),
+                identity.attempt(),
+                read,
+                result -> copies.apply(result).observationIds(),
+                result -> copies.apply(result).feedbackIds());
+    }
+
+    /** What a review attempt was launched as, captured before its sandbox existed. */
+    private record LaunchedAttempt(
+            long workspaceId,
+            UUID jobId,
+            int attempt,
+            String workerId,
+            String image,
+            @Nullable String model,
+            @Nullable String promptDigest,
+            @Nullable String inputsDigest) {}
+
+    /**
+     * Binds the attempt the executor is launching: the job must be RUNNING as exactly this attempt. Anything else, and
+     * a mentor session, which is never bound, keeps no transcript.
+     */
+    @Override
+    public Consumer<Map<String, byte[]>> bind(UUID jobId, int attempt, String image) {
+        var launched = jobs.findByIdWithWorkspace(jobId)
+                .filter(job -> job.getStatus() == AgentJobStatus.RUNNING
+                        && job.getRetryCount() == attempt
+                        && job.getWorkerId() != null)
+                .map(job -> new LaunchedAttempt(
+                        job.getWorkspace().getId(),
+                        jobId,
+                        attempt,
+                        Objects.requireNonNull(job.getWorkerId()),
+                        image,
+                        job.getConfigSnapshot() == null
+                                ? null
+                                : job.getConfigSnapshot()
+                                        .path("upstreamModelId")
+                                        .asString(null),
+                        job.getPromptDigest(),
+                        job.getInputsDigest()));
+        if (launched.isEmpty()) return files -> {};
+        var bound = launched.get();
+        return files -> keepTranscript(bound, files);
+    }
+
+    /**
+     * Keeps the native session transcripts of an admitted upload beside the attempt folder for a day. Only while the
+     * job is still owned as the attempt that was launched, only by the runtime that holds that attempt's lease, and only
+     * for its READY receipt in this store. A receipt that cannot index every copied dependency keeps a summary the
+     * worker rebuilds itself, marked METADATA_ONLY. Never throws into the upload, and never changes the job's status.
+     */
+    private void keepTranscript(LaunchedAttempt launched, Map<String, byte[]> files) {
+        var traces = new TreeMap<String, byte[]>();
+        files.forEach((name, bytes) -> {
+            if (name.startsWith(TRACES) && name.length() > TRACES.length())
+                traces.put(name.substring(TRACES.length()), bytes);
+        });
+        if (traces.isEmpty()) return;
+        try {
+            // A delayed upload of an earlier attempt finds the job requeued under another attempt or owner.
+            boolean owned = jobs.findByIdAndWorkspaceId(launched.jobId(), launched.workspaceId())
+                    .filter(job -> job.getRetryCount() == launched.attempt()
+                            && launched.workerId().equals(job.getWorkerId()))
+                    .isPresent();
+            if (!owned) return;
+            Path root = directory(launched.workspaceId(), launched.jobId(), launched.attempt(), launched.workerId());
+            Path trace = root.resolveSibling(root.getFileName() + TRACE_SUFFIX);
+            EvidenceFolderLease.writeAsRuntime(layout.root(), launched.workspaceId(), launched.jobId(), () -> {
+                var custody = personCopies.traceCustody(launched.jobId(), launched.workspaceId(), launched.attempt());
+                if (custody == EvidenceFolderPersonDataCatalog.TraceCustody.NOT_HELD
+                        || Files.exists(trace, LinkOption.NOFOLLOW_LINKS)) return;
+                Files.createDirectories(root.getParent());
+                Path staging = Files.createTempDirectory(root.getParent(), "." + trace.getFileName() + ".preparing-");
+                try {
+                    boolean withinBudget = boundedTraces(traces);
+                    boolean raw = custody == EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED && withinBudget;
+                    ObjectNode record = JsonNodeFactory.instance.objectNode();
+                    record.put("jobId", launched.jobId().toString());
+                    record.put("workspaceId", launched.workspaceId());
+                    record.put("attempt", launched.attempt());
+                    record.put("image", launched.image());
+                    record.put("model", launched.model());
+                    record.put("promptDigest", launched.promptDigest());
+                    record.put("inputsDigest", launched.inputsDigest());
+                    record.put("retention", raw ? "NATIVE_TRANSCRIPT" : "METADATA_ONLY");
+                    // A copied row whose source cannot vouch for the people it names keeps every session's words out.
+                    if (!raw)
+                        record.put(
+                                "contentUnavailable", withinBudget ? "OWNERSHIP_INCOMPLETE" : "TRACE_OUTPUT_INVALID");
+                    record.put(
+                            "expiresAt", clock.instant().plus(TRACE_RETENTION).toString());
+                    if (raw) {
+                        for (var entry : traces.entrySet()) {
+                            Path target = safePath(staging, entry.getKey());
+                            Files.createDirectories(target.getParent());
+                            Files.write(target, entry.getValue(), StandardOpenOption.CREATE_NEW);
+                        }
+                    } else {
+                        var sessions = TraceSummary.of(traces.get(TRACE_MANIFEST));
+                        if (sessions == null) record.putNull("sessions");
+                        else record.set("sessions", sessions);
+                        record.put("sessionScanTruncated", TraceSummary.scanTruncated(traces.get(TRACE_MANIFEST)));
+                    }
+                    Path recordFile = staging.resolve(TRACE_RECORD);
+                    Files.writeString(recordFile, record.toString(), StandardOpenOption.CREATE_NEW);
+                    // The sweep counts the retention from this timestamp, as it counts the grace from an ended marker.
+                    Files.setLastModifiedTime(recordFile, FileTime.from(clock.instant()));
+                    Files.move(staging, trace, StandardCopyOption.ATOMIC_MOVE);
+                } finally {
+                    if (Files.exists(staging, LinkOption.NOFOLLOW_LINKS)) delete(staging);
+                }
+            });
+        } catch (IOException | RuntimeException exception) {
+            log.warn(
+                    "Could not keep the review transcript of job {}: {}",
+                    launched.jobId(),
+                    exception.getClass().getSimpleName());
+        }
+    }
+
+    /** The sandbox cannot enlarge debug retention beyond the collector's declared limits. */
+    private static boolean boundedTraces(Map<String, byte[]> traces) {
+        long bytes = 0;
+        if (traces.size() > 1001) return false;
+        for (var entry : traces.entrySet()) {
+            boolean manifest = TRACE_MANIFEST.equals(entry.getKey());
+            if (!manifest && !entry.getKey().matches("[0-9]{4}\\.jsonl")) return false;
+            if (entry.getValue().length > (manifest ? 1024 * 1024 : TRACE_FILE_BUDGET)) return false;
+            bytes += entry.getValue().length;
+            if (bytes > TRACE_BYTE_BUDGET) return false;
+        }
+        return true;
+    }
+
     public void cleanAfterRestart() {
         cleanAttempts(true);
     }
@@ -388,10 +561,13 @@ public class JobEvidenceFiles {
         if (!Files.isDirectory(layout.jobsRoot())) return;
         try (var paths = Files.walk(layout.jobsRoot(), 3)) {
             var roots = new HashSet<Path>();
+            var traces = new HashSet<Path>();
             paths.filter(path -> layout.jobsRoot().relativize(path).getNameCount() == 3)
                     .forEach(path -> {
                         String name = path.getFileName().toString();
-                        if (name.startsWith(".") && name.contains(".preparing-")) {
+                        if (name.endsWith(TRACE_SUFFIX) || name.contains(TRACE_SUFFIX + ".preparing-")) {
+                            traces.add(path);
+                        } else if (name.startsWith(".") && name.contains(".preparing-")) {
                             roots.add(path.resolveSibling(name.substring(1, name.indexOf(".preparing-"))));
                         } else if (name.endsWith(".ended")) {
                             roots.add(path.resolveSibling(name.substring(0, name.lastIndexOf('.'))));
@@ -440,8 +616,35 @@ public class JobEvidenceFiles {
                     log.warn("Could not clean attempt folder {}", root, exception);
                 }
             }
+            traces.forEach(this::cleanTrace);
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
+        }
+    }
+
+    /**
+     * A transcript outlives its attempt, its admitted inputs and a restart, whatever the job's status, until its day
+     * is over. A staging copy left by a stopped writer goes at once: the runtime that wrote it no longer holds the job.
+     */
+    private void cleanTrace(Path trace) {
+        try {
+            var acquired = leaseJob(trace);
+            if (acquired.isEmpty()) return;
+            var lease = acquired.get();
+            try (lease) {
+                if (!Files.exists(trace, LinkOption.NOFOLLOW_LINKS)) return;
+                Path record = trace.resolve(TRACE_RECORD);
+                if (trace.getFileName().toString().startsWith(".")
+                        || !Files.isRegularFile(record, LinkOption.NOFOLLOW_LINKS)
+                        || !Files.getLastModifiedTime(record, LinkOption.NOFOLLOW_LINKS)
+                                .toInstant()
+                                .plus(TRACE_RETENTION)
+                                .isAfter(clock.instant())) {
+                    delete(trace);
+                }
+            }
+        } catch (RuntimeException | IOException exception) {
+            log.warn("Could not clean review transcript {}", trace, exception);
         }
     }
 
@@ -560,11 +763,122 @@ public class JobEvidenceFiles {
 
     private Path directory(AgentJob job) {
         String worker = Objects.requireNonNull(job.getWorkerId(), "Attempt has no owning worker");
+        return directory(job.getWorkspace().getId(), job.getId(), job.getRetryCount(), worker);
+    }
+
+    private Path directory(long workspaceId, UUID jobId, int attempt, String worker) {
         return layout.jobsRoot()
-                .resolve(job.getWorkspace().getId().toString())
-                .resolve(job.getId().toString())
-                .resolve(job.getRetryCount() + "-"
-                        + ProvenanceDigest.sha256Hex(worker.getBytes(StandardCharsets.UTF_8)));
+                .resolve(Long.toString(workspaceId))
+                .resolve(jobId.toString())
+                .resolve(attempt + "-" + ProvenanceDigest.sha256Hex(worker.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /**
+     * The collector's manifest is sandbox output: what a METADATA_ONLY record keeps is rebuilt here from it, field by
+     * field, as owned enums, booleans and bounded counts. Nothing the manifest carries is copied as written.
+     */
+    private static final class TraceSummary {
+        private static final JsonMapper MANIFESTS = new JsonMapper();
+        /** The collector's own reserve for its manifest (gateway-run.ts); a larger one was not written by it. */
+        private static final int MAX_MANIFEST_BYTES = 1024 * 1024;
+
+        private static final int MAX_SESSIONS = 1000;
+        private static final long MAX_COUNT = 1_000_000;
+        private static final long MAX_TOKENS = 1_000_000_000_000L;
+        private static final long MAX_BYTES = TRACE_BYTE_BUDGET;
+        private static final long MAX_REVISION = (1L << 53) - 1;
+        private static final Set<String> PHASES = Set.of("practice", "public-review", "private-feedback");
+        private static final Set<String> OMISSIONS = Set.of("oversize", "budget", "unreadable");
+        private static final Set<String> STOP_REASONS =
+                Set.of("stop", "length", "toolUse", "error", "aborted", "other");
+        /** The tools a review session is given (pi-runner.ts); the collector counts any other name as "other". */
+        private static final Set<String> TOOL_NAMES = Set.of(
+                "read",
+                "grep",
+                "find",
+                "ls",
+                "bash",
+                "codemode",
+                "read_practice",
+                "report_observation",
+                "report_feedback",
+                "report_review",
+                "other");
+
+        private TraceSummary() {}
+
+        /** The sessions as the worker states them, or null when the manifest is absent, oversize or unreadable. */
+        static @Nullable ArrayNode of(byte @Nullable [] manifest) {
+            if (manifest == null || manifest.length > MAX_MANIFEST_BYTES) return null;
+            JsonNode root;
+            try {
+                root = MANIFESTS.readTree(manifest);
+            } catch (RuntimeException unreadable) {
+                log.warn(
+                        "Unreadable transcript manifest: {}",
+                        unreadable.getClass().getSimpleName());
+                return null;
+            }
+            if (!root.path("sessions").isArray()) return null;
+            ArrayNode sessions = JsonNodeFactory.instance.arrayNode();
+            for (JsonNode session : root.path("sessions")) {
+                if (sessions.size() == MAX_SESSIONS) break;
+                ObjectNode kept = sessions.addObject();
+                kept.put("copied", session.path("file").isString());
+                putBounded(kept, "bytes", session.path("bytes"), MAX_BYTES);
+                putFlag(kept, "redacted", session.path("redacted"));
+                putFlag(kept, "partialLineDropped", session.path("partialLineDropped"));
+                putOwned(kept, "omitted", session.path("omitted"), OMISSIONS);
+                JsonNode summary = session.path("summary");
+                if (!summary.isObject()) continue;
+                ObjectNode facts = kept.putObject("summary");
+                putOwned(facts, "phase", summary.path("phase"), PHASES);
+                putBounded(facts, "practiceRevisionId", summary.path("practiceRevisionId"), MAX_REVISION);
+                for (String count : List.of("entries", "assistantCalls", "toolErrors", "compactions")) {
+                    putBounded(facts, count, summary.path(count), MAX_COUNT);
+                }
+                ObjectNode usage = facts.putObject("usage");
+                for (String bucket : List.of("input", "output", "cacheRead", "cacheWrite")) {
+                    putBounded(usage, bucket, summary.path("usage").path(bucket), MAX_TOKENS);
+                }
+                putCounts(facts.putObject("stopReasons"), summary.path("stopReasons"), STOP_REASONS);
+                putCounts(facts.putObject("toolCalls"), summary.path("toolCalls"), TOOL_NAMES);
+            }
+            return sessions;
+        }
+
+        static boolean scanTruncated(byte @Nullable [] manifest) {
+            if (manifest == null || manifest.length > MAX_MANIFEST_BYTES) return true;
+            try {
+                var root = MANIFESTS.readTree(manifest);
+                var value = root.path("sessionScanTruncated");
+                return !root.path("sessions").isArray()
+                        || root.path("sessions").size() > MAX_SESSIONS
+                        || !value.isBoolean()
+                        || value.asBoolean();
+            } catch (RuntimeException unreadable) {
+                return true;
+            }
+        }
+
+        private static void putBounded(ObjectNode target, String field, JsonNode value, long max) {
+            if (value.isIntegralNumber() && value.canConvertToLong() && value.asLong() >= 0 && value.asLong() <= max) {
+                target.put(field, value.asLong());
+            }
+        }
+
+        private static void putFlag(ObjectNode target, String field, JsonNode value) {
+            if (value.isBoolean()) target.put(field, value.asBoolean());
+        }
+
+        private static void putOwned(ObjectNode target, String field, JsonNode value, Set<String> owned) {
+            if (value.isString() && owned.contains(value.asString())) target.put(field, value.asString());
+        }
+
+        /** Only owned keys, each a bounded count; another key is dropped, not renamed. */
+        private static void putCounts(ObjectNode target, JsonNode counts, Set<String> owned) {
+            for (String key : owned) putBounded(target, key, counts.path(key), MAX_COUNT);
+        }
     }
 
     private static Path safePath(Path root, String path) {

@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.io.Serial;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -23,6 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -145,13 +147,22 @@ public class ObservationAdmissionService {
      */
     private InAppSupportContext inAppSupport(AdmissionIdentity identity) {
         try {
-            return Objects.requireNonNull(transactions.execute(status -> {
-                AgentJob job = ownedJob(identity);
-                InAppSupportReader reader = inAppSupportReader.getIfAvailable();
-                return reader == null
-                        ? InAppSupportContext.unavailable(Instant.now())
-                        : reader.snapshot(job, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
-            }));
+            return evidenceFiles.indexLateRead(
+                    identity,
+                    () -> Objects.requireNonNull(transactions.execute(status -> {
+                        AgentJob job = ownedJob(identity);
+                        InAppSupportReader reader = inAppSupportReader.getIfAvailable();
+                        return reader == null
+                                ? InAppSupportContext.unavailable(Instant.now())
+                                : reader.snapshot(
+                                        job, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
+                    })),
+                    support -> new JobEvidenceFiles.LateCopies(
+                            support.practices().stream()
+                                    .flatMap(practice -> practice.occurrences().stream())
+                                    .map(InAppSupportContext.Occurrence::observationId)
+                                    .collect(Collectors.toSet()),
+                            Set.of()));
         } catch (StaleAttemptException lost) {
             throw lost;
         } catch (RuntimeException e) {
@@ -232,9 +243,29 @@ public class ObservationAdmissionService {
         }
     }
 
-    /** A separately dated communication read: it cannot roll back or replace the admitted assessment. */
+    /**
+     * A separately dated communication read: it cannot roll back or replace the admitted assessment. Its rows come
+     * from other reviews, so they are indexed in this attempt's receipt before the sandbox receives them.
+     */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ObjectNode publicFeedbackHistory(AdmissionIdentity identity) {
+        return evidenceFiles.indexLateRead(
+                identity, () -> readPublicFeedbackHistory(identity), ObservationAdmissionService::publicHistoryCopies);
+    }
+
+    private static JobEvidenceFiles.LateCopies publicHistoryCopies(ObjectNode read) {
+        Set<UUID> feedback = new HashSet<>();
+        Set<UUID> basedOn = new HashSet<>();
+        read.path("history").path("feedback").forEach(row -> {
+            feedback.add(UUID.fromString(row.path("id").asString()));
+            row.path("basedOn")
+                    .forEach(support ->
+                            basedOn.add(UUID.fromString(support.path("id").asString())));
+        });
+        return new JobEvidenceFiles.LateCopies(basedOn, feedback);
+    }
+
+    private ObjectNode readPublicFeedbackHistory(AdmissionIdentity identity) {
         return Objects.requireNonNull(transactions.execute(status -> {
             AgentJob job = ownedJob(identity);
             if (admissionDigest(job).isBlank()) {

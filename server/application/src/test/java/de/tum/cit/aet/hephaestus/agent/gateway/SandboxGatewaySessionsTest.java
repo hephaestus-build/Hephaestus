@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
@@ -198,6 +199,46 @@ class SandboxGatewaySessionsTest {
             assertThat(duplicate.admitted()).isFalse();
             assertThat(duplicate.etag()).isEqualTo(expectedEtag);
             assertThat(session.result().get("observations.json")).isEqualTo("{}".getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
+    void shouldBindTheLaunchedAttemptAtRegistrationAndAdmitTheResultWhateverListenersDo() throws Exception {
+        UUID jobId = UUID.randomUUID();
+        var bound = new ArrayList<String>();
+        var told = new ArrayList<Map<String, byte[]>>();
+        var listening = new SandboxGatewaySessions(
+                SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET,
+                List.of(
+                        (job, attempt, image) -> {
+                            throw new IllegalStateException("the job row is unavailable");
+                        },
+                        (job, attempt, image) -> files -> {
+                            throw new IllegalStateException("the transcript store is unavailable");
+                        },
+                        (job, attempt, image) -> {
+                            bound.add(job + "#" + attempt + "@" + image);
+                            return told::add;
+                        }));
+        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
+        try (var session = listening.registerAttempt(jobId, 2, "agent@sha256:pinned", "token", archive, "out")) {
+            assertThat(bound).as("bound before anything can upload").containsExactly(jobId + "#2@agent@sha256:pinned");
+            byte[] result = resultTar();
+
+            assertThat(upload(session, result).admitted()).isTrue();
+            assertThat(upload(session, result).admitted()).isFalse();
+
+            assertThat(told)
+                    .singleElement()
+                    .satisfies(files -> assertThat(files).containsOnlyKeys("observations.json"));
+            assertThat(session.result()).containsOnlyKeys("observations.json");
+        }
+        Path mentorArchive = Files.writeString(temporary.resolve("mentor.tar"), "input");
+        try (var mentor = listening.register("token", mentorArchive, "out")) {
+            upload(mentor, resultTar());
+            assertThat(bound)
+                    .as("a session without a launched attempt binds nothing")
+                    .hasSize(1);
         }
     }
 

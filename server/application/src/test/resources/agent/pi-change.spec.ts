@@ -101,6 +101,44 @@ void test("template comparison keeps text separated by comments apart", () => {
 	assert.deepEqual(view.authored, [1]);
 });
 
+void test("an authored user benefit under the template's headings is kept as the author's words", () => {
+	const description = `<!--MR title format: #<IssueNumber>: <Short, imperative description> — Example: #12: Add login screen-->
+
+## Description
+
+Closes #11
+
+Profile edits are kept on the device and are still there after the app restarts.
+Returning users skip the setup screen and continue where they left off.
+
+## Intro Course App Requirements
+
+- [x] **Requirement:** Persistence — profile edits survive quitting and reopening the app
+
+## Testing Instructions
+
+N/A
+
+## Definition of Done
+
+- [x] MR title follows the \`#<IssueNumber>: <Description>\` format
+- [x] Description explains what was changed and why
+- [ ] Related issue is linked (e.g., \`Closes #12\`)
+`;
+	const view = authoredDescription(description, new Map([["templates/Default.md", TEMPLATE]]));
+	assert.deepEqual(view.authored, [5, 7, 8, 12, 16]);
+	const rendered = renderAuthoredDescription(description, view);
+	assert.match(
+		rendered,
+		/\[L7\] Profile edits are kept on the device and are still there after the app restarts\.\n\[L8\] Returning users skip the setup screen and continue where they left off\./u,
+	);
+	assert.match(
+		rendered,
+		/\[L12\] - \[x\] \*\*Requirement:\*\* Persistence — profile edits survive quitting and reopening the app/u,
+	);
+	assert.doesNotMatch(rendered, /MR title format|## Description|## Intro Course App Requirements/u);
+});
+
 function git(repository: string, ...args: string[]): string {
 	return execFileSync("git", ["-C", repository, ...args], {
 		encoding: "utf8",

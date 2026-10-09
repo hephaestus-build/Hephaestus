@@ -199,6 +199,8 @@ public class DockerSandboxAdapter implements SandboxManager {
             }
             attempt = launcher.open(
                     jobId,
+                    claimedAttempt,
+                    spec.image(),
                     spec.networkPolicy(),
                     workspaceManager.createInputTar(
                             spec.inputFiles(), spec.inputFilesOnDisk(), spec.inputDirectories()),

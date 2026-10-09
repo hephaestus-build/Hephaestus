@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -59,6 +60,13 @@ public class ExactPersonDataCopyRecorder implements PersonDataCopyRecorder {
     }
 
     @Override
+    public void recordCopiedJob(UUID jobId) {
+        for (var frame = ACTIVE.get(); frame != null; frame = frame.parent) {
+            if (frame.copiedJobs.add(jobId) && frame.writer != null) frame.writer.run();
+        }
+    }
+
+    @Override
     public Capture begin() {
         var frame = new CaptureFrame(ACTIVE.get());
         ACTIVE.set(frame);
@@ -69,6 +77,7 @@ public class ExactPersonDataCopyRecorder implements PersonDataCopyRecorder {
         private final @Nullable CaptureFrame parent;
         private final Set<PersonCopyIdentity> identities = new LinkedHashSet<>();
         private final Set<Long> repositories = new LinkedHashSet<>();
+        private final Set<UUID> copiedJobs = new LinkedHashSet<>();
         private final Map<Long, List<PersonCopyIdentity>> users;
         private @Nullable Runnable writer;
         private boolean closed;
@@ -91,6 +100,11 @@ public class ExactPersonDataCopyRecorder implements PersonDataCopyRecorder {
         @Override
         public List<Long> repositoryIds() {
             return repositories.stream().sorted().toList();
+        }
+
+        @Override
+        public List<UUID> copiedJobIds() {
+            return copiedJobs.stream().sorted().toList();
         }
 
         @Override
