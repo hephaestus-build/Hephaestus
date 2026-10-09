@@ -136,7 +136,7 @@ void test("public composition cannot discover or read private history through na
 		cwd: CWD,
 		agentDir: AGENT_DIR,
 		tools: PUBLIC_REVIEW_TOOLS,
-		customTools: ["select_feedback", "report_review"].map((name) =>
+		customTools: ["read_practice", "report_review"].map((name) =>
 			defineTool({
 				name,
 				label: name,
@@ -152,7 +152,7 @@ void test("public composition cannot discover or read private history through na
 		sessionManager: SessionManager.create(CWD, path.join(CWD, ".sessions")),
 	});
 	try {
-		assert.deepEqual(session.getActiveToolNames(), ["select_feedback", "report_review"]);
+		assert.deepEqual(session.getActiveToolNames(), ["read_practice", "report_review"]);
 		assert.deepEqual(session.getCallableToolNames(), []);
 		session.setActiveToolsByName(["read", "grep", "bash", "codemode"]);
 		assert.deepEqual(session.getActiveToolNames(), []);
