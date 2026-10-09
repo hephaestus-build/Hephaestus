@@ -1,15 +1,15 @@
 {
-	"commit": "387664f1f96d79003a906d92e3e687f7485eb58b",
+	"commit": "f4dc130cf739cdd357f3a88e4b82c3f89501e547",
 	"images": {
 		"HEPHAESTUS_IMAGE_ALPINE": "docker.io/library/alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
-		"HEPHAESTUS_IMAGE_NATS": "docker.io/library/nats@sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
-		"HEPHAESTUS_IMAGE_TRAEFIK": "docker.io/library/traefik@sha256:f86a2cab1b5c649070c49f883c743dd32d8485a56e3368c5f93b9e91f1e91259",
-		"HEPHAESTUS_IMAGE_WEBAPP": "ghcr.io/hephaestus-build/webapp@sha256:68a5f218ba48a9f4c61fd64129ef6967d31b450545e6f188ad61f0e058106bc2",
-		"HEPHAESTUS_IMAGE_APPLICATION_SERVER": "ghcr.io/hephaestus-build/application-server@sha256:2e37f6681c63c25dd564b06c442a48c68f317667427d13a2d99d636fc4745c3e",
-		"HEPHAESTUS_IMAGE_AGENT_PI": "ghcr.io/hephaestus-build/agent-pi@sha256:b05026314fe093deba19ac26eef3ecdb556e85d4a76c72280b6c841aa623fce5",
-		"HEPHAESTUS_IMAGE_POSTGRES": "ghcr.io/hephaestus-build/postgres@sha256:bda46c255b49c21849ae2b4165ab66cb99c793f02ac2bca5ecda0311d07d4570"
+		"HEPHAESTUS_IMAGE_NATS": "docker.io/synadia/nats-server@sha256:e7c229e0f6415993d29a7ada7ef61f5fd380d7c1134b9038f70f6eff2813b0a0",
+		"HEPHAESTUS_IMAGE_TRAEFIK": "docker.io/library/traefik@sha256:575fa15b135078fe5e50aa847987d96dbddd7b093c172429618404df73f3fa7c",
+		"HEPHAESTUS_IMAGE_WEBAPP": "ghcr.io/hephaestus-build/webapp@sha256:cab9c61486ffe3c651c829d404e430e6262ef76c1482ae29d400e377e318373e",
+		"HEPHAESTUS_IMAGE_APPLICATION_SERVER": "ghcr.io/hephaestus-build/application-server@sha256:fc8f8e67a561791772cc34e20c46d0f8debe0d45663883b93ac57568f8b8f0ab",
+		"HEPHAESTUS_IMAGE_AGENT_PI": "ghcr.io/hephaestus-build/agent-pi@sha256:17e6e2d79488d63c3c11c1dbef2c878359d8dc8ea14454b584f9a8fc73b6a7da",
+		"HEPHAESTUS_IMAGE_POSTGRES": "ghcr.io/hephaestus-build/postgres@sha256:0825e8b34c065334a545cf77e6287c09d3d621d10eba026b1d655f0f6bdd7b57"
 	},
 	"allowRollback": false,
-	"freeze": true,
+	"freeze": false,
 	"refreshDatabaseImage": false
 }
