@@ -3973,6 +3973,7 @@ async function main() {
 	const compositionRequest = loadCompositionRequest();
 	const streamUsage = newUsageLedger();
 	let providerFailures = 0;
+	const measurementReply = { received: false };
 	let measuring = true;
 	const subscribeSession = (trackedSession: AgentSession) =>
 		trackedSession.subscribe((event: AgentSessionEvent) => {
@@ -3982,6 +3983,9 @@ async function main() {
 				// A call a codemode script makes is the script's work, not a call the model sent: the loop
 				// guards count only the latter, and the trace keeps the former apart.
 				if (event.parentToolCallId === undefined) {
+					if (measuring) {
+						measurementReply.received = true;
+					}
 					console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 					if (currentTurn) {
 						noteToolCall(currentTurn, event.toolName, event.args, measuring);
@@ -4048,13 +4052,25 @@ async function main() {
 			if (event.type === "message_end" && event.message.role === "assistant") {
 				addAssistantUsage(streamUsage, event.message);
 				const { stopReason } = event.message;
+				// An error or abort alone is not a reply; meaningful partial output is. Once answered,
+				// later provider failures cannot turn a recording failure into a wholly unreachable review.
+				if (
+					measuring &&
+					((stopReason !== "error" && stopReason !== "aborted") ||
+						event.message.content.some(
+							(content) =>
+								content.type === "toolCall" || (content.type === "text" && !isBlank(content.text)),
+						))
+				) {
+					measurementReply.received = true;
+				}
 				if (currentTurn) {
 					currentTurn.modelError = stopReason === "error";
 				}
 				const types = listOrEmpty(event.message.content).map((c) => c.type);
 				const toolCalls = types.filter((t) => t === "toolCall").length;
 				const { rawStopReason } = event.message;
-				// Non-retryable provider errors also require a retry outcome if no practice was recorded.
+				// An error can leave a review unanswered even when the SDK does not retry it.
 				if (stopReason === "error" && measuring) {
 					providerFailures += 1;
 				}
@@ -4397,7 +4413,7 @@ async function main() {
 	}
 
 	if (!maybeWriteResultFile()) {
-		if (providerFailures > 0) {
+		if (providerFailures > 0 && !measurementReply.received) {
 			console.error(
 				`[pi-runner] UNREACHABLE: this review reached no practice, and ${providerFailures} model call(s) ` +
 					`went unanswered — the provider, not the work, is what this run could not read`,
