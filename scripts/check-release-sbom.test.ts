@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { validateReleaseSbom } from "./check-release-sbom.ts";
+import { componentEvidence, imagePath, validateReleaseSbom } from "./check-release-sbom.ts";
 
 const repository = "ghcr.io/hephaestus-build/webapp";
 const digest = "sha256:1102d43b320b1b9c06bdfc7f9e616c068abadace9b6874dedfcf41e1f35da3f5";
@@ -64,6 +64,118 @@ function withSourceMetadata(metadata: Record<string, unknown>): unknown {
 		source: { ...syft.source, metadata: { ...syft.source.metadata, ...metadata } },
 	};
 }
+
+await test("reads Go binaries and file digests only from a Syft scan of the exact subject", () => {
+	const hash = "1".repeat(64);
+	const goSyft = {
+		...syft,
+		descriptor: {
+			configuration: {
+				catalogers: {
+					used: ["go-module-binary-cataloger", "file-metadata-cataloger", "file-digest-cataloger"],
+				},
+				search: { scope: "squashed" },
+			},
+		},
+		artifacts: [
+			artifact,
+			{
+				...artifact,
+				type: "go-module",
+				foundBy: "go-module-binary-cataloger",
+				locations: [
+					{ path: "/usr/local/bin/helper", annotations: { evidence: "primary" } },
+					{ path: "/usr/local/bin/ignored", annotations: { evidence: "supporting" } },
+				],
+			},
+			// A go.mod read from source is not an executable the image runs.
+			{
+				...artifact,
+				type: "go-module",
+				foundBy: "go-module-file-cataloger",
+				locations: [{ path: "/src/go.mod", annotations: { evidence: "primary" } }],
+			},
+		],
+		files: [
+			{
+				location: { path: "/usr/local/bin/helper" },
+				digests: [{ algorithm: "sha256", value: hash }],
+			},
+			{ location: { path: "/app/server.jar" }, digests: [{ algorithm: "sha1", value: "x" }] },
+			{ location: { path: "/twice" }, digests: [{ algorithm: "sha256", value: hash }] },
+			{ location: { path: "/twice" }, digests: [{ algorithm: "sha256", value: "2".repeat(64) }] },
+		],
+	};
+	const evidence = componentEvidence(goSyft, subject);
+	assert.deepEqual([...evidence.goBinaries], ["/usr/local/bin/helper"]);
+	assert.equal(evidence.sha256.get("/usr/local/bin/helper"), hash);
+	assert.equal(evidence.sha256.get("/app/server.jar"), null);
+	assert.equal(evidence.sha256.get("/twice"), null, "different digests for one path are ambiguous");
+	assert.throws(() => componentEvidence(syft, subject), /Syft descriptor/u);
+	for (const missing of goSyft.descriptor.configuration.catalogers.used) {
+		assert.throws(
+			() =>
+				componentEvidence(
+					{
+						...goSyft,
+						descriptor: {
+							configuration: {
+								...goSyft.descriptor.configuration,
+								catalogers: {
+									used: goSyft.descriptor.configuration.catalogers.used.filter(
+										(name) => name !== missing,
+									),
+								},
+							},
+						},
+					},
+					subject,
+				),
+			/did not run/u,
+		);
+	}
+	assert.throws(() => componentEvidence({ ...goSyft, artifacts: [] }, subject), /no Go binary/u);
+	assert.throws(
+		() =>
+			componentEvidence(
+				{
+					...goSyft,
+					artifacts: [{ ...artifact, type: "go-module", foundBy: "go-module-binary-cataloger" }],
+				},
+				subject,
+			),
+		/no primary location/u,
+	);
+	assert.throws(
+		() =>
+			componentEvidence(
+				{
+					...goSyft,
+					descriptor: {
+						configuration: { ...goSyft.descriptor.configuration, search: { scope: "all-layers" } },
+					},
+				},
+				subject,
+			),
+		/squashed/u,
+	);
+	assert.throws(
+		() => componentEvidence(goSyft, { ...subject, platform: "linux/arm64" }),
+		/wrong platform/u,
+	);
+	assert.throws(
+		() =>
+			componentEvidence(
+				{ ...goSyft, files: [{ location: { path: "usr/local/bin/helper" } }] },
+				subject,
+			),
+		/canonical absolute image path/u,
+	);
+	assert.equal(imagePath("usr/local/bin/helper"), "/usr/local/bin/helper");
+	for (const bad of ["", "/a/../b", "a//b", "./a", String.raw`a\b`, "//a"]) {
+		assert.equal(imagePath(bad), undefined, bad);
+	}
+});
 
 await test("proves subject binding and lossless package conversion", () => {
 	assert.deepEqual(validateReleaseSbom(syft, spdx, cycloneDx, subject), {
