@@ -647,9 +647,11 @@ Only admitted observations authorize assessments and concerns.
 Primary code from admitted public citations precedes the observations as bounded whole files from the verified revisions.
 Change citations add matching pinned diff sections or an explicit omission reason.
 
-The first turn carries the complete staged criteria of each practice with an eligible `NOT_MET` observation before the observations.
-It then carries eligible current-work observations, prior public feedback and captured discussion on the same work.
-It also receives each owning practice revision's name, purpose and known limitations.
+The first turn shows the captured work and complete permitted public communication once.
+Each practice with an eligible `NOT_MET` observation then carries its whole staged criteria, complete observations and known limitations.
+Candidate prior witness references use the delivered feedback's captured practice association, without deciding a match or novelty.
+Eligible `MET` observations start as an identity and summary index, without rationale or citations.
+
 Delivered feedback retains its identity, reviewed revision and original observation support.
 Public history keeps a stale delivery's stored words as a record of what was delivered, not of a current claim or the provider's current text.
 Private history still shows only current words.
@@ -664,37 +666,51 @@ Omitted entries are counted by reason and cannot be prior-advice witnesses.
 It receives scope bounds for undecided and unreached practices, which support no claims.
 An observation that cites or consulted a private or unknown source stays out of this session entirely.
 Removing a private citation would not remove the information from the observation's prose.
-The public session has only selection and recording tools.
+The public session has two tools: `read_practice` and `report_review`.
 It has no file, search or execution tools and loads no private context.
+The first turn ends with the writing guidance.
 
-Within that session, `select_feedback` chooses observation IDs to discuss and exact withholding decisions.
-Every eligible `NOT_MET` observation must be selected or withheld.
-Selecting `MET` observations is optional.
-Repetition reasons must name eligible prior statements from the supplied history.
+`read_practice` shows a practice’s complete eligible `MET` observations beside its whole staged criteria.
+It also shows the known limitations and candidate prior witness references.
+A whole standard already shown beside a concern is referenced there rather than repeated.
+It names no path and serves no other practice.
+A criterion that is missing, unreadable, empty or blank is shown as such and makes nothing available.
+Reading a standard creates no obligation to acknowledge anything.
+
+`report_review` submits complete decisions first, then the summary and line notes in the same call.
+Each eligible `NOT_MET` observation has one decision: `RAISE` or a withholding reason.
+A raised observation supports text.
+A withheld one does not.
+The runner validates it whole against the original admitted observations and stores it whole, or refuses it with every reason.
+There is no separate selection step: the observations each text rests on are the review's choice.
+
+Every eligible `NOT_MET` observation is spoken about or withheld, never both.
+A review without text is a valid decision.
+When there is no eligible `NOT_MET` observation, its decision list is empty.
+
+Repetition reasons name eligible prior statements in `witnessIds`.
 This check establishes a located, dated statement by another author or usable delivered feedback, not semantic equivalence.
 The model still judges whether the advice repeats, whether circumstances changed and whether it adds value.
+The witnesses are checked and then dropped.
+Each withholding decision becomes the existing stored observation support and reason.
 
-A refused selection leaves the last accepted selection intact.
-An accepted replacement revises it.
+A text that rests on a `MET` observation needs its complete reference in view when the model wrote it.
+An opening standard for a mixed-result practice does not supply its deferred `MET` grounds.
+The complete reference from `read_practice` is in view only from the next model turn.
+Thus, a review sent in the same response as the read is refused.
 
-An accepted selection returns its admitted observations and the complete staged criteria of selected `MET` practices when available.
-The `NOT_MET` criteria already supplied in the first turn are not repeated.
 The criteria explain the recorded standard and its accepted responses and establish no additional concern.
 The admitted observations stay unchanged, but their outcomes are candidate claims, not certified conclusions.
-
-When the captured evidence does not support a selected concern under its standard, the session selects again and withholds it as `BELOW_BAR`.
+When the captured evidence does not support a concern under its standard, the session withholds it as `BELOW_BAR`.
 `review-composer.md` owns that rule.
-Writing guidance ends the selection handoff.
 
-After a completed compaction, the selection or recording tool restores the complete original review turn.
+A completed compaction takes every standard out of view.
+The next tool answer restores the complete original review turn and every standard read so far, whole.
 A final proposal is refused until the next model turn can use that restored context.
 Another tool call in the same batch cannot finalize it.
 
-`report_review` proposes the complete summary and line notes against the accepted selection.
-It must account for exactly the selected observations and repeat the accepted withholding decisions.
 Invalid proposals receive correction reasons within the existing turn budget.
 An accepted proposal ends the composition, including an intentionally quiet review.
-Selection remains transient.
 The stored review and independent server admission retain their existing contract.
 
 The private session receives the task, the brief, the admitted observations with their qualifications,
@@ -728,7 +744,7 @@ The same supported action may appear across channels when it serves each channel
 The shared writing guide and each channel's prompt define those purposes:
 
 - `IN_CONTEXT` is public feedback about the author’s work. `report_review` submits the whole final review:
-  an optional complete summary, complete line notes, and exact observation-scoped withholding decisions.
+  complete observation-scoped decisions, an optional complete summary and complete line notes.
   Each body names every admitted decided observation it speaks about in `basedOn`.
   The model writes the prose.
   The server never joins fragments or publishes raw observation summaries.

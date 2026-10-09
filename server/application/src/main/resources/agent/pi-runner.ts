@@ -74,25 +74,26 @@ import {
 	PRIOR_ADVICE_REASONS,
 	PRIVATE_CHANNELS,
 	type PreparedFeedbackTarget,
+	type OwnPriorFeedback,
+	READ_PRACTICE_TOOL_DESCRIPTION,
 	type ReviewPractice,
 	REVIEW_CONTRACT_VERSION,
 	REVIEW_TOOL_DESCRIPTION,
-	type ReviewSelection,
 	type ReviewedObservation,
-	SELECTION_TOOL_DESCRIPTION,
+	STANDARD_REFERENCE,
 	WITHHOLD_REASONS,
 	buildReviewTurn,
+	consultedStandard,
 	decidedByReview,
 	notReachedNote,
+	practiceStandard,
 	priorAdviceWitnesses,
 	priorPublicFeedback,
 	publicObservations,
+	readPracticeParameters,
 	readReview,
-	readSelection,
+	readablePractices,
 	reviewToolParameters,
-	selectionMismatch,
-	selectionText,
-	selectionToolParameters,
 	uncertainOutcomes,
 	undeliverableUnits,
 	validateFeedbackEvidence,
@@ -1170,13 +1171,13 @@ async function refusal<T>(toolCallId: string, text: string): Promise<AgentToolRe
 }
 
 /**
- * The tools a turn exists to call: what it records with them is what it owes. select_feedback stores nothing, but its
+ * The tools a turn exists to call: what it records with them is what it owes. read_practice stores nothing, but its
  * answer is a function of its arguments like theirs, so it shares their repeat and attempt bounds.
  */
 const RECORDING_TOOLS: ReadonlySet<string> = new Set([
 	"report_observation",
 	"report_feedback",
-	"select_feedback",
+	"read_practice",
 	"report_review",
 ]);
 
@@ -1756,9 +1757,11 @@ const COMPOSITION_NUDGE =
 
 /** What the composer of the review on the work is told near its budget's end. */
 const REVIEW_NUDGE =
-	`Everything this review may rest on is in this turn's prompt. Without an accepted selection, send one ` +
-	`select_feedback call now; with one, store the final review with one report_review call: the complete summary, ` +
-	`any line notes, and the selection's withholding decisions. No prose outside the calls.`;
+	`Everything this review may rest on is in this session. Store the final review now with one report_review call: ` +
+	`first one decision for each NOT_MET observation, RAISE or a withholding reason, then the complete summary and ` +
+	`any line notes, which speak about each raised observation and no withheld one. ` +
+	`Read a MET practice's complete reference with read_practice first only if the review acknowledges it and that ` +
+	`reference is not yet in view. No prose outside the calls.`;
 
 /** Calls a composition may make before its first recording call; at this one it is nudged to persist. */
 const COMPOSITION_EXPLORATION_NUDGE = 12;
@@ -2493,18 +2496,24 @@ interface ReportReviewDetails {
 	stored: number;
 }
 
-interface SelectFeedbackDetails {
-	accepted: boolean;
+interface ReadPracticeDetails {
+	shown: boolean;
 }
 
 /**
  * Once final, both tools refuse every call: one response can carry several calls after the final one.
- * A restored reference reaches a subsequent model decision, not another tool call in the same batch.
+ * A tool answer reaches a subsequent model decision, never another call in the same batch: what an answer shows is
+ * pending until the next turn starts, and a completed compaction takes everything out of view.
  */
 interface PublicReviewState {
-	selection: ReviewSelection | null;
 	final: boolean;
 	reviewContext: "LOST" | "RESTORING" | "HELD";
+	/** Complete MET grounds and standards shown by read_practice, for restoration. */
+	consulted: Map<string, string>;
+	/** The practices whose complete MET reference the model could read when it made its current decision. */
+	inView: Set<string>;
+	/** Shown in the current batch; in view from the next turn. */
+	pending: Set<string>;
 }
 
 function reviewableById(
@@ -2527,83 +2536,97 @@ function reviewableById(
 
 const REVIEW_FINAL = "The review on this work is final; this composition accepts nothing more.";
 
-/** A refused selection leaves the accepted one standing; nothing the tool accepts is stored or published. */
-function buildSelectionTool(
-	restable: ReadonlyMap<string, ReviewedObservation>,
+/**
+ * Shows one MET practice's complete reference beside its permitted MET observations, and
+ * nothing else: no path, no other practice, nothing private. A read that is missing, fails or is empty shows that
+ * and puts nothing in view.
+ */
+function buildPracticeTool(
 	reviewable: readonly Record<string, unknown>[],
-	witnesses: ReturnType<typeof priorAdviceWitnesses>,
+	standardOf: (slug: string) => { text: string; whole: boolean },
+	context: { practices: readonly ReviewPractice[]; history: readonly OwnPriorFeedback[] },
 	state: PublicReviewState,
-	reviewTurn: () => string,
+	restore: () => string,
 ) {
-	// Every witness a decision can name; readSelection checks which reason each one may support.
-	const eligible = [...witnesses].filter(([, witness]) => witness.eligibleForAlreadySaid);
+	const readable = new Set(readablePractices(reviewable));
 	return defineTool({
-		name: "select_feedback",
+		name: "read_practice",
 		exposure: "model-only",
-		label: "Select Feedback",
-		description: SELECTION_TOOL_DESCRIPTION,
-		parameters: selectionToolParameters(
-			restable,
-			eligible.map(([id]) => id),
-		),
-		execute: async (toolCallId, params): Promise<AgentToolResult<SelectFeedbackDetails>> => {
+		label: "Read Practice",
+		description: READ_PRACTICE_TOOL_DESCRIPTION,
+		parameters: readPracticeParameters([...readable]),
+		execute: async (toolCallId, params): Promise<AgentToolResult<ReadPracticeDetails>> => {
 			if (!compositionAdmitted) {
-				return refusal<SelectFeedbackDetails>(
+				return refusal<ReadPracticeDetails>(
 					toolCallId,
 					"Feedback composition opens only after Java admits the completed observations.",
 				);
 			}
 			if (state.final) {
-				return refusal<SelectFeedbackDetails>(toolCallId, REVIEW_FINAL);
+				return refusal<ReadPracticeDetails>(toolCallId, REVIEW_FINAL);
 			}
-			const read = readSelection(params, restable, witnesses);
-			const restored = state.reviewContext === "LOST" ? `\n${reviewTurn()}\n` : "";
-			if (state.reviewContext === "LOST") {
-				state.reviewContext = "RESTORING";
-			}
-			if ("errors" in read) {
-				const standing =
-					state.selection === null
-						? "no selection is accepted yet"
-						: "the selection accepted before it still stands";
-				const reasons = read.errors.map((error) => `- ${error}`).join("\n");
-				const stands =
-					state.selection === null
-						? ""
-						: `\nThe selection that stands:\n${selectionText(state.selection, reviewable, criteriaFileOf)}`;
-				return refusal<SelectFeedbackDetails>(
+			const slug =
+				isRecord(params) && typeof params.practiceSlug === "string"
+					? params.practiceSlug.trim()
+					: "";
+			if (!readable.has(slug)) {
+				const offered = readable.size > 0 ? [...readable].join(", ") : "none";
+				return refusal<ReadPracticeDetails>(
 					toolCallId,
-					`selection refused, ${standing}:\n${reasons}${restored}${stands}`,
+					`${slug === "" ? "practiceSlug is required" : `${slug} is not a practice with a MET observation this review may acknowledge`}; read_practice shows only: ${offered}`,
 				);
 			}
-			state.selection = read.selection;
+			const restored = state.reviewContext === "LOST" ? `${restore()}\n\n` : "";
+			const standard = standardOf(slug);
+			const consulted = consultedStandard(
+				standard.text,
+				slug,
+				reviewable,
+				context.practices,
+				context.history,
+			);
+			if (standard.whole) {
+				state.consulted.set(slug, consulted);
+				state.pending.add(slug);
+			}
 			return {
 				content: [
 					{
 						type: "text",
-						text: `Accepted the selection:${restored}\n${selectionText(read.selection, reviewable, criteriaFileOf)}\nNow store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions. A later select_feedback call replaces this selection until the review is final.`,
+						text: standard.whole
+							? `${restored}${STANDARD_REFERENCE}\n${consulted}\nThis standard is in view from your next turn.`
+							: `${restored}${standard.text}\nWithout its standard, no acknowledgement of this practice can be stored.`,
 					},
 				],
-				details: { accepted: true },
+				details: { shown: standard.whole },
 			};
 		},
 	});
 }
 
-/** Reads the review against only the observations admission marked publicEligible, and the accepted selection. */
+/**
+ * Reads the review against only the observations admission marked publicEligible, the statements shown as already
+ * said, and the standards in view when the model wrote it.
+ */
 function buildReviewTool(
 	lineNotes: boolean,
 	restable: ReadonlyMap<string, ReviewedObservation>,
-	reviewable: readonly Record<string, unknown>[],
+	witnesses: ReturnType<typeof priorAdviceWitnesses>,
 	state: PublicReviewState,
-	reviewTurn: () => string,
+	restore: () => string,
 ) {
+	// Every witness a decision can name; readReview checks which reason each one may support.
+	const eligible = [...witnesses].filter(([, witness]) => witness.eligibleForAlreadySaid);
 	return defineTool({
 		name: "report_review",
 		exposure: "model-only",
 		label: "Report Review",
 		description: REVIEW_TOOL_DESCRIPTION,
-		parameters: reviewToolParameters(restable, lineNotes),
+		parameters: reviewToolParameters(
+			restable,
+			lineNotes,
+			eligible.map(([id]) => id),
+		),
 		execute: async (toolCallId, params): Promise<AgentToolResult<ReportReviewDetails>> => {
 			if (!compositionAdmitted) {
 				return refusal<ReportReviewDetails>(
@@ -2614,27 +2637,22 @@ function buildReviewTool(
 			if (state.final) {
 				return refusal<ReportReviewDetails>(toolCallId, REVIEW_FINAL);
 			}
-			if (state.selection === null) {
-				return refusal<ReportReviewDetails>(
-					toolCallId,
-					"review refused, nothing was stored: no selection is accepted yet. Choose with one select_feedback call first, then send the whole review.",
-				);
-			}
 			if (state.reviewContext !== "HELD") {
-				const restored = state.reviewContext === "LOST" ? `\n${reviewTurn()}\n` : "";
+				const restored = state.reviewContext === "LOST" ? `\n${restore()}\n` : "";
 				state.reviewContext = "RESTORING";
 				return refusal<ReportReviewDetails>(
 					toolCallId,
-					`review refused, nothing was stored: the session's context was compacted. Use the restored review reference in the next model turn before storing the review.${restored}\nThe selection that stands:\n${selectionText(state.selection, reviewable, criteriaFileOf)}\nSend the whole review again, or select again first.`,
+					`review refused, nothing was stored: the session's context was compacted. Use the restored review reference in the next model turn before storing the review.${restored}\nSend the whole review again.`,
 				);
 			}
-			const read = readReview(params, restable, lineNotes);
-			const errors =
-				"errors" in read ? read.errors : selectionMismatch(read.review, state.selection);
-			if ("errors" in read || errors.length > 0) {
+			const read = readReview(params, restable, lineNotes, {
+				witnesses,
+				standardsInView: state.inView,
+			});
+			if ("errors" in read) {
 				return refusal<ReportReviewDetails>(
 					toolCallId,
-					`review refused, nothing was stored:\n${errors.map((error) => `- ${error}`).join("\n")}`,
+					`review refused, nothing was stored:\n${read.errors.map((error) => `- ${error}`).join("\n")}`,
 				);
 			}
 			// Final only once persisted: a failed write leaves the review unaccepted, so it is never delivered.
@@ -2678,21 +2696,12 @@ function undecidedByReview(reviewable: readonly Record<string, unknown>[]): stri
 		.filter((id) => !decided.has(id));
 }
 
-/** Carries the accepted selection, which a compaction may have removed from the session's context. */
-function finishReviewText(
-	undecided: readonly string[],
-	selection: ReviewSelection | null,
-	reviewable: readonly Record<string, unknown>[],
-): string {
+function finishReviewText(undecided: readonly string[]): string {
 	const owed =
 		undecided.length > 0
 			? `## Undecided\nThe review leaves these NOT_MET observations undecided: ${undecided.join(", ")}.`
 			: "## Unfinished\nThe review on this work is not final yet.";
-	const next =
-		selection === null
-			? "Choose with one select_feedback call, then store the final review with one report_review call."
-			: `${selectionText(selection, reviewable, criteriaFileOf)}\nThis selection stands. Store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions, or select again first.`;
-	return `${owed}\n${next} A review that says nothing is still one final report_review call. No prose outside the calls.`;
+	return `${owed}\nStore the final review with one report_review call. A review that says nothing is still one final report_review call. No prose outside the calls.`;
 }
 
 /** Explanatory context on each practice the review's observations were measured against, from the staged index. */
@@ -3488,7 +3497,7 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 			owed.length > 0
 				? `Still owed: ${owed.join(", ")}. Record what the evidence you have read supports for these`
 				: "Record what the evidence you have read supports";
-		// The review's next tool depends on whether a selection stands, which REVIEW_NUDGE already says.
+		// The review's next tool depends on what it still lacks, which REVIEW_NUDGE already says.
 		let correction = `Correct what its answer names and send one ${recording ? toolName : composerTool} call.`;
 		if (composerTool === "report_review") {
 			correction = `Correct what its answer names. ${REVIEW_NUDGE}`;
@@ -4506,8 +4515,9 @@ async function main() {
 	process.exit(0);
 
 	/**
-	 * The review on the work, in a fresh session of its own whose only tools choose and store the review, with every
-	 * input inline. Private history is not staged into it, and it can read nothing from the workspace.
+	 * The review on the work, in a fresh session of its own whose only tools show a MET practice's staged standard and
+	 * store the whole review, with every other input inline. Private history is not staged into it, and it can read
+	 * nothing else from the workspace.
 	 */
 	async function composeReview(
 		request: CompositionRequest,
@@ -4568,20 +4578,77 @@ async function main() {
 		};
 		persistRunnerDebug();
 		const restable = reviewableById(reviewable);
-		const state: PublicReviewState = { selection: null, final: false, reviewContext: "LOST" };
+		const state: PublicReviewState = {
+			final: false,
+			reviewContext: "LOST",
+			consulted: new Map(),
+			inView: new Set(),
+			pending: new Set(),
+		};
+		// One staged read per practice for the whole composition: what a turn shows and what counts as shown agree.
+		const reads = new Map<string, string | null | Error>();
+		const stagedOnce = (slug: string): string | null => {
+			if (!reads.has(slug)) {
+				try {
+					reads.set(slug, criteriaFileOf(slug));
+				} catch (error) {
+					reads.set(slug, error instanceof Error ? error : new Error(String(error)));
+				}
+			}
+			const staged = reads.get(slug);
+			if (staged instanceof Error) {
+				throw staged;
+			}
+			return staged ?? null;
+		};
+		const practices = practiceContext(reviewable);
+		/** The opening turn and every standard read since, whole: what a compaction removed. */
+		const reference = () => {
+			const consulted = [...state.consulted.values()];
+			return consulted.length === 0
+				? text
+				: `${text}\n\n### Standards read earlier in this session\n${STANDARD_REFERENCE}\n${consulted.join("\n")}`;
+		};
+		const restore = () => {
+			state.reviewContext = "RESTORING";
+			for (const slug of state.consulted.keys()) {
+				state.pending.add(slug);
+			}
+			return reference();
+		};
 		const { session: reviewSession } = await createAgentSession({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
 			tools: PUBLIC_REVIEW_TOOLS,
 			customTools: [
-				buildSelectionTool(
-					restable,
+				buildPracticeTool(
 					reviewable,
+					(slug) => {
+						const standard = practiceStandard(slug, stagedOnce);
+						const opening = reviewable.some(
+							(entry) =>
+								entry.publicEligible === true &&
+								entry.outcome === "NOT_MET" &&
+								entry.practiceSlug === slug,
+						);
+						return standard.whole && opening
+							? {
+									text: `The whole standard of \`${slug}\` is shown with its concern in the opening reference.\n`,
+									whole: true,
+								}
+							: standard;
+					},
+					{ practices, history: alreadySaid.feedback },
+					state,
+					restore,
+				),
+				buildReviewTool(
+					lineNotes,
+					restable,
 					priorAdviceWitnesses(alreadySaid.feedback, captured.statements),
 					state,
-					() => text,
+					restore,
 				),
-				buildReviewTool(lineNotes, restable, reviewable, state, () => text),
 			],
 			sessionManager: SessionManager.create(CWD, `${CWD}/.sessions`),
 			settingsManager,
@@ -4605,9 +4672,18 @@ async function main() {
 		const unsubscribeContext = reviewSession.subscribe((event) => {
 			if (event.type === "compaction_end" && !event.aborted && !hasText(event.errorMessage)) {
 				state.reviewContext = "LOST";
-			} else if (event.type === "turn_start" && state.reviewContext === "RESTORING") {
-				// Pi begins the next model turn after the current tool batch has ended.
-				state.reviewContext = "HELD";
+				state.inView.clear();
+				state.pending.clear();
+			} else if (event.type === "turn_start") {
+				// Pi begins the next model turn after the current tool batch has ended: only then can the model read
+				// what that batch's answers showed.
+				if (state.reviewContext === "RESTORING") {
+					state.reviewContext = "HELD";
+				}
+				for (const slug of state.pending) {
+					state.inView.add(slug);
+				}
+				state.pending.clear();
 			}
 		});
 		activeSession = reviewSession;
@@ -4641,10 +4717,10 @@ async function main() {
 			ownHistoryOmissions: alreadySaid.omissions,
 			ownHistoryReadAt: read.readAt,
 			captured,
-			practices: practiceContext(reviewable),
+			practices,
 			notReached: notReachedSlugs,
 			lineNotes,
-			stagedCriteria: criteriaFileOf,
+			stagedCriteria: stagedOnce,
 		});
 		// The composition owes one final review, whatever it decides: an all-MET review is final only when sent.
 		const owed = () => (state.final ? 0 : Math.max(1, undecidedByReview(reviewable).length));
@@ -4712,11 +4788,13 @@ async function main() {
 				try {
 					await Promise.race([
 						(async () => {
-							const prepared = await prepareTurnText(
-								reviewSession,
-								() =>
-									`${state.reviewContext === "HELD" ? "" : `${text}\n\n`}${finishReviewText(left, state.selection, reviewable)}`,
-							);
+							// Decided when the prompt is prepared, which may compact: only a prompt that carries the
+							// reference puts its standards back in view.
+							let restoring = false;
+							const prepared = await prepareTurnText(reviewSession, () => {
+								restoring = state.reviewContext !== "HELD";
+								return `${restoring ? `${reference()}\n\n` : ""}${finishReviewText(left)}`;
+							});
 							if (safety.expired()) {
 								return;
 							}
@@ -4727,6 +4805,11 @@ async function main() {
 								preflightResult: (disposition) => {
 									if (disposition === "started") {
 										state.reviewContext = "HELD";
+										if (restoring) {
+											for (const slug of state.consulted.keys()) {
+												state.inView.add(slug);
+											}
+										}
 									}
 								},
 							});
