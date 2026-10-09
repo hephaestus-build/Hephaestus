@@ -68,7 +68,10 @@ The opening holds the work and concerns; `read_practice` supplies optional recog
   as complete.
 
 Prefer useful recognition of a meaningful response to earlier questions or warranted
-advice on this work; a useful initial choice can earn recognition too. Matching work,
+advice on this work; a useful initial choice can earn recognition too. When a statement
+marked `eligibleForAlreadySaid` already recognised the same choice and the current evidence
+shows nothing new about it, leave that acknowledgement out. A newly evidenced meaningful
+choice or progress can still earn recognition. Matching work,
 practice or revision, or a result that changed from `NOT_MET` to `MET`, does not
 establish a fix. To acknowledge that current work addresses an earlier question or
 request, use the recorded communication and current qualified evidence; this does not
@@ -119,7 +122,7 @@ a note was posted, or say that every practice was checked.
 - `decisions` — one decision per NOT_MET observation: its `observationId` and `disposition`, either `RAISE` or one
   of the withholding reasons above. A prior-advice reason also names its `witnessIds`. These decisions are internal.
   Every raised observation has text; no withheld observation appears in text.
-- `summary` — the one comment on the work. Leave it out when nothing on this work earns a comment.
+- `summary` — the one comment on the work, or `null` when nothing on this work earns a comment.
 - `inline` — notes, each on one `anchorable` citation, named by its `observationId` and `citationIndex`. On GitHub
   it is meant to appear as a review comment on that line. On GitLab it is an ordinary comment on the merge request,
   headed by a link to the line.

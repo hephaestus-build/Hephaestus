@@ -92,6 +92,7 @@ import {
 	publicObservations,
 	readPracticeParameters,
 	readReview,
+	prepareReviewArguments,
 	readablePractices,
 	reviewToolParameters,
 	uncertainOutcomes,
@@ -2619,6 +2620,7 @@ function buildReviewTool(
 	const eligible = [...witnesses].filter(([, witness]) => witness.eligibleForAlreadySaid);
 	return defineTool({
 		name: "report_review",
+		prepareArguments: prepareReviewArguments,
 		exposure: "model-only",
 		label: "Report Review",
 		description: REVIEW_TOOL_DESCRIPTION,

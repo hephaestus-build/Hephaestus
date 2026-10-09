@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 import { Ajv } from "ajv";
@@ -838,9 +839,12 @@ void test("the native schema requires complete decisions and each text's fields 
 	const valid = validatorFor(decidedOnly);
 	const quiet = {
 		decisions: [below("colors"), below("handoff"), below("why"), below("description")],
+		summary: null,
+		inline: [],
 	};
 	assert.ok(valid(quiet), JSON.stringify(valid.errors));
 	assert.ok(!valid({}), "a report must deliberately account for every negative");
+	assert.ok(!valid({ decisions: quiet.decisions, inline: [] }), "no summary is expressed as null");
 	assert.ok(
 		valid({
 			decisions: allRaised,
@@ -901,6 +905,58 @@ void test("the native schema requires complete decisions and each text's fields 
 			],
 		}),
 	);
+});
+
+void test("native Responses serialization keeps a quiet summary nullable without accepting malformed text", () => {
+	const parameters = reviewToolParameters(decidedOnly, true, []);
+	const quiet = {
+		decisions: ["colors", "handoff", "why", "description"].map((observationId) => ({
+			observationId,
+			disposition: "BELOW_BAR",
+			witnessIds: [],
+		})),
+		summary: null,
+		inline: [],
+	};
+	const native = spawnSync(
+		process.execPath,
+		[
+			"--experimental-import-meta-resolve",
+			"--input-type=module",
+			"-e",
+			`import assert from "node:assert/strict";
+const sdk = import.meta.resolve("@earendil-works/pi-coding-agent");
+const { validateToolArguments } = await import(import.meta.resolve("@earendil-works/pi-ai", sdk));
+const { stream } = await import(import.meta.resolve("@earendil-works/pi-ai/api/openai-responses", sdk));
+const tool = { name: "report_review", description: "Store the whole review.", parameters: JSON.parse(process.argv[1]) };
+const quiet = JSON.parse(process.argv[2]);
+const { prepareReviewArguments } = await import(process.argv[3]);
+const validate = (parameters, arguments_) => validateToolArguments({ ...tool, parameters }, { name: tool.name, arguments: prepareReviewArguments(arguments_) });
+assert.deepEqual(validate(tool.parameters, quiet), quiet);
+for (const value of [null, [], "", JSON.stringify(quiet)]) {
+  assert.throws(() => validate(tool.parameters, value));
+}
+for (const summary of ["", false, 0, [], {}, { body: "Point", basedOn: [] }]) {
+  assert.throws(() => validate(tool.parameters, { ...quiet, summary }));
+}
+let payload;
+const model = { id: "configured-model", name: "configured-model", api: "openai-responses", provider: "hephaestus", baseUrl: "http://127.0.0.1:9/v1", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 1000 };
+const answer = await stream(model, { messages: [{ role: "system", content: "Write the review.", toolsAdded: [tool], timestamp: 0 }, { role: "user", content: "Write it.", timestamp: 0 }] }, { apiKey: "synthetic", onPayload: (params) => { payload = params; throw new Error("stopped before any request left"); } }).result();
+assert.equal(answer.stopReason, "error");
+const outgoing = payload.tools.find((entry) => entry.name === tool.name);
+assert.deepEqual(outgoing.parameters, tool.parameters);
+assert.notEqual(outgoing.strict, true);
+assert.deepEqual(validate(outgoing.parameters, quiet), quiet);
+assert.throws(() => validate(outgoing.parameters, { ...quiet, summary: {} }));
+`,
+			JSON.stringify(parameters),
+			JSON.stringify(quiet),
+			new URL("../../../main/resources/agent/pi-runner-composition.ts", import.meta.url).href,
+		],
+		{ encoding: "utf8", cwd: process.cwd() },
+	);
+	assert.equal(native.status, 0, native.stderr);
+	assert.ok("review" in readReview(quiet, decidedOnly, true, inView));
 });
 
 void test("with no negatives the required decision list is empty, and work without lines accepts no notes", () => {

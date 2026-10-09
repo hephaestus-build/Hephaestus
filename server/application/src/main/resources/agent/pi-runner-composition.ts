@@ -535,6 +535,19 @@ function readDecisions(
 	return { decided, named, errors };
 }
 
+/** Keep an explicit no-summary distinct from a primitive the SDK could coerce to null. */
+export function prepareReviewArguments(value: unknown) {
+	if (!isObject(value)) {
+		throw new Error("the review is one object with decisions, summary and inline");
+	}
+	if (value.summary !== undefined && value.summary !== null && !isObject(value.summary)) {
+		throw new Error(
+			"summary is one object with body and basedOn, or null when there is no comment",
+		);
+	}
+	return value;
+}
+
 /**
  * Reads one review as the composer sent it, or every reason it cannot be stored. A review is stored whole or not
  * at all: its decisions and texts were written together, so one wrong part sends the whole review back to be
@@ -1068,7 +1081,7 @@ function idList(ids: readonly string[], description: string) {
  * decision for each NOT_MET observation comes first, each text names only decided observations of this run, and a
  * note sits only on one with a line of this change. A list with nothing it could name takes no items. The required
  * fields of each part are required here, so a missing one is answered by the provider's own validation; the texts
- * stay optional, since saying nothing is a decision. readReview stays the final check and answers each part by name.
+ * use null for no summary and an empty array for no notes. readReview stays the final check and answers each part by name.
  *
  * @param lineNotes whether this work has lines a note can be placed on
  * @param eligibleWitnesses every witnessId a decision may name; readReview checks which reason each one supports
@@ -1095,7 +1108,7 @@ export function reviewToolParameters(
 		: [];
 	return {
 		type: "object",
-		required: ["decisions"],
+		required: ["decisions", "summary"],
 		properties: {
 			decisions: {
 				type: "array",
@@ -1126,11 +1139,11 @@ export function reviewToolParameters(
 				},
 			},
 			summary: {
-				type: "object",
+				type: ["object", "null"],
 				required: ["basedOn", "body"],
 				description:
 					"The one overview comment on the work: the guidance its NOT_MET observations warrant, a useful " +
-					"choice or repair the evidence shows, and points not carried by line notes. Omit it when nothing " +
+					"choice or repair the evidence shows, and points not carried by line notes. Send null when nothing " +
 					"on this work earns a comment of its own.",
 				properties: {
 					basedOn: idList(
