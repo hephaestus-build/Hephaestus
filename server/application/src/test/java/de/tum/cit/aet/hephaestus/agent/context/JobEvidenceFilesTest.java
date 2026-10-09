@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.context;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -43,6 +45,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -57,6 +60,7 @@ import org.eclipse.jgit.api.Git;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.mockito.Mockito;
@@ -674,6 +678,212 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         assertThat(read(files, job, "context/quote", sha)).isEmpty();
         assertThat(layout.jobsRoot().resolve("1").resolve(job.getId().toString()))
                 .isEmptyDirectory();
+    }
+
+    private static final String IMAGE = "agent@sha256:pinned";
+
+    /**
+     * A manifest as a sandbox could forge it: names, paths, arguments and error text in every field, unknown keys,
+     * unowned enums, and numbers that are fractional, negative or past any bound.
+     */
+    private static final String FORGED_MANIFEST = """
+            {"schemaVersion":1,"budgetBytes":1,"model":"Jane Roe","sessions":[
+              {"file":"people/jane-roe.jsonl","bytes":120,"redacted":"Jane Roe","partialLineDropped":false,
+               "omitted":"Jane Roe","error":"Jane Roe <jane@example.com>",
+               "summary":{"phase":"practice","practiceRevisionId":12,"practiceSlug":"jane-roe","entries":6,
+                 "assistantCalls":1e30,"toolErrors":-1,"compactions":1.5,
+                 "usage":{"input":100,"output":"Jane Roe","cacheRead":9007199254740993,"cacheWrite":5,"note":"Jane Roe"},
+                 "stopReasons":{"toolUse":1,"Jane Roe":2},
+                 "toolCalls":{"read":2,"jane_roe_tool":1,"other":1},
+                 "arguments":{"path":"/workspace/inputs/people/7/person.json"}}},
+              {"summary":{"phase":"Jane Roe"}}
+            ]}
+            """;
+
+    /** An upload as the gateway runner sends it: the result, a native session copy and its manifest. */
+    private static final Map<String, byte[]> TRACED_UPLOAD = Map.of(
+            "result.json", "{\"observations\":[]}".getBytes(StandardCharsets.UTF_8),
+            "traces/0001.jsonl", "{\"type\":\"session\",\"cwd\":\"Jane Roe\"}\n".getBytes(StandardCharsets.UTF_8),
+            "traces/manifest.json", FORGED_MANIFEST.getBytes(StandardCharsets.UTF_8));
+
+    private static Path traceOf(FabricLayout layout, AgentJob job, int attempt) {
+        return layout.jobsRoot()
+                .resolve("1")
+                .resolve(job.getId().toString())
+                .resolve(attempt + "-" + ProvenanceDigest.sha256Hex("worker".getBytes(StandardCharsets.UTF_8))
+                        + ".trace");
+    }
+
+    /** A job as the executor launches it: RUNNING as attempt 0 of this worker; later changes show in both reads. */
+    private AgentJob launched() {
+        var job = job();
+        job.setStatus(AgentJobStatus.RUNNING);
+        when(jobs.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
+        return job;
+    }
+
+    /** The lease a running attempt holds once its capture published the folder. */
+    private static EvidenceFolderLease runtimeLease(FabricLayout layout, AgentJob job) {
+        var lease =
+                EvidenceFolderLease.tryAcquire(layout.root(), 1L, job.getId()).orElseThrow();
+        lease.shareWithRemovals();
+        return lease;
+    }
+
+    @ParameterizedTest
+    @EnumSource(EvidenceFolderPersonDataCatalog.TraceCustody.class)
+    void shouldKeepTheNativeTranscriptOnlyWhenTheReceiptIndexesEveryCopiedDependency(
+            EvidenceFolderPersonDataCatalog.TraceCustody custody) throws Exception {
+        var layout = new FabricLayout(root.toString());
+        var copies = personCopies();
+        var job = launched();
+        when(copies.traceCustody(job.getId(), 1L, 0)).thenReturn(custody);
+        var files = new JobEvidenceFiles(layout, jobs, clock, copies);
+        var upload = files.bind(job.getId(), 0, IMAGE);
+        // Cancelled while it ran: the upload that still arrived is the attempt's.
+        job.setStatus(AgentJobStatus.CANCELLED);
+
+        var lease = runtimeLease(layout, job);
+        try (lease) {
+            upload.accept(TRACED_UPLOAD);
+        }
+
+        Path trace = traceOf(layout, job, 0);
+        switch (custody) {
+            case INDEXED -> {
+                assertThat(trace.resolve("0001.jsonl")).hasContent("{\"type\":\"session\",\"cwd\":\"Jane Roe\"}\n");
+                var record = new JsonMapper().readTree(Files.readString(trace.resolve("record.json")));
+                assertThat(record.path("retention").asString()).isEqualTo("NATIVE_TRANSCRIPT");
+                assertThat(record.has("contentUnavailable")).isFalse();
+                assertThat(record.path("attempt").asInt()).isZero();
+                assertThat(record.path("image").asString()).isEqualTo(IMAGE);
+                assertThat(Instant.parse(record.path("expiresAt").asString()))
+                        .isEqualTo(clock.instant().plus(Duration.ofHours(24)));
+            }
+            case UNINDEXED_DEPENDENCY -> {
+                try (var kept = Files.list(trace)) {
+                    assertThat(kept.map(path -> path.getFileName().toString()))
+                            .as("neither a session's words nor the sandbox's own manifest")
+                            .containsExactly("record.json");
+                }
+                String text = Files.readString(trace.resolve("record.json"));
+                for (String forged : List.of("Jane", "jane", "/workspace", "people/", "1e30", "note", "arguments")) {
+                    assertThat(text).doesNotContain(forged);
+                }
+                var record = new JsonMapper().readTree(text);
+                assertThat(record.path("retention").asString()).isEqualTo("METADATA_ONLY");
+                assertThat(record.path("contentUnavailable").asString()).isEqualTo("OWNERSHIP_INCOMPLETE");
+                assertThat(record.path("sessions"))
+                        .as("rebuilt from owned enums, flags and bounded integers only")
+                        .isEqualTo(new JsonMapper().readTree("""
+                                [{"copied":true,"bytes":120,"partialLineDropped":false,
+                                  "summary":{"phase":"practice","practiceRevisionId":12,"entries":6,
+                                    "usage":{"input":100,"cacheWrite":5},
+                                    "stopReasons":{"toolUse":1},
+                                    "toolCalls":{"read":2,"other":1}}},
+                                 {"copied":false,"summary":{"usage":{},"stopReasons":{},"toolCalls":{}}}]
+                                """));
+            }
+            case NOT_HELD ->
+                assertThat(trace.getParent())
+                        .as("an erased or requested receipt gets nothing, not even a record")
+                        .doesNotExist();
+        }
+        assertThat(job.getStatus()).isEqualTo(AgentJobStatus.CANCELLED);
+    }
+
+    @Test
+    void shouldEnforceTranscriptByteAndMemberLimitsEvenWhenTheSandboxClaimsOtherwise() throws Exception {
+        var layout = new FabricLayout(root.toString());
+        var copies = personCopies();
+        var job = launched();
+        when(copies.traceCustody(job.getId(), 1L, 0)).thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
+        var files = new JobEvidenceFiles(layout, jobs, clock, copies);
+        var upload = files.bind(job.getId(), 0, IMAGE);
+        var forged = new HashMap<>(TRACED_UPLOAD);
+        forged.put("traces/0001.jsonl", new byte[2 * 1024 * 1024 + 1]);
+        var lease = runtimeLease(layout, job);
+        try (lease) {
+            upload.accept(forged);
+        }
+        Path trace = traceOf(layout, job, 0);
+        assertThat(trace.resolve("0001.jsonl")).doesNotExist();
+        var record = new JsonMapper().readTree(Files.readString(trace.resolve("record.json")));
+        assertThat(record.path("retention").asString()).isEqualTo("METADATA_ONLY");
+        assertThat(record.path("contentUnavailable").asString()).isEqualTo("TRACE_OUTPUT_INVALID");
+    }
+
+    @Test
+    void shouldNotAttributeADelayedUploadOfAnEarlierAttemptToItsSuccessor() throws Exception {
+        var layout = new FabricLayout(root.toString());
+        var copies = personCopies();
+        var job = launched();
+        when(copies.traceCustody(eq(job.getId()), eq(1L), anyInt()))
+                .thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
+        var files = new JobEvidenceFiles(layout, jobs, clock, copies);
+        var earlier = files.bind(job.getId(), 0, IMAGE);
+        // Requeued: the successor attempt runs on this worker and holds the job's lease.
+        job.setRetryCount(1);
+        var successor = files.bind(job.getId(), 1, IMAGE);
+        var notLaunched = files.bind(job.getId(), 5, IMAGE);
+
+        var lease = runtimeLease(layout, job);
+        try (lease) {
+            earlier.accept(TRACED_UPLOAD);
+            notLaunched.accept(TRACED_UPLOAD);
+            assertThat(layout.jobsRoot())
+                    .as("the late upload lands in neither attempt's folder")
+                    .doesNotExist();
+
+            successor.accept(TRACED_UPLOAD);
+        }
+        assertThat(traceOf(layout, job, 1).resolve("0001.jsonl")).exists();
+        assertThat(traceOf(layout, job, 0)).doesNotExist();
+    }
+
+    @Test
+    void shouldWriteNoTranscriptOutsideTheRuntimeLeaseAndNeverFailTheUpload() throws Exception {
+        var layout = new FabricLayout(root.toString());
+        var copies = personCopies();
+        var job = launched();
+        when(copies.traceCustody(job.getId(), 1L, 0)).thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
+        var files = new JobEvidenceFiles(layout, jobs, clock, copies);
+        var upload = files.bind(job.getId(), 0, IMAGE);
+
+        upload.accept(TRACED_UPLOAD);
+        assertThat(traceOf(layout, job, 0))
+                .as("the runtime no longer holds the attempt")
+                .doesNotExist();
+
+        when(copies.traceCustody(job.getId(), 1L, 0)).thenThrow(new IllegalStateException("receipts unavailable"));
+        var lease = runtimeLease(layout, job);
+        try (lease) {
+            upload.accept(TRACED_UPLOAD);
+        }
+        assertThat(traceOf(layout, job, 0)).doesNotExist();
+    }
+
+    @Test
+    void shouldKeepATranscriptThroughARestartForADayWhateverTheJobBecame() throws Exception {
+        var layout = new FabricLayout(root.toString());
+        var copies = personCopies();
+        var job = launched();
+        when(copies.traceCustody(job.getId(), 1L, 0)).thenReturn(EvidenceFolderPersonDataCatalog.TraceCustody.INDEXED);
+        var lease = runtimeLease(layout, job);
+        try (lease) {
+            new JobEvidenceFiles(layout, jobs, clock, copies)
+                    .bind(job.getId(), 0, IMAGE)
+                    .accept(TRACED_UPLOAD);
+        }
+        job.setStatus(AgentJobStatus.COMPLETED);
+        Path trace = traceOf(layout, job, 0);
+
+        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(23)), copies).cleanAfterRestart();
+        assertThat(trace.resolve("0001.jsonl")).exists();
+
+        new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(24)), copies).cleanEndedAttempts();
+        assertThat(trace).doesNotExist();
     }
 
     private static AgentJob job() {

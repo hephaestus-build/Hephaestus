@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.context.StagedArtifactNames;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicReviewEligibility;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
@@ -118,6 +119,9 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     @Mock
     private PublicReviewEligibility publicEligibility;
 
+    @Mock
+    private PersonDataCopyRecorder personCopies;
+
     private ReviewHistoryContentSource provider;
 
     private final Map<UUID, List<Observation>> boundTo = new HashMap<>();
@@ -135,7 +139,8 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 issueRepository,
                 new StagedArtifactNames(ReviewHistoryContentSourceTest::identitiesOf),
                 objectMapper,
-                publicEligibility);
+                publicEligibility,
+                personCopies);
         lenient().when(conversationLiveness.activeThreadIds(anyLong(), any())).thenAnswer(invocation -> {
             Collection<Long> threads = invocation.getArgument(1);
             return threads.stream()

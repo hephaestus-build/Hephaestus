@@ -197,7 +197,8 @@ composition uses the sandbox's already downloaded read-only workspace and the pe
 A sweep retries missed cleanup. Other ended attempts become eligible for deletion one hour after
 the worker first records that they have ended. On restart, the worker deletes folders for unknown
 or finished attempts immediately and preserves matching running attempts. There are no keep-refs,
-content-addressed store, evidence payload rows, shared volume, or retained replay copies. Snapshot
+content-addressed store, evidence payload rows, shared volume, or retained replay copies; session
+transcripts are a bounded debug exception ([Update — 2026-10-09](#update--2026-10-09-debug-transcripts)). Snapshot
 repositories under the fabric root are released by the process that created them; age-based cleanup
 reclaims only leftovers of a previous process.
 
@@ -328,6 +329,34 @@ Each named part carries its own trigger at the point of decision. The Kubernetes
 decision is revisited only on evidence of unacceptable 2.0 adoption loss with explicit ownership of a
 second long-lived support matrix. A driver exceeding the few-hundred-line budget or requiring a
 protocol fork fails the split rule and must be simplified rather than normalized.
+
+## Update — 2026-10-09: debug transcripts
+
+The maintainers authorized one bounded exception to § Evidence admission and deletion.
+A worker keeps a review attempt's native session transcripts for 24 hours, for next-day investigation.
+The exception does not change input deletion: admitted inputs are still deleted at admission.
+It adds no replayable workspace snapshot, no database table, no API and no listing.
+
+- **Custody.** The transcripts sit beside the attempt folder, under the same job lease and the same `person_evidence_copy` receipt.
+  Erasure of the job removes them with the job folder before it acknowledges.
+  The sweep deletes them after 24 hours, also after a restart and whatever the job's status.
+- **Ownership proof.** A transcript can repeat any row that the review copied from another review's observations or feedback.
+  This includes the history staged at capture and the reads during the run (IN_APP support and public history).
+  Those rows can quote people whom only the source review's receipt names.
+  A receipt therefore records the jobs whose rows it copied and unions their receipts.
+  It is `dependencies: COMPLETE` only when each such receipt is `READY` and itself `COMPLETE`.
+  Receipts written before this update have no marker and never count as complete.
+  A read during the run holds the copy fence from before it selects rows until its people are in the attempt's `READY` receipt.
+  A receipt that is no longer `READY` is never revived.
+- **Fallback.** Without that proof, the worker keeps no file from the sandbox.
+  It rebuilds a summary of owned enums and bounded numbers from the collector's manifest and marks the attempt `METADATA_ONLY`.
+- **Attempt.** The worker binds a session to its job, attempt, owner and image when the session is registered, before the sandbox starts.
+  An upload is kept only while the job is still owned as that attempt.
+  Reviews that copy legacy history can keep metadata only indefinitely.
+  New dependent receipts do not reconstruct missing legacy ownership.
+- **Unavailable.** A parent SIGKILL, a Docker stop timeout before the upload, or a failed upload leaves no transcript.
+
+The [workspace ABI](../contributor/agent/workspace-abi.mdx#session-transcripts) owns the bounds and file formats.
 
 ## Sources
 

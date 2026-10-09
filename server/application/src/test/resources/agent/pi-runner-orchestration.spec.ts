@@ -708,6 +708,7 @@ if (scenario !== undefined && scenario !== "") {
 		});
 	});
 	const manager = {
+		appendCustomEntry: () => undefined,
 		getSessionFile: () => undefined,
 		getSessionId: () => "test-session",
 		buildSessionProjection: () => ({ messages: [] }),
@@ -787,7 +788,7 @@ if (scenario !== undefined && scenario !== "") {
 					}
 					return {
 						registerProvider: () => undefined,
-						getModel: () => ({ contextWindow: 128_000, maxTokens: 16_384 }),
+						getModel: () => ({ id: "test-model", contextWindow: 128_000, maxTokens: 16_384 }),
 					};
 				},
 			},

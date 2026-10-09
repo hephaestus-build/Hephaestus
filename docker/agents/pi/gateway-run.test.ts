@@ -2,12 +2,237 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
-import { upload } from "./gateway-run.ts";
+import test, { type TestContext } from "node:test";
+import { collectTraces, upload } from "./gateway-run.ts";
+
+function traceManifest(text: string) {
+	const value: unknown = JSON.parse(text);
+	assert.ok(typeof value === "object" && value !== null);
+	assert.ok("sessionScanTruncated" in value && typeof value.sessionScanTruncated === "boolean");
+	assert.ok("sessions" in value && Array.isArray(value.sessions));
+	const sessions: unknown[] = value.sessions;
+	return { sessionScanTruncated: value.sessionScanTruncated, sessions };
+}
+
+function omission(session: unknown) {
+	assert.ok(typeof session === "object" && session !== null);
+	assert.ok("file" in session && "omitted" in session && "summary" in session);
+	return { file: session.file, omitted: session.omitted, summary: session.summary };
+}
+
+const CREDENTIAL = "eyJhbGciOiJIUzI1NiJ9.attempt-credential.signature";
+/** Words a session read or wrote about a person; none of them may reach the metadata a transcript keeps alone. */
+const PERSONAL = [
+	"Jane Roe",
+	"/workspace/inputs/people/7/person.json",
+	"jane-roe-practice",
+	"jane_roe_tool",
+];
+
+/** One native session file as Pi 1.0 writes it: header, binding, opening, tool call and result, compaction. */
+function nativeSession(): string {
+	const at = "2026-10-09T12:00:00.000Z";
+	return `${[
+		{ type: "session", version: 3, id: "s1", timestamp: at, cwd: "/workspace" },
+		{
+			type: "custom",
+			id: "e1",
+			parentId: null,
+			timestamp: at,
+			customType: "hephaestus.review-session",
+			data: {
+				phase: "practice",
+				practiceSlug: "jane-roe-practice",
+				practiceRevisionId: 12,
+				model: "Jane Roe",
+			},
+		},
+		{
+			type: "message",
+			id: "e2",
+			parentId: "e1",
+			timestamp: at,
+			message: {
+				role: "user",
+				content: [{ type: "text", text: "Review the work of Jane Roe" }],
+				timestamp: 0,
+			},
+		},
+		{
+			type: "message",
+			id: "e3",
+			parentId: "e2",
+			timestamp: at,
+			message: {
+				role: "assistant",
+				content: [
+					{ type: "text", text: "Jane Roe wrote this" },
+					{
+						type: "toolCall",
+						id: "c1",
+						name: "read",
+						arguments: { path: "/workspace/inputs/people/7/person.json", token: CREDENTIAL },
+					},
+					{ type: "toolCall", id: "c2", name: "jane_roe_tool", arguments: {} },
+				],
+				api: "openai-responses",
+				provider: "hephaestus",
+				model: "Jane Roe",
+				usage: { input: 100, output: 20, cacheRead: 5, cacheWrite: 1, totalTokens: 126 },
+				stopReason: "toolUse",
+				timestamp: 0,
+			},
+		},
+		{
+			type: "message",
+			id: "e4",
+			parentId: "e3",
+			timestamp: at,
+			message: {
+				role: "toolResult",
+				toolCallId: "c1",
+				toolName: "read",
+				content: [{ type: "text", text: "Jane Roe <jane@example.com>" }],
+				isError: true,
+				timestamp: 0,
+			},
+		},
+		{
+			type: "compaction",
+			id: "e5",
+			parentId: "e4",
+			timestamp: at,
+			summary: "Jane Roe was reviewed",
+			firstKeptEntryId: "e2",
+			tokensBefore: 1000,
+		},
+	]
+		.map((entry) => JSON.stringify(entry))
+		.join("\n")}\n`;
+}
+
+async function collected(context: TestContext) {
+	const directory = await mkdtemp(path.join(tmpdir(), "gateway-traces-"));
+	context.after(async () => rm(directory, { recursive: true, force: true }));
+	const sessions = path.join(directory, ".sessions");
+	const out = path.join(directory, "out");
+	await mkdir(sessions);
+	await mkdir(path.join(out, "traces"), { recursive: true });
+	await writeFile(path.join(out, "result.json"), "{}");
+	return { sessions, out };
+}
+
+void test("copies whole native sessions without the attempt credential and summarizes them as enums and numbers", async (context) => {
+	const { sessions, out } = await collected(context);
+	const native = nativeSession();
+	await writeFile(
+		path.join(sessions, "2026-10-09_s1.jsonl"),
+		`${native}{"type":"message","id":"torn`,
+	);
+	await writeFile(path.join(out, "traces", "planted.jsonl"), "written in the sandbox");
+
+	await collectTraces(sessions, out, CREDENTIAL);
+
+	const copiedFiles = await readdir(path.join(out, "traces"));
+	assert.deepEqual(copiedFiles.toSorted(), ["0001.jsonl", "manifest.json"]);
+	const copy = await readFile(path.join(out, "traces", "0001.jsonl"), "utf8");
+	assert.equal(copy, native.replaceAll(CREDENTIAL, "[attempt-credential]"));
+	assert.ok(!copy.includes(CREDENTIAL));
+	assert.ok(copy.includes('"type":"compaction"') && copy.includes('"role":"toolResult"'));
+	const text = await readFile(path.join(out, "traces", "manifest.json"), "utf8");
+	const manifest = traceManifest(text);
+	assert.equal(manifest.sessionScanTruncated, false);
+	assert.deepEqual(manifest.sessions, [
+		{
+			file: "0001.jsonl",
+			bytes: Buffer.byteLength(native) + '{"type":"message","id":"torn'.length,
+			redacted: true,
+			partialLineDropped: true,
+			omitted: null,
+			summary: {
+				phase: "practice",
+				practiceRevisionId: 12,
+				entries: 6,
+				assistantCalls: 1,
+				stopReasons: { toolUse: 1 },
+				usage: { input: 100, output: 20, cacheRead: 5, cacheWrite: 1 },
+				toolCalls: { read: 1, other: 1 },
+				toolErrors: 1,
+				compactions: 1,
+			},
+		},
+	]);
+	for (const words of [...PERSONAL, CREDENTIAL]) {
+		assert.ok(!text.includes(words), `the manifest carries ${words}`);
+	}
+	assert.equal(await readFile(path.join(out, "result.json"), "utf8"), "{}");
+});
+
+void test("omits a session past the per-file bound and keeps nothing when the result leaves no room", async (context) => {
+	const { sessions, out } = await collected(context);
+	await writeFile(path.join(sessions, "large.jsonl"), Buffer.alloc(2 * 1024 * 1024 + 1, 0x0a));
+	await collectTraces(sessions, out, CREDENTIAL);
+	const manifest = traceManifest(await readFile(path.join(out, "traces", "manifest.json"), "utf8"));
+	assert.deepEqual(manifest.sessions.map(omission), [
+		{ file: null, omitted: "oversize", summary: null },
+	]);
+
+	await writeFile(path.join(out, "observations.json"), Buffer.alloc(49 * 1024 * 1024, 0x20));
+	await collectTraces(sessions, out, CREDENTIAL);
+	const resultFiles = await readdir(out);
+	assert.deepEqual(resultFiles.toSorted(), ["observations.json", "result.json"]);
+});
+
+void test("bounds session traversal and reports an incomplete scan without counting unseen entries", async (context) => {
+	const { sessions, out } = await collected(context);
+	await Promise.all(
+		Array.from({ length: 1001 }, async (_, index) =>
+			writeFile(path.join(sessions, `${index}.jsonl`), ""),
+		),
+	);
+	await collectTraces(sessions, out, CREDENTIAL);
+	const manifest = traceManifest(await readFile(path.join(out, "traces", "manifest.json"), "utf8"));
+	assert.equal(manifest.sessionScanTruncated, true);
+	assert.equal(manifest.sessions.length, 1000);
+});
+
+void test("marks an absent or linked session root as incomplete instead of a complete empty session set", async (context) => {
+	const { sessions, out } = await collected(context);
+	await collectTraces(sessions, out, CREDENTIAL);
+	const empty = traceManifest(await readFile(path.join(out, "traces", "manifest.json"), "utf8"));
+	assert.equal(empty.sessionScanTruncated, false);
+	assert.deepEqual(empty.sessions, []);
+	await rm(sessions, { recursive: true });
+	await collectTraces(sessions, out, CREDENTIAL);
+	const absent = traceManifest(await readFile(path.join(out, "traces", "manifest.json"), "utf8"));
+	assert.equal(absent.sessionScanTruncated, true);
+	const elsewhere = path.join(path.dirname(sessions), "elsewhere");
+	await mkdir(elsewhere);
+	await writeFile(path.join(elsewhere, "private.jsonl"), nativeSession());
+	await symlink(elsewhere, sessions);
+	await collectTraces(sessions, out, CREDENTIAL);
+	const linked = traceManifest(await readFile(path.join(out, "traces", "manifest.json"), "utf8"));
+	assert.equal(linked.sessionScanTruncated, true);
+	assert.deepEqual(linked.sessions, []);
+	assert.deepEqual(await readdir(path.join(out, "traces")), ["manifest.json"]);
+});
+
+void test("does not add trace members when the result already occupies the archive entry budget", async (context) => {
+	const { sessions, out } = await collected(context);
+	await writeFile(path.join(sessions, "review.jsonl"), nativeSession());
+	await Promise.all(
+		Array.from({ length: 9998 }, async (_, index) => mkdir(path.join(out, `entry-${index}`))),
+	);
+	await collectTraces(sessions, out, CREDENTIAL);
+	const names = await readdir(out);
+	assert.equal(names.length, 9999);
+	assert.ok(!names.includes("traces"));
+	assert.equal(await readFile(path.join(out, "result.json"), "utf8"), "{}");
+});
 
 for (const scenario of [
 	{ name: "retries an unfinished upload", responses: [503, 204] },

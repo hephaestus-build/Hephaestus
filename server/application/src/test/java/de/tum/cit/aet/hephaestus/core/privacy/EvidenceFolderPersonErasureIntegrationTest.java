@@ -44,9 +44,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -63,6 +65,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
@@ -245,8 +248,199 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    @Test
+    void shouldVouchForCopiedHistoryOnlyThroughReceiptsThatIndexedTheirOwnCopies() throws Exception {
+        databaseTestUtils.cleanDatabase();
+        var recorder = new ExactPersonDataCopyRecorder(jdbc);
+        var catalog = catalog(root, recorder);
+        var indexed = job("copied-history");
+        var workspace = indexed.getWorkspace();
+        var quoted = new PersonCopyIdentity("GITLAB", "https://quoted.example", "7", null);
+        copy(root, catalog, recorder, indexed, quoted).close();
+        assertThat(payload(indexed).path("dependencies").asString()).isEqualTo("COMPLETE");
+        var legacyQuoted = new PersonCopyIdentity("GITLAB", "https://legacy.example", "8", null);
+        var legacy = legacyCopy(workspace, legacyQuoted);
+
+        var vouched = jobIn(workspace);
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        files.beginPersonCapture(vouched);
+        recorder.recordCopiedJob(indexed.getId());
+        files.prepare(
+                        vouched,
+                        new PreparedEvidence(Map.of("inputs/history/observations.json", new byte[] {'{', '}'}), null),
+                        null)
+                .close();
+        assertThat(payload(vouched).path("dependencies").asString()).isEqualTo("COMPLETE");
+        assertThat(identities(vouched)).contains("https://quoted.example#7");
+
+        var unvouched = jobIn(workspace);
+        files.beginPersonCapture(unvouched);
+        recorder.recordCopiedJob(legacy.getId());
+        files.prepare(
+                        unvouched,
+                        new PreparedEvidence(Map.of("inputs/history/observations.json", new byte[] {'{', '}'}), null),
+                        null)
+                .close();
+        assertThat(payload(unvouched).path("dependencies").asString())
+                .as("a receipt from before dependencies were recorded cannot vouch for the rows it copied")
+                .isEqualTo("UNKNOWN");
+        assertThat(identities(unvouched))
+                .as("what it does name still indexes erasure")
+                .contains("https://legacy.example#8");
+        assertThat(catalog.traceCustody(unvouched.getId(), workspace.getId(), 0))
+                .isEqualTo(EvidenceFolderPersonDataCatalog.TraceCustody.UNINDEXED_DEPENDENCY);
+    }
+
+    @Test
+    void shouldIndexALateReadsPeopleUnderTheFenceBeforeReturningItAndNeverReviveAnErasedReceipt() throws Exception {
+        databaseTestUtils.cleanDatabase();
+        var provider =
+                providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "https://late.example"));
+        var developer = new User();
+        developer.setProvider(provider);
+        developer.setNativeId(77L);
+        developer.setLogin("late-developer");
+        developer.setType(User.Type.USER);
+        long developerId = Objects.requireNonNull(users.saveAndFlush(developer).getId());
+        var recorder = new ExactPersonDataCopyRecorder(jdbc);
+        var catalog = catalog(root, recorder);
+        var running = job("late-read");
+        var workspace = running.getWorkspace();
+        var source = jobIn(workspace);
+        copy(root, catalog, recorder, source, new PersonCopyIdentity("GITLAB", "https://source.example", "5", null))
+                .close();
+        var inputs = copy(
+                root, catalog, recorder, running, new PersonCopyIdentity("GITLAB", "https://late.example", "1", null));
+        try (inputs) {
+            UUID supported = observation(source, developerId);
+
+            String answered = catalog.indexLateRead(
+                    running.getId(),
+                    workspace.getId(),
+                    0,
+                    () -> {
+                        assertThat(jdbc.queryForObject("SELECT pg_try_advisory_lock(2165,1)", Boolean.class))
+                                .as("an erasure cannot start between the read and its indexing")
+                                .isFalse();
+                        return "support read";
+                    },
+                    read -> Set.of(supported),
+                    read -> Set.of());
+
+            assertThat(answered).isEqualTo("support read");
+            assertThat(identities(running))
+                    .as("the developer the support is about, and whoever its source review copied")
+                    .contains("https://late.example#77", "https://source.example#5");
+            assertThat(payload(running).path("dependencies").asString()).isEqualTo("COMPLETE");
+            var person = new PersonScope(
+                    null,
+                    List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "77", null)),
+                    List.of(developerId));
+            assertThat(catalog.jobsContaining(person)).contains(running.getId());
+
+            var legacy = legacyCopy(workspace, new PersonCopyIdentity("GITLAB", "https://legacy.example", "8", null));
+            UUID legacySupport = observation(legacy, developerId);
+            catalog.indexLateRead(
+                    running.getId(),
+                    workspace.getId(),
+                    0,
+                    () -> "old support",
+                    read -> Set.of(legacySupport),
+                    read -> Set.of());
+            catalog.indexLateRead(
+                    running.getId(),
+                    workspace.getId(),
+                    0,
+                    () -> "support again",
+                    read -> Set.of(supported),
+                    read -> Set.of());
+            assertThat(payload(running).path("dependencies").asString())
+                    .as("never upgraded once a dependency could not vouch")
+                    .isEqualTo("UNKNOWN");
+            assertThat(catalog.traceCustody(running.getId(), workspace.getId(), 0))
+                    .isEqualTo(EvidenceFolderPersonDataCatalog.TraceCustody.UNINDEXED_DEPENDENCY);
+
+            jdbc.update("UPDATE person_evidence_copy SET state='ERASE_REQUESTED' WHERE job_id=?", running.getId());
+            String before = payload(running).toString();
+            assertThat(catalog.indexLateRead(
+                            running.getId(),
+                            workspace.getId(),
+                            0,
+                            () -> "after erasure",
+                            read -> Set.of(supported),
+                            read -> Set.of()))
+                    .isEqualTo("after erasure");
+            assertThat(jdbc.queryForObject(
+                            "SELECT state FROM person_evidence_copy WHERE job_id=?", String.class, running.getId()))
+                    .isEqualTo("ERASE_REQUESTED");
+            assertThat(payload(running).toString()).isEqualTo(before);
+            assertThat(catalog.traceCustody(running.getId(), workspace.getId(), 0))
+                    .isEqualTo(EvidenceFolderPersonDataCatalog.TraceCustody.NOT_HELD);
+        }
+    }
+
+    private JsonNode payload(AgentJob job) {
+        return mapper.readTree(Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT payload::text FROM person_evidence_copy WHERE job_id=?", String.class, job.getId())));
+    }
+
+    /** The receipt's people as origin#subject; jsonb keeps no key order to compare text against. */
+    private List<String> identities(AgentJob job) {
+        var names = new ArrayList<String>();
+        payload(job)
+                .path("identities")
+                .forEach(identity -> names.add(identity.path("providerOrigin").asString() + "#"
+                        + identity.path("subject").asString()));
+        return names;
+    }
+
+    /** A receipt written before receipts recorded the jobs whose rows they copied. */
+    private AgentJob legacyCopy(Workspace workspace, PersonCopyIdentity identity) {
+        var legacy = jobIn(workspace);
+        jdbc.update(
+                "INSERT INTO person_evidence_copy(id,workspace_id,job_id,store_id,state,payload) VALUES (?,?,?,?,'READY',CAST(? AS jsonb))",
+                UUID.randomUUID(),
+                workspace.getId(),
+                legacy.getId(),
+                UUID.randomUUID(),
+                mapper.writeValueAsString(
+                        Map.of("attempt", 0, "identities", List.of(identity), "repositories", List.of())));
+        return legacy;
+    }
+
+    /**
+     * An observation another review recorded. Seeded as SchemaRowSeeder documents, with foreign keys off: the late
+     * index reads only its workspace, source job and developer, and nothing here depends on the rows it would reference.
+     */
+    private UUID observation(AgentJob source, long aboutUserId) {
+        UUID id = UUID.randomUUID();
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role = replica");
+            new SchemaRowSeeder(jdbc)
+                    .insert(
+                            "observation",
+                            Map.of(
+                                    "id",
+                                    id,
+                                    "workspace_id",
+                                    source.getWorkspace().getId(),
+                                    "agent_job_id",
+                                    source.getId(),
+                                    "about_user_id",
+                                    aboutUserId,
+                                    "outcome",
+                                    "NOT_MET",
+                                    "severity",
+                                    "MINOR"));
+        });
+        return id;
+    }
+
     private AgentJob job(String name) {
-        Workspace workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace(name));
+        return jobIn(workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace(name)));
+    }
+
+    private AgentJob jobIn(Workspace workspace) {
         var job = new AgentJob();
         job.setWorkspace(workspace);
         job.setJobType(AgentJobType.CONVERSATION_REVIEW);

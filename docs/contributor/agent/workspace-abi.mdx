@@ -117,12 +117,13 @@ It is not a successful review.
 │   └── composition/                 #   observations.json — the admitted observations feedback is composed from.
 ├── out/                             # THE ONLY collected directory — result.json, review-state.json,
 │                                    #   usage.json, runner-debug.json, practice-coverage.json,
-│                                    #   feedback.json, watchdog-killed.json
+│                                    #   feedback.json, watchdog-killed.json; traces/ is added after
+│                                    #   the runner exits (§ Session transcripts)
 ├── task.json                        # TaskEnvelope<…> — runtime contract between handler and runner.
 ├── .pi/                             # Pi SDK agent dir — $PI_CODING_AGENT_DIR resolves here.
 │   ├── AGENTS.md                    #   Orchestrator instructions
 │   └── settings.json                #   Pi SDK config (provider, model, compaction, retry)
-├── .sessions/                       # Pi SDK session JSONL, one file per session.
+├── .sessions/                       # Pi SDK session JSONL, one file per session; copied to out/traces/.
 ├── pi-provider.json                 # Provider/model routing for the runner.
 ├── pi-provider.ts                   # Provider/model helper imported by both runners.
 ├── pi-error-text.ts                 # Shared error-message helper.
@@ -377,6 +378,56 @@ Limits are 50 MiB for the entire archive, including headers, end markers and pad
 And 10,000 entries, including directories.
 Rejected transfers are aborted without draining the remaining body.
 Files are read into memory, never extracted to the worker filesystem.
+
+## Session transcripts
+
+Each runner session writes its native Pi JSONL under `.sessions/`.
+The first entry after the header is a `hephaestus.review-session` custom entry.
+It binds the file to its phase (`practice`, `public-review` or `private-feedback`), practice slug and revision, model, job and workspace.
+The SDK keeps custom entries out of the model's context.
+
+After the runner child exits, `gateway-run.ts` copies the session files into `out/traces/` before it packages `out/`.
+It does this on every path where the parent still runs: success, failure, work deadline and the parent's own SIGTERM.
+A parent SIGKILL or a failed upload leaves no transcript.
+
+- At most 1,000 directory entries are scanned.
+  `sessionScanTruncated` marks an incomplete scan without counting unseen files.
+- The copies use at most 7 MiB in total and 2 MiB per file.
+  Another 1 MiB is reserved for their manifest.
+  The worker independently enforces an 8 MiB bound on uploaded trace files.
+  Its bounded metadata record is separate.
+  The total is also limited to what the archive limits above leave after `out/`, less a 1 MiB reserve.
+  A transcript can never make the result archive invalid.
+- A file is copied whole or not at all.
+  A torn last line is dropped.
+  Each literal occurrence of the attempt credential is replaced, and the copy is marked `redacted`.
+- The transcript manifest lists each session: the copied file or why it was omitted (`oversize`, `budget`, `unreadable`).
+  It also has a summary read through the SDK's `parseSessionEntries`.
+  The summary contains only enums and numbers.
+  It records phase, practice revision, entry count, assistant calls, token usage, tool calls, tool errors and compactions.
+  Stop reasons and tool names use the owned vocabulary.
+  It contains no arguments, results, model text, paths or error text.
+- If the collector fails, it removes `out/traces/` and the result is uploaded without transcripts.
+
+The worker keeps transcripts for 24 hours beside the attempt folder, as `<attempt>.trace/`.
+Before the sandbox starts, gateway registration binds the review to its job, attempt, owner and declared image.
+At upload, the worker requires the same attempt and owner.
+It writes only under the lease that the running attempt holds.
+A delayed upload of an earlier attempt therefore writes nothing.
+A cancelled job stays cancelled, and its transcript is kept if the upload arrived.
+
+Raw JSONL requires a local `READY` receipt with `COMPLETE` dependencies.
+The uploaded files must also meet the worker's member and byte limits.
+The raw bytes are sandbox-written debug data, not evidence.
+
+Otherwise `record.json` says `METADATA_ONLY`.
+`contentUnavailable` distinguishes `OWNERSHIP_INCOMPLETE` from `TRACE_OUTPUT_INVALID`.
+It then keeps no file from the sandbox.
+The worker rebuilds the session summary from the manifest itself.
+It keeps owned enums, flags and bounded integers only, and drops any other key or value.
+A receipt that is not `READY` gets nothing.
+
+[ADR 0041](../../decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-09-debug-transcripts) has the retention decision.
 
 ## Exit codes
 

@@ -42,8 +42,17 @@ public final class SandboxAttemptLauncher {
         this.gatewayPort = gatewayPort;
     }
 
-    /** Registers the gateway session for the credential and creates the attempt volumes, or neither. */
-    public Attempt open(@Nullable UUID jobId, @Nullable NetworkPolicy policy, Path inputTar, Map<String, String> labels)
+    /**
+     * Registers the gateway session for the credential and creates the attempt volumes, or neither. A review attempt
+     * with a declared attempt number is bound to that attempt and image before anything can upload for it.
+     */
+    public Attempt open(
+            @Nullable UUID jobId,
+            @Nullable Integer attemptNumber,
+            @Nullable String image,
+            @Nullable NetworkPolicy policy,
+            Path inputTar,
+            Map<String, String> labels)
             throws IOException {
         String token = policy == null ? null : policy.llmProxyToken();
         if (token == null || token.isBlank()) {
@@ -51,9 +60,13 @@ public final class SandboxAttemptLauncher {
         }
         SandboxGatewaySessions.Session session;
         try {
-            session = jobId == null
-                    ? gatewaySessions.register(token, inputTar, "out")
-                    : gatewaySessions.register(jobId, token, inputTar, "out");
+            if (jobId == null) {
+                session = gatewaySessions.register(token, inputTar, "out");
+            } else if (attemptNumber == null || image == null) {
+                session = gatewaySessions.register(jobId, token, inputTar, "out");
+            } else {
+                session = gatewaySessions.registerAttempt(jobId, attemptNumber, image, token, inputTar, "out");
+            }
         } catch (IOException | RuntimeException exception) {
             try {
                 Files.deleteIfExists(inputTar);
