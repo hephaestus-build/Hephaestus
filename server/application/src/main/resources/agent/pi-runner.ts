@@ -90,12 +90,13 @@ import {
 	priorAdviceWitnesses,
 	priorPublicFeedback,
 	publicObservations,
+	publicQualifications,
+	qualificationEvidence,
 	readPracticeParameters,
 	readReview,
 	prepareReviewArguments,
 	readablePractices,
 	reviewToolParameters,
-	uncertainOutcomes,
 	undeliverableUnits,
 	validateFeedbackEvidence,
 	workIdentity,
@@ -3057,19 +3058,21 @@ function normalizeQuotedText(value: string): string {
 
 /** Omit duplicated quotes and verification digests; the full admission record remains on disk. */
 function composerView(observation: AdmittedObservation): Record<string, unknown> {
-	// Abstentions cannot support claims. MET counterevidence keeps the same qualifications as NOT_MET.
+	const citations = observation.citations.map(
+		({ quote: _quote, verification: _verification, ...citation }) => citation,
+	);
+	// An abstention keeps the limit it recorded and its ids; its summary and rationale may assert more than it decided.
 	if (observation.outcome !== "NOT_MET" && observation.outcome !== "MET") {
-		const { id, practiceSlug, outcome, summary } = observation;
-		return { id, practiceSlug, outcome, summary };
+		const { id, practiceSlug, outcome } = observation;
+		return { id, practiceSlug, outcome, evidence: qualificationEvidence(observation), citations };
 	}
-	const { evidence, citations, ...rest } = observation;
+	// MET counterevidence keeps the same qualifications as NOT_MET.
+	const { evidence, citations: _admitted, ...rest } = observation;
 	const { citations: _measured, ...branches } = isRecord(evidence) ? evidence : {};
 	return {
 		...rest,
 		...(Object.keys(branches).length > 0 ? { evidence: branches } : {}),
-		citations: citations.map(
-			({ quote: _quote, verification: _verification, ...citation }) => citation,
-		),
+		citations,
 	};
 }
 
@@ -3215,7 +3218,7 @@ function buildCompositionTurn(
 		.filter((block) => block !== "")
 		.join("\n");
 	return `## This turn
-The review just finished. The criteria its NOT_MET practices were assessed against come first, as staged; its ${observations.length} admitted measurement(s) follow them. The MET and NOT_MET ones carry their rationale and their citations by coordinates, the abstentions only what they recorded; the full record, quoted lines included, is \`work/composition/observations.json\`. The history follows them.
+The review just finished. The criteria its NOT_MET practices were assessed against come first, as staged; its ${observations.length} admitted measurement(s) follow them. The MET and NOT_MET ones carry their rationale and their citations by coordinates; the abstentions carry the limit they recorded, an open question or why the practice did not apply, and their citations by coordinates. The full record, quoted lines included, is \`work/composition/observations.json\`. The history follows them.
 
 ${notMetCriteria(observations)}
 \`\`\`json
@@ -4704,9 +4707,7 @@ async function main() {
 				.filter((part) => part !== "")
 				.join("\n\n"),
 			observations: reviewable,
-			undecided: uncertainOutcomes(
-				admittedObservations.filter((observation) => observation.publicEligible === true),
-			),
+			qualifications: publicQualifications(admittedObservations),
 			alreadySaid: alreadySaid.feedback,
 			ownHistoryOmissions: alreadySaid.omissions,
 			ownHistoryReadAt: read.readAt,

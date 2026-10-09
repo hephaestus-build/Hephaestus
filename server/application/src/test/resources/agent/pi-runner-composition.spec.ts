@@ -30,7 +30,7 @@ import {
 	reviewToolParameters,
 	sameLinesNote,
 	notMetReference,
-	uncertainOutcomes,
+	publicQualifications,
 	undeliverableUnits,
 	validateFeedbackEvidence,
 } from "../../../main/resources/agent/pi-runner-composition.ts";
@@ -397,6 +397,11 @@ void test("what a review decided covers what it says and what it withholds", () 
 
 const PRIVATE_SENTENCE = "Earlier reviews told this person the same thing twice before.";
 
+/** An abstention's own prose can assert more than it decided; only its recorded limit is context. */
+const CONFLICT_SUMMARY = "One ticket bundles three independently shippable deliverables";
+const CONFLICT_RATIONALE = "Against the stated request, the scoping is plainly several concerns.";
+const WITHDRAWN = "No CSV download is requested. This work is withdrawn.";
+
 const admitted = [
 	{
 		id: "current",
@@ -463,14 +468,60 @@ void test("the review composition sees only what admission marked eligible, and 
 				citations: [],
 			},
 		],
-		undecided: uncertainOutcomes([
+		qualifications: publicQualifications([
 			...admitted,
+			{
+				id: "conflict",
+				practiceSlug: "issue-scoped-to-single-concern",
+				outcome: "UNDETERMINED",
+				summary: CONFLICT_SUMMARY,
+				evidenceRationale: CONFLICT_RATIONALE,
+				publicEligible: true,
+				evidence: {
+					citations: [{ sourceKind: "scm.issue.core", path: "description.md", quote: WITHDRAWN }],
+					undecidability: {
+						openQuestion:
+							"Does the withdrawal or the delivery requirement state the current request?",
+						wouldSettleIt: "An authored statement that resolves the two current sections.",
+					},
+				},
+				citations: [
+					{
+						index: 0,
+						sourceKind: "scm.issue.core",
+						path: "description.md",
+						startLine: 3,
+						quote: WITHDRAWN,
+						verification: { status: "VERIFIED", quoteSha256: "def" },
+					},
+				],
+			},
 			{
 				id: "na",
 				practiceSlug: "ships-tests",
 				outcome: "NOT_APPLICABLE",
 				summary: "No behaviour changed, so no test is owed.",
+				evidenceRationale: "Nothing in this work needs a test.",
+				publicEligible: true,
+				evidence: {
+					inapplicability: {
+						consulted: ["scm.pull-request.diff"],
+						subject: "changed behaviour a test could cover",
+						ruledOutBy: "the diff changes only the text of one label",
+					},
+				},
 				citations: [{ index: 0, sourceKind: "scm.pull-request.diff", quote: "+ text" }],
+			},
+			{
+				id: "reviewer-limit",
+				practiceSlug: "reviews-respectfully-asks-rather-than-demands",
+				outcome: "UNDETERMINED",
+				summary: PRIVATE_SENTENCE,
+				publicEligible: false,
+				evidence: {
+					undecidability: { openQuestion: PRIVATE_SENTENCE, wouldSettleIt: PRIVATE_SENTENCE },
+				},
+				citations: [],
 			},
 		]),
 		alreadySaid: [],
@@ -512,9 +563,28 @@ void test("the review composition sees only what admission marked eligible, and 
 	assert.match(turn, /"name": "Describe what changed and why"/u);
 	assert.doesNotMatch(turn, /whyItMatters/u);
 	assert.match(turn, /"knownLimitations":/u);
-	// An undecided practice is a bound by name, without the prose or the lines it looked at.
-	assert.match(turn, /Looked at and not decided[^\n]*ships-tests \(NOT_APPLICABLE\)/u);
-	assert.ok(!turn.includes("No behaviour changed"), turn);
+	// An eligible abstention shows the whole limit it recorded and its quoted lines, never its id or its prose.
+	const limits = turn.slice(
+		turn.indexOf("### Recorded limits of this review"),
+		turn.indexOf("### Where the words go"),
+	);
+	assert.match(limits, /"openQuestion": "Does the withdrawal or the delivery requirement/u);
+	assert.match(limits, /"wouldSettleIt": "An authored statement that resolves/u);
+	assert.match(limits, /"subject": "changed behaviour a test could cover"/u);
+	assert.match(limits, /"ruledOutBy": "the diff changes only the text of one label"/u);
+	assert.equal(turn.split(WITHDRAWN).length - 1, 1, turn);
+	for (const hidden of [
+		CONFLICT_SUMMARY,
+		CONFLICT_RATIONALE,
+		"No behaviour changed",
+		"Nothing in this work needs a test",
+		'"conflict"',
+		'"na"',
+		"quoteSha256",
+		"reviews-respectfully-asks-rather-than-demands",
+	]) {
+		assert.ok(!turn.includes(hidden), hidden);
+	}
 	assert.match(turn, /did not settle one of its practices: keeps-tests-honest/u);
 	assert.match(turn, /No same-work delivered feedback is shown here\./u);
 	// A discussion this run did not capture is unknown, never an empty one.
@@ -560,7 +630,7 @@ void test("the public turn carries captured discussion once, with its locator an
 	const turn = buildReviewTurn({
 		sameWork: "The captured issue asks for a login screen.",
 		observations: [],
-		undecided: [],
+		qualifications: [],
 		alreadySaid: [],
 		captured,
 		practices: [],
@@ -576,7 +646,7 @@ void test("the public turn carries captured discussion once, with its locator an
 	const withoutBodies = buildReviewTurn({
 		sameWork: "The captured issue asks for a login screen.",
 		observations: [],
-		undecided: [],
+		qualifications: [],
 		alreadySaid: [],
 		captured: { ...captured, sources: [], statements: [], omitted },
 		practices: [],
@@ -791,7 +861,7 @@ void test("own history omits whole oversized or over-budget entries without hidi
 	const input = {
 		sameWork: "The captured work.",
 		observations: [],
-		undecided: [],
+		qualifications: [],
 		alreadySaid: view.feedback,
 		captured: {
 			capturedAt: null,
@@ -1395,7 +1465,7 @@ void test("concern projection preserves new same-practice grounds and wrong old 
 			statements: [],
 		},
 		practices,
-		undecided: [],
+		qualifications: [],
 		notReached: [],
 		lineNotes: true,
 		stagedCriteria: () => "Whole error standard.",
@@ -1661,7 +1731,7 @@ void test("a delivery after work capture informs novelty without becoming advice
 	const turn = buildReviewTurn({
 		sameWork: "Captured work without a known capture time.",
 		observations: [],
-		undecided: [],
+		qualifications: [],
 		alreadySaid: unknownCapture,
 		ownHistoryReadAt: "2026-10-07T11:00:00Z",
 		captured: {
