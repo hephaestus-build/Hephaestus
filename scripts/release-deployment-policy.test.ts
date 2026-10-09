@@ -224,41 +224,33 @@ await test("release publication requires native smoke tests for every supported 
 	assert.match(release, /gh release upload "\$TAG_NAME" host-smoke\/\*\.json/u);
 });
 
-await test("release consumers wait for their tools, sandbox check and smoke records", () => {
+await test("release evidence waits for the digest-bound sandbox check", () => {
 	const workflow: unknown = parseDocument(release).toJS();
-	for (const [name, consumer] of [
-		["tag-images", "Generate and enforce release evidence"],
-		["supported-host-smoke", "Smoke-test the blessed install"],
-		["publish-release", "Verify supported-host smoke records"],
-	] as const) {
-		const steps = asArray(at(workflow, ["jobs", name, "steps"], name), name).map((value, index) =>
-			asRecord(value, `${name}.steps[${index}]`),
-		);
-		const join = steps.findIndex((step) => step["wait-all"] === true);
-		const consumes = steps.findIndex((step) => step.name === consumer);
-		assert.ok(join > 0 && consumes > join, `${name} consumes unfinished preparation`);
-		assert.ok(
-			steps.every((step, index) => step.background !== true || index < join),
-			`${name} launches preparation after its join`,
-		);
-		if (name === "tag-images") {
-			const security = steps.findIndex((step) => step.id === "security-tools");
-			const toolsReady = steps.findIndex((step) => step.wait === "security-tools");
-			const database = steps.findIndex(
-				(step) => step.uses === "./.github/actions/download-trivy-db",
-			);
-			const digests = steps.findIndex((step) => step.id === "retag");
-			const sandbox = steps.findIndex((step) => step.name === "Verify Node-only agent-pi sandbox");
-			assert.ok(
-				security !== -1 && toolsReady > security && database > toolsReady && join > database,
-			);
-			assert.ok(digests !== -1 && sandbox > digests && sandbox < join);
-		} else {
-			assert.ok(
-				steps.slice(0, join).every((step) => step.run === undefined),
-				`${name} executes before its preparation is joined`,
-			);
-		}
+	const steps = asArray(
+		at(workflow, ["jobs", "tag-images", "steps"], "tag-images"),
+		"tag-images",
+	).map((value, index) => asRecord(value, `tag-images.steps[${index}]`));
+	const digests = steps.findIndex((step) => step.id === "retag");
+	const sandbox = steps.findIndex((step) => step.id === "sandbox-contract");
+	const security = steps.findIndex(
+		(step) => step.uses === "./.github/actions/setup-release-security-tools",
+	);
+	const database = steps.findIndex((step) => step.uses === "./.github/actions/download-trivy-db");
+	const join = steps.findIndex((step) => step.wait === "sandbox-contract");
+	const evidence = steps.findIndex((step) => step.name === "Generate and enforce release evidence");
+	assert.ok(digests !== -1 && sandbox > digests && security > sandbox && database > security);
+	assert.ok(join > database && evidence > join);
+	const sandboxStep = steps[sandbox];
+	assert.ok(sandboxStep);
+	assert.equal(sandboxStep.background, true);
+	assert.equal(typeof sandboxStep.run, "string");
+	assert.deepEqual(
+		steps.filter((step) => step.background === true).map((step) => step.id),
+		["sandbox-contract"],
+	);
+	for (const name of ["supported-host-smoke", "publish-release"]) {
+		const preparation = asArray(at(workflow, ["jobs", name, "steps"], name), name);
+		assert.ok(preparation.every((value) => asRecord(value, name).background !== true));
 	}
 });
 
