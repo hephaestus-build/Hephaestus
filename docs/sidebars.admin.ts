@@ -76,6 +76,11 @@ const sidebars: SidebarsConfig = {
 							label: "Artifact-Source Governance",
 						},
 						{ type: "doc", id: "dsms/personal-data-map", label: "Personal-Data Map" },
+						{
+							type: "doc",
+							id: "dsms/tum-privacy-notice-changes",
+							label: "TUM Privacy Notice Changes",
+						},
 					],
 				},
 			],

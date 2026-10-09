@@ -1,8 +1,9 @@
 # ADR 0051: Practices across the workspace counts developers and never names one
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-02
 **Amended:** 2026-10-07, accepted. The page has no smallest count. *Amendment of 2026-10-07* gives the change.
+2026-10-09: standings and practices stay out of sorting and the public page. *Update — 2026-10-09* gives the limit.
 **Authors:** Valentin Grüner
 **Builds on:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md) (no score, no rank),
 [ADR 0047](0047-the-practice-profile-has-one-reader.md) (the Practice profile has one reader)
@@ -164,3 +165,12 @@ A full DPIA that does not confirm the reassessment of 2026-10-07.
 5. ABS DataLab, *Safe Outputs*: <https://www.abs.gov.au/system/files/documents/bec1cc42a3e20dd01d9748b621f8b8b7/DataLab%20Safe%20Researcher%20Virtual%20Training_Pt3_Safe%20Outputs_JAN%202024.pdf>
 6. US Department of Education PTAC, *Frequently Asked Questions: Disclosure Avoidance*: <https://studentprivacy.ed.gov/sites/default/files/resource_document/file/FAQs_disclosure_avoidance_0.pdf>
 7. ONS, *Policy on protecting confidentiality in tables of birth and death statistics*: <https://www.ons.gov.uk/methodology/methodologytopicsandstatisticalconcepts/disclosurecontrol/policyonprotectingconfidentialityintablesofbirthanddeathstatistics>
+
+## Update — 2026-10-09 (sorting and the public page)
+
+[ADR 0052](0052-activity-sorts-by-contributions-and-can-be-public.md) lets Workspace activity sort people by their counts.
+It also adds a public activity page.
+This page stays out of both.
+Standings and practices never sort people.
+They never appear on a public page.
+Nothing above changes.

@@ -90,10 +90,11 @@ They do not redact every name, secret, or third-party detail in source text.
 | File | Purpose |
 |---|---|
 | [`record-of-processing.md`](./record-of-processing.md) | Art. 30 record. TOMs (Art. 32) folded in under Art. 30(1)(g). Fenced blocks paste-ready into the TUM DSMS form. |
-| [`dpia-prescreen.md`](./dpia-prescreen.md) | Art. 35 pre-screen. Indicates a full DPIA. Records the pending controller/DPO determination, safeguards, and change freeze. Covers the research purpose and the reasoning for one research consent. |
+| [`dpia-prescreen.md`](./dpia-prescreen.md) | Art. 35 pre-screen. Indicates a full DPIA. Records the pending controller/DPO determination, safeguards, and change freeze. Covers the research purpose and the reasoning for one research consent. Reassesses the new audiences: Practices across the workspace and the public activity page. |
 | [`processor-checklist.md`](./processor-checklist.md) | Art. 28 checklist. Per-processor AVV status. LRZ-as-separate-controller analysis. |
 | [`artifact-source-governance.md`](./artifact-source-governance.md) | Approval, minimization, processor-egress, retention, and erasure gate for every AI-readable source. |
 | [`personal-data-map.md`](./personal-data-map.md) | Personal-data stores, export coverage, erasure paths, residual retention, and their verification. Includes how withdrawal reaches research copies. |
+| [`tum-privacy-notice-changes.md`](./tum-privacy-notice-changes.md) | Changes to the TUM public notice for sorted activity, the public activity page and workspace addresses. The legal reviewer approves each wording. |
 
 The live imprint and privacy pages are at https://hephaestus.build/imprint and https://hephaestus.build/privacy. Markdown source: [`webapp/public/legal/profiles/tumaet/`](https://github.com/hephaestus-build/Hephaestus/tree/main/webapp/public/legal/profiles/tumaet).
 
