@@ -145,14 +145,13 @@ void test("both commit practices read the subjects from the commit record and st
 			);
 			// One record row per authored commit; the merge is set aside.
 			assert.deepEqual(
-				result.hints.map((h) => [h.file, h.pattern, h.context, h.flags.joinedClauses]),
+				result.hints.map((h) => [h.file, h.pattern, h.context]),
 				[
-					["areas/changed-work/commits.json", "commit", "1111111 Add button to start run", false],
+					["areas/changed-work/commits.json", "commit", "1111111 Add button to start run"],
 					[
 						"areas/changed-work/commits.json",
 						"commit",
 						"2222222 add location manager, SwiftData persistence, and UI color cleanup",
-						true,
 					],
 				],
 			);
@@ -171,15 +170,44 @@ void test("a terse subject that names its object is not a shape to check, whatev
 	try {
 		const result = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
 		assert.deepEqual(
-			result.hints.map((h) => [h.context, h.flags.bare, h.flags.paths]),
+			result.hints.map((h) => [h.context, h.flags.bare]),
 			[
-				["1111111 Update Readme", false, "docs/screenshot.png"],
-				["2222222 update", true, "docs/screenshot.png"],
+				["1111111 Update Readme", false],
+				["2222222 update", true],
 			],
 		);
-		// The criteria judge clarity, so the listed paths are never offered as a test of a subject's accuracy.
-		assert.match(result.directions[1] ?? "", /never measure whether its subject is accurate/u);
+		assert.equal("paths" in (result.hints[0]?.flags ?? {}), false);
 		assert.doesNotMatch(result.directions[1] ?? "", /about the files it touched/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("subject hints keep informative conjunctions and vague subjects separate from commit scope", async () => {
+	const { root, script, contextDir } = await stage("commit-subjects-explain-each-change", [
+		commit(
+			"1111111",
+			"Restore request failures and remove the HTTP status check",
+			["p"],
+			[{ status: "M", path: "App/Model.swift", additions: 2, deletions: 8 }],
+		),
+		commit("2222222", "fix"),
+		commit("3333333", "Merge branch 'main'", ["p1", "p2"]),
+	]);
+	try {
+		const result = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
+		assert.equal(result.metrics.authoredCommits, 2);
+		assert.equal(result.metrics.mergeCommits, 1);
+		assert.deepEqual(
+			result.hints.map((hint) => ({ context: hint.context, flags: hint.flags })),
+			[
+				{
+					context: "1111111 Restore request failures and remove the HTTP status check",
+					flags: { bare: false, repeat: false, cutOff: false },
+				},
+				{ context: "2222222 fix", flags: { bare: true, repeat: false, cutOff: false } },
+			],
+		);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -214,6 +242,14 @@ void test("one authored commit is still a history to judge, and an unread commit
 			assert.match(empty.directions[0] ?? "", /^No authored commit in the reviewed range/u);
 			assert.equal(empty.metrics.authoredCommits, 0);
 			assert.equal(empty.metrics.mergeCommits, 0);
+			writeFileSync(
+				path.join(contextDir, "commits.json"),
+				JSON.stringify({ commits: [commit("3333333", "Merge branch 'main'", ["p1", "p2"])] }),
+			);
+			const merges = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
+			assert.deepEqual(merges.hints, []);
+			assert.equal(merges.metrics.authoredCommits, 0);
+			assert.equal(merges.metrics.mergeCommits, 1);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
