@@ -998,5 +998,16 @@
 		},
 		"reason": "One subject names nothing it changed in an otherwise clear history: a lone straggler.",
 		"workType": "pull_request"
+	},
+	{
+		"id": "informative-conjunction-is-subject-clarity-not-commit-cohesion",
+		"expected": {
+			"commit-subjects-explain-each-change": "MET"
+		},
+		"files": {
+			"context/commits.json": "{\"commits\":[{\"sha\":\"58f0edd\",\"message\":\"Restore request failures and remove the HTTP status check\",\"parents\":[\"06e6ddd\"],\"files\":[{\"path\":\"App/Model.swift\",\"status\":\"M\",\"additions\":2,\"deletions\":8}]},{\"sha\":\"06e6ddd\",\"message\":\"Represent request failure as an empty result\",\"parents\":[\"7a155b2\"],\"files\":[{\"path\":\"App/Model.swift\",\"status\":\"M\",\"additions\":1,\"deletions\":1}]}]}"
+		},
+		"reason": "Both subjects name specific actions and objects. A conjunction does not make a subject vague, and subject clarity does not assess commit accuracy or cohesion.",
+		"workType": "pull_request"
 	}
 ]
