@@ -2,7 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -76,7 +78,8 @@ class IssueContentSourceTest extends BaseUnitTest {
                 objectMapper,
                 issueRepository,
                 issueCommentRepository,
-                new IssueEvidenceRevision(issueCommentRepository, new IssueCommentProvenance(issueId -> List.of())));
+                new IssueEvidenceRevision(
+                        issueCommentRepository, new IssueCommentProvenance(mock(DeliveredIssueCommentLookup.class))));
         lenient().when(issueCommentRepository.countByIssueId(ISSUE_ID)).thenReturn(0L);
         lenient().when(issueCommentRepository.findStoredByIssueId(ISSUE_ID)).thenReturn(List.of());
     }
@@ -188,6 +191,12 @@ class IssueContentSourceTest extends BaseUnitTest {
         assertThat(issue.getCommentsCount()).isEqualTo(3);
     }
 
+    private static DeliveredIssueCommentLookup deliveries(List<DeliveredIssueCommentLookup.DeliveredComment> notes) {
+        DeliveredIssueCommentLookup deliveries = mock(DeliveredIssueCommentLookup.class);
+        lenient().when(deliveries.findForIssue(anyLong())).thenReturn(notes);
+        return deliveries;
+    }
+
     /** A source whose delivery record names {@code delivered} as Hephaestus's own GitLab notes. */
     private IssueContentSource excludingDelivered(StoredComment... delivered) {
         List<DeliveredIssueCommentLookup.DeliveredComment> notes = new ArrayList<>();
@@ -199,7 +208,7 @@ class IssueContentSourceTest extends BaseUnitTest {
                 objectMapper,
                 issueRepository,
                 issueCommentRepository,
-                new IssueEvidenceRevision(issueCommentRepository, new IssueCommentProvenance(issueId -> notes)));
+                new IssueEvidenceRevision(issueCommentRepository, new IssueCommentProvenance(deliveries(notes))));
     }
 
     @Test

@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredIssueCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -102,7 +104,8 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
                 reviewGate,
                 workspaceResolver,
                 signalRecorder,
-                new IssueEvidenceRevision(issueCommentRepository, new IssueCommentProvenance(issueId -> List.of())),
+                new IssueEvidenceRevision(
+                        issueCommentRepository, new IssueCommentProvenance(mock(DeliveredIssueCommentLookup.class))),
                 transactionManager);
         lenient()
                 .when(transactionManager.getTransaction(any()))
