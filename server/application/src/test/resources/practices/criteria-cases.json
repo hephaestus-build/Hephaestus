@@ -1009,5 +1009,56 @@
 		},
 		"reason": "Both subjects name specific actions and objects. A conjunction does not make a subject vague, and subject clarity does not assess commit accuracy or cohesion.",
 		"workType": "pull_request"
+	},
+	{
+		"id": "issue-withdrawn-requirements-retained",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "NOT_APPLICABLE",
+			"issue-scoped-to-single-concern": "NOT_APPLICABLE"
+		},
+		"files": {
+			"context/metadata.json": "{\"title\": \"CSV audit download, service-status banner and XML archive\", \"state\": \"OPEN\", \"state_reason\": null, \"labels\": [\"type::Task\"], \"body\": \"Current scope decision: this work is withdrawn. No CSV audit download, service-status banner or XML archive is requested. The earlier proposal below is retained as history.\\n\\n## Earlier proposal retained for history\\n\\nAdd a CSV audit download, a rotating service-status banner and an XML archive. Each can ship independently.\\n\\n## Earlier checks\\n\\nThe CSV download opens with column headers. The banner rotates through published service notices. The XML archive opens as XML.\\n\"}\n",
+			"context/description.md": "Current scope decision: this work is withdrawn. No CSV audit download, service-status banner or XML archive is requested. The earlier proposal below is retained as history.\n\n## Earlier proposal retained for history\n\nAdd a CSV audit download, a rotating service-status banner and an XML archive. Each can ship independently.\n\n## Earlier checks\n\nThe CSV download opens with column headers. The banner rotates through published service notices. The XML archive opens as XML.\n",
+			"context/comments.json": "[]\n",
+			"context/project_inventory.json": "{\"synced_at\": null, \"truncated\": false, \"issues\": [], \"pullRequests\": []}\n"
+		},
+		"reason": "Explicit withdrawal leaves no requested export work; retained historical deliverables do not become an active decomposition or scope lapse.",
+		"workType": "issue"
+	},
+	{
+		"id": "issue-partially-withdrawn-requirements",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "NOT_MET",
+			"issue-scoped-to-single-concern": "NOT_MET",
+			"issue-has-checkable-outcome": "MET",
+			"issue-states-an-actionable-problem": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"title\": \"CSV audit download, service-status banner and XML archive\", \"state\": \"OPEN\", \"state_reason\": null, \"labels\": [\"type::Task\"], \"body\": \"Current scope decision: deliver the CSV audit download and the rotating service-status banner. Drop the XML archive. The remaining outputs can ship and be assigned independently.\\n\\n## Current checks\\n\\nThe CSV download contains column headers and one row per audit record. The service-status banner rotates through published service notices. Neither output depends on the other.\\n\\n## Earlier proposal retained for history\\n\\nAdd a CSV audit download, a rotating service-status banner and an XML archive. Each can ship independently.\\n\\n## Earlier checks\\n\\nThe CSV download opens with column headers. The banner rotates through published service notices. The XML archive opens as XML.\\n\"}\n",
+			"context/description.md": "Current scope decision: deliver the CSV audit download and the rotating service-status banner. Drop the XML archive. The remaining outputs can ship and be assigned independently.\n\n## Current checks\n\nThe CSV download contains column headers and one row per audit record. The service-status banner rotates through published service notices. Neither output depends on the other.\n\n## Earlier proposal retained for history\n\nAdd a CSV audit download, a rotating service-status banner and an XML archive. Each can ship independently.\n\n## Earlier checks\n\nThe CSV download opens with column headers. The banner rotates through published service notices. The XML archive opens as XML.\n",
+			"context/comments.json": "[]\n",
+			"context/project_inventory.json": "{\"synced_at\": null, \"truncated\": false, \"issues\": [], \"pullRequests\": []}\n"
+		},
+		"reason": "Dropping one output preserves two concrete independently deliverable requests; absent tracked sub-units and unrelated combined scope remain assessable without reviving the withdrawn output.",
+		"workType": "issue",
+		"expectedSeverity": {
+			"breaks-large-work-into-trackable-subtasks": "MINOR",
+			"issue-scoped-to-single-concern": "MINOR"
+		}
+	},
+	{
+		"id": "issue-conflicting-current-scope",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "UNDETERMINED",
+			"issue-scoped-to-single-concern": "UNDETERMINED"
+		},
+		"files": {
+			"context/metadata.json": "{\"title\": \"CSV audit download, service-status banner and XML archive\", \"state\": \"OPEN\", \"state_reason\": null, \"labels\": [\"type::Task\"], \"body\": \"## Current scope decision\\n\\nNo CSV audit download, service-status banner or XML archive is requested. This work is withdrawn.\\n\\n## Current delivery requirement\\n\\nDeliver the CSV audit download, service-status banner and XML archive. All three remain requested.\\n\\n## Earlier proposal retained for history\\n\\nAdd a CSV audit download, a rotating service-status banner and an XML archive. Each can ship independently.\\n\\n## Earlier checks\\n\\nThe CSV download opens with column headers. The banner rotates through published service notices. The XML archive opens as XML.\\n\"}\n",
+			"context/description.md": "## Current scope decision\n\nNo CSV audit download, service-status banner or XML archive is requested. This work is withdrawn.\n\n## Current delivery requirement\n\nDeliver the CSV audit download, service-status banner and XML archive. All three remain requested.\n\n## Earlier proposal retained for history\n\nAdd a CSV audit download, a rotating service-status banner and an XML archive. Each can ship independently.\n\n## Earlier checks\n\nThe CSV download opens with column headers. The banner rotates through published service notices. The XML archive opens as XML.\n",
+			"context/comments.json": "[]\n",
+			"context/project_inventory.json": "{\"synced_at\": null, \"truncated\": false, \"issues\": [], \"pullRequests\": []}\n"
+		},
+		"reason": "Two explicit current statements contradict one another without a resolving decision; their order alone cannot decide the request.",
+		"workType": "issue"
 	}
 ]
