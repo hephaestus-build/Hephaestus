@@ -499,7 +499,6 @@ jobs:
         needs.detect-changes.outputs.unfiltered == 'true'
       )
     permissions:
-      checks: write
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -525,7 +524,7 @@ jobs:
           actionlint_flags: ${{ steps.native.outputs.compatible }}
           fail_level: error
           filter_mode: nofilter
-          reporter: github-check
+          reporter: github-annotations
 
   # A required context as well; the note above `workflow-lint` says why filtering one is safe.
   zizmor:
