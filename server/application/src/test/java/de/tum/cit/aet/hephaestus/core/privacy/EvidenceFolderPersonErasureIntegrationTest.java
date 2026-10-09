@@ -588,6 +588,27 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
         var otherFolder = root.resolve("jobs")
                 .resolve(unrelated.getWorkspace().getId().toString())
                 .resolve(unrelated.getId().toString());
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        files.bind(first.getId(), 0, "synthetic-indexed-image")
+                .accept(Map.of(
+                        "traces/manifest.json",
+                        "{\"sessions\":[],\"sessionScanTruncated\":false}".getBytes(StandardCharsets.UTF_8),
+                        "traces/0001.jsonl",
+                        "{\"type\":\"session\",\"cwd\":\"SYNTHETIC-TRACE-CANARY\"}\n"
+                                .getBytes(StandardCharsets.UTF_8)));
+        Path trace;
+        try (var retained = Files.list(firstFolder)) {
+            var traces = retained.filter(
+                            folder -> folder.getFileName().toString().endsWith(".trace"))
+                    .toList();
+            assertThat(traces).hasSize(1);
+            trace = traces.getFirst();
+        }
+        assertThat(trace.resolve("0001.jsonl")).exists();
+        assertThat(mapper.readTree(Files.readString(trace.resolve("record.json")))
+                        .path("retention")
+                        .asString())
+                .isEqualTo("NATIVE_TRANSCRIPT");
         Files.createDirectories(firstFolder.resolve(".failed.preparing-orphan"));
         Files.writeString(firstFolder.resolve(".failed.preparing-orphan/copied.txt"), "ORPHAN-PROFILE-CANARY");
         var person = new PersonScope(
@@ -607,6 +628,9 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
             firstInputs.close();
             secondInputs.close();
             removal.get(10, TimeUnit.SECONDS);
+            assertThat(trace)
+                    .as("the retained native transcript is removed before erasure acknowledgement")
+                    .doesNotExist();
             assertThat(firstFolder).doesNotExist();
             assertThat(secondFolder).doesNotExist();
             assertThat(otherFolder).exists();
