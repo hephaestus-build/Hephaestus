@@ -10,7 +10,7 @@
  * platform-digest resolver through `resolve-image-scan-subject.ts`.
  */
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { asRecord, isRecord } from "./json.ts";
@@ -26,13 +26,17 @@ export interface Subject {
 	/** Short image name, as `security/release-images.json` and the policy exceptions spell it. */
 	readonly image: string;
 	readonly reference: string;
+	/** An authenticated platform leaf, when the caller already resolved it. */
+	readonly digest?: string;
 	readonly repository: string;
 }
 
 export interface ScanOutcome {
 	readonly image: string;
-	/** `false` when the policy evaluator rejected something; never throws the run. */
+	/** False for a policy refusal or, in a continuing scan, an infrastructure error. */
 	readonly passed: boolean;
+	/** An unavailable scan, distinct from a completed policy refusal. */
+	readonly error?: string;
 	/** Carried because the policy match key is per platform, so an outcome that does not name one
 	 * cannot be reported or compared against the release gate's subjects. */
 	readonly platform: string;
@@ -46,6 +50,8 @@ export interface ScanOptions {
 	 */
 	readonly annotate?: boolean;
 	readonly platform?: string;
+	/** Collect every subject even when one scan is unavailable. Existing callers remain fail-fast. */
+	readonly continueOnError?: boolean;
 }
 
 /**
@@ -137,7 +143,13 @@ async function scan(
 	platform: string,
 	annotate: boolean,
 ): Promise<ScanOutcome> {
-	const digest = await resolvePlatformDigest(subject.reference, platform);
+	const digest = subject.digest ?? (await resolvePlatformDigest(subject.reference, platform));
+	if (
+		!DIGEST.test(digest) ||
+		(subject.digest !== undefined && subject.reference !== `${subject.repository}@${digest}`)
+	) {
+		throw new Error(`scan subject is not bound to its platform digest: ${subject.image}`);
+	}
 	const stem = reportStem(subject.image, platform);
 	const report = path.join(directory, `${stem}.json`);
 	await run("trivy", [
@@ -152,6 +164,7 @@ async function scan(
 		`${subject.repository}@${digest}`,
 	]);
 	const result = path.join(directory, `${stem}.policy.json`);
+	await rm(result, { force: true });
 	const evaluator = [
 		path.join(import.meta.dirname, "..", "check-release-vulnerabilities.ts"),
 		subject.image,
@@ -181,7 +194,16 @@ export async function scanAll(
 	const platform = options.platform ?? PLATFORM;
 	const outcomes: ScanOutcome[] = [];
 	for (const subject of subjects) {
-		outcomes.push(await scan(subject, directory, platform, options.annotate ?? false));
+		try {
+			outcomes.push(await scan(subject, directory, platform, options.annotate ?? false));
+		} catch (error) {
+			if (options.continueOnError !== true) {
+				throw error;
+			}
+			const detail = error instanceof Error ? error.message : String(error);
+			process.stderr.write(`${subject.image} (${platform}): ${detail}\n`);
+			outcomes.push({ image: subject.image, platform, passed: false, error: detail });
+		}
 	}
 	return outcomes;
 }

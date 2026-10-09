@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
@@ -8,6 +8,7 @@ import { advisoryFile, componentAdvisories, evaluate } from "./check-release-vul
 import { readJsonFileSync } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
+	releaseAtLeast,
 	releaseCertificateIdentity,
 	releaseIdentityFor,
 	releaseOwner,
@@ -36,7 +37,12 @@ interface ExpectedImage {
 	provenance: Subject["provenance"];
 	repository: string;
 }
-type VerificationMode = "verify" | "verify-signatures" | "write-validation";
+/** This release must include the checksum signature before its version is published. */
+export function requiresSignedEvidence(release: string): boolean {
+	return releaseAtLeast(release, "v0.86.2");
+}
+
+type VerificationMode = "verify" | "verify-signatures" | "write-validation" | "verify-capture";
 
 const digestPattern = /^sha256:[a-f0-9]{64}$/u;
 const imagePattern = /^[a-z0-9-]+$/u;
@@ -265,9 +271,10 @@ export function validateManifest(
 	return { schemaVersion: 1, subjects };
 }
 
-function command(commandName: string, args: string[], capture = false): string {
+function command(commandName: string, args: string[], capture = false, cwd?: string): string {
 	const result = spawnSync(commandName, args, {
 		encoding: "utf8",
+		cwd,
 		stdio: capture ? "pipe" : "inherit",
 		maxBuffer: CAPTURE_LIMIT_BYTES,
 	});
@@ -279,6 +286,56 @@ function command(commandName: string, args: string[], capture = false): string {
 		throw new Error(`${commandName} failed with exit code ${result.status ?? "unknown"}${detail}`);
 	}
 	return result.stdout;
+}
+
+/** Authenticate the evidence bytes before archived policy, advisory or native file identities are read. */
+function verifyEvidenceChecksums(directory: string, release: string): Set<string> {
+	const checksums = path.resolve(directory, "SHA256SUMS");
+	const bundle = `${checksums}.sigstore.json`;
+	if (!existsSync(bundle)) {
+		throw new Error("archived evidence has no SHA256SUMS signature");
+	}
+	command(
+		"cosign",
+		[
+			"verify-blob",
+			"--bundle",
+			bundle,
+			"--certificate-identity",
+			releaseCertificateIdentity(release, process.env),
+			"--certificate-oidc-issuer",
+			"https://token.actions.githubusercontent.com",
+			checksums,
+		],
+		true,
+	);
+	command("sha256sum", ["-c", "SHA256SUMS"], true, directory);
+	const files = new Set<string>();
+	for (const line of readFileSync(checksums, "utf8").trimEnd().split("\n")) {
+		const file = /^[a-f0-9]{64} [ *](?<file>[A-Za-z0-9][A-Za-z0-9._-]*)$/u.exec(line)?.groups?.file;
+		if (file === undefined || files.has(file)) {
+			throw new Error(
+				"SHA256SUMS must contain unique native checksum records for evidence basenames",
+			);
+		}
+		files.add(file);
+	}
+	return files;
+}
+
+function requireChecksumCoverage(
+	files: ReadonlySet<string> | undefined,
+	names: readonly string[],
+): void {
+	if (files === undefined) {
+		// Only explicit trusted capture modes have no authenticated archive.
+		return;
+	}
+	for (const name of names) {
+		if (!files.has(name)) {
+			throw new Error(`SHA256SUMS does not cover ${name}`);
+		}
+	}
 }
 
 export function verifyReleaseEvidence(
@@ -297,6 +354,15 @@ export function verifyReleaseEvidence(
 	// signed by the pre-transfer repository, both of which it keeps forever — resolve
 	// namespace *and* signer per version, never from the run context.
 	const { release } = manifestValue;
+	const covered =
+		mode === "write-validation" || mode === "verify-capture"
+			? undefined
+			: verifyEvidenceChecksums(directory, release);
+	requireChecksumCoverage(covered, [
+		"manifest.json",
+		"release-images.json",
+		"vulnerability-policy.json",
+	]);
 	const manifest = validateManifest(
 		manifestValue,
 		readJsonFileSync(path.join(directory, "release-images.json")),
@@ -305,7 +371,16 @@ export function verifyReleaseEvidence(
 	const policy = readJsonFileSync(path.join(directory, "vulnerability-policy.json"));
 	// A stored schema 2 policy is read only to verify this signed bundle, each exception bound to its own
 	// digest; writing a validation always holds the bundle to the current schema.
-	const historical = mode !== "write-validation";
+	const historical = mode === "verify" || mode === "verify-signatures";
+	requireChecksumCoverage(covered, [
+		...manifest.subjects.flatMap((subject) => {
+			const stem = `${subject.image}-${subject.platform.replace("/", "-")}`;
+			return ["syft", "spdx", "cdx", "license", "trivy", "sbom-validation", "policy"].map(
+				(kind) => `${stem}.${kind}.json`,
+			);
+		}),
+		...componentAdvisories(policy, undefined, historical).map(advisoryFile),
+	]);
 	for (const subject of manifest.subjects) {
 		const suffix = subject.platform.replace("/", "-");
 		const prefix = path.join(directory, `${subject.image}-${suffix}`);
@@ -439,7 +514,7 @@ if (import.meta.main) {
 	const [directory = "", option] = process.argv.slice(2);
 	if (directory === "") {
 		throw new Error(
-			"usage: verify-release-evidence <evidence-directory> [--verify-signatures|--write-validation]",
+			"usage: verify-release-evidence <evidence-directory> [--verify-signatures|--write-validation|--verify-capture]",
 		);
 	}
 	let mode: VerificationMode;
@@ -452,13 +527,17 @@ if (import.meta.main) {
 			mode = "verify-signatures";
 			break;
 		}
+		case "--verify-capture": {
+			mode = "verify-capture";
+			break;
+		}
 		case "--write-validation": {
 			mode = "write-validation";
 			break;
 		}
 		default: {
 			throw new Error(
-				"usage: verify-release-evidence <evidence-directory> [--verify-signatures|--write-validation]",
+				"usage: verify-release-evidence <evidence-directory> [--verify-signatures|--write-validation|--verify-capture]",
 			);
 		}
 	}

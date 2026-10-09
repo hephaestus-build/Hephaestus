@@ -996,7 +996,7 @@ jobs:
           node scripts/verify-release-evidence.ts evidence --write-validation
           # Again without --write-validation, which re-derives the validation documents and fails if
           # they changed: the release runs the verifier twice for the same reason.
-          node scripts/verify-release-evidence.ts evidence
+          node scripts/verify-release-evidence.ts evidence --verify-capture
 
       # An exit status cannot say which subject carries which finding.
       - name: Upload the evidence bundle
