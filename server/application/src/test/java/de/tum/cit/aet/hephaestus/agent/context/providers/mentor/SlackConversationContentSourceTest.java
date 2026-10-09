@@ -24,11 +24,11 @@ class SlackConversationContentSourceTest extends BaseUnitTest {
     private ConversationThreadProjection projection;
 
     @Test
-    void supportsOnlyMentorChatRequestsAndIsOptional() {
+    void supportsOnlyHephTurnRequestsAndIsOptional() {
         SlackConversationContentSource source = new SlackConversationContentSource(projection, objectMapper);
 
         assertThat(source.required()).isFalse();
-        assertThat(source.supports(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID())))
+        assertThat(source.supports(new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID())))
                 .isTrue();
         assertThat(source.supports(new ContextRequest.PracticeReviewRequest(new AgentJob())))
                 .isFalse();
@@ -41,7 +41,7 @@ class SlackConversationContentSourceTest extends BaseUnitTest {
                 .thenReturn(objectMapper.createObjectNode().put("source", "slack"));
 
         Map<String, byte[]> files = new HashMap<>();
-        source.contribute(new ContextRequest.MentorChatRequest(11L, 22L, UUID.randomUUID()), files);
+        source.contribute(new ContextRequest.HephTurnRequest(11L, 22L, UUID.randomUUID()), files);
 
         assertThat(files).containsOnlyKeys(SlackConversationContentSource.OUTPUT_KEY);
         JsonNode payload = objectMapper.readTree(files.get(SlackConversationContentSource.OUTPUT_KEY));

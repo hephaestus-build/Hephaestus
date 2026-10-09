@@ -239,7 +239,8 @@ public class PracticeStandingService {
             PracticeStandingDTO dto = evidence != null && share != null
                     ? toStanding(evidence, trend, deliveredGuidance, share)
                     : silentStanding(subject.getValue(), evidence);
-            standings.add(new StandingSnapshot.PracticeStanding(dto, observed, liveRuns, trend, share));
+            standings.add(new StandingSnapshot.PracticeStanding(
+                    dto, observed, liveRuns, trend, share, decidedWork(evidence, trend, since)));
         }
         standings.sort(Comparator.<StandingSnapshot.PracticeStanding>comparingInt(
                         standing -> standing.dto().standing().rank())
@@ -333,6 +334,19 @@ public class PracticeStandingService {
     }
 
     /**
+     * How many pieces of work reached a verdict in the population {@link #standingShare} reads: the live runs when
+     * one judged the practice, else the requested and backfilled work.
+     */
+    private int decidedWork(@Nullable PracticeEvidence evidence, PracticeTrend trend, Instant since) {
+        if (trend.recentMetShare(practiceTrendService.standingWindow(), STANDING_DECAY)
+                        .isPresent()
+                || evidence == null) {
+            return trend.cleanWork().decidedWork();
+        }
+        return practiceTrendService.selfSelectedDecidedWork(evidence.observed(), since);
+    }
+
+    /**
      * One practice's window of observations, split by what each one says about the developer.
      *
      * <p>Split once, then read by everything downstream: the practice's two lists, the trend's evidence, the
@@ -413,13 +427,15 @@ public class PracticeStandingService {
          * @param share the continuous standing of a practice that has one, else null. The level above
          *     aggregates THIS rather than the rendered labels, which would put 0.79 and 0.51 at the same
          *     weight. Kept out of {@link PracticeStandingDTO}: the developer-facing response carries no score.
+         * @param decidedWork how many pieces of work reached a verdict in the population the standing was read off
          */
         public record PracticeStanding(
                 PracticeStandingDTO dto,
                 List<Observation> evidence,
                 List<Observation> liveRuns,
                 PracticeTrend trend,
-                @Nullable Double share) {
+                @Nullable Double share,
+                int decidedWork) {
 
             /**
              * Whether a practice at {@code STRENGTH} is holding: every one of the newest opportunities its

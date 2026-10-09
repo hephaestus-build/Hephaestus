@@ -82,7 +82,7 @@ public class SandboxNetworkManager {
      * else reclaims it: Docker refuses the duplicate name, and the reconciler spares a network whose
      * job is still queued — which a job retrying on that very conflict is. An attempt that was
      * requeued as orphaned can still be running on a worker whose heartbeat only lapsed, but that
-     * attempt is superseded already. A mentor session's network is replaced only when this process
+     * attempt is superseded already. A Heph host's network is replaced only when this process
      * created it or its recorded creator is positively gone, and a network a sandbox is still attached to
      * is never taken. Both fail loudly rather than pulling the network out from under it.
      */
@@ -103,9 +103,9 @@ public class SandboxNetworkManager {
                     && !creator.createdBySelf(leftover.labels())
                     && creator.liveness(leftover.labels()) != SandboxCreator.Liveness.GONE) {
                 throw new SandboxInfrastructureException("Network " + networkName
-                        + " belongs to a mentor session. The application container that created the session"
+                        + " belongs to a Heph host. The worker container that started the host"
                         + " is still running or cannot be identified."
-                        + " End the session there, or remove the network when no container uses it.");
+                        + " Stop that worker, or remove the network when no container uses it.");
             }
             log.warn("Removing the network an interrupted run left behind: name={}, id={}", networkName, leftover.id());
             if (!removeUnlessInUse(leftover.id(), networkName)) {

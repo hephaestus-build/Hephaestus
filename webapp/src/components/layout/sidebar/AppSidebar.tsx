@@ -1,12 +1,6 @@
-import { Link } from "@tanstack/react-router";
-import { SquarePen } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 
-import type {
-	ChatThreadSummary,
-	IntegrationCatalogEntry,
-	WorkspaceListItem,
-} from "@/api/types.gen";
+import type { IntegrationCatalogEntry, WorkspaceListItem } from "@/api/types.gen";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
 import {
 	Sidebar,
@@ -15,7 +9,6 @@ import {
 	SidebarGroup,
 	SidebarHeader,
 	SidebarMenu,
-	SidebarMenuButton,
 	SidebarMenuItem,
 	SidebarMenuSkeleton,
 	SidebarRail,
@@ -24,15 +17,13 @@ import {
 } from "@/components/ui/sidebar";
 
 import { NavAdmin } from "./NavAdmin";
-import { NavContextHeader } from "./NavContextHeader";
 import { NavDashboards } from "./NavDashboards";
 import { NavFooter } from "./NavFooter";
 import { NavMentor } from "./NavMentor";
-import { NavMentorThreads } from "./NavMentorThreads";
 import { NavSuperAdmin } from "./NavSuperAdmin";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
-export type SidebarContext = "main" | "mentor" | "admin";
+export type SidebarContext = "main" | "admin";
 
 export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	isAdmin: boolean;
@@ -50,9 +41,6 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	onWorkspaceChange?: (workspace: WorkspaceListItem) => void;
 	onAddWorkspace?: () => void;
 	workspacesLoading?: boolean;
-	mentorThreads?: ChatThreadSummary[];
-	mentorThreadsLoading?: boolean;
-	mentorThreadsError?: string;
 }
 
 export function AppSidebar({
@@ -69,9 +57,6 @@ export function AppSidebar({
 	onWorkspaceChange,
 	onAddWorkspace,
 	workspacesLoading = false,
-	mentorThreads,
-	mentorThreadsLoading,
-	mentorThreadsError,
 	onClick,
 	...props
 }: AppSidebarProps) {
@@ -82,7 +67,6 @@ export function AppSidebar({
 			setOpenMobile(false);
 		}
 	};
-	let contextHeader: ReactNode = null;
 	let sidebarContent: ReactNode;
 
 	if (context === "admin") {
@@ -99,44 +83,7 @@ export function AppSidebar({
 				</SidebarMenu>
 			</SidebarGroup>
 		);
-	} else if (!activeWorkspace) {
-		sidebarContent = (
-			<div className="group-data-[collapsible=icon]:hidden">
-				<NoWorkspace headingLevel={2} />
-			</div>
-		);
-	} else if (context === "mentor") {
-		contextHeader = (
-			<NavContextHeader
-				title="Mentor"
-				backLink={
-					<Link to="/w/$workspaceSlug" params={{ workspaceSlug: activeWorkspace.workspaceSlug }} />
-				}
-			>
-				{!readOnly && (
-					<SidebarMenuButton
-						render={
-							<Link
-								to="/w/$workspaceSlug/mentor"
-								params={{ workspaceSlug: activeWorkspace.workspaceSlug }}
-							/>
-						}
-					>
-						<SquarePen />
-						New chat
-					</SidebarMenuButton>
-				)}
-			</NavContextHeader>
-		);
-		sidebarContent = (
-			<NavMentorThreads
-				workspaceSlug={activeWorkspace.workspaceSlug}
-				threads={mentorThreads ?? []}
-				isLoading={mentorThreadsLoading}
-				error={mentorThreadsError}
-			/>
-		);
-	} else {
+	} else if (activeWorkspace) {
 		sidebarContent = (
 			<>
 				<NavDashboards
@@ -155,6 +102,12 @@ export function AppSidebar({
 				)}
 			</>
 		);
+	} else {
+		sidebarContent = (
+			<div className="group-data-[collapsible=icon]:hidden">
+				<NoWorkspace headingLevel={2} />
+			</div>
+		);
 	}
 
 	return (
@@ -171,7 +124,6 @@ export function AppSidebar({
 						isAppAdmin={isAppAdmin}
 					/>
 				)}
-				{contextHeader}
 			</SidebarHeader>
 			<SidebarContent onClick={handleSectionClick}>{sidebarContent}</SidebarContent>
 			<SidebarFooter onClick={handleSectionClick}>

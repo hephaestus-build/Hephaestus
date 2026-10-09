@@ -1,8 +1,7 @@
 // pi-agent-sandbox.ts — the sandbox trust posture every Pi session in this image runs under.
-// Shared by the practice runner (pi-runner.ts) and the mentor runner (pi-mentor-runner.ts): both
-// execute the same vendored SDK inside the same container at the same working directory, so a
-// trust or discovery option set correctly in one and left at its default in the other reopens the
-// crash the fix removed for the other.
+// Shared by the practice runner (pi-runner.ts) and the Heph host (heph-host.ts): both execute the
+// same vendored SDK in the same image at the same working directory, so each trust and discovery
+// option must be set the same way in both.
 
 import type { SettingsManagerCreateOptions } from "@earendil-works/pi-coding-agent";
 

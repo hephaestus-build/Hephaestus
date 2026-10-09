@@ -26,15 +26,6 @@ class WorkerCapacityStateTest extends BaseUnitTest {
     }
 
     @Test
-    void mentorClaimRefusesWhenAtCapacity() {
-        WorkerCapacityState state = new WorkerCapacityState(WorkerPropertiesFixtures.minimal("1", "1"));
-        assertThat(state.tryClaimMentor()).isTrue();
-        assertThat(state.tryClaimMentor()).isFalse();
-        state.releaseMentor();
-        assertThat(state.tryClaimMentor()).isTrue();
-    }
-
-    @Test
     void releaseUnderflowIsIdempotent() {
         // Double-release happens on the executor's cleanup path during early shutdown.
         WorkerCapacityState state = new WorkerCapacityState(WorkerPropertiesFixtures.minimal("1", "1"));
@@ -50,6 +41,5 @@ class WorkerCapacityStateTest extends BaseUnitTest {
         state.claimReview();
         CapacityReport snap = state.snapshot();
         assertThat(snap.spareReview()).isZero();
-        assertThat(snap.spareMentor()).isZero();
     }
 }

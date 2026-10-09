@@ -26,7 +26,7 @@ the gitlab.lrz.de operator.
 | PostgreSQL (in-house container) | Application data store | No (self-hosted) | — |
 | Hephaestus app server (in-house container) | Identity and session management (native auth, ADR 0017) | No (self-hosted) | — |
 | Spring Boot application server (in-house container) | Admission, context and persistence. No sandbox on a server-only role. | No (self-hosted) | — |
-| Connected worker and review/Heph sandboxes | Executes AI work and holds temporary context and mounted evidence | No when controller-owned. Assess Art. 28 for externally operated workers. | Record each worker operator, location, access and deletion acknowledgement. Server-only operation has no Docker socket. |
+| Connected worker, review sandboxes and the Heph host | Executes AI work and holds temporary context and mounted evidence | No when controller-owned. Assess Art. 28 for externally operated workers. | Record each worker operator, location, access and deletion acknowledgement. Server-only operation has no Docker socket. |
 | Traefik v3 reverse proxy (in-house container) | TLS termination, routing | No (self-hosted) | — |
 | `Let's Encrypt` ACME endpoint | Domain-validation certificates | The endpoint receives no end-user project content. Record ACME account/contact data separately. | — |
 | DNS provider (Cloudflare for hephaestus.build) | Authoritative DNS, including the DNS-only wildcard record for workspace addresses and the DNS-01 challenge records | No. It carries no request and receives no request data. | Keep every record DNS-only. A proxied record makes the provider a processor and needs a new assessment. The DNS API token is a secret, scoped to the one zone. |

@@ -4,7 +4,12 @@ import type { ProfileChange, ReviewedWorkRef } from "@/api/types.gen";
 import type { FeedbackTextSegment } from "@/components/practice-vocabulary/feedback-text";
 import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
 
-import { composeGroupOverview, composeOverview, EMPTY_OVERVIEW } from "./compose-overview";
+import {
+	composeChangeSentences,
+	composeGroupOverview,
+	composeOverview,
+	EMPTY_OVERVIEW,
+} from "./compose-overview";
 
 const AT = new Date("2026-09-09T14:10:00Z");
 
@@ -56,6 +61,35 @@ const overview = (partial: Partial<Overview>): Overview => ({
 	...EMPTY_OVERVIEW,
 	latestRun: { reviewId: "job-1", at: AT, reviewedWork: pullRequest(425) },
 	...partial,
+});
+
+describe("composeChangeSentences", () => {
+	it("says each subject's one change once, what needs the reader first, and never new feedback twice", () => {
+		const sentences = composeChangeSentences([
+			change("STANDING_MOVED", "describe-changes", "Describe changes", {
+				from: "DEVELOPING",
+				to: "STRENGTH",
+				direction: "UP",
+			}),
+			change("TREND_TURNED", "describe-changes", "Describe changes", {
+				from: "STABLE",
+				to: "IMPROVING",
+			}),
+			change("FEEDBACK_RESET", "link-issues", "Link issues", {
+				feedbackId: "f1",
+				cleanNeeded: 3,
+				evidence: [pullRequest(7)],
+			}),
+		]).map(plain);
+
+		expect(sentences).toHaveLength(2);
+		expect(sentences[0]).toMatch(/^Link issues /u);
+		expect(sentences[1]).toMatch(/^Describe changes /u);
+	});
+
+	it("says nothing for a week without changes", () => {
+		expect(composeChangeSentences([])).toStrictEqual([]);
+	});
 });
 
 describe("composeOverview", () => {

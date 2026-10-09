@@ -10,11 +10,10 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
-import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
-import de.tum.cit.aet.hephaestus.mentor.ThreadSurface;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryDraft;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -60,6 +59,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
@@ -118,10 +118,10 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
     private ReactionRepository reactionRepository;
 
     @Autowired
-    private ChatThreadRepository chatThreadRepository;
+    private MentorConversationService mentorConversations;
 
     @Autowired
-    private ChatMessageRepository chatMessageRepository;
+    private MentorEntryService mentorEntries;
 
     private Workspace workspace;
     private Workspace otherWorkspace;
@@ -1692,7 +1692,7 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
         void returnsPlacementsInDisplayOrderWithTheirLocators() {
             Feedback unit = persistUnit(workspace, job, alice, 0, FeedbackDeliveryState.DELIVERED, null, "Body");
             Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
-            UUID chatMessageId = UUID.randomUUID();
+            UUID mentorEntryId = UUID.randomUUID();
             feedbackPlacementRepository.save(FeedbackPlacement.builder()
                     .feedback(unit)
                     .placementType(PlacementType.INLINE)
@@ -1725,7 +1725,7 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
             feedbackPlacementRepository.save(FeedbackPlacement.builder()
                     .feedback(unit)
                     .placementType(PlacementType.CONVERSATION_TURN)
-                    .chatMessageId(chatMessageId)
+                    .mentorEntryId(mentorEntryId)
                     .createdAt(createdAt.plusSeconds(1))
                     .build());
 
@@ -1740,8 +1740,8 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     .isEqualTo("src/B.java")
                     .jsonPath("$.placements[3].placementType")
                     .isEqualTo("CONVERSATION_TURN")
-                    .jsonPath("$.placements[3].chatMessageId")
-                    .isEqualTo(chatMessageId.toString());
+                    .jsonPath("$.placements[3].mentorEntryId")
+                    .isEqualTo(mentorEntryId.toString());
         }
 
         @Test
@@ -1969,26 +1969,19 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     .build());
         }
 
-        /** Links {@code unit} to an assistant turn of a thread on {@code surface}, as a delivered conversation does. */
-        private void raiseIn(Feedback unit, Workspace ws, User recipient, ThreadSurface surface) {
-            ChatThread thread = new ChatThread();
-            thread.setId(UUID.randomUUID());
-            thread.setTitle(surface + " thread");
-            thread.setUser(recipient);
-            thread.setWorkspace(ws);
-            thread.setSurface(surface);
-            chatThreadRepository.save(thread);
-            ChatMessage turn = new ChatMessage();
-            turn.setId(UUID.randomUUID());
-            turn.setThread(thread);
-            turn.setRole(ChatMessage.Role.ASSISTANT);
-            turn.setStatus(ChatMessage.Status.completed);
-            turn.setParts(OBJECT_MAPPER.valueToTree(List.of(Map.of("type", "text", "text", "A turn"))));
-            chatMessageRepository.saveAndFlush(turn);
+        /** Links {@code unit} to a Heph message of a turn asked on {@code surface}, as a delivered conversation does. */
+        private void raiseIn(Feedback unit, Workspace ws, User recipient, MentorEntry.Surface surface) {
+            var conversation =
+                    mentorConversations.findOrCreateMain(ws.getId(), recipient.getId(), Set.of(recipient.getId()));
+            MentorEntry answer = mentorEntries.append(
+                    ws.getId(),
+                    conversation.getId(),
+                    new MentorEntryDraft(
+                            MentorEntry.Kind.HEPH, surface, "A turn", null, UUID.randomUUID(), null, null));
             feedbackPlacementRepository.save(FeedbackPlacement.builder()
                     .feedback(unit)
                     .placementType(PlacementType.CONVERSATION_TURN)
-                    .chatMessageId(turn.getId())
+                    .mentorEntryId(answer.getId())
                     .createdAt(Instant.now())
                     .build());
         }
@@ -2008,9 +2001,9 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
             Feedback onGitLab =
                     unit(workspace, gitlabJob, alice, FeedbackChannel.IN_CONTEXT, FeedbackDeliveryState.DELIVERED);
             Feedback inApp = unit(workspace, job, alice, FeedbackChannel.IN_CHAT, FeedbackDeliveryState.DELIVERED);
-            raiseIn(inApp, workspace, alice, ThreadSurface.WEB);
+            raiseIn(inApp, workspace, alice, MentorEntry.Surface.APP);
             Feedback inSlack = unit(workspace, job, alice, FeedbackChannel.IN_CHAT, FeedbackDeliveryState.DELIVERED);
-            raiseIn(inSlack, workspace, alice, ThreadSurface.SLACK_DM);
+            raiseIn(inSlack, workspace, alice, MentorEntry.Surface.SLACK);
             unit(workspace, job, alice, FeedbackChannel.IN_CHAT, FeedbackDeliveryState.PREPARED);
             unit(workspace, job, alice, FeedbackChannel.IN_APP, FeedbackDeliveryState.SUPPRESSED);
             // Bob's feedback and another workspace's stay out of Alice's counts.

@@ -23,7 +23,8 @@ type EmailPreferencesState =
 			status: "ready";
 			preferences: Omit<NotificationPreferences, "etag">;
 			isPending: boolean;
-			onChange: (choices: EmailNotificationChoices) => void;
+			/** Reports the choice that changed; the route keeps the others as they are. */
+			onChange: (patch: Partial<EmailNotificationChoices>) => void;
 	  };
 
 export interface EmailPreferencesSectionProps {
@@ -106,14 +107,7 @@ export function EmailPreferencesSection({
 		if (state.status !== "ready" || busy) {
 			return;
 		}
-		state.onChange({
-			productFeedback: state.preferences.productFeedback,
-			workspaceAlerts: state.preferences.workspaceAlerts,
-			surveySummaries: state.preferences.surveySummaries,
-			productSurveys: state.preferences.productSurveys,
-			researchSurveys: state.preferences.researchSurveys,
-			...patch,
-		});
+		state.onChange(patch);
 	};
 
 	return (

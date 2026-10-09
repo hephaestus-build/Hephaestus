@@ -6,7 +6,7 @@ description: Reserved paths, task envelope, and exit codes for the Pi sandbox wo
 ---
 
 This ABI covers the one-shot practice runner's container workspace at `/workspace/`.
-The interactive mentor uses a separate workspace contract.
+The Heph host uses its own layout. See [Heph runtime](../unified-pi-runtime.mdx).
 
 ## Layout
 
@@ -144,8 +144,9 @@ It is not a successful review.
 └── .run-pi.ts                       # Runner script entry point.
 ```
 
-The mentor uses a separate `context/target/`, `context/user/`, and `scratch/` layout.
-Both runners execute on Node.
+The Heph host stages only its scripts and its system prompt.
+It reads the stored path and the situation of a turn from the worker (`GET context`), and context documents through `fetch_context`.
+The practice runner and the Heph host execute on Node.
 See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).
 
 ## Path conventions
@@ -634,11 +635,11 @@ A citation can name `work/change/diff.patch` itself by the view's own line numbe
 If its quote occurs at one place, the citation is recorded at that changed file, side, and `[L<n>]`.
 A side or revision on a citation that settles on another source than the change or the checkout is dropped, since admission refuses either there.
 A refused citation is answered with what the cited lines really hold.
-The mentor runner exposes no native tool.
-Its context arrives through `fetch_context`.
+The Heph host exposes no native tool.
+Its context documents arrive through `fetch_context`.
 
 It gives feedback about an observation with `link_observation`.
-The reply shows its `text` to the developer once the server admits that observation for them.
+The answer shows its `text` to the developer once the worker admits that observation for them.
 
 A refused link fails the call and shows nothing.
 

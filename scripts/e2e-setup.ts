@@ -1,5 +1,14 @@
 import { Client } from "pg";
 
+import {
+	type Api,
+	type E2eLlmRoute,
+	type E2ePricing,
+	oneOf,
+	provisionLlmModel,
+	readLlmRoute,
+	required,
+} from "./lib/e2e-llm.ts";
 import { isLoopbackHost, isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { completeTransparencyNotice } from "./lib/research-consent.ts";
@@ -10,15 +19,8 @@ interface Config {
 	provider: "github" | "gitlab";
 	pat: string;
 	serverUrl: string;
-	llmKey: string;
-	llmBaseUrl: string;
-	model: string;
-	protocol: "openai-completions" | "openai-responses";
-	authMode: "BEARER" | "API_KEY";
-	pricingMode: "PRICED" | "NO_CHARGE";
-	inputUsd?: number;
-	outputUsd?: number;
-	priceNote?: string;
+	llm: E2eLlmRoute;
+	pricing: E2ePricing;
 	workspaceSlug: string;
 	accountLogin?: string;
 	accountType: string;
@@ -79,26 +81,11 @@ function parseArgs(args: string[]): Map<string, string> {
 	return result;
 }
 
-function required(value: string, message: string): string {
-	if (!value) {
-		throw new Error(message);
-	}
-	return value;
-}
-
 function nonNegativeNumber(value: string, name: string): number {
 	if (!/^\d+(?:\.\d+)?$/u.test(value)) {
 		throw new Error(`${name} must be a non-negative number`);
 	}
 	return Number(value);
-}
-
-function oneOf<const T extends string>(value: string, allowed: readonly T[], message: string): T {
-	const match = allowed.find((candidate) => candidate === value);
-	if (match === undefined) {
-		throw new Error(message);
-	}
-	return match;
 }
 
 function loopbackUrl(value: string, protocols: readonly string[], message: string): string {
@@ -117,16 +104,6 @@ export function loadConfig(env: Record<string, string | undefined>, args: string
 		get("--provider", "E2E_PROVIDER", "gitlab"),
 		["github", "gitlab"],
 		"provider must be github or gitlab",
-	);
-	const protocol = oneOf(
-		get("--llm-protocol", "E2E_LLM_PROTOCOL", "openai-responses"),
-		["openai-completions", "openai-responses"],
-		"E2E_LLM_PROTOCOL is invalid",
-	);
-	const authMode = oneOf(
-		get("--llm-auth-mode", "E2E_LLM_AUTH_MODE", "BEARER"),
-		["BEARER", "API_KEY"],
-		"E2E_LLM_AUTH_MODE is invalid",
 	);
 	const pricingMode = oneOf(
 		get("--llm-pricing-mode", "E2E_LLM_PRICING_MODE"),
@@ -154,7 +131,16 @@ export function loadConfig(env: Record<string, string | undefined>, args: string
 		throw new Error("E2E_PR_ID must be numeric");
 	}
 	const priceNote = env.E2E_LLM_PRICE_NOTE;
-	if (pricingMode === "NO_CHARGE" && !isSet(priceNote)) {
+	let pricing: E2ePricing;
+	if (pricingMode === "PRICED") {
+		pricing = {
+			pricingMode,
+			per1mInputUsd: nonNegativeNumber(input, "E2E_LLM_INPUT_USD"),
+			per1mOutputUsd: nonNegativeNumber(output, "E2E_LLM_OUTPUT_USD"),
+		};
+	} else if (isSet(priceNote)) {
+		pricing = { pricingMode, note: priceNote };
+	} else {
 		throw new Error("E2E_LLM_PRICE_NOTE is required for NO_CHARGE");
 	}
 	return {
@@ -164,19 +150,8 @@ export function loadConfig(env: Record<string, string | undefined>, args: string
 			"an SCM PAT is required through the environment",
 		),
 		serverUrl: get("--server-url", "E2E_SERVER_URL", "https://gitlab.lrz.de").replace(/\/$/u, ""),
-		llmKey: required(env.E2E_LLM_KEY ?? "", "E2E_LLM_KEY is required"),
-		llmBaseUrl: required(
-			get("--llm-base-url", "E2E_LLM_BASE_URL"),
-			"E2E_LLM_BASE_URL is required",
-		).replace(/\/$/u, ""),
-		model: required(get("--model", "E2E_MODEL"), "E2E_MODEL is required"),
-		protocol,
-		authMode,
-		pricingMode,
-		inputUsd: pricingMode === "PRICED" ? nonNegativeNumber(input, "E2E_LLM_INPUT_USD") : undefined,
-		outputUsd:
-			pricingMode === "PRICED" ? nonNegativeNumber(output, "E2E_LLM_OUTPUT_USD") : undefined,
-		priceNote,
+		llm: readLlmRoute(get, env),
+		pricing,
 		workspaceSlug: get("--workspace-slug", "E2E_WS_SLUG", "e2e"),
 		accountLogin: get("--account-login", "E2E_ACCOUNT_LOGIN") || undefined,
 		accountType: get("--account-type", "E2E_ACCOUNT_TYPE", "ORG"),
@@ -217,30 +192,18 @@ async function login(config: Config): Promise<string> {
 	return jwt;
 }
 
-type Api = (
-	method: string,
-	path: string,
-	body?: unknown,
-	headers?: Record<string, string>,
-) => Promise<unknown>;
-
 async function assertModelListed(config: Config): Promise<void> {
+	const { llm } = config;
 	const llmHeaders: Record<string, string> =
-		config.authMode === "API_KEY"
-			? { "api-key": config.llmKey }
-			: { authorization: `Bearer ${config.llmKey}` };
+		llm.authMode === "API_KEY" ? { "api-key": llm.key } : { authorization: `Bearer ${llm.key}` };
 	const models = array(
 		object(
-			await jsonRequest(
-				`${config.llmBaseUrl}/models`,
-				{ headers: llmHeaders },
-				"LLM model discovery",
-			),
+			await jsonRequest(`${llm.baseUrl}/models`, { headers: llmHeaders }, "LLM model discovery"),
 			"LLM model discovery",
 		).data,
 		"LLM model discovery",
 	);
-	if (!models.some((model) => model.id === config.model)) {
+	if (!models.some((model) => model.id === llm.model)) {
 		throw new Error("the configured model is not listed by the LLM provider");
 	}
 }
@@ -386,72 +349,16 @@ async function configureLlm(api: Api, config: Config): Promise<number> {
 	if (settings.allowWorkspaceConnections !== true) {
 		await api("PUT", "/admin/llm/settings", { allowWorkspaceConnections: true });
 	}
-	const connections = array(
-		await api("GET", `/workspaces/${config.workspaceSlug}/llm/connections`),
-		"LLM connections",
+	const modelId = await provisionLlmModel(
+		api,
+		`/workspaces/${config.workspaceSlug}/llm`,
+		{
+			connection: { slug: "e2e-openai-compatible", displayName: "E2E OpenAI-compatible" },
+			modelDisplayName: "E2E model",
+			pricing: config.pricing,
+		},
+		config.llm,
 	);
-	let connection = connections.find((entry) => entry.slug === "e2e-openai-compatible");
-	if (
-		connection &&
-		(connection.baseUrl !== config.llmBaseUrl ||
-			connection.apiProtocol !== config.protocol ||
-			connection.authMode !== config.authMode)
-	) {
-		throw new Error(
-			"existing E2E connection uses a different immutable route; use a fresh workspace slug",
-		);
-	}
-	connection ??= object(
-		await api("POST", `/workspaces/${config.workspaceSlug}/llm/connections`, {
-			displayName: "E2E OpenAI-compatible",
-			slug: "e2e-openai-compatible",
-			baseUrl: config.llmBaseUrl,
-			apiProtocol: config.protocol,
-			authMode: config.authMode,
-			apiKey: config.llmKey,
-			enabled: false,
-		}),
-		"LLM connection",
-	);
-	const connectionId = idField(connection, "LLM connection");
-	await api("PATCH", `/workspaces/${config.workspaceSlug}/llm/connections/${connectionId}`, {
-		apiKey: config.llmKey,
-	});
-	const probe = object(
-		await api("POST", `/workspaces/${config.workspaceSlug}/llm/connections/${connectionId}/probe`),
-		"LLM probe",
-	);
-	if (probe.reachable !== true) {
-		throw new Error("OpenAI-compatible connection probe failed");
-	}
-	const pricing =
-		config.pricingMode === "PRICED"
-			? {
-					pricingMode: config.pricingMode,
-					per1mInputUsd: config.inputUsd,
-					per1mOutputUsd: config.outputUsd,
-				}
-			: { pricingMode: config.pricingMode, priceNote: config.priceNote };
-	let catalogModel = array(
-		await api("GET", `/workspaces/${config.workspaceSlug}/llm/models`),
-		"LLM models",
-	).find((entry) => entry.connectionId === connectionId && entry.upstreamModelId === config.model);
-	catalogModel ??= object(
-		await api(
-			"POST",
-			`/workspaces/${config.workspaceSlug}/llm/connections/${connectionId}/models`,
-			{ displayName: "E2E model", upstreamModelId: config.model, enabled: false, ...pricing },
-		),
-		"LLM model",
-	);
-	const modelId = idField(catalogModel, "LLM model");
-	await api("PATCH", `/workspaces/${config.workspaceSlug}/llm/connections/${connectionId}`, {
-		enabled: true,
-	});
-	await api("PATCH", `/workspaces/${config.workspaceSlug}/llm/models/${modelId}`, {
-		enabled: true,
-		...pricing,
-	});
 	return modelId;
 }
 
@@ -462,8 +369,6 @@ async function bindAgents(api: Api, config: Config, modelId: number): Promise<vo
 			enabled: true,
 			timeoutSeconds: 1200,
 			maxConcurrentJobs: 1,
-			// A practice review runs on the internal network; only Heph may reach the internet.
-			allowInternet: purpose === "MENTOR",
 		});
 	}
 	const agents = array(

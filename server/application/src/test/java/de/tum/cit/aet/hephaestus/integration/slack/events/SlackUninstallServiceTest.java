@@ -11,7 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorSlackThreadService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
@@ -52,9 +51,6 @@ class SlackUninstallServiceTest extends BaseUnitTest {
     private SlackWorkspacePurgeAdapter purgeAdapter;
 
     @Mock
-    private MentorSlackThreadService mentorSlackThreadService;
-
-    @Mock
     private ConversationFeedbackErasure conversationFeedbackErasure;
 
     @Mock
@@ -68,7 +64,6 @@ class SlackUninstallServiceTest extends BaseUnitTest {
                 workspaceResolver,
                 connectionService,
                 purgeAdapter,
-                mentorSlackThreadService,
                 conversationFeedbackErasure,
                 messageService,
                 mock(IntegrationAttentionService.class));
@@ -109,7 +104,6 @@ class SlackUninstallServiceTest extends BaseUnitTest {
         InOrder order = inOrder(conversationFeedbackErasure, purgeAdapter);
         order.verify(conversationFeedbackErasure).eraseAllConversationForWorkspace(WORKSPACE);
         order.verify(purgeAdapter).deleteWorkspaceData(WORKSPACE);
-        verify(mentorSlackThreadService).purgeSlackThreads(WORKSPACE);
     }
 
     @Test
@@ -119,6 +113,6 @@ class SlackUninstallServiceTest extends BaseUnitTest {
         service().onUninstall(TEAM, "app_uninstalled", "Ev1");
 
         verify(connectionService, never()).transition(any(), any());
-        verifyNoInteractions(purgeAdapter, mentorSlackThreadService, conversationFeedbackErasure);
+        verifyNoInteractions(purgeAdapter, conversationFeedbackErasure);
     }
 }

@@ -505,8 +505,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "Project", // Through organization.workspaceId
                                         "PracticeFeedbackPreparationRequestedEvent", // carries workspaceId directly
                                         // (conversational routing)
-                                        "ConversationFeedbackPreparedEvent", // carries workspaceId directly (Slack
-                                        // nudge)
                                         "ApprovedFeedbackReadyEvent", // carries workspaceId directly
                                         "BotCommand", // BotCommandReceivedEvent carries repositoryId → workspace
                                         "WorkspaceCreatedEvent", // Carries workspaceId + kind
@@ -542,7 +540,11 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         // Carries workspaceId + collectionId. An in-module after-commit hop: the
                                         // Outline collection resume must not kick its async sync until the ENABLED
                                         // write is committed, or the sync reads PAUSED and no-ops.
-                                        "OutlineCollectionResumedEvent");
+                                        "OutlineCollectionResumedEvent",
+                                        // MentorLedgerEvents carry workspaceId directly (Heph ledger notifications)
+                                        "LedgerChanged",
+                                        "TurnChanged",
+                                        "EntryChanged");
 
                                 boolean isWorkspaceAware =
                                         workspaceAwareEventPrefixes.stream().anyMatch(paramTypeName::contains);

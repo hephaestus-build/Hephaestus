@@ -468,10 +468,7 @@ function BindingRow({
 	const [maxConcurrentJobs, setMaxConcurrentJobs] = useState(() =>
 		String(binding?.maxConcurrentJobs ?? 3),
 	);
-	const [allowInternet, setAllowInternet] = useState(binding?.allowInternet ?? false);
 	const [showAdvanced, setShowAdvanced] = useState(false);
-	// A practice review always runs on an internal network; the server rejects the flag for it.
-	const internetConfigurable = purpose === "MENTOR";
 	const [submitAttempt, setSubmitAttempt] = useState(0);
 
 	const showErrors = submitAttempt > 0;
@@ -518,7 +515,6 @@ function BindingRow({
 			workspaceModelId: selection.scope === "WORKSPACE" ? selection.id : undefined,
 			timeoutSeconds: timeout.value,
 			maxConcurrentJobs: concurrency.value,
-			allowInternet: internetConfigurable && allowInternet,
 			enabled,
 		});
 	};
@@ -663,17 +659,6 @@ function BindingRow({
 										{hasText(concurrencyError) && (
 											<FieldError id={concurrencyErrorId}>{concurrencyError}</FieldError>
 										)}
-									</Field>
-								)}
-								{internetConfigurable && (
-									<Field orientation="horizontal">
-										<FieldLabel htmlFor={`${rowId}-internet`}>Internet access{forRow}</FieldLabel>
-										<Switch
-											id={`${rowId}-internet`}
-											checked={allowInternet}
-											onCheckedChange={setAllowInternet}
-											disabled={pending}
-										/>
 									</Field>
 								)}
 							</FieldGroup>

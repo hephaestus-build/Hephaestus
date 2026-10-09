@@ -31,7 +31,7 @@ class ProfileChangeDetectorTest {
     @Test
     @DisplayName("a standing that reads differently as of the two edges moved, with the window's work as evidence")
     void shouldDetectAStandingMoveWhenTheLabelsDiffer() {
-        List<ProfileChangeDTO> changes = ProfileChangeDetector.detect(
+        List<ProfileChangeDTO> changes = ProfileChangeDetector.standingChanges(
                 WINDOW,
                 List.of(practice(
                         "reviewable-diff-size", PracticeStandingDTO.Standing.STRENGTH, TrendDirection.UNCERTAIN)),
@@ -61,7 +61,7 @@ class ProfileChangeDetectorTest {
     @Test
     @DisplayName("a trend that points elsewhere than before turned; one that had no direction before did not")
     void shouldDetectATrendTurnWhenBothEdgesHaveADirection() {
-        List<ProfileChangeDTO> turned = ProfileChangeDetector.detect(
+        List<ProfileChangeDTO> turned = ProfileChangeDetector.standingChanges(
                 WINDOW,
                 List.of(practice(
                         "describe-what-and-why", PracticeStandingDTO.Standing.MIXED, TrendDirection.DECLINING)),
@@ -72,7 +72,7 @@ class ProfileChangeDetectorTest {
                 Map.of("describe-what-and-why", List.of(PR_22)),
                 Map.of(),
                 Map.of());
-        List<ProfileChangeDTO> firstDirection = ProfileChangeDetector.detect(
+        List<ProfileChangeDTO> firstDirection = ProfileChangeDetector.standingChanges(
                 WINDOW,
                 List.of(practice("describe-what-and-why", PracticeStandingDTO.Standing.MIXED, null)),
                 List.of(practice(
@@ -94,7 +94,7 @@ class ProfileChangeDetectorTest {
     @Test
     @DisplayName("crossing the minimum evidence into an unclear direction did not turn; leaving a direction did")
     void shouldDetectATrendTurnOnlyWhenOneEdgePointsSomewhere() {
-        List<ProfileChangeDTO> enoughToCompare = ProfileChangeDetector.detect(
+        List<ProfileChangeDTO> enoughToCompare = ProfileChangeDetector.standingChanges(
                 WINDOW,
                 List.of(practice(
                         "describe-what-and-why",
@@ -107,7 +107,7 @@ class ProfileChangeDetectorTest {
                 Map.of("describe-what-and-why", List.of(PR_22)),
                 Map.of(),
                 Map.of());
-        List<ProfileChangeDTO> noLongerImproving = ProfileChangeDetector.detect(
+        List<ProfileChangeDTO> noLongerImproving = ProfileChangeDetector.standingChanges(
                 WINDOW,
                 List.of(practice(
                         "describe-what-and-why", PracticeStandingDTO.Standing.MIXED, TrendDirection.IMPROVING)),
@@ -132,7 +132,7 @@ class ProfileChangeDetectorTest {
             "a practice observed for the first time inside the window is first observed, dated by that observation")
     void shouldDetectAFirstObservationWhenItFallsInsideTheWindow() {
         Instant first = Instant.parse("2026-09-09T14:10:00Z");
-        List<ProfileChangeDTO> changes = ProfileChangeDetector.detect(
+        List<ProfileChangeDTO> changes = ProfileChangeDetector.standingChanges(
                 WINDOW,
                 List.of(practice("asks-answerable-questions", PracticeStandingDTO.Standing.NOT_OBSERVED, null)),
                 List.of(practice("asks-answerable-questions", PracticeStandingDTO.Standing.NO_OPPORTUNITY, null)),
@@ -152,7 +152,7 @@ class ProfileChangeDetectorTest {
     @Test
     @DisplayName("a practice with a new verdict and a first observation keeps both: they are different types")
     void shouldKeepOneChangePerTypeWhenAPracticeChangedTwice() {
-        List<ProfileChangeDTO> changes = ProfileChangeDetector.detect(
+        List<ProfileChangeDTO> changes = ProfileChangeDetector.standingChanges(
                 WINDOW,
                 List.of(),
                 List.of(practice("asks-answerable-questions", PracticeStandingDTO.Standing.DEVELOPING, null)),
@@ -178,7 +178,7 @@ class ProfileChangeDetectorTest {
     @Test
     @DisplayName("a standing that moved toward strength moved up")
     void shouldSayUpWhenTheStandingMovedTowardStrength() {
-        List<ProfileChangeDTO> changes = ProfileChangeDetector.detect(
+        List<ProfileChangeDTO> changes = ProfileChangeDetector.standingChanges(
                 WINDOW,
                 List.of(practice("reviewable-diff-size", PracticeStandingDTO.Standing.DEVELOPING, null)),
                 List.of(practice("reviewable-diff-size", PracticeStandingDTO.Standing.MIXED, null)),
@@ -197,7 +197,7 @@ class ProfileChangeDetectorTest {
     @Test
     @DisplayName("moving between the two silences is not a change a developer can act on")
     void shouldIgnoreAMoveWhenBothEdgesAreSilences() {
-        List<ProfileChangeDTO> changes = ProfileChangeDetector.detect(
+        List<ProfileChangeDTO> changes = ProfileChangeDetector.standingChanges(
                 WINDOW,
                 List.of(practice("keeps-the-test-suite-honest", PracticeStandingDTO.Standing.NOT_OBSERVED, null)),
                 List.of(practice("keeps-the-test-suite-honest", PracticeStandingDTO.Standing.NO_OPPORTUNITY, null)),
@@ -213,7 +213,7 @@ class ProfileChangeDetectorTest {
     @Test
     @DisplayName("a group whose standing moved carries the work of every practice in it, once each, newest first")
     void shouldDetectAGroupMoveWithTheGroupsWorkWhenTheGroupLabelDiffers() {
-        List<ProfileChangeDTO> changes = ProfileChangeDetector.detect(
+        List<ProfileChangeDTO> changes = ProfileChangeDetector.standingChanges(
                 WINDOW,
                 List.of(
                         practice("scope-one-reviewable-change", PracticeStandingDTO.Standing.MIXED, null),

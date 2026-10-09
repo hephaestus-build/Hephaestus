@@ -135,7 +135,7 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     @Test
     void mentorRequestsCannotUseTheReviewFolderRenderer() {
         assertThat(catchThrowable(() ->
-                        renderer().capture(new ContextRequest.MentorChatRequest(1L, 42L, UUID.randomUUID()), Set.of())))
+                        renderer().capture(new ContextRequest.HephTurnRequest(1L, 42L, UUID.randomUUID()), Set.of())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("No review job for mentor workspace 1");
         assertThat(new FabricLayout(root.toString()).jobsRoot()).doesNotExist();

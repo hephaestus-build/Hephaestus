@@ -16,7 +16,9 @@ public enum EmailKind {
     ACCOUNT_SECURITY_CHANGED("account-security-changed", false),
     SURVEY_ENDED_SUMMARY("survey-ended-summary", true),
     SURVEY_INVITATION("survey-invitation", true),
-    PRODUCT_FEEDBACK("product-feedback", true);
+    PRODUCT_FEEDBACK("product-feedback", true),
+    /** The note that a weekly digest is ready, when the developer has no Slack identity. */
+    MENTOR_DIGEST("mentor-digest", true);
 
     private final String templateName;
     private final boolean optional;

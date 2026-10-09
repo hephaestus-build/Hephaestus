@@ -127,14 +127,6 @@ public class SlackSubjectKeyDeriver implements SubjectKeyDeriver {
             case "message_im", "app_home_opened" ->
                 firstNonBlank(
                         event.path("user").asString(""), event.path("channel").asString(""));
-            case "app_context_changed" ->
-                firstNonBlank(
-                        event.path("context")
-                                .path("entities")
-                                .path(0)
-                                .path("value")
-                                .asString(""),
-                        event.path("user").asString(""));
             case "member_joined_channel" -> event.path("channel").asString("");
             case "app_uninstalled", "tokens_revoked" -> "workspace";
             default ->

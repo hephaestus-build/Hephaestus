@@ -237,29 +237,35 @@ Resource limits, capacity, and workspace transfer limits remain under `hephaestu
 
 Compose forwards these variables only to `application-worker`.
 `application-server` runs without the worker role.
-Each worker joins a job network as the container Docker identifies by its default hostname.
-Keep the worker's default hostname.
+Each worker joins a job network or its Heph host network as the container Docker identifies by its default hostname.
+Keep the default hostname of each worker container.
+With a custom `hostname:`, the worker logs that it cannot identify its container, and it starts no Heph host.
+
 A worker outside Docker joins no job network.
 The server refuses its practice reviews, which run on an internal network.
+The worker also logs that it cannot identify its container, but it starts its Heph host ([runtime roles](./runtime-roles.mdx#the-heph-host)).
 
 Use a distinct `owner` for each installation that shares a Docker daemon but uses a different database.
 All worker-capable roles of the same installation must use the same stable value.
 It accepts 1–63 lowercase letters, digits, and hyphens, with a letter or digit first.
 Container inventory, capacity accounting, and cleanup select the `hephaestus.sandbox-owner` label.
-Job and interactive-session networks use `hephaestus-sandbox-<owner>--<UUID>`.
+
+Job networks and Heph host networks use `hephaestus-sandbox-<owner>--<UUID>`.
+For a Heph host, the UUID is the host ID.
 This prevents accidental cross-installation cleanup.
-
 It is not an authorization boundary against a process with Docker daemon access.
-Interactive-session networks, attempt volumes, and containers also record the application container that started them, identified by its own `HOSTNAME`.
-They record its start time.
-Cleanup removes them only after that container stops or restarts.
-It keeps resources whose owner it cannot establish.
 
-Keep the default container hostname.
-With a custom `hostname:` or an application outside Docker, the application logs that it cannot identify its container.
-After a crash, those interactive resources require manual removal.
-Until removal, that session cannot start a new sandbox.
-The error names the network.
+Each worker starts one Heph host, with its own internal network, attempt volumes, and container.
+These resources have the label `hephaestus.session-id=<host-id>`.
+The host container also has the label `hephaestus.kind=heph-host`.
+
+These resources also record the worker container that started them, identified by its own `HOSTNAME`, and its start time.
+Cleanup removes them only after that worker container stops or restarts.
+It keeps resources whose creator it cannot establish.
+
+After a crash of that worker, its Heph host exits when its command channel closes.
+The stopped host container and its other resources require manual removal.
+A new host gets a new ID, so leftover resources do not stop new Heph turns.
 Cleanup also keeps networks created before this record existed.
 
 The REQUIRED fact `sandbox.docker-legacy-configuration` rejects old Docker settings outside `hephaestus.sandbox.docker.*` on workers.
@@ -270,9 +276,9 @@ The worker does not read the old settings.
 
 :::caution CAUTION: Establish network ownership before removal
 
-A sandbox network's name identifies only its session, not whether the network is unused.
-A conversation's sandbox can take minutes to start.
-During that time, only the application container may be attached.
+A sandbox network's name identifies only its job or Heph host, not whether the network is unused.
+A Heph host can take up to its start timeout to start ([runtime roles](./runtime-roles.mdx#the-heph-host)).
+During that time, only the worker container may be attached.
 Establish the owner before you remove the network.
 
 :::
@@ -298,50 +304,57 @@ Establish the owner before you remove the network.
    Include the application server and workers with this `owner`.
    Only this pause proves the network unused: no process can start or attach a sandbox.
    Other installations on the daemon are unaffected.
-4. Only after that pause, inspect the network again:
+4. Only after that pause, remove the Heph host containers that the stopped workers left:
+
+   ```bash
+   docker container ls -aq --filter label=hephaestus.kind=heph-host --filter label=hephaestus.sandbox-owner=<owner>
+   docker container rm --force <container>
+   ```
+
+5. Inspect the network again:
 
    ```bash
    docker network inspect --format '{{range $id, $c := .Containers}}{{$id}} {{$c.Name}}{{println}}{{end}}' <network>
    ```
 
-5. Resolve the configured app-server container to its full id:
+6. Resolve the worker container to its full id:
 
    ```bash
-   docker container inspect --format '{{.Id}}' <app-server-container>
+   docker container inspect --format '{{.Id}}' <worker-container>
    ```
 
    If an attached container has another id, a sandbox still uses the network.
    Leave that network.
 
-6. If the app-server container is still attached, disconnect it by its full id:
+7. If the worker container is still attached, disconnect it by its full id:
 
    ```bash
-   docker network disconnect <network> <app-server-id>
+   docker network disconnect <network> <worker-id>
    ```
 
-7. Remove the network:
+8. Remove the network:
 
    ```bash
    docker network rm <network>
    ```
 
-8. List the session's attempt volumes, using the session id at the end of the network name:
+9. List the host's attempt volumes, using the host ID at the end of the network name:
 
    ```bash
-   docker volume ls -q --filter label=hephaestus.session-id=<session-id>
+   docker volume ls -q --filter label=hephaestus.session-id=<host-id>
    ```
 
-9. Remove those volumes:
+10. Remove those volumes:
 
-   ```bash
-   docker volume rm
-   ```
+    ```bash
+    docker volume rm
+    ```
 
-   The command refuses a volume that a container still uses.
+    The command refuses a volume that a container still uses.
 
 Before an upgrade from unscoped sandbox ownership or a change to `owner`:
 
-1. Drain reviews and interactive sessions.
+1. Drain reviews and Heph turns.
 2. Stop that installation's workers.
 3. Verify ownership of its remaining containers and networks.
 4. Only after verification, remove those resources.

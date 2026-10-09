@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.HephTurnRequest;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.practices.PracticeGuidanceRules;
 import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
@@ -12,13 +12,17 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomyPolicy;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaults;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
@@ -29,7 +33,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Materialises {@code inputs/context/practice_catalog.json} for {@link MentorChatRequest}.
+ * Materialises {@code inputs/context/practice_catalog.json} for {@link HephTurnRequest}.
  *
  * <p>Lists workspace practices with criteria and developer guidance so the mentor agent can talk about specific
  * coding standards that apply to the user's contributions, in the words the practice panel uses. Independent of
@@ -53,6 +57,12 @@ public class PracticeCatalogContentSource implements ContentSource {
 
     private static final String CACHE_NAME = "mentor_practice_context";
 
+    /** Practices listed in full; the rest are named in {@code omittedPractices}. */
+    private static final int MAX_PRACTICES = 20;
+
+    /** The catalog's own bound, well below the fetch cap, so it is never cut inside a practice. */
+    private static final int MAX_CATALOG_CHARS = 64_000;
+
     private final PracticeRepository practiceRepository;
     private final WorkspaceRepository workspaceRepository;
     private final ObjectMapper objectMapper;
@@ -60,7 +70,7 @@ public class PracticeCatalogContentSource implements ContentSource {
 
     @Override
     public boolean supports(ContextRequest request) {
-        return request instanceof MentorChatRequest;
+        return request instanceof HephTurnRequest;
     }
 
     @Override
@@ -72,7 +82,7 @@ public class PracticeCatalogContentSource implements ContentSource {
     @Override
     @Transactional(readOnly = true)
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
-        MentorChatRequest req = (MentorChatRequest) request;
+        HephTurnRequest req = (HephTurnRequest) request;
         Long key = req.workspaceId();
         Cache cache = cacheManager.getCache(CACHE_NAME);
         // Atomic compute-if-absent closes the get/build/put race on invalidation events.
@@ -104,12 +114,20 @@ public class PracticeCatalogContentSource implements ContentSource {
 
         ObjectNode root = objectMapper.createObjectNode();
         root.putObject("workspace").put("slug", workspace.getWorkspaceSlug());
+        root.put("totalPractices", practices.size());
 
+        // By group, then by name: the catalog's own order, never a ranking.
+        List<Practice> ordered = practices.stream()
+                .sorted(Comparator.comparing((Practice p) -> groupName(p), Comparator.nullsLast(String::compareTo))
+                        .thenComparing(Practice::getName)
+                        .thenComparing(Practice::getSlug))
+                .toList();
         ArrayNode arr = root.putArray("practices");
-        for (Practice practice : practices) {
+        for (Practice practice : ordered.subList(0, Math.min(ordered.size(), MAX_PRACTICES))) {
             ObjectNode node = arr.addObject();
             node.put("slug", practice.getSlug());
             node.put("displayName", practice.getName());
+            node.put("group", groupName(practice));
             node.put("criteria", practice.getCriteria());
             node.put("whyItMatters", practice.getWhyItMatters());
             node.put("whatGoodLooksLike", practice.getWhatGoodLooksLike());
@@ -118,6 +136,54 @@ public class PracticeCatalogContentSource implements ContentSource {
             PracticeGuide guide = practice.getGuide();
             node.put("guide", guide == null ? null : PracticeGuidanceRules.describeFigures(guide.markdown()));
         }
+        // Whole practices first: a cut inside one would read as a complete criterion. The bound measures the whole
+        // file, with its list of what it left out.
+        ArrayNode omitted = root.putArray("omittedPractices");
+        ordered.subList(arr.size(), ordered.size()).forEach(practice -> omitted.add(practice.getSlug()));
+        root.put("truncated", !omitted.isEmpty());
+        while (arr.size() > 1 && !fits(root)) {
+            omitted.insert(0, arr.remove(arr.size() - 1).path("slug").asString());
+            root.put("truncated", true);
+        }
+        if (!arr.isEmpty() && !fits(root)) {
+            shorten(root, (ObjectNode) arr.get(0));
+            root.put("truncated", true);
+        }
         return root;
+    }
+
+    /** The texts of a practice that may be shortened, each marked when it is. */
+    private static final List<String> SHORTENABLE =
+            List.of("criteria", "whyItMatters", "whatGoodLooksLike", "guide", "visualDescription");
+
+    /** Fits the one practice left by halving its longest text until the file fits, naming each text it shortened. */
+    private void shorten(ObjectNode root, ObjectNode practice) {
+        ArrayNode shortened = practice.putArray("shortenedFields");
+        while (!fits(root)) {
+            Optional<String> found = SHORTENABLE.stream()
+                    .filter(field -> practice.path(field).isString())
+                    .max(Comparator.comparingInt(
+                            field -> practice.path(field).asString().length()));
+            if (found.isEmpty() || practice.path(found.get()).asString().isEmpty()) {
+                return;
+            }
+            String longest = found.get();
+            String text = practice.path(longest).asString();
+            int keep = text.length() / 2;
+            int end = keep > 0 && Character.isHighSurrogate(text.charAt(keep - 1)) ? keep - 1 : keep;
+            practice.put(longest, text.substring(0, end));
+            if (!shortened.valueStream().anyMatch(name -> name.asString().equals(longest))) {
+                shortened.add(longest);
+            }
+        }
+    }
+
+    private boolean fits(ObjectNode root) {
+        return objectMapper.writeValueAsString(root).length() <= MAX_CATALOG_CHARS;
+    }
+
+    private static @Nullable String groupName(Practice practice) {
+        PracticeGroup group = practice.getGroup();
+        return group == null ? null : group.getName();
     }
 }

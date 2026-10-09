@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import java.time.Duration;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -130,10 +129,10 @@ public final class SandboxLayout {
     /** Workspace-relative path of the orchestrator instructions (combination of prefix + filename). */
     public static final String ORCHESTRATOR_PATH = PI_AGENT_PREFIX + ORCHESTRATOR_FILENAME;
 
-    /** Mentor system prompt path — pinned by {@code SandboxLayoutSyncTest} against pi-mentor-runner.ts. */
+    /** Heph's system prompt, staged for the Heph host — pinned by {@code SandboxLayoutSyncTest} against heph-host.ts. */
     public static final String MENTOR_SYSTEM_PROMPT_PATH = "agent/mentor/system.md";
 
-    /** Workspace-relative directory for Pi SDK session JSONL files (matches the mentor runner's {@code SESSIONS_DIR}). */
+    /** Workspace-relative directory for Pi SDK session JSONL files. */
     public static final String SESSIONS_DIR = ".sessions";
 
     /** Exit code emitted by the Pi runner on envelope/image drift (unsupported {@code schemaVersion} or invalid task fields). */
@@ -167,7 +166,7 @@ public final class SandboxLayout {
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
     /** Runtime contract required by the staged runners. */
-    public static final int RUNTIME_CONTRACT_VERSION = 4;
+    public static final int RUNTIME_CONTRACT_VERSION = 5;
 
     /** Node major required by the staged runners. */
     public static final int NODE_MAJOR = 24;
@@ -177,9 +176,4 @@ public final class SandboxLayout {
 
     /** Practice slug pattern enforced at the handler boundary as defense-in-depth against FS-path injection. */
     public static final Pattern PRACTICE_SLUG = Pattern.compile("[a-z0-9][a-z0-9-]{0,63}");
-
-    /** Exact workspace paths an adapter may pass in {@link PiPlanSpec#extraInputs()}. */
-    public static Set<String> allowedExtraInputPaths() {
-        return Set.of(MENTOR_SYSTEM_PROMPT_PATH);
-    }
 }

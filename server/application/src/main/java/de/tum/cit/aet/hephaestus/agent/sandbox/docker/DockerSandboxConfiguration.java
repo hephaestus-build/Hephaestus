@@ -8,14 +8,9 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.DockerInteractiveSandboxAdapter;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxMetrics;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxRegistry;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.StdinWriteWatchdog;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -39,7 +34,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Spring configuration for the Docker sandbox subsystem.
@@ -53,11 +47,7 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 @ConditionalOnWorkerRole
 @ConditionalOnClass(DockerClient.class)
-@EnableConfigurationProperties({
-    SandboxProperties.class,
-    DockerSandboxProperties.class,
-    InteractiveSandboxProperties.class
-})
+@EnableConfigurationProperties({SandboxProperties.class, DockerSandboxProperties.class})
 public class DockerSandboxConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxConfiguration.class);
@@ -229,6 +219,31 @@ public class DockerSandboxConfiguration {
     }
 
     @Bean
+    public HostSandbox dockerHostSandbox(
+            SandboxNetworkManager networkManager,
+            SandboxWorkspaceManager workspaceManager,
+            SandboxContainerManager containerManager,
+            ContainerSecurityPolicy securityPolicy,
+            SandboxCreator creator,
+            SandboxGatewaySessions gatewaySessions,
+            DockerClientOperations volumeOperations,
+            AgentImageProperties agentImageProperties,
+            DockerSandboxProperties dockerProperties,
+            SandboxGatewayProperties gatewayProperties) {
+        return new DockerHostSandbox(
+                networkManager,
+                workspaceManager,
+                containerManager,
+                securityPolicy,
+                creator,
+                gatewaySessions,
+                volumeOperations,
+                agentImageProperties.reference(),
+                dockerProperties.owner(),
+                gatewayProperties.port());
+    }
+
+    @Bean
     public SandboxVolumeManager sandboxVolumeManager(DockerClientOperations ops, DockerSandboxProperties properties) {
         return new SandboxVolumeManager(ops, properties);
     }
@@ -251,65 +266,6 @@ public class DockerSandboxConfiguration {
             SandboxProperties properties,
             DockerSandboxProperties dockerProperties) {
         return new DockerHealthIndicator(containerManager, properties, dockerProperties);
-    }
-
-    // Interactive (mentor) sandbox — sibling of SandboxManager.
-
-    @Bean
-    public InteractiveSandboxMetrics interactiveSandboxMetrics(MeterRegistry meterRegistry) {
-        return new InteractiveSandboxMetrics(meterRegistry);
-    }
-
-    @Bean
-    public StdinWriteWatchdog stdinWriteWatchdog() {
-        return new StdinWriteWatchdog();
-    }
-
-    @Bean
-    public InteractiveSandboxRegistry interactiveSandboxRegistry(
-            InteractiveSandboxProperties properties,
-            SandboxContainerManager containerManager,
-            StdinWriteWatchdog watchdog,
-            MeterRegistry meterRegistry,
-            SandboxCreator creator) {
-        return new InteractiveSandboxRegistry(properties, containerManager, watchdog, meterRegistry, creator);
-    }
-
-    @Bean
-    public DockerInteractiveSandboxAdapter dockerInteractiveSandboxAdapter(
-            InteractiveSandboxProperties interactiveProperties,
-            SandboxNetworkManager networkManager,
-            SandboxWorkspaceManager workspaceManager,
-            SandboxContainerManager containerManager,
-            ContainerSecurityPolicy securityPolicy,
-            InteractiveSandboxRegistry registry,
-            InteractiveSandboxMetrics metrics,
-            ObjectMapper mapper,
-            // Shared platform-thread executor (declared above for the sync sandbox); the interactive
-            // adapter runs runClose() here too — docker-java sync calls pin virtual carriers on JDK 21.
-            ExecutorService dockerWaitExecutor,
-            DockerSandboxProperties dockerProperties,
-            SandboxGatewayProperties gatewayProperties,
-            MentorProxyCredentialRegistry mentorProxyCredentialRegistry,
-            SandboxGatewaySessions gatewaySessions,
-            DockerClientOperations volumeOperations,
-            SandboxCreator creator) {
-        return new DockerInteractiveSandboxAdapter(
-                interactiveProperties,
-                networkManager,
-                workspaceManager,
-                containerManager,
-                securityPolicy,
-                registry,
-                metrics,
-                mapper,
-                dockerWaitExecutor,
-                dockerProperties,
-                gatewayProperties.port(),
-                mentorProxyCredentialRegistry,
-                gatewaySessions,
-                volumeOperations,
-                creator);
     }
 
     /**

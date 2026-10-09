@@ -88,6 +88,9 @@ Use these words on every task:
   Its product area is **mentor**.
   Neither Heph, the application, nor a review is an *agent*.
   That word means the sandboxed runtime that executes a review.
+  A developer has one **Heph conversation** per workspace.
+  A **Heph thread** forks it at one message.
+  The UI says *message* for one of its entries.
 - **runtime role** — `server`, `worker` or `webhook`: the slice of one JAR a container boots.
 - **integration** — one connected provider: GitHub, GitLab, Slack or Outline, each with its own
   adapter under `integration/`.

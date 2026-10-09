@@ -708,7 +708,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     private byte[] mentorContext() {
         Map<String, byte[]> files = new HashMap<>();
         deliveredFeedback.contribute(
-                new ContextRequest.MentorChatRequest(workspace.getId(), developer.getId(), UUID.randomUUID()), files);
+                new ContextRequest.HephTurnRequest(workspace.getId(), developer.getId(), UUID.randomUUID()), files);
         return Objects.requireNonNull(files.get(DeliveredFeedbackContentSource.OUTPUT_KEY));
     }
 

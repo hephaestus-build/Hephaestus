@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.HephTurnRequest;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.RecipientFeedbackRow;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
@@ -42,6 +44,9 @@ public class DeliveredFeedbackContentSource implements ContentSource {
 
     private static final int LOOKBACK_DAYS = 90;
     private static final int MAX_FEEDBACK = 30;
+    /** The longest delivered words staged for one piece; a longer one is cut and marked. */
+    private static final int MAX_BODY_CHARS = 2_000;
+
     private static final int MAX_PAGES = 5;
 
     private final UserRepository userRepository;
@@ -54,7 +59,7 @@ public class DeliveredFeedbackContentSource implements ContentSource {
 
     @Override
     public boolean supports(ContextRequest request) {
-        return request instanceof MentorChatRequest;
+        return request instanceof HephTurnRequest;
     }
 
     @Override
@@ -65,7 +70,7 @@ public class DeliveredFeedbackContentSource implements ContentSource {
     @Override
     @Transactional(readOnly = true)
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
-        MentorChatRequest req = (MentorChatRequest) request;
+        HephTurnRequest req = (HephTurnRequest) request;
         ObjectNode payload = buildPayload(req.workspaceId(), req.developerId());
         try {
             files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(payload));
@@ -119,9 +124,10 @@ public class DeliveredFeedbackContentSource implements ContentSource {
             // A withdrawn card keeps its record but not its words: an admin took them back as wrong.
             String body = usable.withdrawn() ? null : deliveredText(row);
             if (body != null) {
-                describe(delivered.addObject(), row).put("body", body);
+                ObjectNode words = describe(delivered.addObject(), usable);
+                MergeReadinessContentSource.putText(words, "body", body, MAX_BODY_CHARS);
             }
-            ObjectNode state = describe(states.addObject(), row)
+            ObjectNode state = describe(states.addObject(), usable)
                     .put("status", status(row))
                     .put("recordedClaimCurrentness", usable.evidence().name())
                     .put("createdAt", row.getCreatedAt().toString());
@@ -166,7 +172,8 @@ public class DeliveredFeedbackContentSource implements ContentSource {
      * A row this conversation may use, whether every review behind it is still current, and whether a workspace
      * admin withdrew it from the practice page.
      */
-    private record Usable(RecipientFeedbackRow row, ReviewClaimCurrentness evidence, boolean withdrawn) {}
+    private record Usable(
+            RecipientFeedbackRow row, ReviewClaimCurrentness evidence, boolean withdrawn, List<Observation> bound) {}
 
     /**
      * The rows whose every bound observation may still be shown to the developer, as on their practice page, and
@@ -194,12 +201,19 @@ public class DeliveredFeedbackContentSource implements ContentSource {
                         .filter(Objects::nonNull)
                         .toList());
         Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(workspaceId, shown.keySet());
+        Map<UUID, List<Observation>> bound = bindings.stream()
+                .collect(Collectors.groupingBy(
+                        FeedbackObservationVisibility::getFeedbackId,
+                        Collectors.mapping(FeedbackObservationVisibility::getObservation, Collectors.toList())));
         return rows.stream()
                 .filter(row -> shown.containsKey(row.getId()))
                 .filter(row -> !ArtifactKinds.CONVERSATION_THREAD.equals(row.getArtifactKind())
                         || (row.getArtifactId() != null && activeThreadIds.contains(row.getArtifactId())))
                 .map(row -> new Usable(
-                        row, Objects.requireNonNull(shown.get(row.getId())), withdrawn.contains(row.getId())))
+                        row,
+                        Objects.requireNonNull(shown.get(row.getId())),
+                        withdrawn.contains(row.getId()),
+                        bound.getOrDefault(row.getId(), List.of())))
                 .toList();
     }
 
@@ -213,8 +227,28 @@ public class DeliveredFeedbackContentSource implements ContentSource {
         return row.getChannel() == FeedbackChannel.IN_CHAT || body == null || body.isBlank() ? null : body;
     }
 
-    private static ObjectNode describe(ObjectNode node, RecipientFeedbackRow row) {
+    private static ObjectNode describe(ObjectNode node, Usable usable) {
+        RecipientFeedbackRow row = usable.row();
         node.put("feedbackId", row.getId().toString());
+        // The practices and observations behind the piece: fetch an observation's detail from observations_history.
+        ArrayNode practices = node.putArray("practiceSlugs");
+        usable.bound().stream()
+                .map(observation -> observation.getPractice().getSlug())
+                .distinct()
+                .sorted()
+                .forEach(practices::add);
+        ArrayNode observations = node.putArray("observationIds");
+        usable.bound().stream()
+                .map(observation -> observation.getId().toString())
+                .distinct()
+                .sorted()
+                .forEach(observations::add);
+        ArrayNode reviews = node.putArray("reviewIds");
+        usable.bound().stream()
+                .map(observation -> observation.getAgentJobId().toString())
+                .distinct()
+                .sorted()
+                .forEach(reviews::add);
         node.put("surface", row.getChannel().name());
         if (row.getArtifactKind() != null) {
             node.put("artifactKind", row.getArtifactKind().value());

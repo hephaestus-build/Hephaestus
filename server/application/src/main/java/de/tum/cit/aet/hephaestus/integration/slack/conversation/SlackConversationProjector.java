@@ -38,6 +38,12 @@ public class SlackConversationProjector implements ConversationThreadProjection 
     /** Cap on distinct threads surfaced per turn — the envelope budget. */
     static final int MAX_THREADS = 30;
 
+    /** The newest messages of one thread a Heph turn reads; an older thread start is left out and marked. */
+    static final int MAX_MESSAGES_PER_THREAD = 40;
+
+    /** The Heph file's own bound, below the fetch cap, so it is never cut inside a thread. */
+    static final int MAX_PAYLOAD_CHARS = 48_000;
+
     private final SlackThreadRepository threadRepository;
 
     private final SlackMessageRepository messageRepository;
@@ -93,7 +99,7 @@ public class SlackConversationProjector implements ConversationThreadProjection 
      * wraps it under the content-source output key.
      *
      * @param workspaceId     the workspace to scope every query to (explicit predicate)
-     * @param audienceMemberId the mentor-chat requester's SCM user id — the participant-firewall audience
+     * @param audienceMemberId the Heph turn's developer's SCM user id — the participant-firewall audience
      */
     @Override
     public ObjectNode buildPayload(long workspaceId, long audienceMemberId) {
@@ -119,12 +125,83 @@ public class SlackConversationProjector implements ConversationThreadProjection 
             }
             conv.put("threadTs", key.threadTs());
             ArrayNode messages = conv.putArray("messages");
-            boolean truncated = appendThreadMessages(workspaceId, key, messages, null);
-            conv.put("messageCount", messages.size());
-            conv.put("truncated", truncated);
+            int stored = appendAudienceMessages(workspaceId, key, messages, audienceMemberId);
+            conv.put("messageCount", stored);
+            // The newest messages are kept; the thread's opening message stays first when it is among them.
+            conv.put("truncated", stored > messages.size());
+        }
+        // Newest threads first: the oldest ones go until the file fits, whole threads only.
+        int left = 0;
+        while (conversations.size() > 1 && !fits(root)) {
+            conversations.remove(conversations.size() - 1);
+            left++;
         }
         root.put("totalThreads", conversations.size());
+        root.put("omittedThreads", left);
+        boolean shortened =
+                !conversations.isEmpty() && !fits(root) && fitLastThread(root, (ObjectNode) conversations.get(0));
+        root.put("truncated", left > 0 || shortened);
         return root;
+    }
+
+    /** Whether the whole file, as the turn reads it, is within {@link #MAX_PAYLOAD_CHARS}. */
+    private boolean fits(ObjectNode root) {
+        return objectMapper.writeValueAsString(root).length() <= MAX_PAYLOAD_CHARS;
+    }
+
+    /**
+     * Fits the one thread left by leaving out its oldest messages, counted, and then by shortening the text of the one
+     * message left, marked. Never a cut the turn cannot see.
+     *
+     * @return that the thread was shortened
+     */
+    private boolean fitLastThread(ObjectNode root, ObjectNode thread) {
+        ArrayNode messages = (ArrayNode) thread.get("messages");
+        int omitted = 0;
+        while (messages.size() > 1 && !fits(root)) {
+            messages.remove(0);
+            omitted++;
+            thread.put("omittedMessages", omitted);
+            thread.put("truncated", true);
+        }
+        if (!fits(root) && !messages.isEmpty() && messages.get(0) instanceof ObjectNode message) {
+            String text = message.path("text").asString("");
+            message.put("textShortened", true);
+            message.put("textChars", text.length());
+            int keep = text.length();
+            while (keep > 0 && !fits(root)) {
+                keep /= 2;
+                int end = keep > 0 && Character.isHighSurrogate(text.charAt(keep - 1)) ? keep - 1 : keep;
+                message.put("text", text.substring(0, end));
+            }
+            thread.put("truncated", true);
+        }
+        return true;
+    }
+
+    /**
+     * The newest {@link #MAX_MESSAGES_PER_THREAD} messages of one thread for the Heph turn of {@code audienceMemberId},
+     * each with when it was sent and whether that developer wrote it.
+     *
+     * @return how many messages the thread holds
+     */
+    private int appendAudienceMessages(long workspaceId, ThreadKey key, ArrayNode messages, long audienceMemberId) {
+        List<SlackThreadMessageRow> rows =
+                messageRepository.findThreadMessages(workspaceId, key.channelId(), key.threadTs(), Pageable.unpaged());
+        List<SlackThreadMessageRow> newest =
+                rows.subList(Math.max(0, rows.size() - MAX_MESSAGES_PER_THREAD), rows.size());
+        append(newest, messages, null);
+        for (int index = 0; index < newest.size(); index++) {
+            ObjectNode node = (ObjectNode) messages.get(index);
+            Instant sent = sourceEffectiveAt(newest.get(index).slackTs());
+            if (sent != null) {
+                node.put("sentAt", sent.toString());
+            }
+            node.put(
+                    "byYou",
+                    Long.valueOf(audienceMemberId).equals(newest.get(index).authorMemberId()));
+        }
+        return rows.size();
     }
 
     /**
@@ -215,8 +292,14 @@ public class SlackConversationProjector implements ConversationThreadProjection 
 
     private boolean appendThreadMessages(
             long workspaceId, ThreadKey key, ArrayNode messages, @Nullable Long reviewedMemberId) {
-        List<SlackThreadMessageRow> rows =
-                messageRepository.findThreadMessages(workspaceId, key.channelId(), key.threadTs(), Pageable.unpaged());
+        append(
+                messageRepository.findThreadMessages(workspaceId, key.channelId(), key.threadTs(), Pageable.unpaged()),
+                messages,
+                reviewedMemberId);
+        return false;
+    }
+
+    private void append(List<SlackThreadMessageRow> rows, ArrayNode messages, @Nullable Long reviewedMemberId) {
         for (int index = 0; index < rows.size(); index++) {
             SlackThreadMessageRow row = rows.get(index);
             recordNative(row.authorSlackUserId(), row.slackTeamId());
@@ -237,6 +320,5 @@ public class SlackConversationProjector implements ConversationThreadProjection 
                 node.put("edited", true);
             }
         }
-        return false;
     }
 }

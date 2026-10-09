@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.HephTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeFeedbackDeliveryPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
@@ -74,7 +74,7 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
 
     @Override
     public boolean supports(ContextRequest request) {
-        return request instanceof MentorChatRequest;
+        return request instanceof HephTurnRequest;
     }
 
     @Override
@@ -85,7 +85,7 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
     @Override
     @Transactional
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
-        MentorChatRequest req = (MentorChatRequest) request;
+        HephTurnRequest req = (HephTurnRequest) request;
         long workspaceId = req.workspaceId();
         List<PreparedConversationFact> prepared =
                 feedbackObservationRepository.findPreparedConversationFactsForRecipient(
@@ -135,6 +135,13 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
                         fact.getFeedbackId(), workspaceId, decision.refusal().name());
                 continue;
             }
+            ConversationBriefBody.Brief brief = ConversationBriefBody.parse(fact.getBody());
+            if (brief == null) {
+                // A unit without the composer's notes has nothing for Heph to say.
+                feedbackRepository.markPreparedSuppressed(
+                        fact.getFeedbackId(), workspaceId, FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE.name());
+                continue;
+            }
             ObjectNode node = arr.addObject();
             node.put("observationId", fact.getObservationId().toString());
             node.put("practiceSlug", fact.getPracticeSlug());
@@ -169,7 +176,7 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
                     node.set("reviewedWork", work);
                 }
             }
-            writeNotes(node, fact.getBody());
+            writeNotes(node, brief);
         }
         root.put("totalPrepared", arr.size());
         try {
@@ -179,11 +186,7 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
         }
     }
 
-    private static void writeNotes(ObjectNode node, String body) {
-        ConversationBriefBody.Brief brief = ConversationBriefBody.parse(body);
-        if (brief == null) {
-            return;
-        }
+    private static void writeNotes(ObjectNode node, ConversationBriefBody.Brief brief) {
         node.put("topic", brief.title());
         ObjectNode notes = node.putObject("notes");
         notes.put("situation", brief.situation());

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFi
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.github.bucket4j.Bucket;
@@ -62,6 +64,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     private WorkerJwtVerifier jwtVerifier;
 
     @Mock
+    private MentorTurnRepository turnRepository;
+
+    @Mock
     private ProxyBudgetGate budgetGate;
 
     @Mock
@@ -88,8 +93,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         httpSecurity(context),
                         GATEWAY,
                         jobRepository,
+                        turnRepository,
+                        new SandboxGatewaySessions(),
                         jwtVerifier,
-                        new MentorProxyCredentialRegistry(),
                         resolver,
                         accounting,
                         OBJECT_MAPPER,
@@ -128,6 +134,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
 
         assertThat(answerTo("POST", "/internal/llm/responses", GATEWAY_PORT, oversized))
                 .isEqualTo(413);
+        // The Heph host resends an oversized end with read notes, so the end must be refused the same way.
+        assertThat(answerTo("POST", "/internal/llm/turn/" + UUID.randomUUID() + "/end", GATEWAY_PORT, oversized))
+                .isEqualTo(413);
     }
 
     /** The result upload is bounded by the archive budget, not by the model-call bound. */
@@ -138,6 +147,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         tooLarge.setContent(new byte[GATEWAY.maxRequestBytes() + 1]);
         MockHttpServletRequest undeclared = new MockHttpServletRequest("POST", path);
         undeclared.setLocalPort(GATEWAY_PORT);
+        undeclared.addHeader("Transfer-Encoding", "chunked");
 
         assertThat(answerTo(tooLarge))
                 .as("a small archive is not held to the model-call bound")
@@ -159,8 +169,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     void shouldRejectCookieAndQueryCredentialsWhenNoBearerHeaderIsPresent() throws Exception {
         AgentJob job = runningJobOnAttempt(1);
         when(jobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
-        when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
-        assertThat(answerToTokenCall("current-attempt")).isEqualTo(200);
+        when(jwtVerifier.verify("current.attempt.jwt")).thenReturn(jobJwt(job, 1));
+        assertThat(answerToTokenCall("current.attempt.jwt")).isEqualTo(200);
 
         for (String path : List.of(
                 "/internal/llm/responses",
@@ -169,8 +179,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 "/internal/llm/public-feedback-history")) {
             MockHttpServletRequest request = request("POST", path, GATEWAY_PORT);
             request.setCookies(
-                    new Cookie("__Host-HEPHAESTUS_AT", "current-attempt"), new Cookie("JSESSIONID", "current-attempt"));
-            request.addParameter("access_token", "current-attempt");
+                    new Cookie("__Host-HEPHAESTUS_AT", "current.attempt.jwt"),
+                    new Cookie("JSESSIONID", "current.attempt.jwt"));
+            request.addParameter("access_token", "current.attempt.jwt");
             assertThat(answerTo(request)).isEqualTo(401);
             assertThat(servedAs.get()).isNull();
             assertThat(request.getSession(false)).isNull();
@@ -186,10 +197,10 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     void servesACapabilityCallAsTheAttemptItsTokenNames() throws Exception {
         AgentJob job = runningJobOnAttempt(1);
         when(jobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
-        when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
-        when(jwtVerifier.verify("dead-attempt")).thenReturn(jobJwt(job, 0));
+        when(jwtVerifier.verify("current.attempt.jwt")).thenReturn(jobJwt(job, 1));
+        when(jwtVerifier.verify("dead.attempt.jwt")).thenReturn(jobJwt(job, 0));
 
-        assertThat(answerToTokenCall("current-attempt")).isEqualTo(200);
+        assertThat(answerToTokenCall("current.attempt.jwt")).isEqualTo(200);
         assertThat(servedAs.get())
                 .isNotNull()
                 .extracting(Authentication::getPrincipal)
@@ -197,7 +208,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .extracting(ProxyRouting::principalDescription)
                 .isEqualTo("job:" + job.getId());
 
-        assertThat(answerToTokenCall("dead-attempt")).isEqualTo(401);
+        assertThat(answerToTokenCall("dead.attempt.jwt")).isEqualTo(401);
         assertThat(servedAs.get()).isNull();
     }
 
@@ -206,10 +217,10 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         String path = "/internal/llm/public-feedback-history";
         AgentJob job = runningJobOnAttempt(1);
         when(jobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
-        when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
-        when(jwtVerifier.verify("dead-attempt")).thenReturn(jobJwt(job, 0));
+        when(jwtVerifier.verify("current.attempt.jwt")).thenReturn(jobJwt(job, 1));
+        when(jwtVerifier.verify("dead.attempt.jwt")).thenReturn(jobJwt(job, 0));
         MockHttpServletRequest current = request("POST", path, GATEWAY_PORT);
-        current.addHeader("Authorization", "Bearer current-attempt");
+        current.addHeader("Authorization", "Bearer current.attempt.jwt");
         assertThat(answerTo(current)).isEqualTo(200);
         assertThat(servedAs.get())
                 .isNotNull()
@@ -218,7 +229,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .extracting(ProxyRouting::principalDescription)
                 .isEqualTo("job:" + job.getId());
         MockHttpServletRequest stale = request("POST", path, GATEWAY_PORT);
-        stale.addHeader("Authorization", "Bearer dead-attempt");
+        stale.addHeader("Authorization", "Bearer dead.attempt.jwt");
         assertThat(answerTo(stale)).isEqualTo(401);
         assertThat(servedAs.get()).isNull();
         assertThat(answerTo("POST", path, GATEWAY_PORT)).isEqualTo(401);
@@ -294,7 +305,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         null,
                         workspace.getId(),
                         600,
-                        false,
                         null,
                         null)
                 .toJson(OBJECT_MAPPER));

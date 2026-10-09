@@ -1,0 +1,22 @@
+{
+  "activity": "writing",
+  "tool": null,
+  "stage": "Thinking…",
+  "messages": [
+    {
+      "content": [
+        { "type": "text", "text": "Let me look at the workspace." },
+        {
+          "type": "toolCall",
+          "id": "call-link",
+          "name": "link_observation",
+          "arguments": {
+            "observationId": "0b6c1f0e-8d3a-4c51-9a4e-2f7d5c9e1a33",
+            "text": "Your pull request names the decision but not why."
+          }
+        }
+      ]
+    },
+    { "content": [{ "type": "text", "text": "Pin it by" }] }
+  ]
+}

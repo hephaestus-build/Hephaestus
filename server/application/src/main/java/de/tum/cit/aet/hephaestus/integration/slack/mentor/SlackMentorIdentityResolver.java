@@ -53,13 +53,38 @@ public class SlackMentorIdentityResolver {
         return resolveMemberIdInternal(workspaceId, teamId, slackUserId, false);
     }
 
+    /**
+     * The account's member in a workspace.
+     *
+     * @param actorId the actor that speaks for the account in the workspace
+     * @param accountActorIds every actor of the account that is a member of the workspace, {@code actorId} included
+     */
+    public record Member(long actorId, List<Long> accountActorIds) {}
+
     /** Live mentor admission requires an active account; historical attribution does not. */
     @Transactional(readOnly = true)
-    public Optional<Long> resolveActiveMemberId(long workspaceId, @Nullable String teamId, String slackUserId) {
-        return resolveMemberIdInternal(workspaceId, teamId, slackUserId, true);
+    public Optional<Member> resolveActiveMember(long workspaceId, @Nullable String teamId, String slackUserId) {
+        return membership(workspaceId, teamId, slackUserId, true)
+                .map(view -> new Member(Objects.requireNonNull(view.memberId()), view.memberIds()));
+    }
+
+    /** The account a Slack user is linked to, whatever its status: an account may always turn a notification off. */
+    @Transactional(readOnly = true)
+    public Optional<Long> resolveAccountId(@Nullable String teamId, String slackUserId) {
+        if (slackUserId.isBlank() || teamId == null || teamId.isBlank()) {
+            return Optional.empty();
+        }
+        return accountIdentityQuery.resolveAccountId(
+                gitProviderRegistry.resolveProviderId("SLACK", SLACK_SERVER_URL), slackUserId, teamId);
     }
 
     private Optional<Long> resolveMemberIdInternal(
+            long workspaceId, @Nullable String teamId, String slackUserId, boolean activeAccountOnly) {
+        return membership(workspaceId, teamId, slackUserId, activeAccountOnly)
+                .map(view -> Objects.requireNonNull(view.memberId()));
+    }
+
+    private Optional<AccountWorkspaceMembershipQuery.WorkspaceMembershipView> membership(
             long workspaceId, @Nullable String teamId, String slackUserId, boolean activeAccountOnly) {
         if (slackUserId.isBlank() || teamId == null || teamId.isBlank()) {
             return Optional.empty();
@@ -69,9 +94,7 @@ public class SlackMentorIdentityResolver {
                 ? accountIdentityQuery.resolveActiveAccountId(slackProviderId, slackUserId, teamId)
                 : accountIdentityQuery.resolveAccountId(slackProviderId, slackUserId, teamId);
         return accountId.map(workspaceMembershipQuery::membershipsForAccount).orElseGet(List::of).stream()
-                .filter(view -> view.workspaceId() == workspaceId)
-                .map(AccountWorkspaceMembershipQuery.WorkspaceMembershipView::memberId)
-                .filter(Objects::nonNull)
+                .filter(view -> view.workspaceId() == workspaceId && view.memberId() != null)
                 .findFirst();
     }
 

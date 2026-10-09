@@ -69,7 +69,7 @@ public class InAppFeedbackService {
      * the developer already saw, and the ledger keeps the record. Applied when the page is read, never by
      * touching the row, so the ledger and the operator surfaces still have it.
      */
-    static final Duration CLOSED_CARD_STAYS = Duration.ofDays(30);
+    public static final Duration CLOSED_CARD_STAYS = Duration.ofDays(30);
 
     private final FeedbackRepository feedbackRepository;
     private final InAppFeedbackEvidence feedbackEvidence;
@@ -150,6 +150,25 @@ public class InAppFeedbackService {
     }
 
     /**
+     * When each card the developer's practice pages show unread was prepared: on the page by the rule
+     * {@link #getInAppFeedback} pages by, and not delivered yet. Read without delivering anything, so it equals what
+     * the page would show if the developer opened it now.
+     */
+    @Transactional(readOnly = true)
+    public List<Instant> unreadPreparedAt(Long workspaceId, long recipientUserId) {
+        Instant now = clock.instant();
+        Reads reads =
+                reads(workspaceId, feedbackRepository.findReadableInAppForRecipient(workspaceId, recipientUserId));
+        Map<UUID, WorkResolution> resolutions = feedbackEvidence.workResolutions(
+                workspaceId, awaitingTheWork(reads, now), reads.evidence(), reads.practiceChangedAt(), now);
+        return page(reads.rows(), reads, resolutions, now).stream()
+                .map(Slot::feedback)
+                .filter(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED)
+                .map(Feedback::getCreatedAt)
+                .toList();
+    }
+
+    /**
      * What the card rule reads besides the work, keyed by feedback id.
      *
      * @param rows the readable rows that can be cards, in their newest-first order
@@ -166,7 +185,8 @@ public class InAppFeedbackService {
             Map<UUID, FeedbackResponseDTO> responses) {}
 
     private Reads reads(Long workspaceId, List<Feedback> readable) {
-        Map<UUID, Instant> withdrawnAt = withdrawnAt(workspaceId, readable);
+        Map<UUID, Instant> withdrawnAt =
+                withdrawnAt(workspaceId, readable.stream().map(Feedback::getId).toList());
         // A withdrawn card nobody was shown is not on the page at all; one already shown says it was withdrawn.
         List<Feedback> shown = readable.stream()
                 .filter(feedback -> !withdrawnAt.containsKey(feedback.getId())
@@ -312,14 +332,12 @@ public class InAppFeedbackService {
                 .toList();
     }
 
-    /** When each of {@code rows} with an open withdrawal was withdrawn. */
-    private Map<UUID, Instant> withdrawnAt(Long workspaceId, List<Feedback> rows) {
-        if (rows.isEmpty()) {
+    /** When each of these pieces was withdrawn, for those with an open withdrawal. */
+    public Map<UUID, Instant> withdrawnAt(Long workspaceId, Collection<UUID> feedbackIds) {
+        if (feedbackIds.isEmpty()) {
             return Map.of();
         }
-        return withdrawalRepository
-                .findActiveFor(workspaceId, rows.stream().map(Feedback::getId).toList())
-                .stream()
+        return withdrawalRepository.findActiveFor(workspaceId, feedbackIds).stream()
                 .collect(Collectors.toMap(FeedbackWithdrawal::getFeedbackId, FeedbackWithdrawal::getWithdrawnAt));
     }
 
@@ -350,7 +368,7 @@ public class InAppFeedbackService {
     }
 
     /** Open, or closed for less than {@link #CLOSED_CARD_STAYS}. */
-    private static boolean stillOnThePage(@Nullable Instant closedAt, Instant now) {
+    public static boolean stillOnThePage(@Nullable Instant closedAt, Instant now) {
         return closedAt == null || !closedAt.plus(CLOSED_CARD_STAYS).isBefore(now);
     }
 

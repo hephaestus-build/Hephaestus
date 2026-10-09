@@ -2,23 +2,23 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.HephTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection.ProjectedDocument;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -56,18 +56,18 @@ public class OutlineDocumentContentSource implements ContentSource {
 
     private final DocumentProjection projection;
     private final ObjectMapper objectMapper;
-    private final ChatMessageRepository chatMessageRepository;
+    private final MentorEntryRepository mentorEntryRepository;
 
     public OutlineDocumentContentSource(
-            DocumentProjection projection, ObjectMapper objectMapper, ChatMessageRepository chatMessageRepository) {
+            DocumentProjection projection, ObjectMapper objectMapper, MentorEntryRepository mentorEntryRepository) {
         this.projection = projection;
         this.objectMapper = objectMapper;
-        this.chatMessageRepository = chatMessageRepository;
+        this.mentorEntryRepository = mentorEntryRepository;
     }
 
     @Override
     public boolean supports(ContextRequest request) {
-        return request instanceof MentorChatRequest;
+        return request instanceof HephTurnRequest;
     }
 
     /** Documentation is enrichment: a missing corpus or resolution failure degrades to writing nothing. */
@@ -80,7 +80,7 @@ public class OutlineDocumentContentSource implements ContentSource {
     @Transactional(readOnly = true)
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
         try {
-            if (request instanceof MentorChatRequest mentor) {
+            if (request instanceof HephTurnRequest mentor) {
                 contributeMentor(mentor, files);
             }
         } catch (RuntimeException e) {
@@ -88,7 +88,7 @@ public class OutlineDocumentContentSource implements ContentSource {
         }
     }
 
-    private void contributeMentor(MentorChatRequest request, Map<String, byte[]> files) {
+    private void contributeMentor(HephTurnRequest request, Map<String, byte[]> files) {
         List<ProjectedDocument> documents = rankedMentorDocuments(request);
         if (documents.isEmpty()) {
             return;
@@ -103,7 +103,15 @@ public class OutlineDocumentContentSource implements ContentSource {
             node.put("collection", doc.collectionSlug());
             node.put("slug", doc.slug());
             node.put("title", doc.title());
+            if (doc.url() != null) {
+                node.put("url", doc.url());
+            }
             node.put("body", excerptBody(doc));
+            String full = doc.bodyMarkdown();
+            if (!doc.deleted() && full != null && full.length() > MENTOR_BODY_CHARS) {
+                node.put("bodyTruncated", true);
+                node.put("bodyChars", full.length());
+            }
             // Human-facing collection label; "collection" above stays the path/slug identity.
             if (doc.collectionName() != null) {
                 node.put("collection_name", doc.collectionName());
@@ -154,7 +162,7 @@ public class OutlineDocumentContentSource implements ContentSource {
      * recency order ({@link de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection#documentsForWorkspace}) otherwise, so a query-less turn
      * (or a corpus the query misses entirely) still gets documentation instead of nothing.
      */
-    private List<ProjectedDocument> rankedMentorDocuments(MentorChatRequest request) {
+    private List<ProjectedDocument> rankedMentorDocuments(HephTurnRequest request) {
         String query = deriveQueryText(null, currentUserMessageText(request));
         if (!query.isBlank()) {
             List<ProjectedDocument> ranked =
@@ -167,28 +175,14 @@ public class OutlineDocumentContentSource implements ContentSource {
     }
 
     @Nullable
-    private String currentUserMessageText(MentorChatRequest request) {
-        if (request.currentUserMessageId() == null) {
+    private String currentUserMessageText(HephTurnRequest request) {
+        UUID question = request.currentEntryId();
+        if (question == null) {
             return null;
         }
-        return chatMessageRepository
-                .findById(request.currentUserMessageId())
-                .map(message -> visibleText(message.getParts()))
+        return mentorEntryRepository
+                .findTextByIdAndWorkspaceId(question, request.workspaceId())
                 .orElse(null);
-    }
-
-    /** Concatenated {@code text} parts of a UIMessage parts array (the mentor message substrate). */
-    private static String visibleText(@Nullable JsonNode parts) {
-        if (parts == null || !parts.isArray()) {
-            return "";
-        }
-        StringBuilder out = new StringBuilder();
-        for (JsonNode part : parts) {
-            if ("text".equals(part.path("type").asString())) {
-                out.append(part.path("text").asString()).append('\n');
-            }
-        }
-        return out.toString();
     }
 
     /**

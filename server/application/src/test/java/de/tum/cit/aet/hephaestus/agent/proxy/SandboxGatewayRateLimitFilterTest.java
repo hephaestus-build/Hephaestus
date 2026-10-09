@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -10,6 +11,7 @@ import io.github.bucket4j.Bucket;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -136,12 +138,21 @@ class SandboxGatewayRateLimitFilterTest extends BaseUnitTest {
                 resolver,
                 OBJECT_MAPPER,
                 new ProxyAccounting(
-                        budgetGate, usageAccumulator, mentorTurnUsageAccumulator, meterRegistry, OBJECT_MAPPER));
+                        budgetGate, usageAccumulator, mentorTurnUsageAccumulator, meterRegistry, OBJECT_MAPPER),
+                request -> false);
     }
 
     private void authenticate(String principalDescription) {
         var routing = new ProxyRouting(
-                principalDescription, "openai-responses", "https://api.example.com/v1", null, null, null, null, null);
+                principalDescription,
+                "openai-responses",
+                "https://api.example.com/v1",
+                null,
+                null,
+                null,
+                null,
+                new ProxyRouting.BilledAttempt(
+                        LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 0, BigDecimal.ZERO, "worker-1"));
         SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(routing, null));
     }
 

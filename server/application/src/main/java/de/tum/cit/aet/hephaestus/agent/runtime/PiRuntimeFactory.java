@@ -75,7 +75,6 @@ public class PiRuntimeFactory {
         }
         String promptDigest = ProvenanceDigest.rootDigestHex(promptScaffolding);
         inputFiles.putAll(promptScaffolding);
-        inputFiles.putAll(spec.extraInputs());
 
         long agentTimeoutMs = (spec.timeoutSeconds() - TIMEOUT_BUFFER_SECONDS) * 1000L;
         env.put("AGENT_BUDGET_MS", Long.toString(agentTimeoutMs));
@@ -106,7 +105,7 @@ public class PiRuntimeFactory {
                 + "/"
                 + SandboxLayout.RUNNER_SCRIPT_FILENAME;
 
-        NetworkPolicy networkPolicy = buildNetworkPolicy(jobToken, spec.allowInternet());
+        NetworkPolicy networkPolicy = buildNetworkPolicy(jobToken);
 
         log.debug(
                 "Built Pi plan: timeout={}s, apiProtocol={}, model={}, files={}",
@@ -191,9 +190,12 @@ public class PiRuntimeFactory {
         }
     }
 
-    /** The sandbox layer fills in {@code llmProxyUrl} during PREPARE; this only shapes the policy. */
-    static NetworkPolicy buildNetworkPolicy(String jobToken, boolean allowInternet) {
-        return new NetworkPolicy(allowInternet, null, jobToken);
+    /**
+     * A job runs on an internal network: native shell access must not provide a route to push or fetch uncaptured
+     * evidence. The sandbox layer fills in {@code llmProxyUrl}.
+     */
+    static NetworkPolicy buildNetworkPolicy(String jobToken) {
+        return new NetworkPolicy(false, null, jobToken);
     }
 
     /** Read a classpath resource under {@link #AGENT_RESOURCE_PREFIX}. */

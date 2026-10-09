@@ -1,9 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
-import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -21,10 +19,8 @@ public record PiPlanSpec(
         @Nullable Integer maxOutputTokens,
         @Nullable ReasoningEffort reasoningEffort,
         @Nullable String jobToken,
-        boolean allowInternet,
         int timeoutSeconds,
         PiRunnerProfile runnerProfile,
-        Map<String, byte[]> extraInputs,
         @Nullable String precomputeStep) {
     public PiPlanSpec {
         if (apiProtocol == null || apiProtocol.isBlank()) {
@@ -45,20 +41,6 @@ public record PiPlanSpec(
         }
         if (jobToken == null || jobToken.isBlank()) {
             throw new IllegalArgumentException("jobToken is required — every sandbox talks to the LLM proxy");
-        }
-        // Cloned, not just Map.copyOf'd: a frozen map still shares its byte[] values with the caller,
-        // who could then mutate file contents after the allowlist check below has passed.
-        extraInputs = extraInputs != null
-                ? extraInputs.entrySet().stream()
-                        .collect(Collectors.toUnmodifiableMap(
-                                Map.Entry::getKey, e -> e.getValue().clone()))
-                : Map.of();
-        for (String path : extraInputs.keySet()) {
-            if (!SandboxLayout.allowedExtraInputPaths().contains(path)) {
-                throw new IllegalArgumentException("extraInputs path '" + path
-                        + "' is not a recognised workspace path: must appear in "
-                        + "SandboxLayout.allowedExtraInputPaths()");
-            }
         }
         precomputeStep = precomputeStep != null ? precomputeStep : "";
     }

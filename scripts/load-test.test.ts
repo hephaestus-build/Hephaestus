@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { asRecord, asStringArray } from "./lib/json.ts";
 import { loadTasks } from "./lib/task-graph.ts";
 
-import { configuration, k6Image, renderBaseline } from "./load-test.ts";
+import { configuration, dockerNetwork, k6Image, renderBaseline } from "./load-test.ts";
 
 const env = {
 	BASE_URL: "https://load.example.test",
@@ -81,6 +81,37 @@ await test("runner records the inputs a scenario ran under and never records sec
 	assert.throws(() =>
 		configuration("detection-mentor", { ...mentorEnv, SANDBOX_API_REQUESTS_PER_MINUTE: "0" }),
 	);
+});
+
+await test("the Heph scenario takes one token or one per developer and records neither", () => {
+	const hephEnv = {
+		BASE_URL: "http://127.0.0.1:8080",
+		API_PREFIX: "",
+		WORKSPACE_SLUG: "e2e",
+		AUTH_TOKENS: "first-secret,second-secret",
+		STAGES: "1:1m,2:1m",
+	};
+	const recorded = configuration("heph", hephEnv);
+	assert.ok(!JSON.stringify(recorded).includes("secret"));
+	assert.deepEqual(Object.keys(recorded.inputs).toSorted(), [
+		"API_PREFIX",
+		"BASE_URL",
+		"STAGES",
+		"WORKSPACE_SLUG",
+	]);
+	assert.equal(
+		configuration("heph", { ...hephEnv, AUTH_TOKENS: undefined, AUTH_TOKEN: "one" }).scenario,
+		"heph",
+	);
+	assert.throws(() => configuration("heph", { ...hephEnv, AUTH_TOKENS: "" }), /AUTH_TOKEN/u);
+	assert.throws(() => configuration("heph", { ...hephEnv, WORKSPACE_SLUG: "" }), /WORKSPACE_SLUG/u);
+});
+
+await test("k6 joins a named Docker network only when asked", () => {
+	assert.deepEqual(dockerNetwork(undefined), []);
+	assert.deepEqual(dockerNetwork(" "), []);
+	assert.deepEqual(dockerNetwork("host"), ["--network=host"]);
+	assert.throws(() => dockerNetwork("host --privileged"), /LOAD_TEST_NETWORK/u);
 });
 
 await test("renders k6 threshold verdicts without claiming host qualification", () => {
@@ -274,6 +305,7 @@ await test("load tasks stay uncached and outside automatic quality and verificat
 	for (const name of [
 		"test:load:webhook-burst",
 		"test:load:detection-mentor",
+		"test:load:heph",
 		"report:load:baseline",
 	]) {
 		assert.equal(asRecord(tasks[name], name).cache, false);

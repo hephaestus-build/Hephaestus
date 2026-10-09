@@ -20,7 +20,7 @@ class MentorRoleGatingTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepInteractiveSandboxAvailableWheneverWorkerRoleIsEnabled() {
+    void shouldKeepTheSandboxAvailableWheneverWorkerRoleIsEnabled() {
         assertWorkerRoleCondition(DockerSandboxConfiguration.class);
     }
 

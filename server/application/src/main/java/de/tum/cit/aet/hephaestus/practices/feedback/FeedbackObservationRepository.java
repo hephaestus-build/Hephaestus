@@ -416,6 +416,7 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
          * The composer's notes to the mentor, or null when nothing was composed for this unit. See
          * {@link ConversationBriefBody}.
          */
+        @Nullable
         String getBody();
 
         Severity getSeverity();

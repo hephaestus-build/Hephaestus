@@ -19,4 +19,13 @@ public record NotificationPreferencesDTO(
 
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean surveySummaries,
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean workspaceAlerts,
+
+        @Schema(requiredMode = RequiredMode.REQUIRED, description = "The weekly digest is on")
+        boolean weeklyDigest,
+
+        @Schema(
+                requiredMode = RequiredMode.REQUIRED,
+                description = "Heph can answer in at least one of your workspaces, so a weekly digest can be written")
+        boolean weeklyDigestAvailable,
+
         @NonNull String etag) {}

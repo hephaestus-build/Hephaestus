@@ -133,7 +133,7 @@ class DeliveredFeedbackConsentGateIntegrationTest extends AbstractSlackConsentGa
     private JsonNode contribute() {
         Map<String, byte[]> files = new HashMap<>();
         contentSource.contribute(
-                new ContextRequest.MentorChatRequest(workspace.getId(), recipient.getId(), UUID.randomUUID()), files);
+                new ContextRequest.HephTurnRequest(workspace.getId(), recipient.getId(), UUID.randomUUID()), files);
         return objectMapper.readTree(files.get(DeliveredFeedbackContentSource.OUTPUT_KEY));
     }
 

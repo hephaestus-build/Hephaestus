@@ -148,7 +148,6 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
                         3L,
                         1L,
                         30,
-                        false,
                         null,
                         null)
                 .toJson(mapper));

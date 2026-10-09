@@ -2,9 +2,9 @@ package de.tum.cit.aet.hephaestus.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountTimeZone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Optional;
@@ -12,11 +12,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class AccountPreferencesServiceTest extends BaseUnitTest {
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void shouldChangeOnlyPracticeFeedbackDelivery(boolean enabled) {
         var repository = mock(UserPreferencesRepository.class);
-        var service = new AccountPreferencesService(repository);
+        var service = new AccountPreferencesService(repository, mock(AccountTimeZone.class));
         var user = new User();
         user.setId(42L);
         user.setLogin("octocat");
@@ -24,11 +25,10 @@ class AccountPreferencesServiceTest extends BaseUnitTest {
         preferences.setParticipateInResearch(true);
         when(repository.findByUserId(42L)).thenReturn(Optional.of(preferences));
 
-        var updated = service.updateUserSettings(user, new UserSettingsDTO(enabled));
+        var updated = service.updateUserSettings(user, 7L, new UserSettingsDTO(enabled, "Europe/Berlin"));
 
         assertThat(updated.practiceFeedbackDeliveryEnabled()).isEqualTo(enabled);
         assertThat(preferences.isPracticeFeedbackDeliveryEnabled()).isEqualTo(enabled);
         assertThat(preferences.isParticipateInResearch()).isTrue();
-        verify(repository).save(preferences);
     }
 }

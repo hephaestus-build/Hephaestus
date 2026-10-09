@@ -2,18 +2,19 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -29,6 +30,19 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Mentor context queries take workspace ID parameters")
 public interface MentorContextQueryRepository extends JpaRepository<User, Long> {
+
+    /**
+     * HQL: the repository bound as {@code hiddenRepository} is not one a team of this workspace hides from
+     * contributions — the rule Activity and the review history apply, so no list here names work whose reviews Heph
+     * may not show. Needs {@code :workspaceId}; a query binds the alias with {@code hiddenRepository = ...}.
+     */
+    String NOT_HIDDEN = """
+                  AND NOT EXISTS (
+                      SELECT 1 FROM WorkspaceTeamRepositorySettings wtrs
+                      WHERE wtrs.workspace.id = :workspaceId
+                        AND wtrs.hiddenFromContributions = true
+                        AND wtrs.repository =\s""";
+
     /**
      * Single-round-trip snapshot of every counter {@code UserContentSource} needs. The JPQL
      * anchors on {@code User} so the constructor expression evaluates exactly once (one row
@@ -44,6 +58,8 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
                 WHERE p1.author.id = :userId
                   AND p1.deletedAt IS NULL
                   AND rtm1.workspace.id = :workspaceId
+                  AND p1.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "p1.repository)" + """
                   AND p1.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN), 0L),
             COALESCE((SELECT COUNT(p2)
                 FROM PullRequest p2
@@ -52,6 +68,8 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
                 WHERE p2.author.id = :userId
                   AND p2.deletedAt IS NULL
                   AND rtm2.workspace.id = :workspaceId
+                  AND p2.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "p2.repository)" + """
                   AND p2.isMerged = true
                   AND p2.mergedAt > :weekAgo
                   AND p2.mergedAt <= :now), 0L),
@@ -62,6 +80,9 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
                 WHERE p3.author.id = :userId
                   AND p3.deletedAt IS NULL
                   AND rtm3.workspace.id = :workspaceId
+                  AND p3.repository.provider.id = :providerId
+        """ + NOT_HIDDEN
+            + "p3.repository)" + """
                   AND p3.isMerged = true
                   AND p3.mergedAt > :twoWeeksAgo
                   AND p3.mergedAt <= :weekAgo), 0L),
@@ -73,6 +94,8 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
                   AND i.author.id = :userId
                   AND i.deletedAt IS NULL
                   AND rtmi.workspace.id = :workspaceId
+                  AND i.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "i.repository)" + """
                   AND i.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN), 0L),
             COALESCE((SELECT COUNT(r1)
                 FROM PullRequestReview r1
@@ -81,6 +104,9 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
                 WHERE r1.author.id = :userId
                   AND r1.pullRequest.deletedAt IS NULL
                   AND rtmr1.workspace.id = :workspaceId
+                  AND r1.pullRequest.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "r1.pullRequest.repository)"
+            + """
                   AND r1.submittedAt > :weekAgo
                   AND r1.submittedAt <= :now), 0L),
             COALESCE((SELECT COUNT(r2)
@@ -90,6 +116,8 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
                 WHERE r2.author.id = :userId
                   AND r2.pullRequest.deletedAt IS NULL
                   AND rtmr2.workspace.id = :workspaceId
+                  AND r2.pullRequest.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "r2.pullRequest.repository)" + """
                   AND r2.submittedAt > :twoWeeksAgo
                   AND r2.submittedAt <= :weekAgo), 0L),
             COALESCE((SELECT COUNT(r3)
@@ -99,6 +127,8 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
                 WHERE r3.pullRequest.author.id = :userId
                   AND r3.pullRequest.deletedAt IS NULL
                   AND rtmr3.workspace.id = :workspaceId
+                  AND r3.pullRequest.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "r3.pullRequest.repository)" + """
                   AND r3.submittedAt > :weekAgo
                   AND r3.submittedAt <= :now), 0L),
             COALESCE((SELECT COUNT(work)
@@ -110,6 +140,9 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
                   AND work.deletedAt IS NULL
                   AND work.isDraft = false
                   AND rtmpr.workspace.id = :workspaceId
+                  AND work.repository.provider.id = :providerId
+        """
+            + NOT_HIDDEN + "work.repository)" + """
                   AND work.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
                   AND
         """ + RequestedReviewer.AWAITING_REVIEW + """
@@ -121,6 +154,9 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
                 WHERE t.pullRequest.author.id = :userId
                   AND t.pullRequest.deletedAt IS NULL
                   AND rtmt.workspace.id = :workspaceId
+                  AND t.pullRequest.repository.provider.id = :providerId
+        """ + NOT_HIDDEN
+            + "t.pullRequest.repository)" + """
                   AND t.pullRequest.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
                   AND t.state = de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread.State.UNRESOLVED), 0L)
         )
@@ -129,6 +165,7 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
         """)
     MentorUserCounts fetchUserCounts(
             @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
             @Param("userId") Long userId,
             @Param("twoWeeksAgo") Instant twoWeeksAgo,
             @Param("weekAgo") Instant weekAgo,
@@ -154,10 +191,13 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
           AND a.id = :userId
           AND i.deletedAt IS NULL
           AND rtm.workspace.id = :workspaceId
+          AND i.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "i.repository)" + """
           AND i.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
         ORDER BY i.createdAt DESC
         """)
-    List<Issue> findAssignedOpenIssues(@Param("workspaceId") Long workspaceId, @Param("userId") Long userId);
+    List<Issue> findAssignedOpenIssues(
+            @Param("workspaceId") Long workspaceId, @Param("providerId") Long providerId, @Param("userId") Long userId);
 
     /**
      * Open, ready PRs that ask the user directly for a review they still owe ({@link RequestedReviewer#AWAITING_REVIEW}),
@@ -176,55 +216,17 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
           AND work.deletedAt IS NULL
           AND work.isDraft = false
           AND rtm.workspace.id = :workspaceId
+          AND work.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "work.repository)" + """
           AND work.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
           AND
         """ + RequestedReviewer.AWAITING_REVIEW + """
         ORDER BY work.createdAt DESC
         """)
-    List<PullRequest> findPendingReviewRequestPrs(@Param("workspaceId") Long workspaceId, @Param("userId") Long userId);
-
-    /** Recent chat threads for the user within the workspace, newest first. Caller passes
-     *  a {@link Pageable} ({@code PageRequest.of(0, limit)}) so the DB-side LIMIT keeps power
-     *  users (hundreds of threads) from hydrating the full list just to {@code subList(0, 10)}. */
-    @Query("""
-        SELECT t
-        FROM ChatThread t
-        WHERE t.workspace.id = :workspaceId
-          AND t.user.id = :userId
-        ORDER BY t.createdAt DESC
-        """)
-    List<ChatThread> findRecentChatThreads(
-            @Param("workspaceId") Long workspaceId, @Param("userId") Long userId, Pageable pageable);
+    List<PullRequest> findPendingReviewRequestPrs(
+            @Param("workspaceId") Long workspaceId, @Param("providerId") Long providerId, @Param("userId") Long userId);
 
     // Observations context — reviews received in window
-
-    /**
-     * Earliest USER-role message per thread for a batch of thread ids, in one round trip. Native because
-     * Postgres {@code DISTINCT ON} is the cheapest path; equivalent JPQL would need a correlated
-     * subquery for every thread anyway. Joins {@code chat_thread} on {@code workspace_id} so the
-     * query refuses cross-tenant ids the caller might pass — defence in depth even though the
-     * upstream id list is already user-scoped.
-     *
-     * <p>{@code m.parts::text} casts the {@code jsonb} column to text so the projection element is a plain
-     * String the caller parses with {@code readTree}. Selecting the raw {@code jsonb} into an untyped
-     * {@code Object[]} makes Hibernate apply its JSON Java-type and throw "JSON deserialize failed for String
-     * … from Array", silently degrading the prior-conversation context to empty.
-     *
-     * <p><b>Precondition:</b> {@code threadIds} MUST be non-empty. The native {@code IN (:threadIds)}
-     * expands to invalid {@code IN ()} SQL (a Postgres syntax error) for an empty list, so callers must
-     * short-circuit beforehand (as {@code WorkspaceContentSource.loadFirstUserMessages} does).
-     */
-    @Query(value = """
-        SELECT DISTINCT ON (m.thread_id) m.thread_id, m.parts::text
-          FROM chat_message m
-          JOIN chat_thread t ON t.id = m.thread_id
-         WHERE m.thread_id IN (:threadIds)
-           AND t.workspace_id = :workspaceId
-           AND m.role = 'USER'
-         ORDER BY m.thread_id, m.created_at ASC
-        """, nativeQuery = true)
-    List<Object[]> findFirstUserMessagePartsByThreadIds(
-            @Param("workspaceId") Long workspaceId, @Param("threadIds") List<UUID> threadIds);
 
     /**
      * Reviews received on user's authored PRs within {@code since}..now, scoped to workspace.
@@ -241,17 +243,20 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
         WHERE prr.pullRequest.author.id = :userId
           AND prr.pullRequest.deletedAt IS NULL
           AND rtm.workspace.id = :workspaceId
+          AND prr.pullRequest.repository.provider.id = :providerId
           AND prr.submittedAt > :since
+        """ + NOT_HIDDEN + "prr.pullRequest.repository)" + """
         ORDER BY prr.submittedAt DESC
         """)
     List<PullRequestReview> findReviewsReceivedSince(
             @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
             @Param("userId") Long userId,
             @Param("since") Instant since,
             Pageable page);
 
     /**
-     * The developer's own authored PULL REQUESTS in the workspace, newest first — the work itself (not
+     * The developer's own authored PULL REQUESTS in the workspace, most recently active first — the work itself (not
      * observations about it), so the mentor has a concrete, linkable inventory of what they shipped. Same
      * author + RepositoryToMonitor scoping as {@link #findReviewsReceivedSince}. {@code FROM PullRequest}
      * narrows to the PR discriminator (single-table inheritance), so issues never leak in.
@@ -264,10 +269,15 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
         WHERE p.author.id = :userId
           AND p.deletedAt IS NULL
           AND rtm.workspace.id = :workspaceId
-        ORDER BY p.createdAt DESC
+          AND p.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "p.repository)" + """
+        ORDER BY COALESCE(p.updatedAt, p.createdAt) DESC NULLS LAST, p.id DESC
         """)
     List<PullRequest> findRecentAuthoredPullRequests(
-            @Param("workspaceId") Long workspaceId, @Param("userId") Long userId, Pageable page);
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("userId") Long userId,
+            Pageable page);
 
     /** The stored copies of {@code ids} on the workspace's connected instance, for comparing with what was reviewed. */
     @Query("""
@@ -333,6 +343,7 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
           AND p.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
           AND rtm.workspace.id = :workspaceId
           AND r.provider.id = :providerId
+        """ + NOT_HIDDEN + "r)" + """
         ORDER BY p.updatedAt DESC NULLS LAST, p.id DESC
         """)
     List<PullRequest> findOpenAuthoredPullRequestsOnInstance(
@@ -357,6 +368,7 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
           AND p.deletedAt IS NULL
           AND rtm.workspace.id = :workspaceId
           AND r.provider.id = :providerId
+        """ + NOT_HIDDEN + "r)" + """
         """)
     List<PullRequest> findAuthoredPullRequestOnInstance(
             @Param("workspaceId") Long workspaceId,
@@ -427,7 +439,7 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
 
     /**
      * The developer's own authored ISSUES (excluding PRs via {@code TYPE(i) = Issue}) in the workspace,
-     * newest first. Companion to {@link #findRecentAuthoredPullRequests}.
+     * most recently active first. Companion to {@link #findRecentAuthoredPullRequests}.
      */
     @Query("""
         SELECT i
@@ -437,9 +449,367 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
         WHERE i.author.id = :userId
           AND i.deletedAt IS NULL
           AND rtm.workspace.id = :workspaceId
+          AND i.repository.provider.id = :providerId
           AND TYPE(i) = Issue
-        ORDER BY i.createdAt DESC
+        """ + NOT_HIDDEN + "i.repository)" + """
+        ORDER BY COALESCE(i.updatedAt, i.createdAt) DESC NULLS LAST, i.id DESC
         """)
     List<Issue> findRecentAuthoredIssues(
-            @Param("workspaceId") Long workspaceId, @Param("userId") Long userId, Pageable page);
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("userId") Long userId,
+            Pageable page);
+
+    /** Number, title and link of pull requests by id, for naming the work a review-history row is about. */
+    @Query("""
+        SELECT p.id AS id, p.number AS number, p.title AS title, p.htmlUrl AS url
+        FROM PullRequest p
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = p.repository.nameWithOwner
+        WHERE p.id IN :ids
+          AND p.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND p.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "p.repository)")
+    List<WorkRef> findPullRequestRefs(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("ids") Collection<Long> ids);
+
+    /** {@link #findPullRequestRefs} for issues. */
+    @Query("""
+        SELECT i.id AS id, i.number AS number, i.title AS title, i.htmlUrl AS url
+        FROM Issue i
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = i.repository.nameWithOwner
+        WHERE TYPE(i) = Issue
+          AND i.id IN :ids
+          AND i.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND i.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "i.repository)")
+    List<WorkRef> findIssueRefs(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("ids") Collection<Long> ids);
+
+    interface WorkRef {
+        Long getId();
+
+        Integer getNumber();
+
+        @Nullable
+        String getTitle();
+
+        @Nullable
+        String getUrl();
+    }
+
+    /** Which requested reviewers of a pull request still owe it a verdict ({@link RequestedReviewer#AWAITING_REVIEW}). */
+    @Query("""
+        SELECT request.user.id
+        FROM PullRequest work
+        JOIN work.requestedReviewers request
+        WHERE work.id = :pullRequestId
+          AND work.deletedAt IS NULL
+          AND
+        """ + RequestedReviewer.AWAITING_REVIEW)
+    Set<Long> findAwaitingReviewerIds(@Param("pullRequestId") Long pullRequestId);
+
+    /** The commits the provider associates with a pull request, oldest first. */
+    @Query("""
+        SELECT c
+        FROM Commit c
+        JOIN c.associatedPullRequests p
+        WHERE p.id = :pullRequestId
+          AND p.deletedAt IS NULL
+        ORDER BY c.authoredAt ASC, c.id ASC
+        """)
+    List<Commit> findCommitsOfPullRequest(@Param("pullRequestId") Long pullRequestId, Pageable page);
+
+    /** How many of a pull request's stored commits there are, and how many have their file changes captured. */
+    @Query("""
+        SELECT COUNT(c) AS stored, COUNT(c.gitDetailsCapturedAt) AS captured
+        FROM Commit c
+        JOIN c.associatedPullRequests p
+        WHERE p.id = :pullRequestId
+          AND p.deletedAt IS NULL
+        """)
+    CommitCoverage countCommitsOfPullRequest(@Param("pullRequestId") Long pullRequestId);
+
+    interface CommitCoverage {
+        long getStored();
+
+        long getCaptured();
+    }
+
+    /** The file changes of a pull request's captured commits, a commit at a time. */
+    @Query("""
+        SELECT f
+        FROM CommitFileChange f
+        JOIN f.commit c
+        JOIN c.associatedPullRequests p
+        WHERE p.id = :pullRequestId
+          AND p.deletedAt IS NULL
+        ORDER BY c.authoredAt ASC, c.id ASC, f.id ASC
+        """)
+    List<CommitFileChange> findFileChangesOfPullRequest(@Param("pullRequestId") Long pullRequestId, Pageable page);
+
+    /**
+     * The pull requests the provider records as closing {@code issueId}, newest first, each under the scope its issue
+     * was read with: monitored by the workspace, on its connected instance, not tombstoned and not hidden.
+     */
+    @Query("""
+        SELECT p
+        FROM PullRequest p
+        JOIN p.closingIssues i
+        LEFT JOIN FETCH p.author
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = p.repository.nameWithOwner
+        WHERE i.id = :issueId
+          AND p.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND p.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "p.repository)" + """
+        ORDER BY p.createdAt DESC, p.id DESC
+        """)
+    List<PullRequest> findPullRequestsClosingIssue(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("issueId") Long issueId,
+            Pageable page);
+
+    /**
+     * The related issues an issue names, each under the scope the issue was read with. Related work can sit in another
+     * repository, so each relation is read with the predicates of its own, never loaded and then filtered.
+     */
+    String RELATED_IN_SCOPE = """
+          AND r.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND repo.provider.id = :providerId
+        """ + NOT_HIDDEN + "repo)" + """
+        ORDER BY r.number ASC, r.id ASC
+        """;
+
+    /** The issue's parent, when it is in scope. */
+    @Query("""
+        SELECT r
+        FROM Issue i
+        JOIN i.parentIssue r
+        JOIN r.repository repo
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = repo.nameWithOwner
+        WHERE i.id = :issueId
+          AND TYPE(i) = Issue
+          AND i.deletedAt IS NULL
+          AND TYPE(r) = Issue
+        """ + RELATED_IN_SCOPE)
+    List<Issue> findParentInScope(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("issueId") Long issueId,
+            Pageable page);
+
+    /** The issue's sub-issues in scope. */
+    @Query("""
+        SELECT r
+        FROM Issue r
+        JOIN r.repository repo
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = repo.nameWithOwner
+        WHERE r.parentIssue.id = :issueId
+          AND TYPE(r) = Issue
+        """ + RELATED_IN_SCOPE)
+    List<Issue> findSubIssuesInScope(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("issueId") Long issueId,
+            Pageable page);
+
+    /** The issues in scope that block the issue. */
+    @Query("""
+        SELECT r
+        FROM Issue i
+        JOIN i.blockedBy r
+        JOIN r.repository repo
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = repo.nameWithOwner
+        WHERE i.id = :issueId
+          AND TYPE(i) = Issue
+          AND i.deletedAt IS NULL
+          AND TYPE(r) = Issue
+        """ + RELATED_IN_SCOPE)
+    List<Issue> findBlockersInScope(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("issueId") Long issueId,
+            Pageable page);
+
+    /** The issues in scope that the issue blocks. */
+    @Query("""
+        SELECT r
+        FROM Issue i
+        JOIN i.blocking r
+        JOIN r.repository repo
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = repo.nameWithOwner
+        WHERE i.id = :issueId
+          AND TYPE(i) = Issue
+          AND i.deletedAt IS NULL
+          AND TYPE(r) = Issue
+        """ + RELATED_IN_SCOPE)
+    List<Issue> findBlockedInScope(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("issueId") Long issueId,
+            Pageable page);
+
+    /**
+     * One issue the developer authored or is assigned to, in any stored state, monitored by the workspace, on its
+     * connected instance, not tombstoned and not hidden — the scope of {@link #findAuthoredPullRequestOnInstance}.
+     */
+    @Query("""
+        SELECT DISTINCT i
+        FROM Issue i
+        JOIN i.repository r
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
+        LEFT JOIN i.assignees assignee
+        WHERE TYPE(i) = Issue
+          AND i.id = :issueId
+          AND i.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND r.provider.id = :providerId
+          AND (i.author.id = :userId OR assignee.id = :userId)
+        """ + NOT_HIDDEN + "r)")
+    List<Issue> findOwnIssueOnInstance(
+            @Param("workspaceId") Long workspaceId,
+            @Param("userId") Long userId,
+            @Param("providerId") Long providerId,
+            @Param("issueId") Long issueId);
+
+    // Activity: the developer's own dated actions, in monitored repositories no team hides
+
+    /** Pull requests the developer authored that opened, merged or closed since {@code since}, latest first. */
+    @Query("""
+        SELECT p
+        FROM PullRequest p
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = p.repository.nameWithOwner
+        LEFT JOIN FETCH p.repository
+        WHERE p.author.id = :userId
+          AND p.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND p.repository.provider.id = :providerId
+          AND (p.createdAt >= :since OR p.mergedAt >= :since OR p.closedAt >= :since)
+        """ + NOT_HIDDEN + "p.repository)" + """
+        ORDER BY COALESCE(p.mergedAt, p.closedAt, p.createdAt) DESC, p.id DESC
+        """)
+    List<PullRequest> findAuthoredPullRequestsActiveSince(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("userId") Long userId,
+            @Param("since") Instant since,
+            Pageable page);
+
+    /** Issues the developer authored that opened or closed since {@code since}, latest first. */
+    @Query("""
+        SELECT i
+        FROM Issue i
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = i.repository.nameWithOwner
+        LEFT JOIN FETCH i.repository
+        WHERE TYPE(i) = Issue
+          AND i.author.id = :userId
+          AND i.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND i.repository.provider.id = :providerId
+          AND (i.createdAt >= :since OR i.closedAt >= :since)
+        """ + NOT_HIDDEN + "i.repository)" + """
+        ORDER BY COALESCE(i.closedAt, i.createdAt) DESC, i.id DESC
+        """)
+    List<Issue> findAuthoredIssuesActiveSince(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("userId") Long userId,
+            @Param("since") Instant since,
+            Pageable page);
+
+    /** Reviews the developer gave on other people's pull requests since {@code since}, newest first. */
+    @Query("""
+        SELECT r
+        FROM PullRequestReview r
+        JOIN FETCH r.pullRequest pr
+        LEFT JOIN FETCH pr.author
+        LEFT JOIN FETCH pr.repository
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = pr.repository.nameWithOwner
+        WHERE r.author.id = :userId
+          AND r.pullRequest.deletedAt IS NULL
+          AND (pr.author IS NULL OR pr.author.id <> :userId)
+          AND r.submittedAt >= :since
+          AND rtm.workspace.id = :workspaceId
+          AND pr.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "pr.repository)" + """
+        ORDER BY r.submittedAt DESC, r.id DESC
+        """)
+    List<PullRequestReview> findReviewsGivenSince(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("userId") Long userId,
+            @Param("since") Instant since,
+            Pageable page);
+
+    /** Comments the developer wrote on pull requests and issues since {@code since}, newest first. */
+    @Query("""
+        SELECT c
+        FROM IssueComment c
+        JOIN FETCH c.issue i
+        LEFT JOIN FETCH i.repository
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = i.repository.nameWithOwner
+        WHERE c.author.id = :userId
+          AND c.issue.deletedAt IS NULL
+          AND c.createdAt >= :since
+          AND rtm.workspace.id = :workspaceId
+          AND i.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "i.repository)" + """
+        ORDER BY c.createdAt DESC, c.id DESC
+        """)
+    List<IssueComment> findCommentsWrittenSince(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("userId") Long userId,
+            @Param("since") Instant since,
+            Pageable page);
+
+    /** Inline review comments the developer wrote since {@code since}, newest first. */
+    @Query("""
+        SELECT c
+        FROM PullRequestReviewComment c
+        JOIN FETCH c.pullRequest pr
+        LEFT JOIN FETCH pr.repository
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = pr.repository.nameWithOwner
+        WHERE c.author.id = :userId
+          AND c.pullRequest.deletedAt IS NULL
+          AND c.createdAt >= :since
+          AND rtm.workspace.id = :workspaceId
+          AND pr.repository.provider.id = :providerId
+        """ + NOT_HIDDEN + "pr.repository)" + """
+        ORDER BY c.createdAt DESC, c.id DESC
+        """)
+    List<PullRequestReviewComment> findInlineCommentsWrittenSince(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("userId") Long userId,
+            @Param("since") Instant since,
+            Pageable page);
+
+    /** Commits the developer authored since {@code since}, newest first. */
+    @Query("""
+        SELECT c
+        FROM Commit c
+        JOIN FETCH c.repository repo
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = repo.nameWithOwner
+        WHERE c.author.id = :userId
+          AND c.authoredAt >= :since
+          AND rtm.workspace.id = :workspaceId
+          AND repo.provider.id = :providerId
+        """ + NOT_HIDDEN + "repo)" + """
+        ORDER BY c.authoredAt DESC, c.id DESC
+        """)
+    List<Commit> findCommitsAuthoredSince(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("userId") Long userId,
+            @Param("since") Instant since,
+            Pageable page);
 }

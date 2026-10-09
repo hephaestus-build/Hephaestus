@@ -72,8 +72,12 @@ class SlackMessageServiceTest extends BaseUnitTest {
                         s -> s.sendEphemeralForWorkspace(7L, "C1ABCDEFGH", "U123", List.of(), "f")),
                 Arguments.of("startStream", (ThrowingSend) s -> s.startStream(7L, "C1ABCDEFGH", "171234.5678", "hi")),
                 Arguments.of("appendStream", (ThrowingSend) s -> s.appendStream(7L, "C1ABCDEFGH", "171234.5678", "hi")),
-                Arguments.of(
-                        "stopStream", (ThrowingSend) s -> s.stopStream(7L, "C1ABCDEFGH", "171234.5678", List.of())));
+                Arguments.of("stopStream", (ThrowingSend) s -> s.stopStream(
+                        7L, "C1ABCDEFGH", "171234.5678", new SlackMessageService.StreamStop(null, List.of(), null))),
+                Arguments.of("postMessage", (ThrowingSend)
+                        s -> s.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null)),
+                Arguments.of("setReaction", (ThrowingSend)
+                        s -> s.setReaction(7L, "D1ABCDEFGH", "171234.5678", "eyes", true)));
     }
 
     /** These ride inbound events whose handlers do not catch, so a throw would NAK into the poison alarm. */
@@ -88,10 +92,6 @@ class SlackMessageServiceTest extends BaseUnitTest {
 
     private static Stream<Arguments> decorationCalls() {
         return Stream.of(
-                Arguments.of(
-                        "setStatus", (ThrowingSend) s -> s.setStatus(7L, "C1ABCDEFGH", "171234.5678", "Thinking…")),
-                Arguments.of("setSuggestedPrompts", (ThrowingSend)
-                        s -> s.setSuggestedPrompts(7L, "C1ABCDEFGH", "Try", List.of())),
                 Arguments.of("publishHomeView", (ThrowingSend)
                         s -> s.publishHomeView(7L, "U123", View.builder().build())),
                 Arguments.of("joinPublicChannel", (ThrowingSend) s -> s.joinPublicChannel(7L, "C1ABCDEFGH")));

@@ -899,6 +899,12 @@ Closed pull or merge requests, and merged work that the workspace setting exclud
 `IN_APP` and `IN_CHAT` retain their own evidence and visibility gates.
 Preparation alone does not certify that a unit may be shown.
 
+`IN_CHAT` feedback becomes `DELIVERED` only when Heph shows it in an answer through `link_observation`.
+[Heph runtime](./unified-pi-runtime.mdx#delivery-of-shown-feedback) owns the rule.
+
+The [weekly digest](./practice-feedback-language.md) links to delivered feedback.
+It changes no delivery state and creates no placement.
+
 After admission commits, private composition receives a dated `IN_APP` support read from the same owner that selects a card's evidence.
 It applies the previous-card cutoff, bounded history, current claims and delivery-purpose visibility.
 The broader authorized history remains available for `IN_CHAT`.

@@ -1,6 +1,5 @@
 export interface GatewayCapabilities {
 	workspaceByteBudget: number;
-	frameByteBudget: number | null;
 }
 
 const PROTOCOL_VERSION = 3;
@@ -29,15 +28,7 @@ export async function discoverCapabilities(
 	) {
 		throw new Error("Invalid gateway capabilities");
 	}
-	// Absent on the wire for a session with no interactive channel.
-	const frameByteBudget = "frameByteBudget" in capabilities ? capabilities.frameByteBudget : null;
-	if (frameByteBudget !== null && !isByteBudget(frameByteBudget)) {
-		throw new Error("Invalid gateway capabilities");
-	}
-	return {
-		workspaceByteBudget: capabilities.workspaceByteBudget,
-		frameByteBudget,
-	};
+	return { workspaceByteBudget: capabilities.workspaceByteBudget };
 }
 
 /** Whether an environment value is set and not empty: the gateway refuses to start on either. */

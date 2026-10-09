@@ -18,6 +18,9 @@
             "integration.core::events",
             "integration.core::spi",
             "productfeedback::notification",
+            // The weekly digest's email note: the event it answers, the subscription port it implements, and whether
+            // a digest can be written for the account (shown in User settings).
+            "agent::weekly-digest",
         })
 @org.jspecify.annotations.NullMarked
 package de.tum.cit.aet.hephaestus.notification;

@@ -18,7 +18,7 @@ export interface WorkspaceMentorPreferenceNoticeProps {
 	workspaceSlug: string;
 	/** The page to come back to after changing the choice; the route reads `useLocation().href`. */
 	returnTo: string;
-	/** Produced by `mentorPreferenceReason`, so `unavailable` always arrives with the saved choice. */
+	/** Produced by `mentorNotice`, so `unavailable` always arrives with the saved choice. */
 	notice: MentorNotice;
 }
 

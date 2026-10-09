@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
+import de.tum.cit.aet.hephaestus.workspace.spi.MentorRefusalReason;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import java.util.List;
@@ -13,7 +14,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * One member's view of setup in one workspace. {@code aiChoice} is the account's answer, the same in
  * every workspace; {@code aiOptions} says what this workspace has set up under each answer, which is
- * what differs between workspaces.
+ * what differs between workspaces. {@code mentorRefusal} is this member's own answer from Heph's admission.
  */
 public record WorkspaceOnboardingDTO(
         @NonNull String workspaceName,
@@ -22,7 +23,13 @@ public record WorkspaceOnboardingDTO(
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean aiChoiceRequired,
         @Nullable MemberAiChoice aiChoice,
         @NonNull List<WorkspaceAiOptionDTO> aiOptions,
-        @NonNull List<WorkspaceOnboardingLinkDTO> links) {
+        @NonNull List<WorkspaceOnboardingLinkDTO> links,
+
+        @Schema(
+                description =
+                        "Why Heph declines this member here, by the rule that admits each question; null when Heph can answer")
+        @Nullable
+        MentorRefusalReason mentorRefusal) {
     public record WorkspaceAiOptionDTO(
             @NonNull MemberAiChoice choice,
             @Schema(requiredMode = RequiredMode.REQUIRED) boolean practiceReviewsReady,

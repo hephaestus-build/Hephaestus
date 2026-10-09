@@ -23,8 +23,8 @@ both service objectives and saturation, following Google's SLO guidance
 
 ## Run
 
-The two load scenarios are uncached and manual. CI runs `test:load:syntax`, which inspects both
-scenarios and tests their contracts using the same digest-pinned k6 image, with networking disabled.
+The load scenarios are uncached and manual. CI runs `test:load:syntax`, which inspects every
+scenario and tests their contracts using the same digest-pinned k6 image, with networking disabled.
 `vp run check` runs the runner's own tests.
 
 ```bash
@@ -43,13 +43,36 @@ export SANDBOX_API_REQUESTS_PER_MINUTE=120
 vp run test:load:detection-mentor
 ```
 
+`heph.js` loads Heph alone, with no review and no `ARTIFACT_IDS`. Each simulated developer has one
+main conversation and `THREADS_PER_DEVELOPER` (default 2) threads, each with one question in flight.
+`STAGES` ramps the developers, for example `1:2m,5:3m,15:3m,30:3m`. Give each developer its own
+token in `AUTH_TOKENS` (comma-separated, at least one per developer at the peak), because the
+`mentor-turns` limit and the follow-up queue are per developer:
+
+```bash
+export AUTH_TOKENS=...,... WORKSPACE_SLUG=capacity-test STAGES=1:2m,5:3m,15:3m,30:3m
+vp run test:load:heph
+```
+
+To load a server on this machine, k6 must use the host network, and the server serves the API at
+its root:
+
+```bash
+export LOAD_TEST_NETWORK=host API_PREFIX= BASE_URL=http://127.0.0.1:8080
+```
+
 `BASE_URL` is the externally reachable application root (without `/api`); both scenarios use it.
 The gateway remains private, and only the detection+mentor workload crosses it, so only that
 scenario takes and records the gateway limits.
 Optional workload inputs are documented by the scenario's defaults.
 Keep mentor traffic running long enough to overlap practice reviews; the default mentor phase is
-10 minutes, while slow reviews can take longer. This is a finite concurrent-session workload,
-not an arrival-rate claim for mentor throughput ([open versus closed models](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/open-vs-closed/)).
+10 minutes, while slow reviews can take longer. Each mentor VU asks once at the top level of the
+token owner's Heph conversation, then asks again in the thread of that message, so the VUs run as
+concurrent conversations. This is a finite concurrent-conversation workload, not an arrival-rate
+claim for mentor throughput ([open versus closed models](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/open-vs-closed/)).
+All mentor VUs ask as the token owner, so they share one `mentor-turns` rate limit: 20 questions in
+10 minutes by default. For a run that asks more, raise `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY` on
+the isolated host ([Runtime roles](../docs/admin/runtime-roles.mdx#live-answers)).
 
 Each invocation prints a fresh `load-results/<scenario>-<timestamp>` directory. Set `LOAD_RESULTS_DIR`
 to choose another **unused** directory. It contains `summary.json`, `run.json` (inputs, image,
@@ -74,8 +97,9 @@ the document names the k6 image the run used and whether the checkout has moved 
 k6 result alone does not qualify a host: supply the companion operator evidence listed in the
 document. Do not commit tokens, environment files or unredacted Compose configuration.
 
-The pinned k6 client buffers each `text/event-stream` response. This scenario measures concurrent
-full-response completion, not time to first event or per-event latency.
+A mentor VU submits a turn, then polls the conversation page for the status of its question.
+`detection-mentor.js` sets the poll interval. `mentor_turn_duration` measures completion to within that
+interval. It does not measure the time to the first text of the answer.
 
 ## Collect host evidence
 
@@ -140,9 +164,13 @@ k6's verdict. Do not maintain a second set of threshold values in documentation.
   publish gate and fast-path timeout make it a different workload that needs its own scenario.
 - The mixed scenario requires every requested review to finish successfully. Exact completion
   counts catch interrupted iterations that never add a sample to a completion-rate metric.
-- Mentor HTTP failures and whole-turn success are independent of polling traffic. Streams must
-  contain a finish chunk and the terminal sentinel, without error/abort/tool-error chunks;
-  the server sends `[DONE]` on errors too.
+- Mentor HTTP failures and whole-turn success are independent of polling traffic. A turn counts as
+  answered only when it ends `DONE`.
+- `heph.js` reads a turn's progress from the conversation's active turns every `POLL_MS`. Its
+  `heph_queue_wait`, `heph_first_partial` and `heph_first_text` are therefore accurate to that
+  interval. They include the provider's own latency: compare them with a direct call to the provider.
+  A provider gateway that buffers its event stream delivers the whole answer at once, so the first
+  text then arrives with the end of the turn.
 - These are workload budgets, not an isolated gateway latency SLO or time-to-first-token SLO.
   Inspect gateway metrics for [the dedicated connector](https://github.com/hephaestus-build/Hephaestus/issues/1730)
   and reject capacity qualification on `429`/`413` or provider throttling, including failures hidden

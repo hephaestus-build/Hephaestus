@@ -187,8 +187,8 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
             List<CachedSlackIdentity> caches = jdbc.query(
                     """
                     SELECT author_slack_user_id,slack_team_id FROM slack_message WHERE author_member_id=?
-                    UNION SELECT m.slack_user_id,m.slack_team_id FROM mentor_slack_thread m
-                        JOIN chat_thread t ON t.id=m.chat_thread_id WHERE t.user_id=?
+                    UNION SELECT slack_user_id,slack_team_id FROM mentor_conversation
+                        WHERE user_id=? AND slack_user_id IS NOT NULL
                     """, (rs, row) -> new CachedSlackIdentity(rs.getString(1), rs.getString(2)), userId, userId);
             for (var cache : caches) {
                 if (cache.subject() == null
@@ -208,8 +208,7 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                     """
                     SELECT author_member_id FROM slack_message
                         WHERE author_slack_user_id=? AND slack_team_id=? AND author_member_id IS NOT NULL
-                    UNION SELECT t.user_id FROM mentor_slack_thread m JOIN chat_thread t ON t.id=m.chat_thread_id
-                        WHERE m.slack_user_id=? AND m.slack_team_id=?
+                    UNION SELECT user_id FROM mentor_conversation WHERE slack_user_id=? AND slack_team_id=?
                     """,
                     (rs, row) -> rs.getLong(1),
                     identity.subject(),

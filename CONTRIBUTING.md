@@ -180,7 +180,7 @@ The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-pol
 
 - `webapp`: React frontend
 - `extension`: Chrome extension
-- `server`: Java application server (includes the in-process Pi mentor agent and the webhook receiver)
+- `server`: Java application server (includes the worker that runs the Heph host, and the webhook receiver)
 - `docs`: Documentation
 
 **Infrastructure scopes** (affect runtime):
@@ -220,7 +220,7 @@ The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-pol
 
 - `fix(activity): keep the time range when switching workspaces`
 - `feat(teams): show sub-teams under their parent`
-- `feat(mentor): add conversation history`
+- `feat(mentor): reply to a Heph answer in a thread`
 - `feat(server): add an open-work endpoint`
 - `docs: update installation instructions`
 - `refactor(mentor): improve code analysis performance`

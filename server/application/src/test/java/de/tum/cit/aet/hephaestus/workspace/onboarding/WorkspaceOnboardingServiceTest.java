@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberMentorReadiness;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
 import java.time.Clock;
 import java.time.Instant;
@@ -79,6 +81,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
                 memberships,
                 links,
                 availability,
+                mock(MemberMentorReadiness.class),
                 audit,
                 Clock.fixed(NOW, ZoneOffset.UTC));
         // The account row is read back by the same method that wrote it, so the mock keeps what it saved.
@@ -98,7 +101,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         lenient().when(workspaces.findByIdForUpdate(1L)).thenReturn(Optional.of(workspace));
         when(memberships.membershipsForAccount(10L))
                 .thenReturn(List.of(new AccountWorkspaceMembershipQuery.WorkspaceMembershipView(
-                        1L, "engineering", "Engineering", "MEMBER", 20L)));
+                        1L, "engineering", "Engineering", "MEMBER", 20L, List.of(20L))));
         return workspace;
     }
 

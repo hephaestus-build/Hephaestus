@@ -104,6 +104,9 @@ if history never changes underneath an instance that already ran part of it.
    Release *N* stops reads and writes, and migrates data if necessary.
    Release *N+1* drops it. A single
    release must stay bootable against the schema left behind by the previous one.
+   An ADR can grant an exception, for example
+   [ADR 0055](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0055-one-heph-conversation-per-developer.md).
+   Such a release tells operators to stop every role before the upgrade.
 
 CI enforces 1 and 2 mechanically (see below). 3 is a review responsibility. The sole archival
 transition is the verified v0.77.4 baseline: archived files remain byte-identical and test-only.

@@ -164,9 +164,21 @@ public class SandboxReconciler {
         try {
             List<DockerOperations.ContainerInfo> containers = containerManager.listManagedContainers();
             for (DockerOperations.ContainerInfo container : containers) {
-                if (SandboxLabels.KIND_INTERACTIVE.equals(container.labels().get(SandboxLabels.KIND))) {
-                    // A mentor session names its network by session id, which is never an agent-job id.
-                    parseUuid(container.labels().get(SandboxLabels.SESSION_ID)).ifPresent(inUse::add);
+                Optional<UUID> hostId = parseUuid(container.labels().get(SandboxLabels.SESSION_ID));
+                if (hostId.isPresent()) {
+                    // A Heph host names its network by its own id, which is never an agent-job id (SandboxCreator).
+                    if (creator.liveness(container.labels()) != SandboxCreator.Liveness.GONE) {
+                        inUse.add(hostId.get());
+                        continue;
+                    }
+                    try {
+                        log.warn("Removing a Heph host its worker left behind: id={}", container.id());
+                        containerManager.forceRemove(container.id());
+                        orphanedContainers.increment();
+                    } catch (Exception e) {
+                        inUse.add(hostId.get());
+                        log.warn("Failed to remove an abandoned Heph host {}: {}", container.id(), e.getMessage());
+                    }
                     continue;
                 }
                 String jobIdStr = container.labels().get(SandboxLabels.JOB_ID);
@@ -205,9 +217,8 @@ public class SandboxReconciler {
 
     /**
      * A practice review's network and volumes follow its job, which is neither queued nor running by
-     * now. A mentor sandbox's exist long before, and between, the containers that claim them, and only
-     * the process that created them knows they are wanted, so they go only once that recorded creator
-     * is positively gone. A network with neither record predates them and could be either; it is kept.
+     * now. A Heph host's network and volumes go only once their recorded creator is positively gone
+     * ({@link SandboxCreator}). A network with neither record predates them and could be either; it is kept.
      */
     private boolean isAbandoned(Map<String, String> labels, @Nullable Instant createdAt) {
         if (labels.containsKey(SandboxLabels.SESSION_ID)) {
@@ -253,7 +264,7 @@ public class SandboxReconciler {
             List<DockerOperations.NetworkInfo> networks = networkManager.listOrphanedNetworks();
 
             for (DockerOperations.NetworkInfo network : networks) {
-                // The suffix is a job id, or a mentor session id for an interactive sandbox.
+                // The suffix is a job id, or a Heph host's id.
                 String name = network.name();
                 if (!name.startsWith(networkManager.networkPrefix())) {
                     continue;

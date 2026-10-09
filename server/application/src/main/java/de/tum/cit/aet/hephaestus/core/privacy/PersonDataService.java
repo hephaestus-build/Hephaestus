@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -187,9 +188,13 @@ public class PersonDataService {
                         throw new IllegalStateException("Erasure contributor inventory changed");
                     if (!completed.containsKey(store.store())) {
                         long count = store.erase(Objects.requireNonNull(frozen.get(store.store())));
+                        // The database clock, which every runtime shares: a Heph turn compares its own start with it.
+                        Instant erasedAt = Objects.requireNonNull(
+                                        jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
+                                .toInstant();
                         completed.put(
                                 store.store(),
-                                new PersonDataStoreReceipt(count, Instant.now(), r.getAdministratorAccountId()));
+                                new PersonDataStoreReceipt(count, erasedAt, r.getAdministratorAccountId()));
                         r.setCompletedJson(mapper.writeValueAsString(completed));
                         requests.saveAndFlush(r);
                     }

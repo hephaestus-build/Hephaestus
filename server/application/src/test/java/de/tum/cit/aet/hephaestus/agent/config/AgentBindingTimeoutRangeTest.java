@@ -18,9 +18,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * The ceiling is the load-bearing end: {@code MentorInFlightReaper} reaps a turn older than
- * {@link AgentBindingLimits#MAX_TIMEOUT_SECONDS} as abandoned, so a binding configured past that window
- * would have live turns reaped mid-answer.
+ * The ceiling is the load-bearing end: a run must fit in its sandbox's {@link ResourceLimits#MAX_RUNTIME}, so a
+ * binding configured past {@link AgentBindingLimits#MAX_TIMEOUT_SECONDS} would outlast its container.
  */
 class AgentBindingTimeoutRangeTest extends BaseUnitTest {
 
@@ -54,7 +53,7 @@ class AgentBindingTimeoutRangeTest extends BaseUnitTest {
                 .as("below the floor a run cannot finish a single model call")
                 .isNotEmpty();
         assertThat(violationsFor(AgentBindingLimits.MAX_TIMEOUT_SECONDS + 1))
-                .as("above the ceiling a turn can outlive the sweep that bills abandoned turns")
+                .as("above the ceiling a run can outlast its sandbox")
                 .isNotEmpty();
     }
 
@@ -65,7 +64,7 @@ class AgentBindingTimeoutRangeTest extends BaseUnitTest {
     }
 
     private static Set<ConstraintViolation<AgentBindingRequestDTO>> violationsFor(@Nullable Integer timeoutSeconds) {
-        AgentBindingRequestDTO request = new AgentBindingRequestDTO(1L, null, timeoutSeconds, null, null, null);
+        AgentBindingRequestDTO request = new AgentBindingRequestDTO(1L, null, timeoutSeconds, null, null);
         return validator.validate(request).stream()
                 .filter(v -> v.getPropertyPath().toString().equals("timeoutSeconds"))
                 .collect(Collectors.toSet());

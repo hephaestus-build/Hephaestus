@@ -16,7 +16,9 @@ Three boolean properties control the roles:
 | Worker  | `hephaestus.runtime.worker.enabled`  | `true`  |
 | Webhook | `hephaestus.runtime.webhook.enabled` | `true`  |
 
-All three properties default to on, which starts the monolith role set. Heph also requires a connected worker control channel, even when server and worker roles share that JVM. It has no direct Docker fallback.
+All three properties default to on, which starts the monolith role set.
+Heph turns need at least one process with the worker role, even when the server and worker roles share that JVM.
+The server role never runs a Heph turn itself.
 
 ## Boot log
 
@@ -177,10 +179,10 @@ A server pod with the worker role enabled uses one root for both.
 The webhook role has no Git.
 
 Sandbox maintenance follows the worker role in both split-out and single-container deployments.
-Idle mentor sessions and orphaned resources are cleaned periodically without enabling server-wide
-scheduled jobs on the worker. Stalled writes are checked on a separate thread so a slow Docker cleanup
-cannot delay their timeout. API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or
-startup sync-job recovery.
+The worker removes orphaned sandbox resources at startup and then at a fixed interval.
+These resources include a Heph host whose worker is gone.
+This maintenance does not enable server-wide scheduled jobs on the worker.
+API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or startup sync-job recovery.
 
 The worker application HTTP endpoint binds to loopback. Every role has a separate private
 management listener on port **9090**, including a single-JVM topology. Management does not run on
@@ -216,71 +218,179 @@ In a split-pod topology, both pods need it:
 
 A pod without this setting claims nothing and spends nothing.
 
-## Interactive mentor turns
+## Heph turns
 
-Interactive mentor turns run their sandboxes on **connected workers**, for both web chat and Slack DMs.
+A Heph turn is one answer from Heph to one question, in the webapp or in a Slack DM.
+Turns run in the **Heph host**, one long-lived container on each worker.
 The application server keeps these functions:
 
-- HTTP/SSE and Slack delivery.
-- Admission and budget checks.
-- Thread persistence and `fetch_context`.
+- The web API, the live answer stream, and Slack delivery.
+- A first admission check when a question arrives. The worker admits the turn again, with the budget check, when it claims it.
+- The Heph conversation store in PostgreSQL.
 
-It needs no Docker client when `hephaestus.runtime.worker.enabled=false`.
-A worker with spare mentor capacity owns each live session.
-No in-process fallback exists.
+The server role needs no Docker client and never connects to a Heph host.
 `AGENT_ENABLED` controls queued practice reviews, not Heph.
-The authenticated worker hub relays session commands and runner frames.
 
-The server sends a session's proxy route and turn billing binding to its worker.
-The worker resolves provider keys and never sends them to the sandbox.
+### Dispatch
+
+When a developer asks a question, the server stores it in PostgreSQL with a queued turn.
+Each worker listens for turn changes through PostgreSQL `LISTEN/NOTIFY`.
+It also checks the queue every 30 seconds as a backstop.
+A worker with free capacity claims the next turn and holds a lease on it.
+The worker runs the turn in its Heph host and writes the answer to PostgreSQL while Heph writes it.
+The server then sends the answer to the webapp or posts it to Slack.
+
+A turn that finds no free capacity waits in the queue until a worker can claim it.
+Each conversation runs one turn at a time.
+A thread is a separate conversation, so a thread turn can run at the same time as a turn in the main conversation.
+Questions that arrive during a turn wait in their conversation.
+When `hephaestus.mentor.turn.max-follow-ups` questions wait, Hephaestus refuses the next one.
+
+### Heph capacity
+
+`hephaestus.worker.capacity.mentor-max` sets how many Heph turns one worker runs at once.
+The default is 8.
+The model provider usually sets the real limit, not the worker:
+
+- A turn uses little of the Heph host. In a load test, one host ran 90 turns at once in 364 MiB of memory.
+- Each turn that streams writes its partial answer up to 4 times each second, one short statement each time.
+- A provider that queues calls past its concurrency limit makes each call slower.
+  In the same load test, one provider key answered a single call in 4 seconds.
+  With 8 calls at once, each call took 34 seconds.
+
+A turn that waits in the Hephaestus queue does not count against its deadline.
+A call that waits at the provider counts against the deadline and against the model idle timeout.
+Thus, find how many calls your provider serves at once at full speed.
+Keep the total capacity of all workers at or below that number.
+
+Within that limit, size the capacity from the expected load.
+Concurrent turns are about the questions each second multiplied by the seconds for each answer.
+For example, 1.8 questions each second with 4.5-second answers need 8 concurrent turns.
+`mentor_turn_queue_wait_seconds` and `mentor_turn_queued` show how long and how many questions wait ([Observability](./observability.mdx#heph-turn-metrics)).
+
+### Lease, retry, and deadline
+
+The worker renews the lease of each running turn at one third of `hephaestus.mentor.turn.lease`.
+If the worker or its Heph host stops, the lease expires.
+The server's lease reaper then returns the turn to the queue once, and any worker can claim it.
+If the lease of the second attempt also expires, the turn fails with **Heph could not finish this reply. Try again.**
+
+The timeout of the workspace's Heph model binding is the deadline of each attempt.
+At the deadline, the worker stops the turn.
+The turn fails with **Heph took too long to reply and stopped. Try again.**
+The worker ends a stopped turn itself if the Heph host does not end it within 30 seconds.
+
+The worker's LLM proxy cuts a Heph model call whose provider stays silent too long.
+Two bounds apply:
+
+- `hephaestus.mentor.turn.model-first-byte-timeout` (default 5 minutes) bounds the wait for the response headers.
+  A provider can queue a request before it answers, so this bound is the longer one.
+- `hephaestus.mentor.turn.model-idle-timeout` (default 2 minutes) bounds each gap in the stream after the headers.
+
+Any byte counts, also an SSE comment that a gateway sends to keep the connection alive.
+The turn's deadline also bounds both, because the stop at the deadline cancels the call.
+The turn fails with **Heph's AI model stopped responding, so Heph could not finish this reply. Try again in a moment.**
+The worker logs the cut call and the failure with the reason `STALLED` and the bound that was passed.
+
+In a load test, the slowest 5 % of single calls took 21 seconds, and calls under load took 34 seconds on average.
+Both defaults are above these times.
+A gateway that buffers the whole answer and sends nothing until then shows a slow answer as one long silence.
+Configure it to stream or to send keep-alive comments, for example with `proxy_buffering off` in nginx.
+Otherwise, set the timeout above your longest answer.
+
+### Provider breaker
+
+Each worker keeps a circuit breaker for each provider connection.
+A call that stalls, that cannot connect, or that ends with a server error counts as a failure.
+When at least 3 calls in 5 minutes ended, and half of them failed, the breaker opens for 60 seconds.
+
+While it is open, the worker starts no Heph turn on that connection.
+Each such turn fails at once with **Heph's AI model is not responding right now, so Heph did not start this reply. Try again in a few minutes.**
+Model calls of turns that already run, and of practice reviews, get an error at once.
+
+After 60 seconds, one call probes the provider.
+If it succeeds, the breaker closes.
+If it fails, the breaker opens again.
+
+A rate limit, a request error, or a client that went away does not count.
+[Observability](./observability.mdx#heph-turn-metrics) names the breaker's metrics.
+
+### The Heph host
+
+Each worker starts its Heph host when it claims its first turn.
+A worker that never claims a turn starts no host.
+The host runs from the agent image with these fixed limits:
+
+- 2 GiB of memory.
+- 2 CPUs.
+- 256 processes.
+
+These limits do not come from the `SANDBOX_*` variables, and the host does not count against `SANDBOX_MAX_CONCURRENT`.
+The host has its own internal Docker network and volumes.
+Its container has the label `hephaestus.kind=heph-host`.
+
+Two cases change the network:
+
+- A worker that runs on the machine itself, outside any container, cannot join a Docker network.
+  It gives its host an ordinary bridge network with internet access (see the [threat model](./threat-model.mdx), SB-3).
+  The host reaches the worker through `host.docker.internal`.
+  Local development runs this way.
+- A worker in a container that it cannot identify starts no host.
+  Each Heph turn on it fails with **Heph could not start. Try again in a moment.**
+  The worker logs why.
+  [Docker configuration](./configuration-readiness.mdx#docker-configuration) gives the hostname rule.
+
+The host is ready when it opens its command channel to the worker's sandbox gateway.
+If the host cannot start, or the channel does not open within 3 minutes, the turn fails.
+The developer then sees **Heph could not start. Try again in a moment.**
+
+If the command channel closes, the worker removes the host.
+The worker pings the channel every 5 seconds.
+If the host leaves 6 pings in a row without an answer, about 30 seconds, the worker closes the channel and removes the host.
+Before it removes a host, the worker logs the end of the host's output at `WARN`.
+
+A turn that ran in a removed host runs again when its lease expires, if it was on its first attempt.
+A turn on its second attempt fails.
+The next turn that the worker claims starts a new host.
+On a graceful drain, the worker stops claiming turns and waits up to 2 minutes for its running turns.
+Then it removes the host.
+If a worker stops without a drain, sandbox maintenance removes its host (see [Configuration readiness](./configuration-readiness.mdx#removing-leftover-sandbox-networks)).
+
+The worker gives each attempt a credential that is valid only for that turn.
+The worker resolves provider keys and never sends them to the host.
 PostgreSQL remains the billing record.
 
-When no worker can admit a new session, Heph says **“Heph is busy. Try again.”** A drain rejects
-new sessions and ends existing streams. After idle eviction, a drain or a worker restart, the next
-turn opens a session on an available worker and restores the saved `session_jsonl`. Sticky server
-affinity retains the live placement. Changing the model, route, image, runtime inputs or limits
-replaces the session instead of reusing an incompatible runtime.
+### Live answers
 
-Each developer has at most one live Heph sandbox per workspace on its selected worker.
-Startup takes several seconds because it requires these resources and actions:
+The server role serves the live answer stream at `GET /api/workspaces/{slug}/mentor/events`.
+It sends a `ping` comment every 20 seconds.
+The reverse proxy must keep an idle connection open for longer than 20 seconds.
+The bundled Traefik keeps it open for 300 seconds.
+A developer can have at most 10 open streams.
 
-- A job network and volumes.
-- The workspace initializer.
-- The runtime container.
-- The runner's SDK load.
+The `mentor-turns` rate limit applies to `POST /api/workspaces/{slug}/mentor/turns`.
+`HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY` (default `20`) and `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_PERIOD` (default `10m`) set it.
+The limit counts the questions of one account.
+A load test that asks more questions as one account must raise the capacity.
 
-Where Hephaestus can anticipate a message, it starts the sandbox **before** the first message:
+### Tunables
 
-- **Opening Heph** in the webapp, or coming back to its browser tab, calls
-  `POST /api/workspaces/{slug}/mentor/sandbox`. The server answers `202` at once and starts the sandbox
-  in the background. It sends no prompt, calls no model and writes no thread.
-- **Opening the Hephaestus app in Slack** (`app_home_opened`, either tab) does the same for a linked
-  developer.
+| Property                                    | Default       | Effect                                                                  |
+| ------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
+| `hephaestus.worker.capacity.mentor-max`     | `auto` (8)    | The number of Heph turns that one worker's Heph host runs at once ([Heph capacity](#heph-capacity)) |
+| `hephaestus.mentor.turn.lease`              | `PT1M`        | The lease of a running turn. The worker renews it at one third of this. |
+| `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M`  | How long one model call of a turn may wait for the provider's response headers |
+| `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn may send nothing |
+| `hephaestus.mentor.turn.lease-reaper-delay` | `PT15S`       | The interval at which the server looks for expired leases               |
+| `hephaestus.mentor.turn.max-follow-ups`     | `3`           | The number of questions that can wait in one conversation or Heph thread |
+| `hephaestus.mentor.agent.max-prompt-chars`  | `100000`      | The maximum length of a question sent in the webapp, in characters      |
 
-Preparation has no effect in these cases:
+Give all roles the same values.
+The Compose files forward only the capacity, as `HEPHAESTUS_WORKER_MENTOR_MAX`.
+To change another key, add its environment variable to the services with a Compose override.
+An example is `HEPHAESTUS_MENTOR_TURN_LEASE`.
 
-- The sandbox is already warm.
-- A turn uses the sandbox.
-- The developer has no Heph model.
-- The developer's budget is spent.
-- `hephaestus.mentor.max-sessions-per-user` or `hephaestus.mentor.max-sessions-total` has been reached.
-
-A turn that arrives during preparation waits for that sandbox instead of starting another.
-
-A sandbox stays warm for `hephaestus.mentor.idle-ttl-seconds` (default `900`) after its last frame.
-Each idle runner holds about 165 MB, so a longer TTL keeps more memory in use between messages. The
-session caps, not the TTL, bound the total. The Traefik sticky cookie's `maxAge` in
-`docker/compose.app.yaml` follows the TTL.
-Change both together.
-
-A worker restart or deploy ends its
-Heph sessions. The next message restores the saved thread on an available worker.
-`mentor_turn_first_token_seconds{sandbox="cold"}` counts the turns that waited
-([Observability](./observability.mdx#heph-turn-metrics)).
-
-Attachment and a prepare `202` indicate transport or acceptance, not SDK readiness.
-`mentor_turn_runtime_ready_seconds` measures from turn acceptance until `open_thread` confirms that
-the runtime is usable. First-token and whole-turn timers measure different boundaries.
+[Observability](./observability.mdx#heph-turn-metrics) lists the Heph turn metrics.
 
 ## Worker pod env vars
 
@@ -295,22 +405,25 @@ AGENT_ENABLED=true
 ```
 
 Without the last line, the worker boots and registers but claims no practice-review jobs.
-It can still serve Heph: `AGENT_ENABLED` does not gate interactive sessions.
+It can still run Heph turns: `AGENT_ENABLED` does not gate them.
 
 No LLM environment variables are necessary.
-The LLM proxy runs in-process on this pod.
-It follows the worker/sandbox capability, not `AGENT_ENABLED`.
+The LLM proxy runs in-process on each pod with the worker role, whatever `AGENT_ENABLED` says.
+It serves queued practice reviews and Heph turns.
 It reads providers from the same instance/workspace catalog as the app pod.
 
 1. Register providers at runtime under Instance admin → AI models, or under the workspace's AI models page.
 2. Never register providers through an environment variable.
 
-Capacity defaults to `auto` and auto-sizes from `Runtime.availableProcessors()`. Override only if the
-host is noisy — and mind the name: the JVM binds
-`HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX` / `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`. The shorter
-`HEPHAESTUS_WORKER_REVIEW_MAX` / `_MENTOR_MAX` are **compose-file aliases only**
-(`docker/compose.app.yaml` translates them). Set them on a K8s or systemd deployment and they are
-silently ignored.
+Both capacities default to `auto`.
+Review capacity then sizes from `Runtime.availableProcessors()`.
+[Tunables](#tunables) gives the Heph capacity.
+Override them only if the host is noisy.
+
+The JVM binds `HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX` and `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`.
+The shorter `HEPHAESTUS_WORKER_REVIEW_MAX` and `HEPHAESTUS_WORKER_MENTOR_MAX` are **Compose-file aliases only**.
+`docker/compose.app.yaml` translates them.
+A Kubernetes or systemd deployment ignores them without a warning.
 
 `SANDBOX_MAX_CONCURRENT` also caps review capacity.
 A worker never claims more concurrent reviews than the host permits concurrent sandboxes.

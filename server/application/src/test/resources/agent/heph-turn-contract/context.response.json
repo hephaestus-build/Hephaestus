@@ -1,0 +1,13 @@
+{
+  "sessionId": "5a0e9d0c-0f61-4a55-9c4e-6a4b7f3f2d10",
+  "entries": [],
+  "prompt": "[Thu 2026-10-08 09:12 UTC · app] How should I pin the deployment image?",
+  "model": {
+    "apiProtocol": "openai-responses",
+    "modelId": "test-model",
+    "contextWindow": 200000,
+    "maxOutputTokens": 8192,
+    "reasoningEffort": null
+  },
+  "situation": "<situation>\nNow: Thu 2026-10-08 09:12 UTC.\n</situation>"
+}

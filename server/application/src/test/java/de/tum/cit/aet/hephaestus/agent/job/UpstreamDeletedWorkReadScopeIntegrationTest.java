@@ -527,7 +527,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
 
     private List<Long> mentorAuthoredPullRequestIds() {
         return mentorContextQueryRepository
-                .findRecentAuthoredPullRequests(workspace.getId(), author.getId(), FIRST_PAGE)
+                .findRecentAuthoredPullRequests(workspace.getId(), providerId(), author.getId(), FIRST_PAGE)
                 .stream()
                 .map(PullRequest::getId)
                 .toList();

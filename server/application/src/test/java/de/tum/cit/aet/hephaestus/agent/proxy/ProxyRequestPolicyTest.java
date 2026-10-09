@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -30,7 +30,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
     private AgentJobRepository jobs;
 
     @Mock
-    private ChatMessageRepository messages;
+    private MentorTurnRepository turns;
 
     @Mock
     private ReviewMemberAiPolicy reviews;
@@ -45,7 +45,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        policy = new ProxyRequestPolicy(egress, jobs, messages, reviews, routing);
+        policy = new ProxyRequestPolicy(egress, jobs, turns, reviews, routing);
     }
 
     private ProxyRouting request(LlmUsageSourceType source) {
@@ -78,18 +78,10 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
 
     @Test
     void shouldUseTheDurableMentorTurnDeveloperNotASuppliedUserId() {
-        when(messages.findDeveloperIdByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(20L));
+        when(turns.findDeveloperIdByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(20L));
         when(routing.allows(1L, 20L, model)).thenReturn(false);
         assertThat(policy.allows(request(LlmUsageSourceType.MENTOR_TURN))).isFalse();
         verify(routing).allows(1L, 20L, model);
         verifyNoInteractions(jobs);
-    }
-
-    @Test
-    void shouldRequireABillableExecution() {
-        var request = new ProxyRouting(
-                "test", "openai-completions", "https://example.invalid", FundingSource.INSTANCE, 7L, 8L, 1L, null);
-        assertThat(policy.allows(request)).isFalse();
-        verifyNoInteractions(jobs, messages, routing, reviews);
     }
 }

@@ -131,7 +131,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
                 createdAt);
     }
 
-    private static DockerOperations.ContainerInfo mentorContainer(String id, UUID sessionId) {
+    private static DockerOperations.ContainerInfo hostContainer(String id, UUID sessionId) {
         return new DockerOperations.ContainerInfo(
                 id,
                 "test",
@@ -139,7 +139,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
                         SandboxLabels.OWNER,
                         "default",
                         SandboxLabels.KIND,
-                        SandboxLabels.KIND_INTERACTIVE,
+                        SandboxLabels.KIND_HEPH_HOST,
                         SandboxLabels.SESSION_ID,
                         sessionId.toString()),
                 "running",
@@ -380,15 +380,40 @@ class SandboxReconcilerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldKeepANetworkWhenALiveMentorSessionOwnsIt() {
+        void shouldRemoveAHephHostWhenItsWorkerIsGone() {
+            UUID hostId = UUID.randomUUID();
+            var labels = Map.of(
+                    SandboxLabels.OWNER,
+                    "default",
+                    SandboxLabels.KIND,
+                    SandboxLabels.KIND_HEPH_HOST,
+                    SandboxLabels.SESSION_ID,
+                    hostId.toString(),
+                    SandboxLabels.CREATOR_CONTAINER,
+                    "gone-worker",
+                    SandboxLabels.CREATOR_STARTED_AT,
+                    "t1");
+            when(jobRepository.findByStatusIn(any())).thenReturn(List.of());
+            when(containerManager.listManagedContainers())
+                    .thenReturn(List.of(
+                            new DockerOperations.ContainerInfo("ctr-host", "test", labels, "running", LONG_AGO)));
+            when(creatorContainers.inspectContainerIdentity("gone-worker")).thenReturn(Optional.empty());
+            when(networkManager.listOrphanedNetworks()).thenReturn(List.of());
+
+            reconciler.periodicReconciliation();
+
+            verify(containerManager).forceRemove("ctr-host");
+        }
+
+        @Test
+        void shouldKeepANetworkWhenARunningHephHostOwnsIt() {
             UUID sessionId = UUID.randomUUID();
 
             when(jobRepository.findByStatusIn(any())).thenReturn(List.of());
-            when(containerManager.listManagedContainers())
-                    .thenReturn(List.of(mentorContainer("ctr-mentor", sessionId)));
+            when(containerManager.listManagedContainers()).thenReturn(List.of(hostContainer("ctr-host", sessionId)));
             when(networkManager.listOrphanedNetworks())
                     .thenReturn(List.of(new DockerOperations.NetworkInfo(
-                            "net-mentor",
+                            "net-host",
                             "hephaestus-sandbox-default--" + sessionId,
                             LONG_AGO,
                             Map.of(SandboxLabels.SESSION_ID, sessionId.toString()))));
@@ -503,12 +528,12 @@ class SandboxReconcilerTest extends BaseUnitTest {
 
     /**
      * A real network manager and creator over the Docker boundary: what reaches the daemon is what is
-     * asserted. The mentor admission creates its network and volumes minutes before any container
+     * asserted. A Heph host launch creates its network and volumes minutes before any container
      * claims them — through an image pull, the initializer, and the handoff after the initializer is
      * removed and before the runtime is created — so the sweep below sees no claiming container.
      */
     @Nested
-    class InteractiveAdmission {
+    class HostAdmission {
 
         private static final String RECONCILER_SHORT_ID = "0a1b2c3d4e5f";
         private static final String RECONCILER_ID = RECONCILER_SHORT_ID + "6a7b8c9d0e1f";
@@ -548,7 +573,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
                     SandboxLabels.OWNER,
                     "default",
                     SandboxLabels.KIND,
-                    SandboxLabels.KIND_INTERACTIVE,
+                    SandboxLabels.KIND_HEPH_HOST,
                     SandboxLabels.SESSION_ID,
                     SESSION.toString(),
                     SandboxLabels.CREATOR_CONTAINER,

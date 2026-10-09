@@ -12,8 +12,11 @@ import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
-import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -30,9 +33,11 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,13 +62,19 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Autowired
-    private ChatThreadRepository threads;
+    private IdentityLinkRepository identityLinks;
 
     @Autowired
     private PracticeRepository practices;
 
     @Autowired
-    private IdentityLinkRepository identityLinks;
+    private MentorConversationService conversations;
+
+    @Autowired
+    private MentorTurnService turns;
+
+    @Autowired
+    private MentorEntryRepository entries;
 
     @Autowired
     private ActivityEventRepository activityEvents;
@@ -218,30 +229,37 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldListOnlyTheViewedUsersConversationsWhenOthersExistInAndOutsideTheWorkspace() {
+    void shouldListOnlyTheViewedUsersConversationWhenOthersExistInAndOutsideTheWorkspace() {
         User other = persistUser("another-view-user");
         ensureWorkspaceMembership(workspace, other, WorkspaceMembership.WorkspaceRole.MEMBER);
-        ChatThread own = thread(workspace, viewed, "Viewed user's conversation");
-        thread(workspace, other, "Other private conversation");
+        MentorTurnService.Submission own = question(workspace, viewed, "Viewed user's question");
+        MentorTurnService.Submission colleagues = question(workspace, other, "Other private question");
         Workspace elsewhere = createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
-        thread(elsewhere, viewed, "Other workspace conversation");
-        sessionRequest("/workspaces/acme/mentor/threads")
+        MentorTurnService.Submission foreign = question(elsewhere, viewed, "Other workspace question");
+
+        sessionRequest("/workspaces/acme/mentor/entries")
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.length()")
-                .isEqualTo(1)
-                .jsonPath("$[0].id")
-                .isEqualTo(own.getId().toString());
+                .jsonPath("$.entries[*].id")
+                .value(ids -> assertThat(ids)
+                        .asInstanceOf(InstanceOfAssertFactories.LIST)
+                        .containsExactly(own.question().getId().toString())
+                        .doesNotContain(
+                                colleagues.question().getId().toString(),
+                                foreign.question().getId().toString()));
+        assertThat(userViewRowsFor(viewed)).isOne();
     }
 
     @Test
     void shouldNotDiscloseAConversationWhenItBelongsToAnotherMember() {
         User other = persistUser("another-view-user");
         ensureWorkspaceMembership(workspace, other, WorkspaceMembership.WorkspaceRole.MEMBER);
-        ChatThread foreign = thread(workspace, other, "Other private conversation");
-        sessionRequest("/workspaces/acme/mentor/threads/" + foreign.getId())
+        MentorTurnService.Submission colleagues = question(workspace, other, "Other private question");
+
+        sessionRequest("/workspaces/acme/mentor/entries/"
+                        + colleagues.question().getId() + "/thread")
                 .exchange()
                 .expectStatus()
                 .isNotFound()
@@ -252,8 +270,9 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldNotDiscloseAConversationWhenItBelongsToAnotherWorkspace() {
         User other = persistUser("another-view-user");
         Workspace elsewhere = createWorkspace("other-view", "Other view", other.getLogin(), AccountType.USER, other);
-        ChatThread foreignWorkspace = thread(elsewhere, viewed, "Other workspace conversation");
-        sessionRequest("/workspaces/acme/mentor/threads/" + foreignWorkspace.getId())
+        MentorTurnService.Submission foreign = question(elsewhere, viewed, "Other workspace question");
+
+        sessionRequest("/workspaces/acme/mentor/entries/" + foreign.question().getId() + "/thread")
                 .exchange()
                 .expectStatus()
                 .isNotFound()
@@ -292,7 +311,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldDenyNormalUserViewReadsToAWorkspaceOwnerWhoIsNotAnInstanceAdministrator() {
         Account owner = viewedUsersOwnAccount();
 
-        sessionRequest("/workspaces/acme/mentor/threads", "mock-jwt-member-" + owner.getId())
+        sessionRequest("/workspaces/acme/practice-profile/overview", "mock-jwt-member-" + owner.getId())
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -306,7 +325,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         jdbc.execute("ALTER TABLE auth_event ADD CONSTRAINT reject_user_view_test "
                 + "CHECK (event_type <> 'USER_VIEW' OR viewed_user_id <> " + viewed.getId() + ") NOT VALID");
         try {
-            (selection ? request(viewedPath()) : sessionRequest("/workspaces/acme/mentor/threads"))
+            (selection ? request(viewedPath()) : sessionRequest("/workspaces/acme/practice-profile/overview"))
                     .exchange()
                     .expectStatus()
                     .isEqualTo(503)
@@ -445,25 +464,26 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldRefuseToDeleteTheViewedUsersConversationAndRecordNothing() {
-        ChatThread own = thread(workspace, viewed, "Viewed user's conversation");
+    void shouldRefuseToDeleteTheMessageAndRecordNothingWhenAnAdminViewsTheUser() {
+        MentorTurnService.Submission own = question(workspace, viewed, "Viewed user's question");
 
         client.delete()
-                .uri("/workspaces/acme/mentor/threads/" + own.getId())
+                .uri("/workspaces/acme/mentor/entries/" + own.question().getId())
                 .headers(viewHeaders(token(), viewed.getId()))
                 .exchange()
                 .expectStatus()
                 .isForbidden()
                 .expectBody(Void.class);
 
-        assertThat(threads.existsById(own.getId())).isTrue();
+        assertThat(entries.findById(own.question().getId()).orElseThrow().isRedacted())
+                .isFalse();
         assertThat(userViewRowsFor(viewed)).isZero();
     }
 
     @Test
     void shouldRefuseAnOptionsRequestCarryingTheViewAndRecordNothing() {
         client.options()
-                .uri("/workspaces/acme/mentor/threads")
+                .uri("/workspaces/acme/practice-profile/overview")
                 .headers(viewHeaders(token(), viewed.getId()))
                 .exchange()
                 .expectStatus()
@@ -476,7 +496,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldRefuseAHeadRequestCarryingTheViewAndRecordNothing() {
         client.head()
-                .uri("/workspaces/acme/mentor/threads")
+                .uri("/workspaces/acme/practice-profile/overview")
                 .headers(viewHeaders(token(), viewed.getId()))
                 .exchange()
                 .expectStatus()
@@ -513,7 +533,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldRecordTheReasonAndTheReadWithItsQueryWhenANormalAppReadIsViewed() {
-        sessionRequest("/workspaces/acme/mentor/threads?page=0")
+        sessionRequest("/workspaces/acme/practice-profile/overview?page=0")
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -523,7 +543,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 "SELECT details::text FROM auth_event WHERE event_type = 'USER_VIEW' AND viewed_user_id = ?",
                 String.class,
                 viewed.getId());
-        assertThat(details).contains("Support").contains("/workspaces/acme/mentor/threads?page=0");
+        assertThat(details).contains("Support").contains("/workspaces/acme/practice-profile/overview?page=0");
     }
 
     @Test
@@ -547,7 +567,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @ValueSource(strings = "not-a-user")
     void shouldRejectAViewAndRecordNothingWhenTheViewedUserIsNotAnId(@Nullable String userHeader) {
         client.get()
-                .uri("/workspaces/acme/mentor/threads")
+                .uri("/workspaces/acme/practice-profile/overview")
                 .headers(headers -> {
                     headers.setBearerAuth(token());
                     headers.set(UserViewContextHolder.WORKSPACE_HEADER, "acme");
@@ -639,6 +659,16 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         };
     }
 
+    /** A question {@code author} asked Heph in {@code where}, with its queued turn. */
+    private MentorTurnService.Submission question(Workspace where, User author, String text) {
+        MentorConversation main = conversations.findOrCreateMain(where.getId(), author.getId(), Set.of(author.getId()));
+        return turns.submit(
+                where.getId(),
+                main.getId(),
+                new MentorTurnService.Question(
+                        MentorTurn.Surface.APP, text, UUID.randomUUID().toString(), null, null));
+    }
+
     /** One review event by {@code actor} in a connected repository of the viewed workspace. */
     private void recordReview(User actor) {
         UUID id = UUID.randomUUID();
@@ -664,15 +694,6 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 repository.getId(),
                 ActivityTargetType.REVIEW.getValue(),
                 id.getMostSignificantBits());
-    }
-
-    private ChatThread thread(Workspace ownerWorkspace, User owner, String title) {
-        ChatThread thread = new ChatThread();
-        thread.setId(UUID.randomUUID());
-        thread.setWorkspace(ownerWorkspace);
-        thread.setUser(owner);
-        thread.setTitle(title);
-        return threads.save(thread);
     }
 
     private void persistGuidedPractice(Workspace ownerWorkspace) {

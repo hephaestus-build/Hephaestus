@@ -1,4 +1,5 @@
 import { UserRoundCog } from "lucide-react";
+import { useState } from "react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -29,9 +30,15 @@ import {
 	SlackPreferencesSection,
 	type SlackPreferencesSectionProps,
 } from "./SlackPreferencesSection";
+import {
+	hasWeeklyDigest,
+	WeeklyDigestSection,
+	type WeeklyDigestSectionProps,
+} from "./WeeklyDigestSection";
 
 export interface SettingsPageProps {
 	emailPreferencesProps: EmailPreferencesSectionProps;
+	weeklyDigestProps: WeeklyDigestSectionProps;
 	practiceFeedbackProps: PracticeFeedbackSectionProps;
 	researchProps: ResearchParticipationSectionProps;
 	showResearchSection: boolean;
@@ -49,6 +56,7 @@ export interface SettingsPageProps {
 
 export function SettingsPage({
 	emailPreferencesProps,
+	weeklyDigestProps,
 	practiceFeedbackProps,
 	researchProps,
 	showResearchSection,
@@ -72,6 +80,15 @@ export function SettingsPage({
 
 	const practiceFeedbackPending = isLoading || practiceFeedbackLoading;
 	const researchPending = isLoading || researchLoading;
+
+	// Once shown with its switch, the weekly digest stays for this visit: turning it off where none
+	// is written would otherwise remove the switch the reader just used.
+	const digestState = weeklyDigestProps.state;
+	const [keepWeeklyDigest, setKeepWeeklyDigest] = useState(false);
+	if (digestState.status === "ready" && hasWeeklyDigest(digestState) && !keepWeeklyDigest) {
+		setKeepWeeklyDigest(true);
+	}
+	const showWeeklyDigest = keepWeeklyDigest || hasWeeklyDigest(digestState);
 
 	return (
 		<PageLayout>
@@ -123,6 +140,13 @@ export function SettingsPage({
 
 				<Separator />
 				<PublicActivitySection {...publicActivityProps} />
+
+				{showWeeklyDigest && (
+					<>
+						<Separator />
+						<WeeklyDigestSection {...weeklyDigestProps} />
+					</>
+				)}
 
 				{hasEmailPreferences(emailPreferencesProps.state) && (
 					<>

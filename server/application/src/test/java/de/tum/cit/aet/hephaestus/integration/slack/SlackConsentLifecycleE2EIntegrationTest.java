@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.agent.job.ConversationReviewSubmitter;
 import de.tum.cit.aet.hephaestus.agent.job.conversation.ConversationThreadTriggerScheduler;
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -31,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsen
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelConsentGate;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentGate;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
@@ -179,7 +181,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         SlackMentorIdentityResolver identityResolver = mock(SlackMentorIdentityResolver.class);
         when(identityResolver.resolveMemberId(workspaceId, TEAM, "U1")).thenReturn(Optional.of(u1MemberId));
         when(identityResolver.resolveMemberId(workspaceId, TEAM, "U2")).thenReturn(Optional.of(u2MemberId));
-        when(identityResolver.resolveActiveMemberId(any(Long.class), any(), any()))
+        when(identityResolver.resolveActiveMember(any(Long.class), any(), any()))
                 .thenReturn(Optional.empty());
 
         slackMessageService = mock(SlackMessageService.class);
@@ -214,7 +216,9 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 mock(SlackAppHomeService.class),
                 new SlackParticipantConsentService(participantConsentRepository),
                 new SlackPersonErasureService(messageRepository, threadRepository, conversationFeedbackErasure),
-                slackMessageService);
+                slackMessageService,
+                mock(SlackMentorService.class),
+                mock(WeeklyDigestSubscriptions.class));
     }
 
     @Test

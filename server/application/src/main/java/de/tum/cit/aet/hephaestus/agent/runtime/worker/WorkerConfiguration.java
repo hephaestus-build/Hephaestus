@@ -2,9 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.runtime.worker;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
-import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameCodec;
@@ -15,7 +12,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.ToDoubleFunction;
 import org.springframework.beans.factory.SmartInitializingSingleton;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationEventPublisher;
@@ -67,13 +63,6 @@ public class WorkerConfiguration {
         capacityGauge(
                 registry,
                 state,
-                AgentMetrics.WORKER_CAPACITY_TOTAL,
-                "mentor",
-                s -> s.mentorMax(),
-                "Configured maximum concurrent mentor sessions");
-        capacityGauge(
-                registry,
-                state,
                 AgentMetrics.WORKER_CAPACITY_IN_FLIGHT,
                 "review",
                 s -> s.snapshot().inFlightReview(),
@@ -81,24 +70,10 @@ public class WorkerConfiguration {
         capacityGauge(
                 registry,
                 state,
-                AgentMetrics.WORKER_CAPACITY_IN_FLIGHT,
-                "mentor",
-                s -> s.snapshot().inFlightMentor(),
-                "Mentor sessions currently open");
-        capacityGauge(
-                registry,
-                state,
                 AgentMetrics.WORKER_CAPACITY_SPARE,
                 "review",
                 s -> s.snapshot().spareReview(),
                 "Spare review slots");
-        capacityGauge(
-                registry,
-                state,
-                AgentMetrics.WORKER_CAPACITY_SPARE,
-                "mentor",
-                s -> s.snapshot().spareMentor(),
-                "Spare mentor slots");
     }
 
     private static void capacityGauge(
@@ -163,25 +138,13 @@ public class WorkerConfiguration {
     }
 
     @Bean
-    WorkerMentorSessions workerMentorSessions(
-            WorkerControlClient client,
-            WorkerCapacityState capacity,
-            @Qualifier("dockerInteractiveSandboxAdapter") InteractiveSandboxService sandbox,
-            MentorProxyCredentialRegistry credentials,
-            ObjectMapper mapper,
-            InteractiveSandboxProperties properties) {
-        return new WorkerMentorSessions(client, capacity, sandbox, credentials, mapper, properties);
-    }
-
-    @Bean
     WorkerDrainCoordinator workerDrainCoordinator(
             WorkerControlClient client,
             WorkerCapacityState state,
             WorkerProperties properties,
             Optional<AgentJobExecutor> executor,
-            Optional<WorkerMentorSessions> mentorSessions,
             ApplicationEventPublisher events,
             MeterRegistry meterRegistry) {
-        return new WorkerDrainCoordinator(client, state, properties, executor, mentorSessions, events, meterRegistry);
+        return new WorkerDrainCoordinator(client, state, properties, executor, events, meterRegistry);
     }
 }

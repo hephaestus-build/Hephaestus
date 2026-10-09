@@ -332,8 +332,7 @@ class ReviewAttemptsContentSourceIntegrationTest extends AbstractPracticeReviewI
     private JsonNode overview() {
         Map<String, byte[]> files = new HashMap<>();
         source.contribute(
-                new ContextRequest.MentorChatRequest(workspace.getId(), student.getId(), UUID.randomUUID(), null),
-                files);
+                new ContextRequest.HephTurnRequest(workspace.getId(), student.getId(), UUID.randomUUID(), null), files);
         return objectMapper.readTree(Objects.requireNonNull(files.get(ReviewAttemptsContentSource.OUTPUT_KEY)));
     }
 

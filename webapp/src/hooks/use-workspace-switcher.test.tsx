@@ -165,11 +165,8 @@ describe("useWorkspaceSwitcher", () => {
 		await waitFor(() => expect(router.state.location.href).toBe("/w/alpha/teams"));
 	});
 
-	it.each([
-		["mentor thread", "/w/alpha/mentor/thread-1?message=foreign", "mentor/$threadId"],
-		["member", "/w/alpha/user/octocat?group=foreign", "user/$username"],
-	])("falls back to workspace home from a %s", async (_name, initialEntry, path) => {
-		const router = renderRoute(initialEntry, path);
+	it("falls back to workspace home from a member", async () => {
+		const router = renderRoute("/w/alpha/user/octocat?group=foreign", "user/$username");
 
 		await clickWorkspaceSwitch();
 
@@ -182,12 +179,12 @@ describe("useWorkspaceSwitcher", () => {
 	});
 
 	it("does nothing when the selected workspace is already active", async () => {
-		const router = renderRoute("/w/alpha/mentor/thread-1?message=current", "mentor/$threadId");
+		const router = renderRoute("/w/alpha/user/octocat?group=current", "user/$username");
 		const user = userEvent.setup();
 
 		await user.click(await screen.findByRole("button", { name: "Keep workspace" }));
 
-		expect(router.state.location.href).toBe("/w/alpha/mentor/thread-1?message=current");
+		expect(router.state.location.href).toBe("/w/alpha/user/octocat?group=current");
 		expect(toast.info).not.toHaveBeenCalled();
 	});
 

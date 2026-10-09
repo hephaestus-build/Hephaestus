@@ -31,7 +31,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment(
                     "integration.scm.gitlab.credentials.GitLabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
             assignment("testconfig.BaseIntegrationTest", "base"),
-            assignment("agent.mentor.chat.MentorWorkerSplitIntegrationTest", "mentor-worker-split"),
             assignment("notification.AccountDeletionEmailIntegrationTest", "email-capture"),
             assignment("notification.AccountSecurityEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
@@ -49,6 +48,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("core.auth.clientsession.ClientSessionIntegrationTest", "dev-login"),
             assignment("core.auth.clientsession.ClientSessionConcurrencyIntegrationTest", "dev-login"),
             assignment("integration.scm.github.BaseGitHubLiveIntegrationTest", "github-live"),
+            assignment("agent.mentor.live.HephTurnLiveTest", "heph-live"),
             assignment("integration.outline.OutlineFrameworkRegistrationIntegrationTest", "outline-enabled"),
             assignment(
                     "integration.outline.collection.OutlineCollectionAdminControllerIntegrationTest",
@@ -69,9 +69,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry(
                     "workspace-folder",
                     "real Slack and Outline visibility, repeatable-read capture and cross-source admission; projection spy commits a concurrent row to prove isolation"),
-            Map.entry(
-                    "mentor-worker-split",
-                    "server-only role with authenticated worker transport and controlled runner, routing and admission boundaries"),
             Map.entry(
                     "gitlab-token-lifecycle",
                     "real credential storage, lifecycle locks and attention with only irreversible upstream token rotation mocked"),
@@ -95,6 +92,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "consent-sign-in",
                     "real cookie and installed-client sign-in with the production consent interceptor enabled"),
             Map.entry("github-live", "explicitly selected live GitHub profile and credentials"),
+            Map.entry("heph-live", "worker role with a real Heph host container, the agent image and a live model"),
             Map.entry("outline-enabled", "enabled Outline integration wiring"),
             Map.entry("slack-ingest", "enabled Slack ingest wiring with its review-submission spy"),
             Map.entry("slack-lifecycle", "agent submission boundary override"),
@@ -118,6 +116,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
             "StartupBudgetIntegrationTest",
+            "agent.mentor.live.HephTurnLiveTest",
             "core.auth.clientsession.ClientSessionMigratedSchemaTest",
             "integration.schema.ProductionSchemaContractIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
@@ -127,7 +126,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
             "testconfig.RealAuthIntegrationTest",
             "agent.handler.PracticeReviewPipelineIntegrationTest",
-            "agent.mentor.chat.MentorWorkerSplitIntegrationTest",
             "notification.AccountDeletionEmailIntegrationTest",
             "notification.AccountSecurityEmailIntegrationTest",
             "productfeedback.ProductFeedbackEmailIntegrationTest",
@@ -151,7 +149,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> DIRTY_CONTEXT_TESTS = Set.of();
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
-            "agent.mentor.chat.MentorWorkerSplitIntegrationTest",
             "integration.scm.gitlab.credentials.GitLabTokenLifecycleIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
             "integration.slack.SlackConsentLifecycleE2EIntegrationTest");

@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.HephTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewAttemptRow;
@@ -51,7 +51,7 @@ public class ReviewAttemptsContentSource implements ContentSource {
 
     public static final String OUTPUT_KEY = OUTPUT_PREFIX + "review_attempts.json";
 
-    /** Mirrored by {@code REVIEW_ATTEMPTS_ITEM} in {@code pi-mentor-protocol.ts}. */
+    /** Mirrored by {@code REVIEW_ATTEMPTS_ITEM} in {@code heph-host-protocol.ts}. */
     private static final Pattern WORK_KEY =
             Pattern.compile("inputs/context/review_attempts/(pull_request|issue)/(\\d{1,18})\\.json");
 
@@ -65,7 +65,7 @@ public class ReviewAttemptsContentSource implements ContentSource {
 
     @Override
     public boolean supports(ContextRequest request) {
-        return request instanceof MentorChatRequest;
+        return request instanceof HephTurnRequest;
     }
 
     @Override
@@ -77,7 +77,7 @@ public class ReviewAttemptsContentSource implements ContentSource {
     @Override
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW, isolation = Isolation.REPEATABLE_READ)
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
-        MentorChatRequest req = (MentorChatRequest) request;
+        HephTurnRequest req = (HephTurnRequest) request;
         try {
             files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(overview(req.workspaceId(), req.developerId())));
         } catch (JacksonException e) {
@@ -159,6 +159,10 @@ public class ReviewAttemptsContentSource implements ContentSource {
                 shown.stream()
                         .map(row -> Objects.requireNonNull(row.getReviewId()))
                         .toList());
+        root.put(
+                "about",
+                "Runs of Hephaestus's automated practice review on the developer's own work. They are not reviews "
+                        + "by people: reviews people gave or received are in activity.json and observations_history.json.");
         ObjectNode coverage = root.putObject("coverage");
         coverage.put("scope", "RETAINED_REVIEWS_OF_OWN_AUTHORED_SCM_WORK");
         coverage.putArray("workKinds").add(ArtifactKinds.PULL_REQUEST.value()).add(ArtifactKinds.ISSUE.value());
@@ -195,6 +199,7 @@ public class ReviewAttemptsContentSource implements ContentSource {
         node.put("artifactKind", kind.value());
         node.put("artifactId", row.getArtifactId());
         node.put("number", row.getNumber());
+        node.put("title", row.getTitle());
         node.put("url", row.getUrl());
         node.put("state", row.getState());
         node.put("reviewsResource", resourceOf(kind, row.getArtifactId()));

@@ -1,12 +1,16 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDTO;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -21,8 +25,17 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
-import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerProbe;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -39,15 +52,19 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,9 +72,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.test.web.reactive.server.StatusAssertions;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.support.TransactionTemplate;
+import reactor.core.Disposable;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -68,6 +90,7 @@ import tools.jackson.databind.ObjectMapper;
 class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final Duration STREAM_WAIT = Duration.ofSeconds(20);
     private static final String SHARED_LOGIN = "shared-org";
     private static final String DIFF_EVIDENCE_JSON =
             "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"context/diff.patch\","
@@ -96,10 +119,37 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     private PracticeRevisionRepository practiceRevisionRepository;
 
     @Autowired
-    private ChatThreadRepository chatThreadRepository;
+    private ActivityEventRepository activityEventRepository;
 
     @Autowired
-    private ActivityEventRepository activityEventRepository;
+    private MentorConversationService mentorConversations;
+
+    @Autowired
+    private MentorTurnService mentorTurns;
+
+    @Autowired
+    private MentorTurnRepository mentorTurnRepository;
+
+    @Autowired
+    private MentorEntryService mentorEntries;
+
+    @Autowired
+    private MentorEntryRepository mentorEntryRepository;
+
+    @Autowired
+    private MentorLedgerNotifications mentorNotifications;
+
+    @Autowired
+    private TransactionTemplate transactions;
+
+    @Autowired
+    private LlmConnectionRepository llmConnections;
+
+    @Autowired
+    private LlmModelRepository llmModels;
+
+    @Autowired
+    private WorkspaceAgentBindingRepository agentBindings;
 
     @Autowired
     private TeamRepository teamRepository;
@@ -131,7 +181,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     private TenantData tenantA;
     private TenantData tenantB;
 
-    private record TenantData(String practiceSlug, UUID observationId, UUID feedbackId, UUID threadId) {}
+    private record TenantData(String practiceSlug, UUID observationId, UUID feedbackId, UUID entryId, UUID turnId) {}
 
     @BeforeEach
     void provisionTwoTenants() {
@@ -213,14 +263,24 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .createdAt(Instant.now())
                 .build());
 
-        ChatThread thread = new ChatThread();
-        thread.setId(UUID.randomUUID());
-        thread.setTitle("Thread in " + ws.getWorkspaceSlug());
-        thread.setWorkspace(ws);
-        thread.setUser(overlapUser);
-        chatThreadRepository.save(thread);
+        MentorConversation main =
+                mentorConversations.findOrCreateMain(ws.getId(), overlapUser.getId(), Set.of(overlapUser.getId()));
+        MentorTurnService.Submission question = mentorTurns.submit(
+                ws.getId(),
+                main.getId(),
+                new MentorTurnService.Question(
+                        MentorTurn.Surface.APP,
+                        "Question in " + ws.getWorkspaceSlug(),
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
 
-        return new TenantData(practiceSlug, observationId, feedback.getId(), thread.getId());
+        return new TenantData(
+                practiceSlug,
+                observationId,
+                feedback.getId(),
+                question.question().getId(),
+                question.turn().getId());
     }
 
     private void linkSyncedOrg(Workspace ws, IdentityProvider provider) {
@@ -499,36 +559,212 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Nested
-    @DisplayName("Mentor threads")
+    @DisplayName("Mentor conversation")
     class Mentor {
 
         @Test
         @WithMentorUser
-        void listReturnsOnlyOwnWorkspaceThreads() {
+        void shouldListOnlyTheOwnWorkspacesMessagesWhenTheDeveloperBelongsToTwoWorkspaces() {
             webTestClient
                     .get()
-                    .uri("/workspaces/{slug}/mentor/threads", workspaceA.getWorkspaceSlug())
+                    .uri("/workspaces/{slug}/mentor/entries", workspaceA.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
                     .isOk()
                     .expectBody()
-                    .jsonPath("$.length()")
+                    .jsonPath("$.entries.length()")
                     .isEqualTo(1)
-                    .jsonPath("$[0].id")
-                    .isEqualTo(tenantA.threadId().toString());
+                    .jsonPath("$.entries[0].id")
+                    .isEqualTo(tenantA.entryId().toString());
         }
 
         @Test
         @WithMentorUser
         void detailIsScopedToWorkspace() {
-            expectDetailStatus("/mentor/threads/{key}", tenantA.threadId())
+            expectDetailStatus("/mentor/entries/{key}/thread", tenantA.entryId())
                     .isOk()
                     .expectBody(Void.class);
-            expectDetailStatus("/mentor/threads/{key}", tenantB.threadId())
+            expectDetailStatus("/mentor/entries/{key}/thread", tenantB.entryId())
                     .isNotFound()
                     .expectBody(Void.class);
         }
+
+        @Test
+        @WithMentorUser
+        void shouldLeaveTheOtherWorkspacesTurnQueuedWhenTheDeveloperStopsItThroughThisWorkspace() {
+            Map<String, String> stop = Map.of("status", "STOPPED");
+
+            expectMentorWrite(HttpMethod.PATCH, "/mentor/turns/{key}/status", tenantA.turnId(), stop)
+                    .isOk()
+                    .expectBody(Void.class);
+            expectMentorWrite(HttpMethod.PATCH, "/mentor/turns/{key}/status", tenantB.turnId(), stop)
+                    .isNotFound()
+                    .expectBody(Void.class);
+
+            assertThat(mentorTurnRepository
+                            .findById(tenantB.turnId())
+                            .orElseThrow()
+                            .getStatus())
+                    .isEqualTo(MentorTurn.Status.QUEUED);
+        }
+
+        @Test
+        @WithMentorUser
+        void shouldKeepTheOtherWorkspacesVoteWhenTheDeveloperVotesThroughThisWorkspace() {
+            UUID ownAnswer = hephAnswer(workspaceA).getId();
+            UUID foreignAnswer = hephAnswer(workspaceB).getId();
+            mentorEntries.vote(workspaceB.getId(), foreignAnswer, MentorEntry.Vote.NOT_HELPFUL);
+            Map<String, String> helpful = Map.of("vote", "HELPFUL");
+
+            expectMentorWrite(HttpMethod.PUT, "/mentor/entries/{key}/vote", ownAnswer, helpful)
+                    .isOk()
+                    .expectBody(Void.class);
+            expectMentorWrite(HttpMethod.PUT, "/mentor/entries/{key}/vote", foreignAnswer, helpful)
+                    .isNotFound()
+                    .expectBody(Void.class);
+            expectMentorWrite(HttpMethod.DELETE, "/mentor/entries/{key}/vote", foreignAnswer, null)
+                    .isNotFound()
+                    .expectBody(Void.class);
+
+            assertThat(mentorEntryRepository
+                            .findById(foreignAnswer)
+                            .orElseThrow()
+                            .getVote())
+                    .isEqualTo(MentorEntry.Vote.NOT_HELPFUL);
+        }
+
+        @Test
+        @WithMentorUser
+        void shouldKeepTheOtherWorkspacesMessageWhenTheDeveloperDeletesItThroughThisWorkspace() {
+            expectMentorWrite(HttpMethod.DELETE, "/mentor/entries/{key}", tenantB.entryId(), null)
+                    .isNotFound()
+                    .expectBody(Void.class);
+            expectMentorWrite(HttpMethod.DELETE, "/mentor/entries/{key}", tenantA.entryId(), null)
+                    .isNoContent()
+                    .expectBody(Void.class);
+
+            MentorEntry foreign =
+                    mentorEntryRepository.findById(tenantB.entryId()).orElseThrow();
+            assertThat(foreign.getRedactedAt()).isNull();
+            assertThat(foreign.getText()).isEqualTo("Question in " + workspaceB.getWorkspaceSlug());
+            assertThat(mentorTurnRepository
+                            .findById(tenantB.turnId())
+                            .orElseThrow()
+                            .getStatus())
+                    .isEqualTo(MentorTurn.Status.QUEUED);
+        }
+
+        @Test
+        @WithMentorUser
+        void shouldOpenNoThreadOnTheOtherWorkspacesMessageWhenTheDeveloperAsksThroughThisWorkspace() {
+            enableHeph(workspaceA);
+            String ownRequest = UUID.randomUUID().toString();
+            String foreignRequest = UUID.randomUUID().toString();
+
+            ask(ownRequest, tenantA.entryId()).isOk().expectBody(Void.class);
+            ask(foreignRequest, tenantB.entryId()).isNotFound().expectBody(Void.class);
+
+            assertThat(mentorConversations.findThread(workspaceA.getId(), tenantA.entryId()))
+                    .isPresent();
+            assertThat(mentorConversations.findThread(workspaceB.getId(), tenantB.entryId()))
+                    .isEmpty();
+            assertThat(mentorEntries.exists(workspaceA.getId(), foreignRequest)).isFalse();
+            assertThat(mentorEntries.exists(workspaceB.getId(), foreignRequest)).isFalse();
+        }
+
+        @Test
+        @WithMentorUser
+        void shouldStreamNoChangeOfTheOtherWorkspaceWhenTheDeveloperWatchesThisWorkspace() {
+            List<ServerSentEvent<String>> events = new CopyOnWriteArrayList<>();
+            Disposable subscription = webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/mentor/events", workspaceA.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .accept(MediaType.TEXT_EVENT_STREAM)
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .returnResult(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
+                    .getResponseBody()
+                    .filter(event -> event.event() != null)
+                    .subscribe(events::add);
+            try {
+                await().atMost(STREAM_WAIT).until(() -> streamed(events, "snapshot", tenantA.turnId()));
+                awaitLedgerListening();
+
+                MentorEntry foreignAnswer = hephAnswer(workspaceB);
+                mentorTurns.stop(workspaceB.getId(), tenantB.turnId());
+                // Changes reach the stream in commit order, so this change arrives after the foreign ones.
+                mentorTurns.stop(workspaceA.getId(), tenantA.turnId());
+
+                await().atMost(STREAM_WAIT)
+                        .until(() -> streamed(events, "turn", tenantA.turnId())
+                                && streamed(events, "turn", MentorTurn.Status.STOPPED.name()));
+                assertThat(events)
+                        .noneMatch(event -> mentions(event, tenantB.turnId())
+                                || mentions(event, tenantB.entryId())
+                                || mentions(event, foreignAnswer.getId())
+                                || mentions(event, foreignAnswer.getConversationId()));
+            } finally {
+                subscription.dispose();
+            }
+        }
+    }
+
+    private StatusAssertions expectMentorWrite(HttpMethod method, String suffix, Object key, @Nullable Object body) {
+        WebTestClient.RequestBodySpec request = webTestClient
+                .method(method)
+                .uri("/workspaces/{slug}" + suffix, workspaceA.getWorkspaceSlug(), key)
+                .headers(TestAuthUtils.withCurrentUser());
+        WebTestClient.RequestHeadersSpec<?> sent = body == null
+                ? request
+                : request.contentType(MediaType.APPLICATION_JSON).bodyValue(body);
+        return sent.exchange().expectStatus();
+    }
+
+    private StatusAssertions ask(String requestId, UUID parentEntryId) {
+        return webTestClient
+                .post()
+                .uri("/workspaces/{slug}/mentor/turns", workspaceA.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("requestId", requestId, "text", "Follow-up question", "parentEntryId", parentEntryId))
+                .exchange()
+                .expectStatus();
+    }
+
+    /** Binds a mentor model to the workspace, so Heph accepts questions there. */
+    private void enableHeph(Workspace ws) {
+        var connection = llmConnections.save(LlmCatalogTestFixtures.connection("heph-" + ws.getWorkspaceSlug()));
+        var model =
+                llmModels.save(LlmCatalogTestFixtures.model(connection, "heph-" + ws.getWorkspaceSlug(), "heph-model"));
+        agentBindings.save(LlmCatalogTestFixtures.mentorBinding(ws, model));
+    }
+
+    /** One of Heph's answers in the shared developer's main conversation of {@code ws}. */
+    private MentorEntry hephAnswer(Workspace ws) {
+        MentorConversation main =
+                mentorConversations.findOrCreateMain(ws.getId(), overlapUser.getId(), Set.of(overlapUser.getId()));
+        return mentorEntries.append(
+                ws.getId(), main.getId(), MentorLedgerFixtures.heph("Answer in " + ws.getWorkspaceSlug()));
+    }
+
+    /** Waits until this process receives ledger notifications, so the stream does not miss a change. */
+    private void awaitLedgerListening() {
+        MentorLedgerProbe.on(mentorNotifications).awaitListening(transactions, mentorTurnRepository, STREAM_WAIT);
+    }
+
+    private static boolean streamed(List<ServerSentEvent<String>> events, String name, Object content) {
+        return events.stream().anyMatch(event -> {
+            String data = event.data();
+            return name.equals(event.event()) && data != null && data.contains(content.toString());
+        });
+    }
+
+    private static boolean mentions(ServerSentEvent<String> event, UUID id) {
+        String data = event.data();
+        return data != null && data.contains(id.toString());
     }
 
     @Nested

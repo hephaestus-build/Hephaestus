@@ -190,11 +190,12 @@ Role changes and new links do not replace an eligible representative on the conn
 Loss or disablement of its link or membership can change the representative.
 Reconnection to another instance can also change it.
 
-Conversations with Heph survive this change.
+The Heph conversation survives this change.
 The request carries all of the account's member actor ids.
-The account can list and open a thread started through any of them.
-A new thread belongs to the selected actor.
-A continued thread moves to that actor.
+The server finds the account's main conversation through any of them.
+If none exists, the server creates it under the selected actor.
+A write through another selected actor moves the conversation and its Heph threads to that actor (`user_id`).
+Thus, an account has one main conversation per workspace, whichever actor is selected.
 
 A failure in this cross-module query propagates instead of returning an empty membership list.
 
@@ -229,8 +230,8 @@ in [GitHub integration](../admin/github-integration#workspace-attachment).
 
 `WorkspaceContextExecutor.wrap` captures the workspace context and MDC for a background task. It does
 not propagate Spring authentication or `CurrentScmIdentityHolder`. Tasks that need the authenticated
-actor must carry that identity separately. Mentor turns do this explicitly: they copy the verified
-actor id and display login to the turn thread and clear them in `finally`.
+actor must carry that identity separately. A Heph turn needs no request identity: its `TurnJwt`
+carries the developer of the conversation, and the worker builds the turn's context for that developer.
 
 For work that needs only workspace context:
 

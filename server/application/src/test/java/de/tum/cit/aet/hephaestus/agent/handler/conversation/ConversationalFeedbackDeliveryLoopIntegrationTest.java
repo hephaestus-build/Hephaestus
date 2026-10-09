@@ -3,97 +3,73 @@ package de.tum.cit.aet.hephaestus.agent.handler.conversation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
-import de.tum.cit.aet.hephaestus.agent.AgentJobType;
-import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
-import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
-import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChannel;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnPersistence;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
-import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
-import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
-import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
-import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
-import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
-import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
-import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
-import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import java.time.Instant;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.PageRequest;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
 
 class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationTest {
 
-    private static final ObjectMapper OM = new ObjectMapper();
     private static final String SHOWN = "Your description names the decision but not why it beat the alternative.";
-
-    @Autowired
-    private FeedbackChannelRouter router;
-
-    @Autowired
-    private ConversationalFeedbackPreparer preparer;
 
     @Autowired
     private ConversationalDeliveryReconciler reconciler;
 
     @Autowired
-    private MentorTurnPersistence mentorTurnPersistence;
+    private MentorConversationService conversations;
+
+    @Autowired
+    private MentorTurnService turns;
+
+    @Autowired
+    private MentorTurnCompletion completion;
+
+    @Autowired
+    private MentorEntryRepository entries;
 
     @Autowired
     private FeedbackRepository feedbackRepository;
 
     @Autowired
     private FeedbackPlacementRepository feedbackPlacementRepository;
-
-    @Autowired
-    private ObservationRepository observationRepository;
-
-    @Autowired
-    private PracticeRepository practiceRepository;
-
-    @Autowired
-    private PracticeRevisionRepository practiceRevisionRepository;
-
-    @Autowired
-    private AgentJobRepository agentJobRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -105,38 +81,23 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
     private IdentityProviderRepository identityProviderRepository;
 
     @Autowired
-    private ChatThreadRepository chatThreadRepository;
+    private FeedbackChannelRouter router;
 
     @Autowired
-    private ChatMessageRepository chatMessageRepository;
+    private ObservationRepository observationRepository;
 
     @Autowired
-    private InstanceSettingsService instanceSettingsService;
+    private ApplicationContext beans;
 
     private Workspace workspace;
-    private Practice practice;
+    private ConversationalFeedbackFixtures fixtures;
     private User recipient;
 
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        var settings = instanceSettingsService.get();
-        instanceSettingsService.updateSilentMode(
-                false, null, null, EntityTagPrecondition.parse("\"" + settings.getVersion() + "\""));
         workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("conv-delivery-test"));
-        practice = new Practice();
-        PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
-        practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
-        practice.setWorkspace(workspace);
-        practice.setSlug("test-practice");
-        practice.setName("Test Practice");
-        practice.setCriteria("Test description");
-        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
-        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
-        practice = practiceRepository.saveAndFlush(practice);
-        PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
-        practice.setCurrentRevision(revision);
-        practice = practiceRepository.saveAndFlush(practice);
+        fixtures = new ConversationalFeedbackFixtures(beans, workspace, "Test Practice");
         IdentityProvider provider = identityProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseGet(() -> identityProviderRepository.save(
@@ -145,14 +106,14 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
     }
 
     @Test
-    void twoJobsPrepareStructuredConversationBriefs() {
-        AgentJob job1 = newJob();
-        AgentJob job2 = newJob();
+    void shouldPrepareOneConversationBriefPerJobWhenTwoJobsObserveTheDeveloper() {
+        AgentJob job1 = fixtures.job();
+        AgentJob job2 = fixtures.job();
         saveObservation(job1, "occ-1");
         saveObservation(job2, "occ-2");
 
-        prepareFor(job1);
-        prepareFor(job2);
+        fixtures.prepare(job1);
+        fixtures.prepare(job2);
 
         List<Feedback> prepared = feedbackRepository.findRecentPreparedConversationForRecipient(
                 workspace.getId(), recipient.getId(), PageRequest.of(0, 10));
@@ -165,107 +126,88 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
     }
 
     @Test
-    void shouldDeliverTheFeedbackOnceWhenACompletedReplyShowedIt() {
-        AgentJob job = newJob();
+    void shouldDeliverTheFeedbackOnceOnTheMessageThatShowedItWhenAnAppAnswerShowedIt() {
+        AgentJob job = fixtures.job();
         Observation a = saveObservation(job, "occ-a");
         Observation b = saveObservation(job, "occ-b");
-        prepareFor(job);
-        ChatMessage assistant = persistAssistantMessage(ChatMessage.Status.in_flight);
-        TranslatorState state = new TranslatorState(assistant.getId());
-        state.recordDataObservation(UIMessageChunk.DataObservation.of(a.getId(), SHOWN));
-        state.recordDataObservation(UIMessageChunk.DataObservation.of(b.getId(), SHOWN));
-        MentorTurnPersistence.TurnPersistenceCookie cookie = cookie(assistant);
-        mentorTurnPersistence.complete(
-                cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
+        fixtures.prepare(job);
+        MentorTurn turn = runningTurn(MentorTurn.Surface.APP);
 
-        mentorTurnPersistence.recordDelivery(cookie, MentorChannel.DeliveryOutcome.DELIVERED);
-        mentorTurnPersistence.recordDelivery(cookie, MentorChannel.DeliveryOutcome.DELIVERED);
+        end(turn, MentorTurn.Status.DONE, answer(link("call-a", a.getId()), link("call-b", b.getId())), null);
 
-        assertThat(conversationUnits()).singleElement().satisfies(f -> {
+        UUID answerEntry = turns.answer(workspace.getId(), turn.getId()).answerEntryId();
+        assertThat(fixtures.conversationUnits()).singleElement().satisfies(f -> {
             assertThat(f.getDeliveryState()).isEqualTo(FeedbackDeliveryState.DELIVERED);
             assertThat(f.getBody()).contains("\"kind\":\"conversation-brief\"");
         });
-        assertThat(feedbackPlacementRepository.findAll()).singleElement().satisfies(placement -> {
-            assertThat(placement.getPlacementType()).isEqualTo(PlacementType.CONVERSATION_TURN);
-            assertThat(placement.getChatMessageId()).isEqualTo(assistant.getId());
+        assertThat(placements()).singleElement().satisfies(placement -> {
+            assertThat(placement.getMentorEntryId())
+                    .isEqualTo(linkingMessage(turn))
+                    .isNotEqualTo(answerEntry);
         });
-        assertThat(chatMessageRepository
-                        .findById(assistant.getId())
-                        .orElseThrow()
-                        .getParts())
-                .extracting(part -> part.path("data").path("text").asString())
-                .containsExactly(SHOWN, SHOWN);
     }
 
     @Test
-    void shouldLeaveFeedbackPreparedWhenTheReplyOnlyNamedItsObservation() {
-        AgentJob job = newJob();
-        Observation observation = saveObservation(job, "occ-named");
-        prepareFor(job);
-        ChatMessage assistant = persistAssistantMessage(
-                ChatMessage.Status.completed,
-                OM.createArrayNode()
-                        .add(OM.createObjectNode().put("type", "text").put("text", "How did the review go?"))
-                        .add(link(observation.getId(), null)));
+    void shouldLeaveTheFeedbackPreparedWhenTheAppAnswerThatShowedItFails() {
+        AgentJob job = fixtures.job();
+        Observation observation = saveObservation(job, "occ-failed");
+        fixtures.prepare(job);
+        MentorTurn turn = runningTurn(MentorTurn.Surface.APP);
 
-        mentorTurnPersistence.recordDelivery(cookie(assistant), MentorChannel.DeliveryOutcome.DELIVERED);
+        end(turn, MentorTurn.Status.FAILED, answer(link("call-failed", observation.getId())), "The model failed");
 
-        assertThat(preparedCount()).isEqualTo(1);
-        assertThat(feedbackPlacementRepository.findAll()).isEmpty();
+        assertThat(turns.answer(workspace.getId(), turn.getId()).answerEntryId())
+                .as("a failed turn stores no answer")
+                .isNull();
+        assertThat(preparedCount()).isOne();
+        assertThat(placements()).isEmpty();
     }
 
     @Test
-    void shouldDeliverOnlyTheFeedbackTheReplyShowedWhenItAlsoNamedAnother() {
-        AgentJob named = newJob();
+    void shouldDeliverOnlyTheFeedbackTheAnswerShowedWhenItAlsoNamedAnother() {
+        AgentJob named = fixtures.job();
         Observation onlyNamed = saveObservation(named, "occ-only-named");
-        prepareFor(named);
-        AgentJob shownJob = newJob();
+        fixtures.prepare(named);
+        AgentJob shownJob = fixtures.job();
         Observation shown = saveObservation(shownJob, "occ-shown");
-        prepareFor(shownJob);
-        ChatMessage assistant = persistAssistantMessage(
-                ChatMessage.Status.completed,
-                OM.createArrayNode().add(link(onlyNamed.getId(), null)).add(link(shown.getId(), SHOWN)));
+        fixtures.prepare(shownJob);
+        MentorTurn turn = runningTurn(MentorTurn.Surface.SLACK);
 
-        mentorTurnPersistence.recordDelivery(cookie(assistant), MentorChannel.DeliveryOutcome.DELIVERED);
+        end(
+                turn,
+                MentorTurn.Status.DONE,
+                answer(refusedLink("call-named", onlyNamed.getId()), link("call-shown", shown.getId())),
+                null);
+        completion.recordDelivery(workspace.getId(), turn.getId(), List.of(onlyNamed.getId(), shown.getId()));
 
-        assertThat(conversationUnits())
+        assertThat(fixtures.conversationUnits())
                 .extracting(f -> f.getAgentJobId(), f -> f.getDeliveryState())
                 .containsExactlyInAnyOrder(
                         tuple(named.getId(), FeedbackDeliveryState.PREPARED),
                         tuple(shownJob.getId(), FeedbackDeliveryState.DELIVERED));
-        assertThat(feedbackPlacementRepository.findAll())
+        assertThat(placements())
                 .singleElement()
-                .satisfies(placement -> assertThat(placement.getChatMessageId()).isEqualTo(assistant.getId()));
+                .satisfies(placement -> assertThat(placement.getMentorEntryId()).isEqualTo(linkingMessage(turn)));
     }
 
     @Test
-    void silentTransportOutcomeConsumesPreparedUnitProspectively() {
-        AgentJob job = newJob();
+    void shouldSuppressThePreparedUnitWhenSilentModeStoppedTheSlackAnswer() {
+        AgentJob job = fixtures.job();
         Observation observation = saveObservation(job, "occ-silent");
-        prepareFor(job);
-        ChatMessage assistant = persistAssistantMessage(ChatMessage.Status.in_flight);
-        TranslatorState state = new TranslatorState(assistant.getId());
-        state.recordDataObservation(UIMessageChunk.DataObservation.of(observation.getId(), SHOWN));
-        MentorTurnPersistence.TurnPersistenceCookie cookie = cookie(assistant);
+        fixtures.prepare(job);
+        MentorTurn turn = runningTurn(MentorTurn.Surface.SLACK);
+        end(turn, MentorTurn.Status.DONE, answer(link("call-silent", observation.getId())), null);
 
-        mentorTurnPersistence.complete(
-                cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
-
-        mentorTurnPersistence.recordDelivery(cookie, MentorChannel.DeliveryOutcome.INSTANCE_SILENCED);
+        completion.recordSilenced(workspace.getId(), turn.getId());
 
         assertThat(reconciler.suppressForSilentMode(workspace.getId(), recipient.getId(), List.of(observation.getId())))
                 .isZero();
-        assertThat(chatMessageRepository
-                        .findById(assistant.getId())
-                        .orElseThrow()
-                        .getStatus())
-                .isEqualTo(ChatMessage.Status.completed);
-        assertThat(conversationUnits()).singleElement().satisfies(feedback -> {
+        assertThat(fixtures.conversationUnits()).singleElement().satisfies(feedback -> {
             assertThat(feedback.getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
             assertThat(feedback.getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.INSTANCE_SILENCED);
         });
         assertThat(preparedCount()).isZero();
-        assertThat(feedbackPlacementRepository.findAll()).isEmpty();
+        assertThat(placements()).isEmpty();
     }
 
     /**
@@ -274,9 +216,9 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
      */
     @Test
     void shouldRouteThePersistedProblemsBeforeCompositionAsPreparationDoes() {
-        AgentJob job = newJob();
-        Observation onTheDiff = saveObservation(job, "occ-diff", "scm.pull-request.diff");
-        Observation described = saveObservation(job, "occ-described", "scm.pull-request.core");
+        AgentJob job = fixtures.job();
+        Observation onTheDiff = fixtures.observation(job, recipient, "occ-diff", "scm.pull-request.diff");
+        Observation described = fixtures.observation(job, recipient, "occ-described", "scm.pull-request.core");
         List<Observation> persisted = observationRepository.findByAgentJobId(job.getId(), workspace.getId());
 
         assertThat(router.decide(persisted, workspace.getId(), RoutingContext.author()))
@@ -287,9 +229,9 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 .containsOnlyKeys(onTheDiff.getId(), described.getId())
                 .doesNotContainValue(ConversationRoutingDecision.ADMIT);
 
-        prepareFor(job);
+        fixtures.prepare(job);
 
-        assertThat(conversationUnits())
+        assertThat(fixtures.conversationUnits())
                 .filteredOn(unit -> unit.getAgentJobId().equals(job.getId()))
                 .singleElement()
                 .satisfies(unit -> assertThat(unit.getDeliveryState()).isEqualTo(FeedbackDeliveryState.PREPARED));
@@ -298,123 +240,87 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 .containsExactly(described.getId());
     }
 
-    private void prepareFor(AgentJob job) {
-        List<Observation> observations = observationRepository.findByAgentJobId(
-                job.getId(), job.getWorkspace().getId());
-        List<Observation> admitted = router.admit(observations, workspace.getId(), RoutingContext.author());
-        preparer.prepare(job.getId(), workspace.getId(), admitted, List.of(conversationUnit(admitted)));
+    /** Heph's message that called {@code link_observation}; the answer's closing message follows it. */
+    private UUID linkingMessage(MentorTurn turn) {
+        return entries.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                        workspace.getId(), turn.getId(), MentorEntry.Kind.HEPH)
+                .getFirst()
+                .getId();
     }
 
-    private ComposedFeedbackUnit conversationUnit(List<Observation> observations) {
-        return new ComposedFeedbackUnit(
-                FeedbackChannel.IN_CHAT,
-                practice.getSlug(),
-                observations.stream().map(o -> o.getId().toString()).toList(),
-                ComposedFeedbackUnit.Action.NEW,
-                null,
-                null,
-                "Test practice",
-                null,
-                null,
-                new ComposedFeedbackUnit.ConversationBrief(
-                        "The practice recurred.",
-                        "Recognize the decision point.",
-                        "The observations show the same pattern.",
-                        "They can explain the decision in their own words.",
-                        null));
-    }
-
-    private List<Feedback> conversationUnits() {
-        return feedbackRepository.findAll().stream()
-                .filter(f -> f.getChannel() == FeedbackChannel.IN_CHAT)
-                .toList();
+    /** The placements of this workspace's conversation feedback. */
+    private List<FeedbackPlacement> placements() {
+        return feedbackPlacementRepository.findByFeedbackIdInAndPlacementType(
+                fixtures.conversationUnits().stream().map(Feedback::getId).toList(), PlacementType.CONVERSATION_TURN);
     }
 
     private long preparedCount() {
-        return conversationUnits().stream()
+        return fixtures.conversationUnits().stream()
                 .filter(f -> f.getDeliveryState() == FeedbackDeliveryState.PREPARED)
                 .count();
     }
 
-    private AgentJob newJob() {
-        AgentJob job = new AgentJob();
-        job.setWorkspace(workspace);
-        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-        job.setConfigSnapshot(OM.valueToTree(Map.of("model", "test")));
-        job.setEvidenceSnapshot(OM.readTree("{\"manifest\":{\"contractVersion\":\"1.2.0\"}}"));
-        return agentJobRepository.save(job);
-    }
-
     private Observation saveObservation(AgentJob job, String occurrenceKey) {
-        return saveObservation(job, occurrenceKey, "scm.pull-request.core");
+        return fixtures.observation(job, recipient, occurrenceKey);
     }
 
-    private Observation saveObservation(AgentJob job, String occurrenceKey, String sourceKind) {
-        UUID id = UUID.randomUUID();
-        observationRepository.insertIfAbsent(
-                id,
-                occurrenceKey,
-                job.getId(),
-                job.getWorkspace().getId(),
-                practice.getId(),
-                practice.getCurrentRevision().getId(),
-                "scm.pull_request",
-                42L,
-                recipient.getId(),
-                "Observation title",
-                "NOT_MET",
-                "MAJOR",
-                AdmittedObservationFixtures.evidence(
-                                job.getId(), sourceKind, "context/metadata.json", "metadata.json", "example")
-                        .toString(),
-                null,
-                null,
-                Instant.now(),
-                "LIVE");
-        return observationRepository.findById(id).orElseThrow();
+    private static final String WORKER = "worker-delivery";
+
+    /** A {@code link_observation} call of Heph's, and whether the server admitted it. */
+    private record Link(String callId, UUID observationId, boolean shown) {}
+
+    private static Link link(String callId, UUID observationId) {
+        return new Link(callId, observationId, true);
     }
 
-    private static MentorTurnPersistence.TurnPersistenceCookie cookie(ChatMessage assistant) {
-        return new MentorTurnPersistence.TurnPersistenceCookie(
-                assistant.getThread().getId(),
-                UUID.randomUUID(),
-                assistant.getId(),
-                Instant.now(),
-                "test-model",
-                Mockito.mock(LlmPriceSnapshot.class),
-                "test-session-version");
+    private static Link refusedLink(String callId, UUID observationId) {
+        return new Link(callId, observationId, false);
     }
 
-    /** A stored link; one with no text is how replies stored links before they carried the feedback. */
-    private static ObjectNode link(UUID observationId, @Nullable String text) {
-        ObjectNode part = OM.createObjectNode()
-                .put("type", "data-observation")
-                .put("id", UUID.randomUUID().toString());
-        ObjectNode data = part.putObject("data").put("observationId", observationId.toString());
-        if (text != null) {
-            data.put("text", text);
+    private MentorTurn runningTurn(MentorTurn.Surface surface) {
+        var conversation =
+                conversations.findOrCreateMain(workspace.getId(), recipient.getId(), Set.of(recipient.getId()));
+        MentorTurn asked = turns.submit(
+                        workspace.getId(),
+                        conversation.getId(),
+                        new MentorTurnService.Question(
+                                surface,
+                                "How did my review go?",
+                                UUID.randomUUID().toString(),
+                                null,
+                                null))
+                .turn();
+        MentorTurn claimed = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        assertThat(claimed.getId()).isEqualTo(asked.getId());
+        return claimed;
+    }
+
+    /** The Pi entries of an answer that links each observation, then answers. */
+    private static List<JsonNode> answer(Link... links) {
+        Map<String, UUID> calls = new LinkedHashMap<>();
+        for (Link link : links) {
+            calls.put(link.callId(), link.observationId());
         }
-        return part;
+        List<JsonNode> entries = new ArrayList<>();
+        entries.add(MentorLedgerFixtures.linkObservations(MentorLedgerFixtures.piId(), calls, SHOWN));
+        for (Link link : links) {
+            entries.add(MentorLedgerFixtures.toolResult(
+                    MentorLedgerFixtures.piId(),
+                    link.callId(),
+                    "link_observation",
+                    link.shown() ? "Shown to the developer" : "Not admitted",
+                    !link.shown()));
+        }
+        entries.add(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "That is what I saw."));
+        return entries;
     }
 
-    private ChatMessage persistAssistantMessage(ChatMessage.Status status) {
-        return persistAssistantMessage(status, OM.createArrayNode());
-    }
-
-    private ChatMessage persistAssistantMessage(ChatMessage.Status status, ArrayNode parts) {
-        ChatThread thread = new ChatThread();
-        thread.setId(UUID.randomUUID());
-        thread.setUser(recipient);
-        thread.setWorkspace(workspace);
-        thread.setTitle("t");
-        chatThreadRepository.save(thread);
-        ChatMessage message = new ChatMessage();
-        message.setId(UUID.randomUUID());
-        message.setThread(thread);
-        message.setRole(ChatMessage.Role.ASSISTANT);
-        message.setStatus(status);
-        message.setParts(parts);
-        message.setMetadata(OM.createObjectNode());
-        return chatMessageRepository.save(message);
+    /** The host ends the turn with the entries it appended. */
+    private void end(MentorTurn turn, MentorTurn.Status outcome, List<JsonNode> entries, @Nullable String error) {
+        completion.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnCompletion.Ending(outcome, entries, error, null));
     }
 }

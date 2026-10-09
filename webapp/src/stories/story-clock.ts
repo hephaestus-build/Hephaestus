@@ -23,6 +23,15 @@ export const hoursBefore = (hours: number): Date => new Date(STORY_NOW - hours *
 
 export const daysBefore = (days: number): Date => new Date(STORY_NOW - days * DAY_MS);
 
+const STORY_DAY_START = new Date(STORY_NOW).setHours(0, 0, 0, 0);
+
+/**
+ * `minutes` before the story clock, but never before its local midnight. A story that says "Today"
+ * then holds at any time of day, where `minutesBefore` crosses into yesterday just after midnight.
+ */
+export const earlierToday = (minutes: number): Date =>
+	new Date(Math.max(STORY_DAY_START, STORY_NOW - minutes * MINUTE_MS));
+
 export const daysAfter = (days: number): Date => new Date(STORY_NOW + days * DAY_MS);
 
 const STORY_YEAR = new Date(STORY_NOW).getFullYear();

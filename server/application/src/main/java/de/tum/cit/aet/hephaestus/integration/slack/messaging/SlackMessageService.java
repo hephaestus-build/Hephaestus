@@ -3,22 +3,16 @@ package de.tum.cit.aet.hephaestus.integration.slack.messaging;
 import com.slack.api.Slack;
 import com.slack.api.methods.MethodsClient;
 import com.slack.api.methods.SlackApiException;
+import com.slack.api.methods.SlackApiTextResponse;
 import com.slack.api.methods.request.chat.ChatPostEphemeralRequest;
 import com.slack.api.methods.request.chat.ChatPostMessageRequest;
 import com.slack.api.methods.response.auth.AuthTestResponse;
-import com.slack.api.methods.response.chat.ChatAppendStreamResponse;
-import com.slack.api.methods.response.chat.ChatPostEphemeralResponse;
 import com.slack.api.methods.response.chat.ChatPostMessageResponse;
-import com.slack.api.methods.response.chat.ChatStartStreamResponse;
-import com.slack.api.methods.response.chat.ChatStopStreamResponse;
 import com.slack.api.methods.response.conversations.ConversationsInfoResponse;
-import com.slack.api.methods.response.conversations.ConversationsJoinResponse;
 import com.slack.api.methods.response.conversations.ConversationsListResponse;
-import com.slack.api.methods.response.views.ViewsPublishResponse;
 import com.slack.api.model.Conversation;
 import com.slack.api.model.ConversationType;
 import com.slack.api.model.Message;
-import com.slack.api.model.assistant.SuggestedPrompt;
 import com.slack.api.model.block.LayoutBlock;
 import com.slack.api.model.view.View;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGateway;
@@ -28,13 +22,14 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 import okhttp3.Response;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -66,19 +61,27 @@ public class SlackMessageService {
     private static final long RATE_LIMIT_MAX_WAIT_MS = 20_000L;
 
     /**
-     * Wider bounds for the nightly history reconciliation only: Slack's non-Marketplace clamp on
-     * {@code conversations.history}/{@code conversations.replies} (1 req/min since May 2025) answers with
-     * {@code Retry-After: 60}, which the interactive 20s cap would retry too early and waste.
+     * Wider bounds for history reads that no one waits on: the nightly history reconciliation and the Heph reply
+     * reconciler's {@link #findWorkspaceMessages}. Slack's clamp on {@code conversations.history}/{@code conversations.replies}
+     * for distributed non-Marketplace apps (1 request per minute) answers with {@code Retry-After: 60}, which the
+     * interactive {@link #RATE_LIMIT_MAX_WAIT_MS} cap would retry too early and waste.
      */
     private static final long SYNC_RATE_LIMIT_MAX_WAIT_MS = 90_000L;
 
     private static final long SYNC_RATE_LIMIT_TOTAL_BUDGET_MS = 150_000L;
 
+    /**
+     * The smallest {@code conversations.history} or {@code conversations.replies} page any install gets: Slack's clamp
+     * for distributed non-Marketplace apps. A self-hosted instance's own app gets more. The reconciler reads one page
+     * from the question on, which holds its reply unless the developer wrote this many messages after it.
+     */
+    private static final int HISTORY_MATCH_LIMIT = 15;
+
     private final Slack slack;
     private final SlackCredentialProvider credentialProvider;
     private final SlackRateLimitTracker rateLimitTracker;
     private final OutboundEgressGuard egressGuard;
-    private final ConcurrentMap<Long, String> botUserIdCache = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, BotIdentity> botCache = new ConcurrentHashMap<>();
 
     public SlackMessageService(
             SlackCredentialProvider credentialProvider,
@@ -96,11 +99,6 @@ public class SlackMessageService {
 
     public void sendForWorkspace(
             long workspaceId, String channelId, @Nullable String threadTs, List<LayoutBlock> blocks, String fallback) {
-        if (!egressGuard.deliveryAllowed("slack.write")) {
-            throw new SlackSendException(workspaceId, channelId, "silent_mode_engaged");
-        }
-        String token = resolveToken(workspaceId)
-                .orElseThrow(() -> new SlackSendException(workspaceId, channelId, "no_active_slack_connection"));
         ChatPostMessageRequest.ChatPostMessageRequestBuilder request = ChatPostMessageRequest.builder()
                 .channel(channelId)
                 .blocks(blocks)
@@ -108,26 +106,55 @@ public class SlackMessageService {
         if (threadTs != null && !threadTs.isBlank()) {
             request.threadTs(threadTs);
         }
-        try {
-            ChatPostMessageResponse response = callOutboundHonoringRateLimit(
-                    workspaceId, channelId, () -> slack.methods(token).chatPostMessage(request.build()));
-            if (!response.isOk()) {
-                String error = response.getError() == null ? "unknown" : response.getError();
-                log.warn(
-                        "Slack chat.postMessage failed: workspaceId={}, channelId={}, error={}",
-                        workspaceId,
-                        channelId,
-                        error);
-                throw new SlackSendException(workspaceId, channelId, error);
-            }
-        } catch (SlackApiException | IOException e) {
-            log.warn(
-                    "Slack chat.postMessage transport failure: workspaceId={}, channelId={}, error={}",
-                    workspaceId,
-                    channelId,
-                    e.getMessage());
-            throw new SlackSendException(workspaceId, channelId, "transport_failure", e);
+        ChatPostMessageRequest built = request.build();
+        callWrite(workspaceId, channelId, methods -> methods.chatPostMessage(built));
+    }
+
+    /**
+     * A posted message: the conversation it landed in and its {@code ts}. A post addressed to a user id lands in the
+     * app's DM with that user, whose channel id the answer names.
+     */
+    public record Posted(String channelId, String ts) {}
+
+    /**
+     * Posts a message without link or media unfurls. {@code text} is what notifications and screen readers show.
+     */
+    public Posted postMessage(
+            long workspaceId,
+            String channelId,
+            @Nullable String threadTs,
+            List<LayoutBlock> blocks,
+            String text,
+            Message.@Nullable Metadata metadata) {
+        ChatPostMessageRequest.ChatPostMessageRequestBuilder request = ChatPostMessageRequest.builder()
+                .channel(channelId)
+                .blocks(blocks)
+                .text(text)
+                .unfurlLinks(false)
+                .unfurlMedia(false)
+                .metadata(metadata);
+        if (threadTs != null && !threadTs.isBlank()) {
+            request.threadTs(threadTs);
         }
+        ChatPostMessageRequest built = request.build();
+        ChatPostMessageResponse response = callWrite(workspaceId, channelId, methods -> methods.chatPostMessage(built));
+        String postedTo = response.getChannel();
+        return new Posted(postedTo == null || postedTo.isBlank() ? channelId : postedTo, response.getTs());
+    }
+
+    /** Replaces the blocks, text and metadata of a message the app wrote, such as a stream that Slack already ended. */
+    public void updateMessage(
+            long workspaceId,
+            String channelId,
+            String ts,
+            List<LayoutBlock> blocks,
+            String text,
+            Message.@Nullable Metadata metadata) {
+        callWrite(
+                workspaceId,
+                channelId,
+                methods -> methods.chatUpdate(req ->
+                        req.channel(channelId).ts(ts).blocks(blocks).text(text).metadata(metadata)));
     }
 
     /**
@@ -137,57 +164,44 @@ public class SlackMessageService {
      */
     public void sendEphemeralForWorkspace(
             long workspaceId, String channelId, String slackUserId, List<LayoutBlock> blocks, String fallback) {
-        if (!egressGuard.deliveryAllowed("slack.write")) {
-            throw new SlackSendException(workspaceId, channelId, "silent_mode_engaged");
-        }
-        String token = resolveToken(workspaceId)
-                .orElseThrow(() -> new SlackSendException(workspaceId, channelId, "no_active_slack_connection"));
         ChatPostEphemeralRequest request = ChatPostEphemeralRequest.builder()
                 .channel(channelId)
                 .user(slackUserId)
                 .blocks(blocks)
                 .text(fallback)
                 .build();
-        try {
-            ChatPostEphemeralResponse response = callOutboundHonoringRateLimit(
-                    workspaceId, channelId, () -> slack.methods(token).chatPostEphemeral(request));
-            if (!response.isOk()) {
-                String error = response.getError() == null ? "unknown" : response.getError();
-                log.warn(
-                        "Slack chat.postEphemeral failed: workspaceId={}, channelId={}, userId={}, error={}",
-                        workspaceId,
-                        channelId,
-                        slackUserId,
-                        error);
-                throw new SlackSendException(workspaceId, channelId, error);
-            }
-        } catch (SlackApiException | IOException e) {
-            log.warn(
-                    "Slack chat.postEphemeral transport failure: workspaceId={}, channelId={}, error={}",
-                    workspaceId,
-                    channelId,
-                    e.getMessage());
-            throw new SlackSendException(workspaceId, channelId, "transport_failure", e);
-        }
+        callWrite(workspaceId, channelId, methods -> methods.chatPostEphemeral(request));
     }
 
-    /** Evict the cached bot user id, e.g. on uninstall — a later reconnect may install a different app. */
-    public void evictBotUserId(long workspaceId) {
-        botUserIdCache.remove(workspaceId);
+    /** Whether the workspace has an active Slack connection whose bot token Hephaestus can use. */
+    public boolean isConnected(long workspaceId) {
+        return resolveToken(workspaceId).isPresent();
+    }
+
+    /** Evict the cached bot identity, e.g. on uninstall — a later reconnect may install a different app. */
+    public void evictBot(long workspaceId) {
+        botCache.remove(workspaceId);
     }
 
     /**
-     * The app's own bot user id ({@code U…}) for this workspace via {@code auth.test}, or empty when it cannot be
-     * resolved (no active connection / Slack failure). Best-effort and never throws — used only to skip the bot's
-     * OWN {@code member_joined_channel} event, so an unresolved id degrades to "cannot confirm it's the bot"
-     * rather than blocking the caller.
+     * The app's bot in a workspace, as {@code auth.test} names it.
      *
-     * <p>Positive results are cached per workspace: the bot user id is stable for an installation, and this runs on
+     * @param userId the bot user ({@code U…}), which a member event names
+     * @param botId the bot ({@code B…}), which every message the app posts carries as {@code bot_id}
+     */
+    public record BotIdentity(String userId, @Nullable String botId) {}
+
+    /**
+     * The app's own bot in this workspace via {@code auth.test}, or empty when it cannot be resolved (no active
+     * connection / Slack failure). Best-effort and never throws: an unresolved bot degrades to "cannot confirm that it is
+     * the bot" rather than blocking the caller.
+     *
+     * <p>Positive results are cached per workspace: the bot is stable for an installation, and this runs on
      * the serial event-consumer thread for every {@code member_joined_channel}, so an uncached remote call per join
      * would stall unrelated workspaces' events. Failures are not cached (retried on the next event).
      */
-    public Optional<String> resolveBotUserId(long workspaceId) {
-        String cached = botUserIdCache.get(workspaceId);
+    public Optional<BotIdentity> resolveBot(long workspaceId) {
+        BotIdentity cached = botCache.get(workspaceId);
         if (cached != null) {
             return Optional.of(cached);
         }
@@ -199,8 +213,9 @@ public class SlackMessageService {
             AuthTestResponse r = callHonoringRateLimit(
                     workspaceId, () -> slack.methods(token.get()).authTest(req -> req));
             if (r.isOk() && r.getUserId() != null && !r.getUserId().isBlank()) {
-                botUserIdCache.put(workspaceId, r.getUserId());
-                return Optional.of(r.getUserId());
+                BotIdentity bot = new BotIdentity(r.getUserId(), r.getBotId());
+                botCache.put(workspaceId, bot);
+                return Optional.of(bot);
             }
             log.debug("Slack auth.test not ok for workspaceId={}: error={}", workspaceId, r.getError());
             return Optional.empty();
@@ -215,71 +230,157 @@ public class SlackMessageService {
      * to. {@code markdownText} is standard Markdown (Slack renders it, incl. tables) — not Slack mrkdwn.
      */
     public String startStream(long workspaceId, String channel, @Nullable String threadTs, String markdownText) {
-        if (!egressGuard.deliveryAllowed("slack.write")) {
-            throw new SlackSendException(workspaceId, channel, "silent_mode_engaged");
-        }
-        String token = resolveToken(workspaceId)
-                .orElseThrow(() -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
-        try {
-            egressGuard.requireDeliveryAllowed("slack.write");
-            ChatStartStreamResponse r = slack.methods(token)
-                    .chatStartStream(
-                            req -> req.channel(channel).threadTs(threadTs).markdownText(markdownText));
-            if (!r.isOk()) {
-                throw new SlackSendException(workspaceId, channel, r.getError() == null ? "unknown" : r.getError());
-            }
-            return r.getTs();
-        } catch (OutboundEgressSuppressedException e) {
-            throw new SlackSendException(workspaceId, channel, "silent_mode_engaged", e);
-        } catch (SlackApiException e) {
-            throw streamFailure(workspaceId, channel, e);
-        } catch (IOException e) {
-            throw new SlackSendException(workspaceId, channel, "transport_failure", e);
-        }
+        return callWrite(
+                        workspaceId,
+                        channel,
+                        methods -> methods.chatStartStream(
+                                req -> req.channel(channel).threadTs(threadTs).markdownText(markdownText)))
+                .getTs();
     }
 
     /** Append a Markdown delta to an in-progress stream. Throws with the Slack error so callers can detect a gone recipient. */
     public void appendStream(long workspaceId, String channel, String ts, String markdownText) {
+        callWrite(
+                workspaceId,
+                channel,
+                methods -> methods.chatAppendStream(
+                        req -> req.channel(channel).ts(ts).markdownText(markdownText)));
+    }
+
+    /**
+     * How {@link #stopStream} ends a stream.
+     *
+     * @param markdownText a last piece of Markdown
+     * @param blocks blocks under the text, such as feedback buttons
+     * @param metadata metadata that tags the message for the reconciler
+     */
+    public record StreamStop(
+            @Nullable String markdownText, List<LayoutBlock> blocks, Message.@Nullable Metadata metadata) {}
+
+    public void stopStream(long workspaceId, String channel, String ts, StreamStop stop) {
+        callWrite(
+                workspaceId,
+                channel,
+                methods -> methods.chatStopStream(req -> req.channel(channel)
+                        .ts(ts)
+                        .markdownText(stop.markdownText())
+                        .blocks(stop.blocks().isEmpty() ? null : stop.blocks())
+                        .metadata(stop.metadata())));
+    }
+
+    private interface WriteCall<T extends SlackApiTextResponse> {
+        T call(MethodsClient methods) throws SlackApiException, IOException;
+    }
+
+    /**
+     * One Slack write; every write of this gateway goes through it. Silent Mode refuses it before a token is read. A
+     * 429 is retried after its {@code Retry-After}; one that outlives the retry budget is {@code ratelimited} and
+     * carries its wait. A failed transport is {@code transport_failure}.
+     */
+    private <T extends SlackApiTextResponse> T callWrite(long workspaceId, String channel, WriteCall<T> call) {
         if (!egressGuard.deliveryAllowed("slack.write")) {
             throw new SlackSendException(workspaceId, channel, "silent_mode_engaged");
         }
         String token = resolveToken(workspaceId)
                 .orElseThrow(() -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
         try {
-            egressGuard.requireDeliveryAllowed("slack.write");
-            ChatAppendStreamResponse r = slack.methods(token)
-                    .chatAppendStream(req -> req.channel(channel).ts(ts).markdownText(markdownText));
-            if (!r.isOk()) {
-                throw new SlackSendException(workspaceId, channel, r.getError() == null ? "unknown" : r.getError());
+            T response = callOutboundHonoringRateLimit(workspaceId, channel, () -> call.call(slack.methods(token)));
+            if (!response.isOk()) {
+                String error = response.getError();
+                throw new SlackSendException(workspaceId, channel, error == null ? "unknown" : error);
             }
-        } catch (OutboundEgressSuppressedException e) {
-            throw new SlackSendException(workspaceId, channel, "silent_mode_engaged", e);
+            return response;
         } catch (SlackApiException e) {
-            throw streamFailure(workspaceId, channel, e);
+            long retryAfterMs = rateLimitRetryAfterMillis(e);
+            if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED) {
+                throw new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
+            }
+            throw new SlackSendException(workspaceId, channel, "transport_failure", e);
         } catch (IOException e) {
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
         }
     }
 
-    /** Finalize a stream, optionally attaching terminal blocks (observation chips / actions). */
-    public void stopStream(long workspaceId, String channel, String ts, List<LayoutBlock> blocks) {
-        if (!egressGuard.deliveryAllowed("slack.write")) {
-            throw new SlackSendException(workspaceId, channel, "silent_mode_engaged");
+    /**
+     * Adds ({@code present}) or removes the app's emoji reaction on a message. A reaction that is already in the
+     * wanted state counts as done.
+     *
+     * @throws SlackSendException with the Slack error when Slack refused it
+     */
+    public void setReaction(long workspaceId, String channel, String ts, String emoji, boolean present) {
+        try {
+            if (present) {
+                callWrite(
+                        workspaceId,
+                        channel,
+                        methods -> methods.reactionsAdd(
+                                req -> req.channel(channel).timestamp(ts).name(emoji)));
+            } else {
+                callWrite(
+                        workspaceId,
+                        channel,
+                        methods -> methods.reactionsRemove(
+                                req -> req.channel(channel).timestamp(ts).name(emoji)));
+            }
+        } catch (SlackSendException e) {
+            if (!(present ? "already_reacted" : "no_reaction").equals(e.slackError())) {
+                throw e;
+            }
         }
+    }
+
+    /**
+     * The {@code ts} of each message posted at or after {@code oldest} that {@code match} accepts, oldest first, read
+     * with its metadata: from the top level of the channel, or from the replies of {@code threadTs}. Reads one page.
+     *
+     * @throws SlackSendException when Slack could not be read, so the caller cannot conclude the message is absent
+     */
+    public List<String> findWorkspaceMessages(
+            long workspaceId, String channel, @Nullable String threadTs, String oldest, Predicate<Message> match) {
         String token = resolveToken(workspaceId)
                 .orElseThrow(() -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
         try {
-            egressGuard.requireDeliveryAllowed("slack.write");
-            ChatStopStreamResponse r = slack.methods(token)
-                    .chatStopStream(req -> req.channel(channel).ts(ts).blocks(blocks));
-            if (!r.isOk()) {
-                throw new SlackSendException(workspaceId, channel, r.getError() == null ? "unknown" : r.getError());
+            List<Message> messages;
+            String error;
+            if (threadTs == null) {
+                var r = callHonoringRateLimit(
+                        workspaceId,
+                        () -> slack.methods(token)
+                                .conversationsHistory(req -> req.channel(channel)
+                                        .oldest(oldest)
+                                        .inclusive(true)
+                                        .includeAllMetadata(true)
+                                        .limit(HISTORY_MATCH_LIMIT)),
+                        SYNC_RATE_LIMIT_MAX_WAIT_MS,
+                        SYNC_RATE_LIMIT_TOTAL_BUDGET_MS);
+                messages = r.getMessages();
+                error = r.isOk() ? null : r.getError();
+            } else {
+                var r = callHonoringRateLimit(
+                        workspaceId,
+                        () -> slack.methods(token)
+                                .conversationsReplies(req -> req.channel(channel)
+                                        .ts(threadTs)
+                                        .oldest(oldest)
+                                        .inclusive(true)
+                                        .includeAllMetadata(true)
+                                        .limit(HISTORY_MATCH_LIMIT)),
+                        SYNC_RATE_LIMIT_MAX_WAIT_MS,
+                        SYNC_RATE_LIMIT_TOTAL_BUDGET_MS);
+                messages = r.getMessages();
+                error = r.isOk() ? null : r.getError();
             }
-        } catch (OutboundEgressSuppressedException e) {
-            throw new SlackSendException(workspaceId, channel, "silent_mode_engaged", e);
-        } catch (SlackApiException e) {
-            throw streamFailure(workspaceId, channel, e);
-        } catch (IOException e) {
+            if (error != null) {
+                throw new SlackSendException(workspaceId, channel, error);
+            }
+            return (messages == null ? List.<Message>of() : messages)
+                    .stream()
+                            .filter(match)
+                            .map(Message::getTs)
+                            .filter(ts -> ts != null && !ts.isBlank())
+                            .sorted(SlackTs::compare)
+                            .toList();
+        } catch (SlackApiException | IOException e) {
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
         }
     }
@@ -290,82 +391,16 @@ public class SlackMessageService {
      * best-effort).
      */
     public void publishHomeView(long workspaceId, String slackUserId, View view) {
-        if (!egressGuard.deliveryAllowed("slack.write")) {
-            return;
-        }
-        String token = resolveToken(workspaceId)
-                .orElseThrow(() -> new SlackSendException(workspaceId, slackUserId, "no_active_slack_connection"));
         try {
-            ViewsPublishResponse r = callOutboundHonoringRateLimit(
+            callWrite(
                     workspaceId,
                     slackUserId,
-                    () -> slack.methods(token)
-                            .viewsPublish(req -> req.userId(slackUserId).view(view)));
-            if (!r.isOk()) {
-                String error = r.getError() == null ? "unknown" : r.getError();
-                log.warn(
-                        "Slack views.publish failed: workspaceId={}, userId={}, error={}",
-                        workspaceId,
-                        slackUserId,
-                        error);
-                throw new SlackSendException(workspaceId, slackUserId, error);
-            }
+                    methods ->
+                            methods.viewsPublish(req -> req.userId(slackUserId).view(view)));
         } catch (SlackSendException e) {
-            if ("silent_mode_engaged".equals(e.slackError())) {
-                return;
+            if (!"silent_mode_engaged".equals(e.slackError())) {
+                throw e;
             }
-            throw e;
-        } catch (SlackApiException | IOException e) {
-            log.warn(
-                    "Slack views.publish transport failure: workspaceId={}, userId={}, error={}",
-                    workspaceId,
-                    slackUserId,
-                    e.getMessage());
-            throw new SlackSendException(workspaceId, slackUserId, "transport_failure", e);
-        }
-    }
-
-    /**
-     * Set the assistant "thinking…" status on a thread. Best-effort: only assistant threads support it, so a
-     * failure (e.g. a plain DM thread) is swallowed.
-     */
-    public void setStatus(long workspaceId, String channel, @Nullable String threadTs, String status) {
-        if (!egressGuard.deliveryAllowed("slack.write")) {
-            return;
-        }
-        Optional<String> token = resolveToken(workspaceId);
-        if (token.isEmpty()) {
-            return;
-        }
-        try {
-            egressGuard.requireDeliveryAllowed("slack.write");
-            slack.methods(token.get())
-                    .assistantThreadsSetStatus(
-                            req -> req.channelId(channel).threadTs(threadTs).status(status));
-        } catch (Exception e) {
-            log.debug("Slack setStatus skipped (channel={}): {}", channel, e.getMessage());
-        }
-    }
-
-    /**
-     * Set suggested prompts at the top of the agent Messages tab. Best-effort: prompts are a discovery nicety, so
-     * a failure is swallowed.
-     */
-    public void setSuggestedPrompts(long workspaceId, String channel, String title, List<SuggestedPrompt> prompts) {
-        if (!egressGuard.deliveryAllowed("slack.write")) {
-            return;
-        }
-        Optional<String> token = resolveToken(workspaceId);
-        if (token.isEmpty() || prompts.isEmpty()) {
-            return;
-        }
-        try {
-            egressGuard.requireDeliveryAllowed("slack.write");
-            slack.methods(token.get())
-                    .assistantThreadsSetSuggestedPrompts(
-                            req -> req.channelId(channel).title(title).prompts(prompts));
-        } catch (Exception e) {
-            log.debug("Slack setSuggestedPrompts skipped (channel={}): {}", channel, e.getMessage());
         }
     }
 
@@ -570,29 +605,12 @@ public class SlackMessageService {
             List<Message> messages, @Nullable String nextCursor) {}
 
     public void joinPublicChannel(long workspaceId, String channelId) {
-        if (!egressGuard.deliveryAllowed("slack.write")) {
-            return;
-        }
-        String token = resolveToken(workspaceId)
-                .orElseThrow(() -> new SlackSendException(workspaceId, channelId, "no_active_slack_connection"));
         try {
-            ConversationsJoinResponse response = callOutboundHonoringRateLimit(
-                    workspaceId,
-                    channelId,
-                    () -> slack.methods(token).conversationsJoin(req -> req.channel(channelId)));
-            if (!response.isOk()) {
-                throw new SlackSendException(
-                        workspaceId, channelId, response.getError() == null ? "unknown" : response.getError());
-            }
+            callWrite(workspaceId, channelId, methods -> methods.conversationsJoin(req -> req.channel(channelId)));
         } catch (SlackSendException e) {
-            if ("silent_mode_engaged".equals(e.slackError())) {
-                return;
+            if (!"silent_mode_engaged".equals(e.slackError())) {
+                throw e;
             }
-            throw e;
-        } catch (SlackApiException e) {
-            throw streamFailure(workspaceId, channelId, e);
-        } catch (IOException e) {
-            throw new SlackSendException(workspaceId, channelId, "transport_failure", e);
         }
     }
 
@@ -640,8 +658,8 @@ public class SlackMessageService {
     }
 
     /**
-     * Variant with explicit wait/budget bounds: interactive callers keep the tight defaults (a user is waiting),
-     * the nightly reconciliation passes the wider {@code SYNC_*} bounds (see {@link #SYNC_RATE_LIMIT_MAX_WAIT_MS}).
+     * Variant with explicit wait/budget bounds: interactive callers keep the tight defaults (a user is waiting), and
+     * history reads that no one waits on pass the wider {@code SYNC_*} bounds (see {@link #SYNC_RATE_LIMIT_MAX_WAIT_MS}).
      */
     private <T> T callHonoringRateLimit(long workspaceId, SlackCall<T> call, long maxWaitMs, long totalBudgetMs)
             throws SlackApiException, IOException {
@@ -661,14 +679,15 @@ public class SlackMessageService {
                 if (budgetLeftMs <= 0) {
                     throw e; // retry budget spent — let the caller map it
                 }
-                long waitMs = Math.min(Math.min(backoffWithJitter(retryAfterMs, ++attempt), maxWaitMs), budgetLeftMs);
+                long waitMs =
+                        Math.min(Math.min(SlackBackoff.withJitter(retryAfterMs, ++attempt), maxWaitMs), budgetLeftMs);
                 log.warn(
                         "Slack rate-limited (429); backing off {} ms before retry (attempt {}, budget left {} ms)",
                         waitMs,
                         attempt,
                         budgetLeftMs);
                 budgetLeftMs -= waitMs;
-                sleepQuietly(waitMs);
+                SlackBackoff.sleep(waitMs);
                 if (Thread.currentThread().isInterrupted()) {
                     // Interrupted mid-backoff (e.g. a shutting-down worker thread): stop retrying immediately rather
                     // than spinning the rest of the budget in a tight loop; surface the last 429 unchanged (the
@@ -677,21 +696,6 @@ public class SlackMessageService {
                 }
             }
         }
-    }
-
-    /**
-     * Map a streaming-call {@link SlackApiException} onto a {@link SlackSendException}, carrying the 429
-     * {@code Retry-After} wait so the streaming channel can honor it without counting it as a stream death.
-     */
-    private SlackSendException streamFailure(long workspaceId, String channel, SlackApiException e) {
-        long retryAfterMs = rateLimitRetryAfterMillis(e);
-        if (retryAfterMs != SlackSendException.NOT_RATE_LIMITED) {
-            // The streaming path honors Retry-After in the caller rather than here, so this is the second
-            // (and last) place a Slack 429 is recognized — record it so the admin surface sees it too.
-            rateLimitTracker.recordThrottle(workspaceId, retryAfterMs);
-            return new SlackSendException(workspaceId, channel, "ratelimited", retryAfterMs, e);
-        }
-        return new SlackSendException(workspaceId, channel, "transport_failure", e);
     }
 
     /**
@@ -713,27 +717,6 @@ public class SlackMessageService {
             }
         }
         return Math.max(0L, seconds) * 1000L;
-    }
-
-    /**
-     * Honor {@code retryAfterMs} (capped at {@link #RATE_LIMIT_MAX_WAIT_MS}) plus a small jitter; when the header
-     * asked for no wait, fall back to a mild exponential backoff (1s, 2s, 4s… capped). Jitter avoids a thundering
-     * herd of replicas retrying in lockstep.
-     */
-    private static long backoffWithJitter(long retryAfterMs, int attempt) {
-        long base = retryAfterMs > 0 ? retryAfterMs : 1000L * (1L << Math.min(attempt - 1, 4));
-        return base + ThreadLocalRandom.current().nextLong(0L, 250L);
-    }
-
-    private static void sleepQuietly(long millis) {
-        if (millis <= 0) {
-            return;
-        }
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     private Optional<String> resolveToken(long workspaceId) {

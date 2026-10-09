@@ -10,7 +10,7 @@ description: Runtime roles, module boundaries, and the paths from connected work
 ```mermaid
 flowchart TB
     accTitle: Hephaestus runtime topology
-    accDescr: The webapp calls the server. The webhook role verifies provider events and publishes them to NATS. The server consumes events and admits jobs to PostgreSQL. Connected workers execute reviews and Heph in sandboxes.
+    accDescr: The webapp calls the server. The webhook role verifies provider events and publishes them to NATS. The server consumes events and writes jobs and Heph turns to PostgreSQL. Connected workers run reviews in sandboxes and Heph turns in one Heph host each.
     Providers[GitHub, GitLab, Slack, Outline] --> Webhook[Webhook role]
     Webhook --> NATS[NATS JetStream]
     NATS --> Server[Server role]
@@ -18,7 +18,7 @@ flowchart TB
     Server --> DB[(PostgreSQL)]
     Worker[Worker role] --> DB
     Server <-->|Authenticated worker hub| Worker
-    Worker --> Sandbox[Review and Heph sandboxes]
+    Worker --> Sandbox[Review sandboxes and the Heph host]
     Sandbox --> Proxy[Worker LLM proxy]
     Proxy --> Models[Configured model services]
     Worker -->|Automatic review feedback| Providers
@@ -26,7 +26,7 @@ flowchart TB
 ```
 
 One JAR boots in the server, worker, and webhook roles. The supported Compose deployment runs each
-in its own container. Only the worker has Docker access. Heph sessions need connected workers even
+in its own container. Only the worker has Docker access. Heph turns need a connected worker even
 when server and worker roles share a JVM.
 There is no direct server-side sandbox fallback.
 
@@ -93,16 +93,43 @@ Missing required capture produces no observation.
 
 ## Heph
 
-The server owns HTTP/SSE, Slack delivery, admission, budget checks, thread persistence, and
-`fetch_context`. A connected worker owns the live session, its sandbox, attachment, and eviction.
-[Unified Pi runtime](./unified-pi-runtime) owns placement and conversation checkpoints.
+```mermaid
+sequenceDiagram
+    accTitle: One Heph turn
+    accDescr: The server stores the question and a queued turn. A worker claims the turn after a PostgreSQL notification and starts it in its Heph host. The host reads the context, reports partial answers, and sends all entries with the end of the turn. The server streams changes to the app and posts Slack answers.
+    participant C as App or Slack
+    participant S as Server role
+    participant DB as PostgreSQL
+    participant W as Worker role
+    participant H as Heph host
+    C->>S: Question
+    S->>DB: Question entry and queued turn
+    DB-->>W: NOTIFY mentor_ledger
+    W->>DB: Claim turn, admit, lease
+    W->>H: start (TurnJwt)
+    H->>W: Read context, call tools and the model
+    H->>W: Partial answers, then the end with all entries
+    W->>DB: Entries, usage, delivered feedback
+    DB-->>S: NOTIFY mentor_ledger
+    S-->>C: SSE events, or the Slack answer
+```
+
+PostgreSQL holds the whole Heph conversation in three workspace-scoped tables.
+The server role owns the HTTP API, the live stream, Slack ingress and posts, submission, and the weekly digest.
+A worker owns dispatch, admission, its Heph host, and the turn endpoints that the host calls.
+No conversation state lives in a process, so any worker can run any turn.
+[Heph runtime](./unified-pi-runtime) owns the turn lifecycle, the host, and the context of a turn.
+
 The UI uses shadcn components over Base UI.
-It renders streamed text, tool activity, and observation feedback without a separate assistant-ui runtime.
+It renders the stored messages and the partial answer from the generated client, with no assistant runtime.
+
+Each developer has one Heph conversation per workspace, with one level of Heph threads.
+The app shows the whole conversation. Slack shows what was asked there.
 
 Heph is available to workspace members only, within their account-wide AI choice. It uses permitted
-recent work, review requests, assigned issues, earlier conversations, practices, and connected
-context. Prepared conversation feedback counts as delivered only when shown, not merely linked by
-a completed turn. [Chat with Heph](/user/ai-mentor) owns the member-facing behavior.
+recent work, review requests, assigned issues, the conversation itself, practices, and connected
+context. [Heph runtime](./unified-pi-runtime#delivery-of-shown-feedback) owns the delivery rule.
+[Talk with Heph](/user/ai-mentor) owns the member-facing behavior.
 
 ## Member pages
 

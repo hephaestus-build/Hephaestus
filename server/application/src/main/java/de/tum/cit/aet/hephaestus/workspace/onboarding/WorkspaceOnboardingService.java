@@ -6,13 +6,17 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberMentorReadiness;
+import de.tum.cit.aet.hephaestus.workspace.spi.MentorRefusalReason;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
 import java.time.Clock;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -38,6 +42,7 @@ class WorkspaceOnboardingService {
     private final AccountWorkspaceMembershipQuery memberships;
     private final WorkspaceOnboardingLinks links;
     private final WorkspaceAiAvailability availability;
+    private final MemberMentorReadiness mentorReadiness;
     private final ConfigAuditPort audit;
     private final Clock clock;
 
@@ -76,7 +81,16 @@ class WorkspaceOnboardingService {
                                         .map(WorkspaceOnboardingService::toDTO)
                                         .toList()))
                         .toList(),
-                linkOptions);
+                linkOptions,
+                mentorRefusal(context.id()));
+    }
+
+    /** A request without a selected developer of this workspace cannot ask Heph either. */
+    private @Nullable MentorRefusalReason mentorRefusal(long workspaceId) {
+        return CurrentScmIdentityHolder.getUserId()
+                .map(developerId -> mentorReadiness.refusal(workspaceId, developerId))
+                .orElse(Optional.of(MentorRefusalReason.UNAVAILABLE))
+                .orElse(null);
     }
 
     private static boolean hasOpenRequiredLink(List<WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO> linkOptions) {

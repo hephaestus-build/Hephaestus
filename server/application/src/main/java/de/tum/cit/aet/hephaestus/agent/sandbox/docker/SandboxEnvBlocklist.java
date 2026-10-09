@@ -9,10 +9,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Blocklist of env-var names callers must not inject into a sandbox: library injection,
- * code-execution-via-tooling, proxy hijacking, credential exfiltration. Used by both the sync
- * and interactive adapters. ASCII-case-insensitive; depends on
- * {@code InteractiveSandboxSpec}'s {@code [A-Za-z_][A-Za-z0-9_]*} key regex to keep Unicode
- * case-folding out of scope.
+ * code-execution-via-tooling, proxy hijacking, credential exfiltration. Used by the practice review
+ * sandbox. Matching folds ASCII case only.
  */
 public final class SandboxEnvBlocklist {
 

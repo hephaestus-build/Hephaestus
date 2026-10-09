@@ -96,7 +96,8 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                         "llm_usage_event",
                         "llm_usage_event",
                         "t.source_id IN (" + SUBJECT_JOBS
-                                + ") OR t.source_id IN (SELECT id FROM chat_message WHERE thread_id IN (SELECT id FROM chat_thread WHERE user_id = ANY(:users)))",
+                                + ") OR t.source_id IN (SELECT mt.id FROM mentor_turn mt JOIN mentor_conversation mc"
+                                + " ON mc.id = mt.conversation_id WHERE mc.user_id = ANY(:users))",
                         "id,workspace_id,job_type,source_type,source_id,source_attempt,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,total_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,occurred_at,usage_provenance",
                         "id",
                         "source_id=gen_random_uuid()",

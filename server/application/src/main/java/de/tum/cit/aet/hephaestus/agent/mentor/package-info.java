@@ -1,14 +1,14 @@
 /**
- * Pi-mentor infrastructure — replaceable layer between {@link de.tum.cit.aet.hephaestus.mentor}
- * (durable REST + JPA) and the Pi runner.
+ * How Heph turns run, between the {@link de.tum.cit.aet.hephaestus.mentor} ledger and the Heph host that runs them.
  *
  * <ul>
- *   <li>{@code chat/} — SSE orchestration ({@link de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChatService}),
- *       JSON-RPC wrapper ({@link de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRunnerClient}),
- *       per-thread mutex, persistence dispatch, AI-SDK {@code UIMessageChunk} wire types
- *       under {@code chat/wire/}, the Pi-event → UI-chunk translator alongside.</li>
- *   <li>{@link de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter} — sandbox-spec adapter,
- *       symmetric with {@code agent/practice/PracticePiAdapter}.</li>
+ *   <li>{@code chat/}: admission ({@link de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission}), billing and
+ *       conversational feedback delivery when a turn ends
+ *       ({@link de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion}), and the lease reaper
+ *       ({@link de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnLeaseReaper}).</li>
+ *   <li>{@code host/}: the worker's Heph host, the one long-lived container that runs this worker's turns, and the
+ *       endpoints it calls with each turn's credential
+ *       ({@link de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnDispatcher}).</li>
  * </ul>
  *
  * <p>Turn cost is derived from the admission-frozen {@code LlmPriceSnapshot} — the single pricing

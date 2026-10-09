@@ -765,9 +765,9 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
      * The {@link FeedbackLocation} of feedback {@code f}, as a native text expression: the one definition that the
      * operator list's column, its filter and the counts by location share, so a count and its filtered list agree.
      * The provider of work is the integration of the review that composed the feedback, which is also where
-     * {@code ReviewedWorkRefDTO#provider} comes from. A conversation's provider is the surface of the thread whose turn
-     * the feedback is linked to. {@code chk_chat_thread_surface} allows only {@code WEB} and {@code SLACK_DM}. Every
-     * subquery carries the workspace by hand, as every query on this table does.
+     * {@code ReviewedWorkRefDTO#provider} comes from. A conversation's provider is the surface of the Heph message the
+     * feedback is linked to: {@code SLACK} when the turn was asked in Slack, the app otherwise. Every subquery carries
+     * the workspace by hand, as every query on this table does.
      */
     String LOCATION = """
         (CASE f.channel
@@ -777,10 +777,9 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
                  FROM agent_job j WHERE j.id = f.agent_job_id AND j.workspace_id = f.workspace_id),
                 'OTHER_WORK')
             ELSE COALESCE(
-                (SELECT CASE t.surface WHEN 'SLACK_DM' THEN 'SLACK' ELSE 'HEPH' END
+                (SELECT CASE e.surface WHEN 'SLACK' THEN 'SLACK' ELSE 'HEPH' END
                  FROM feedback_placement fp
-                 JOIN chat_message m ON m.id = fp.chat_message_id
-                 JOIN chat_thread t ON t.id = m.thread_id AND t.workspace_id = f.workspace_id
+                 JOIN mentor_entry e ON e.id = fp.mentor_entry_id AND e.workspace_id = f.workspace_id
                  WHERE fp.feedback_id = f.id
                  ORDER BY fp.created_at, fp.id
                  LIMIT 1),
@@ -1162,4 +1161,49 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("workspaceId") Long workspaceId,
             @Param("recipientUserId") Long recipientUserId,
             @Param("practiceSlug") String practiceSlug);
+    // ── Weekly digest: which feedback it lists is WeeklyDigestFacts' rule ──────────────────────────────
+
+    /**
+     * Delivered inside the window, {@code delivered_at} after {@code since} and at or before {@code until}, whether
+     * or not a newer card replaced it since. Feedback replaced before delivery has no {@code delivered_at}.
+     */
+    String DELIVERED_BETWEEN = """
+          f.workspaceId = :workspaceId
+          AND f.recipientUserId = :recipientUserId
+          AND f.deliveryState IN :reached
+          AND f.deliveredAt > :since
+          AND f.deliveredAt <= :until
+        """;
+
+    @Query("SELECT f FROM Feedback f WHERE " + DELIVERED_BETWEEN + " ORDER BY f.deliveredAt ASC, f.id ASC")
+    List<Feedback> findDeliveredForRecipientBetween(
+            @Param("workspaceId") Long workspaceId,
+            @Param("recipientUserId") Long recipientUserId,
+            @Param("since") Instant since,
+            @Param("until") Instant until,
+            @Param("reached") Collection<FeedbackDeliveryState> reached);
+
+    /**
+     * Whether anything reached the recipient inside a window, or a card was prepared for their practice pages in
+     * it: the cheap check that runs before a weekly digest is composed.
+     */
+    @Query("""
+        SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM Feedback f
+        WHERE (""" + DELIVERED_BETWEEN + """
+          ) OR (f.workspaceId = :workspaceId
+              AND f.recipientUserId = :recipientUserId
+              AND f.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_APP
+              AND f.deliveryState = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.PREPARED
+              AND f.createdAt > :since
+              AND f.createdAt <= :until)
+        """)
+    boolean existsReceivedBetween(
+            @Param("workspaceId") Long workspaceId,
+            @Param("recipientUserId") Long recipientUserId,
+            @Param("since") Instant since,
+            @Param("until") Instant until,
+            @Param("reached") Collection<FeedbackDeliveryState> reached);
+
+    List<Feedback> findByWorkspaceIdAndRecipientUserIdAndIdIn(
+            Long workspaceId, Long recipientUserId, Collection<UUID> ids);
 }

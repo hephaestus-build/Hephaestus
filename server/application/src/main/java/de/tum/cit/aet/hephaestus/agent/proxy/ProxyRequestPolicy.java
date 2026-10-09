@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 class ProxyRequestPolicy {
     private final EgressPolicy egress;
     private final AgentJobRepository jobs;
-    private final ChatMessageRepository messages;
+    private final MentorTurnRepository turns;
     private final ReviewMemberAiPolicy reviews;
     private final MemberAiRoutingAdapter routing;
 
@@ -28,7 +28,7 @@ class ProxyRequestPolicy {
     public boolean allows(ProxyRouting request) {
         Long workspaceId = request.workspaceId();
         var attempt = request.attempt();
-        if (workspaceId == null || attempt == null) return false;
+        if (workspaceId == null) return false;
         var model = new LlmModelResolver.ConnectionRef(
                 request.connectionScope(), request.connectionId(), request.modelId(), workspaceId);
         return switch (attempt.sourceType()) {
@@ -37,7 +37,7 @@ class ProxyRequestPolicy {
                         .filter(job -> reviews.allows(job, model))
                         .isPresent();
             case MENTOR_TURN ->
-                messages.findDeveloperIdByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
+                turns.findDeveloperIdByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
                         .filter(developer -> routing.allows(workspaceId, developer, model))
                         .isPresent();
         };

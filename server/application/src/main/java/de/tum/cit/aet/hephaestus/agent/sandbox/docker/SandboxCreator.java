@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -8,15 +11,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The application container that creates interactive sandbox resources. Only the process that
- * created a mentor sandbox tracks it, in memory, and processes sharing a Docker daemon cannot see
- * each other's memory. So every interactive resource records its creator when it is created, and
- * automatic cleanup can wait until that creator is gone.
+ * The worker container that creates a Heph host's resources. Only the process that started a host
+ * tracks it, in memory, and processes sharing a Docker daemon cannot see each other's memory. So
+ * every host resource records its creator when it is created, and automatic cleanup can wait until
+ * that creator is gone.
  *
  * <p>The creator is the container this process runs in, found by the id Docker gives it as its default
  * hostname; it is also the one container {@link SandboxNetworkManager} joins to a sandbox network. A
- * process that cannot be identified that way records no creator, joins no network, and what it creates
- * is never removed by automatic cleanup.
+ * process outside any container records no creator and joins no network, and automatic cleanup never
+ * removes what it creates. A process in a container that it cannot identify starts no Heph host
+ * ({@link DockerHostSandbox}).
  */
 public class SandboxCreator {
 
@@ -34,6 +38,9 @@ public class SandboxCreator {
     }
 
     private static final Pattern DEFAULT_HOSTNAME = Pattern.compile("[0-9a-f]{12,64}");
+
+    /** Files that Docker and Podman put into every container they start. */
+    private static final List<String> CONTAINER_MARKERS = List.of(".dockerenv", "run/.containerenv");
 
     private final DockerInspectOperations containers;
     private final Supplier<@Nullable String> hostname;
@@ -85,10 +92,17 @@ public class SandboxCreator {
     private void reportUnidentified(String reason) {
         if (!reportedUnidentified) {
             reportedUnidentified = true;
-            log.warn(
-                    "Cannot identify this process's container ({}); mentor sandboxes it starts while this lasts "
-                            + "record no creator, so automatic cleanup never removes them",
-                    reason);
+            if (outsideContainer()) {
+                log.warn(
+                        "This process runs outside a container ({}); a Heph host it starts records no creator, so "
+                                + "automatic cleanup never removes it",
+                        reason);
+            } else {
+                log.warn(
+                        "Cannot identify this process's container ({}); it starts no Heph host while this lasts. "
+                                + "Keep the container's default hostname",
+                        reason);
+            }
         }
     }
 
@@ -110,6 +124,18 @@ public class SandboxCreator {
             log.debug("Could not inspect sandbox creator {}: {}", id, e.getMessage());
             return Liveness.UNREADABLE;
         }
+    }
+
+    /**
+     * Whether this process runs on the machine itself rather than in a container. A container that this process
+     * cannot identify (a custom {@code hostname:}) is still a container: it is not outside Docker.
+     */
+    public boolean outsideContainer() {
+        return outsideContainer(Path.of("/"));
+    }
+
+    static boolean outsideContainer(Path root) {
+        return CONTAINER_MARKERS.stream().noneMatch(marker -> Files.exists(root.resolve(marker)));
     }
 
     /** Whether this process, in its current start, created the resource. */

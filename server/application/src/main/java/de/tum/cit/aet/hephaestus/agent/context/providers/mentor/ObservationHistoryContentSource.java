@@ -2,9 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.HephTurnRequest;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -16,10 +17,12 @@ import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +34,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
@@ -96,11 +100,12 @@ public class ObservationHistoryContentSource implements ContentSource {
     private final ConversationConsentGate conversationConsentGate;
     private final ObservationVisibilityPolicy visibilityPolicy;
     private final ReviewedWorkCoverage reviewedWorkCoverage;
+    private final WorkspaceActorSelector actorSelector;
     private final ObjectMapper objectMapper;
 
     @Override
     public boolean supports(ContextRequest request) {
-        return request instanceof MentorChatRequest;
+        return request instanceof HephTurnRequest;
     }
 
     @Override
@@ -111,7 +116,7 @@ public class ObservationHistoryContentSource implements ContentSource {
     @Override
     @Transactional(readOnly = true)
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
-        MentorChatRequest req = (MentorChatRequest) request;
+        HephTurnRequest req = (HephTurnRequest) request;
         ObjectNode payload = buildPayload(req.workspaceId(), req.developerId());
         try {
             files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(payload));
@@ -136,10 +141,13 @@ public class ObservationHistoryContentSource implements ContentSource {
                 .findById(developerId)
                 .orElseThrow(() -> new EntityNotFoundException("User", developerId.toString()));
         Selection selection = select(workspaceId, developerId);
-        List<PullRequestReview> reviews = queryRepository.findReviewsReceivedSince(
-                workspaceId, developerId, selection.since(), PageRequest.of(0, MAX_RECENT_REVIEWS));
-        Map<UUID, ObjectNode> reviewedWork =
-                reviewedWorkCoverage.of(workspaceId, selection.all().toList());
+        // Reviews are read only on the workspace's connected instance; without one there are none to list.
+        List<PullRequestReview> reviews = actorSelector
+                .connectedProviderId(workspaceId)
+                .map(providerId -> queryRepository.findReviewsReceivedSince(
+                        workspaceId, providerId, developerId, selection.since(), PageRequest.of(0, MAX_RECENT_REVIEWS)))
+                .orElse(List.of());
+        Map<UUID, RowFacts> reviewedWork = rowFacts(workspaceId, selection.all().toList());
         return fittedOverview(user, selection, reviews, reviewedWork);
     }
 
@@ -171,7 +179,7 @@ public class ObservationHistoryContentSource implements ContentSource {
         }
         root.put("readAt", selection.preparedAt().toString());
         root.put("list", listed.get().getKey());
-        Map<UUID, ObjectNode> reviewedWork = reviewedWorkCoverage.of(workspaceId, List.of(observation));
+        Map<UUID, RowFacts> reviewedWork = rowFacts(workspaceId, List.of(observation));
         ObjectNode row = root.putObject("observation");
         describe(row, observation, reviewedWork);
         describeEvidence(row, observation);
@@ -262,7 +270,7 @@ public class ObservationHistoryContentSource implements ContentSource {
      * says so rather than pretending to be complete.
      */
     private ObjectNode fittedOverview(
-            User user, Selection selection, List<PullRequestReview> reviews, Map<UUID, ObjectNode> reviewedWork) {
+            User user, Selection selection, List<PullRequestReview> reviews, Map<UUID, RowFacts> reviewedWork) {
         List<Listed> lists = selection.lists().stream()
                 .map(list -> new Listed(list.name(), new ArrayList<>(list.rows())))
                 .toList();
@@ -303,7 +311,7 @@ public class ObservationHistoryContentSource implements ContentSource {
             List<Listed> lists,
             int selectedReviews,
             List<PullRequestReview> reviews,
-            Map<UUID, ObjectNode> reviewedWork,
+            Map<UUID, RowFacts> reviewedWork,
             Set<UUID> summariesLeftOut) {
         Instant preparedAt = selection.preparedAt();
         List<Observation> recent = lists.getFirst().rows();
@@ -316,6 +324,10 @@ public class ObservationHistoryContentSource implements ContentSource {
             conversationConsentGate.writeUntrustedEnvelope(root);
         }
         root.putObject("user").put("login", user.getLogin()).put("name", user.getName());
+        root.put(
+                "about",
+                "Observations are what Hephaestus's automated practice reviews recorded about the developer's work; "
+                        + "reviewsReceived are reviews people left on their pull requests.");
         root.set("coverage", objectMapper.valueToTree(Coverage.of(preparedAt)));
         root.putObject("detail")
                 .put("loaded", false)
@@ -372,6 +384,9 @@ public class ObservationHistoryContentSource implements ContentSource {
             }
             if (review.getAuthor() != null) {
                 node.put("reviewer", review.getAuthor().getLogin());
+                if (review.getAuthor().getType() == User.Type.BOT) {
+                    node.put("bot", true);
+                }
             }
             if (review.getState() != null) {
                 node.put("state", review.getState().name());
@@ -400,7 +415,52 @@ public class ObservationHistoryContentSource implements ContentSource {
         return root;
     }
 
-    private static void describe(ObjectNode node, Observation o, Map<UUID, ObjectNode> reviewedWork) {
+    /**
+     * What a row says beyond the observation itself: how the reviewed work relates to the stored copy, and the work's
+     * number, title and link where it is a pull request or issue.
+     */
+    private record RowFacts(ObjectNode reviewedWork, MentorContextQueryRepository.@Nullable WorkRef work) {}
+
+    private Map<UUID, RowFacts> rowFacts(long workspaceId, List<Observation> observations) {
+        Map<UUID, ObjectNode> coverage = reviewedWorkCoverage.of(workspaceId, observations);
+        Map<Long, MentorContextQueryRepository.WorkRef> works = new HashMap<>();
+        // Work is named only where it can be read: on the workspace's connected instance.
+        actorSelector.connectedProviderId(workspaceId).ifPresent(providerId -> {
+            List<Long> pullRequestIds = workIds(observations, ArtifactKinds.PULL_REQUEST);
+            if (!pullRequestIds.isEmpty()) {
+                queryRepository
+                        .findPullRequestRefs(workspaceId, providerId, pullRequestIds)
+                        .forEach(ref -> works.put(ref.getId(), ref));
+            }
+            List<Long> issueIds = workIds(observations, ArtifactKinds.ISSUE);
+            if (!issueIds.isEmpty()) {
+                queryRepository
+                        .findIssueRefs(workspaceId, providerId, issueIds)
+                        .forEach(ref -> works.put(ref.getId(), ref));
+            }
+        });
+        Map<UUID, RowFacts> facts = new HashMap<>();
+        for (Observation o : observations) {
+            Long artifactId = o.getArtifactId();
+            facts.put(
+                    o.getId(),
+                    new RowFacts(
+                            Objects.requireNonNull(coverage.get(o.getId())),
+                            artifactId == null ? null : works.get(artifactId)));
+        }
+        return facts;
+    }
+
+    private static List<Long> workIds(List<Observation> observations, ArtifactKind kind) {
+        return observations.stream()
+                .filter(o -> kind.equals(o.getArtifactKind()))
+                .map(Observation::getArtifactId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private static void describe(ObjectNode node, Observation o, Map<UUID, RowFacts> reviewedWork) {
         node.put("id", o.getId().toString());
         node.put("resource", resourceOf(o.getId()));
         node.put("reviewId", o.getAgentJobId().toString());
@@ -418,7 +478,15 @@ public class ObservationHistoryContentSource implements ContentSource {
         if (o.getArtifactId() != null) {
             node.put("artifactId", o.getArtifactId());
         }
-        node.set("reviewedWork", Objects.requireNonNull(reviewedWork.get(o.getId())));
+        RowFacts facts = Objects.requireNonNull(reviewedWork.get(o.getId()));
+        MentorContextQueryRepository.WorkRef work = facts.work();
+        if (work != null) {
+            node.putObject("work")
+                    .put("number", work.getNumber())
+                    .put("title", work.getTitle())
+                    .put("url", work.getUrl());
+        }
+        node.set("reviewedWork", facts.reviewedWork());
     }
 
     private static void describeEvidence(ObjectNode node, Observation o) {

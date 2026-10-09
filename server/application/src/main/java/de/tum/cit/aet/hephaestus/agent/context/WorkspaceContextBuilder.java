@@ -459,7 +459,7 @@ public class WorkspaceContextBuilder {
         }
     }
 
-    /** The job behind any review request, or {@code null} for the mentor-chat flow. */
+    /** The job behind any review request, or {@code null} for a Heph turn. */
     private static @Nullable AgentJob reviewJob(ContextRequest request) {
         return switch (request) {
             case ContextRequest.PracticeReviewRequest pr -> pr.job();
@@ -467,7 +467,7 @@ public class WorkspaceContextBuilder {
             case ContextRequest.ConversationReviewRequest cr -> cr.job();
             case ContextRequest.DocumentReviewRequest dr -> dr.job();
             // Synchronous mentor chat has no job.
-            case ContextRequest.MentorChatRequest ignored -> null;
+            case ContextRequest.HephTurnRequest ignored -> null;
         };
     }
 }

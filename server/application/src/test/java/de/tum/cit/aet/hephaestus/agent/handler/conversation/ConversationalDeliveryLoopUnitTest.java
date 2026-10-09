@@ -61,7 +61,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.context.ApplicationEventPublisher;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -84,9 +83,6 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     @Mock
     private ObservationRepository observationRepository;
-
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
 
     @Mock
     private OutboundEgressGuard egressGuard;
@@ -147,12 +143,7 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
         when(feedbackRepository.existsByAgentJobIdAndPosition(any(), anyInt())).thenReturn(false);
         when(feedbackRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         return new ConversationalFeedbackPreparer(
-                feedbackRepository,
-                feedbackObservationRepository,
-                observationRepository,
-                supersession,
-                eventPublisher,
-                egressGuard);
+                feedbackRepository, feedbackObservationRepository, observationRepository, supersession, egressGuard);
     }
 
     private ConversationalDeliveryReconciler reconciler() {
@@ -314,7 +305,6 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
         assertThat(prepared).isZero();
         verify(feedbackRepository, never()).save(any());
-        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     private enum ObsKind {
@@ -413,7 +403,6 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
         int prepared = preparer().prepare(job, WS, admitted, List.of());
 
         assertThat(prepared).isZero();
-        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -425,8 +414,6 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
         int prepared = preparer.prepare(UUID.randomUUID(), WS, List.of(problem(null, null)), List.of());
 
         assertThat(prepared).isZero();
-        // any(Object.class), not any(): binds the publishEvent(Object) overload the record actually dispatches to.
-        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -451,7 +438,7 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
         ArgumentCaptor<FeedbackPlacement> placement = ArgumentCaptor.forClass(FeedbackPlacement.class);
         verify(feedbackPlacementRepository, times(1)).save(placement.capture());
         assertThat(placement.getValue().getPlacementType()).isEqualTo(PlacementType.CONVERSATION_TURN);
-        assertThat(placement.getValue().getChatMessageId()).isEqualTo(msg);
+        assertThat(placement.getValue().getMentorEntryId()).isEqualTo(msg);
     }
 
     @Test

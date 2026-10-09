@@ -158,6 +158,8 @@ class AccountWorkspaceMembershipQueryIntegrationTest extends BaseIntegrationTest
             assertThat(view.workspaceId()).isEqualTo(workspace.getId());
             assertThat(view.role()).isEqualTo("OWNER");
             assertThat(view.memberId()).isEqualTo(firstLinkedActor.getId());
+            // Every actor of the account in the workspace, so a Heph conversation is found by any of them.
+            assertThat(view.memberIds()).containsExactlyInAnyOrder(firstLinkedActor.getId(), olderActor.getId());
         });
 
         laterMembership.setRole(WorkspaceMembership.WorkspaceRole.MEMBER);

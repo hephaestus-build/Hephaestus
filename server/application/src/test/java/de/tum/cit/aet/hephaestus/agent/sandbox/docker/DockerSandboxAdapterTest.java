@@ -253,8 +253,6 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             String job = JOB_ID.toString();
             Map<String, String> sessionLabels = new HashMap<>(attemptLabels(job, "1"));
             sessionLabels.put(SandboxLabels.SESSION_ID, UUID.randomUUID().toString());
-            Map<String, String> interactiveLabels = new HashMap<>(attemptLabels(job, "1"));
-            interactiveLabels.put(SandboxLabels.KIND, SandboxLabels.KIND_INTERACTIVE);
             when(containerManager.listManagedContainers())
                     .thenReturn(List.of(
                             container("earlier", attemptLabels(job, "1")),
@@ -275,8 +273,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                                             job,
                                             SandboxLabels.JOB_ATTEMPT,
                                             "1")),
-                            container("session", sessionLabels),
-                            container("interactive", interactiveLabels)));
+                            container("session", sessionLabels)));
             Map<String, String> labels = attemptLabels(job, "2");
             when(securityPolicy.buildLabels(JOB_ID, 2)).thenReturn(labels);
             when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
@@ -300,8 +297,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     "overflow",
                     "other-job",
                     "other-owner",
-                    "session",
-                    "interactive")) {
+                    "session")) {
                 verify(containerManager, never()).forceRemove(protectedId);
             }
             assertThat(runtimeContainer.get().labels()).containsEntry(SandboxLabels.JOB_ATTEMPT, "2");

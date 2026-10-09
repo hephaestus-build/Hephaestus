@@ -23,18 +23,18 @@ export function PracticeFeedbackSection({
 					Practice feedback
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					Your workspace can deliver AI-generated practice feedback on work you author, and send
-					related Slack reminders. You can turn both off below.
+					Your workspace can deliver AI-generated practice feedback on work you author. You can turn
+					it off below.
 				</p>
 			</div>
 
 			<Field orientation="horizontal">
 				<FieldContent>
-					<FieldLabel htmlFor="practice-feedback-delivery">Comments and Slack reminders</FieldLabel>
+					<FieldLabel htmlFor="practice-feedback-delivery">Comments on your work</FieldLabel>
 					<FieldDescription>
 						Turn this off to stop new comments on issues, pull requests, and merge requests you
-						author, and related Slack reminders. Reviews still run, and workspace admins can still
-						see the resulting observations.
+						author. Reviews still run, and workspace admins can still see the resulting
+						observations.
 					</FieldDescription>
 				</FieldContent>
 				<Switch

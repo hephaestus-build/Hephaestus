@@ -14,9 +14,9 @@ class FrameCodecRoundTripTest extends BaseUnitTest {
 
     @Test
     void preservesAllFieldsThroughRoundTrip() {
-        // CapacityReport carries six ints; if the sealed-switch + polymorphic deser is wired wrong
-        // the decoded record will not equal the input. Stronger signal than instanceof-check.
-        CapacityReport payload = new CapacityReport(4, 2, 1, 0, 3, 2);
+        // If the sealed-switch + polymorphic deser is wired wrong the decoded record will not equal
+        // the input. Stronger signal than instanceof-check.
+        CapacityReport payload = new CapacityReport(4, 1, 3);
         FrameEnvelope envelope = FrameEnvelope.of(payload);
 
         FrameEnvelope decoded = codec.decode(codec.encode(envelope));
@@ -35,28 +35,17 @@ class FrameCodecRoundTripTest extends BaseUnitTest {
     }
 
     @Test
-    void mentorCommandsAndEventsRoundTripWithUnicodeAndBinaryInputs() {
-        var mapper = new ObjectMapper();
-        var body = mapper.createObjectNode().put("text", "Heph 🌍");
-        var session = UUID.randomUUID();
-        var request = UUID.randomUUID();
-        for (var operation : MentorSessionCommand.Operation.values()) {
-            var input = FrameEnvelope.of(new MentorSessionCommand(session, request, operation, body));
-            assertThat(codec.decode(codec.encode(input))).isEqualTo(input);
-        }
-        for (var kind : MentorSessionEvent.Kind.values()) {
-            var input = FrameEnvelope.of(new MentorSessionEvent(session, request, kind, body));
-            assertThat(codec.decode(codec.encode(input))).isEqualTo(input);
-        }
+    void shouldRoundTripUnicodeTextWhenAFrameIsEncodedAndDecoded() {
+        var input = FrameEnvelope.of(new CancelJob(UUID.randomUUID().toString(), "Heph 🌍"));
+        assertThat(codec.decode(codec.encode(input))).isEqualTo(input);
     }
 
     @Test
     void checksUtf8BytesRatherThanJavaCharacterCount() {
         String oversized = "🌍".repeat(FrameCodec.MAX_FRAME_BYTES / 4 + 1);
         assertThatThrownBy(() -> codec.decode(oversized)).isInstanceOf(FrameCodec.FrameCodecException.class);
-        var body = new ObjectMapper().createObjectNode().put("text", oversized);
-        assertThatThrownBy(() -> codec.encode(FrameEnvelope.of(
-                        new MentorSessionEvent(UUID.randomUUID(), null, MentorSessionEvent.Kind.FRAME, body))))
+        assertThatThrownBy(() -> codec.encode(
+                        FrameEnvelope.of(new CancelJob(UUID.randomUUID().toString(), oversized))))
                 .isInstanceOf(FrameCodec.FrameCodecException.class);
     }
 }

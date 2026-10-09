@@ -43,11 +43,14 @@ dependencies {
     implementation(libs.angus.mail)
     implementation(libs.spring.boot.starter.thymeleaf)
     implementation(libs.spring.boot.starter.aspectj)
-    runtimeOnly(libs.postgresql)
+    // The Heph ledger listens for PostgreSQL notifications through the driver's own API.
+    implementation(libs.postgresql)
     runtimeOnly(libs.h2)
     compileOnly(libs.lombok)
     // docker-java exposes Immutables metadata; consumers need annotations, not its processor.
     compileOnly(libs.immutables.value.annotations)
+    // PostgreSQL driver types carry Checker Framework annotations that javac must resolve.
+    compileOnly(libs.checker.qual)
     implementation(libs.spring.modulith.starter.core)
     // Event publication registry: the durable outbox behind notification listeners (ADR 0044).
     implementation(libs.spring.modulith.starter.jdbc)

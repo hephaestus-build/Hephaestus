@@ -11,8 +11,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>Deactivation (disconnect/uninstall) does <b>not</b> hook in here: the Slack persistence layer
  * ({@code slack_message}, {@code slack_thread}, {@code slack_monitored_channel},
- * {@code slack_participant_consent}, {@code mentor_slack_thread}) is real and PII-bearing, and its GDPR
- * hard-erase runs synchronously inside the fenced disconnect transaction in
+ * {@code slack_participant_consent}, the Slack identity on {@code mentor_conversation}) is real and
+ * PII-bearing, and its GDPR hard-erase runs synchronously inside the fenced disconnect transaction in
  * {@code SlackConnectionStrategy#eraseLocalData} (via {@code SlackWorkspaceContentEraser}) rather than on
  * an AFTER_COMMIT lifecycle event, as Outline's does.
  */

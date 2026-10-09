@@ -2,15 +2,17 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.HephTurnRequest;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +22,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Materialises {@code inputs/context/user.json} for {@link MentorChatRequest}.
+ * Materialises {@code inputs/context/user.json} for {@link HephTurnRequest}.
  *
  * <p>The provider does NOT decide whether a piece of data is relevant — the agent does, given the
  * full week/last-week numbers and a small set of pre-generated insight strings.
@@ -39,11 +41,12 @@ public class UserContentSource implements ContentSource {
 
     private final UserRepository userRepository;
     private final MentorContextQueryRepository queryRepository;
+    private final WorkspaceActorSelector actorSelector;
     private final ObjectMapper objectMapper;
 
     @Override
     public boolean supports(ContextRequest request) {
-        return request instanceof MentorChatRequest;
+        return request instanceof HephTurnRequest;
     }
 
     @Override
@@ -57,7 +60,7 @@ public class UserContentSource implements ContentSource {
     @Override
     @Transactional(readOnly = true)
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
-        MentorChatRequest req = (MentorChatRequest) request;
+        HephTurnRequest req = (HephTurnRequest) request;
         ObjectNode payload = buildPayload(req.workspaceId(), req.developerId());
         try {
             files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(payload));
@@ -77,7 +80,17 @@ public class UserContentSource implements ContentSource {
         Instant weekAgo = now.minus(7, ChronoUnit.DAYS);
         Instant twoWeeksAgo = now.minus(14, ChronoUnit.DAYS);
 
-        MentorUserCounts c = queryRepository.fetchUserCounts(workspaceId, developerId, twoWeeksAgo, weekAgo, now);
+        // A repository path names a repository only on one instance: no counts without the connected one.
+        Optional<Long> provider = actorSelector.connectedProviderId(workspaceId);
+        if (provider.isEmpty()) {
+            ObjectNode root = objectMapper.createObjectNode();
+            root.putObject("user").put("login", user.getLogin()).put("name", user.getName());
+            root.put("status", "UNAVAILABLE");
+            root.put("reason", "The workspace has no connected GitHub or GitLab instance.");
+            return root;
+        }
+        MentorUserCounts c =
+                queryRepository.fetchUserCounts(workspaceId, provider.get(), developerId, twoWeeksAgo, weekAgo, now);
         long openPRs = c.openPRs();
         long mergedThisWeek = c.mergedThisWeek();
         long mergedLastWeek = c.mergedLastWeek();

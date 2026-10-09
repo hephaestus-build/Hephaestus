@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -50,6 +52,17 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
     @Transactional(propagation = Propagation.MANDATORY)
     public void holdForErasure() {
         jdbc.query("SELECT pg_advisory_xact_lock(2165,1)", rs -> {});
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean erasedSince(String store, Instant since) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM person_data_request r
+                    CROSS JOIN LATERAL jsonb_each(CAST(r.completed_json AS jsonb)) step
+                    WHERE step.key = ? AND CAST(step.value ->> 'completedAt' AS timestamptz) >= ?)
+                """, Boolean.class, store, Timestamp.from(since)));
     }
 
     private Lease acquire(boolean shared) {

@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.HephTurnRequest;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -15,17 +15,17 @@ import org.junit.jupiter.api.Test;
 class ContextRequestTest extends BaseUnitTest {
 
     @Test
-    void mentorChatRequestValidation() {
+    void hephTurnRequestValidation() {
         UUID threadId = UUID.randomUUID();
-        MentorChatRequest req = new MentorChatRequest(1L, 2L, threadId);
+        HephTurnRequest req = new HephTurnRequest(1L, 2L, threadId);
         assertThat(req.workspaceId()).isEqualTo(1L);
         assertThat(req.developerId()).isEqualTo(2L);
-        assertThat(req.threadId()).isEqualTo(threadId);
+        assertThat(req.conversationId()).isEqualTo(threadId);
 
-        assertThatThrownBy(() -> new MentorChatRequest(0L, 2L, threadId))
+        assertThatThrownBy(() -> new HephTurnRequest(0L, 2L, threadId))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("workspaceId");
-        assertThatThrownBy(() -> new MentorChatRequest(1L, 0L, threadId))
+        assertThatThrownBy(() -> new HephTurnRequest(1L, 0L, threadId))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("developerId");
     }

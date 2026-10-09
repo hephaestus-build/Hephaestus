@@ -1,0 +1,12 @@
+[(#{email.mentor-digest.subject})]
+
+Your weekly digest for [(${weekDays})] in [(${workspaceName})] is ready in Hephaestus.
+
+Open in Hephaestus: [(${workspaceAddress})]/mentor?entry=[(${entryId})]
+
+Open it to go through it with Heph. Replies to this email are not read.
+
+Turn off the weekly digest: [(${unsubscribeUrl})]
+
+--
+[(#{email.footer(${webappUrl})})]

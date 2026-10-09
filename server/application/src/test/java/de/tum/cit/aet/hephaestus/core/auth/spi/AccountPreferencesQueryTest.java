@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.account.UserPreferences;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery.PreferencesView;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.ZoneId;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,16 @@ class AccountPreferencesQueryTest extends BaseUnitTest {
             @Override
             public Optional<PreferencesView> preferencesForUserId(long userId) {
                 return stored == null ? Optional.empty() : Optional.of(new PreferencesView(true, stored));
+            }
+
+            @Override
+            public Optional<ZoneId> timeZoneForUserId(long userId) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<ZoneId> timeZoneForAccount(long accountId) {
+                return Optional.empty();
             }
         };
     }

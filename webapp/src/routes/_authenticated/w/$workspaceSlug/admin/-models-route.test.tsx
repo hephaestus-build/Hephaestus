@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { deferred } from "@/test/async";
 
 import { getMemberOnboardingQueryKey, listAgentsQueryKey } from "@/api/@tanstack/react-query.gen";
-import type { AgentBinding } from "@/api/types.gen";
+import type { AgentBinding, WorkspaceOnboarding } from "@/api/types.gen";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
@@ -57,7 +57,6 @@ function binding(
 		ready: true,
 		timeoutSeconds: 600,
 		maxConcurrentJobs: 3,
-		allowInternet: false,
 	};
 }
 
@@ -410,23 +409,24 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 	expect(pickerOf(row("Practice reviews", "Cloud")).textContent).toContain("Select a model");
 });
 
+/** A member who chose Cloud, answered as the server would for the workspace's `bindings`. */
+function cloudMemberOnboarding(bindings: AgentBinding[]): WorkspaceOnboarding {
+	const mentorReady = bindings.some((entry) => entry.purpose === "MENTOR");
+	return {
+		...workspaceOnboarding(),
+		aiChoice: "CLOUD",
+		...(mentorReady ? {} : { mentorRefusal: "UNAVAILABLE" }),
+		aiOptions: [{ choice: "CLOUD", mentorReady, practiceReviewsReady: true, models: [] }],
+	};
+}
+
 it("lists Heph in the navigation once a Heph model is assigned, and drops it when the assignment is cleared", async () => {
 	const user = userEvent.setup();
 	let bindings: AgentBinding[] = [binding("PRACTICE_REVIEW", 20)];
 	mockModelsRoute(() => bindings);
 	server.use(
 		http.get("*/workspaces/acme/onboarding/me", () =>
-			HttpResponse.json({
-				...workspaceOnboarding(),
-				aiOptions: [
-					{
-						choice: "CLOUD",
-						mentorReady: bindings.some((entry) => entry.purpose === "MENTOR"),
-						practiceReviewsReady: true,
-						models: [],
-					},
-				],
-			}),
+			HttpResponse.json(cloudMemberOnboarding(bindings)),
 		),
 		http.put("*/workspaces/acme/agents/MENTOR", () => {
 			bindings = [...bindings, binding("MENTOR", 20)];

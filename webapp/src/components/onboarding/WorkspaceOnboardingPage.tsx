@@ -40,7 +40,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { isMentorSetUp } from "@/lib/mentor-preference";
 import { openRequiredLinks } from "@/lib/onboarding-links";
 import { type WorkspaceCoverage, workspaceCoverage } from "@/lib/workspace-coverage";
 
@@ -484,7 +483,8 @@ function memberSetupState(
 	const heading = "Your AI choice";
 	const models = data?.aiOptions.find((option) => option.choice === choice)?.models ?? [];
 	const workspaceName = data?.workspaceName ?? "this workspace";
-	const mentorSetUp = data !== undefined && isMentorSetUp(data);
+	// Whether any choice would bring Heph here, so the question names it.
+	const mentorSetUp = data?.aiOptions.some((option) => option.mentorReady) === true;
 	let intro = "Your answer controls future AI requests across all your workspaces.";
 	if (firstVisit) {
 		intro = mentorSetUp

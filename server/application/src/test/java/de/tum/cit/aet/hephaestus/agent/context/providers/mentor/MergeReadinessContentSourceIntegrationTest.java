@@ -430,8 +430,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
 
         ((MergeReadinessContentSource) transactional.getProxy())
                 .contribute(
-                        new ContextRequest.MentorChatRequest(
-                                workspace.getId(), student.getId(), UUID.randomUUID(), null),
+                        new ContextRequest.HephTurnRequest(workspace.getId(), student.getId(), UUID.randomUUID(), null),
                         files);
 
         assertThat(pages.get()).isEqualTo(2);
@@ -609,6 +608,15 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
             assertThat(entry.path(field)).as(field).isEqualTo(beforeMerge.path(field));
         }
         assertThat(entry.path("latestReviews").get(0).path("bot").asBoolean()).isTrue();
+        assertThat(entry.path("latestReviews").get(0).path("url").asString()).isEqualTo(mr.getHtmlUrl() + "#approvals");
+        assertThat(entry.path("generalNotes").get(0).path("url").asString()).startsWith(mr.getHtmlUrl() + "#note_");
+        assertThat(entry.path("threads")
+                        .get(0)
+                        .path("comments")
+                        .get(0)
+                        .path("url")
+                        .asString())
+                .startsWith(mr.getHtmlUrl() + "#note_");
         assertThat(entry.path("threads")
                         .get(0)
                         .path("comments")
@@ -844,8 +852,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
 
     private JsonNode payload(long workspaceId, long developerId) {
         Map<String, byte[]> files = new HashMap<>();
-        source.contribute(
-                new ContextRequest.MentorChatRequest(workspaceId, developerId, UUID.randomUUID(), null), files);
+        source.contribute(new ContextRequest.HephTurnRequest(workspaceId, developerId, UUID.randomUUID(), null), files);
         return objectMapper.readTree(Objects.requireNonNull(files.get(MergeReadinessContentSource.OUTPUT_KEY)));
     }
 

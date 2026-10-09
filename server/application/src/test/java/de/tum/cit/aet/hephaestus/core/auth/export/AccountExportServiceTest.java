@@ -65,6 +65,7 @@ class AccountExportServiceTest extends BaseUnitTest {
         Account account = new Account("Ada Lovelace");
         setId(account, ACCOUNT_ID);
         account.setPrimaryEmail("ada@example.com");
+        account.setTimeZone("Europe/Berlin");
         account.setAppRole(Account.AppRole.USER);
         account.setStatus(Account.Status.ACTIVE);
         account.setCreatedAt(clock.instant());
@@ -82,7 +83,8 @@ class AccountExportServiceTest extends BaseUnitTest {
         when(featureRepo.findFlagsByAccountId(ACCOUNT_ID)).thenReturn(List.of("notification_access"));
         when(authEventRepo.findByAccountSince(eq(ACCOUNT_ID), any())).thenReturn(List.of());
         when(membershipQuery.membershipsForAccount(ACCOUNT_ID))
-                .thenReturn(List.of(new WorkspaceMembershipView(7L, "tum-ase", "TUM ASE", "MEMBER", 314L)));
+                .thenReturn(
+                        List.of(new WorkspaceMembershipView(7L, "tum-ase", "TUM ASE", "MEMBER", 314L, List.of(314L))));
         when(preferencesQuery.preferencesForAccount(ACCOUNT_ID))
                 .thenReturn(Optional.of(new AccountPreferencesQuery.PreferencesView(!participating, false)));
 
@@ -95,7 +97,8 @@ class AccountExportServiceTest extends BaseUnitTest {
                 gitProviderRegistry,
                 clock,
                 accountId -> new AccountAiChoiceExport.Choice("NO_AI", clock.instant()),
-                accountId -> new NotificationPreferencesExportQuery.Preferences(false, false, false, false, false),
+                accountId ->
+                        new NotificationPreferencesExportQuery.Preferences(false, false, false, false, false, false),
                 research);
 
         ExportBundle bundle = assembler.assemble(ACCOUNT_ID);
@@ -103,6 +106,7 @@ class AccountExportServiceTest extends BaseUnitTest {
         assertThat(bundle.schemaVersion()).isEqualTo(ExportBundle.SCHEMA_VERSION);
         assertThat(bundle.account().id()).isEqualTo(ACCOUNT_ID);
         assertThat(bundle.account().primaryEmail()).isEqualTo("ada@example.com");
+        assertThat(bundle.account().timeZone()).isEqualTo("Europe/Berlin");
         assertThat(bundle.identities()).singleElement().satisfies(i -> {
             assertThat(i.provider()).isEqualTo("GITLAB");
             assertThat(i.usernameAtSignup()).isEqualTo("ada");

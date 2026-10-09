@@ -17,8 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
@@ -33,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 class OutlineDocumentContentSourceTest extends BaseUnitTest {
@@ -54,13 +52,13 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
     private IssueRepository issueRepository;
 
     @Mock
-    private ChatMessageRepository chatMessageRepository;
+    private MentorEntryRepository mentorEntryRepository;
 
     private OutlineDocumentContentSource provider;
 
     @BeforeEach
     void setUp() {
-        provider = new OutlineDocumentContentSource(projection, objectMapper, chatMessageRepository);
+        provider = new OutlineDocumentContentSource(projection, objectMapper, mentorEntryRepository);
     }
 
     private ContextRequest.PracticeReviewRequest prRequest(String body) {
@@ -91,8 +89,8 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
         return new ContextRequest.IssueReviewRequest(job);
     }
 
-    private ContextRequest.MentorChatRequest mentorRequest() {
-        return new ContextRequest.MentorChatRequest(WORKSPACE_ID, 7L, UUID.randomUUID());
+    private ContextRequest.HephTurnRequest mentorRequest() {
+        return new ContextRequest.HephTurnRequest(WORKSPACE_ID, 7L, UUID.randomUUID());
     }
 
     private static ProjectedDocument doc(String collection, String slug, String title, String body) {
@@ -138,6 +136,7 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
                 false,
                 null,
                 null,
+                null,
                 null);
     }
 
@@ -160,6 +159,7 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
                 List.of(),
                 false,
                 collectionName,
+                null,
                 null,
                 null);
     }
@@ -207,6 +207,43 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
         assertThat(entry.has("body")).isTrue();
         assertThat(entry.has("verdict")).isFalse();
         assertThat(entry.has("severity")).isFalse();
+    }
+
+    @Test
+    void shouldGiveTheDocumentLinkAndSayWhenTheBodyWasCut() throws Exception {
+        String longBody = "a".repeat(OutlineDocumentContentSource.MENTOR_BODY_CHARS + 500);
+        ProjectedDocument linked = new ProjectedDocument(
+                "engineering",
+                "release-guide",
+                "Release guide",
+                longBody,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                false,
+                null,
+                null,
+                null,
+                "https://docs.example/doc/release-guide-abc123");
+        when(projection.documentsForWorkspace(WORKSPACE_ID))
+                .thenReturn(List.of(linked, doc("Product", "roadmap", "Roadmap", "Q3 plans.")));
+
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        provider.contribute(mentorRequest(), files);
+
+        JsonNode root = objectMapper.readTree(files.get("inputs/context/outline_docs.json"));
+        assertThat(root.get(0).get("url").asString()).isEqualTo("https://docs.example/doc/release-guide-abc123");
+        assertThat(root.get(0).get("bodyTruncated").asBoolean()).isTrue();
+        assertThat(root.get(0).get("bodyChars").asInt()).isEqualTo(longBody.length());
+        assertThat(root.get(1).has("url")).as("no link was captured").isFalse();
+        assertThat(root.get(1).has("bodyTruncated")).isFalse();
     }
 
     @Test
@@ -333,10 +370,10 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
     @Test
     void mentorPathRanksByTheCurrentUserMessageWhenOneExists() throws Exception {
         UUID messageId = UUID.randomUUID();
-        ContextRequest.MentorChatRequest request =
-                new ContextRequest.MentorChatRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), messageId);
-        when(chatMessageRepository.findById(messageId))
-                .thenReturn(Optional.of(userMessage("How do we deploy the webhook server?")));
+        ContextRequest.HephTurnRequest request =
+                new ContextRequest.HephTurnRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), messageId);
+        when(mentorEntryRepository.findTextByIdAndWorkspaceId(messageId, WORKSPACE_ID))
+                .thenReturn(Optional.of("How do we deploy the webhook server?"));
         when(projection.searchDocuments(
                         eq(WORKSPACE_ID), anyString(), eq(OutlineDocumentContentSource.MAX_MENTOR_DOCUMENTS)))
                 .thenReturn(List.of(doc("Ops", "deploy-guide", "Deploy Guide", "Steps.")));
@@ -353,9 +390,10 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
     @Test
     void mentorPathFallsBackToRecencyWhenTheQueryMatchesNothing() {
         UUID messageId = UUID.randomUUID();
-        ContextRequest.MentorChatRequest request =
-                new ContextRequest.MentorChatRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), messageId);
-        when(chatMessageRepository.findById(messageId)).thenReturn(Optional.of(userMessage("something niche")));
+        ContextRequest.HephTurnRequest request =
+                new ContextRequest.HephTurnRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), messageId);
+        when(mentorEntryRepository.findTextByIdAndWorkspaceId(messageId, WORKSPACE_ID))
+                .thenReturn(Optional.of("something niche"));
         when(projection.searchDocuments(
                         eq(WORKSPACE_ID), anyString(), eq(OutlineDocumentContentSource.MAX_MENTOR_DOCUMENTS)))
                 .thenReturn(List.of());
@@ -366,15 +404,5 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
         provider.contribute(request, files);
 
         assertThat(files.keySet()).containsExactly("inputs/context/outline_docs.json");
-    }
-
-    private ChatMessage userMessage(String text) {
-        ChatMessage message = new ChatMessage();
-        ArrayNode parts = objectMapper.createArrayNode();
-        ObjectNode part = parts.addObject();
-        part.put("type", "text");
-        part.put("text", text);
-        message.setParts(parts);
-        return message;
     }
 }

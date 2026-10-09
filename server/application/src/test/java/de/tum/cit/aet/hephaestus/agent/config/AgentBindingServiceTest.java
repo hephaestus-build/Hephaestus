@@ -87,7 +87,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var request = new AgentBindingRequestDTO(99L, null, 300, 2, true, true);
+        var request = new AgentBindingRequestDTO(99L, null, 300, 2, true);
         WorkspaceAgentBinding saved =
                 service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED, request);
 
@@ -99,7 +99,6 @@ class AgentBindingServiceTest extends BaseUnitTest {
         assertThat(saved.getWorkspaceModel()).isNull();
         assertThat(saved.getTimeoutSeconds()).isEqualTo(300);
         assertThat(saved.getMaxConcurrentJobs()).isEqualTo(2);
-        assertThat(saved.isAllowInternet()).isTrue();
         assertThat(saved.isEnabled()).isTrue();
         verify(llmModelResolver).isAvailable(any(WorkspaceAgentBinding.class));
 
@@ -119,27 +118,6 @@ class AgentBindingServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void upsertRejectsInternetAccessForPracticeReviews() {
-        Workspace w = workspace();
-        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
-        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                        1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED))
-                .thenReturn(Optional.empty());
-        LlmModel model = new LlmModel();
-        model.setId(99L);
-        when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
-        when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
-
-        // PracticePiAdapter enforces an internal network regardless of stored configuration.
-        var request = new AgentBindingRequestDTO(99L, null, null, null, true, true);
-        assertThatThrownBy(() -> service.upsertBinding(
-                        context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED, request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("internal network");
-        verify(bindingRepository, never()).save(any());
-    }
-
-    @Test
     void upsertRejectsAModelThatIsNotAvailableToTheWorkspace() {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
@@ -151,7 +129,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(false);
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
         assertThatThrownBy(() -> service.upsertBinding(
                         context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED, request))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -170,7 +148,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
         assertThatThrownBy(() ->
                         service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD, request))
                 .isInstanceOf(AgentBindingSlotMismatchException.class)
@@ -192,7 +170,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         model.setId(99L);
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
         assertThatThrownBy(
                         () -> service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.IN_HOUSE, request))
                 .isInstanceOf(AgentBindingSlotMismatchException.class)
@@ -217,7 +195,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
         WorkspaceAgentBinding saved =
                 service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD, request);
 
@@ -241,7 +219,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
         WorkspaceAgentBinding saved =
                 service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED, request);
 
@@ -259,7 +237,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
                         1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());
 
-        var bothNull = new AgentBindingRequestDTO(null, null, null, null, null, true);
+        var bothNull = new AgentBindingRequestDTO(null, null, null, null, true);
         assertThatThrownBy(() ->
                         service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED, bothNull))
                 .isInstanceOf(IllegalArgumentException.class);

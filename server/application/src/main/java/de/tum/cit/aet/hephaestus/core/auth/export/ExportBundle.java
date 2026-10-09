@@ -34,6 +34,7 @@ public record ExportBundle(
             Long id,
             String displayName,
             @Nullable String primaryEmail,
+            @Nullable String timeZone,
             // appRole intentionally omitted: it is controller-assigned authorization state, NOT data the
             // subject "provided" under GDPR Art. 20(1) — out of portability scope. (Admin views surface it
             // elsewhere.) `status` is kept: it is the subject's own account-lifecycle state.

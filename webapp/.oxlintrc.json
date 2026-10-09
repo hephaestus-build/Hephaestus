@@ -237,6 +237,12 @@
 			"rules": { "import/no-relative-parent-imports": "off" }
 		},
 		{
+			// The live spec reads and provisions its model with `scripts/lib/e2e-llm.ts`, the code
+			// `scripts/e2e-setup.ts` uses, so the two have one implementation; no alias spans the trees.
+			"files": ["e2e/heph.live.spec.ts"],
+			"rules": { "import/no-relative-parent-imports": "off" }
+		},
+		{
 			"files": ["src/lib/**"],
 			"rules": {
 				"no-restricted-imports": [

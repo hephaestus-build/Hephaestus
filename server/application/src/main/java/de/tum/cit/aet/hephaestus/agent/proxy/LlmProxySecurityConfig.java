@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
@@ -9,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.core.web.PayloadSizeFilter;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import org.springframework.context.annotation.Bean;
@@ -35,7 +37,9 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <ol>
  *   <li>the sandbox capabilities on the gateway connector, authenticated by a proxy-scoped bearer
- *       credential and rate-limited per authenticated principal;
+ *       credential and rate-limited per authenticated principal. The Heph host's turn bookkeeping (its context,
+ *       partial answer and end) is exempt from the rate limit: the host sends a partial answer several times a
+ *       second, and the model-driven calls of the same turn stay limited;
  *   <li>everything else on the gateway connector, denied and answered {@code 404} so the connector
  *       admits to no route a sandbox is not meant to call;
  *   <li>the capability paths on every other connector, denied the same way, so they exist only where
@@ -43,7 +47,7 @@ import tools.jackson.databind.ObjectMapper;
  * </ol>
  *
  * <p>Gated on the worker/sandbox capability rather than the practice-job feature flag, because
- * disabling practice reviews must not break mentor turns.
+ * disabling practice reviews must not break Heph turns.
  */
 @Configuration
 @ConditionalOnWorkerRole
@@ -55,8 +59,9 @@ class LlmProxySecurityConfig {
             HttpSecurity http,
             SandboxGatewayProperties gatewayProperties,
             AgentJobRepository agentJobRepository,
+            MentorTurnRepository mentorTurnRepository,
+            SandboxGatewaySessions gatewaySessions,
             WorkerJwtVerifier jwtVerifier,
-            MentorProxyCredentialRegistry mentorRegistry,
             BucketResolver bucketResolver,
             ProxyAccounting accounting,
             ObjectMapper objectMapper,
@@ -71,9 +76,19 @@ class LlmProxySecurityConfig {
         RequestMatcher runtimeReads = new OrRequestMatcher(
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}"),
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/workspace"),
-                paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/frames"));
+                paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/commands"));
         RequestMatcher resultUpload = paths.matcher(HttpMethod.POST, "/internal/llm/runtime/{id}/result");
-        RequestMatcher capabilities = new OrRequestMatcher(modelCalls, runtimeReads, resultUpload);
+        RequestMatcher turnTools = new OrRequestMatcher(
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/fetch-context"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/link-observation"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/search"));
+        RequestMatcher turnBookkeeping = new OrRequestMatcher(
+                paths.matcher(HttpMethod.GET, "/internal/llm/turn/{id}/context"),
+                paths.matcher(HttpMethod.PUT, "/internal/llm/turn/{id}/partial"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/end"));
+        RequestMatcher bodies = new OrRequestMatcher(modelCalls, turnTools, turnBookkeeping);
+        RequestMatcher capabilities =
+                new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, turnTools, turnBookkeeping);
         var limit = new AuthRateLimitProperties.Limit(gatewayProperties.requestsPerMinute(), Duration.ofMinutes(1));
 
         http.securityMatcher(new AndRequestMatcher(onGatewayConnector(gatewayProperties), capabilities))
@@ -85,18 +100,20 @@ class LlmProxySecurityConfig {
                 .addFilterBefore(
                         new JobTokenAuthenticationFilter(
                                 agentJobRepository,
+                                mentorTurnRepository,
+                                gatewaySessions,
                                 jwtVerifier,
-                                mentorRegistry,
                                 objectMapper,
                                 workerProperties.resolvedWorkerId()),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(
-                        bounded(gatewayProperties.maxRequestBytes(), modelCalls), JobTokenAuthenticationFilter.class)
+                        bounded(gatewayProperties.maxRequestBytes(), bodies), JobTokenAuthenticationFilter.class)
                 .addFilterBefore(
                         bounded(SandboxOutputArchive.MAX_OUTPUT_BYTES, resultUpload),
                         JobTokenAuthenticationFilter.class)
                 .addFilterAfter(
-                        new SandboxGatewayRateLimitFilter(limit, bucketResolver, objectMapper, accounting),
+                        new SandboxGatewayRateLimitFilter(
+                                limit, bucketResolver, objectMapper, accounting, turnBookkeeping),
                         JobTokenAuthenticationFilter.class);
 
         return http.build();

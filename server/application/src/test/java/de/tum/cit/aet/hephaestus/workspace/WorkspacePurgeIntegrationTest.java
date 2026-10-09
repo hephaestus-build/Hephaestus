@@ -24,8 +24,6 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.slack.domain.MentorSlackThread;
-import de.tum.cit.aet.hephaestus.integration.slack.domain.MentorSlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
@@ -34,10 +32,13 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionSweeper;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspacePurgeAdapter;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
-import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
@@ -65,6 +66,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
@@ -111,10 +113,16 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private OrganizationRepository organizationRepository;
 
     @Autowired
-    private ChatThreadRepository chatThreadRepository;
+    private MentorConversationService mentorConversations;
 
     @Autowired
-    private ChatMessageRepository chatMessageRepository;
+    private MentorConversationRepository mentorConversationRepository;
+
+    @Autowired
+    private MentorEntryService mentorEntries;
+
+    @Autowired
+    private MentorEntryRepository mentorEntryRepository;
 
     @Autowired
     private SlackMessageRepository slackMessageRepository;
@@ -124,9 +132,6 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private SlackMonitoredChannelRepository slackMonitoredChannelRepository;
-
-    @Autowired
-    private MentorSlackThreadRepository mentorSlackThreadRepository;
 
     @Autowired
     private SlackParticipantConsentRepository slackParticipantConsentRepository;
@@ -507,10 +512,10 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Nested
-    class ChatThreadCleanup {
+    class MentorConversationCleanup {
 
         @Test
-        void purgeDeletesChatThreads() {
+        void shouldDeleteEveryHephConversationWhenTheWorkspaceIsPurged() {
             User owner = persistUser("chat-cleanup-owner");
             Workspace workspace = workspaceService.createWorkspace(new CreateWorkspaceRequestDTO(
                     "chat-cleanup-ws",
@@ -522,23 +527,17 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     "glpat-chat-cleanup-token",
                     null));
 
-            ChatThread t1 = new ChatThread();
-            t1.setId(UUID.randomUUID());
-            t1.setTitle("Thread A");
-            t1.setWorkspace(workspace);
-            t1.setUser(owner);
-            ChatThread t2 = new ChatThread();
-            t2.setId(UUID.randomUUID());
-            t2.setTitle("Thread B");
-            t2.setWorkspace(workspace);
-            t2.setUser(owner);
-            chatThreadRepository.save(t1);
-            chatThreadRepository.save(t2);
+            MentorConversation main =
+                    mentorConversations.findOrCreateMain(workspace.getId(), owner.getId(), Set.of(owner.getId()));
+            MentorEntry question =
+                    mentorEntries.append(workspace.getId(), main.getId(), MentorLedgerFixtures.heph("Question A"));
+            MentorConversation thread = mentorConversations.openThread(workspace.getId(), question.getId());
 
             workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
 
-            assertThat(chatThreadRepository.findById(t1.getId())).isEmpty();
-            assertThat(chatThreadRepository.findById(t2.getId())).isEmpty();
+            assertThat(mentorConversationRepository.findById(main.getId())).isEmpty();
+            assertThat(mentorConversationRepository.findById(thread.getId())).isEmpty();
+            assertThat(mentorEntryRepository.findById(question.getId())).isEmpty();
         }
     }
 
@@ -650,24 +649,10 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             channel.setConsentState(SlackMonitoredChannel.ConsentState.PENDING);
             slackMonitoredChannelRepository.save(channel);
 
-            // mentor_slack_thread.chat_thread_id is a NOT NULL FK → chat_thread(id); seed a real thread first.
             User owner = persistUser(channelId + "-mentor-owner");
-            ChatThread chatThread = new ChatThread();
-            chatThread.setId(UUID.randomUUID());
-            chatThread.setTitle("Slack DM " + channelId);
-            chatThread.setWorkspace(workspace);
-            chatThread.setUser(owner);
-            chatThreadRepository.save(chatThread);
-
-            MentorSlackThread mentorThread = new MentorSlackThread();
-            mentorThread.setId(UUID.randomUUID());
-            mentorThread.setWorkspaceId(workspaceId);
-            mentorThread.setChatThreadId(chatThread.getId());
-            mentorThread.setSlackTeamId("T1");
-            mentorThread.setSlackChannelId(channelId);
-            mentorThread.setSlackThreadTs(threadTs);
-            mentorThread.setSlackUserId("U1");
-            mentorSlackThreadRepository.save(mentorThread);
+            MentorConversation dm =
+                    mentorConversations.findOrCreateMain(workspaceId, owner.getId(), Set.of(owner.getId()));
+            mentorConversations.bindSlackIdentity(workspaceId, dm.getId(), "T1", "U1", "D" + channelId);
 
             slackParticipantConsentRepository.optOutOfIngestion(workspaceId, "U1", "SLACK_APP_HOME");
         }
@@ -715,8 +700,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(slackThreadRepository.countByWorkspaceId(a.getId())).isZero();
             assertThat(slackMonitoredChannelRepository.countByWorkspaceId(a.getId()))
                     .isZero();
-            assertThat(mentorSlackThreadRepository.countByWorkspaceId(a.getId()))
-                    .isZero();
+            assertThat(slackDmConversations(a)).isZero();
             assertThat(slackParticipantConsentRepository.countByWorkspaceIdAndIngestionOptedOutTrue(a.getId()))
                     .isZero();
 
@@ -724,8 +708,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(slackThreadRepository.countByWorkspaceId(b.getId())).isEqualTo(1);
             assertThat(slackMonitoredChannelRepository.countByWorkspaceId(b.getId()))
                     .isEqualTo(1);
-            assertThat(mentorSlackThreadRepository.countByWorkspaceId(b.getId()))
-                    .isEqualTo(1);
+            assertThat(slackDmConversations(b)).isEqualTo(1);
             assertThat(slackParticipantConsentRepository.countByWorkspaceIdAndIngestionOptedOutTrue(b.getId()))
                     .isEqualTo(1);
         }
@@ -767,8 +750,8 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
             assertDerivedConversationErased(erased);
             assertDerivedConversationExists(retained);
-            assertThat(chatMessageRepository.findById(erased.messageId())).isEmpty();
-            assertThat(chatMessageRepository.findById(retained.messageId())).isPresent();
+            assertThat(mentorEntryRepository.findById(erased.messageId())).isEmpty();
+            assertThat(mentorEntryRepository.findById(retained.messageId())).isPresent();
         }
 
         private record DerivedConversation(
@@ -789,7 +772,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .containsExactlyInAnyOrder(derived.preparedId(), derived.deliveredId());
             assertThat(feedbackPlacementRepository.findByFeedbackId(derived.deliveredId()))
                     .singleElement()
-                    .extracting(FeedbackPlacement::getChatMessageId)
+                    .extracting(FeedbackPlacement::getMentorEntryId)
                     .isEqualTo(derived.messageId());
         }
 
@@ -814,19 +797,10 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
         /** Seed both a never-delivered and a delivered judgment for one conversation. */
         private DerivedConversation seedDerivedConversation(Workspace workspace, long threadId) {
             User owner = persistUser("conv-" + workspace.getId() + "-subject");
-            ChatThread chatThread = new ChatThread();
-            chatThread.setId(UUID.randomUUID());
-            chatThread.setWorkspace(workspace);
-            chatThread.setUser(owner);
-            chatThreadRepository.save(chatThread);
-            ChatMessage message = new ChatMessage();
-            message.setId(UUID.randomUUID());
-            message.setThread(chatThread);
-            message.setRole(ChatMessage.Role.ASSISTANT);
-            message.setStatus(ChatMessage.Status.completed);
-            message.setParts(OM.valueToTree(List.of(Map.of("type", "text", "text", "Delivered guidance"))));
-            message.setMetadata(OM.createObjectNode());
-            chatMessageRepository.save(message);
+            MentorConversation conversation =
+                    mentorConversations.findOrCreateMain(workspace.getId(), owner.getId(), Set.of(owner.getId()));
+            MentorEntry message = mentorEntries.append(
+                    workspace.getId(), conversation.getId(), MentorLedgerFixtures.heph("Delivered guidance"));
 
             Practice practice = new Practice();
             practice.setSignals(PracticeTestEvidence.signals(ArtifactKinds.CONVERSATION_THREAD));
@@ -904,10 +878,17 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             feedbackPlacementRepository.save(FeedbackPlacement.builder()
                     .feedback(delivered)
                     .placementType(PlacementType.CONVERSATION_TURN)
-                    .chatMessageId(message.getId())
+                    .mentorEntryId(message.getId())
                     .createdAt(Instant.now())
                     .build());
             return new DerivedConversation(observationIds, prepared.getId(), delivered.getId(), message.getId());
         }
+    }
+
+    private long slackDmConversations(Workspace workspace) {
+        return Objects.requireNonNull(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM mentor_conversation WHERE workspace_id = ? AND slack_user_id IS NOT NULL",
+                Long.class,
+                workspace.getId()));
     }
 }

@@ -65,9 +65,7 @@ class MirrorQueryPredicateGuardTest extends BaseUnitTest {
      * {@code @Query} at all. Each name here is a claim that the query reaches no issue or pull-request
      * row; a mentor query that adds one has to be weighed and named here before the guard goes quiet.
      */
-    private static final Set<String> MENTOR_QUERIES_THE_SCAN_CANNOT_READ = Set.of(
-            // chat_message joined to chat_thread; no SCM artifact in either.
-            "findFirstUserMessagePartsByThreadIds");
+    private static final Set<String> MENTOR_QUERIES_THE_SCAN_CANNOT_READ = Set.of();
 
     @Nested
     @DisplayName("mentor context")
@@ -167,7 +165,7 @@ class MirrorQueryPredicateGuardTest extends BaseUnitTest {
         @Test
         void assignedOpenIssuesExcludesMergeRequests() throws NoSuchMethodException {
             String jpql = normalize(MentorContextQueryRepository.class
-                    .getMethod("findAssignedOpenIssues", Long.class, Long.class)
+                    .getMethod("findAssignedOpenIssues", Long.class, Long.class, Long.class)
                     .getAnnotation(Query.class)
                     .value());
 

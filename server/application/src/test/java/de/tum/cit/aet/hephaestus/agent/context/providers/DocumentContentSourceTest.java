@@ -223,6 +223,7 @@ class DocumentContentSourceTest extends BaseUnitTest {
                 false,
                 "Engineering",
                 null,
+                null,
                 null);
     }
 }

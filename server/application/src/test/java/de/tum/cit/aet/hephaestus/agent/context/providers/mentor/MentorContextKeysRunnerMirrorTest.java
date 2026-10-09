@@ -19,16 +19,16 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Drift guard for the prose contract in {@link MentorContextKeys}: the JS runner's hand-maintained
- * {@code FETCH_CONTEXT_ALLOWED} whitelist (pi-mentor-protocol.ts) must mirror
- * {@link MentorContextKeys#ALLOWED_OUTPUT_KEYS}. Java is authoritative (MentorChatService re-checks),
+ * Drift guard for the prose contract in {@link MentorContextKeys}: the Heph host's hand-maintained
+ * {@code FETCH_CONTEXT_ALLOWED} whitelist (heph-host-protocol.ts) must mirror
+ * {@link MentorContextKeys#ALLOWED_OUTPUT_KEYS}. Java is authoritative (the worker re-checks every key),
  * so a divergence only weakens the runner's defense-in-depth — this test makes the mirror enforced.
  */
 @Tag("unit")
 class MentorContextKeysRunnerMirrorTest {
 
-    private static final Path RUNNER = Path.of("src", "main", "resources", "agent", "pi-mentor-runner.ts");
-    private static final Path PROTOCOL = Path.of("src", "main", "resources", "agent", "pi-mentor-protocol.ts");
+    private static final Path RUNNER = Path.of("src", "main", "resources", "agent", "heph-host.ts");
+    private static final Path PROTOCOL = Path.of("src", "main", "resources", "agent", "heph-host-protocol.ts");
     private static final Path SYSTEM_PROMPT = Path.of("src", "main", "resources", "agent", "mentor", "system.md");
     private static final Pattern ALLOWED_BLOCK =
             Pattern.compile("const FETCH_CONTEXT_ALLOWED = new Set\\(\\[(.*?)\\]\\);", Pattern.DOTALL);
@@ -40,7 +40,7 @@ class MentorContextKeysRunnerMirrorTest {
         String source = Files.readString(PROTOCOL, StandardCharsets.UTF_8);
         Matcher block = ALLOWED_BLOCK.matcher(source);
         assertThat(block.find())
-                .as("FETCH_CONTEXT_ALLOWED block present in pi-mentor-protocol.ts")
+                .as("FETCH_CONTEXT_ALLOWED block present in heph-host-protocol.ts")
                 .isTrue();
 
         Set<String> jsKeys = STRING_LITERAL
@@ -102,6 +102,20 @@ class MentorContextKeysRunnerMirrorTest {
                 .isEmpty();
         assertThat(Files.readString(PROTOCOL, StandardCharsets.UTF_8))
                 .contains("/^inputs\\/context\\/review_attempts\\/(?:pull_request|issue)\\/\\d{1,18}\\.json$/u");
+    }
+
+    @Test
+    @DisplayName("an issue detail key names one issue by artifactId, mirrored by the runner")
+    void issueDetailKeyIsCanonical() throws IOException {
+        assertThat(IssueDetailSource.artifactIdOf("inputs/context/issue/88.json"))
+                .contains(88L);
+        assertThat(IssueDetailSource.artifactIdOf("inputs/context/issue/../user.json"))
+                .isEmpty();
+        assertThat(IssueDetailSource.artifactIdOf("inputs/context/issue/1234567890123456789.json"))
+                .isEmpty();
+        assertThat(IssueDetailSource.resourceOf(88L)).isEqualTo("inputs/context/issue/88.json");
+        assertThat(Files.readString(PROTOCOL, StandardCharsets.UTF_8))
+                .contains("/^inputs\\/context\\/issue\\/\\d{1,18}\\.json$/u");
     }
 
     @Test

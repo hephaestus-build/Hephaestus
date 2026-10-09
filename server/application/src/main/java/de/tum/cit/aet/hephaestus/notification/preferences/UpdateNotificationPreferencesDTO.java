@@ -19,4 +19,12 @@ public record UpdateNotificationPreferencesDTO(
         Boolean workspaceAlerts,
 
         @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
-        Boolean surveySummaries) {}
+        Boolean surveySummaries,
+
+        @NotNull
+        @NonNull
+        @Schema(
+                requiredMode = RequiredMode.REQUIRED,
+                description = "The weekly digest in your Heph conversation, with one note in Slack or email that it is"
+                        + " ready")
+        Boolean weeklyDigest) {}

@@ -15,9 +15,9 @@ import static org.mockito.Mockito.when;
 
 import com.slack.api.model.block.LayoutBlock;
 import com.slack.api.model.view.View;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorReadinessQuery;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
@@ -54,7 +54,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
     private MentorReadinessQuery mentorReadinessQuery;
 
     @Mock
-    private MentorTurnRunner mentorTurnRunner;
+    private MentorAdmission mentorAdmission;
 
     @Mock
     private SlackMessageService messageService;
@@ -75,7 +75,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
                 participantConsentRepository,
                 monitoredChannelRepository,
                 mentorReadinessQuery,
-                mentorTurnRunner,
+                mentorAdmission,
                 messageService,
                 onboardingService,
                 uiLinks);
@@ -118,7 +118,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
     @EnumSource(MentorRefusal.class)
     void shouldRenderMemberRefusalWithoutInvitation(MentorRefusal refusal) {
         when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.of(developer()));
-        when(mentorTurnRunner.refusal(7L, 314L)).thenReturn(Optional.of(refusal));
+        when(mentorAdmission.refusal(7L, 314L)).thenReturn(Optional.of(refusal));
 
         String rendered = service.buildHomeView(7L, "T1", "U1").getBlocks().toString();
 
@@ -143,7 +143,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
     @Test
     void shouldRestoreInvitationWhenMemberBecomesEligible() {
         when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.of(developer()));
-        when(mentorTurnRunner.refusal(7L, 314L))
+        when(mentorAdmission.refusal(7L, 314L))
                 .thenReturn(Optional.of(MentorRefusal.NO_AI))
                 .thenReturn(Optional.empty());
 
@@ -162,7 +162,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
     void shouldNotPublishInvitationWhenMemberReadinessFails() {
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
         when(identityResolver.resolveDeveloper(7L, "T1", "U1")).thenReturn(Optional.of(developer()));
-        when(mentorTurnRunner.refusal(7L, 314L)).thenThrow(new IllegalStateException("Admission unavailable"));
+        when(mentorAdmission.refusal(7L, 314L)).thenThrow(new IllegalStateException("Admission unavailable"));
 
         assertThatThrownBy(() -> service.onHomeOpened("T1", "U1")).isInstanceOf(IllegalStateException.class);
         verifyNoInteractions(messageService);

@@ -174,7 +174,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
         @Test
         void shouldLeaveTheMentorsCurrentWorkToItsOwnSourcesWhenAskedForAConversation() {
-            assertThat(provider.supports(new ContextRequest.MentorChatRequest(WORKSPACE_ID, 2L, UUID.randomUUID())))
+            assertThat(provider.supports(new ContextRequest.HephTurnRequest(WORKSPACE_ID, 2L, UUID.randomUUID())))
                     .isFalse();
         }
     }

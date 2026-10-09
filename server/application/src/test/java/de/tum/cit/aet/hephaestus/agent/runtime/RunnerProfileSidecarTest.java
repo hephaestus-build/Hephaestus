@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.MentorRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeRunnerProfile;
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,7 +28,7 @@ class RunnerProfileSidecarTest {
     private static final Pattern RELATIVE_IMPORT = Pattern.compile("from \"\\./([^\"]+)\"");
 
     static Stream<PiRunnerProfile> profiles() {
-        return Stream.of(new PracticeRunnerProfile(), new MentorRunnerProfile());
+        return Stream.of(new PracticeRunnerProfile());
     }
 
     @ParameterizedTest

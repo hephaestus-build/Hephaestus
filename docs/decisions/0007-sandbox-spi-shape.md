@@ -1,6 +1,6 @@
 # ADR 0007: Sandbox SPI shape — sealed VolumeMount + typed NetworkPolicy
 
-**Status:** Accepted (amended 2026-09-03 #1719 — mount portability superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md))
+**Status:** Accepted (amended 2026-09-03 #1719 — mount portability superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — interactive SPI replaced by `HostSandbox`, [ADR 0055](0055-one-heph-conversation-per-developer.md))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -73,3 +73,10 @@ A driver only launches, observes, kills, removes and lists; the workspace moves 
 sandboxes take no host mounts, so the first non-`HostPathMount` consumer this ADR was reserving the
 seal for will not arrive. No `VolumeMount` type exists; `SandboxSpec.volumeMounts` is the
 `Map<String, String>` of option 3.
+
+## Update — 2026-10-09 (Heph host, [ADR 0055](0055-one-heph-conversation-per-developer.md))
+
+`InteractiveSandboxSpec` and the whole interactive sandbox SPI are deleted. The Heph host uses its own
+small SPI, `agent.sandbox.spi.HostSandbox` (`launch(HostSpec)`, `isRunning(Host)`, `remove(Host)`), with the Docker
+implementation `DockerHostSandbox`. It reuses the container, security and network managers of the job
+sandbox. `SandboxSpec` and `NetworkPolicy` are unchanged.

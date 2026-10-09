@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.HashMap;
@@ -33,28 +34,35 @@ class MentorPersonalContextFreshnessTest extends BaseUnitTest {
     void shouldReadChangedProfileForTheNextTurnWithoutReusingFormattedPersonalContent(Source kind) throws Exception {
         var users = mock(UserRepository.class);
         var queries = mock(MentorContextQueryRepository.class);
+        var instance = mock(WorkspaceActorSelector.class);
+        when(instance.connectedProviderId(1L)).thenReturn(Optional.of(5L));
         var mapper = new ObjectMapper();
         ContentSource source =
                 switch (kind) {
                     case USER -> {
                         when(queries.fetchUserCounts(
-                                        eq(1L), eq(2L), any(Instant.class), any(Instant.class), any(Instant.class)))
+                                        eq(1L),
+                                        eq(5L),
+                                        eq(2L),
+                                        any(Instant.class),
+                                        any(Instant.class),
+                                        any(Instant.class)))
                                 .thenReturn(new MentorUserCounts(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L));
-                        yield new UserContentSource(users, queries, mapper);
+                        yield new UserContentSource(users, queries, instance, mapper);
                     }
                     case WORKSPACE -> {
                         var workspaces = mock(WorkspaceRepository.class);
                         var workspace = new Workspace();
                         workspace.setWorkspaceSlug("context-freshness");
                         when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
-                        yield new WorkspaceContentSource(users, workspaces, queries, mapper);
+                        yield new WorkspaceContentSource(users, workspaces, queries, instance, mapper);
                     }
-                    case AUTHORED_WORK -> new RecentAuthoredWorkContentSource(users, queries, mapper);
+                    case AUTHORED_WORK -> new RecentAuthoredWorkContentSource(users, queries, instance, mapper);
                 };
         var original = new User();
         original.setLogin("PROFILE-BEFORE-ERASURE");
         when(users.findById(2L)).thenReturn(Optional.of(original));
-        var request = new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID());
+        var request = new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID());
         var first = new HashMap<String, byte[]>();
         source.contribute(request, first);
         assertThat(first).hasSize(1);

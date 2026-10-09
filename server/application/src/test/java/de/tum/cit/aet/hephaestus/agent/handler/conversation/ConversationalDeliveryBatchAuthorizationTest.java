@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ConversationConsentGate;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChannel.DeliveryOutcome;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -54,10 +53,7 @@ import org.mockito.Mockito;
  *
  * <p>Run once per ledger-writing turn ending, because the answer to "which linked observations may this turn
  * act on" cannot depend on how the turn ended. The two endings write opposite things — DELIVERED raises the
- * unit, INSTANCE_SILENCED burns it, and nothing ever writes a unit back to PREPARED — so an ending that
- * admits an id the other refuses spends a developer's coaching on an observation the turn was never allowed to
- * use. {@code MentorTurnPersistence#reconcileConversationalDelivery} is the switch these correspond to; a
- * new outcome added there fails this file's switch to compile.
+ * unit, INSTANCE_SILENCED burns it, and nothing ever writes a unit back to PREPARED.
  */
 class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
 
@@ -66,21 +62,18 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
     private static final String PERMITTED_KIND = "scm.pull-request.diff";
     private static final String DENIED_KIND = "hephaestus.observation-history";
 
+    private enum Ending {
+        DELIVERED,
+        INSTANCE_SILENCED,
+    }
+
     /**
-     * Every way a linked observation can fail to be deliverable, in one turn, with the deliverable one LAST so
-     * that admitting any other would flip the <em>wrong</em> feedback unit rather than merely one extra: a
-     * source use the catalog withdrew, an id whose observation this workspace cannot read at all, a run with
-     * no {@code agent_job} row, and a claim measured against superseded review rules.
-     *
-     * <p>Each refused observation has a PREPARED unit waiting behind it. Those are the trap: they are what a
-     * wrongly-admitted observation would deliver, so a batch that reads a missing key as anything other than
-     * "refused" fails here instead of passing quietly.
+     * Every way a linked observation can fail to be deliverable, in one turn, with the deliverable one last, so that
+     * admitting any other acts on the wrong feedback unit. Each refused observation has a PREPARED unit behind it.
      */
     @ParameterizedTest
-    @EnumSource(
-            value = DeliveryOutcome.class,
-            names = {"DELIVERED", "INSTANCE_SILENCED"})
-    void actsOnlyOnTheLinkedObservationEveryConjunctStillAdmits(DeliveryOutcome ending) {
+    @EnumSource(Ending.class)
+    void shouldActOnlyOnTheLinkedObservationWhenEveryConjunctStillAdmitsIt(Ending ending) {
         FeedbackRepository feedbackRepository = mock(FeedbackRepository.class);
         FeedbackObservationRepository feedbackObservations = mock(FeedbackObservationRepository.class);
         FeedbackPlacementRepository placements = mock(FeedbackPlacementRepository.class);
@@ -184,8 +177,6 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
                         verify(placements, never()).save(any());
                         yield burned.getValue();
                     }
-                    case NOT_DELIVERED ->
-                        throw new AssertionError("NOT_DELIVERED writes no unit; @EnumSource excludes it");
                 };
 
         assertThat(actedOn)

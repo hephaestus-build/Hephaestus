@@ -10,13 +10,13 @@ import org.jspecify.annotations.Nullable;
  * variant via a sealed switch — no {@code instanceof} chains in the orchestrator.
  *
  * <p>There is no universal {@code job()} accessor: synchronous mentor chat
- * ({@link MentorChatRequest}) has no {@link AgentJob}. Per-variant accessors carry the
+ * ({@link HephTurnRequest}) has no {@link AgentJob}. Per-variant accessors carry the
  * variant-specific identity instead.
  */
 public sealed interface ContextRequest
         permits ContextRequest.PracticeReviewRequest,
                 ContextRequest.IssueReviewRequest,
-                ContextRequest.MentorChatRequest,
+                ContextRequest.HephTurnRequest,
                 ContextRequest.ConversationReviewRequest,
                 ContextRequest.DocumentReviewRequest {
     /**
@@ -52,27 +52,25 @@ public sealed interface ContextRequest
     }
 
     /**
-     * Build the materialised mentor-chat context: user activity, workspace context, practice
-     * catalog and observation history. There is no {@link AgentJob} — mentor chat is synchronous
-     * and runs against a long-lived interactive sandbox keyed by {@code (workspaceId, developerId)}.
+     * Build the context documents of a Heph turn ({@code MentorContextKeys.ALLOWED_OUTPUT_KEYS}). There is no
+     * {@link AgentJob}: a Heph turn belongs to a conversation.
      *
-     * @param workspaceId   workspace scoping for every content source's queries
-     * @param developerId the active user the content sources describe
-     * @param threadId      conversation thread the request originated from (used by providers
-     *                      that need per-thread cache keys)
-     * @param currentUserMessageId message persisted for the active turn; history providers exclude it
+     * @param workspaceId    workspace scoping for every content source's queries
+     * @param developerId    the active user the content sources describe
+     * @param conversationId the Heph conversation the turn runs in
+     * @param currentEntryId the question the turn answers; providers that read the question use its text
      */
-    record MentorChatRequest(
+    record HephTurnRequest(
             long workspaceId,
             long developerId,
-            UUID threadId,
-            @Nullable UUID currentUserMessageId) implements ContextRequest {
-        public MentorChatRequest(long workspaceId, long developerId, UUID threadId) {
-            this(workspaceId, developerId, threadId, null);
+            UUID conversationId,
+            @Nullable UUID currentEntryId) implements ContextRequest {
+        public HephTurnRequest(long workspaceId, long developerId, UUID conversationId) {
+            this(workspaceId, developerId, conversationId, null);
         }
 
-        public MentorChatRequest {
-            Objects.requireNonNull(threadId, "threadId must not be null");
+        public HephTurnRequest {
+            Objects.requireNonNull(conversationId, "conversationId must not be null");
             if (workspaceId <= 0) {
                 throw new IllegalArgumentException("workspaceId must be positive, got " + workspaceId);
             }

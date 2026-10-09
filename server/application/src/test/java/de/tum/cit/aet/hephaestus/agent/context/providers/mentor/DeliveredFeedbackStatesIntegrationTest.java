@@ -558,7 +558,7 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
     private byte[] contribute() {
         Map<String, byte[]> files = new HashMap<>();
         contentSource.contribute(
-                new ContextRequest.MentorChatRequest(workspace.getId(), recipient.getId(), UUID.randomUUID()), files);
+                new ContextRequest.HephTurnRequest(workspace.getId(), recipient.getId(), UUID.randomUUID()), files);
         return Objects.requireNonNull(files.get(DeliveredFeedbackContentSource.OUTPUT_KEY));
     }
 

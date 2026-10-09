@@ -3,12 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 
-import { getThreadOptions } from "@/api/@tanstack/react-query.gen";
+import { getMentorConversationOptions } from "@/api/@tanstack/react-query.gen";
 import { client } from "@/api/client.gen";
-import type { ChatThreadDetail } from "@/api/types.gen";
-import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { applyUserViewHeaders, clearUserView } from "@/runtime/user-view/session";
+import { FakeEventSource } from "@/test/fake-event-source";
+import { MentorFake } from "@/test/mentor-server";
 import { ROUTE_RENDER_WAIT, renderRouteAt, testQueryClient } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
 
@@ -38,6 +38,7 @@ beforeEach(() => {
 	);
 });
 afterEach(async () => {
+	server.events.removeAllListeners();
 	cleanup();
 	await queryClient.cancelQueries();
 	queryClient.clear();
@@ -45,54 +46,37 @@ afterEach(async () => {
 });
 afterAll(() => client.interceptors.request.eject(applyUserViewHeaders));
 
-it("opens the viewed member's saved conversations", async () => {
-	let viewedUser: string | null = null;
-	server.use(
-		http.get("*/workspaces/:workspaceSlug/mentor/threads", ({ request }) => {
-			viewedUser = request.headers.get("X-User-View-User");
-			return HttpResponse.json([]);
-		}),
-	);
+it("opens the viewed member's conversation read-only, without a live stream", async () => {
+	const conversation = new MentorFake("engineering");
+	const question = conversation.add({ kind: "USER", text: "What should I improve?" });
+	conversation.add({ kind: "HEPH", text: "Earlier guidance remains readable." });
+	conversation.add({ kind: "USER", text: "Which pull request?", parentEntryId: question.id });
+	const requests: Request[] = [];
+	server.events.on("request:start", ({ request }) => {
+		requests.push(request);
+	});
+	server.use(...conversation.handlers());
 
-	renderRouteAt("/w/engineering/mentor", queryClient);
-	await screen.findByRole("heading", { name: "No conversation selected" }, ROUTE_RENDER_WAIT);
-	await waitFor(() => expect(viewedUser).toBe("11"));
-});
-
-it("opens a saved conversation read-only", async () => {
-	const threadId = "65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed";
-	server.use(
-		http.get("*/workspaces/:workspaceSlug/mentor/threads", () =>
-			HttpResponse.json([{ id: threadId, title: "Earlier conversation" }]),
-		),
-		http.get("*/workspaces/:workspaceSlug/mentor/threads/:threadId", () =>
-			HttpResponse.json({
-				id: threadId,
-				createdAt: "2026-09-24T09:15:00Z",
-				messages: [
-					{
-						id: "ea28a7c9-b17f-49be-ae98-a083fa99b2b2",
-						role: "assistant",
-						parts: [{ type: "text", text: "Earlier guidance remains readable." }],
-						metadata: { status: "completed" },
-						createdAt: "2026-09-24T09:15:04.512Z",
-					},
-				],
-			} satisfies Wire<ChatThreadDetail>),
-		),
-	);
-
-	renderRouteAt(`/w/engineering/mentor/${threadId}`, queryClient);
+	renderRouteAt(`/w/engineering/mentor?thread=${question.id}`, queryClient);
 	await screen.findByText("Earlier guidance remains readable.", {}, ROUTE_RENDER_WAIT);
+	await screen.findByText("Which pull request?");
+	const viewedUsers = requests
+		.filter(({ url }) => new URL(url).pathname.includes("/mentor/"))
+		.map(({ headers }) => headers.get("X-User-View-User"));
+	expect(new Set(viewedUsers)).toStrictEqual(new Set(["11"]));
 	expect(screen.queryByRole("textbox")).toBeNull();
+	expect(screen.getAllByRole("button", { name: /^Copy message \(/u }).length).toBeGreaterThan(0);
+	expect(screen.queryByRole("button", { name: /^Helpful/u })).toBeNull();
+	expect(screen.queryByRole("button", { name: /^Delete message/u })).toBeNull();
 	expect(screen.queryByRole("heading", { name: "Heph is off for you" })).toBeNull();
+	expect(FakeEventSource.instances).toHaveLength(0);
 });
 
 const stepUpRequired = () =>
 	HttpResponse.json({ status: 403, code: "step_up_required", maxAgeSeconds: 300 }, { status: 403 });
 
 it("asks for a recent sign-in when a viewed read is refused for it", async () => {
-	server.use(http.get("*/workspaces/:workspaceSlug/mentor/threads", stepUpRequired));
+	server.use(http.get("*/workspaces/:workspaceSlug/mentor/conversation", stepUpRequired));
 
 	renderRouteAt("/w/engineering/mentor", queryClient);
 	await screen.findByRole("dialog", { name: "Confirm access" }, ROUTE_RENDER_WAIT);
@@ -100,20 +84,21 @@ it("asks for a recent sign-in when a viewed read is refused for it", async () =>
 
 it("asks again when a later read is refused after the first prompt was dismissed", async () => {
 	server.use(
-		http.get("*/workspaces/:workspaceSlug/mentor/threads", stepUpRequired),
-		http.get("*/workspaces/:workspaceSlug/mentor/threads/:threadId", stepUpRequired),
+		http.get("*/workspaces/:workspaceSlug/mentor/conversation", stepUpRequired),
+		http.get("*/workspaces/:workspaceSlug/mentor/entries", stepUpRequired),
 	);
 	renderRouteAt("/w/engineering/mentor", queryClient);
 	await screen.findByRole("dialog", { name: "Confirm access" }, ROUTE_RENDER_WAIT);
 	await userEvent.keyboard("{Escape}");
 	await waitFor(() => expect(screen.queryByRole("dialog", { name: "Confirm access" })).toBeNull());
 
-	// The dismissed refusal stays cached on the thread list while a newer read is refused.
+	// The dismissed refusal stays cached on the conversation while a newer read is refused.
 	await act(async () => {
 		await expect(
-			queryClient.query(
-				getThreadOptions({ path: { workspaceSlug: "engineering", threadId: "thread-1" } }),
-			),
+			queryClient.query({
+				...getMentorConversationOptions({ path: { workspaceSlug: "engineering" } }),
+				staleTime: 0,
+			}),
 		).rejects.toMatchObject({ code: "step_up_required" });
 	});
 	await screen.findByRole("dialog", { name: "Confirm access" });

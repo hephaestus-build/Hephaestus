@@ -22,7 +22,5 @@ public interface ModelBindingSource {
 
     boolean isEnabled();
 
-    boolean isAllowInternet();
-
     int getTimeoutSeconds();
 }

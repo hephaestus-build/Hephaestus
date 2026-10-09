@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.notification.preferences;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestAvailability;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
@@ -28,6 +29,7 @@ public class NotificationSubscriptionService {
     private final NotificationSubscriptionRepository subscriptions;
     private final AccountContactQuery contacts;
     private final EmailGateway gateway;
+    private final WeeklyDigestAvailability weeklyDigests;
     private final Clock clock;
 
     public boolean isEnabled(long accountId, NotificationSubscriptionKind kind) {
@@ -80,10 +82,11 @@ public class NotificationSubscriptionService {
             EntityTagPrecondition precondition,
             boolean admin) {
         List<NotificationSubscription> rows = new ArrayList<>(subscriptions.findForUpdate(accountId));
-        boolean enablingSubscription = Arrays.stream(NotificationSubscriptionKind.values())
+        // The weekly digest is not an email kind (NotificationSubscriptionKind.MENTOR_DIGEST).
+        boolean enablingEmail = Arrays.stream(NotificationSubscriptionKind.values())
+                .filter(kind -> kind != NotificationSubscriptionKind.MENTOR_DIGEST)
                 .anyMatch(kind -> requested(update, kind) && !enabled(rows, kind));
-        if (enablingSubscription
-                && contacts.activeVerifiedPrimaryEmail(accountId).isEmpty()) {
+        if (enablingEmail && contacts.activeVerifiedPrimaryEmail(accountId).isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "The account must be active and have a verified email address.");
         }
@@ -122,6 +125,8 @@ public class NotificationSubscriptionService {
                 gateway.configured(),
                 enabled(rows, NotificationSubscriptionKind.SURVEY_SUMMARIES),
                 enabled(rows, NotificationSubscriptionKind.WORKSPACE_ALERTS),
+                enabled(rows, NotificationSubscriptionKind.MENTOR_DIGEST),
+                weeklyDigests.availableFor(accountId),
                 EntityTagPrecondition.format(version(rows)));
     }
 
@@ -132,6 +137,7 @@ public class NotificationSubscriptionService {
             case RESEARCH_SURVEYS -> update.researchSurveys();
             case WORKSPACE_ALERTS -> update.workspaceAlerts();
             case SURVEY_SUMMARIES -> update.surveySummaries();
+            case MENTOR_DIGEST -> update.weeklyDigest();
         };
     }
 

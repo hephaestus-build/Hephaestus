@@ -49,7 +49,9 @@ Hephaestus analyzes the synced activity against practices that the workspace adm
 
 Automated practice review forwards the relevant pull/merge-request diff or issue content and the surrounding discussion to the provider. For a pull/merge request, it also forwards whatever the review reads from the captured repository and its history. It can post the resulting AI-generated feedback as comments on the reviewed artifact. Where explicitly connected and permitted, selected Outline documents may supply project context.
 
-The conversational mentor is an in-app chat where contributors can ask follow-up questions. Hephaestus forwards their messages and the approved bounded context to an eligible model configured for Heph, selected by the AI choice of the person who asks (see the recipient details below). This context can come from repository activity, prior feedback, selected Outline documents, or participant-permitted monitored Slack channels. Sources are purpose- and audience-bound. An enabled integration does not by itself authorize all of its content for every request.
+The conversational mentor, Heph, is one conversation for each contributor in each workspace, with threads. The contributor can use it in the web app or in a Slack DM. Hephaestus forwards their messages and the approved bounded context to an eligible model configured for Heph, selected by the AI choice of the person who asks (see the recipient details below). This context can come from repository activity, prior feedback, selected Outline documents, or participant-permitted monitored Slack channels. Sources are purpose- and audience-bound. An enabled integration does not by itself authorize all of its content for every request.
+
+The weekly digest is opt-in and off by default. If a contributor turns it on, Hephaestus adds a weekly digest to their Heph conversation. It links the feedback that reached them in the past week and lists changes on their practice profile. Hephaestus then sends a short note through Slack, or by email when it cannot reach them in Slack. The note contains no feedback content, no counts and no practice names. Hephaestus stores the contributor's time zone to schedule the digest.
 
 Contributors who sign in with their GitHub or LRZ-GitLab account get a personal dashboard that summarizes their observations and activity. They get access to the conversational mentor and their account preferences. Sign-in adds the federated user identifier, username, display name, email, and avatar URL to what Hephaestus holds about that contributor.
 
@@ -71,7 +73,7 @@ The participant can refuse or withdraw at any time. Refusing or withdrawing has 
 
 TUM is the controller. Workspace administrators make these workspace-level choices under TUM's operating responsibility; an administrator role does not establish separate or joint controllership. The choices are listed in "Legal basis" below. Hephaestus focuses on the contributor's own development. Observations serve the contributor and let the workspace administrator deliver targeted feedback during the project.
 
-Observations are advisory and contestable. The platform makes no automated decisions within the meaning of Art. 22 GDPR. It feeds no grading, assessment, HR, or access-control pipeline. Signed-in contributors can stop new practice-feedback comments and related Slack reminders through the in-app **Comments and Slack reminders** setting. They can respond to individual pieces of feedback by recording whether the feedback was helpful and how they handled it.
+Observations are advisory and contestable. The platform makes no automated decisions within the meaning of Art. 22 GDPR. It feeds no grading, assessment, HR, or access-control pipeline. Signed-in contributors can stop new practice-feedback comments through the in-app **Comments on your work** setting. They can respond to individual pieces of feedback by recording whether the feedback was helpful and how they handled it.
 
 This delivery setting does not stop review processing.
 
@@ -157,7 +159,7 @@ Other categories include:
 - Email request/expiry/cancellation and relay-acceptance facts, and pending notification payloads.
 - Selected Outline project documents.
 - Slack integration data when enabled: Slack IDs, Slack identity links and App Home privacy choices.
-- Hephaestus DM mentor messages and new messages in administrator-activated monitored Slack channels, when Slack is enabled.
+- Heph conversation messages written in Slack DMs, and new messages in administrator-activated monitored Slack channels, when Slack is enabled.
 
 For research participants only, the research uses these categories in pseudonymized form:
 
@@ -424,7 +426,7 @@ Contributor profile and dependent records
 
 Instance administration → Person data covers exact source-only identities as well as account holders. Each personal store has an implemented export and erasure contributor. The preview freezes row keys. Changed scope requires a new preview.
 
-Erasure cancels affected attempts and waits for mounted evidence-store acknowledgement. It removes selected conversations and derived records. It anonymizes shared profiles and attribution. It clears affected hidden Heph runtime journals. An offline worker or failed step leaves a resumable request, not a completed erasure.
+Erasure cancels affected attempts and waits for mounted evidence-store acknowledgement. It removes selected conversations and derived records. It anonymizes shared profiles and attribution. It redacts the Heph tool results and summaries that could hold copies of the person's data. An offline worker or failed step leaves a resumable request, not a completed erasure.
 
 Other developers' observations and feedback stay when the person appeared only in their evidence. Erasure removes the captured input copies. Permanent exact-native-identity suppression prevents new product processing. Sync may still mirror upstream records. Git history, broker payloads, backups, delivered email and provider-side copies follow the separate boundaries in the personal-data map. These controls do not authorize extended evaluation retention.
 
@@ -439,7 +441,7 @@ Mirrored third-party content
 Disconnection of the corresponding integration and workspace purge erase the same rows by hard deletion, not by a deleted-flag. The erased content is:
 
 - GitHub / gitlab.lrz.de: the mirrored repository and everything that cascades from it. This includes issues, pull/merge requests, reviews, review threads and comments, discussions, labels, milestones, and collaborators. It also includes the workspace's repository monitors and any local git clone. The org-level mirror includes teams, team memberships and organization memberships. Removal also covers the activity-event log and SCM-derived practice observations and feedback, whose evidence quotes mirrored content verbatim. Repository rows are instance-global and shared. A repository that another workspace still monitors remains for that workspace. Only the disconnecting workspace's access path is removed. The org-level mirror is removed only when no other workspace is bound to the same organization.
-- Slack: messages, threads, monitored-channel records, participant-consent records, mentor threads, and conversation-derived observations and feedback.
+- Slack: messages, threads, monitored-channel records, participant-consent records, the Slack DM identity on Heph conversations, and conversation-derived observations and feedback. The Heph questions and answers written in Slack, and the tool results and summaries of their turns, are erased in place: their content is removed and the app shows them as deleted. Their running turns stop.
 - Outline: documents, collections, and the document event log.
 
 Retention after disconnection / purge
@@ -507,9 +509,9 @@ The practice-review sandbox runs as non-root inside isolated Docker containers o
 
 Queued practice review also requires the operator to set `AGENT_ENABLED=true`. The deployment's compose files pass that variable to both the application server and worker, with a `false` default. No runtime profile overrides it. A worker started outside those compose files, on the `worker` Spring profile, is also off until the variable is set. It gates the job queue. With it unset, the system submits, claims and executes no practice-review jobs.
 
-Interactive mentor conversations do **not** use that queue, so `AGENT_ENABLED` does not gate them. Web and Slack turns place their sandbox on a connected worker with spare mentor capacity. The application server keeps admission, budget checks, context and thread persistence. It needs no Docker client when its worker role is disabled. A worker drain or restart ends its live sessions. The next turn restores the thread from PostgreSQL.
+Heph conversations do **not** use that queue, so `AGENT_ENABLED` does not gate them. Each worker runs one Heph host container for the Heph turns that it claims from PostgreSQL. The host serves several developers and workspaces at the same time. It has no shell, file, or code-execution tool, and each turn gets a credential that is valid only for that turn. The application server keeps admission, budget checks, context and the conversation store. It needs no Docker client when its worker role is disabled.
 
-Without spare capacity, the system returns an explicit, retryable busy response, rather than executing locally. Heph has a separate allow-internet binding. Practice reviews enforce an internal network regardless of the stored binding. Heph can have broader connectivity.
+Without spare capacity, a turn waits in the queue until a worker can run it. It never runs on the application server. The Heph host runs on its own internal Docker network, unless its worker runs outside any container ([runtime roles](../runtime-roles.mdx#the-heph-host)). Practice reviews always run on an internal network.
 
 Before enabling that network posture:
 
@@ -654,7 +656,7 @@ In the DSMS multi-select:
 
 ```text
 - GitHub and gitlab.lrz.de supply identity at sign-in through GitHub OAuth and gitlab.lrz.de OIDC. The application server federates directly to them. They supply repository activity through the GitHub App installation or workspace-configured access token. They deliver webhook events to the platform's /webhooks endpoint.
-- A connected Slack workspace supplies linked identity, App Home choices and mentor direct messages. It also supplies new messages from explicitly activated monitored channels after the visible announcement.
+- A connected Slack workspace supplies linked identity, App Home choices and Heph direct messages. It also supplies new messages from explicitly activated monitored channels after the visible announcement.
 - A connected Outline workspace supplies documents and author attribution from collections that the workspace administrator explicitly selects. When a contributor connects Outline, it can also supply linked identity.
 - Data subjects directly supply account preferences, AI-assistant messages, product feedback, survey answers, and rights requests through the contact process.
 - The shipped production stack has no general access log for the HTTP connection. Authentication and security processing still use connection metadata. Only authentication events collect the source IP address and user agent as such. These events retain them under the auth-event log's own 12-month window described above.
@@ -760,14 +762,13 @@ while monitored. They are not rewritten for person erasure. Offline mounted stor
 erasure before the person job completes. See the personal-data map for executable evidence.
 
 The person-data upgrade clears unresolvable legacy administrator attribution, connection-audit
-actor/detail fields, membership subject attribution and hidden Heph journals once. Visible chats,
-settings and lifecycle times remain. Pending integration authorizations must be restarted. A legacy
+actor/detail fields and membership subject attribution once. Settings and lifecycle times remain. Pending integration authorizations must be restarted. A legacy
 Outline mirror lacking an exact provider instance stops the upgrade. The shipped migration fragment
 owns the operator backup and recovery procedure. This clearing is not a general retention schedule.
 
 ## Deployment security evidence
 
-Sandboxes run on the worker role only. Web and Slack Heph use connected workers. The server owns
+Sandboxes run on the worker role only. Web and Slack Heph turns run in the Heph host of a worker. The server owns
 admission, context and persistence without a Docker socket. Worker memory and mounted copies are
 part of the privacy boundary. Management metrics are on a separate private listener, not the public
 API.

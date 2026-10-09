@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.ModelVisibility;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -67,6 +69,9 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private WorkerJwtVerifier jwtVerifier;
 
     @Autowired
+    private MentorTurnRepository turnRepository;
+
+    @Autowired
     private WorkerJwtIssuer jwtIssuer;
 
     private JobTokenAuthenticationFilter filter;
@@ -76,7 +81,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void setUp() {
         SecurityContextHolder.clearContext();
         filter = new JobTokenAuthenticationFilter(
-                jobRepository, jwtVerifier, new MentorProxyCredentialRegistry(), objectMapper, "worker-1");
+                jobRepository, turnRepository, new SandboxGatewaySessions(), jwtVerifier, objectMapper, "worker-1");
         User owner = persistUser("proxy-owner");
         workspace = createWorkspace("proxy-ws", "Proxy Workspace", "proxy-org", AccountType.ORG, owner);
     }
@@ -263,7 +268,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         snapshot.put("modelId", model.getId());
         snapshot.put("workspaceId", workspace.getId());
         snapshot.put("timeoutSeconds", 600);
-        snapshot.put("allowInternet", false);
 
         AgentJob job = new AgentJob();
         job.setWorkspace(workspace);

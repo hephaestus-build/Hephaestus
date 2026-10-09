@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -68,6 +69,9 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     @Mock
     ReviewedWorkCoverage reviewedWorkCoverage;
 
+    @Mock
+    WorkspaceActorSelector actorSelector;
+
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
@@ -98,6 +102,11 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 });
     }
 
+    @BeforeEach
+    void connectedInstance() {
+        lenient().when(actorSelector.connectedProviderId(1L)).thenReturn(Optional.of(5L));
+    }
+
     @Test
     void emptyDefaults() throws Exception {
         User user = new User();
@@ -106,11 +115,11 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         when(observationRepository.findRecentByDeveloperAndWorkspace(
                         eq(2L), eq(1L), any(Instant.class), eq(VERDICTS), any(Pageable.class)))
                 .thenReturn(List.of());
-        when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
+        when(queryRepository.findReviewsReceivedSince(eq(1L), eq(5L), eq(2L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
 
         Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        provider.contribute(new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID()), files);
 
         byte[] bytes = files.get("inputs/context/observations_history.json");
         assertThat(bytes).isNotNull();
@@ -140,7 +149,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         when(observationRepository.findRecentByDeveloperAndWorkspace(
                         eq(2L), eq(1L), any(Instant.class), eq(VERDICTS), any(Pageable.class)))
                 .thenReturn(List.of(observation));
-        when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
+        when(queryRepository.findReviewsReceivedSince(eq(1L), eq(5L), eq(2L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of());
         when(visibilityPolicy.permitsAll(1L, List.of(observation), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(Set.of());
@@ -242,11 +251,33 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         review.setBody("Please add a test.");
         review.setHtmlUrl("https://example.test/pr/42#review");
         review.setSubmittedAt(Instant.parse("2025-06-11T12:00:00Z"));
-        when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
+        when(queryRepository.findReviewsReceivedSince(eq(1L), eq(5L), eq(2L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(review));
+        when(queryRepository.findPullRequestRefs(1L, 5L, List.of(123L)))
+                .thenReturn(List.of(new MentorContextQueryRepository.WorkRef() {
+                    @Override
+                    public Long getId() {
+                        return 123L;
+                    }
+
+                    @Override
+                    public Integer getNumber() {
+                        return 42;
+                    }
+
+                    @Override
+                    public String getTitle() {
+                        return "Add retry";
+                    }
+
+                    @Override
+                    public String getUrl() {
+                        return "https://example.test/pr/42";
+                    }
+                }));
 
         Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        provider.contribute(new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID()), files);
 
         JsonNode root = objectMapper.readTree(files.get("inputs/context/observations_history.json"));
 
@@ -262,6 +293,12 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         assertThat(bad.get("observedAt").asString()).isEqualTo(observedBad.toString());
         assertThat(bad.get("artifactKind").asString()).isEqualTo("scm.pull_request");
         assertThat(bad.get("artifactId").asLong()).isEqualTo(123L);
+        assertThat(bad.get("work").get("number").asInt()).isEqualTo(42);
+        assertThat(bad.get("work").get("title").asString()).isEqualTo("Add retry");
+        assertThat(bad.get("work").get("url").asString()).isEqualTo("https://example.test/pr/42");
+        assertThat(root.get("abstentions").get(0).has("work"))
+                .as("no reviewed work to name")
+                .isFalse();
         assertThat(bad.has("evidence")).isFalse();
         assertThat(bad.has("evidenceRationale")).isFalse();
         assertThat(root.get("detail").get("loaded").asBoolean()).isFalse();
@@ -592,7 +629,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
             review.setSubmittedAt(Instant.parse("2025-06-11T12:00:00Z").minusSeconds(i));
             reviews.add(review);
         }
-        when(queryRepository.findReviewsReceivedSince(eq(1L), eq(2L), any(Instant.class), any(Pageable.class)))
+        when(queryRepository.findReviewsReceivedSince(eq(1L), eq(5L), eq(2L), any(Instant.class), any(Pageable.class)))
                 .thenReturn(reviews);
 
         ObjectNode root = provider.buildPayload(1L, 2L);

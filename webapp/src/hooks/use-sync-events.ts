@@ -16,6 +16,7 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { ConnectionSummary, IntegrationCatalogEntry } from "@/api/types.gen";
 import environment from "@/environment";
+import { openEventStream } from "@/lib/event-stream";
 import { isRecord } from "@/lib/is-record";
 import { hasText } from "@/lib/text";
 import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
@@ -59,16 +60,6 @@ function parseHint(payload: string): SyncEventHint | undefined {
 	}
 	return { scope, connectionId };
 }
-
-/** Backoff ladder for manual reconnects: 1s, 2s, 4s … capped, each scaled by 0.5–1.0× jitter. */
-const RECONNECT_BASE_MS = 1000;
-const RECONNECT_CAP_MS = 30_000;
-
-/**
- * Consecutive failed connects before the surface reports live updates gone. One is a blip — a proxy
- * restart reconnects within a second — so tolerate it silently.
- */
-const FAILURES_BEFORE_DEGRADED = 2;
 
 /** Floor between catch-up resyncs, so a flapping stream cannot storm the cache. */
 const RESYNC_THROTTLE_MS = 30_000;
@@ -139,12 +130,8 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 			return;
 		}
 
-		let source: EventSource | null = null;
-		let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
-		let consecutiveFailures = 0;
 		let hasEverOpened = false;
 		let lastResyncAt = 0;
-		let disposed = false;
 		const hintTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 		const invalidate = async (queryKey: readonly unknown[]) =>
@@ -233,104 +220,39 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 			);
 		};
 
-		/**
-		 * One controller per connection, not one per hook: an `AbortSignal` is one-shot, and
-		 * `addEventListener(…, { signal })` with an already-aborted signal attaches nothing at all,
-		 * silently. Reusing a controller across reconnects leaves every stream after the first deaf.
-		 */
-		const controllers = new WeakMap<EventSource, AbortController>();
-
-		const detach = (target: EventSource) => {
-			controllers.get(target)?.abort();
-			controllers.delete(target);
-			target.close();
-		};
-
-		const connect = () => {
-			const current = new EventSource(
-				`${environment.serverUrl}/workspaces/${workspaceSlug}/sync/events`,
-				{ withCredentials: true },
-			);
-			source = current;
-			const controller = new AbortController();
-			controllers.set(current, controller);
-			const { signal } = controller;
-
-			current.addEventListener(
-				"open",
-				() => {
-					consecutiveFailures = 0;
-					setLivePushUnavailable(false);
-
-					// oxlint-disable-next-line no-restricted-properties -- Measures RESYNC_THROTTLE_MS from the previous open, inside a DOM listener; `useNow`'s shared tick is the same order as that window and could not resolve it.
-					const now = Date.now();
-					// The first open races the page's own mount fetches, which are already loading this
-					// data — resyncing here would cancel and restart them. Record the timestamp anyway so
-					// an immediate re-open is throttled against the mount.
-					const isFirstOpen = !hasEverOpened;
-					hasEverOpened = true;
-					if (isFirstOpen || now - lastResyncAt < RESYNC_THROTTLE_MS) {
-						if (isFirstOpen) {
-							lastResyncAt = now;
-						}
-						return;
-					}
+		const handleOpen = () => {
+			// oxlint-disable-next-line no-restricted-properties -- Measures RESYNC_THROTTLE_MS from the previous open, inside a DOM listener; `useNow`'s shared tick is the same order as that window and could not resolve it.
+			const now = Date.now();
+			// The first open races the page's own mount fetches, which are already loading this
+			// data — resyncing here would cancel and restart them. Record the timestamp anyway so
+			// an immediate re-open is throttled against the mount.
+			const isFirstOpen = !hasEverOpened;
+			hasEverOpened = true;
+			if (isFirstOpen || now - lastResyncAt < RESYNC_THROTTLE_MS) {
+				if (isFirstOpen) {
 					lastResyncAt = now;
-					resyncIntegrationQueries();
-				},
-				{ signal },
-			);
-
-			current.addEventListener("sync", handleHint, { signal });
-
-			current.addEventListener(
-				"error",
-				() => {
-					// Only act on CLOSED. CONNECTING means the browser is already auto-retrying a network
-					// error (the HTML spec makes that automatic), so stay out of it. CLOSED means the
-					// connection failed — the spec reaches it for any non-200 or wrong Content-Type — and
-					// the browser never retries that: one 502 during a deploy or one 401 on an expired
-					// session ends live updates for the session unless we reconnect ourselves.
-					if (current.readyState !== EventSource.CLOSED) {
-						return;
-					}
-
-					consecutiveFailures += 1;
-					if (consecutiveFailures >= FAILURES_BEFORE_DEGRADED) {
-						setLivePushUnavailable(true);
-					}
-
-					detach(current);
-					if (disposed) {
-						return;
-					}
-
-					const backoff = Math.min(
-						RECONNECT_CAP_MS,
-						RECONNECT_BASE_MS * 2 ** (consecutiveFailures - 1),
-					);
-					// Jitter keeps every admin tab from re-storming the server on the same tick after a
-					// shared outage.
-					reconnectTimer = setTimeout(connect, backoff * (0.5 + Math.random() * 0.5));
-				},
-				{ signal },
-			);
+				}
+				return;
+			}
+			lastResyncAt = now;
+			resyncIntegrationQueries();
 		};
 
-		connect();
+		const close = openEventStream(
+			`${environment.serverUrl}/workspaces/${workspaceSlug}/sync/events`,
+			{
+				events: { sync: handleHint },
+				onOpen: handleOpen,
+				onPausedChange: setLivePushUnavailable,
+			},
+		);
 
 		return () => {
-			disposed = true;
-			if (reconnectTimer) {
-				clearTimeout(reconnectTimer);
-			}
 			for (const timer of hintTimers.values()) {
 				clearTimeout(timer);
 			}
 			hintTimers.clear();
-			if (source) {
-				detach(source);
-			}
+			close();
 		};
 	}, [workspaceSlug, queryClient]);
 

@@ -58,6 +58,10 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.sandbox.docker.AgentImagePullBootstrapper",
                     RuntimeRole.WORKER_PROPERTY),
+            // Heph turns run on a worker's Heph host, in its sandbox, behind its gateway.
+            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephHostConfiguration", RuntimeRole.WORKER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnController", RuntimeRole.WORKER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnContexts", RuntimeRole.WORKER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.core.runtime.hub.HubConfiguration", RuntimeRole.SERVER_PROPERTY),
             // Admin surfaces and the services behind them are server-only: the worker and webhook pods do
             // not load core.auth, so an admin controller mapped there is a route with no authentication
@@ -145,7 +149,9 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.SurveyAdminController", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackService", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.SurveyService", RuntimeRole.SERVER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorInFlightReaper", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnLeaseReaper", RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnQueueSampler", RuntimeRole.SERVER_PROPERTY),
             // ADR 0006: the LLM proxy runs beside the sandbox on the WORKER, and only there.
             Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxyController", RuntimeRole.WORKER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig", RuntimeRole.WORKER_PROPERTY),
@@ -218,10 +224,10 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
      * mentor model binding in the DB, not a capability flag.
      */
     private static final List<String> UNCONDITIONAL_MENTOR_BEANS = List.of(
-            "de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChatService",
-            "de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChatController",
-            "de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChatExecutorConfig",
-            "de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChatMetrics");
+            "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission",
+            "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion",
+            "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter",
+            "de.tum.cit.aet.hephaestus.mentor.MentorTurnService");
 
     @Test
     void runtimeGatesAreMatchIfMissingTrue() {
@@ -360,7 +366,9 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
     private static final List<String> CROSS_ROLE_AUTH_SPI_IMPLS = List.of(
             "de.tum.cit.aet.hephaestus.core.auth.AccountIdentityQueryService",
             "de.tum.cit.aet.hephaestus.core.auth.AccountRoleQueryService",
-            "de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService");
+            "de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService",
+            // The worker reads a developer's time zone for the situation of a Heph turn.
+            "de.tum.cit.aet.hephaestus.core.auth.AccountTimeZoneService");
 
     @Test
     void allAuthStereotypeBeansAreServerGated() {

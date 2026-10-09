@@ -17,7 +17,6 @@ import tools.jackson.databind.ObjectMapper;
 @PersonDataStores({
     "slack_thread",
     "slack_message",
-    "mentor_slack_thread",
     "slack_participant_consent",
     "slack_channel_consent_event",
     "slack_monitored_channel"
@@ -40,16 +39,6 @@ public class IntegrationSlackPersonDataCatalog implements PersonDataCatalog {
                         "id",
                         "",
                         -60),
-                new JdbcPersonDataStore(
-                        jdbc,
-                        mapper,
-                        "mentor_slack_thread",
-                        "mentor_slack_thread",
-                        "t.chat_thread_id IN (SELECT id FROM chat_thread WHERE user_id = ANY(:users)) OR EXISTS (SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb)) AS i(\"providerId\" bigint,subject text,\"teamId\" text) JOIN identity_provider p ON p.id=i.\"providerId\" WHERE p.type='SLACK' AND p.server_url='https://slack.com' AND i.subject=t.slack_user_id AND i.\"teamId\"=t.slack_team_id)",
-                        "id,workspace_id,chat_thread_id,slack_team_id,slack_channel_id,slack_thread_ts,slack_user_id,created_at",
-                        "id",
-                        "",
-                        -130),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

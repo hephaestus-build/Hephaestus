@@ -114,13 +114,6 @@
 			]
 		},
 		{
-			"matchManagers": ["npm"],
-			"matchFileNames": ["webapp/package.json"],
-			"matchPackageNames": ["ai", "@ai-sdk/react"],
-			"groupName": "Vercel AI SDK",
-			"minimumGroupSize": 2
-		},
-		{
 			"matchDepNames": ["node"],
 			"groupName": "Node.js toolchain"
 		},

@@ -44,7 +44,7 @@ class SandboxGatewaySessionsTest {
         long bytes = Files.size(archive);
         var bounded = new SandboxGatewaySessions(bytes * 2);
         Path selection;
-        try (var session = bounded.register("token", archive, "out")) {
+        try (var session = bounded.register(UUID.randomUUID(), "token", archive, "out")) {
             byte[] first;
             try (var download = session.download("area", "chat")) {
                 first = download.input().readAllBytes();
@@ -88,7 +88,7 @@ class SandboxGatewaySessionsTest {
     @Test
     void shouldRefuseAbsentAndUnsafeSelectionsWithoutLeavingFiles() throws Exception {
         Path archive = workspaceArchive();
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             for (String repository : List.of("8", "../7", "7/../8", "7%2fsecret")) {
                 assertThatThrownBy(() -> session.download("repo", repository))
                         .isInstanceOfSatisfying(
@@ -139,7 +139,7 @@ class SandboxGatewaySessionsTest {
     @Test
     void shouldBindDownloadsToTheRegisteredCredentialAndAllowWholeFileRetry() throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "exact bytes");
-        try (var session = sessions.register("attempt-credential", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "attempt-credential", archive, "out")) {
             assertThatThrownBy(() -> sessions.require(session.id(), "Bearer different-attempt"))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,
@@ -160,7 +160,7 @@ class SandboxGatewaySessionsTest {
     @Test
     void shouldRevokeAnAttemptWhenItsRuntimeIsRemoved() throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        var session = sessions.register("token", archive, "out");
+        var session = sessions.register(UUID.randomUUID(), "token", archive, "out");
 
         session.close();
 
@@ -178,7 +178,7 @@ class SandboxGatewaySessionsTest {
     @ValueSource(strings = {"Basic token", "Bearer "})
     void shouldRefuseACredentialWhenItIsNotANonEmptyBearerToken(String authorization) throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             assertThatThrownBy(() -> sessions.require(session.id(), authorization))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,
@@ -189,7 +189,7 @@ class SandboxGatewaySessionsTest {
     @Test
     void shouldKeepTheFirstCompleteResultAndRejectDuplicateUploads() throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             byte[] result = resultTar();
             String expectedEtag = etag(result);
             upload(session, result);
@@ -233,9 +233,9 @@ class SandboxGatewaySessionsTest {
                     .satisfies(files -> assertThat(files).containsOnlyKeys("observations.json"));
             assertThat(session.result()).containsOnlyKeys("observations.json");
         }
-        Path mentorArchive = Files.writeString(temporary.resolve("mentor.tar"), "input");
-        try (var mentor = listening.register("token", mentorArchive, "out")) {
-            upload(mentor, resultTar());
+        Path hostArchive = Files.writeString(temporary.resolve("host.tar"), "input");
+        try (var host = listening.register(UUID.randomUUID(), "token", hostArchive, "out")) {
+            upload(host, resultTar());
             assertThat(bound)
                     .as("a session without a launched attempt binds nothing")
                     .hasSize(1);
@@ -245,7 +245,7 @@ class SandboxGatewaySessionsTest {
     @Test
     void shouldNotAcceptAnInvalidArchiveAsACompletedResult() throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             assertThatThrownBy(() -> upload(session, new byte[0])).isInstanceOf(IOException.class);
             assertThatThrownBy(session::result).isInstanceOf(IllegalStateException.class);
 
@@ -258,7 +258,7 @@ class SandboxGatewaySessionsTest {
     @Test
     void shouldRejectADifferentSecondResultAndAFalseContentDigest() throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             byte[] first = resultTar();
             assertThatThrownBy(() -> session.upload(new ByteArrayInputStream(first), contentDigest(new byte[0])))
                     .isInstanceOfSatisfying(
@@ -279,7 +279,7 @@ class SandboxGatewaySessionsTest {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
         var reading = new CountDownLatch(1);
         var disconnect = new CountDownLatch(1);
-        try (var session = sessions.register("token", archive, "out");
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out");
                 var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var first = executor.submit(() -> {
                 session.upload(

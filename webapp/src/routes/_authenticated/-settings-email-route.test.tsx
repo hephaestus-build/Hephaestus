@@ -19,6 +19,8 @@ const preferences = {
 	researchSurveys: false,
 	emailAvailable: true,
 	deliveryConfigured: true,
+	weeklyDigest: false,
+	weeklyDigestAvailable: false,
 	etag: '"0-0-0"',
 };
 
@@ -90,6 +92,7 @@ describe("account email choices", () => {
 			surveySummaries: false,
 			productSurveys: true,
 			researchSurveys: false,
+			weeklyDigest: false,
 		});
 		expect(product.getAttribute("aria-checked")).toBe("false");
 		expect(product.getAttribute("aria-disabled")).toBe("true");
@@ -250,6 +253,7 @@ describe("account email choices", () => {
 					surveySummaries: false,
 					productSurveys: false,
 					researchSurveys: false,
+					weeklyDigest: false,
 				},
 			]);
 		},
@@ -295,6 +299,7 @@ describe("account email choices", () => {
 				researchSurveys: false,
 				workspaceAlerts: false,
 				surveySummaries: true,
+				weeklyDigest: false,
 			},
 		]);
 	});
@@ -316,7 +321,7 @@ describe("account email choices", () => {
 			await screen.findByRole("switch", { name: "Product survey invitations" }, ROUTE_RENDER_WAIT),
 		);
 		await screen.findByText(
-			"Email choices changed elsewhere. Review the updated choices and try again.",
+			"Your choices changed elsewhere. Review the updated choices and try again.",
 		);
 		expect(reads).toBe(2);
 		expect(
@@ -361,6 +366,7 @@ describe("account email choices", () => {
 					surveySummaries: false,
 					productSurveys: false,
 					researchSurveys: true,
+					weeklyDigest: false,
 				},
 			]),
 		);

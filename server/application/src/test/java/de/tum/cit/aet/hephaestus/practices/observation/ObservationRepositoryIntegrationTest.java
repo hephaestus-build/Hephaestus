@@ -47,6 +47,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
@@ -116,6 +117,9 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private ObservationReferences observationReferences;
 
     private Workspace workspace;
     private Practice practice;
@@ -367,6 +371,23 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     assertThat(run.getArtifactKind()).isEqualTo("scm.pull_request");
                     assertThat(run.getArtifactId()).isEqualTo(100L);
                 });
+    }
+
+    @Test
+    void shouldNameThePracticeAndTheWorkOfAnObservationOnlyInItsWorkspace() {
+        UUID observationId = insertIssueObservation(900L, workspace.getId(), practice.getId(), agentJob.getId());
+
+        ObservationReferences.Reference reference = observationReferences
+                .find(workspace.getId(), Set.of(observationId))
+                .get(observationId);
+
+        assertThat(reference).isNotNull();
+        assertThat(reference.practiceSlug()).isEqualTo("test-practice");
+        assertThat(reference.practiceName()).isEqualTo("Test Practice");
+        assertThat(reference.work().kind()).isEqualTo(ArtifactKinds.ISSUE);
+        assertThat(reference.work().id()).isEqualTo("900");
+        assertThat(observationReferences.find(workspace.getId() + 1, Set.of(observationId)))
+                .isEmpty();
     }
 
     private UUID insertIssueObservation(long issueId, long workspaceId, long practiceId, UUID jobId) {

@@ -21,7 +21,6 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -63,24 +62,21 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
         return jobRepository.saveAndFlush(job);
     }
 
-    private void accumulate(@Nullable UUID jobId, JsonNode body, boolean responsesProtocol) {
+    private void accumulate(UUID jobId, JsonNode body, boolean responsesProtocol) {
         accumulateAs(
-                jobId == null
-                        ? null
-                        : new ProxyRouting.BilledAttempt(
-                                LlmUsageSourceType.AGENT_JOB, jobId, 0, BigDecimal.ZERO, "worker-1"),
+                new ProxyRouting.BilledAttempt(LlmUsageSourceType.AGENT_JOB, jobId, 0, BigDecimal.ZERO, "worker-1"),
                 body,
                 responsesProtocol);
     }
 
-    private void accumulateAs(ProxyRouting.@Nullable BilledAttempt attempt, JsonNode body, boolean responsesProtocol) {
+    private void accumulateAs(ProxyRouting.BilledAttempt attempt, JsonNode body, boolean responsesProtocol) {
         accumulateAs(
                 new ProxyUsageAccumulator(jobRepository, new SimpleMeterRegistry()), attempt, body, responsesProtocol);
     }
 
     private void accumulateAs(
             ProxyUsageAccumulator accumulator,
-            ProxyRouting.@Nullable BilledAttempt attempt,
+            ProxyRouting.BilledAttempt attempt,
             JsonNode body,
             boolean responsesProtocol) {
         transactionTemplate.executeWithoutResult(
@@ -122,16 +118,6 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
         AgentJobLlmUsage usage = usageOf(job);
         assertThat(usage.totalCalls()).isZero();
         assertThat(usage.inputTokens()).isZero();
-    }
-
-    @Test
-    @DisplayName("the mentor route (no billing target) touches no row")
-    void nullJobIdIsANoOp() {
-        AgentJob job = persistedJob("proxy-usage-null-target");
-
-        accumulate(null, json("{\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":0}}"), false);
-
-        assertThat(usageOf(job).totalCalls()).isZero();
     }
 
     /**

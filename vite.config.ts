@@ -335,6 +335,7 @@ export default defineConfig({
 			"gate:load-syntax": group(["test:load:syntax"]),
 			"test:load:webhook-burst": run("node scripts/load-test.ts webhook-burst"),
 			"test:load:detection-mentor": run("node scripts/load-test.ts detection-mentor"),
+			"test:load:heph": run("node scripts/load-test.ts heph"),
 			"report:load:baseline": run("node scripts/load-test.ts report"),
 			"test:load:syntax": run("node scripts/load-test.ts syntax"),
 

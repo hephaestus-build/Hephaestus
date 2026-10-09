@@ -40,11 +40,8 @@ public class PracticePiAdapter {
                 request.maxOutputTokens(),
                 request.reasoningEffort(),
                 request.jobToken(),
-                // Native shell access must not provide a route to push or fetch uncaptured evidence.
-                false,
                 request.timeoutSeconds(),
                 PROFILE,
-                Map.of(),
                 buildPrecomputeStep(request.timeoutSeconds())));
         Map<String, String> environment = new LinkedHashMap<>(plan.environment());
         environment.put(PRACTICE_MODEL_CALLS_ENV, Integer.toString(reviewProperties.practiceModelCalls()));

@@ -30,7 +30,6 @@
 		"generate:api": "vp run --filter api-generator generate:webapp"
 	},
 	"dependencies": {
-		"@ai-sdk/react": "4.0.96",
 		"@base-ui/react": "1.8.0",
 		"@dnd-kit/core": "^6.3.1",
 		"@dnd-kit/modifiers": "^9.0.0",
@@ -45,7 +44,6 @@
 		"@tanstack/react-router": "1.170.32",
 		"@tanstack/react-router-devtools": "1.167.1",
 		"@tanstack/react-table": "9.2.4",
-		"ai": "7.0.93",
 		"class-variance-authority": "0.7.1",
 		"cn": "0.2.6",
 		"date-fns": "4.4.0",
@@ -63,7 +61,6 @@
 		"streamdown": "2.6.0",
 		"use-sync-external-store": "1.6.0",
 		"usehooks-ts": "3.1.1",
-		"uuid": "14.0.2",
 		"zod": "4.5.4"
 	},
 	"devDependencies": {
@@ -75,7 +72,6 @@
 		"@playwright/test": "1.63.0",
 		"@primer/primitives": "11.10.0",
 		"@sentry/vite-plugin": "5.4.0",
-		"@shadcn/helpers": "0.2.0",
 		"@shadcn/lint": "0.1.0",
 		"@storybook/addon-a11y": "10.6.0",
 		"@storybook/addon-docs": "10.6.0",

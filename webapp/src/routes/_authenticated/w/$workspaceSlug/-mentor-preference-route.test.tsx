@@ -1,21 +1,25 @@
-import { focusManager } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { expect, it, vi } from "vitest";
 
 import { getMemberOnboardingQueryKey } from "@/api/@tanstack/react-query.gen";
-import type { ChatThreadDetail, WorkspaceOnboarding } from "@/api/types.gen";
-import type { Wire } from "@/lib/dates";
+import type { WorkspaceOnboarding } from "@/api/types.gen";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { MentorFake } from "@/test/mentor-server";
 import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 30_000 });
 
 it("keeps an existing conversation readable under No AI and restores its composer after opting in", async () => {
-	const threadId = "65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed";
-	let preference: WorkspaceOnboarding = { ...workspaceOnboarding(), aiChoice: "NO_AI" };
+	let preference: WorkspaceOnboarding = {
+		...workspaceOnboarding(),
+		aiChoice: "NO_AI",
+		mentorRefusal: "NO_AI",
+	};
+	const conversation = new MentorFake();
+	conversation.add({ kind: "HEPH", text: "Earlier guidance remains readable." });
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -23,37 +27,19 @@ it("keeps an existing conversation readable under No AI and restores its compose
 			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
 		),
 		http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(preference)),
-		http.get("*/workspaces/acme/mentor/threads", () =>
-			HttpResponse.json([{ id: threadId, title: "Earlier conversation" }]),
-		),
-		http.get("*/workspaces/acme/mentor/threads/:threadId", () =>
-			HttpResponse.json({
-				id: threadId,
-				createdAt: "2026-09-24T09:15:00Z",
-				messages: [
-					{
-						id: "ea28a7c9-b17f-49be-ae98-a083fa99b2b2",
-						role: "assistant",
-						parts: [{ type: "text", text: "Earlier guidance remains readable." }],
-						metadata: { status: "completed" },
-						createdAt: "2026-09-24T09:15:04.512Z",
-					},
-				],
-			} satisfies Wire<ChatThreadDetail>),
-		),
+		...conversation.handlers(),
 	);
-	const { queryClient } = renderRouteAtWithRouter(`/w/acme/mentor/${threadId}`);
+	const { queryClient } = renderRouteAtWithRouter("/w/acme/mentor");
 	await screen.findByText("Earlier guidance remains readable.", {}, ROUTE_RENDER_WAIT);
 	await screen.findByRole("heading", { name: "Heph is off for you" });
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
-		"/w/acme/onboarding?returnTo=/w/acme/mentor/65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed",
+		"/w/acme/onboarding?returnTo=/w/acme/mentor",
 	);
 	expect(screen.queryByRole("textbox")).toBeNull();
-	expect(screen.queryByRole("button", { name: /edit|try again/iu })).toBeNull();
 
 	// The server now answers with the new choice too, so a refetch cannot undo the opt-in.
 	preference = {
-		...preference,
+		...workspaceOnboarding(),
 		aiChoice: "IN_HOUSE_ONLY",
 		aiOptions: [
 			{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
@@ -65,7 +51,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 			preference,
 		);
 	});
-	await screen.findByRole("textbox", {}, ROUTE_RENDER_WAIT);
+	await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT);
 	expect(screen.queryByRole("heading", { name: "Heph is off for you" })).toBeNull();
 });
 
@@ -80,13 +66,14 @@ it("names the saved choice when no Heph model is set up for it", async () => {
 			HttpResponse.json({
 				...workspaceOnboarding(),
 				aiChoice: "CLOUD",
+				mentorRefusal: "UNAVAILABLE",
 				aiOptions: [
 					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] },
 					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
 				],
 			}),
 		),
-		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
+		...new MentorFake().handlers(),
 	);
 	renderRouteAtWithRouter("/w/acme/mentor");
 	await screen.findByRole(
@@ -102,7 +89,7 @@ it("names the saved choice when no Heph model is set up for it", async () => {
 	);
 });
 
-it("says Heph is not set up, and offers no choice to change, where no model is ready for any choice", async () => {
+it("says Heph is not set up, and offers no choice to change, to a member without a choice whom no model serves", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -112,14 +99,14 @@ it("says Heph is not set up, and offers no choice to change, where no model is r
 		http.get("*/workspaces/acme/onboarding/me", () =>
 			HttpResponse.json({
 				...workspaceOnboarding(),
-				aiChoice: "CLOUD",
+				mentorRefusal: "UNAVAILABLE",
 				aiOptions: [
 					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] },
 					{ choice: "IN_HOUSE_ONLY", mentorReady: false, practiceReviewsReady: false, models: [] },
 				],
 			}),
 		),
-		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
+		...new MentorFake().handlers(),
 	);
 	renderRouteAtWithRouter("/w/acme/mentor");
 	await screen.findByRole(
@@ -148,16 +135,16 @@ it("opens Heph for a member whose account carries no feature flags", async () =>
 				],
 			}),
 		),
-		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
+		...new MentorFake().handlers(),
 	);
 	const { router } = renderRouteAtWithRouter("/w/acme/mentor");
-	await screen.findByRole("textbox", {}, ROUTE_RENDER_WAIT);
-	// A new chat opens under its own thread id; what matters is that the member stayed in Heph.
-	expect(router.state.location.pathname.startsWith("/w/acme/mentor")).toBe(true);
+	await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT);
+	expect(router.state.location.pathname).toBe("/w/acme/mentor");
 });
 
-it("prepares the member's Heph sandbox when Heph opens, and again when they come back to the tab", async () => {
-	const prepared: string[] = [];
+it("offers Heph to a member who has not chosen, whom the workspace's undeclared model serves", async () => {
+	// The server answers such a member from the undeclared slot, which `aiOptions` does not list, and
+	// sends no refusal; the page follows the refusal, not the declared options.
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -167,50 +154,30 @@ it("prepares the member's Heph sandbox when Heph opens, and again when they come
 		http.get("*/workspaces/acme/onboarding/me", () =>
 			HttpResponse.json({
 				...workspaceOnboarding(),
-				aiChoice: "IN_HOUSE_ONLY",
 				aiOptions: [
-					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+					{ choice: "IN_HOUSE_ONLY", mentorReady: false, practiceReviewsReady: false, models: [] },
+					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: false, models: [] },
 				],
-			}),
+			} satisfies WorkspaceOnboarding),
 		),
-		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
-		http.post("*/workspaces/:workspaceSlug/mentor/sandbox", ({ params }) => {
-			prepared.push(String(params.workspaceSlug));
-			return new HttpResponse(null, { status: 202 });
-		}),
+		...new MentorFake().handlers(),
 	);
 	renderRouteAtWithRouter("/w/acme/mentor");
-	await screen.findByRole("textbox", {}, ROUTE_RENDER_WAIT);
-	await waitFor(() => expect(prepared).toStrictEqual(["acme"]), ROUTE_RENDER_WAIT);
-
-	act(() => {
-		focusManager.setFocused(false);
-		focusManager.setFocused(true);
-	});
-	await waitFor(() => expect(prepared).toStrictEqual(["acme", "acme"]), ROUTE_RENDER_WAIT);
-	focusManager.setFocused(undefined);
+	await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT);
+	expect(screen.queryByText("Heph is not set up in this workspace yet")).toBeNull();
 });
 
-it("prepares nothing when Heph is off for the member", async () => {
-	let prepared = false;
+it("lists Heph in the navigation for a member who has not chosen", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
 		http.get("*/workspaces/acme/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
 		),
-		http.get("*/workspaces/acme/onboarding/me", () =>
-			HttpResponse.json({ ...workspaceOnboarding(), aiChoice: "NO_AI" }),
-		),
-		http.get("*/workspaces/acme/mentor/threads", () => HttpResponse.json([])),
-		http.post("*/workspaces/:workspaceSlug/mentor/sandbox", () => {
-			prepared = true;
-			return new HttpResponse(null, { status: 202 });
-		}),
+		http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(workspaceOnboarding())),
 	);
-	renderRouteAtWithRouter("/w/acme/mentor");
-	await screen.findByRole("heading", { name: "Heph is off for you" }, ROUTE_RENDER_WAIT);
-	expect(prepared).toBe(false);
+	renderRouteAtWithRouter("/w/acme/teams");
+	await screen.findByRole("link", { name: /AI mentor/u }, ROUTE_RENDER_WAIT);
 });
 
 it("keeps Heph out of the navigation for a reader who is not a member", async () => {
@@ -244,6 +211,7 @@ it("offers Heph in the navigation where a Heph model is ready, whatever the memb
 			HttpResponse.json({
 				...workspaceOnboarding(),
 				aiChoice: "NO_AI",
+				mentorRefusal: "NO_AI",
 				aiOptions: [
 					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: false, models: [] },
 				],
@@ -257,6 +225,7 @@ it("offers Heph in the navigation where a Heph model is ready, whatever the memb
 it("keeps Heph out of the navigation of a workspace where only practice reviews have a model", async () => {
 	const ready: WorkspaceOnboarding = {
 		...workspaceOnboarding(),
+		aiChoice: "CLOUD",
 		aiOptions: [{ choice: "CLOUD", mentorReady: true, practiceReviewsReady: true, models: [] }],
 	};
 	server.use(
@@ -271,6 +240,7 @@ it("keeps Heph out of the navigation of a workspace where only practice reviews 
 		http.get("*/workspaces/other/onboarding/me", () =>
 			HttpResponse.json({
 				...ready,
+				mentorRefusal: "UNAVAILABLE",
 				aiOptions: [
 					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] },
 				],
