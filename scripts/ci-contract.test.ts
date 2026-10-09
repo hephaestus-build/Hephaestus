@@ -81,7 +81,7 @@ const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary"]);
 
 // Assignment names exclude '=' so each token has only one possible split.
 const VP_INVOCATION =
-	/(?:^|[|&;]\s*|timeout (?:-\S+ )*\S+ (?:env )?)(?:[^\s=]+=\S+ )*vp (?:run|exec|-C)\b/mu;
+	/(?:^|[|&;]\s*|timeout (?:-\S+ )*[^\s-]\S* (?:env )?)(?:[^\s=]+=\S+ )*vp (?:run|exec|-C)\b/mu;
 
 void test("vp invocation detection handles assignments without exponential backtracking", () => {
 	for (const command of [
@@ -103,7 +103,8 @@ void test("vp invocation detection handles assignments without exponential backt
 			"--input-type=module",
 			"-e",
 			`const pattern = new RegExp(${JSON.stringify(VP_INVOCATION.source)}, "mu");
-        if (pattern.test("&" + "!==! ".repeat(20_000))) process.exit(1);`,
+        if (pattern.test("&" + "!==! ".repeat(20_000))) process.exit(1);
+        if (pattern.test("timeout " + "--x=y ".repeat(20_000))) process.exit(1);`,
 		],
 		{ encoding: "utf8", timeout: 5000 },
 	);
