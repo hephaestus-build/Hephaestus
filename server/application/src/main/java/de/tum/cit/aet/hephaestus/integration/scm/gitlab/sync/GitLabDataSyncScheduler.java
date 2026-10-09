@@ -905,7 +905,16 @@ public class GitLabDataSyncScheduler {
         }
 
         for (Repository repo : availableRepos) {
-            activityLedgerRepair.reconcileRepository(session.scopeId(), repo.getId());
+            try {
+                activityLedgerRepair.reconcileRepository(session.scopeId(), repo.getId());
+            } catch (RuntimeException e) {
+                log.warn(
+                        "Activity ledger repair failed: workspaceId={}, repositoryId={}",
+                        session.scopeId(),
+                        repo.getId(),
+                        e);
+                reportWarning(handle);
+            }
         }
 
         log.info(

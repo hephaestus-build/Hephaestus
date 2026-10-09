@@ -551,7 +551,11 @@ public class GitHubHistoricalBackfillService {
             log.info("No pull requests to backfill: repo={}", safeRepoName);
         }
 
-        activityLedgerRepair.reconcileRepository(scopeId, repositoryId);
+        try {
+            activityLedgerRepair.reconcileRepository(scopeId, repositoryId);
+        } catch (RuntimeException e) {
+            log.warn("Activity ledger repair failed: workspaceId={}, repositoryId={}", scopeId, repositoryId, e);
+        }
 
         boolean issuesComplete = !issueResult.hasMore() || target.isIssueBackfillComplete();
         boolean pullRequestsComplete = !prResult.hasMore();

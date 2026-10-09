@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -91,6 +90,9 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
 
     /** Frozen so a re-synced repo reports a bit-identical "unchanged" updatedAt. */
     private static final Instant REPO_UPDATED_AT = Instant.parse("2026-07-01T00:00:00Z");
+
+    @Mock
+    private ActivityLedgerRepair activityLedgerRepair;
 
     @Mock
     private IdentityProviderRepository gitProviderRepository;
@@ -209,7 +211,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 tokenProvider,
                 gitHubAppTokenService,
                 rateLimitTracker,
-                mock(ActivityLedgerRepair.class));
+                activityLedgerRepair);
 
         provider = new IdentityProvider();
         ReflectionTestUtils.setField(provider, "id", PROVIDER_ID);
@@ -475,6 +477,16 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
         verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
         assertThat(result).isTrue();
         verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, null);
+    }
+
+    @Test
+    void shouldRecordLedgerFailureWithoutMislabelingProviderSync() {
+        var target = syncTarget(null, null);
+        when(activityLedgerRepair.reconcileRepository(SCOPE_ID, REPOSITORY_ID))
+                .thenThrow(new IllegalStateException("Database unavailable"));
+
+        assertThat(service.syncSyncTarget(target)).isFalse();
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, "Activity ledger repair failed");
     }
 
     @Test

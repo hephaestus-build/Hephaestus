@@ -228,7 +228,7 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
         var responses = mock(GitLabGraphQlResponseHandler.class);
         var properties = mock(GitLabProperties.class);
         var userLookup = mock(GitLabIssueCommentProcessor.class);
-        ApplicationEventPublisher ignoredEvents = event -> {};
+        var ignoredEvents = mock(ApplicationEventPublisher.class);
         Map<String, Object> root = Map.of(
                 "id",
                 "gid://gitlab/DiffNote/30",

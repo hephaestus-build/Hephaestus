@@ -450,7 +450,12 @@ public class GitHubDataSyncService {
             if (error == null) {
                 error = commitBackfillError;
             }
-            activityLedgerRepair.reconcileRepository(scopeId, repositoryId);
+            try {
+                activityLedgerRepair.reconcileRepository(scopeId, repositoryId);
+            } catch (RuntimeException e) {
+                log.warn("Activity ledger repair failed: workspaceId={}, repositoryId={}", scopeId, repositoryId, e);
+                if (error == null) error = "Activity ledger repair failed";
+            }
             syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, error);
             return error == null;
         } catch (InstallationNotFoundException e) {

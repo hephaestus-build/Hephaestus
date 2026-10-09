@@ -289,7 +289,11 @@ public class GitLabHistoricalBackfillService {
             }
         }
 
-        activityLedgerRepair.reconcileRepository(scopeId, repo.getId());
+        try {
+            activityLedgerRepair.reconcileRepository(scopeId, repo.getId());
+        } catch (RuntimeException e) {
+            log.warn("Activity ledger repair failed: workspaceId={}, repositoryId={}", scopeId, repo.getId(), e);
+        }
 
         if (didWork) {
             syncTargetProvider.updateIssueBackfillState(target.id(), null, null, Instant.now());
