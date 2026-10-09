@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1791582577201-1" author="hephaestus">
+        <createTable tableName="activity_automation">
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="activity_automationPK"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="activity_automationPK"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1791582577201-2" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="activity_automation" constraintName="fk_activity_automation_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1791582577201-3" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="user_id" baseTableName="activity_automation" constraintName="fk_activity_automation_user" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="user" validate="true"/>
+    </changeSet>
+    <changeSet id="1791582577201-4" author="hephaestus">
+        <preConditions onFail="HALT"><tableExists tableName="activity_event"/></preConditions>
+        <sql>CREATE INDEX idx_activity_event_workspace_covering ON activity_event (workspace_id, occurred_at) INCLUDE (actor_id, event_type, target_type, target_id, repository_id)</sql>
+        <dropIndex tableName="activity_event" indexName="idx_activity_event_workspace_occurred"/>
+        <rollback>
+            <sql>CREATE INDEX idx_activity_event_workspace_occurred ON activity_event (workspace_id, occurred_at DESC)</sql>
+            <dropIndex tableName="activity_event" indexName="idx_activity_event_workspace_covering"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

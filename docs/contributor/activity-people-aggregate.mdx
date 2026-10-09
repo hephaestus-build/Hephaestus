@@ -1,0 +1,81 @@
+---
+title: Activity people aggregate
+description: Counts, contributor scope, and limits for the activity people response.
+---
+
+# Activity people aggregate
+
+The activity ledger owns the counts.
+The people response has one row per contributor with activity in the selected range.
+The browser sorts these rows.
+The server does not rank or page them.
+
+## Counts
+
+Contributions are pull requests opened, distinct pull requests reviewed, and issues opened.
+A review of your own pull request does not count.
+Multiple reviews of the same pull request count once in the range.
+Weekly counts deduplicate within each week.
+Thus, the sum of weekly review counts can exceed the range's distinct review count.
+
+People helped counts distinct human authors of reviewed pull requests.
+Provider bots and accounts classified as automation do not count as people helped.
+Comments remain separate from contributions.
+Active weeks count UTC calendar weeks with activity that passes the scope filters.
+
+The first contribution date is independent of the selected range and team.
+It comes from the workspace's currently connected repositories.
+Highlights refer to person identifiers in the same response.
+Automation accounts do not enter the highlights.
+
+## Scope
+
+The default includes repository contributors who are not workspace members.
+The `membersOnly` filter limits the response to the workspace roster.
+Hidden members and hidden former members remain absent from the people and automation lists.
+
+Team keys use the provider's team slug.
+Repository keys use the full provider path, such as `ls1intum/Artemis`.
+The full path distinguishes repositories with the same name.
+The response supplies both sets of keys and display names.
+Unknown filter keys are rejected.
+
+A workspace's automation classification grants no membership or permission.
+An admin can set or reset it.
+A provider bot remains automation after a reset.
+The classification is workspace-scoped and participates in person erasure and workspace purge.
+
+## Range and query cost
+
+Ranges are half-open: `[from, to)`.
+The default is 90 days.
+The other presets are 30 days, 365 days, and all available history.
+Custom ranges and all-time ranges span at most 3,653 days.
+
+An isolated PostgreSQL 18 fixture measured the aggregate with these inputs:
+
+- 1 million ledger events over ten years.
+- 300 contributors and 30 repositories.
+- 300,000 reviews and 100,000 pull requests.
+
+The first all-time plan took 15.95 seconds.
+A repository check ran once per event.
+First-contribution reads repeatedly scanned the review table.
+The revised count plan took 3.58 seconds.
+Its 90-day plan took 254 milliseconds.
+These are synthetic-data SQL measurements, not production latency guarantees.
+They exclude HTTP serialization and transfer.
+
+The covering index has the keys `(workspace_id, occurred_at)`.
+It includes actor, event type, target type, target identifier, and repository identifier.
+The workspace-and-actor index remains useful for first-contribution reads.
+The global actor and target indexes serve other ledger operations.
+Only the old index with the same workspace-and-time keys is redundant.
+
+## Sources
+
+- [PostgreSQL: covering indexes](https://www.postgresql.org/docs/current/indexes-index-only-scans.html).
+- [PostgreSQL: execution plans and buffers](https://www.postgresql.org/docs/current/using-explain.html).
+- [PostgreSQL: aggregate grouping sets and filters](https://www.postgresql.org/docs/18/sql-select.html).
+- [Spring: JDBC access](https://docs.spring.io/spring-framework/reference/data-access/jdbc/choose-style.html).
+- [OWASP: authorization checks](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html).

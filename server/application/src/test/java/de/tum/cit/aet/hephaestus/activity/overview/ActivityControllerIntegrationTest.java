@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
@@ -18,6 +19,7 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO.ReviewerState;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.TeamRefDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO;
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.time.TimeBucketSize;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -43,6 +45,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMemb
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermissionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -161,6 +164,192 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         zoe = member("a-zoe", "Zoe");
         monitored = repository("activity-org/widgets", true);
         unmonitored = repository("activity-org/elsewhere", false);
+    }
+
+    @Autowired
+    private ActivityPeopleService peopleService;
+
+    @Autowired
+    private SqlReadMeasurement reads;
+
+    @Autowired
+    private ActivityAutomationService automationService;
+
+    @Nested
+    class People {
+        @Test
+        void shouldKeepTheStatementBudgetWhenTheContributorListGrows() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
+            var before = reads.measure(() -> peopleService.people(workspace.getId(), range, null, Set.of(), false));
+            List<Long> added = new ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                User outside = persistUser("scale-contributor-" + i);
+                added.add(outside.getId());
+                record(outside, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1000L - i, DAY, monitored);
+            }
+            var after = reads.measure(() -> peopleService.people(workspace.getId(), range, null, Set.of(), false));
+            assertThat(after.value().people()).extracting(p -> p.person().id()).containsAll(added);
+            assertThat(after.cost()).isEqualTo(before.cost());
+            assertThat(after.cost().statements()).isEqualTo(5);
+            assertThat(after.cost().entities()).isZero();
+        }
+
+        @Test
+        void shouldExcludeHiddenPeopleAndCountEachCommentOnceWhenItsEventsRepeat() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            record(zoe, ActivityEventType.COMMENT_CREATED, ActivityTargetType.ISSUE_COMMENT, -2L, DAY, monitored);
+            record(
+                    zoe,
+                    ActivityEventType.COMMENT_CREATED,
+                    ActivityTargetType.ISSUE_COMMENT,
+                    -2L,
+                    DAY.plusSeconds(60),
+                    monitored);
+            workspaceMembershipService.updateMemberVisibility(workspace.getId(), ada.getId(), true);
+            var result = peopleService.people(
+                    workspace.getId(),
+                    new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                    null,
+                    Set.of(),
+                    false);
+            assertThat(result.people()).extracting(p -> p.person().id()).doesNotContain(ada.getId());
+            assertThat(result.people().stream()
+                            .filter(p -> p.person().id().equals(zoe.getId()))
+                            .findFirst()
+                            .orElseThrow()
+                            .counts()
+                            .comments())
+                    .isEqualTo(1);
+        }
+
+        @Test
+        void shouldMoveMachineUsersInBothDirectionsWithoutGrantingMembership() {
+            User machine = persistUser("machine-contributor");
+            record(machine, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
+            automationService.classify(workspace.getId(), machine.getId(), true);
+            var classified = peopleService.people(workspace.getId(), range, null, Set.of(), false);
+            assertThat(classified.people()).extracting(p -> p.person().id()).doesNotContain(machine.getId());
+            assertThat(classified.automation()).extracting(p -> p.person().id()).contains(machine.getId());
+            automationService.classify(workspace.getId(), machine.getId(), false);
+            assertThat(peopleService
+                            .people(workspace.getId(), range, null, Set.of(), false)
+                            .people())
+                    .extracting(p -> p.person().id())
+                    .contains(machine.getId());
+            assertThat(peopleService
+                            .people(workspace.getId(), range, null, Set.of(), true)
+                            .people())
+                    .extracting(p -> p.person().id())
+                    .doesNotContain(machine.getId());
+        }
+
+        @Test
+        void shouldRejectAutomationChangesWhenCallerIsOnlyAMember() {
+            webTestClient
+                    .patch()
+                    .uri(
+                            "/workspaces/{slug}/activity/people/{userId}/automation?treatAsAutomation=true",
+                            workspace.getWorkspaceSlug(),
+                            ada.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
+        }
+
+        @Test
+        void shouldKeepOtherWorkspaceEventsOutOfPeopleAndRejectUnknownRepositoryKeys() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
+            var other = createWorkspace("other-activity", "Other activity", "other-org", AccountType.ORG, zoe);
+            assertThat(peopleService
+                            .people(other.getId(), range, null, Set.of(), false)
+                            .people())
+                    .isEmpty();
+            assertThatThrownBy(() -> peopleService.people(
+                            other.getId(), range, null, Set.of(monitored.getNameWithOwner()), false))
+                    .isInstanceOf(EntityNotFoundException.class);
+        }
+
+        @Test
+        void shouldCountDistinctWorkAcrossReviewsAndWeeksWhenContributorReviewsRepeatedly() {
+            PullRequest pr = pullRequest(zoe, monitored, work -> work);
+            PullRequestReview approval = review(pr, ada, PullRequestReview.State.APPROVED);
+            PullRequestReview changes = review(pr, ada, PullRequestReview.State.CHANGES_REQUESTED);
+            record(ada, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, approval.getId(), DAY, monitored);
+            record(
+                    ada,
+                    ActivityEventType.REVIEW_CHANGES_REQUESTED,
+                    ActivityTargetType.REVIEW,
+                    changes.getId(),
+                    DAY.plus(Duration.ofDays(7)),
+                    monitored);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            record(
+                    zoe,
+                    ActivityEventType.PULL_REQUEST_OPENED,
+                    ActivityTargetType.PULL_REQUEST,
+                    pr.getId(),
+                    DAY,
+                    monitored);
+            var measured = reads.measure(() -> peopleService.people(
+                    workspace.getId(),
+                    new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                    null,
+                    Set.of(),
+                    false));
+            var person = measured.value().people().stream()
+                    .filter(p -> p.person().id().equals(ada.getId()))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(person.counts().contributions()).isEqualTo(2);
+            assertThat(person.counts().pullRequestsReviewed()).isEqualTo(1);
+            assertThat(person.counts().peopleHelped()).isEqualTo(1);
+            assertThat(person.counts().activeWeeks()).isEqualTo(2);
+            assertThat(person.weeks()).hasSize(2);
+            assertThat(measured.cost().statements()).isEqualTo(5);
+            assertThat(measured.cost().entities()).isZero();
+        }
+
+        @Test
+        void shouldSeparateBotsAndIncludeOutsideContributorsWhenMembershipIsNotRequired() {
+            User outside = persistUser("outside-contributor");
+            User bot = persistUser("machine-account");
+            bot.setType(User.Type.BOT);
+            bot = userRepository.save(bot);
+            record(outside, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            record(bot, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2L, DAY, monitored);
+            var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
+            var people = peopleService.people(workspace.getId(), range, null, Set.of(), false);
+            assertThat(people.people())
+                    .extracting(p -> p.person().id())
+                    .contains(outside.getId())
+                    .doesNotContain(bot.getId());
+            assertThat(people.automation()).extracting(p -> p.person().id()).contains(bot.getId());
+            assertThat(peopleService
+                            .people(workspace.getId(), range, null, Set.of(), true)
+                            .people())
+                    .extracting(p -> p.person().id())
+                    .doesNotContain(outside.getId());
+        }
+
+        @Test
+        void shouldExcludeOwnReviewsAndUnmonitoredRepositoriesWhenCountingPeople() {
+            PullRequest pr = pullRequest(ada, monitored, work -> work);
+            PullRequestReview own = review(pr, ada, PullRequestReview.State.APPROVED);
+            record(ada, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, own.getId(), DAY, monitored);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, unmonitored);
+            var people = peopleService.people(
+                    workspace.getId(),
+                    new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                    null,
+                    Set.of(),
+                    false);
+            assertThat(people.people()).extracting(p -> p.person().id()).doesNotContain(ada.getId());
+        }
     }
 
     @Nested

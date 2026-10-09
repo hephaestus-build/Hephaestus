@@ -59,6 +59,34 @@ export type ActivityBucket = {
     summary: ActivitySummary;
 };
 
+export type ActivityCounts = {
+    activeWeeks: number;
+    comments: number;
+    contributions: number;
+    issuesOpened: number;
+    peopleHelped: number;
+    pullRequestsMerged: number;
+    pullRequestsOpened: number;
+    pullRequestsReviewed: number;
+};
+
+/**
+ * Completion comes from backfill checkpoints, not the presence of ledger events.
+ */
+export type ActivityCoverage = {
+    completeRepositories: number;
+    since?: Date;
+    totalRepositories: number;
+};
+
+/**
+ * Identifiers refer only to the people in the same response.
+ */
+export type ActivityHighlights = {
+    firstContributors: Array<number>;
+    mostPeopleHelped: Array<number>;
+};
+
 /**
  * Activity in a time range, in total and over time
  */
@@ -75,6 +103,34 @@ export type ActivityOverview = {
      * The activity in the range; the buckets' summaries add up to it
      */
     summary: ActivitySummary;
+};
+
+export type ActivityPeople = {
+    automation: Array<ActivityPerson>;
+    coverage: ActivityCoverage;
+    from: Date;
+    highlights: ActivityHighlights;
+    people: Array<ActivityPerson>;
+    repositories: Array<ActivityRepository>;
+    teams: Array<ActivityTeam>;
+    to: Date;
+};
+
+export type ActivityPerson = {
+    automation: boolean;
+    counts: ActivityCounts;
+    firstContributionAt?: Date;
+    person: UserInfo;
+    weeks: Array<ActivityWeek>;
+};
+
+/**
+ * The full provider path avoids collisions between repositories with the same name.
+ */
+export type ActivityRepository = {
+    id: number;
+    key: string;
+    name: string;
 };
 
 /**
@@ -121,6 +177,17 @@ export type ActivitySummary = {
      * Pull requests opened
      */
     pullRequestsOpened: number;
+};
+
+export type ActivityTeam = {
+    id: number;
+    key: string;
+    name: string;
+};
+
+export type ActivityWeek = {
+    counts: ActivityCounts;
+    start: Date;
 };
 
 /**
@@ -9840,6 +9907,79 @@ export type GetOpenWorkResponses = {
 };
 
 export type GetOpenWorkResponse = GetOpenWorkResponses[keyof GetOpenWorkResponses];
+
+export type GetActivityPeopleData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: {
+        /**
+         * 30d, 90d (default), 1y, all, or custom
+         */
+        range?: string;
+        from?: Date;
+        to?: Date;
+        team?: string;
+        repo?: Array<string>;
+        membersOnly?: boolean;
+    };
+    url: '/workspaces/{workspaceSlug}/activity/people';
+};
+
+export type GetActivityPeopleErrors = {
+    /**
+     * The caller is not a member of the workspace
+     */
+    403: ProblemDetail;
+};
+
+export type GetActivityPeopleError = GetActivityPeopleErrors[keyof GetActivityPeopleErrors];
+
+export type GetActivityPeopleResponses = {
+    /**
+     * Contributors counted
+     */
+    200: ActivityPeople;
+};
+
+export type GetActivityPeopleResponse = GetActivityPeopleResponses[keyof GetActivityPeopleResponses];
+
+export type UpdateActivityAutomationData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        userId: number;
+    };
+    query: {
+        treatAsAutomation: boolean;
+    };
+    url: '/workspaces/{workspaceSlug}/activity/people/{userId}/automation';
+};
+
+export type UpdateActivityAutomationErrors = {
+    /**
+     * The caller is not a member of the workspace
+     */
+    403: ProblemDetail;
+};
+
+export type UpdateActivityAutomationError = UpdateActivityAutomationErrors[keyof UpdateActivityAutomationErrors];
+
+export type UpdateActivityAutomationResponses = {
+    /**
+     * Automation classification updated
+     */
+    204: void;
+};
+
+export type UpdateActivityAutomationResponse = UpdateActivityAutomationResponses[keyof UpdateActivityAutomationResponses];
 
 export type GetActivitySummaryData = {
     body?: never;

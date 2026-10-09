@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.activity.adapter;
 
+import de.tum.cit.aet.hephaestus.activity.ActivityAutomationRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import org.springframework.stereotype.Component;
@@ -15,13 +16,17 @@ import org.springframework.stereotype.Component;
 public class ActivityWorkspacePurgeAdapter implements WorkspacePurgeContributor {
 
     private final ActivityEventRepository activityEventRepository;
+    private final ActivityAutomationRepository automation;
 
-    public ActivityWorkspacePurgeAdapter(ActivityEventRepository activityEventRepository) {
+    public ActivityWorkspacePurgeAdapter(
+            ActivityEventRepository activityEventRepository, ActivityAutomationRepository automation) {
         this.activityEventRepository = activityEventRepository;
+        this.automation = automation;
     }
 
     @Override
     public void deleteWorkspaceData(Long workspaceId) {
+        automation.deleteAllByWorkspace_Id(workspaceId);
         activityEventRepository.deleteAllByWorkspaceId(workspaceId);
     }
 

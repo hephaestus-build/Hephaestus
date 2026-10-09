@@ -45,6 +45,11 @@ erDiagram
         TIMESTAMPTZ enabled_at "NOT NULL"
     }
 
+    ActivityAutomation {
+        BIGINT user_id PK,FK
+        BIGINT workspace_id PK,FK
+    }
+
     ActivityEvent {
         UUID id PK
         VARCHAR(255) event_key UK "NOT NULL"
@@ -1976,6 +1981,8 @@ erDiagram
     Workspace ||--o{ WorkspaceSlugHistory : has
 
     %% Many-to-Many relationships
+    User }o--o{ ActivityAutomation : has
+    Workspace }o--o{ ActivityAutomation : has
     GitCommit }o--o{ CommitPullRequest : has
     Issue }o--o{ CommitPullRequest : references
     Connection }o--o{ ConnectionActivity : has

@@ -1,11 +1,15 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityOverviewDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.MemberActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
+import de.tum.cit.aet.hephaestus.core.AuditLedger;
+import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.time.TimeBucketParams;
 import de.tum.cit.aet.hephaestus.core.time.TimeRangeFilterParams;
+import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +21,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.Clock;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
@@ -26,6 +31,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -52,6 +58,36 @@ public class ActivityController {
     private final ActivityService activityService;
     private final OpenWorkService openWorkService;
     private final Clock clock;
+    private final ActivityPeopleService peopleService;
+    private final ActivityAutomationService automationService;
+
+    @PatchMapping("/people/{userId}/automation")
+    @RequireAtLeastWorkspaceAdmin
+    @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_ROLE")
+    @Operation(
+            operationId = "updateActivityAutomation",
+            summary = "Treat a contributor as automation, or reset the classification")
+    @ApiResponse(responseCode = "204", description = "Automation classification updated")
+    public ResponseEntity<Void> updateActivityAutomation(
+            WorkspaceContext workspaceContext, @PathVariable long userId, @RequestParam boolean treatAsAutomation) {
+        automationService.classify(workspaceContext.id(), userId, treatAsAutomation);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/people")
+    @Operation(
+            operationId = "getActivityPeople",
+            summary = "Count each contributor and automation account in one response")
+    @ApiResponse(responseCode = "200", description = "Contributors counted")
+    public ResponseEntity<ActivityPeopleDTO> getActivityPeople(
+            WorkspaceContext workspaceContext,
+            @ParameterObject ActivityPeopleRangeParams range,
+            @RequestParam(required = false) @Nullable String team,
+            @RequestParam(required = false) @Nullable Set<String> repo,
+            @RequestParam(defaultValue = "false") boolean membersOnly) {
+        return ResponseEntity.ok(
+                peopleService.people(workspaceContext.id(), range, team, repo == null ? Set.of() : repo, membersOnly));
+    }
 
     @GetMapping("/summary")
     @Operation(

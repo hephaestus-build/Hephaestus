@@ -19,7 +19,7 @@ public enum ConfigAuditEntityType {
     /** Historical only — an earlier spelling of {@link #AGENT_BINDING}. */
     AI_CONFIG_BINDING,
     /**
-     * A member's role or roster visibility: admin-initiated changes, plus role changes org sync applies
+     * A contributor's role, roster visibility, or automation classification: admin-initiated changes, plus role changes org sync applies
      * (actor {@code SYSTEM}). Memberships org sync itself creates or removes are excluded as roster churn
      * that would bury the admin-initiated rows.
      */
