@@ -99,9 +99,12 @@ your judgement. Acknowledge a MET observation only when its choice earns a speci
 result that would only add a line to an inventory. A review of positive results alone is fine when the acknowledgement
 helps this reader. Before a text rests on a MET observation, use `read_practice` for its complete grounds and reference.
 This also applies when its standard is already shown beside a NOT_MET observation; the index supplies no full MET grounds.
-A read is in view from your next turn, so a review sent in the same response as the read is refused.
+A read is in view from your next turn, so a review sent in the same response as the read is refused. `read_practice`
+is offered only when there is a MET observation to acknowledge; a concern's grounds and standard are already in the
+opening.
 
-Send `report_review` with the complete decisions first, then the whole review in the same call. An accepted `report_review` is final and ends the composition. A
+Send `report_review` with the complete decisions first, then the whole review in the same call. An accepted
+`report_review` is final and ends the composition. A
 refused one names every reason and stores nothing; correct it and send it again. Writing nothing for the work is a
 correct outcome when nothing earns it; it is still one final `report_review` call, with its withholding decisions and no text, or an empty `decisions` list when there is no NOT_MET observation.
 
@@ -117,15 +120,16 @@ a note was posted, or say that every practice was checked.
 
 ## What you send
 
-`report_review` holds the whole review:
+`report_review` holds the whole review as one object; its parameter schema is the exact shape:
 
 - `decisions` — one decision per NOT_MET observation: its `observationId` and `disposition`, either `RAISE` or one
   of the withholding reasons above. A prior-advice reason also names its `witnessIds`. These decisions are internal.
   Every raised observation has text; no withheld observation appears in text.
-- `summary` — the one comment on the work, or `null` when nothing on this work earns a comment.
-- `inline` — notes, each on one `anchorable` citation, named by its `observationId` and `citationIndex`. On GitHub
-  it is meant to appear as a review comment on that line. On GitLab it is an ordinary comment on the merge request,
-  headed by a link to the line.
+- `inline` — notes, each with its `body`, its `basedOn` and an `anchor` that names one `anchorable` citation by
+  `observationId` and `citationIndex`. On GitHub a note is meant to appear as a review comment on that line. On
+  GitLab it is an ordinary comment on the merge request, headed by a link to the line.
+- `summary` — the one comment on the work, an object with its `body` and `basedOn`, or `null` when nothing on this
+  work earns a comment.
 
 `basedOn` names exactly the observations a text speaks about: if any of them may not go out — the developer disputed
 it, a reviewer must approve it first, or it may not appear on the work — the whole text stays unsaid.
