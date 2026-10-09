@@ -602,7 +602,11 @@ if (scenario !== undefined && scenario !== "") {
 				},
 			});
 		}
-		if (scenario === "draft-revision" || scenario === "compose-abstention") {
+		if (
+			scenario.startsWith("provider-reply-") ||
+			scenario === "draft-revision" ||
+			scenario === "compose-abstention"
+		) {
 			assert.ok(typeof init?.body === "string");
 			writeFileSync(nodePath.join(cwd, "admission.json"), init.body);
 		}
@@ -908,6 +912,75 @@ if (scenario !== undefined && scenario !== "") {
 							prompts += 1;
 							record(`prompt:${prompts}`);
 							writeFileSync(nodePath.join(cwd, `prompt-${prompts}.md`), text);
+							if (scenario.startsWith("provider-reply-")) {
+								const mode = scenario.slice("provider-reply-".length);
+								if (prompts === 1) {
+									if (mode === "refused-error" || mode === "refused-stall") {
+										emit({
+											type: "tool_execution_start",
+											toolCallId: "refused",
+											toolName: "report_observation",
+											args: {},
+										});
+										await assert.rejects(tool("report_observation").execute("refused", {}));
+										record("answered-refusal");
+									} else if (mode === "stored-error") {
+										await tool("report_observation").execute(
+											"stored",
+											observation("test-practice", "Recorded before the provider failed"),
+										);
+									} else if (mode === "empty-error") {
+										emit({
+											type: "message_end",
+											message: { role: "assistant", stopReason: "stop", content: [] },
+										});
+										return;
+									} else if (mode === "partial-error" || mode === "partial-abort") {
+										emit({
+											type: "message_end",
+											message: {
+												role: "assistant",
+												stopReason: mode === "partial-error" ? "error" : "aborted",
+												content:
+													mode === "partial-error"
+														? [{ type: "text", text: "The changed authentication call" }]
+														: [
+																{
+																	type: "toolCall",
+																	id: "partial",
+																	name: "report_observation",
+																	arguments: {},
+																},
+															],
+											},
+										});
+									} else if (mode === "abort-only") {
+										emit({
+											type: "message_end",
+											message: { role: "assistant", stopReason: "aborted", content: [] },
+										});
+									}
+								}
+								if (mode.endsWith("stall")) {
+									now += 301_000;
+									const inFlight = Promise.withResolvers<undefined>();
+									releasePrompt = () => inFlight.resolve(undefined);
+									await inFlight.promise;
+									releasePrompt = undefined;
+									settleIdle();
+								} else {
+									emit({
+										type: "message_end",
+										message: {
+											role: "assistant",
+											stopReason: "error",
+											content: mode === "blank-error" ? [{ type: "text", text: "  " }] : [],
+											errorMessage: "Provider unavailable",
+										},
+									});
+								}
+								return;
+							}
 							if (scenario === "provider-error") {
 								// The provider answers every call with an error the SDK does not retry.
 								emit({
@@ -2432,6 +2505,15 @@ if (scenario !== undefined && scenario !== "") {
 		"settle-safety",
 		"compose-settle-deadline",
 		"provider-error",
+		"provider-reply-unanswered-stall",
+		"provider-reply-refused-error",
+		"provider-reply-refused-stall",
+		"provider-reply-empty-error",
+		"provider-reply-partial-error",
+		"provider-reply-partial-abort",
+		"provider-reply-blank-error",
+		"provider-reply-abort-only",
+		"provider-reply-stored-error",
 		"batch",
 		"replacement-witness",
 		"comment-undecided",
@@ -2544,6 +2626,22 @@ if (scenario !== undefined && scenario !== "") {
 				"settle-safety": "does not start a measuring turn once settling reaches the safety line",
 				"compose-settle-deadline":
 					"does not ask the composer once more after the run reaches its safety ceiling",
+				"provider-reply-unanswered-stall":
+					"retries only when no model or tool answer preceded a stall",
+				"provider-reply-refused-error":
+					"does not retry the whole review after a refused report and a provider error",
+				"provider-reply-refused-stall":
+					"does not retry the whole review after a refused report and a stall",
+				"provider-reply-empty-error":
+					"counts a normal empty assistant stop as a received reply before a provider error",
+				"provider-reply-partial-error":
+					"counts meaningful partial text on an error as a received reply",
+				"provider-reply-partial-abort":
+					"counts a partial tool call on an abort as a received reply",
+				"provider-reply-blank-error":
+					"does not count blank text on a provider error as a received reply",
+				"provider-reply-abort-only": "does not count an empty abort as a received reply",
+				"provider-reply-stored-error": "admits a stored result despite a later provider error",
 				"provider-error":
 					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
 				"argument-repairs":
@@ -2688,6 +2786,10 @@ if (scenario !== undefined && scenario !== "") {
 						"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,0 +10,1 @@\n[L10] + insecure();\n",
 					);
 					let practiceCriteria = "# Test practice\nCriteria.";
+					if (stage.startsWith("provider-reply-")) {
+						practiceCriteria =
+							"# Uses secure authentication\n\n## Standard\nAdded authentication calls use checked(), not insecure().\n\n## Occasion\nAn authentication call was added.\n\n## Judge\nMET for checked(); NOT_MET for insecure().\n\n## Grounding\nCite the added call in the captured change.\n\n## Severity\nMAJOR for an added insecure() call.\n\n## Defer\nOther code is outside this practice.";
+					}
 					if (stage === "measure-context-compact") {
 						practiceCriteria =
 							"    let answer = qualified(work)\n\n# Standard\nBounded criterion.  \n\n## Occasion\nOnly captured work.\n\n## Judge\nQualify the outcome.\n\n## Defer\nUnknown remains unknown.  \n\n";
@@ -2879,7 +2981,7 @@ if (scenario !== undefined && scenario !== "") {
 						}),
 					);
 					let budgetMs = "10000";
-					if (stage === "stall") {
+					if (stage === "stall" || stage.endsWith("-stall")) {
 						budgetMs = "3600000";
 					} else if (stage === "compose-settle-deadline") {
 						budgetMs = "200";
@@ -3229,6 +3331,41 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(child.stderr, /calls=6\/6, outputTokens=600\/24000, stoppedBy=budget/u);
 							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
+						case "provider-reply-unanswered-stall":
+						case "provider-reply-refused-error":
+						case "provider-reply-refused-stall":
+						case "provider-reply-empty-error":
+						case "provider-reply-partial-error":
+						case "provider-reply-partial-abort":
+						case "provider-reply-blank-error":
+						case "provider-reply-abort-only":
+						case "provider-reply-stored-error": {
+							const stored = stage === "provider-reply-stored-error";
+							const unanswered = [
+								"provider-reply-unanswered-stall",
+								"provider-reply-blank-error",
+								"provider-reply-abort-only",
+							].includes(stage);
+							const answeredExit = stored ? 0 : 1;
+							assert.equal(child.status, unanswered ? 76 : answeredExit, child.stderr);
+							reached({ "test-practice": stored ? "EVALUATED" : "NOT_REACHED" });
+							if (stored) {
+								assert.equal(readObservations(nodePath.join(cwd, "out/result.json")).length, 1);
+								assert.equal(readObservations(nodePath.join(cwd, "admission.json")).length, 1);
+							} else {
+								assert.equal(existsSync(nodePath.join(cwd, "out/result.json")), false);
+								assert.equal(existsSync(nodePath.join(cwd, "admission.json")), false);
+							}
+							if (unanswered) {
+								assert.match(child.stderr, /UNREACHABLE/u);
+							} else {
+								assert.doesNotMatch(child.stderr, /UNREACHABLE/u);
+							}
+							if (stage.includes("refused")) {
+								assert.ok(events.includes("answered-refusal"));
+							}
 							break;
 						}
 						case "provider-error": {
