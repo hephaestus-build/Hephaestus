@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -133,7 +134,9 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
         ReviewRepositoryPreparer.PreparedReview prepared = null;
-        if (readsClone(selectedKinds) && gitRepositoryManager.isEnabled()) {
+        boolean cloneRequested = readsClone(selectedKinds);
+        boolean cloneEnabled = cloneRequested && gitRepositoryManager.isEnabled();
+        if (cloneEnabled) {
             prepared = practiceReview.preparation().prepare(repositoryPreparer, job);
         } else {
             repositoryPreparer.authorize(job);
@@ -144,7 +147,10 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         Map<SourceKind, SourceContentState> contentStates = new HashMap<>();
         Map<SourceKind, List<String>> limitations = new HashMap<>();
 
-        if (readsClone(selectedKinds)) {
+        Map<SourceKind, SourceCaptureState> states = cloneRequested && !cloneEnabled
+                ? Map.of(DIFF, new SourceCaptureState.NotCollected(SourceAbsenceReason.DISABLED))
+                : Map.of();
+        if (cloneEnabled) {
             ensureRepositoryAvailable(new RepositoryKey(job.getWorkspace().getId(), repositoryId));
         }
         if (selectedKinds.contains(CORE)) {
@@ -193,7 +199,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
                 Map.of(),
                 Map.of(),
                 contentStates,
-                Map.of(),
+                states,
                 Map.of(),
                 null,
                 limitations);
@@ -204,10 +210,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     }
 
     private void ensureRepositoryAvailable(RepositoryKey repositoryId) {
-        if (!gitRepositoryManager.isEnabled()) {
-            throw new JobPreparationException(
-                    "Git local storage is disabled but required for repository evidence: repoId=" + repositoryId);
-        }
         if (!gitRepositoryManager.isRepositoryCloned(repositoryId)) {
             throw new JobPreparationException(
                     "Repository is not available locally for evidence capture: repoId=" + repositoryId);

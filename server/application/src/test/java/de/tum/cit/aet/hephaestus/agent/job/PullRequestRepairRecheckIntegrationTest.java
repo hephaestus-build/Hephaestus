@@ -670,56 +670,63 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         job.setWorkerId("test-worker");
         job = agentJobRepository.saveAndFlush(job);
         evidenceFiles.beginPersonCapture(job);
-        var raw = folderBuilder.prepare(
-                new ContextRequest.PracticeReviewRequest(job), EvidencePlan.compile(List.of(linked)));
-        JobFolderIndex manifest = Objects.requireNonNull(raw.manifest());
-        var snapshot = MAPPER.createObjectNode();
-        snapshot.set("manifest", MAPPER.valueToTree(manifest));
-        snapshot.set(
-                ReviewedWork.SNAPSHOT_KEY,
-                MAPPER.valueToTree(ReviewedWork.captured(
-                                MAPPER.writeValueAsBytes(manifest),
-                                raw.files(),
-                                Objects.requireNonNull(job.getMetadata())
-                                        .path("pull_request_id")
-                                        .asLong(),
-                                MAPPER)
-                        .orElseThrow()));
-        snapshot.putArray("practices")
-                .addObject()
-                .put("slug", linked.getSlug())
-                .put("revisionId", linked.getCurrentRevision().getId());
-        job.setEvidenceSnapshot(snapshot);
-        job = agentJobRepository.saveAndFlush(job);
-        PreparedJobInputs inputs = evidenceFiles.prepare(
-                job,
-                new PreparedEvidence(raw.files(), raw.filesOnDisk(), raw.cleanups(), null, raw.directories()),
-                null);
-        String path = SandboxLayout.CONTEXT_PREFIX + "linked_work_items/18.md";
-        List<String> lines = Files.readAllLines(inputs.filesOnDisk().get(path));
-        int line = IntStream.range(0, lines.size())
-                        .filter(index -> lines.get(index).contains(expectedBody))
-                        .findFirst()
-                        .orElseThrow()
-                + 1;
-        assertThat(lines.get(line - 1)).contains(expectedBody);
-        var observations = MAPPER.createArrayNode();
-        var result = observations.addObject();
-        result.put("practiceSlug", linked.getSlug())
-                .put("summary", "Linked criteria are complete")
-                .put("outcome", "MET")
-                .put("evidenceRationale", "The captured linked issue shows the completed acceptance criterion.")
-                .putNull("severity");
-        result.putObject("evidence")
-                .putArray("citations")
-                .addObject()
-                .put("sourceKind", "scm.linked-work-items")
-                .put("path", path)
-                .put("artifactPath", path)
-                .put("startLine", line)
-                .put("endLine", line)
-                .put("quote", expectedBody);
-        return new LinkedAttempt(job, inputs, observations);
+        PreparedJobInputs inputs = null;
+        try (var raw = folderBuilder.prepare(
+                new ContextRequest.PracticeReviewRequest(job), EvidencePlan.compile(List.of(linked)))) {
+            JobFolderIndex manifest = Objects.requireNonNull(raw.manifest());
+            var snapshot = MAPPER.createObjectNode();
+            snapshot.set("manifest", MAPPER.valueToTree(manifest));
+            snapshot.set(
+                    ReviewedWork.SNAPSHOT_KEY,
+                    MAPPER.valueToTree(ReviewedWork.captured(
+                                    MAPPER.writeValueAsBytes(manifest),
+                                    raw.files(),
+                                    Objects.requireNonNull(job.getMetadata())
+                                            .path("pull_request_id")
+                                            .asLong(),
+                                    MAPPER)
+                            .orElseThrow()));
+            snapshot.putArray("practices")
+                    .addObject()
+                    .put("slug", linked.getSlug())
+                    .put("revisionId", linked.getCurrentRevision().getId());
+            job.setEvidenceSnapshot(snapshot);
+            job = agentJobRepository.saveAndFlush(job);
+            inputs = evidenceFiles.prepare(
+                    job,
+                    new PreparedEvidence(raw.files(), raw.filesOnDisk(), raw.cleanups(), null, raw.directories()),
+                    null);
+            String path = SandboxLayout.CONTEXT_PREFIX + "linked_work_items/18.md";
+            List<String> lines = Files.readAllLines(inputs.filesOnDisk().get(path));
+            int line = IntStream.range(0, lines.size())
+                            .filter(index -> lines.get(index).contains(expectedBody))
+                            .findFirst()
+                            .orElseThrow()
+                    + 1;
+            assertThat(lines.get(line - 1)).contains(expectedBody);
+            var observations = MAPPER.createArrayNode();
+            var result = observations.addObject();
+            result.put("practiceSlug", linked.getSlug())
+                    .put("summary", "Linked criteria are complete")
+                    .put("outcome", "MET")
+                    .put("evidenceRationale", "The captured linked issue shows the completed acceptance criterion.")
+                    .putNull("severity");
+            result.putObject("evidence")
+                    .putArray("citations")
+                    .addObject()
+                    .put("sourceKind", "scm.linked-work-items")
+                    .put("path", path)
+                    .put("artifactPath", path)
+                    .put("startLine", line)
+                    .put("endLine", line)
+                    .put("quote", expectedBody);
+            return new LinkedAttempt(job, inputs, observations);
+        } catch (Exception | Error failure) {
+            if (inputs != null) inputs.close();
+            throw failure;
+        } finally {
+            evidenceFiles.abortPersonCapture(job);
+        }
     }
 
     private record LinkedAttempt(AgentJob job, PreparedJobInputs inputs, JsonNode observations)

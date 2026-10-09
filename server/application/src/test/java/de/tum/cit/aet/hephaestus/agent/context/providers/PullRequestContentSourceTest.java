@@ -757,6 +757,34 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     class RepositoryAvailability {
 
         @Test
+        void shouldCaptureMetadataAndRecordDisabledDiffWithoutClaimingCodeEvidence() {
+            var captured = provider.capture(request(sampleMetadata()), Set.of(CORE, DIFF));
+
+            assertThat(captured.files())
+                    .containsKeys("context/metadata.json", PullRequestContentSource.DESCRIPTION_FILE);
+            assertThat(captured.files()).doesNotContainKey(PullRequestContentSource.CHANGE_FILE);
+            assertThat(captured.completeness())
+                    .containsEntry(CORE, SourceCompleteness.COMPLETE)
+                    .doesNotContainKey(DIFF);
+            assertThat(captured.immutableIdentities()).isEmpty();
+            assertThat(captured.stateOverrides())
+                    .containsExactly(
+                            Map.entry(DIFF, new SourceCaptureState.NotCollected(SourceAbsenceReason.DISABLED)));
+            verify(repositoryPreparer).authorize(any());
+            verify(repositoryPreparer, never()).prepare(any());
+        }
+
+        @Test
+        void shouldRefuseDisabledDiffWhenRepositoryAuthorizationFails() {
+            when(repositoryPreparer.authorize(any()))
+                    .thenThrow(new JobPreparationException("The review source identity changed"));
+
+            assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(DIFF)))
+                    .isInstanceOf(JobPreparationException.class)
+                    .hasMessageContaining("source identity changed");
+        }
+
+        @Test
         void throwsWhenRepositoryMissing() {
             lenient().when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(gitRepositoryManager.isRepositoryCloned(REPOSITORY)).thenReturn(false);
