@@ -794,7 +794,13 @@ export function buildPublicReviewHistory(
 			if (otherWork === null) {
 				recipient.author = textOf(core.shown.author);
 				recipient.authorId = idOf(core.shown.author_id);
-				if (folderIndex.artifactKind === "scm.pull_request") {
+				if (
+					folderIndex.artifactKind === "scm.pull_request" &&
+					typeof framing.repositoryFullName === "string" &&
+					core.shown.repository_full_name === framing.repositoryFullName &&
+					typeof framing.pullRequestNumber === "number" &&
+					core.shown.pr_number === framing.pullRequestNumber
+				) {
 					reviewedRevision = textOf(core.shown.commit_sha);
 				}
 			}

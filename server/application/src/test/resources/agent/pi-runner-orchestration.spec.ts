@@ -2775,6 +2775,8 @@ if (scenario !== undefined && scenario !== "") {
 						nodePath.join(cwd, "evidence/metadata.json"),
 						JSON.stringify({
 							title: "Add login",
+							repository_full_name: "group/repo",
+							pr_number: 3,
 							commit_sha: "a".repeat(40),
 							pr_url: "https://gitlab.example/group/repo/-/merge_requests/3",
 						}),

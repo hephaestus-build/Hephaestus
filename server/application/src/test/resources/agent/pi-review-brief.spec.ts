@@ -1193,7 +1193,7 @@ void test("unlisted, unavailable, malformed and oversized discussion never becom
 	);
 });
 
-void test("a missing code head or unavailable core supplies no revision coordinate", (t) => {
+void test("an incomplete work identity, missing code head or unavailable core supplies no revision coordinate", (t) => {
 	const root = workspace({ "context/metadata.json": discussionMetadata() });
 	t.after(() => rmSync(root, { recursive: true, force: true }));
 	const index = discussionIndex("scm.general-review-comments", GENERAL_PATH);
@@ -1204,7 +1204,25 @@ void test("a missing code head or unavailable core supplies no revision coordina
 		);
 		assert.equal(buildPublicReviewHistory(root, "context", index, FRAMING).reviewedRevision, null);
 	}
+	for (const identity of [
+		{ pr_number: 7 },
+		{ repository_full_name: "group/repo" },
+		{ repository_full_name: null, pr_number: 7 },
+		{ repository_full_name: "group/repo", pr_number: "7" },
+	]) {
+		writeFileSync(
+			nodePath.join(root, "context/metadata.json"),
+			JSON.stringify({ ...identity, commit_sha: "a".repeat(40) }),
+		);
+		assert.equal(buildPublicReviewHistory(root, "context", index, FRAMING).reviewedRevision, null);
+	}
 	writeFileSync(nodePath.join(root, "context/metadata.json"), discussionMetadata());
+	for (const framing of [
+		{ repositoryFullName: undefined, pullRequestNumber: 7 },
+		{ repositoryFullName: "group/repo", pullRequestNumber: undefined },
+	]) {
+		assert.equal(buildPublicReviewHistory(root, "context", index, framing).reviewedRevision, null);
+	}
 	const missing = {
 		...index,
 		sources: index.sources.filter((source) => source.kind !== "scm.pull-request.core"),
