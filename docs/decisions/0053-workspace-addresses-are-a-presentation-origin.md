@@ -42,9 +42,15 @@ The server must allow the origin with `Access-Control-Allow-Credentials: true` [
 5. **A custom domain for each workspace, such as `contributors.example.org`.** Rejected for now. It is a different site, so the browser treats the apex cookies as third-party cookies. It also needs a certificate for each domain.
 6. **The workspace host is a presentation origin. Sign-in and the API stay on the apex.** Chosen.
 
+How the workspace hosts get TLS:
+
+1. **A CDN proxy, such as Cloudflare, in front of the workspace hosts.** Rejected. The proxy is a new processor. It also serves the web app that calls the API. Thus, it must be trusted with that code.
+2. **One certificate for each workspace host, through HTTP-01.** Rejected. Each certificate goes into the public Certificate Transparency logs [7], so the logs show which workspaces exist.
+3. **One wildcard certificate through the DNS-01 challenge [8], with a DNS-only wildcard record.** Chosen.
+
 ## Decision
 
-Option 6.
+Option 6 for the address, and option 3 for TLS.
 
 - When the instance switch is on, `<slug>.<base domain>` is the main workspace address.
   `/w/<slug>` sends a 308 redirect to it.
@@ -73,10 +79,11 @@ Option 6.
   The browser then does not send the session cookie.
 - Only Hephaestus serves hosts under the base domain.
   Each other host under it must be a reserved name, because CORS trusts every other label.
-- hephaestus.build sends only the workspace hosts through a Cloudflare proxy.
-  The apex stays direct, so sign-in, the session cookies and the API traffic never pass Cloudflare.
-  Cloudflare features that change content stay off, for example Rocket Loader, Zaraz, Email Obfuscation and Workers.
-  The [processor checklist](../admin/dsms/processor-checklist.md) records Cloudflare before it carries traffic.
+- A DNS-only wildcard record sends every workspace host to the same origin as the apex.
+  Traefik gets a `Let's Encrypt` wildcard certificate through the DNS-01 challenge.
+  The DNS API token is a secret, scoped to the one zone.
+  hephaestus.build uses Cloudflare only as its DNS provider, so Cloudflare carries no request.
+  Self-hosters use the same path with their own DNS provider.
 - The browser extension maps a pasted workspace host URL to the apex.
 
 ## Consequences
@@ -88,9 +95,11 @@ Option 6.
   A host that another service runs must become a reserved name first.
 - All workspace hosts are the same site as the apex.
   Thus, `SameSite` gives no protection between them, and the CSRF token stays necessary.
-- Cloudflare sees the IP address and the request metadata of each workspace host.
-  It also serves the web app that calls the API.
-  Thus, Hephaestus trusts Cloudflare for the integrity of that code, under a processor agreement.
+- No new processor receives request data. All hosts end TLS at the instance's own Traefik.
+- The DNS API token can change the records of its zone.
+  A leak of the token lets an attacker issue certificates for the zone or redirect it.
+  Thus, the token stays scoped to the one zone and is stored as a secret.
+- The certificate logs show only the wildcard, never a workspace slug.
 - A reader answers the cookie choice once on each workspace host.
 - The decision is reversible.
   Turn off the instance switch, and `/w/<slug>` is the address again.
@@ -113,3 +122,5 @@ Option 6.
 4. Public Suffix List, *Learn more*: <https://publicsuffix.org/learn/>
 5. MDN, *Access-Control-Allow-Credentials*: <https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Access-Control-Allow-Credentials>
 6. GitHub Docs, *About the user authorization callback URL*: <https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-user-authorization-callback-url>
+7. MDN, *Certificate Transparency*: <https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Certificate_Transparency>
+8. `Let's Encrypt`, *Challenge Types*: <https://letsencrypt.org/docs/challenge-types/>

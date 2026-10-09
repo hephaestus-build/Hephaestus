@@ -374,13 +374,15 @@ also leave every total on the page.
 With workspace addresses on, each workspace has its own host, such as `team.example.org`.
 Sign-in and its cookies stay on the instance host.
 Each workspace host keeps its own cookie choice and theme in the browser.
-A proxy or CDN in front of the hosts is a recipient.
+A wildcard certificate through the DNS-01 challenge needs no proxy, and the DNS provider receives no request data.
+If a proxy or CDN serves the hosts, it is a recipient.
 Name it in the notice.
 
 ```md
 A workspace can have its own address, such as [team.example.org]. Sign-in and its cookies stay on
 [example.org]. Each workspace address stores its own cookie choice and theme in your browser, so it
-asks for your cookie choice once. [Proxy or CDN provider, its role and transfer basis.]
+asks for your cookie choice once. [If a proxy or CDN serves these addresses: its provider, role and
+transfer basis.]
 ```
 
 ## Verifying the configuration

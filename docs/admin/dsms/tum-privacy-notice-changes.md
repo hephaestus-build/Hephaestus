@@ -21,7 +21,6 @@ Items 1 and 2 replace the text about the older public workspace flag, which the 
 | 7 | § 7 Your rights | Add the objection paragraph in [item 6](#6-recipients-and-objection), separate from the other rights (Art. 21(4) GDPR). | Public activity page |
 | 8 | § 10 Workspace configuration | Add: "Workspace administrators decide whether the workspace has a public activity page. They tell the members before they publish it. Course workspaces stay private." | Public activity page |
 | 9 | § 4 Cookies | Add the text in [item 9](#9-workspace-addresses). | Workspace addresses |
-| 10 | § 5 and § 6 | Add Cloudflare as a recipient for the workspace hosts, with its transfer basis. | Workspace addresses, after the [processor checklist](./processor-checklist.md) records Cloudflare |
 
 ## Proposed wording
 

@@ -285,18 +285,15 @@ The [operator obligations](../legal-pages.mdx#the-public-activity-page) list the
 
 ### Reassessment: workspace addresses
 
-**Date:** 2026-10-09. **Trigger:** a new processor. **Change:** [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md).
-**Proposed residual risk:** low. **Controller decision:** pending. The coordinator confirms Cloudflare as a processor before the proxy carries traffic.
+**Date:** 2026-10-09. **Trigger:** new hosts for the web app. **Change:** [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md).
+**Residual risk:** unchanged.
 
-Workspace addresses change no data category, purpose or audience.
-Sign-in, the session cookies and the API stay on `hephaestus.build`, which Cloudflare does not proxy.
+Workspace addresses change no data category, purpose, audience or recipient.
+Sign-in, the session cookies and the API stay on `hephaestus.build`.
 A workspace host keeps its own cookie choice and theme.
 
-Cloudflare proxies only the workspace hosts.
-It processes the IP address and the request metadata of each workspace host.
-It also serves the web app that calls the API, so the processor agreement must cover the integrity of that code.
-Cloudflare features that change content stay off.
-The [processor checklist](./processor-checklist.md) records Cloudflare and its transfer to the USA.
+Every host ends TLS at the instance's own Traefik, with a `Let's Encrypt` wildcard certificate from the DNS-01 challenge.
+Cloudflare is only the DNS provider of hephaestus.build. It carries no request and is not a processor for request data.
 
 The source-specific decision and test checklist lives in
 [`artifact-source-governance.md`](./artifact-source-governance.md). The controller's decision identifier and date
