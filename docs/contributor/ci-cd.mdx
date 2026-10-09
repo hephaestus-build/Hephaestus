@@ -821,11 +821,11 @@ If no such default-branch commit exists, the run builds every image itself. `det
   PR's branch, build both architectures. Pull requests and merge groups build only changed images and alias the rest.
   The Version PR's branch builds them all. `detect-changes` decides both once, as `single-arch` and `all-images`, and hands them to
   every image build in the run.
-- The affected `Build` gates and `Test` suites use native `background: true` setup steps.
-  Each job overlaps its toolchain or JDK, Gradle caches, restored server, and PostgreSQL image as needed.
-  The browser jobs install Playwright in the background after the toolchain that it runs on.
-  One `wait-all: true` step joins them. The job's one Gradle invocation or suite starts after all setup
-  steps finish. A setup failure fails the job at the join.
+- Action and composite setup steps run sequentially within each job. The runner writes the shared
+  event file before each action. The action SDK reads that file. Concurrent action starts can expose
+  incomplete event data. Jobs and matrix entries still run independently. Standalone shell work
+  that does not read action context can use native `background: true` with a join before its consumer.
+
 - `Security` starts from `Detect changes`. Only `Pinned upstream images` reads the advisory
   snapshot, so only it waits for `Image advisory database`.
 - Quality legs run independently. The image matrix in `reusable-docker-build.yml` uses
