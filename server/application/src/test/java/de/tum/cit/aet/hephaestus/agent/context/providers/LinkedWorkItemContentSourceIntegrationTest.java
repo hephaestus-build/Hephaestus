@@ -73,6 +73,9 @@ class LinkedWorkItemContentSourceIntegrationTest extends BaseIntegrationTest {
         persistIssue(3, Issue.State.CLOSED, epic);
         persistIssue(4, Issue.State.OPEN, epic);
         persistIssue(5, Issue.State.CLOSED, other);
+        Issue deleted = persistIssue(8, Issue.State.CLOSED, epic);
+        deleted.setDeletedAt(Instant.now());
+        issueRepository.save(deleted);
         PullRequest mr = new PullRequest();
         mr.setNativeId(nextNativeId());
         mr.setProvider(provider);

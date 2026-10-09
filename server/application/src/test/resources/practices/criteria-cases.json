@@ -516,9 +516,7 @@
 	},
 	{
 		"id": "issue-link-in-body-without-commit-capture",
-		"omit": [
-			"context/commits.json"
-		],
+		"omit": ["context/commits.json"],
 		"expected": {
 			"links-the-change-to-its-issue": "MET"
 		},
@@ -563,9 +561,7 @@
 	},
 	{
 		"id": "resolved-review-request-without-commit-capture",
-		"omit": [
-			"context/commits.json"
-		],
+		"omit": ["context/commits.json"],
 		"expected": {
 			"engaging-with-inline-review-comments": "MET"
 		},
@@ -1011,6 +1007,80 @@
 		"workType": "pull_request"
 	},
 	{
+		"id": "independent-enum-pickers",
+		"workType": "pull_request",
+		"expected": {
+			"removes-duplication-instead-of-copy-pasting": "MET"
+		},
+		"files": {
+			"repo/ChoicesView.swift": "import SwiftUI\nenum SortOrder: String, CaseIterable, Identifiable {\n    case newest, oldest\n    var id: Self { self }\n}\nenum DisplayMode: String, CaseIterable, Identifiable {\n    case list, grid\n    var id: Self { self }\n}\nstruct ChoicesView: View {\n    @State var sort = SortOrder.newest\n    @State var display = DisplayMode.list\n    var body: some View {\n        Form {\n            Picker(\"Sort order\", selection: $sort) {\n                ForEach(SortOrder.allCases) { value in\n                    Text(value.rawValue).tag(value)\n                }\n            }\n            Picker(\"Display mode\", selection: $display) {\n                ForEach(DisplayMode.allCases) { value in\n                    Text(value.rawValue).tag(value)\n                }\n            }\n        }\n    }\n}\n"
+		},
+		"reason": "Independent enum choices repeat the framework option-rendering idiom without duplicating a maintained domain rule."
+	},
+	{
+		"id": "repeated-invoice-total",
+		"workType": "pull_request",
+		"expected": {
+			"removes-duplication-instead-of-copy-pasting": "NOT_MET"
+		},
+		"files": {
+			"repo/Invoice.swift": "import Foundation\nstruct Invoice {\n    let amounts: [Decimal]\n    let deliveryFee: Decimal\n    func totalForCheckout() -> Decimal {\n        let subtotal = amounts.reduce(0, +)\n        let delivery = subtotal >= 100 ? Decimal(0) : deliveryFee\n        let tax = subtotal * Decimal(string: \"0.19\")!\n        return subtotal + delivery + tax\n    }\n    func totalForReceipt() -> Decimal {\n        let subtotal = amounts.reduce(0, +)\n        let delivery = subtotal >= 100 ? Decimal(0) : deliveryFee\n        let tax = subtotal * Decimal(string: \"0.19\")!\n        return subtotal + delivery + tax\n    }\n}\n"
+		},
+		"reason": "Checkout and receipt independently repeat the same invoice shipping and tax calculation; changing that calculation requires matching corrections."
+	},
+	{
+		"id": "large-work-with-unknown-child-rollup",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "UNDETERMINED"
+		},
+		"files": {
+			"context/description.md": "Current scope decision: deliver the CSV audit download and the rotating service-status banner. Drop the XML archive. The remaining outputs can ship and be assigned independently.\n\n## Current checks\n\n- [ ] The CSV download contains column headers.\n- [ ] The banner rotates through published service notices.\n\n## Earlier proposal retained for history\n\nAdd a CSV audit download, a service-status banner and an XML archive.\n",
+			"context/metadata.json": "{\"title\": \"CSV audit download and service-status banner\", \"labels\": [], \"sub_issues_total\": null, \"sub_issues_completed\": null}",
+			"context/comments.json": "[]"
+		},
+		"reason": "Two remaining independently shippable outputs have only verification checks, not implementation subtasks. A null rollup leaves child tracking unknown; the partial-work decomposition expectation is uncertainty, not proven absence.",
+		"workType": "issue"
+	},
+	{
+		"id": "large-work-with-reported-zero-child-rollup",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "NOT_MET"
+		},
+		"files": {
+			"context/description.md": "Current scope decision: deliver the CSV audit download and the rotating service-status banner. Drop the XML archive. The remaining outputs can ship and be assigned independently.\n\n## Current checks\n\n- [ ] The CSV download contains column headers.\n- [ ] The banner rotates through published service notices.\n\n## Earlier proposal retained for history\n\nAdd a CSV audit download, a service-status banner and an XML archive.\n",
+			"context/metadata.json": "{\"title\": \"CSV audit download and service-status banner\", \"labels\": [], \"sub_issues_total\": 0, \"sub_issues_completed\": 0}",
+			"context/comments.json": "[]"
+		},
+		"reason": "The same large requested work has only verification checks, no child references or comments, and a reported zero rollup. These captured surfaces establish missing decomposition.",
+		"workType": "issue"
+	},
+	{
+		"id": "large-work-with-implementation-subtasks-and-unknown-rollup",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "MET"
+		},
+		"files": {
+			"context/description.md": "Build the CSV audit download and the rotating service-status banner; each can ship independently.\n\n- [ ] Add the CSV export endpoint.\n- [ ] Add the banner component.\n",
+			"context/metadata.json": "{\"title\": \"CSV audit download and service-status banner\", \"labels\": [], \"sub_issues_total\": null, \"sub_issues_completed\": null}",
+			"context/comments.json": "[]"
+		},
+		"reason": "Concrete implementation subtasks make both independently shippable outputs trackable. An unknown rollup does not erase that positive breakdown.",
+		"workType": "issue"
+	},
+	{
+		"id": "single-deliverable-with-unknown-child-rollup",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "NOT_APPLICABLE"
+		},
+		"files": {
+			"context/description.md": "Fix the date picker so it accepts February 29 in a leap year.\n",
+			"context/metadata.json": "{\"title\": \"Fix leap-year date selection\", \"labels\": [], \"sub_issues_total\": null, \"sub_issues_completed\": null}",
+			"context/comments.json": "[]"
+		},
+		"reason": "A focused bug needs no decomposition. Unknown child tracking does not create a largeness occasion.",
+		"workType": "issue"
+	},
+	{
 		"id": "issue-withdrawn-requirements-retained",
 		"expected": {
 			"breaks-large-work-into-trackable-subtasks": "NOT_APPLICABLE",
@@ -1028,7 +1098,7 @@
 	{
 		"id": "issue-partially-withdrawn-requirements",
 		"expected": {
-			"breaks-large-work-into-trackable-subtasks": "NOT_MET",
+			"breaks-large-work-into-trackable-subtasks": "UNDETERMINED",
 			"issue-scoped-to-single-concern": "NOT_MET",
 			"issue-has-checkable-outcome": "MET",
 			"issue-states-an-actionable-problem": "MET"
@@ -1039,10 +1109,9 @@
 			"context/comments.json": "[]\n",
 			"context/project_inventory.json": "{\"synced_at\": null, \"truncated\": false, \"issues\": [], \"pullRequests\": []}\n"
 		},
-		"reason": "Dropping one output preserves two concrete independently deliverable requests; absent tracked sub-units and unrelated combined scope remain assessable without reviving the withdrawn output.",
+		"reason": "Dropping one output preserves two concrete independent requests and leaves unrelated combined scope assessable. Unknown child tracking cannot establish a missing breakdown; the withdrawn output stays historical.",
 		"workType": "issue",
 		"expectedSeverity": {
-			"breaks-large-work-into-trackable-subtasks": "MINOR",
 			"issue-scoped-to-single-concern": "MINOR"
 		}
 	},
@@ -1060,5 +1129,47 @@
 		},
 		"reason": "Two explicit current statements contradict one another without a resolving decision; their order alone cannot decide the request.",
 		"workType": "issue"
+	},
+	{
+		"id": "issue-request-withdrawn-in-authored-discussion",
+		"expected": {
+			"issue-scoped-to-single-concern": "NOT_APPLICABLE"
+		},
+		"files": {
+			"context/metadata.json": "{\"title\": \"CSV audit download and service-status banner\", \"state\": \"OPEN\", \"labels\": [\"type::Task\"], \"author\": \"developer\", \"author_id\": 41, \"body\": \"Current request: add a CSV audit download and a rotating service-status banner. The two outputs can ship and be assigned independently.\\n\\nThe CSV download contains column headers and one row per audit record. The banner rotates through published service notices.\\n\", \"sub_issues_total\": null, \"sub_issues_completed\": null}\n",
+			"context/description.md": "Current request: add a CSV audit download and a rotating service-status banner. The two outputs can ship and be assigned independently.\n\nThe CSV download contains column headers and one row per audit record. The banner rotates through published service notices.\n",
+			"context/comments.json": "[{\"native_id\": 91, \"author\": \"developer\", \"author_id\": 41, \"created_at\": \"2026-10-09T10:00:00Z\", \"updated_at\": \"2026-10-09T10:00:00Z\", \"body\": \"Scope decision: withdraw this work. Neither the CSV audit download nor the service-status banner is requested. Retain the body above as the earlier proposal.\"}]\n"
+		},
+		"reason": "The author explicitly withdraws all requested work in captured discussion; retained body requirements are history.",
+		"workType": "issue"
+	},
+	{
+		"id": "issue-tutor-scope-clarification-accepted-by-author",
+		"expected": {
+			"issue-scoped-to-single-concern": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"title\": \"CSV audit download and service-status banner\", \"state\": \"OPEN\", \"labels\": [\"type::Task\"], \"author\": \"developer\", \"author_id\": 41, \"body\": \"Current request: add a CSV audit download and a rotating service-status banner. The two outputs can ship and be assigned independently.\\n\\nThe CSV download contains column headers and one row per audit record. The banner rotates through published service notices.\\n\", \"sub_issues_total\": null, \"sub_issues_completed\": null}\n",
+			"context/description.md": "Current request: add a CSV audit download and a rotating service-status banner. The two outputs can ship and be assigned independently.\n\nThe CSV download contains column headers and one row per audit record. The banner rotates through published service notices.\n",
+			"context/comments.json": "[{\"native_id\": 91, \"author\": \"tutor\", \"author_id\": 77, \"created_at\": \"2026-10-09T10:00:00Z\", \"updated_at\": \"2026-10-09T10:00:00Z\", \"body\": \"I suggest keeping only the CSV audit download and dropping the service-status banner.\"}, {\"native_id\": 92, \"author\": \"developer\", \"author_id\": 41, \"created_at\": \"2026-10-09T10:00:00Z\", \"updated_at\": \"2026-10-09T10:00:00Z\", \"body\": \"Agreed: the current request is only the CSV audit download. Drop the service-status banner; the body above records our earlier two-output proposal.\"}]\n"
+		},
+		"reason": "The author accepts a concrete clarification to one deliverable; tutor advice alone is not treated as the adopted request.",
+		"workType": "issue"
+	},
+	{
+		"id": "issue-unaccepted-third-party-withdrawal-proposal",
+		"expected": {
+			"issue-scoped-to-single-concern": "NOT_MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"title\": \"CSV audit download and service-status banner\", \"state\": \"OPEN\", \"labels\": [\"type::Task\"], \"author\": \"developer\", \"author_id\": 41, \"body\": \"Current request: add a CSV audit download and a rotating service-status banner. The two outputs can ship and be assigned independently.\\n\\nThe CSV download contains column headers and one row per audit record. The banner rotates through published service notices.\\n\", \"sub_issues_total\": null, \"sub_issues_completed\": null}\n",
+			"context/description.md": "Current request: add a CSV audit download and a rotating service-status banner. The two outputs can ship and be assigned independently.\n\nThe CSV download contains column headers and one row per audit record. The banner rotates through published service notices.\n",
+			"context/comments.json": "[{\"native_id\": 91, \"author\": \"reviewer\", \"author_id\": 77, \"created_at\": \"2026-10-09T10:00:00Z\", \"updated_at\": \"2026-10-09T10:00:00Z\", \"body\": \"Could we withdraw the CSV audit download and service-status banner entirely? This is a proposal for discussion; no decision has been made.\"}]\n"
+		},
+		"reason": "A later unaccepted proposal does not supersede the explicit authored current request for two independent outputs.",
+		"workType": "issue",
+		"expectedSeverity": {
+			"issue-scoped-to-single-concern": "MINOR"
+		}
 	}
 ]

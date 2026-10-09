@@ -111,48 +111,62 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
             var capture = new ActiveCapture(job.getId(), workspace, copyId, receipt, provenance, lease, admission);
             ACTIVE.set(capture);
             provenance.onChange(() -> recordProgress(capture));
-        } catch (RuntimeException exception) {
-            if (provenance != null) provenance.close();
-            if (lease != null) lease.close();
-            admission.close();
-            throw exception;
+        } catch (RuntimeException | Error exception) {
+            var failedLease = lease;
+            var failedProvenance = provenance;
+            try (admission;
+                    failedLease;
+                    failedProvenance) {
+                throw exception;
+            } finally {
+                ACTIVE.remove();
+            }
         }
     }
 
     /** Called only after the frozen folder exists; the returned lease belongs to PreparedJobInputs. */
     public AutoCloseable finishCapture(AgentJob job) {
         ActiveCapture capture = requireCapture(job);
+        var admission = capture.admission();
+        var provenance = capture.provenance();
         try {
-            capture.receipt()
-                    .set("identities", mapper.valueToTree(capture.provenance().identities()));
-            capture.receipt()
-                    .set("repositories", mapper.valueToTree(capture.provenance().repositoryIds()));
-            if (isSuppressed(
-                    capture.provenance().identities(), capture.admission().jdbc())) {
-                // This capture still owns the folder lease; no runtime has received these inputs.
-                try {
-                    deleteFolder(capture.workspaceId(), capture.jobId());
-                } catch (IOException exception) {
-                    throw new UncheckedIOException(exception);
+            try (admission;
+                    provenance) {
+                capture.receipt()
+                        .set(
+                                "identities",
+                                mapper.valueToTree(capture.provenance().identities()));
+                capture.receipt()
+                        .set(
+                                "repositories",
+                                mapper.valueToTree(capture.provenance().repositoryIds()));
+                if (isSuppressed(
+                        capture.provenance().identities(), capture.admission().jdbc())) {
+                    // This capture still owns the folder lease; no runtime has received these inputs.
+                    try {
+                        deleteFolder(capture.workspaceId(), capture.jobId());
+                    } catch (IOException exception) {
+                        throw new UncheckedIOException(exception);
+                    }
+                    int discarded = capture.admission()
+                            .jdbc()
+                            .update("""
+                        UPDATE person_evidence_copy SET state='ERASED',payload='{}'::jsonb
+                        WHERE id=? AND job_id=? AND workspace_id=? AND state='CAPTURING'
+                        """, capture.copyId(), capture.jobId(), capture.workspaceId());
+                    if (discarded != 1) throw new IllegalStateException("Evidence capture ownership changed");
+                    throw new IllegalStateException("Copied evidence contains an erased native identity");
                 }
-                int discarded = capture.admission()
-                        .jdbc()
-                        .update("""
-                    UPDATE person_evidence_copy SET state='ERASED',payload='{}'::jsonb
-                    WHERE id=? AND job_id=? AND workspace_id=? AND state='CAPTURING'
-                    """, capture.copyId(), capture.jobId(), capture.workspaceId());
-                if (discarded != 1) throw new IllegalStateException("Evidence capture ownership changed");
-                throw new IllegalStateException("Copied evidence contains an erased native identity");
+                updateReceipt(capture);
+                capture.lease().shareWithRemovals();
             }
-            updateReceipt(capture);
-            capture.lease().shareWithRemovals();
             return capture.lease();
-        } catch (RuntimeException exception) {
-            capture.lease().close();
-            throw exception;
+        } catch (RuntimeException | Error exception) {
+            var failedLease = capture.lease();
+            try (failedLease) {
+                throw exception;
+            }
         } finally {
-            capture.provenance().close();
-            capture.admission().close();
             ACTIVE.remove();
         }
     }
@@ -161,16 +175,18 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         ActiveCapture capture = ACTIVE.get();
         if (capture == null) return;
         if (!capture.jobId().equals(job.getId())) throw new IllegalStateException("Wrong evidence capture owner");
-        try {
+        var admission = capture.admission();
+        var lease = capture.lease();
+        var provenance = capture.provenance();
+        try (admission;
+                lease;
+                provenance) {
             capture.receipt()
                     .set("identities", mapper.valueToTree(capture.provenance().identities()));
             capture.receipt()
                     .set("repositories", mapper.valueToTree(capture.provenance().repositoryIds()));
             updateReceipt(capture);
         } finally {
-            capture.provenance().close();
-            capture.lease().close();
-            capture.admission().close();
             ACTIVE.remove();
         }
     }

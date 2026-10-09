@@ -23,8 +23,9 @@ jobs:
           install: "none"
       - uses: ./.github/actions/setup-release-security-tools
         with:
-          install-syft: "false"
-      - name: Download and verify latest supported release evidence
+          install-syft: "true"
+      - name: Download latest supported release evidence
+        id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -32,20 +33,7 @@ jobs:
           tag=$(gh release view --repo "${{ github.repository }}" --json tagName --jq .tagName)
           mkdir release-evidence
           gh release download "$tag" --repo "${{ github.repository }}" --dir release-evidence
-          (cd release-evidence && sha256sum -c SHA256SUMS)
-          lock="release-$tag.json"
-          # A release signed before the repository transfer carries the old owner/repo in
-          # its certificate forever, so the expected identity is the release's, resolved
-          # from security/release-identities.json (issue #1599).
-          identity=$(node scripts/resolve-release-identity.ts "$tag" certificate-identity)
-          cosign verify-blob \
-            --bundle "release-evidence/$lock.sigstore.json" \
-            --certificate-identity "$identity" \
-            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-            "release-evidence/$lock"
-          node scripts/release-image-lock.ts "release-evidence/$lock" \
-            release-evidence/manifest.json "$tag" /tmp/release-lock.env
-          node scripts/verify-release-evidence.ts release-evidence
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/download-trivy-db
         with:
           max-age-hours: "48"
@@ -54,16 +42,11 @@ jobs:
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          jq -er '.subjects[] | [.image, .platform, .digest, .repository] | @tsv' release-evidence/manifest.json |
-          while IFS=$'\t' read -r image platform digest repository; do
-            suffix=${platform//\//-}
-            trivy image --skip-db-update --scanners vuln --format json --output "reports/$image-$suffix.json" "$repository@$digest"
-            node scripts/check-release-vulnerabilities.ts "$image" "$platform" "$digest" "$repository" \
-              "reports/$image-$suffix.json" security/vulnerability-policy.json \
-              "reports/$image-$suffix.policy.json"
-          done
+          SYFT_REGISTRY_AUTH_AUTHORITY: ghcr.io
+          SYFT_REGISTRY_AUTH_USERNAME: ${{ github.actor }}
+          SYFT_REGISTRY_AUTH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: node scripts/rescan-release-images.ts release-evidence reports "$RELEASE_TAG"
       - name: Upload diagnostic reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

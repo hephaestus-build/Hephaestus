@@ -436,6 +436,58 @@ if (scenario !== undefined && scenario !== "") {
 								}
 							: {}),
 					},
+					...(scenario === "compose-fold"
+						? [
+								{
+									...admittedObservation,
+									id: "qualification-und",
+									practiceSlug: "request-scope-practice",
+									citations: [
+										{
+											...admittedObservation.citations[0],
+											path: "src/RequestScope.java",
+											startLine: 41,
+											endLine: 42,
+											quote: "+ unresolvedCurrentRequest();",
+										},
+									],
+									outcome: "UNDETERMINED",
+									severity: null,
+									summary: "Unwarranted conformance summary",
+									evidenceRationale: "Unwarranted conformance rationale",
+									evidence: {
+										undecidability: {
+											openQuestion: "Which current request governs?",
+											wouldSettleIt:
+												"An authored resolution of the conflicting current statements.",
+										},
+									},
+								},
+								{
+									...admittedObservation,
+									id: "qualification-na",
+									practiceSlug: "external-interface-practice",
+									citations: [
+										{
+											...admittedObservation.citations[0],
+											path: "src/ExternalInterface.java",
+											startLine: 73,
+											endLine: 73,
+											quote: "+ unchangedInterface();",
+										},
+									],
+									outcome: "NOT_APPLICABLE",
+									severity: null,
+									evidence: {
+										inapplicability: {
+											consulted: ["scm.pull-request.diff"],
+											subject: "A changed external interface",
+											ruledOutBy: "The captured interface is unchanged.",
+										},
+									},
+								},
+							]
+						: []),
 				];
 			}
 			case "compose":
@@ -1427,6 +1479,25 @@ if (scenario !== undefined && scenario !== "") {
 									observationId,
 									disposition: "BELOW_BAR",
 								}));
+								if (scenario === "compose-fold" && !reviewerOnly) {
+									record(
+										`qualification-support:${await attempt("r-limits", {
+											decisions,
+											summary: {
+												body: "A limit is not a concern.",
+												basedOn: ["qualification-und"],
+											},
+										})}`,
+									);
+									emit({
+										type: "compaction_end",
+										reason: "threshold",
+										result: undefined,
+										aborted: false,
+									});
+									record(`qualification-restored:${await attempt("r-restored", { decisions })}`);
+									emit({ type: "turn_start" });
+								}
 								record(`review-withheld:${await attempt("r-w", { decisions })}`);
 								if (unavailableContext) {
 									rmSync(nodePath.join(cwd, "catalog/practices/test-practice.md"));
@@ -1646,7 +1717,12 @@ if (scenario !== undefined && scenario !== "") {
 											{
 												channel: "IN_APP",
 												practiceSlug: "test-practice",
-												basedOn: ["observation-1", "observation-2"],
+												basedOn: [
+													"observation-1",
+													"observation-2",
+													"qualification-und",
+													"qualification-na",
+												],
 												action: "WITHHOLD",
 												withholdReason: "BELOW_BAR",
 											},
@@ -2695,7 +2771,7 @@ if (scenario !== undefined && scenario !== "") {
 				"compose-invalid-select":
 					"refuses a repeated whole review that decides nothing until a corrected one is stored",
 				"compose-reviewer-only":
-					"reviewer-only observations start no public writer and remain available to private feedback",
+					"reviewer-only concerns start no public writer alongside public abstentions and remain available to private feedback",
 				"compose-counterevidence":
 					"private counterevidence retains MET source qualifications and coordinates without quoted or verified-runtime claims",
 				"compose-context-unavailable":
@@ -2775,6 +2851,9 @@ if (scenario !== undefined && scenario !== "") {
 						nodePath.join(cwd, "evidence/metadata.json"),
 						JSON.stringify({
 							title: "Add login",
+							repository_full_name: "group/repo",
+							pr_number: 3,
+							commit_sha: "a".repeat(40),
 							pr_url: "https://gitlab.example/group/repo/-/merge_requests/3",
 						}),
 					);
@@ -3119,10 +3198,10 @@ if (scenario !== undefined && scenario !== "") {
 						);
 						assert.ok(isRecord(feedback));
 						assert.ok(Array.isArray(feedback.observations));
-						assert.equal(feedback.observations.length, 2);
+						assert.equal(feedback.observations.length, 4);
 						assert.deepEqual(
 							feedback.observations.map((row: unknown) => (isRecord(row) ? row.id : null)),
-							["observation-1", "observation-2"],
+							["observation-1", "observation-2", "qualification-und", "qualification-na"],
 						);
 						assert.ok(Array.isArray(feedback.units) && feedback.units.length > 0);
 						assert.ok(
@@ -4636,6 +4715,7 @@ for (const item of nullableCases) {
 									/The recorded MET observations of `test-practice`:[\s\S]*observation-2/u,
 								);
 								assert.ok(refused.includes(reviewTurn), refused);
+								assert.ok(refused.includes(`"reviewedRevision": "${"a".repeat(40)}"`), refused);
 								// A restored standard keeps what it is for.
 								assert.ok(
 									refused.includes(
@@ -4892,6 +4972,56 @@ for (const item of nullableCases) {
 							);
 							assert.ok(!privateTurn.includes("Long criterion. Long criterion."));
 							assert.ok(privateTurn.includes("# Test practice\nCriteria."));
+							if (fixture === "compose-fold") {
+								const publicTurn = readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8");
+								const limits =
+									/### Recorded limits of this review[\s\S]*?```json\n(?<limits>[\s\S]*?)\n```/u.exec(
+										publicTurn,
+									)?.groups?.limits;
+								assert.ok(limits !== undefined);
+								for (const text of [limits, privateTurn]) {
+									assert.ok(text.includes("Which current request governs?"));
+									assert.ok(
+										text.includes("An authored resolution of the conflicting current statements."),
+									);
+									assert.ok(text.includes("The captured interface is unchanged."));
+									assert.match(text, /"path": "src\/RequestScope\.java"/u);
+									assert.match(text, /"startLine": 41/u);
+									assert.match(text, /"endLine": 42/u);
+									assert.match(text, /"path": "src\/ExternalInterface\.java"/u);
+									assert.match(text, /"startLine": 73/u);
+									assert.match(text, /"endLine": 73/u);
+									assert.doesNotMatch(
+										text,
+										/Unwarranted conformance summary|Unwarranted conformance rationale/u,
+									);
+								}
+								assert.ok(limits.includes("+ unresolvedCurrentRequest();"));
+								assert.ok(limits.includes("+ unchangedInterface();"));
+								assert.ok(!publicTurn.includes("qualification-und"));
+								assert.ok(privateTurn.includes('"id": "qualification-und"'));
+								assert.doesNotMatch(privateTurn, /"quote"|"verification"/u);
+								assert.match(
+									events.find((event) => event.startsWith("qualification-support:")) ?? "",
+									/qualification-und, which is not one of the observations this review may rest on/u,
+								);
+								const restored =
+									events.find((event) => event.startsWith("qualification-restored:")) ?? "";
+								assert.ok(restored.includes("Which current request governs?"));
+								assert.ok(restored.includes("The captured interface is unchanged."));
+								const feedback: unknown = JSON.parse(
+									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+								);
+								assert.ok(isRecord(feedback) && Array.isArray(feedback.units));
+								const unit: unknown = feedback.units[0];
+								assert.ok(isRecord(unit));
+								assert.deepEqual(unit.basedOn, [
+									"observation-1",
+									"observation-2",
+									"qualification-und",
+									"qualification-na",
+								]);
+							}
 							break;
 						}
 						case "compose-abstention": {

@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { closingReferences, issueNumberReferences, relatedReferences } from "./references.ts";
+import {
+	closingReferences,
+	issueNumberReferences,
+	relatedReferences,
+	withoutHtmlComments,
+} from "./references.ts";
+
+void test("comment removal reaches a stable result without joining issue numbers", () => {
+	for (const input of ["<!<!-- hidden -->-- #8>", "<!-- one --><!-- two -->", "plain text"]) {
+		const stripped = withoutHtmlComments(input);
+		assert.equal(withoutHtmlComments(stripped), stripped);
+		assert.equal(stripped.includes("<!--"), false);
+	}
+	assert.deepEqual(issueNumberReferences("#1<!-- template -->2 and #3"), [1, 3]);
+});
 
 void test("closing references use the same issue-number boundary as ordinary references", () => {
 	const text =
