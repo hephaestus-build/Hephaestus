@@ -2,8 +2,14 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -46,6 +52,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
@@ -101,10 +109,140 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
     private PlatformTransactionManager transactions;
 
     private EvidenceFolderPersonDataCatalog catalog(Path store, PersonDataCopyRecorder recorder) {
+        return catalog(store, recorder, fence);
+    }
+
+    private EvidenceFolderPersonDataCatalog catalog(
+            Path store, PersonDataCopyRecorder recorder, PersonDataCopyFence captureFence) {
         ObjectProvider<AgentJobExecutor> executor =
                 new DefaultListableBeanFactory().getBeanProvider(AgentJobExecutor.class);
         return new EvidenceFolderPersonDataCatalog(
-                new FabricLayout(store.toString()), jdbc, namedJdbc, mapper, recorder, fence, executor, lifecycles);
+                new FabricLayout(store.toString()),
+                jdbc,
+                namedJdbc,
+                mapper,
+                recorder,
+                captureFence,
+                executor,
+                lifecycles);
+    }
+
+    private EvidenceFolderPersonDataCatalog failingCloseCatalog(
+            RuntimeException provenanceFailure, RuntimeException admissionFailure) {
+        var nativeRecorder = new ExactPersonDataCopyRecorder(jdbc);
+        var nativeCapture = nativeRecorder.begin();
+        var capture = spy(nativeCapture);
+        doAnswer(invocation -> {
+                    nativeCapture.close();
+                    throw provenanceFailure;
+                })
+                .when(capture)
+                .close();
+        var recorder = mock(PersonDataCopyRecorder.class);
+        when(recorder.begin()).thenReturn(capture).thenAnswer(invocation -> nativeRecorder.begin());
+        var nativeAdmission = fence.capture();
+        var admission = spy(nativeAdmission);
+        doAnswer(invocation -> {
+                    nativeAdmission.close();
+                    throw admissionFailure;
+                })
+                .when(admission)
+                .close();
+        var captureFence = mock(PersonDataCopyFence.class);
+        when(captureFence.capture()).thenReturn(admission).thenAnswer(invocation -> fence.capture());
+        return catalog(root, recorder, captureFence);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldReleaseCaptureAndUntransferredFolderWhenCloseFails(boolean finish) throws Exception {
+        databaseTestUtils.cleanDatabase();
+        var job = job("close-failure");
+        var provenanceFailure = new IllegalStateException("provenance close failed");
+        var admissionFailure = new IllegalStateException("admission close failed");
+        var catalog = failingCloseCatalog(provenanceFailure, admissionFailure);
+        catalog.beginCapture(job);
+        var failure = Objects.requireNonNull(catchThrowable(() -> {
+            if (finish) catalog.finishCapture(job);
+            else catalog.abortCapture(job);
+        }));
+        assertThat(failure).isSameAs(provenanceFailure);
+        assertThat(failure.getSuppressed()).containsExactly(admissionFailure);
+        try (var released = EvidenceFolderLease.tryAcquire(
+                        root, job.getWorkspace().getId(), job.getId())
+                .orElseThrow()) {
+            assertThat(released).isNotNull();
+        }
+        var next = job("same-thread-after-close-failure");
+        catalog.beginCapture(next);
+        try (var transferred = catalog.finishCapture(next)) {
+            assertThat(transferred).isNotNull();
+            assertThat(EvidenceFolderLease.tryAcquire(root, next.getWorkspace().getId(), next.getId()))
+                    .isEmpty();
+        }
+        try (var released = EvidenceFolderLease.tryAcquire(
+                        root, next.getWorkspace().getId(), next.getId())
+                .orElseThrow()) {
+            assertThat(released).isNotNull();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"begin", "finish", "abort"})
+    void shouldPreserveCaptureFailureAndSuppressedCloseErrors(String operation) throws Exception {
+        databaseTestUtils.cleanDatabase();
+        var job = job("capture-failure");
+        var provenanceFailure = new IllegalStateException("provenance close failed");
+        var admissionFailure = new IllegalStateException("admission close failed");
+        var catalog = failingCloseCatalog(provenanceFailure, admissionFailure);
+        if (operation.equals("begin")) {
+            jdbc.update("UPDATE agent_job SET status='QUEUED' WHERE id=?", job.getId());
+        } else {
+            catalog.beginCapture(job);
+            jdbc.update("UPDATE person_evidence_copy SET state='ERASED' WHERE job_id=?", job.getId());
+        }
+        var failure = Objects.requireNonNull(catchThrowable(() -> {
+            switch (operation) {
+                case "begin" -> catalog.beginCapture(job);
+                case "finish" -> catalog.finishCapture(job);
+                case "abort" -> catalog.abortCapture(job);
+                default -> throw new IllegalArgumentException(operation);
+            }
+        }));
+        assertThat(failure)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage(
+                        operation.equals("begin")
+                                ? "This review attempt is no longer admitted"
+                                : "Evidence capture ownership changed");
+        assertThat(failure.getSuppressed()).containsExactly(provenanceFailure, admissionFailure);
+        try (var released = EvidenceFolderLease.tryAcquire(
+                        root, job.getWorkspace().getId(), job.getId())
+                .orElseThrow()) {
+            assertThat(released).isNotNull();
+        }
+        var next = job("same-thread-after-capture-failure");
+        catalog.beginCapture(next);
+        try (var transferred = catalog.finishCapture(next)) {
+            assertThat(transferred).isNotNull();
+        }
+    }
+
+    @Test
+    void shouldKeepTheRightfulCaptureWhenAnotherJobTriesToAbort() throws Exception {
+        databaseTestUtils.cleanDatabase();
+        var catalog = catalog(root, new ExactPersonDataCopyRecorder(jdbc));
+        var owner = job("capture-owner");
+        var foreign = job("foreign-capture-owner");
+        catalog.beginCapture(owner);
+        try {
+            assertThatThrownBy(() -> catalog.abortCapture(foreign)).hasMessage("Wrong evidence capture owner");
+            try (var transferred = catalog.finishCapture(owner)) {
+                assertThat(transferred).isNotNull();
+            }
+        } finally {
+            catalog.abortCapture(owner);
+        }
     }
 
     private AgentJob job(String name) {
