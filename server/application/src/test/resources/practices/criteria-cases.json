@@ -1171,5 +1171,102 @@
 		"expectedSeverity": {
 			"issue-scoped-to-single-concern": "MINOR"
 		}
+	},
+	{
+		"id": "persisted-profile-with-stated-user-benefit",
+		"expected": {
+			"records-significant-decisions-with-rationale": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"title\": \"Add profile model\"}\n",
+			"context/description.md": "Profile edits are kept on the device and are still there after the app restarts.\nReturning users skip the setup screen and continue where they left off.\n",
+			"repo/App/Profile.swift": "import SwiftData\n\n@Model\nfinal class Profile {\n    var displayName: String\n    var weeklyGoal: Int\n\n    init(displayName: String, weeklyGoal: Int) {\n        self.displayName = displayName\n        self.weeklyGoal = weeklyGoal\n    }\n}\n",
+			"repo/App/ProfileApp.swift": "import SwiftUI\nimport SwiftData\n\n@main\nstruct ProfileApp: App {\n    var body: some Scene {\n        WindowGroup { Text(\"Profile\") }\n            .modelContainer(for: Profile.self)\n    }\n}\n"
+		},
+		"reason": "The description states what users keep and can skip because the profile is stored, which is the need for the new stored type even without a because or so-that clause.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "persisted-profile-mechanism-only",
+		"expected": {
+			"records-significant-decisions-with-rationale": "NOT_MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"title\": \"Add profile model\"}\n",
+			"context/description.md": "Added a SwiftData Profile model and saved the profile to disk.\n",
+			"repo/App/Profile.swift": "import SwiftData\n\n@Model\nfinal class Profile {\n    var displayName: String\n    var weeklyGoal: Int\n\n    init(displayName: String, weeklyGoal: Int) {\n        self.displayName = displayName\n        self.weeklyGoal = weeklyGoal\n    }\n}\n",
+			"repo/App/ProfileApp.swift": "import SwiftUI\nimport SwiftData\n\n@main\nstruct ProfileApp: App {\n    var body: some Scene {\n        WindowGroup { Text(\"Profile\") }\n            .modelContainer(for: Profile.self)\n    }\n}\n"
+		},
+		"reason": "The same stored type is described only by the model and the mechanism that saves it, which says what changed and no need it serves.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "persistence-benefit-does-not-explain-public-endpoint",
+		"expected": {
+			"records-significant-decisions-with-rationale": "NOT_MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"title\": \"Add profile model\"}\n",
+			"context/description.md": "Profile edits are kept on the device and are still there after the app restarts.\nReturning users skip the setup screen and continue where they left off.\n",
+			"repo/App/Profile.swift": "import SwiftData\n\n@Model\nfinal class Profile {\n    var displayName: String\n    var weeklyGoal: Int\n\n    init(displayName: String, weeklyGoal: Int) {\n        self.displayName = displayName\n        self.weeklyGoal = weeklyGoal\n    }\n}\n",
+			"repo/Server/ProfileRoutes.swift": "import Vapor\n\nstruct ProfileDTO: Content {\n    let id: UUID\n    let displayName: String\n    let weeklyGoal: Int\n}\n\nfunc profileRoutes(_ app: Application) throws {\n    app.get(\"api\", \"profiles\", \":id\") { req async throws -> ProfileDTO in\n        guard let id = req.parameters.get(\"id\", as: UUID.self) else { throw Abort(.badRequest) }\n        return try await ProfileStore.shared.profile(id: id)\n    }\n}\n"
+		},
+		"reason": "The stated benefit explains keeping profiles on the device, not why profiles are now exposed through a new public endpoint and message format.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "approval-standing-beside-other-reviewer-withdrawn-approval",
+		"expected": {
+			"merges-only-after-approval": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\", \"merged_by\": \"author\", \"author\": \"author\", \"assignees\": [], \"pr_url\": \"https://gitlab.example.org/course/app/-/merge_requests/7\"}\n",
+			"context/review_threads.json": "{\"threads\": [], \"reviewDecisions\": [{\"state\": \"CHANGES_REQUESTED\", \"author\": \"reviewer-a\", \"submittedAt\": \"2026-10-04T09:00:00Z\"}, {\"state\": \"CHANGES_REQUESTED\", \"author\": \"reviewer-a\", \"submittedAt\": \"2026-10-04T15:00:00Z\"}, {\"state\": \"APPROVED\", \"author\": \"reviewer-a\", \"submittedAt\": \"2026-10-05T10:00:00Z\"}, {\"state\": \"DISMISSED\", \"dismissed\": true, \"author\": \"reviewer-b\"}], \"decisionHistoryComplete\": false, \"truncated\": false}\n",
+			"context/project_inventory.json": "{\"contributors\": [\"author\", \"reviewer-a\", \"reviewer-b\"]}\n"
+		},
+		"reason": "Reviewer A's dated approval replaced their own earlier requests and stood at merge. On GitLab the other reviewer's dismissed row is a withdrawn approval, which cannot unsettle A's approval.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "approval-beside-other-request-of-unknown-time",
+		"expected": {
+			"merges-only-after-approval": "UNDETERMINED"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\", \"merged_by\": \"author\", \"author\": \"author\", \"assignees\": [], \"pr_url\": \"https://github.com/course/app/pull/7\"}\n",
+			"context/review_threads.json": "{\"threads\": [], \"reviewDecisions\": [{\"state\": \"APPROVED\", \"author\": \"reviewer-a\", \"submittedAt\": \"2026-10-05T10:00:00Z\"}, {\"state\": \"CHANGES_REQUESTED\", \"author\": \"reviewer-b\"}], \"decisionHistoryComplete\": false, \"truncated\": false}\n",
+			"context/project_inventory.json": "{\"contributors\": [\"author\", \"reviewer-a\", \"reviewer-b\"]}\n"
+		},
+		"reason": "Reviewer A's approval stood at merge, but reviewer B's undated request for changes may also have stood then; the record cannot settle it.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "approval-beside-standing-other-request",
+		"expected": {
+			"merges-only-after-approval": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"merges-only-after-approval": "MAJOR"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\", \"merged_by\": \"author\", \"author\": \"author\", \"assignees\": [], \"pr_url\": \"https://github.com/course/app/pull/7\"}\n",
+			"context/review_threads.json": "{\"threads\": [], \"reviewDecisions\": [{\"state\": \"APPROVED\", \"author\": \"reviewer-a\", \"submittedAt\": \"2026-10-05T10:00:00Z\"}, {\"state\": \"CHANGES_REQUESTED\", \"author\": \"reviewer-b\", \"submittedAt\": \"2026-10-05T11:00:00Z\"}], \"decisionHistoryComplete\": false, \"truncated\": false}\n",
+			"context/project_inventory.json": "{\"contributors\": [\"author\", \"reviewer-a\", \"reviewer-b\"]}\n"
+		},
+		"reason": "Reviewer B's dated request for changes came before the merge and nothing B recorded replaced it, so the merge went over a standing request despite A's approval.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "approval-beside-dismissed-decision-of-unknown-state",
+		"expected": {
+			"merges-only-after-approval": "UNDETERMINED"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\", \"merged_by\": \"author\", \"author\": \"author\", \"assignees\": [], \"pr_url\": \"https://github.com/course/app/pull/7\"}\n",
+			"context/review_threads.json": "{\"threads\": [], \"reviewDecisions\": [{\"state\": \"APPROVED\", \"author\": \"reviewer-a\", \"submittedAt\": \"2026-10-05T10:00:00Z\"}, {\"state\": \"DISMISSED\", \"dismissed\": true, \"author\": \"reviewer-b\"}], \"decisionHistoryComplete\": false, \"truncated\": false}\n",
+			"context/project_inventory.json": "{\"contributors\": [\"author\", \"reviewer-a\", \"reviewer-b\"]}\n"
+		},
+		"reason": "On GitHub a dismissed state without its original state may have been a request for changes, and its dismissal time is unknown, so it may have stood at merge beside A's approval.",
+		"workType": "pull_request"
 	}
 ]
