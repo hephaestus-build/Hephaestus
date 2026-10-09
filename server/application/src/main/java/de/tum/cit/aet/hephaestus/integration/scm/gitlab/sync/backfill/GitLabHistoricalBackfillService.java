@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
@@ -54,6 +55,7 @@ public class GitLabHistoricalBackfillService {
     private static final Duration COOLDOWN_NORMAL = Duration.ofMinutes(5);
     private static final Duration COOLDOWN_ERROR = Duration.ofMinutes(15);
 
+    private final ActivityLedgerRepair activityLedgerRepair;
     private final SyncTargetProvider syncTargetProvider;
     private final RepositoryRepository repositoryRepository;
     private final OrganizationRepository organizationRepository;
@@ -68,12 +70,14 @@ public class GitLabHistoricalBackfillService {
             RepositoryRepository repositoryRepository,
             OrganizationRepository organizationRepository,
             ObjectProvider<GitLabSyncServiceHolder> syncServiceHolderProvider,
-            SyncSchedulerProperties syncSchedulerProperties) {
+            SyncSchedulerProperties syncSchedulerProperties,
+            ActivityLedgerRepair activityLedgerRepair) {
         this.syncTargetProvider = syncTargetProvider;
         this.repositoryRepository = repositoryRepository;
         this.organizationRepository = organizationRepository;
         this.syncServiceHolderProvider = syncServiceHolderProvider;
         this.syncSchedulerProperties = syncSchedulerProperties;
+        this.activityLedgerRepair = activityLedgerRepair;
     }
 
     /**
@@ -84,6 +88,24 @@ public class GitLabHistoricalBackfillService {
      */
     public int runBackfillCycle() {
         return runBackfillPass(null, null);
+    }
+
+    /** The explicit admin action rechecks completed history and repairs already stored activity. */
+    public void repairCompletedRepositories(long workspaceId, SyncExecutionHandle handle) {
+        var session = syncTargetProvider.getSyncSession(workspaceId, IntegrationKind.GITLAB);
+        if (session.isEmpty()) return;
+        Long providerId = getGitLabProviderId(session.get().accountLogin());
+        if (providerId == null) return;
+        for (SyncTarget target : session.get().syncTargets()) {
+            if (handle.isCancellationRequested()) return;
+            if (syncTargetProvider.isRepositoryUnavailable(workspaceId, target.id())) continue;
+            repositoryRepository
+                    .findByNameWithOwnerAndProviderId(target.repositoryNameWithOwner(), providerId)
+                    .ifPresent(repo -> {
+                        activityLedgerRepair.reconcileRepository(workspaceId, repo.getId());
+                        syncTargetProvider.restartCompletedBackfill(workspaceId, target.id());
+                    });
+        }
     }
 
     /**
@@ -266,6 +288,8 @@ public class GitLabHistoricalBackfillService {
                 return didWork;
             }
         }
+
+        activityLedgerRepair.reconcileRepository(scopeId, repo.getId());
 
         if (didWork) {
             syncTargetProvider.updateIssueBackfillState(target.id(), null, null, Instant.now());

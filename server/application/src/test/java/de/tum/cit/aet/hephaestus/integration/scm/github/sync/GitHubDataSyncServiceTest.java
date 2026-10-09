@@ -6,12 +6,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -206,7 +208,8 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 exceptionClassifier,
                 tokenProvider,
                 gitHubAppTokenService,
-                rateLimitTracker);
+                rateLimitTracker,
+                mock(ActivityLedgerRepair.class));
 
         provider = new IdentityProvider();
         ReflectionTestUtils.setField(provider, "id", PROVIDER_ID);

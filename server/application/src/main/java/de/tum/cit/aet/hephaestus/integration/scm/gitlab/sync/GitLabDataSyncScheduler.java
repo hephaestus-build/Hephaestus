@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
@@ -101,6 +102,7 @@ public class GitLabDataSyncScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabDataSyncScheduler.class);
 
+    private final ActivityLedgerRepair activityLedgerRepair;
     private final SyncTargetProvider syncTargetProvider;
     private final SyncContextProvider syncContextProvider;
     private final OrganizationRepository organizationRepository;
@@ -134,7 +136,8 @@ public class GitLabDataSyncScheduler {
             GitLabRepositoryMonitors repositoryMonitors,
             WorkspaceRepository workspaceRepository,
             WorkspaceActorSelector actorSelector,
-            GitLabProjectSyncService projectSyncService) {
+            GitLabProjectSyncService projectSyncService,
+            ActivityLedgerRepair activityLedgerRepair) {
         this.syncTargetProvider = syncTargetProvider;
         this.syncContextProvider = syncContextProvider;
         this.organizationRepository = organizationRepository;
@@ -151,6 +154,7 @@ public class GitLabDataSyncScheduler {
         this.workspaceRepository = workspaceRepository;
         this.actorSelector = actorSelector;
         this.projectSyncService = projectSyncService;
+        this.activityLedgerRepair = activityLedgerRepair;
     }
 
     @PostConstruct
@@ -898,6 +902,10 @@ public class GitLabDataSyncScheduler {
                     reportWarning(handle);
                 }
             }
+        }
+
+        for (Repository repo : availableRepos) {
+            activityLedgerRepair.reconcileRepository(session.scopeId(), repo.getId());
         }
 
         log.info(

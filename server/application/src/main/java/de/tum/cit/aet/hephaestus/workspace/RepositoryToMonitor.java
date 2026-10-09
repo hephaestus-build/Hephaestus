@@ -16,12 +16,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 @Entity
+// Recent-sync timestamp writes must not restore historical checkpoints from an earlier snapshot.
+@DynamicUpdate
 @Table(
         name = "repository_to_monitor",
         uniqueConstraints =

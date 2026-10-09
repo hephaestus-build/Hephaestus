@@ -19,7 +19,7 @@ import org.jspecify.annotations.Nullable;
  * methods concurrently from multiple sync threads.
  */
 public interface SyncTargetProvider
-        extends SyncTimestampProvider, BackfillStateProvider, RepositoryAvailabilityProvider {
+        extends SyncTimestampProvider, BackfillStateProvider, RepositoryAvailabilityProvider, BackfillRestartProvider {
     /**
      * @return list of sync targets for the scope, never null (may be empty if scope not found)
      */

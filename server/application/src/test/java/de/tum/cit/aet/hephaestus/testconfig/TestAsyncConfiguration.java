@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.Ordered;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.core.task.support.TaskExecutorAdapter;
@@ -22,7 +23,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 
 /** Synchronous dispatch keeps event-listener database writes inside the test that triggered them. */
 @Configuration
-@EnableAsync
+@EnableAsync(order = Ordered.HIGHEST_PRECEDENCE + 1)
 @Profile("test")
 public class TestAsyncConfiguration implements AsyncConfigurer {
 
@@ -46,6 +47,11 @@ public class TestAsyncConfiguration implements AsyncConfigurer {
 
     @Bean(name = "syncJobExecutor")
     public AsyncTaskExecutor syncJobExecutor() {
+        return syncExecutor;
+    }
+
+    @Bean(name = "activityExecutor")
+    public AsyncTaskExecutor activityExecutor() {
         return syncExecutor;
     }
 

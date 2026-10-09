@@ -6,11 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
@@ -92,7 +94,8 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
                         new BackfillProperties(true, 50, 100, 60),
                         new FilterProperties(Set.of(), Set.of(), Set.of()),
                         null,
-                        null));
+                        null),
+                mock(ActivityLedgerRepair.class));
 
         lenient().when(syncServiceHolderProvider.getIfAvailable()).thenReturn(syncServiceHolder);
         lenient().when(syncServiceHolder.getIssueSyncService()).thenReturn(issueSyncService);
@@ -100,6 +103,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         lenient().when(syncServiceHolder.getMergeRequestSyncService()).thenReturn(null);
 
         Repository repository = new Repository();
+        repository.setId(42L);
         repository.setNameWithOwner(REPO);
         // No GitLab organization row → no provider id → the service falls back to the unscoped lookup.
         lenient()

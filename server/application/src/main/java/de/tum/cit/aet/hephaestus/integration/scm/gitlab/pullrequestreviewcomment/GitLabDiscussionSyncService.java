@@ -26,7 +26,6 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -480,10 +479,9 @@ public class GitLabDiscussionSyncService {
             return new int[] {0, 0, 1};
         }
 
-        // Pre-compute one synthetic COMMENTED review per (author, discussion) so each note
-        // below can attach to the matching review without redundant DB lookups.
-        Map<Long, PullRequestReview> reviewsByAuthor = reconcileDiscussionReviews(
-                noteNodes, discussionGlobalId, pr, repository, provider, providerId, scopeId);
+        // The thread starter creates a review; subsequent replies remain comments.
+        Map<Long, PullRequestReview> reviewsByAuthor =
+                reconcileDiscussionReview(noteNodes, discussionGlobalId, pr, repository, provider, providerId, scopeId);
 
         // Process each note in the discussion as a review comment
         PullRequestReviewComment previousComment = null;
@@ -556,7 +554,8 @@ public class GitLabDiscussionSyncService {
                     provider,
                     previousComment, // first note has no parent, subsequent notes are replies
                     review,
-                    scopeId);
+                    scopeId,
+                    true);
             PullRequestReviewComment comment = reviewCommentProcessor.findOrCreateComment(noteData, commentContext);
 
             if (comment != null) {
@@ -568,17 +567,8 @@ public class GitLabDiscussionSyncService {
         return new int[] {diffNotes, 0, 0};
     }
 
-    /**
-     * Groups the non-system notes in a discussion by author, finds each author's earliest
-     * createdAt, and reconciles one synthetic COMMENTED {@link PullRequestReview} per author.
-     * <p>
-     * This is the bridge that brings GitLab MR discussions up to GitHub parity: every note
-     * author gets a review row that downstream scoring/profile UIs expect.
-     *
-     * @return map keyed by author native ID to the reconciled review (never null, possibly empty)
-     */
-    @SuppressWarnings("unchecked")
-    private Map<Long, PullRequestReview> reconcileDiscussionReviews(
+    /** Only an original inline comment is a review; discussion replies stay comments. */
+    private Map<Long, PullRequestReview> reconcileDiscussionReview(
             List<Map<String, Object>> noteNodes,
             String discussionGlobalId,
             PullRequest pr,
@@ -586,40 +576,19 @@ public class GitLabDiscussionSyncService {
             IdentityProvider provider,
             Long providerId,
             Long scopeId) {
-        record AuthorEarliest(User author, @Nullable Instant earliest) {}
-
-        Map<Long, AuthorEarliest> byAuthor = new HashMap<>();
-        for (Map<String, Object> noteNode : noteNodes) {
-            if (Boolean.TRUE.equals(noteNode.get("system")) || Boolean.TRUE.equals(noteNode.get("internal"))) {
-                continue;
-            }
-            User author = resolveAuthor(noteNode, providerId);
-            if (author == null || author.getNativeId() == null) {
-                continue;
-            }
-            Instant createdAt = parseTimestamp((String) noteNode.get("createdAt"));
-            byAuthor.merge(author.getNativeId(), new AuthorEarliest(author, createdAt), (existing, incoming) -> {
-                if (existing.earliest() == null) return incoming;
-                if (incoming.earliest() == null) return existing;
-                return incoming.earliest().isBefore(existing.earliest()) ? incoming : existing;
-            });
+        var root = noteNodes.stream()
+                .filter(note -> !Boolean.TRUE.equals(note.get("system")) && !Boolean.TRUE.equals(note.get("internal")))
+                .findFirst()
+                .orElse(null);
+        if (root == null) {
+            return Map.of();
         }
-
-        // Emit REVIEW_COMMENTED events during bulk GraphQL sync so the activity ledger records
-        // COMMENTED reviews. Without a ProcessingContext the review reconciler silently skips
-        // event publication.
-        ProcessingContext ctx = repository != null ? ProcessingContext.forSync(scopeId, repository) : null;
-
-        Map<Long, PullRequestReview> result = new HashMap<>();
-        for (Map.Entry<Long, AuthorEarliest> entry : byAuthor.entrySet()) {
-            AuthorEarliest info = entry.getValue();
-            PullRequestReview review = reviewReconciler.findOrCreateCommentedReview(
-                    pr, info.author(), discussionGlobalId, info.earliest(), provider, ctx);
-            if (review != null) {
-                result.put(entry.getKey(), review);
-            }
-        }
-        return result;
+        User author = resolveAuthor(root, providerId);
+        if (author == null || author.getNativeId() == null) return Map.of();
+        ProcessingContext ctx = ProcessingContext.forSync(scopeId, repository);
+        PullRequestReview review = reviewReconciler.findOrCreateCommentedReview(
+                pr, author, discussionGlobalId, parseTimestamp((String) root.get("createdAt")), provider, ctx);
+        return review == null ? Map.of() : Map.of(author.getNativeId(), review);
     }
 
     /**

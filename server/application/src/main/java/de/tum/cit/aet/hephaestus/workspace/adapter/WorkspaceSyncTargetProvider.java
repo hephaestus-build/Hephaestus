@@ -302,12 +302,24 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     @Override
     @Transactional(readOnly = true)
     public Optional<SyncTarget> findSyncTargetById(Long syncTargetId) {
+        return loadSyncTarget(syncTargetId);
+    }
+
+    private Optional<SyncTarget> loadSyncTarget(Long syncTargetId) {
         return repositoryToMonitorRepository.findById(syncTargetId).flatMap(rtm -> {
             var workspace = rtm.getWorkspace();
             return workspace == null
                     ? Optional.empty()
                     : Optional.of(SyncTargetFactory.create(workspace, rtm, connectionService));
         });
+    }
+
+    @Override
+    @Transactional
+    public Optional<SyncTarget> restartCompletedBackfill(long workspaceId, long syncTargetId) {
+        if (repositoryToMonitorRepository.restartCompletedBackfill(workspaceId, syncTargetId) == 0)
+            return Optional.empty();
+        return loadSyncTarget(syncTargetId);
     }
 
     @Override

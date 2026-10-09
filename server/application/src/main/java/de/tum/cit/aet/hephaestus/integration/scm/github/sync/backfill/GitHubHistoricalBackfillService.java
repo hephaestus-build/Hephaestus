@@ -8,10 +8,12 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_RETRIES;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.adaptPageSize;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
@@ -154,6 +156,8 @@ public class GitHubHistoricalBackfillService {
     private final GitHubPullRequestReviewSyncService reviewSyncService;
     private final GitHubPullRequestReviewCommentSyncService reviewCommentSyncService;
     private final RepositoryRepository repositoryRepository;
+    private final ActivityLedgerRepair activityLedgerRepair;
+    private final GitHubBackfillRepair backfillRepair;
     private final TransactionTemplate transactionTemplate;
     private final Executor monitoringExecutor;
 
@@ -171,7 +175,9 @@ public class GitHubHistoricalBackfillService {
             GitHubPullRequestReviewCommentSyncService reviewCommentSyncService,
             RepositoryRepository repositoryRepository,
             TransactionTemplate transactionTemplate,
-            @Qualifier("monitoringExecutor") Executor monitoringExecutor) {
+            @Qualifier("monitoringExecutor") Executor monitoringExecutor,
+            ActivityLedgerRepair activityLedgerRepair,
+            GitHubBackfillRepair backfillRepair) {
         this.syncTargetProvider = syncTargetProvider;
         this.backfillStateProvider = backfillStateProvider;
         this.syncSchedulerProperties = syncSchedulerProperties;
@@ -186,6 +192,8 @@ public class GitHubHistoricalBackfillService {
         this.repositoryRepository = repositoryRepository;
         this.transactionTemplate = transactionTemplate;
         this.monitoringExecutor = monitoringExecutor;
+        this.activityLedgerRepair = activityLedgerRepair;
+        this.backfillRepair = backfillRepair;
     }
 
     /**
@@ -349,7 +357,14 @@ public class GitHubHistoricalBackfillService {
             return;
         }
 
-        for (SyncTarget target : targets) {
+        for (SyncTarget original : targets) {
+            if (syncTargetProvider.isRepositoryUnavailable(scopeId, original.id())) continue;
+            if (original.isPullRequestBackfillComplete()
+                    && graphQlClientProvider.getRateLimitRemaining(scopeId) < backfillProps.rateLimitThreshold()) {
+                pendingRepositories.incrementAndGet();
+                break;
+            }
+            SyncTarget target = backfillRepair.inspect(original, false);
             if (target.isBackfillComplete()) {
                 continue;
             }
@@ -427,7 +442,7 @@ public class GitHubHistoricalBackfillService {
         // Find the repository in our database - we only need the ID here.
         // The actual entity will be fetched fresh inside each transaction to avoid
         // LazyInitializationException when accessing lazy associations like organization.
-        Optional<Repository> repoOpt = repositoryRepository.findByNameWithOwner(target.repositoryNameWithOwner());
+        Optional<Repository> repoOpt = backfillRepair.findRepository(target);
         if (repoOpt.isEmpty()) {
             log.debug("Skipping backfill: reason=repositoryNotInDb, repo={}", safeRepoName);
             return false;
@@ -535,6 +550,8 @@ public class GitHubHistoricalBackfillService {
             backfillStateProvider.updatePullRequestBackfillState(syncTargetId, 0, 0, Instant.now());
             log.info("No pull requests to backfill: repo={}", safeRepoName);
         }
+
+        activityLedgerRepair.reconcileRepository(scopeId, repositoryId);
 
         boolean issuesComplete = !issueResult.hasMore() || target.isIssueBackfillComplete();
         boolean pullRequestsComplete = !prResult.hasMore();
@@ -1218,6 +1235,16 @@ public class GitHubHistoricalBackfillService {
     @Transactional(readOnly = true)
     public Optional<BackfillProgress> getProgress(Long syncTargetId) {
         return syncTargetProvider.findSyncTargetById(syncTargetId).map(BackfillProgress::fromSyncTarget);
+    }
+
+    /** Repairs ledger gaps and reopens provider-confirmed gaps through the existing admin backfill action. */
+    public void repairCompletedRepositories(long workspaceId, SyncExecutionHandle handle) {
+        for (SyncTarget target : syncTargetProvider.getSyncTargetsForScope(workspaceId)) {
+            if (handle.isCancellationRequested()) return;
+            if (!syncTargetProvider.isRepositoryUnavailable(workspaceId, target.id())) {
+                backfillRepair.inspect(target, true);
+            }
+        }
     }
 
     /**

@@ -83,7 +83,46 @@ class SpringAsyncConfigTest {
         }
     }
 
+    @Test
+    void shouldRunActivityOnProducerWhenExecutorIsSaturated() throws Exception {
+        new ApplicationContextRunner()
+                .withInitializer(ctx -> ctx.getEnvironment().setActiveProfiles("default"))
+                .withUserConfiguration(SpringAsyncConfig.class, AsyncProbe.class)
+                .run(ctx -> {
+                    var executor = ctx.getBean("activityExecutor", ThreadPoolTaskExecutor.class);
+                    CountDownLatch started = new CountDownLatch(2);
+                    CountDownLatch release = new CountDownLatch(1);
+                    Runnable block = () -> {
+                        started.countDown();
+                        try {
+                            release.await();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    };
+                    try {
+                        executor.execute(block);
+                        executor.execute(block);
+                        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+                        for (int i = 0; i < 500; i++) executor.execute(() -> {});
+                        assertThat(ctx.getBean(AsyncProbe.class)
+                                        .activityThread()
+                                        .get(5, TimeUnit.SECONDS))
+                                .isEqualTo(Thread.currentThread().getName());
+                        // Activity overload must not consume the unrelated shared queue.
+                        assertThat(ctx.getBean(AsyncProbe.class).currentThread().get(5, TimeUnit.SECONDS))
+                                .startsWith("async-");
+                    } finally {
+                        release.countDown();
+                    }
+                });
+    }
+
     static class AsyncProbe {
+        @Async("activityExecutor")
+        public CompletableFuture<String> activityThread() {
+            return CompletableFuture.completedFuture(Thread.currentThread().getName());
+        }
 
         @Async
         public CompletableFuture<String> currentThread() {

@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
@@ -21,7 +20,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabFieldUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO.NoteAttributes;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import java.time.Instant;
@@ -60,7 +58,6 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
     private final GitLabPullRequestReviewThreadProcessor threadProcessor;
     private final GitLabPullRequestReviewCommentProcessor reviewCommentProcessor;
     private final PullRequestReviewCommentRepository reviewCommentRepository;
-    private final GitLabReviewReconciler reviewReconciler;
 
     public GitLabDiffNoteWebhookProcessor(
             GitLabUserService gitLabUserService,
@@ -73,8 +70,7 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
             PullRequestRepository pullRequestRepository,
             GitLabPullRequestReviewThreadProcessor threadProcessor,
             GitLabPullRequestReviewCommentProcessor reviewCommentProcessor,
-            PullRequestReviewCommentRepository reviewCommentRepository,
-            GitLabReviewReconciler reviewReconciler) {
+            PullRequestReviewCommentRepository reviewCommentRepository) {
         super(
                 gitLabUserService,
                 userRepository,
@@ -87,7 +83,6 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
         this.threadProcessor = threadProcessor;
         this.reviewCommentProcessor = reviewCommentProcessor;
         this.reviewCommentRepository = reviewCommentRepository;
-        this.reviewReconciler = reviewReconciler;
     }
 
     /**
@@ -206,16 +201,9 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
                         .orElse(null)
                 : null;
 
-        // Reconcile a synthetic COMMENTED review per (author, discussion) so the note links
-        // to a review row, as on GitHub, and activity counts the review.
-        PullRequestReview review = null;
-        if (author != null && discussionGid != null) {
-            review = reviewReconciler.findOrCreateCommentedReview(
-                    pr, author, discussionGid, createdAt, provider, context);
-        }
-
+        // A webhook has no complete discussion, so only the authoritative sync synthesizes reviews.
         var commentContext = new GitLabPullRequestReviewCommentProcessor.CommentContext(
-                thread, pr, author, provider, inReplyTo, review, Objects.requireNonNull(context.scopeId()));
+                thread, pr, author, provider, inReplyTo, null, Objects.requireNonNull(context.scopeId()), false);
         PullRequestReviewComment comment = reviewCommentProcessor.findOrCreateComment(noteData, commentContext);
 
         if (comment != null) {

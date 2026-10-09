@@ -15,6 +15,30 @@ import org.springframework.transaction.annotation.Transactional;
 /** Write and maintenance access to the activity ledger; the read model lives in {@code activity.overview}. */
 @Repository
 public interface ActivityEventRepository extends JpaRepository<ActivityEvent, UUID> {
+    String REPLY_ONLY_REVIEW = """
+            r.state='COMMENTED' AND coalesce(r.body,'') !~ '[^[:space:]]'
+            AND EXISTS (SELECT 1 FROM pull_request_review_comment c
+                WHERE c.review_id=r.id AND c.in_reply_to_id IS NOT NULL)
+            AND NOT EXISTS (SELECT 1 FROM pull_request_review_comment c
+                WHERE c.review_id=r.id AND c.in_reply_to_id IS NULL)
+            """;
+
+    @WorkspaceAgnostic("Review identity is instance-global; the caller writes only its authenticated workspace")
+    @Query(
+            value = "SELECT EXISTS (SELECT 1 FROM pull_request_review r WHERE r.id=:reviewId AND " + REPLY_ONLY_REVIEW
+                    + ")",
+            nativeQuery = true)
+    boolean isReplyOnlyReview(@Param("reviewId") long reviewId);
+
+    @Modifying
+    @Query(value = """
+            DELETE FROM activity_event e USING pull_request_review r, pull_request_review_comment comment
+            WHERE e.workspace_id=:workspaceId AND e.target_type='review' AND e.target_id=r.id
+              AND e.event_type='REVIEW_COMMENTED' AND comment.id=:commentId AND comment.review_id=r.id
+              AND (
+            """ + REPLY_ONLY_REVIEW + ")", nativeQuery = true)
+    int deleteReplyOnlyReviewEvents(@Param("workspaceId") long workspaceId, @Param("commentId") long commentId);
+
     /**
      * Atomically inserts an activity event if absent.
      *
