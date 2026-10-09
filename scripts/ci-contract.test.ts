@@ -80,18 +80,22 @@ const TASK_INVOCATION =
 const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary"]);
 
 // Assignment names exclude '=' so each token has only one possible split.
-const VP_INVOCATION = /(?:^|[|&;]\s*|timeout \S+ \S+ )(?:[^\s=]+=\S+ )*vp (?:run|exec|-C)\b/mu;
+const VP_INVOCATION =
+	/(?:^|[|&;]\s*|timeout (?:-\S+ )*\S+ (?:env )?)(?:[^\s=]+=\S+ )*vp (?:run|exec|-C)\b/mu;
 
 void test("vp invocation detection handles assignments without exponential backtracking", () => {
 	for (const command of [
 		"vp run check",
 		"A=x=y B=z vp exec tool",
+		"timeout 10s vp run check",
+		"timeout --kill-after=30s 15m vp run check",
 		"timeout 10s env A=x vp -C docs lint .",
 		"true && A=x vp run check",
 	]) {
 		assert.equal(VP_INVOCATION.test(command), true, command);
 	}
 	assert.equal(VP_INVOCATION.test('echo "vp run check"'), false);
+	assert.equal(VP_INVOCATION.test("timeout 10s echo vp run check"), false);
 	// Isolate the match so a regression cannot block the test process itself.
 	const match = spawnSync(
 		process.execPath,
