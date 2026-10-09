@@ -29,7 +29,6 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
@@ -78,11 +77,9 @@ public class SecurityConfig {
             @Value("${hephaestus.auth.dev-login-enabled:false}") boolean devLoginEnabled,
             @Value("${hephaestus.auth.cookie-secure:true}") boolean cookieSecure,
             @Value("${hephaestus.auth.cookie-name:" + AuthProperties.DEFAULT_COOKIE_NAME + "}") String authCookieName) {
-        // Fail-closed: insecure cookies (Secure off, __Host- prefix dropped) are a local-http-E2E-only
-        // affordance and must be impossible in production.
-        if (!cookieSecure && environment.acceptsProfiles(Profiles.of("prod"))) {
-            throw new IllegalStateException("hephaestus.auth.cookie-secure must not be false with the 'prod' profile. "
-                    + "The server fails closed and does not start.");
+        if (!cookieSecure && (!environment.matchesProfiles("e2e") || environment.matchesProfiles("prod"))) {
+            throw new IllegalStateException("hephaestus.auth.cookie-secure=false is only allowed in the 'e2e' profile "
+                    + "without the 'prod' profile. The server fails closed and does not start.");
         }
         this.corsProperties = corsProperties;
         this.installedClients = installedClients;

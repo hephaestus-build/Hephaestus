@@ -79,6 +79,40 @@ const TASK_INVOCATION =
 // canary runs only when CI decides PMD inputs changed. Every other CI gate is part of `check`.
 const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary"]);
 
+// Assignment names exclude '=' so each token has only one possible split.
+const VP_INVOCATION =
+	/(?:^|[|&;]\s*)(?:timeout (?:-\S+ )*[^\s-]\S* (?:env )?)?(?:[^\s=]+=\S+ )*vp (?:run|exec|-C)\b/mu;
+
+void test("vp invocation detection handles assignments without exponential backtracking", () => {
+	for (const command of [
+		"vp run check",
+		"A=x=y B=z vp exec tool",
+		"timeout 10s vp run check",
+		"timeout --kill-after=30s 15m vp run check",
+		"timeout 10s env A=x vp -C docs lint .",
+		"true && A=x vp run check",
+		"true && timeout 10s vp run check",
+	]) {
+		assert.equal(VP_INVOCATION.test(command), true, command);
+	}
+	assert.equal(VP_INVOCATION.test('echo "vp run check"'), false);
+	assert.equal(VP_INVOCATION.test('echo "timeout 10s vp run check"'), false);
+	assert.equal(VP_INVOCATION.test("timeout 10s echo vp run check"), false);
+	// Isolate the match so a regression cannot block the test process itself.
+	const match = spawnSync(
+		process.execPath,
+		[
+			"--input-type=module",
+			"-e",
+			`const pattern = new RegExp(${JSON.stringify(VP_INVOCATION.source)}, "mu");
+        if (pattern.test("&" + "!==! ".repeat(20_000))) process.exit(1);
+        if (pattern.test("timeout " + "--x=y ".repeat(20_000))) process.exit(1);`,
+		],
+		{ encoding: "utf8", timeout: 5000 },
+	);
+	assert.equal(match.status, 0, String(match.error ?? match.stderr));
+});
+
 /** The task names one job's steps invoke, with a `${{ matrix.<key> }}` resolved from its matrix. */
 function invokedTasks(definition: YAMLMap): string[] {
 	const names: string[] = [];
@@ -3183,12 +3217,7 @@ void test("installs dependencies in every job that calls vp", async () => {
 					installsItself = true;
 				}
 				// An invocation starts a command; `vp run …` quoted in a message for the summary does not.
-				if (
-					typeof run === "string" &&
-					/(?:^|[|&;]\s*|timeout \S+ \S+ )(?:\S+=\S+ )*vp (?:run|exec|-C)\b/mu.test(
-						run.replaceAll(/\\?`[^`]*\\?`/gu, ""),
-					)
-				) {
+				if (typeof run === "string" && VP_INVOCATION.test(run.replaceAll(/\\?`[^`]*\\?`/gu, ""))) {
 					callsVp = true;
 				}
 			}

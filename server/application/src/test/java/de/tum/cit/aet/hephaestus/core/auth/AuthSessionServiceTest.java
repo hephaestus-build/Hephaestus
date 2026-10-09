@@ -68,6 +68,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
         meterRegistry = new SimpleMeterRegistry();
 
         lenient().when(properties.cookieName()).thenReturn("__Host-HEPHAESTUS_AT");
+        lenient().when(properties.cookieSecure()).thenReturn(true);
 
         clientSessionService = mock(ClientSessionService.class);
         sessionRevocation = mock(SessionRevocation.class);
@@ -89,6 +90,25 @@ class AuthSessionServiceTest extends BaseUnitTest {
                 .tag("result", tag)
                 .counter();
         return counter == null ? 0.0 : counter.count();
+    }
+
+    @Test
+    void shouldProtectBothIssuedAndClearedAccessCookies() {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        service.setCookie(
+                response, new HephaestusJwtIssuer.Token("access-token", UUID.randomUUID(), NOW.plusSeconds(900)));
+        service.clearCookie(response);
+
+        assertThat(response.getCookies()).hasSize(2);
+        for (Cookie cookie : response.getCookies()) {
+            assertThat(cookie.getSecure()).isTrue();
+            assertThat(cookie.isHttpOnly()).isTrue();
+            assertThat(cookie.getAttribute("SameSite")).isEqualTo("Lax");
+            assertThat(cookie.getPath()).isEqualTo("/");
+            assertThat(cookie.getDomain()).isNull();
+        }
+        assertThat(response.getCookies()[0].getMaxAge()).isEqualTo(900);
+        assertThat(response.getCookies()[1].getMaxAge()).isZero();
     }
 
     private static void assertCookieCleared(MockHttpServletResponse response) {

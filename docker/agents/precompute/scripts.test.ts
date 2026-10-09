@@ -263,6 +263,16 @@ void describe("issue classification across practices", () => {
 	});
 });
 
+void it("testing guidance keeps words separated by template comments apart", async () => {
+	const run = await loadScript("states-how-to-verify-the-change");
+	const result = await run("", new Map(), {
+		title: "",
+		source_branch: "",
+		body: "## How to test\nn<!-- template -->a",
+	});
+	assert.match(result.directions.join("\n"), /holds 1 line\(s\) of author text/u);
+});
+
 void it("linked-work analysis reads only explicitly supplied context, never a repository-derived fallback", async () => {
 	const root = await createTempDir("linked-work-context-");
 	const analyse = await loadScript("honours-linked-issue-acceptance-criteria");
