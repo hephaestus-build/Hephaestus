@@ -145,6 +145,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                 throw new IllegalStateException("Copied evidence contains an erased native identity");
             }
             updateReceipt(capture);
+            capture.lease().shareWithRemovals();
             return capture.lease();
         } catch (RuntimeException exception) {
             capture.lease().close();
