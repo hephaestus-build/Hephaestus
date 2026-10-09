@@ -1207,6 +1207,44 @@ void test("a quote copied with the brief's line coordinates is stored without th
 	assert.equal(withoutCoordinates("plain", 3), "plain");
 });
 
+void test("explicit null warrants and citation fields record the same evidence as absence", () => {
+	for (const [outcome, warrant] of [
+		["MET", {}],
+		["NOT_MET", { search: goodSearch }],
+		["NOT_APPLICABLE", { inapplicability: goodInapplicability }],
+		["UNDETERMINED", { undecidability: UNDECIDABLE }],
+	] as const) {
+		const raw = baseObservation({
+			outcome,
+			severity: outcome === "NOT_MET" ? "MAJOR" : null,
+		});
+		const normalized = normalizeObservation({
+			...raw,
+			evidence: {
+				citations: raw.evidence.citations.map((citation) => ({
+					...citation,
+					side: null,
+					revision: null,
+					endLine: null,
+					quote: null,
+				})),
+				search: null,
+				inapplicability: null,
+				undecidability: null,
+				...warrant,
+			},
+		});
+		assert.deepEqual(normalized.evidence, {
+			citations: raw.evidence.citations.map(({ side: _side, ...citation }) => ({
+				...citation,
+				endLine: citation.startLine,
+				quote: "",
+			})),
+			...warrant,
+		});
+	}
+});
+
 void test("incompatible evidence warrants are rejected, not discarded", () => {
 	assert.throws(
 		() =>
