@@ -87,8 +87,12 @@ final class PracticeReviewPreparation {
             return prepareCaptured(job, artifactKind, request, envelope, staging);
         } catch (InsufficientEvidenceException | ReviewCoalescedException refused) {
             throw refused;
-        } catch (RuntimeException failure) {
-            evidenceFiles.abortPersonCapture(job);
+        } catch (RuntimeException | Error failure) {
+            try {
+                evidenceFiles.abortPersonCapture(job);
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
             throw failure;
         }
     }

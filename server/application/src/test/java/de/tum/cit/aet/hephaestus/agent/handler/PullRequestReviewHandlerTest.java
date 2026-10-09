@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -16,6 +17,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -119,6 +121,38 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
     @Mock
     private PublicReviewEligibility publicEligibility;
+
+    @Test
+    void shouldPreservePreparationFailureWhenCaptureAbortFails() {
+        var catalog = mock(PracticeCatalogInjector.class);
+        var files = mock(JobEvidenceFiles.class);
+        var job = new AgentJob();
+        var failure = new IllegalStateException("source capture failed");
+        var cleanupFailure = new IllegalStateException("capture close failed");
+        when(catalog.resolveEligiblePractices(job, ArtifactKinds.PULL_REQUEST)).thenThrow(failure);
+        doThrow(cleanupFailure).when(files).abortPersonCapture(job);
+        var preparation = new PracticeReviewPreparation(
+                workspaceContextBuilder,
+                catalog,
+                taskEnvelopeWriter,
+                gitRepositoryManager,
+                files,
+                mock(PracticeRevisionService.class),
+                answeredPractices);
+
+        assertThatThrownBy(() -> preparation.prepare(
+                        job,
+                        ArtifactKinds.PULL_REQUEST,
+                        new ContextRequest.PracticeReviewRequest(job),
+                        () -> {
+                            throw new AssertionError("No task can be prepared from failed evidence");
+                        },
+                        staged -> {
+                            throw new AssertionError("Failed evidence cannot be staged");
+                        }))
+                .isSameAs(failure)
+                .hasSuppressedException(cleanupFailure);
+    }
 
     @BeforeEach
     void setUp() {
