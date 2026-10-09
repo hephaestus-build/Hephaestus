@@ -472,7 +472,7 @@ jobs:
 
       - uses: ./.github/actions/setup-release-security-tools
         with:
-          install-syft: "false"
+          install-syft: "true"
 
       # Caller-selected registry, not GHCR-only; see ci-cd.mdx § Shared setup actions.
       - name: Log in to Container Registry

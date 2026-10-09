@@ -1,4 +1,6 @@
 import { writeFileSync } from "node:fs";
+import path from "node:path";
+
 import { isSet } from "./lib/env.ts";
 import { readJsonFileSync } from "./lib/json.ts";
 
@@ -242,12 +244,42 @@ function assertDerivedInventoriesCover(
 	}
 }
 
-export function validateReleaseSbom(
-	syftInput: unknown,
-	spdxInput: unknown,
-	cycloneDxInput: unknown,
-	subject: ReleaseSbomSubject,
-): JsonObject {
+/** The one Syft configuration: every file's metadata and SHA-256, package catalogers at their defaults. */
+export const SYFT_CONFIG = path.join(import.meta.dirname, "..", "security", "syft.yaml");
+
+/**
+ * Syft reading one platform manifest from its registry. A daemon pull would re-serialize an OCI manifest
+ * as Docker schema 2 and record a locally computed digest; `--platform` makes Syft fail loudly if the
+ * reference is not this platform's.
+ */
+export function syftImageArguments(reference: string, platform: string): string[] {
+	return [
+		"--from",
+		"registry",
+		reference,
+		"--platform",
+		platform,
+		"--scope",
+		"squashed",
+		"--config",
+		SYFT_CONFIG,
+	];
+}
+
+/** Only what component identity reads: Go binaries, and every file's metadata and SHA-256. */
+export const SYFT_COMPONENT_CATALOGERS = [
+	"--override-default-catalogers",
+	"go-module-binary-cataloger",
+	"--select-catalogers",
+	"+file-metadata-cataloger",
+	"--select-catalogers",
+	"+file-digest-cataloger",
+	"--select-catalogers=-file-content-cataloger",
+	"--select-catalogers=-file-executable-cataloger",
+];
+
+/** A Syft document bound to exactly this repository, platform manifest digest and platform. */
+export function assertSyftSubject(syftInput: unknown, subject: ReleaseSbomSubject): JsonObject {
 	const { digest, platform } = subject;
 	if (!/^sha256:[a-f0-9]{64}$/u.test(digest)) {
 		throw new Error("subject digest is malformed");
@@ -257,9 +289,130 @@ export function validateReleaseSbom(
 		throw new Error("platform must be linux/<architecture>");
 	}
 	const repository = canonicalRepository(text(subject.repository, "subject repository"));
-
 	const syft = object(syftInput, "Syft SBOM");
 	assertSyftSource(syft, { repository, digest, os, architecture });
+	return syft;
+}
+
+/**
+ * One absolute image path with a single leading slash, or undefined when the value is empty, contains a
+ * backslash, or has an empty, `.` or `..` segment. Trivy names a target relative to the image root.
+ */
+export function imagePath(value: string): string | undefined {
+	if (value === "" || value.includes("\\")) {
+		return undefined;
+	}
+	const absolute = value.startsWith("/") ? value : `/${value}`;
+	return absolute
+		.slice(1)
+		.split("/")
+		.every((segment) => segment !== "" && segment !== "." && segment !== "..")
+		? absolute
+		: undefined;
+}
+
+/** The Go executables one Syft scan of a subject catalogued, and the SHA-256 it recorded for each file. */
+export interface ComponentEvidence {
+	digest: string;
+	platform: string;
+	goBinaries: ReadonlySet<string>;
+	/** Null where Syft recorded no SHA-256, several, or different ones for the same path. */
+	sha256: ReadonlyMap<string, string | null>;
+}
+
+function canonicalSyftPath(value: unknown, label: string): string {
+	const raw = text(value, label);
+	if (imagePath(raw) !== raw) {
+		throw new Error(`${label} is not a canonical absolute image path`);
+	}
+	return raw;
+}
+
+/** Read the component identity of a subject from Syft's native Go cataloguer and file digests. */
+export function componentEvidence(
+	syftInput: unknown,
+	subject: ReleaseSbomSubject,
+): ComponentEvidence {
+	const syft = assertSyftSubject(syftInput, subject);
+	// An inventory is complete only if Syft ran the Go binary, file metadata and file digest catalogers
+	// over the squashed image: a scan without them would report no Go and no digests, not their absence.
+	const configuration = object(
+		object(syft.descriptor, "Syft descriptor").configuration,
+		"Syft configuration",
+	);
+	const used = array(
+		object(configuration.catalogers, "Syft catalogers").used,
+		"Syft catalogers used",
+	);
+	for (const cataloger of [
+		"go-module-binary-cataloger",
+		"file-metadata-cataloger",
+		"file-digest-cataloger",
+	]) {
+		if (!used.includes(cataloger)) {
+			throw new Error(`Syft did not run the ${cataloger}`);
+		}
+	}
+	if (object(configuration.search, "Syft search configuration").scope !== "squashed") {
+		throw new Error("Syft did not read the squashed image");
+	}
+	const goBinaries = new Set<string>();
+	for (const [index, value] of array(syft.artifacts, "Syft artifacts").entries()) {
+		const artifact = object(value, `Syft artifact ${index}`);
+		// The native Go binary cataloger names the executable each module was read from as primary.
+		if (artifact.type !== "go-module" || artifact.foundBy !== "go-module-binary-cataloger") {
+			continue;
+		}
+		let primary = 0;
+		for (const [at, location] of array(
+			artifact.locations,
+			`Syft artifact ${index}.locations`,
+		).entries()) {
+			const item = object(location, `Syft artifact ${index} location ${at}`);
+			const annotations =
+				item.annotations === undefined ? {} : object(item.annotations, "Syft location annotations");
+			if (annotations.evidence === "primary") {
+				goBinaries.add(canonicalSyftPath(item.path, `Syft artifact ${index} location ${at} path`));
+				primary += 1;
+			}
+		}
+		if (primary === 0) {
+			throw new Error(`Syft Go artifact ${index} names no primary location`);
+		}
+	}
+	if (goBinaries.size === 0) {
+		throw new Error("Syft catalogued no Go binary");
+	}
+	const sha256 = new Map<string, string | null>();
+	for (const [index, value] of array(syft.files, "Syft files").entries()) {
+		const file = object(value, `Syft file ${index}`);
+		const filePath = canonicalSyftPath(
+			object(file.location, `Syft file ${index} location`).path,
+			`Syft file ${index} path`,
+		);
+		const digests = (
+			file.digests === undefined ? [] : array(file.digests, `Syft file ${index} digests`)
+		)
+			.map((digest) => object(digest, `Syft file ${index} digest`))
+			.filter((digest) => digest.algorithm === "sha256")
+			.map((digest) => digest.value);
+		const [only, ...more] = digests;
+		const hash =
+			typeof only === "string" && more.length === 0 && /^[a-f0-9]{64}$/u.test(only) ? only : null;
+		sha256.set(filePath, sha256.has(filePath) && sha256.get(filePath) !== hash ? null : hash);
+	}
+	return { digest: subject.digest, platform: subject.platform, goBinaries, sha256 };
+}
+
+export function validateReleaseSbom(
+	syftInput: unknown,
+	spdxInput: unknown,
+	cycloneDxInput: unknown,
+	subject: ReleaseSbomSubject,
+): JsonObject {
+	const { digest, platform } = subject;
+	const syft = assertSyftSubject(syftInput, subject);
+	const repository = canonicalRepository(text(subject.repository, "subject repository"));
 
 	const artifacts = array(syft.artifacts, "Syft artifacts");
 	if (artifacts.length === 0) {

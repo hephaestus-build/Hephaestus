@@ -1916,10 +1916,43 @@ void describe("CI contract", () => {
 				);
 			}
 		}
-		// The blocking build gate and the scheduled release rescan; the release path goes through
-		// verify-release-evidence.ts and the main rescan through scan-main-images.ts, both of which
-		// reach the same evaluator without a workflow-level call site.
-		assert.equal(callSites, 2);
+		// The build gate invokes the evaluator directly. Release verification and both rescan owners
+		// reach the same evaluator through TypeScript rather than another workflow call site.
+		assert.equal(callSites, 1);
+
+		// The evaluator runs Syft itself for a subject an exception binds by component inventory
+		// (check-release-vulnerabilities.ts), so every job that reaches it installs the pinned Syft. Only
+		// the advisory snapshot job does not.
+		const cicd = await readFile(".github/workflows/cicd.yml", "utf8");
+		const evaluatorJobs: [string, string][] = [
+			[".github/workflows/reusable-docker-build.yml", scan],
+			[".github/workflows/cicd.yml", job(cicd, "upstream-images")],
+			[
+				".github/workflows/rescan-main-images.yml",
+				await readFile(".github/workflows/rescan-main-images.yml", "utf8"),
+			],
+			[
+				".github/workflows/rescan-release-images.yml",
+				await readFile(".github/workflows/rescan-release-images.yml", "utf8"),
+			],
+		];
+		for (const [file, section] of evaluatorJobs) {
+			assert.match(
+				section,
+				/setup-release-security-tools\n\s+with:\n\s+install-syft: "true"/u,
+				file,
+			);
+		}
+		assert.match(
+			job(cicd, "vulnerability-database"),
+			/install-syft: "false"/u,
+			"the advisory snapshot job needs no Syft",
+		);
+		// Syft 1.51.1 reads GHCR through its native registry authentication.
+		assert.match(
+			await readFile(".github/workflows/rescan-release-images.yml", "utf8"),
+			/SYFT_REGISTRY_AUTH_AUTHORITY: ghcr\.io[\s\S]*SYFT_REGISTRY_AUTH_USERNAME:[\s\S]*SYFT_REGISTRY_AUTH_PASSWORD:/u,
+		);
 	});
 
 	void test("keeps one release vulnerability policy behind every scan", async () => {
@@ -2019,6 +2052,11 @@ void describe("CI contract", () => {
 			filter,
 			/- 'security\/release-images\.json'[\s\S]*- 'security\/vulnerability-policy\.json'/u,
 		);
+		// The Syft configuration is data the gate reads, not an import the closure below finds.
+		assert.ok(
+			filter.includes("- 'security/syft.yaml'"),
+			"release-images must trigger on the Syft config",
+		);
 		// The trigger is derived, not trusted: a filter that lists the entry point but not the module
 		// it parses JSON with skips the gate on the pull request that breaks the parser. Re-walk the
 		// imports and require every file the gate actually loads to appear.
@@ -2081,18 +2119,31 @@ void describe("CI contract", () => {
 				/node scripts\/verify-release-evidence\.ts evidence --write-validation/u,
 			);
 		}
-		// The preflight verifies twice, the second time without --write-validation, so the validation
+		// The preflight verifies twice, the second time in trusted capture mode, so the validation
 		// documents are re-derived and compared exactly as the release re-derives them.
-		assert.match(preflight, /node scripts\/verify-release-evidence\.ts evidence\n/u);
+		assert.match(
+			preflight,
+			/node scripts\/verify-release-evidence\.ts evidence --verify-capture\n/u,
+		);
 		assert.match(preflight, /max-age-hours: "48"/u);
 		assert.match(preflight, /if: .*needs\.detect-changes\.outputs\.release-preflight == 'true'/u);
 		assert.match(cicd, /^ {6}release-preflight:$/mu);
 		assertNeeds(cicd, "all-ci-passed", "Release-preflight");
 
 		// What "everything except signatures" rests on: the verifier's checks are unconditional, and
-		// the only thing any mode decides is whether the two signature checks run and whether a
+		// the only thing any mode decides is whether signature checks run and whether a
 		// validation document is written or compared. A new check gated on anything else is a check a
 		// release could be the first to perform, and lands here rather than in a release.
+		const capture = job(release, "tag-images");
+		const checksumCreation = capture.indexOf("sha256sum -- * > SHA256SUMS");
+		const checksumSigning = capture.indexOf(
+			"cosign sign-blob --yes --bundle evidence/SHA256SUMS.sigstore.json evidence/SHA256SUMS",
+		);
+		assert.ok(checksumCreation !== -1 && checksumSigning > checksumCreation);
+		assert.ok(
+			capture.indexOf("node scripts/verify-release-evidence.ts evidence --verify-signatures") >
+				checksumSigning,
+		);
 		const verifier = await readFile("scripts/verify-release-evidence.ts", "utf8");
 		// Template literals are elided so this test can quote the source lines it expects without
 		// carrying interpolations of its own.
@@ -2101,6 +2152,8 @@ void describe("CI contract", () => {
 			.map((line) => line.trim().replaceAll(/`[^`]*`/gu, "<path>"))
 			.filter((line) => line.includes("mode ==="));
 		assert.deepEqual(conditioned, [
+			'mode === "write-validation" || mode === "verify-capture"',
+			'const historical = mode === "verify" || mode === "verify-signatures";',
 			'persistOrVerify(<path>, sbom, mode === "write-validation");',
 			'persistOrVerify(<path>, policyResult, mode === "write-validation");',
 			'if (mode === "verify-signatures" && subject.provenance === "first-party") {',
@@ -2878,7 +2931,8 @@ void describe("CI contract", () => {
 		assert.match(release, /SOURCE_TAG: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/u);
 		assert.match(release, /node scripts\/resolve-release-images\.ts "\$SOURCE_TAG"/u);
 		assert.doesNotMatch(job(release, "tag-images"), /imagetools/u);
-		assert.match(rescan, /node scripts\/verify-release-evidence\.ts release-evidence/u);
+		assert.match(rescan, /node scripts\/rescan-release-images\.ts release-evidence reports/u);
+		assert.doesNotMatch(rescan, /while IFS|jq -er|verify-release-evidence\.ts/u);
 		assert.doesNotMatch(rescan, /node scripts\/check-release-sbom\.ts/u);
 		assert.equal((release.match(/node scripts\/verify-release-evidence\.ts/gu) ?? []).length, 3);
 		assert.doesNotMatch(release, /node scripts\/check-release-(?:sbom|vulnerabilities)\.ts/u);
