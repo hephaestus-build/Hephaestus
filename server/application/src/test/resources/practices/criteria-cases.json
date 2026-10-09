@@ -516,9 +516,7 @@
 	},
 	{
 		"id": "issue-link-in-body-without-commit-capture",
-		"omit": [
-			"context/commits.json"
-		],
+		"omit": ["context/commits.json"],
 		"expected": {
 			"links-the-change-to-its-issue": "MET"
 		},
@@ -563,9 +561,7 @@
 	},
 	{
 		"id": "resolved-review-request-without-commit-capture",
-		"omit": [
-			"context/commits.json"
-		],
+		"omit": ["context/commits.json"],
 		"expected": {
 			"engaging-with-inline-review-comments": "MET"
 		},
@@ -1009,5 +1005,57 @@
 		},
 		"reason": "Both subjects name specific actions and objects. A conjunction does not make a subject vague, and subject clarity does not assess commit accuracy or cohesion.",
 		"workType": "pull_request"
+	},
+	{
+		"id": "large-work-with-unknown-child-rollup",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "UNDETERMINED"
+		},
+		"files": {
+			"context/description.md": "Current scope decision: deliver the CSV audit download and the rotating service-status banner. Drop the XML archive. The remaining outputs can ship and be assigned independently.\n\n## Current checks\n\n- [ ] The CSV download contains column headers.\n- [ ] The banner rotates through published service notices.\n\n## Earlier proposal retained for history\n\nAdd a CSV audit download, a service-status banner and an XML archive.\n",
+			"context/metadata.json": "{\"title\": \"CSV audit download and service-status banner\", \"labels\": [], \"sub_issues_total\": null, \"sub_issues_completed\": null}",
+			"context/comments.json": "[]"
+		},
+		"reason": "Two remaining independently shippable outputs have only verification checks, not implementation subtasks. A null rollup leaves child tracking unknown; the partial-work decomposition expectation is uncertainty, not proven absence.",
+		"workType": "issue"
+	},
+	{
+		"id": "large-work-with-reported-zero-child-rollup",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "NOT_MET"
+		},
+		"files": {
+			"context/description.md": "Current scope decision: deliver the CSV audit download and the rotating service-status banner. Drop the XML archive. The remaining outputs can ship and be assigned independently.\n\n## Current checks\n\n- [ ] The CSV download contains column headers.\n- [ ] The banner rotates through published service notices.\n\n## Earlier proposal retained for history\n\nAdd a CSV audit download, a service-status banner and an XML archive.\n",
+			"context/metadata.json": "{\"title\": \"CSV audit download and service-status banner\", \"labels\": [], \"sub_issues_total\": 0, \"sub_issues_completed\": 0}",
+			"context/comments.json": "[]"
+		},
+		"reason": "The same large requested work has only verification checks, no child references or comments, and a reported zero rollup. These captured surfaces establish missing decomposition.",
+		"workType": "issue"
+	},
+	{
+		"id": "large-work-with-implementation-subtasks-and-unknown-rollup",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "MET"
+		},
+		"files": {
+			"context/description.md": "Build the CSV audit download and the rotating service-status banner; each can ship independently.\n\n- [ ] Add the CSV export endpoint.\n- [ ] Add the banner component.\n",
+			"context/metadata.json": "{\"title\": \"CSV audit download and service-status banner\", \"labels\": [], \"sub_issues_total\": null, \"sub_issues_completed\": null}",
+			"context/comments.json": "[]"
+		},
+		"reason": "Concrete implementation subtasks make both independently shippable outputs trackable. An unknown rollup does not erase that positive breakdown.",
+		"workType": "issue"
+	},
+	{
+		"id": "single-deliverable-with-unknown-child-rollup",
+		"expected": {
+			"breaks-large-work-into-trackable-subtasks": "NOT_APPLICABLE"
+		},
+		"files": {
+			"context/description.md": "Fix the date picker so it accepts February 29 in a leap year.\n",
+			"context/metadata.json": "{\"title\": \"Fix leap-year date selection\", \"labels\": [], \"sub_issues_total\": null, \"sub_issues_completed\": null}",
+			"context/comments.json": "[]"
+		},
+		"reason": "A focused bug needs no decomposition. Unknown child tracking does not create a largeness occasion.",
+		"workType": "issue"
 	}
 ]
