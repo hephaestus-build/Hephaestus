@@ -110,6 +110,24 @@ for (const [name, change] of [
 			};
 		},
 	],
+	[
+		"visual alt text over 300 characters",
+		(p) => {
+			p.visual = { file: "practices/guidance/a-practice/visual.svg", alt: "a".repeat(301) };
+		},
+	],
+	[
+		"a visual outside the guidance folder",
+		(p) => {
+			p.visual = { file: "practices/visual.svg", alt: "Two changes." };
+		},
+	],
+	[
+		"a guide that is not Markdown",
+		(p) => {
+			p.guide = "practices/guidance/a-practice/guide.html";
+		},
+	],
 ] satisfies [string, (practice: Record<string, unknown>) => void][]) {
 	await test(`the catalogue rejects ${name}`, () => {
 		assert.equal(validate(withPractice(change)), false);

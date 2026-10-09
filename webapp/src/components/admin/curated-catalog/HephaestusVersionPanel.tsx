@@ -12,6 +12,10 @@ import {
 	DEFAULT_DELIVERY_BEHAVIOR_TEXT,
 	deliveryBehaviorSentences,
 } from "@/components/admin/practice-editor/delivery-behavior-text";
+import {
+	PracticeGuideVersion,
+	PracticeVisualVersion,
+} from "@/components/admin/practice-editor/practice-guidance-version";
 import { PracticeEvidenceSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -61,6 +65,8 @@ const PRACTICE_FIELDS = {
 	criteria: "What to look for",
 	whyItMatters: "Why it matters",
 	whatGoodLooksLike: "What good looks like",
+	visual: "Visual",
+	guide: "Guide",
 	precomputeScript: "Static analysis",
 	// The occasions and their evidence render under a heading of their own, which this must not repeat.
 	automatedReviewPolicy: "How it is reviewed",
@@ -186,6 +192,10 @@ export function HephaestusVersionPanel(props: HephaestusVersionPanelProps) {
 											) : (
 												"Evidence details are unavailable for this kind of work."
 											);
+										} else if (field === "visual" && shippedPractice?.visual) {
+											value = <PracticeVisualVersion visual={shippedPractice.visual} />;
+										} else if (field === "guide" && shippedPractice?.guide) {
+											value = <PracticeGuideVersion guide={shippedPractice.guide} />;
 										} else if (field === "deliveryBehavior" && shippedPractice) {
 											const sentences = deliveryBehaviorSentences(shippedPractice.deliveryBehavior);
 											value =

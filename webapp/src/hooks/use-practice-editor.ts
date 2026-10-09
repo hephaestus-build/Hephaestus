@@ -8,7 +8,7 @@ import {
 	updatePracticeMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { CreatePracticeRequest, Practice, UpdatePracticeRequest } from "@/api/types.gen";
-import { problemStatusOf } from "@/lib/problem-detail";
+import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
 import {
 	patchPractice,
@@ -41,17 +41,16 @@ export function usePracticeEditor(workspaceSlug: string): PracticeEditor {
 	const update = useMutation({
 		...updatePracticeMutation(),
 		scope,
-		onError: () => toast.error("We could not save the practice. Try again."),
+		onError: (error) =>
+			toast.error("We could not save the practice", { description: problemDetailOf(error) }),
 	});
 	const create = useMutation({
 		...createPracticeMutation(),
 		scope,
 		onError: (error) =>
-			toast.error(
-				problemStatusOf(error) === 409
-					? "A practice with this identifier already exists in this workspace"
-					: "We could not create the practice. Try again.",
-			),
+			problemStatusOf(error) === 409
+				? toast.error("A practice with this identifier already exists in this workspace")
+				: toast.error("We could not create the practice", { description: problemDetailOf(error) }),
 	});
 
 	return {

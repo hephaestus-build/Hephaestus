@@ -8213,6 +8213,41 @@ paths:
       summary: Move a practice
       tags:
       - Practice Catalog
+  /workspaces/{workspaceSlug}/practices/{practiceSlug}/guidance:
+    get:
+      description: "Returns the visual and the guide that the practice panel shows.\
+        \ Any workspace member can read them. Carries an ETag, so an unchanged visual\
+        \ and guide answer 304."
+      operationId: getPracticeGuidance
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: practiceSlug
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeGuidance"
+          description: Guidance returned
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Practice not found
+      summary: Read one practice's visual and guide
+      tags:
+      - Practice Catalog
   /workspaces/{workspaceSlug}/practices/{practiceSlug}/placement:
     put:
       description: Moves the practice and sets its exact position in one atomic write;
@@ -11262,6 +11297,9 @@ components:
           - "null"
           description: Practice group to add the practice to. Omit or set to null
             for Unassigned.
+        guide:
+          $ref: "#/components/schemas/PracticeGuide"
+          description: "Guide text and its figures; guidance, never review rules"
         name:
           type: string
           description: Human-readable name
@@ -11306,6 +11344,10 @@ components:
           - ASSIGNEE
           - REVIEWER
           - MERGER
+        visual:
+          $ref: "#/components/schemas/PracticeVisual"
+          description: "Developer-facing picture of the practice; guidance, never\
+            \ review rules"
         whatGoodLooksLike:
           type: string
           description: "Developer-facing exemplar; a concrete instance, not the review\
@@ -11812,6 +11854,8 @@ components:
             $ref: "#/components/schemas/PracticeEvidenceRequirement"
         groupSlug:
           type: string
+        guide:
+          $ref: "#/components/schemas/PracticeGuide"
         name:
           type: string
         precomputeScript:
@@ -11840,6 +11884,8 @@ components:
           - ASSIGNEE
           - REVIEWER
           - MERGER
+        visual:
+          $ref: "#/components/schemas/PracticeVisual"
         whatGoodLooksLike:
           type: string
         whyItMatters:
@@ -11887,6 +11933,9 @@ components:
           type: string
           maxLength: 64
           minLength: 0
+        guide:
+          $ref: "#/components/schemas/PracticeGuide"
+          description: "Guide text and its figures; guidance, never review rules"
         name:
           type: string
           maxLength: 128
@@ -11921,6 +11970,10 @@ components:
           - ASSIGNEE
           - REVIEWER
           - MERGER
+        visual:
+          $ref: "#/components/schemas/PracticeVisual"
+          description: "Developer-facing picture of the practice; guidance, never\
+            \ review rules"
         whatGoodLooksLike:
           type: string
           maxLength: 2000
@@ -14709,6 +14762,9 @@ components:
         groupSlug:
           type: string
           description: "Slug of the practice group this practice is bound to, if any"
+        guide:
+          $ref: "#/components/schemas/PracticeGuide"
+          description: Developer-facing guide text and its figures (developer layer)
         id:
           type: integer
           format: int64
@@ -14752,6 +14808,9 @@ components:
           type: string
           format: date-time
           description: Timestamp when the practice was last updated
+        visual:
+          $ref: "#/components/schemas/PracticeVisual"
+          description: Developer-facing picture of the practice (developer layer)
         whatGoodLooksLike:
           type: string
           description: Developer-facing exemplar (developer layer)
@@ -14874,6 +14933,8 @@ components:
             $ref: "#/components/schemas/PracticeEvidenceRequirement"
         groupSlug:
           type: string
+        guide:
+          $ref: "#/components/schemas/PracticeGuide"
         name:
           type: string
         precomputeScript:
@@ -14902,6 +14963,8 @@ components:
           - ASSIGNEE
           - REVIEWER
           - MERGER
+        visual:
+          $ref: "#/components/schemas/PracticeVisual"
         whatGoodLooksLike:
           type: string
         whyItMatters:
@@ -15260,6 +15323,38 @@ components:
       required:
       - group
       - practices
+    PracticeGuidance:
+      type: object
+      description: "The visual and the guide of one practice, as the practice panel\
+        \ shows them"
+      properties:
+        guide:
+          $ref: "#/components/schemas/PracticeGuide"
+        practiceSlug:
+          type: string
+          description: URL-safe identifier unique within workspace
+        visual:
+          $ref: "#/components/schemas/PracticeVisual"
+      required:
+      - practiceSlug
+    PracticeGuide:
+      type: object
+      additionalProperties: false
+      description: "Developer guidance: the text of a practice's Guide tab and the\
+        \ SVG figures it shows. Never changes how the practice is reviewed"
+      properties:
+        figures:
+          type: object
+          additionalProperties:
+            type: string
+          description: "SVG markup of each figure the Markdown shows, by figure name"
+        markdown:
+          type: string
+          description: "Markdown. Shows a figure with ![description](figures/<name>.svg)"
+          maxLength: 12000
+      required:
+      - figures
+      - markdown
     PracticePrecondition:
       type: object
       additionalProperties: false
@@ -15360,6 +15455,8 @@ components:
           - WHAT_GOOD_LOOKS_LIKE
           - GROUP_SLUG
           - DELIVERY_BEHAVIOR
+          - VISUAL
+          - GUIDE
         offeredChanged:
           type: boolean
       required:
@@ -15975,6 +16072,23 @@ components:
       - scope
       - slug
       - support
+    PracticeVisual:
+      type: object
+      additionalProperties: false
+      description: "Developer guidance: one picture of the practice and what it shows.\
+        \ Never changes how the practice is reviewed"
+      properties:
+        alt:
+          type: string
+          description: "What the picture shows, for people who cannot see it"
+          maxLength: 300
+        svg:
+          type: string
+          description: SVG markup. Shapes and text only; colors come from the pv-*
+            theme classes
+      required:
+      - alt
+      - svg
     PracticeWorkTypeDefinitionOptions:
       type: object
       description: "Review timing, evidence choices, and recommended settings for\
@@ -19281,6 +19395,8 @@ components:
             - PRECOMPUTE_SCRIPT
             - WHY_IT_MATTERS
             - WHAT_GOOD_LOOKS_LIKE
+            - VISUAL
+            - GUIDE
           uniqueItems: true
         criteria:
           type: string
@@ -19307,6 +19423,9 @@ components:
           $ref: "#/components/schemas/BindPracticeGroupRequest"
           description: Catalog placement to apply with the definition update; omit
             to leave unchanged
+        guide:
+          $ref: "#/components/schemas/PracticeGuide"
+          description: "Guide text and its figures; guidance, never review rules"
         name:
           type: string
           description: Human-readable name
@@ -19345,6 +19464,10 @@ components:
           - ASSIGNEE
           - REVIEWER
           - MERGER
+        visual:
+          $ref: "#/components/schemas/PracticeVisual"
+          description: "Developer-facing picture of the practice; guidance, never\
+            \ review rules"
         whatGoodLooksLike:
           type: string
           description: Concrete example shown to the developer; not review criteria

@@ -33,4 +33,12 @@ describe("UntrustedMarkdown", () => {
 			expect(link.querySelector("a")).toBeNull();
 		}
 	});
+
+	it("draws no image unless the caller draws it, so no image loads from anywhere", () => {
+		const { container } = render(
+			<UntrustedMarkdown>![A tracking pixel](https://example.com/pixel.png)</UntrustedMarkdown>,
+		);
+
+		expect(container.querySelector("img")).toBeNull();
+	});
 });

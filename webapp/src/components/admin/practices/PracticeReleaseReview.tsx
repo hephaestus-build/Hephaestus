@@ -9,6 +9,10 @@ import {
 	DEFAULT_DELIVERY_BEHAVIOR_TEXT,
 	deliveryBehaviorSentences,
 } from "@/components/admin/practice-editor/delivery-behavior-text";
+import {
+	PracticeGuideVersion,
+	PracticeVisualVersion,
+} from "@/components/admin/practice-editor/practice-guidance-version";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +44,8 @@ const FIELDS = {
 	WHAT_GOOD_LOOKS_LIKE: { label: "What good looks like", key: "whatGoodLooksLike" },
 	GROUP_SLUG: { label: "Group", key: "groupSlug" },
 	DELIVERY_BEHAVIOR: { label: "Feedback delivery", key: "deliveryBehavior" },
+	VISUAL: { label: "Visual", key: "visual" },
+	GUIDE: { label: "Guide", key: "guide" },
 } satisfies Record<Field, { label: string; key: keyof PracticeDefinition }>;
 
 const BASE_SOURCE = {
@@ -51,6 +57,21 @@ const BASE_SOURCE = {
 	CURRENT_DEFINITION:
 		"The current definition, because we could not verify the version you originally adopted. Choose a version for each changed field.",
 } satisfies Record<PracticeReleaseProposal["baseSource"], string>;
+
+/** One version of a field: a visual or guide with its pictures drawn, everything else as text. */
+function FieldVersion({ definition, field }: { definition: PracticeDefinition; field: Field }) {
+	if (field === "VISUAL" && definition.visual) {
+		return <PracticeVisualVersion visual={definition.visual} />;
+	}
+	if (field === "GUIDE" && definition.guide) {
+		return <PracticeGuideVersion guide={definition.guide} />;
+	}
+	return (
+		<pre className="max-h-48 overflow-auto font-sans text-xs break-words whitespace-pre-wrap">
+			{fieldText(definition, field)}
+		</pre>
+	);
+}
 
 function fieldText(definition: PracticeDefinition, field: Field): string {
 	if (field === "DELIVERY_BEHAVIOR") {
@@ -151,9 +172,7 @@ export function PracticeReleaseReview({
 							{([proposal.base, proposal.current, proposal.offered] as const).map(
 								(definition, index) => (
 									<TableCell key={index} className="align-top">
-										<pre className="max-h-48 overflow-auto font-sans text-xs break-words whitespace-pre-wrap">
-											{fieldText(definition, field)}
-										</pre>
+										<FieldVersion definition={definition} field={field} />
 									</TableCell>
 								),
 							)}

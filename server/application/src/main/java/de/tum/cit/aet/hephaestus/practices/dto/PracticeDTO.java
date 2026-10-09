@@ -9,7 +9,9 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -72,6 +74,12 @@ public record PracticeDTO(
         @Nullable @Schema(description = "Developer-facing exemplar (developer layer)")
         String whatGoodLooksLike,
 
+        @Nullable @Schema(description = "Developer-facing picture of the practice (developer layer)")
+        PracticeVisual visual,
+
+        @Nullable @Schema(description = "Developer-facing guide text and its figures (developer layer)")
+        PracticeGuide guide,
+
         @NonNull
         @Schema(
                 description = "How much autonomy the system has over this practice, whether that was set here or "
@@ -121,6 +129,8 @@ public record PracticeDTO(
                 practice.getDisplayOrder(),
                 practice.getWhyItMatters(),
                 practice.getWhatGoodLooksLike(),
+                practice.getVisual(),
+                practice.getGuide(),
                 AutonomyAssignmentDTO.of(
                         AutonomyResolver.resolvePractice(practice, workspaceDefault), practice.getAutonomy()),
                 practice.getCreatedAt(),

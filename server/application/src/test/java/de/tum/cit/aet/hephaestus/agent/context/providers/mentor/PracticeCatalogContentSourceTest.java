@@ -9,7 +9,9 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -100,6 +102,41 @@ class PracticeCatalogContentSourceTest extends BaseUnitTest {
         assertThat(entry.get("displayName").asString()).isEqualTo("Error State Handling");
         assertThat(entry.get("criteria").asString()).contains("Show an error view");
         assertThat(entry.has("description")).isFalse();
+    }
+
+    @Test
+    void shouldHandTheMentorEachFigureAsItsDescriptionWhenThePracticeHasGuidance() throws Exception {
+        Workspace ws = new Workspace();
+        ws.setWorkspaceSlug("acme");
+        when(workspaceRepository.findById(eq(1L))).thenReturn(Optional.of(ws));
+        Practice practice = new Practice();
+        practice.setSlug("scope-one-reviewable-change");
+        practice.setName("Keep the change reviewable");
+        practice.setCriteria("c");
+        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
+        practice.setWhyItMatters("A reviewer can only hold so much in their head.");
+        practice.setWhatGoodLooksLike("A focused change.");
+        practice.setVisual(new PracticeVisual(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\"/>", "Large and split changes"));
+        practice.setGuide(new PracticeGuide(
+                "## How to do it\n\n![Three changes in order](figures/split-order.svg)",
+                Map.of("split-order", "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\"/>")));
+        when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(List.of(practice));
+
+        Map<String, byte[]> files = new HashMap<>();
+        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+
+        JsonNode entry = objectMapper
+                .readTree(files.get("inputs/context/practice_catalog.json"))
+                .get("practices")
+                .get(0);
+        assertThat(entry.get("whyItMatters").asString()).isEqualTo("A reviewer can only hold so much in their head.");
+        assertThat(entry.get("whatGoodLooksLike").asString()).isEqualTo("A focused change.");
+        assertThat(entry.get("visualDescription").asString()).isEqualTo("Large and split changes");
+        // Heph reads text only, so it gets what a figure shows, never its markup or path.
+        assertThat(entry.get("guide").asString())
+                .isEqualTo("## How to do it\n\n(Figure: Three changes in order)")
+                .doesNotContain("<svg");
     }
 
     @Test

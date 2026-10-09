@@ -12,7 +12,10 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuidanceRules;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalog.BundledEntry;
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,6 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class BundledPracticeCatalogLoader {
 
     private static final String CATALOG_RESOURCE = "practices/default-catalog.json";
+    private static final String GUIDANCE_RESOURCES = "practices/guidance/";
 
     private final BundledPracticeCatalog catalog;
     private final Map<String, String> holdsAsBySlug;
@@ -178,7 +182,9 @@ public class BundledPracticeCatalogLoader {
                 whyItMatters,
                 whatGoodLooksLike,
                 groupSlug,
-                deliveryBehavior(objectMapper, node, slug));
+                deliveryBehavior(objectMapper, node, slug),
+                visual(node, slug),
+                guide(node, slug));
         definitionValidator.validate(definition);
         return definition;
     }
@@ -259,6 +265,52 @@ public class BundledPracticeCatalogLoader {
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException exception) {
             throw new IllegalStateException("cannot read bundled precompute script: " + slug, exception);
+        }
+    }
+
+    /**
+     * The visual a bundled practice opens with: an SVG file under its own guidance folder, and the words that say
+     * what it shows. The file stays a file so a maintainer can preview and review it as a picture.
+     */
+    private static @Nullable PracticeVisual visual(JsonNode node, String slug) {
+        JsonNode visual = node.get("visual");
+        if (visual == null) {
+            return null;
+        }
+        return new PracticeVisual(
+                readGuidanceResource(slug, requiredText(visual, "file")), requiredText(visual, "alt"));
+    }
+
+    /**
+     * The guide of a bundled practice and every figure it shows. A figure is read from the path the
+     * Markdown names, relative to the guide, so GitHub previews the guide with its figures.
+     */
+    private static @Nullable PracticeGuide guide(JsonNode node, String slug) {
+        String path = text(node, "guide");
+        if (path == null) {
+            return null;
+        }
+        String markdown = readGuidanceResource(slug, path);
+        Map<String, String> figures = new HashMap<>();
+        for (String name : PracticeGuidanceRules.figureNames(markdown)) {
+            figures.put(name, readGuidanceResource(slug, GUIDANCE_RESOURCES + slug + "/figures/" + name + ".svg"));
+        }
+        return new PracticeGuide(markdown, figures);
+    }
+
+    private static String readGuidanceResource(String slug, String path) {
+        if (!path.startsWith(GUIDANCE_RESOURCES + slug + "/") || path.contains("..")) {
+            throw new IllegalStateException(
+                    "bundled guidance must live under " + GUIDANCE_RESOURCES + slug + "/: " + path);
+        }
+        var resource = new ClassPathResource(path);
+        if (!resource.exists()) {
+            throw new IllegalStateException("bundled guidance file does not exist: " + path);
+        }
+        try (InputStream input = resource.getInputStream()) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new IllegalStateException("cannot read bundled guidance file: " + path, exception);
         }
     }
 

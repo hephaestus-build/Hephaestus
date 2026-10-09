@@ -8,7 +8,9 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -83,7 +85,13 @@ public record UpdatePracticeRequestDTO(
         @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
         Set<DefinitionChange> definitionChanges,
 
-        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior)
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior,
+
+        @Schema(description = "Developer-facing picture of the practice; guidance, never review rules") @Nullable
+        PracticeVisual visual,
+
+        @Schema(description = "Guide text and its figures; guidance, never review rules") @Nullable
+        PracticeGuide guide)
         implements ClosedPracticeInput {
     public UpdatePracticeRequestDTO(
             @Nullable String name,
@@ -115,6 +123,8 @@ public record UpdatePracticeRequestDTO(
                 group,
                 clear,
                 definitionChanges,
+                null,
+                null,
                 null);
     }
 }

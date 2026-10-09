@@ -33,6 +33,9 @@
 			"@/*": ["./src/*"],
 			"@bundled-practices": [
 				"../server/application/src/main/resources/practices/default-catalog.json"
+			],
+			"@bundled-practice-guidance/*": [
+				"../server/application/src/main/resources/practices/guidance/*"
 			]
 		}
 	}

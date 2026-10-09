@@ -10,6 +10,7 @@ import {
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
 import { settledDrawerPanel } from "@/stories/overlay";
+import { bundledGuidance, bundledPractice } from "@/stories/practice-guidance-story-mock-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
@@ -154,10 +155,50 @@ export const EditClearsOptionalGuidance: Story = {
 		await expect(editSubmit).toHaveBeenCalledWith(
 			"commit-discipline",
 			expect.objectContaining({
-				clear: ["PRECONDITION", "WHY_IT_MATTERS", "WHAT_GOOD_LOOKS_LIKE"],
+				clear: ["PRECONDITION", "WHY_IT_MATTERS", "WHAT_GOOD_LOOKS_LIKE", "VISUAL", "GUIDE"],
 			}),
 			null,
 		);
+	},
+};
+
+/** The bundled visual and guide in the editor, the visual previewed in both themes. */
+export const EditWithVisualAndGuide: Story = {
+	args: {
+		mode: "edit",
+		initialData: {
+			...mockPracticeWithAllTriggers,
+			whyItMatters: bundledPractice.whyItMatters,
+			whatGoodLooksLike: bundledPractice.whatGoodLooksLike,
+			visual: bundledGuidance.visual,
+			guide: bundledGuidance.guide,
+		},
+		onSubmit: editSubmit,
+	},
+};
+
+/** Pasted markup needs a description before it can be saved, and the summary leads to it. */
+export const VisualNeedsDescription: Story = {
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async () => {
+		await settledDrawerPanel();
+		createSubmit.mockClear();
+		await userEvent.type(screen.getByRole("textbox", { name: /Name/u }), "Scope one change");
+		await userEvent.type(
+			screen.getByRole("textbox", { name: /What to look for/u }),
+			"Check that the change does one thing.",
+		);
+		await userEvent.click(screen.getByRole("textbox", { name: "SVG markup" }));
+		await userEvent.paste(bundledGuidance.visual.svg);
+		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
+
+		await expect(createSubmit).not.toHaveBeenCalled();
+		await waitFor(async () => {
+			await expect(screen.getByRole("textbox", { name: "Description *" })).toHaveFocus();
+		});
+		await expect(
+			screen.getByRole("textbox", { name: "Description *" }),
+		).toHaveAccessibleDescription(/Describe what the visual shows\./u);
 	},
 };
 

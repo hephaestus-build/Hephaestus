@@ -204,6 +204,33 @@
 					"minLength": 20,
 					"maxLength": 80
 				},
+				"visual": {
+					"description": "Optional picture that introduces the practice on the developer's practice panel. Developer guidance: it never changes how the practice is reviewed. docs/contributor/practice-catalogue.md#bundled-visuals-and-guides owns the files.",
+					"type": "object",
+					"additionalProperties": false,
+					"required": [
+						"file",
+						"alt"
+					],
+					"properties": {
+						"file": {
+							"description": "Classpath resource of the SVG, under this practice's own guidance folder.",
+							"type": "string",
+							"pattern": "^practices/guidance/[a-z0-9]+(?:-[a-z0-9]+)*/visual\\.svg$"
+						},
+						"alt": {
+							"description": "What the picture shows and means, for screen readers and Heph. Product voice.",
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 300
+						}
+					}
+				},
+				"guide": {
+					"description": "Optional guide that the Guide tab of the developer's practice panel shows: a classpath Markdown resource under this practice's own guidance folder. It shows each figure as ![description](figures/<name>.svg). Developer guidance: it never changes how the practice is reviewed.",
+					"type": "string",
+					"pattern": "^practices/guidance/[a-z0-9]+(?:-[a-z0-9]+)*/guide\\.md$"
+				},
 				"deliveryBehavior": {
 					"description": "How negative feedback from this practice is placed or deduplicated.",
 					"$ref": "#/$defs/deliveryBehavior"

@@ -11,9 +11,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.dto.BindPracticeGroupRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.ClearablePracticeField;
 import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PlacePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeGuidanceDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeAutonomyRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -51,6 +53,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -2936,6 +2939,418 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
             assertThat(result).isNotNull();
             assertThat(result.slug()).isEqualTo("guard-clean");
+        }
+    }
+
+    private static final String GUIDANCE_URI = BASE_URI + "/{slug}/guidance";
+    private static final String ADMIN_TOKEN = "mock-jwt-token-for-admin-user";
+    private static final String GUIDANCE_SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 32\">"
+            + "<rect class=\"pv-fill-accent\" x=\"0\" y=\"0\" width=\"28\" height=\"32\"/>"
+            + "<rect class=\"pv-fill-muted\" x=\"36\" y=\"0\" width=\"28\" height=\"32\"/></svg>";
+
+    private static PracticeVisual guidanceVisual(String alt) {
+        return new PracticeVisual(GUIDANCE_SVG, alt);
+    }
+
+    private static PracticeGuide guidanceGuide(String heading) {
+        return new PracticeGuide(
+                "## " + heading + "\n\n![Two boxes side by side](figures/two-boxes.svg)",
+                Map.of("two-boxes", GUIDANCE_SVG));
+    }
+
+    /** A patch that sends only the visual and the guide, so every other field stays as stored. */
+    private static UpdatePracticeRequestDTO guidanceUpdate(
+            @Nullable PracticeVisual visual, @Nullable PracticeGuide guide) {
+        return new UpdatePracticeRequestDTO(
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, visual,
+                guide);
+    }
+
+    private Practice persistPracticeWithGuidance(String slug) {
+        Practice practice = persistPractice(slug, "Guided " + slug, true);
+        practice.setVisual(guidanceVisual("Two boxes side by side"));
+        practice.setGuide(guidanceGuide("How to do it"));
+        return practiceRepository.save(practice);
+    }
+
+    private List<PracticeRevision> revisionsOf(String slug) {
+        Long practiceId = practiceRepository
+                .findByWorkspaceIdAndSlug(workspace.getId(), slug)
+                .orElseThrow()
+                .getId();
+        return practiceRevisionRepository.findAll().stream()
+                .filter(revision -> revision.getPractice().getId().equals(practiceId))
+                .sorted(Comparator.comparingInt(PracticeRevision::getRevisionNumber))
+                .toList();
+    }
+
+    @Nested
+    @DisplayName("GET /practices/{practiceSlug}/guidance")
+    class ReadGuidance {
+
+        private void joinAsMember(Workspace target) {
+            ensureWorkspaceMembership(target, persistUser("mentor"), WorkspaceMembership.WorkspaceRole.MEMBER);
+        }
+
+        private String guidanceETag(String slug) {
+            return Objects.requireNonNull(webTestClient
+                    .get()
+                    .uri(GUIDANCE_URI, workspace.getWorkspaceSlug(), slug)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .returnResult(Void.class)
+                    .getResponseHeaders()
+                    .getETag());
+        }
+
+        @Test
+        @WithMentorUser
+        void shouldReturnTheVisualAndGuideWhenAMemberReadsThem() {
+            joinAsMember(workspace);
+            persistPracticeWithGuidance("guided-practice");
+            persistPractice("plain-practice", "Plain practice", true);
+
+            PracticeGuidanceDTO guided = Objects.requireNonNull(webTestClient
+                    .get()
+                    .uri(GUIDANCE_URI, workspace.getWorkspaceSlug(), "guided-practice")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectHeader()
+                    .valueMatches(HttpHeaders.ETAG, "W/\"[0-9a-f]{64}\"")
+                    .expectHeader()
+                    .valueEquals(HttpHeaders.CACHE_CONTROL, "no-cache, private")
+                    .expectBody(PracticeGuidanceDTO.class)
+                    .returnResult()
+                    .getResponseBody());
+
+            assertThat(guided.practiceSlug()).isEqualTo("guided-practice");
+            assertThat(guided.visual()).isEqualTo(guidanceVisual("Two boxes side by side"));
+            assertThat(guided.guide()).isEqualTo(guidanceGuide("How to do it"));
+
+            webTestClient
+                    .get()
+                    .uri(GUIDANCE_URI, workspace.getWorkspaceSlug(), "plain-practice")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.practiceSlug")
+                    .isEqualTo("plain-practice")
+                    .jsonPath("$.visual")
+                    .doesNotExist()
+                    .jsonPath("$.guide")
+                    .doesNotExist();
+        }
+
+        @Test
+        @WithMentorUser
+        void shouldAnswerNotModifiedUntilTheGuideChangesWhenTheBrowserSendsItsETag() {
+            joinAsMember(workspace);
+            ensureAdminMembership(workspace);
+            persistPracticeWithGuidance("cached-practice");
+            String etag = guidanceETag("cached-practice");
+
+            webTestClient
+                    .get()
+                    .uri(GUIDANCE_URI, workspace.getWorkspaceSlug(), "cached-practice")
+                    .headers(headers -> {
+                        TestAuthUtils.withCurrentUser().accept(headers);
+                        headers.setIfNoneMatch(etag);
+                    })
+                    .exchange()
+                    .expectStatus()
+                    .isNotModified()
+                    .expectHeader()
+                    .valueEquals(HttpHeaders.ETAG, etag)
+                    .expectHeader()
+                    .valueEquals(HttpHeaders.CACHE_CONTROL, "no-cache, private")
+                    .expectBody(Void.class);
+
+            webTestClient
+                    .patch()
+                    .uri(BASE_URI + "/{slug}", workspace.getWorkspaceSlug(), "cached-practice")
+                    .headers(headers -> headers.setBearerAuth(ADMIN_TOKEN))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(guidanceUpdate(null, guidanceGuide("A revised guide")))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+
+            String changed = Objects.requireNonNull(webTestClient
+                    .get()
+                    .uri(GUIDANCE_URI, workspace.getWorkspaceSlug(), "cached-practice")
+                    .headers(headers -> {
+                        TestAuthUtils.withCurrentUser().accept(headers);
+                        headers.setIfNoneMatch(etag);
+                    })
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.guide.markdown")
+                    .isEqualTo(guidanceGuide("A revised guide").markdown())
+                    .returnResult()
+                    .getResponseHeaders()
+                    .getETag());
+            assertThat(changed).isNotEqualTo(etag);
+        }
+
+        @Test
+        @WithMentorUser
+        void shouldReturnProblemDetailWhenThePracticeDoesNotExist() {
+            joinAsMember(workspace);
+
+            ProblemDetail problem = Objects.requireNonNull(webTestClient
+                    .get()
+                    .uri(GUIDANCE_URI, workspace.getWorkspaceSlug(), "non-existent")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound()
+                    .expectHeader()
+                    .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                    .expectBody(ProblemDetail.class)
+                    .returnResult()
+                    .getResponseBody());
+
+            assertThat(problem.getTitle()).isEqualTo("Resource not found");
+        }
+
+        @Test
+        @WithMentorUser
+        void shouldKeepGuidanceInsideItsWorkspaceWhenTheCallerBelongsToAnotherWorkspace() {
+            persistPracticeWithGuidance("private-guidance");
+            User otherOwner = persistUser("other-guidance-owner");
+            Workspace other = createWorkspace(
+                    "other-guidance-ws", "Other guidance", "other-guidance-org", AccountType.ORG, otherOwner);
+            joinAsMember(other);
+
+            webTestClient
+                    .get()
+                    .uri(GUIDANCE_URI, workspace.getWorkspaceSlug(), "private-guidance")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
+
+            webTestClient
+                    .get()
+                    .uri(GUIDANCE_URI, other.getWorkspaceSlug(), "private-guidance")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound()
+                    .expectBody(Void.class);
+        }
+
+        @Test
+        void shouldReturnUnauthorizedWhenNotSignedIn() {
+            persistPracticeWithGuidance("anonymous-guidance");
+
+            webTestClient
+                    .get()
+                    .uri(GUIDANCE_URI, workspace.getWorkspaceSlug(), "anonymous-guidance")
+                    .exchange()
+                    .expectStatus()
+                    .isUnauthorized()
+                    .expectBody(Void.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("Practice visual and guide authoring")
+    class GuidanceAuthoring {
+
+        private CreatePracticeRequestDTO createWithGuidance(
+                String slug, @Nullable PracticeVisual visual, @Nullable PracticeGuide guide) {
+            CreatePracticeRequestDTO base = validCreateRequest(slug);
+            return new CreatePracticeRequestDTO(
+                    base.slug(),
+                    base.name(),
+                    base.signals(),
+                    base.evidenceRequirements(),
+                    base.reviewWhen(),
+                    base.subject(),
+                    base.precondition(),
+                    base.criteria(),
+                    base.precomputeScript(),
+                    base.automatedReviewPolicy(),
+                    base.whyItMatters(),
+                    base.whatGoodLooksLike(),
+                    base.groupSlug(),
+                    base.deliveryBehavior(),
+                    visual,
+                    guide);
+        }
+
+        private WebTestClient.ResponseSpec create(CreatePracticeRequestDTO request) {
+            return webTestClient
+                    .post()
+                    .uri(BASE_URI, workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(request)
+                    .exchange();
+        }
+
+        private WebTestClient.ResponseSpec clear(String slug, ClearablePracticeField field) {
+            return webTestClient
+                    .patch()
+                    .uri(BASE_URI + "/{slug}", workspace.getWorkspaceSlug(), slug)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of("clear", List.of(field.name())))
+                    .exchange();
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldStoreTheGuidanceInANewRevisionWithTheSameReviewRulesWhenAnAdminSetsIt() {
+            ensureAdminMembership(workspace);
+            create(validCreateRequest("guidance-edit"))
+                    .expectStatus()
+                    .isCreated()
+                    .expectBody(Void.class);
+
+            PracticeDTO updated = Objects.requireNonNull(patch(
+                            "guidance-edit",
+                            guidanceUpdate(guidanceVisual("Two boxes side by side"), guidanceGuide("How to do it")))
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(PracticeDTO.class)
+                    .returnResult()
+                    .getResponseBody());
+
+            assertThat(updated.visual()).isEqualTo(guidanceVisual("Two boxes side by side"));
+            assertThat(updated.guide()).isEqualTo(guidanceGuide("How to do it"));
+            Practice stored = practiceRepository
+                    .findByWorkspaceIdAndSlug(workspace.getId(), "guidance-edit")
+                    .orElseThrow();
+            assertThat(stored.getVisual()).isEqualTo(guidanceVisual("Two boxes side by side"));
+            assertThat(stored.getGuide()).isEqualTo(guidanceGuide("How to do it"));
+            List<PracticeRevision> revisions = revisionsOf("guidance-edit");
+            assertThat(revisions)
+                    .extracting(PracticeRevision::getRevisionNumber)
+                    .containsExactly(1, 2);
+            assertThat(revisions.get(0).getVisual()).isNull();
+            assertThat(revisions.get(0).getGuide()).isNull();
+            assertThat(revisions.get(1).getVisual()).isEqualTo(guidanceVisual("Two boxes side by side"));
+            assertThat(revisions.get(1).getGuide()).isEqualTo(guidanceGuide("How to do it"));
+            // Guidance is never a review rule, so earlier observations stay current.
+            assertThat(revisions.get(1).getReviewRuleFingerprint())
+                    .isEqualTo(revisions.get(0).getReviewRuleFingerprint());
+        }
+
+        @Test
+        @WithAdminUser
+        void shouldRemoveOnlyTheClearedPartWhenAnAdminClearsTheVisualOrTheGuide() {
+            ensureAdminMembership(workspace);
+            PracticeDTO created = Objects.requireNonNull(create(createWithGuidance(
+                            "guidance-clear", guidanceVisual("Two boxes side by side"), guidanceGuide("How to do it")))
+                    .expectStatus()
+                    .isCreated()
+                    .expectBody(PracticeDTO.class)
+                    .returnResult()
+                    .getResponseBody());
+            assertThat(created.visual()).isEqualTo(guidanceVisual("Two boxes side by side"));
+            assertThat(created.guide()).isEqualTo(guidanceGuide("How to do it"));
+            assertThat(revisionsOf("guidance-clear")).singleElement().satisfies(revision -> {
+                assertThat(revision.getVisual()).isEqualTo(guidanceVisual("Two boxes side by side"));
+                assertThat(revision.getGuide()).isEqualTo(guidanceGuide("How to do it"));
+            });
+
+            clear("guidance-clear", ClearablePracticeField.VISUAL)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.visual")
+                    .doesNotExist()
+                    .jsonPath("$.guide.markdown")
+                    .isEqualTo(guidanceGuide("How to do it").markdown());
+            clear("guidance-clear", ClearablePracticeField.GUIDE)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.guide")
+                    .doesNotExist();
+
+            Practice stored = practiceRepository
+                    .findByWorkspaceIdAndSlug(workspace.getId(), "guidance-clear")
+                    .orElseThrow();
+            assertThat(stored.getVisual()).isNull();
+            assertThat(stored.getGuide()).isNull();
+            List<PracticeRevision> revisions = revisionsOf("guidance-clear");
+            assertThat(revisions)
+                    .extracting(PracticeRevision::getRevisionNumber)
+                    .containsExactly(1, 2, 3);
+            assertThat(revisions.get(1).getVisual()).isNull();
+            assertThat(revisions.get(1).getGuide()).isEqualTo(guidanceGuide("How to do it"));
+            assertThat(revisions.get(2).getGuide()).isNull();
+        }
+
+        static Stream<Arguments> unsafeGuidance() {
+            return Stream.of(
+                    Arguments.argumentSet(
+                            "a script element",
+                            new PracticeVisual(
+                                    "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\">"
+                                            + "<script>alert(1)</script></svg>",
+                                    "A picture"),
+                            null,
+                            "The visual uses <script>. A picture can only draw shapes and text: svg, g, path, rect, "
+                                    + "circle, ellipse, line, polyline, polygon, text, tspan, title, desc."),
+                    Arguments.argumentSet(
+                            "an image from outside the guide",
+                            null,
+                            new PracticeGuide(
+                                    "## How to do it\n\n![A diagram](https://example.com/diagram.png)", Map.of()),
+                            "The guide shows the image “https://example.com/diagram.png”. A guide shows only its own "
+                                    + "figures. Add the picture as a figure, then show it with "
+                                    + "![description](figures/name.svg)."));
+        }
+
+        @ParameterizedTest(name = "{argumentSetName}")
+        @MethodSource("unsafeGuidance")
+        @WithAdminUser
+        void shouldRejectTheGuidanceWithoutWritingWhenItCouldRunCodeOrLoadAnImage(
+                @Nullable PracticeVisual visual, @Nullable PracticeGuide guide, String detail) {
+            ensureAdminMembership(workspace);
+            create(validCreateRequest("unsafe-guidance"))
+                    .expectStatus()
+                    .isCreated()
+                    .expectBody(Void.class);
+
+            ProblemDetail updateProblem = Objects.requireNonNull(patch("unsafe-guidance", guidanceUpdate(visual, guide))
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody(ProblemDetail.class)
+                    .returnResult()
+                    .getResponseBody());
+            ProblemDetail createProblem =
+                    Objects.requireNonNull(create(createWithGuidance("unsafe-created", visual, guide))
+                            .expectStatus()
+                            .isBadRequest()
+                            .expectBody(ProblemDetail.class)
+                            .returnResult()
+                            .getResponseBody());
+
+            assertThat(updateProblem.getDetail()).isEqualTo(detail);
+            assertThat(createProblem.getDetail()).isEqualTo(detail);
+            Practice stored = practiceRepository
+                    .findByWorkspaceIdAndSlug(workspace.getId(), "unsafe-guidance")
+                    .orElseThrow();
+            assertThat(stored.getVisual()).isNull();
+            assertThat(stored.getGuide()).isNull();
+            assertThat(revisionsOf("unsafe-guidance")).hasSize(1);
+            assertThat(practiceRepository.findByWorkspaceIdAndSlug(workspace.getId(), "unsafe-created"))
+                    .isEmpty();
         }
     }
 }

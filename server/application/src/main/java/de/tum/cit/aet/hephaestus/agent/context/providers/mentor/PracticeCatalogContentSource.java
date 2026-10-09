@@ -4,7 +4,10 @@ import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuidanceRules;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -28,9 +31,9 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Materialises {@code inputs/context/practice_catalog.json} for {@link MentorChatRequest}.
  *
- * <p>Lists workspace practices with criteria so the mentor agent can talk about specific
- * coding standards that apply to the user's contributions. Independent of {@code developerId}
- * — every member of a workspace sees the same practice catalog, so the cache key is just
+ * <p>Lists workspace practices with criteria and developer guidance so the mentor agent can talk about specific
+ * coding standards that apply to the user's contributions, in the words the practice panel uses. Independent of
+ * {@code developerId} — every member of a workspace sees the same practice catalog, so the cache key is just
  * the workspace.
  *
  * <p><b>Freshness is TTL-bounded only.</b> The {@code mentor_practice_context} cache has no
@@ -108,6 +111,12 @@ public class PracticeCatalogContentSource implements ContentSource {
             node.put("slug", practice.getSlug());
             node.put("displayName", practice.getName());
             node.put("criteria", practice.getCriteria());
+            node.put("whyItMatters", practice.getWhyItMatters());
+            node.put("whatGoodLooksLike", practice.getWhatGoodLooksLike());
+            PracticeVisual visual = practice.getVisual();
+            node.put("visualDescription", visual == null ? null : visual.alt());
+            PracticeGuide guide = practice.getGuide();
+            node.put("guide", guide == null ? null : PracticeGuidanceRules.describeFigures(guide.markdown()));
         }
         return root;
     }

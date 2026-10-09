@@ -184,6 +184,7 @@ export function PracticeGroupDetailDrawer({
 								nested={level.nested}
 								path={pathAt(level.depth)}
 								practice={detail.practice}
+								guidance={detail.guidance}
 								feed={detail.feed}
 								feedbackCards={feedbackCards}
 								ratingProps={ratingProps}

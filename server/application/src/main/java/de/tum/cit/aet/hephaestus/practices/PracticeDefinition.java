@@ -39,7 +39,9 @@ public record PracticeDefinition(
         @Nullable String whyItMatters,
         @Nullable String whatGoodLooksLike,
         @Nullable String groupSlug,
-        @NonNull PracticeDeliveryBehavior deliveryBehavior)
+        @NonNull PracticeDeliveryBehavior deliveryBehavior,
+        @Nullable PracticeVisual visual,
+        @Nullable PracticeGuide guide)
         implements CatalogDefinition, ClosedPracticeInput {
     public static final int MAX_PRECOMPUTE_SCRIPT_LENGTH = 100_000;
 
@@ -101,7 +103,9 @@ public record PracticeDefinition(
                 whyItMatters,
                 whatGoodLooksLike,
                 groupSlug,
-                PracticeDeliveryBehavior.DEFAULT);
+                PracticeDeliveryBehavior.DEFAULT,
+                null,
+                null);
     }
 
     public static PracticeDefinition from(Practice practice) {
@@ -118,7 +122,9 @@ public record PracticeDefinition(
                 practice.getWhyItMatters(),
                 practice.getWhatGoodLooksLike(),
                 practice.getGroup() == null ? null : practice.getGroup().getSlug(),
-                practice.getDeliveryBehavior());
+                practice.getDeliveryBehavior(),
+                practice.getVisual(),
+                practice.getGuide());
     }
 
     /**
@@ -147,7 +153,9 @@ public record PracticeDefinition(
                 revision.getWhyItMatters(),
                 revision.getWhatGoodLooksLike(),
                 revision.getGroupSlug(),
-                revision.getDeliveryBehavior());
+                revision.getDeliveryBehavior(),
+                revision.getVisual(),
+                revision.getGuide());
     }
 
     /**
@@ -174,7 +182,9 @@ public record PracticeDefinition(
                 whyItMatters,
                 whatGoodLooksLike,
                 groupSlug,
-                deliveryBehavior);
+                deliveryBehavior,
+                visual,
+                guide);
     }
 
     public ArtifactKind artifactKind() {

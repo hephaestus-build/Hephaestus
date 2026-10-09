@@ -3,6 +3,8 @@ import {
 	createContext,
 	Fragment,
 	type HTMLAttributes,
+	type ImgHTMLAttributes,
+	type OlHTMLAttributes,
 	type ReactNode,
 	useContext,
 } from "react";
@@ -56,10 +58,41 @@ function TextRuns({ children }: { children?: ReactNode }): ReactNode {
 	);
 }
 
+/** An image in the Markdown, as {@link UntrustedMarkdownProps.renderImage} receives it. */
+export interface UntrustedMarkdownImage {
+	src: string;
+	alt: string;
+}
+
+const noImage = (): ReactNode => null;
+
+/** Carries {@link UntrustedMarkdownProps.renderImage} to the images; the default draws none. */
+const RenderImageContext = createContext<(image: UntrustedMarkdownImage) => ReactNode>(noImage);
+
+/** No image loads unless the caller draws it, so a remote image cannot report who read the text. */
+function ChosenImage({ src, alt }: ImgHTMLAttributes<HTMLImageElement>): ReactNode {
+	const renderImage = useContext(RenderImageContext);
+	return typeof src === "string" ? renderImage({ src, alt: alt ?? "" }) : null;
+}
+
+/**
+ * Lists without the renderer's `list-inside`, so the prose styles place the marker outside and a
+ * wrapped line lines up with the text rather than under the bullet.
+ */
+function UnorderedList({ children }: HTMLAttributes<HTMLUListElement>) {
+	return <ul>{children}</ul>;
+}
+
+function OrderedList({ children, start }: OlHTMLAttributes<HTMLOListElement>) {
+	return <ol start={start}>{children}</ol>;
+}
+
 const UNTRUSTED_MARKDOWN_COMPONENTS = {
 	a: SafeAnchor,
+	ul: UnorderedList,
+	ol: OrderedList,
 	code: MarkdownCode,
-	img: () => null,
+	img: ChosenImage,
 	h1: DemotedHeading,
 	h2: DemotedHeading,
 	h3: DemotedHeading,
@@ -119,30 +152,35 @@ export interface UntrustedMarkdownProps {
 	 * link. What a backtick or a fence holds never goes through it — code is quoted, not prose.
 	 */
 	renderText?: (value: string) => ReactNode;
+	/**
+	 * Draws an image the caller vouches for, by its source as written; anything it returns `null`
+	 * for draws nothing. Without it no image renders at all.
+	 */
+	renderImage?: (image: UntrustedMarkdownImage) => ReactNode;
 }
 
 /**
- * Markdown a model wrote, rendered with no HTML passthrough, no remote images and no link the
- * renderer has not checked. Shared rather than copied, so the safety decisions are made once: the
- * operator's feedback preview and the developer's own practice pages show the same text, and a
- * hardening applied to one must not be able to miss the other.
+ * Markdown a model wrote, rendered with no HTML passthrough, no image the caller does not draw
+ * itself and no link the renderer has not checked. Shared rather than copied, so the safety
+ * decisions are made once: the operator's feedback preview and the developer's own practice pages
+ * show the same text, and a hardening applied to one must not be able to miss the other.
  *
  * <p>Brings no wrapper of its own. Callers put {@link UNTRUSTED_MARKDOWN_PROSE} on whichever element
  * they already have, so the prose scope cannot end up nested inside itself.
  */
-export function UntrustedMarkdown({ children, renderText }: UntrustedMarkdownProps) {
-	const markdown = (
-		<Streamdown
-			mode="static"
-			rehypePlugins={[]}
-			remarkRehypeOptions={{ allowDangerousHtml: false }}
-			components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
-		>
-			{children}
-		</Streamdown>
+export function UntrustedMarkdown({ children, renderText, renderImage }: UntrustedMarkdownProps) {
+	return (
+		<RenderTextContext.Provider value={renderText ?? plainText}>
+			<RenderImageContext.Provider value={renderImage ?? noImage}>
+				<Streamdown
+					mode="static"
+					rehypePlugins={[]}
+					remarkRehypeOptions={{ allowDangerousHtml: false }}
+					components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
+				>
+					{children}
+				</Streamdown>
+			</RenderImageContext.Provider>
+		</RenderTextContext.Provider>
 	);
-	if (!renderText) {
-		return markdown;
-	}
-	return <RenderTextContext.Provider value={renderText}>{markdown}</RenderTextContext.Provider>;
 }

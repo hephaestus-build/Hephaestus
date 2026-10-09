@@ -11,6 +11,11 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
+import { PracticeGuideMarkdown } from "@/components/practice-guidance/PracticeGuideMarkdown";
+import {
+	type PracticeGuidanceState,
+	PracticeIntro,
+} from "@/components/practice-guidance/PracticeIntro";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import { isSettledStanding } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import { formatStandingBasis } from "@/components/practice-vocabulary/practice-trend-presentation";
@@ -33,14 +38,14 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
 
 import { newestFirst } from "./practice-feedback-cards";
-import { FeedbackEmpty, LabelledBlock, NoDescription } from "./practice-profile-blocks";
-import { PRACTICE_TABS, type PracticeTab } from "./practice-profile-search";
+import { FeedbackEmpty, LabelledBlock } from "./practice-profile-blocks";
+import { DEFAULT_PRACTICE_TAB, PRACTICE_TABS, type PracticeTab } from "./practice-profile-search";
 import { requestedReviewNote } from "./requested-review-note";
 
 const TAB_LABELS: Record<PracticeTab, string> = {
 	observations: "Observations",
 	feedback: "Feedback",
-	about: "About this practice",
+	guide: "Guide",
 };
 
 export interface PracticeDetailLevelProps {
@@ -53,7 +58,15 @@ export interface PracticeDetailLevelProps {
 	onOpenGroup?: () => void;
 	/** The practice, as the standings carry it: the catalog's words and where the reader stands. */
 	practice?: PracticeStanding;
-	/** The tab shown, from the route's `practiceTab` search param. */
+	/**
+	 * The practice's picture and guide, which load on their own after the standing: the picture
+	 * joins the introduction, and a guide adds the Guide tab.
+	 */
+	guidance: PracticeGuidanceState;
+	/**
+	 * The tab asked for, from the route's `practiceTab` search param. Guide on a practice with no
+	 * guide shows the observations.
+	 */
 	tab: PracticeTab;
 	onTabChange?: (tab: PracticeTab) => void;
 	feed?: ReviewRunFeedState;
@@ -88,16 +101,18 @@ function feedbackCardsOf(cards: PracticeFeedbackCardEntry[], practiceSlug: strin
 const NO_CARDS: PracticeFeedbackCardEntry[] = [];
 
 /**
- * One practice as the level over its group, in three tabs: what the reviews of the reader's work
- * found, the feedback written from it, and the catalog's words on why the practice matters. It is
- * the deepest level, so it is the one that carries the observations — the newest open on arrival
- * and every earlier one a press away, each opening and closing on its own.
+ * One practice as the level over its group: the practice's introduction, then its tabs — where the
+ * reader stands and what the reviews of their work found, the feedback written from it, and the
+ * practice guide when the practice has one. It is the deepest level, so it is the one that carries
+ * the observations — the newest open on arrival and every earlier one a press away, each opening
+ * and closing on its own.
  */
 export function PracticeDetailLevel({
 	nested,
 	path,
 	onOpenGroup,
 	practice,
+	guidance,
 	tab,
 	onTabChange,
 	feed = EMPTY_REVIEW_RUN_FEED,
@@ -138,13 +153,17 @@ export function PracticeDetailLevel({
 				: undefined,
 		feedback: feedbackCount,
 	};
-	// A card on its own practice's level: the words about it are the neighbouring tab.
+	const guide = guidance.status === "ready" ? guidance.guide : undefined;
+	// The Guide tab exists only once a guide has arrived; until then, or without one, a link to it
+	// lands on the observations.
+	const tabs = PRACTICE_TABS.filter((candidate) => candidate !== "guide" || guide !== undefined);
+	const shownTab = tabs.includes(tab) ? tab : DEFAULT_PRACTICE_TAB;
+	// No "Learn more" on a card here: the practice's introduction already leads this level.
 	const feedbackCard = (card: PracticeFeedbackCardEntry) => (
 		<PracticeFeedbackCard
 			key={card.feedbackId}
 			card={card}
 			{...ratingProps?.(card.feedbackId)}
-			onLearnMore={onTabChange && (() => onTabChange("about"))}
 			onOpenGroup={onOpenGroup && (() => onOpenGroup())}
 		/>
 	);
@@ -153,10 +172,10 @@ export function PracticeDetailLevel({
 	if (isLoading) {
 		body = (
 			// The tabs and the observations they open on, as they will be laid out.
-			<>
-				<PracticeTabsSkeleton />
+			<div className="flex flex-col gap-4">
+				<PracticeTabsSkeleton tabs={tabs.length} />
 				<ReviewRunFeedSkeleton rows={skeletonRows} />
-			</>
+			</div>
 		);
 	} else if (error != null) {
 		body = (
@@ -173,116 +192,118 @@ export function PracticeDetailLevel({
 	} else if (practice) {
 		const requestedNote = requestedReviewNote(practice, runs);
 		body = (
-			<Tabs
-				value={tab}
-				onValueChange={(next) => {
-					const chosen = PRACTICE_TABS.find((candidate) => candidate === next);
-					if (chosen) {
-						onTabChange?.(chosen);
-					}
-				}}
-				className="gap-4"
-			>
-				<PracticeTabsRail>
-					<PracticeTabsList aria-label="Practice">
-						{PRACTICE_TABS.map((candidate) => (
-							<PracticeTabsTrigger key={candidate} value={candidate} count={counts[candidate]}>
-								{TAB_LABELS[candidate]}
-							</PracticeTabsTrigger>
-						))}
-					</PracticeTabsList>
-				</PracticeTabsRail>
-				<TabsContent value="observations" className="min-w-0">
-					<Section
-						size="lg"
-						title="Observations"
-						description="Reviews of your work that reached this practice, newest first: why each was noted, the evidence, and the next step."
-					>
-						{hasText(requestedNote) && <p className="max-w-2xl text-sm">{requestedNote}</p>}
-						<ReviewRunFeed
-							feed={feed}
-							runs={runs}
-							skeletonRows={skeletonRows}
-							observations={observations}
-							// The rows are this practice's own, so none repeats its name under the summary.
-							showPracticeName={false}
-							// Every row here reviews the same practice, so the newest is the one the reader
-							// came for; the rest are its history and wait for a press.
-							initiallyOpen="newest"
-							emptyTitle="No observations yet"
-							emptyDescription="An observation appears here after a review checks this practice against your work."
-						/>
-					</Section>
-				</TabsContent>
-				<TabsContent value="feedback" className="min-w-0">
-					<Section
-						size="lg"
-						title="Feedback"
-						description="Feedback about patterns in your work: the open card, then the ones that resolved, newest first."
-					>
-						{feedbackCount === 0 ? (
-							<FeedbackEmpty
-								description="Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on a single piece of work stays there. Open its observation to find recorded comment links."
-								action={
-									onTabChange && (
-										<Button variant="outline" size="sm" onClick={() => onTabChange("observations")}>
-											Show observations
-										</Button>
-									)
+			<>
+				<PracticeIntro practice={practice} guidance={guidance} />
+				<Tabs
+					value={shownTab}
+					onValueChange={(next) => {
+						const chosen = tabs.find((candidate) => candidate === next);
+						if (chosen) {
+							onTabChange?.(chosen);
+						}
+					}}
+					className="gap-4"
+				>
+					<PracticeTabsRail>
+						<PracticeTabsList aria-label="Practice">
+							{tabs.map((candidate) => (
+								<PracticeTabsTrigger key={candidate} value={candidate} count={counts[candidate]}>
+									{TAB_LABELS[candidate]}
+								</PracticeTabsTrigger>
+							))}
+						</PracticeTabsList>
+					</PracticeTabsRail>
+					<TabsContent value="observations" className="min-w-0">
+						<div className="flex flex-col gap-6">
+							<WhereYouStand
+								standing={practice.standing}
+								// A standing no review has settled rests on nothing: no work is named under it.
+								basis={
+									isSettledStanding(practice.standing) && practice.trendSupport
+										? formatStandingBasis(practice.trendSupport)
+										: undefined
 								}
+								direction={practice.direction}
+								support={practice.trendSupport}
+								scope="practice"
 							/>
-						) : (
-							<div className="flex flex-col gap-6">
-								{feedback.open && (
-									<LabelledBlock label="Current feedback" as="h3" className="flex flex-col gap-2.5">
-										{feedbackCard(feedback.open)}
-									</LabelledBlock>
-								)}
-								{feedback.resolved.length > 0 && (
-									<LabelledBlock
-										label="Resolved feedback"
-										as="h3"
-										className="flex flex-col gap-2.5"
-									>
-										{feedback.resolved.map(feedbackCard)}
-									</LabelledBlock>
-								)}
-							</div>
-						)}
-					</Section>
-				</TabsContent>
-				<TabsContent value="about" className="min-w-0">
-					<div className="flex flex-col gap-6">
-						<WhereYouStand
-							standing={practice.standing}
-							// A standing no review has settled rests on nothing: no work is named under it.
-							basis={
-								isSettledStanding(practice.standing) && practice.trendSupport
-									? formatStandingBasis(practice.trendSupport)
-									: undefined
-							}
-							direction={practice.direction}
-							support={practice.trendSupport}
-							scope="practice"
-						/>
-						{hasText(practice.whyItMatters) && (
-							<LabelledBlock label="Why it matters" className="flex flex-col gap-1.5">
-								<p className="max-w-2xl text-sm">{practice.whyItMatters}</p>
-							</LabelledBlock>
-						)}
-						{hasText(practice.whatGoodLooksLike) && (
-							<LabelledBlock label="What good looks like" className="flex flex-col gap-1.5">
-								<p className="max-w-2xl text-sm">{practice.whatGoodLooksLike}</p>
-							</LabelledBlock>
-						)}
-						{!hasText(practice.whyItMatters) && !hasText(practice.whatGoodLooksLike) && (
-							<LabelledBlock label="About this practice" className="flex flex-col gap-1.5">
-								<NoDescription />
-							</LabelledBlock>
-						)}
-					</div>
-				</TabsContent>
-			</Tabs>
+							<Section
+								size="lg"
+								title="Observations"
+								description="Reviews of your work that reached this practice, newest first: why each was noted, the evidence, and the next step."
+							>
+								{hasText(requestedNote) && <p className="max-w-2xl text-sm">{requestedNote}</p>}
+								<ReviewRunFeed
+									feed={feed}
+									runs={runs}
+									skeletonRows={skeletonRows}
+									observations={observations}
+									// The rows are this practice's own, so none repeats its name under the summary.
+									showPracticeName={false}
+									// Every row here reviews the same practice, so the newest is the one the reader
+									// came for; the rest are its history and wait for a press.
+									initiallyOpen="newest"
+									emptyTitle="No observations yet"
+									emptyDescription="An observation appears here after a review checks this practice against your work."
+								/>
+							</Section>
+						</div>
+					</TabsContent>
+					<TabsContent value="feedback" className="min-w-0">
+						<Section
+							size="lg"
+							title="Feedback"
+							description="Feedback about patterns in your work: the open card, then the ones that resolved, newest first."
+						>
+							{feedbackCount === 0 ? (
+								<FeedbackEmpty
+									description="Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on a single piece of work stays there. Open its observation to find recorded comment links."
+									action={
+										onTabChange && (
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => onTabChange("observations")}
+											>
+												Show observations
+											</Button>
+										)
+									}
+								/>
+							) : (
+								<div className="flex flex-col gap-6">
+									{feedback.open && (
+										<LabelledBlock
+											label="Current feedback"
+											as="h3"
+											className="flex flex-col gap-2.5"
+										>
+											{feedbackCard(feedback.open)}
+										</LabelledBlock>
+									)}
+									{feedback.resolved.length > 0 && (
+										<LabelledBlock
+											label="Resolved feedback"
+											as="h3"
+											className="flex flex-col gap-2.5"
+										>
+											{feedback.resolved.map(feedbackCard)}
+										</LabelledBlock>
+									)}
+								</div>
+							)}
+						</Section>
+					</TabsContent>
+					{guide && (
+						<TabsContent value="guide" className="min-w-0">
+							{/* `h3`: the guide's own headings are `h4`, and the outline may not skip a level. */}
+							<Section size="lg" level={3} title="Practice guide">
+								<PracticeGuideMarkdown guide={guide} />
+							</Section>
+						</TabsContent>
+					)}
+				</Tabs>
+			</>
 		);
 	} else {
 		body = (
@@ -317,7 +338,7 @@ export function PracticeDetailLevel({
 					)
 				}
 			/>
-			<DrawerBody className="flex flex-col gap-4 pt-2">{body}</DrawerBody>
+			<DrawerBody className="flex flex-col gap-6 pt-2">{body}</DrawerBody>
 		</>
 	);
 }

@@ -142,6 +142,17 @@ await test("selects the Chrome extension, and the webapp inputs it imports", () 
 const asPattern = (glob: string) =>
 	new RegExp(`^${glob.replaceAll(".", String.raw`\.`).replaceAll("**", ".*")}$`, "u");
 
+/** The globs of one path filter in `cicd.yml`, without its comment lines. */
+async function filterGlobs(name: string): Promise<string[]> {
+	const workflow = await readFile(".github/workflows/cicd.yml", "utf8");
+	const filter = new RegExp(
+		`^ {12}${name}:\\n(?<entries>(?: {14}(?:- '[^']+'|#[^\\n]*)\\n)+)`,
+		"mu",
+	).exec(workflow)?.groups?.entries;
+	assert.ok(filter !== undefined, `cicd.yml has a ${name} filter`);
+	return [...filter.matchAll(/- '(?<glob>[^']+)'/gu)].map(({ groups }) => groups?.glob ?? "");
+}
+
 await test("the CI extension filters select every webapp input the extension imports", async () => {
 	const workflow = await readFile(".github/workflows/cicd.yml", "utf8");
 	const inputs = [
@@ -180,6 +191,22 @@ await test("the CI extension filters select every webapp input the extension imp
 	}
 });
 
+/** Server files that the webapp's tsconfig aliases, with `*` standing for any file name. */
+const serverAliasesOfTheWebapp = Object.values(
+	asRecord(
+		at(
+			parse(readFileSync(path.join(repository, "webapp/tsconfig.json"), "utf8")),
+			["compilerOptions", "paths"],
+			"webapp/tsconfig.json",
+		),
+		"webapp/tsconfig.json compilerOptions.paths",
+	),
+)
+	.flatMap((targets) => asArray(targets, "webapp/tsconfig.json paths"))
+	.map((target) => asString(target, "webapp/tsconfig.json path"))
+	.filter((target) => target.startsWith("../server/"))
+	.map((target) => target.slice("../".length).replace("*", "a/b.svg"));
+
 /** Server files the webapp's tests read, with a template variable standing for any file name. */
 const serverInputsOfTheWebapp = readdirSync(path.join(repository, "webapp/src"), {
 	recursive: true,
@@ -194,17 +221,12 @@ const serverInputsOfTheWebapp = readdirSync(path.join(repository, "webapp/src"),
 		].map(({ groups }) => (groups?.target ?? "").replaceAll(/\$\{[^}]+\}/gu, "1.0.0")),
 	);
 
-await test("selects the webapp for the server resources its tests read", async () => {
+await test("selects the webapp for the server resources its tests and stories read", async () => {
 	assert.ok(serverInputsOfTheWebapp.length > 0, "the webapp's tests read server resources");
-	const workflow = await readFile(".github/workflows/cicd.yml", "utf8");
-	const filter = /^ {12}webapp:\n(?<entries>(?: {14}(?:- '[^']+'|#[^\n]*)\n)+)/mu.exec(workflow)
-		?.groups?.entries;
-	assert.ok(filter !== undefined, "cicd.yml has a webapp filter");
-	const globs = [...filter.matchAll(/- '(?<glob>[^']+)'/gu)].map(
-		({ groups }) => groups?.glob ?? "",
-	);
-	for (const file of serverInputsOfTheWebapp) {
-		assert.deepEqual(scopesFor([file]), ["server", "webapp"], file);
+	const globs = await filterGlobs("webapp");
+	for (const file of [...serverInputsOfTheWebapp, ...serverAliasesOfTheWebapp]) {
+		const scopes = scopesFor([file]);
+		assert.ok(scopes.includes("server") && scopes.includes("webapp"), file);
 		assert.ok(
 			globs.some((glob) => asPattern(glob).test(file)),
 			`the webapp filter must select ${file}`,
@@ -227,6 +249,22 @@ await test("selects the Node runtime and precompute trees", () => {
 		]),
 		["agents"],
 	);
+});
+
+await test("selects the tooling tests for the bundled catalog and guidance they judge", async () => {
+	const globs = await filterGlobs("tooling");
+	const practices = "server/application/src/main/resources/practices/";
+	for (const [file, scopes] of [
+		[`${practices}guidance/a-practice/figures/a.svg`, ["agents", "server", "webapp"]],
+		[`${practices}default-catalog.schema.json`, ["agents", "server"]],
+		[`${practices}default-catalog.json`, ["agents", "server", "webapp"]],
+	] as const) {
+		assert.deepEqual(scopesFor([file]), scopes, file);
+		assert.ok(
+			globs.some((glob) => asPattern(glob).test(file)),
+			`the tooling filter must select ${file}`,
+		);
+	}
 });
 
 await test("selects documentation changes", () => {

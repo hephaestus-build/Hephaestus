@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 256">
+  <rect class="pv-fill-accent-soft" x="0" y="32" width="640" height="130" rx="10"/>
+  <line class="pv-stroke-accent" x1="0" y1="162" x2="640" y2="162" stroke-width="2" stroke-dasharray="6 5"/>
+  <text class="pv-fill-ink" x="0" y="20" font-size="16" font-weight="600">One large change</text>
+  <text class="pv-fill-ink" x="400" y="20" font-size="16" font-weight="600">Same work, split</text>
+  <g>
+    <rect class="pv-fill-accent" x="12" y="40" width="120" height="11" rx="3"/>
+    <rect class="pv-fill-accent" x="12" y="55" width="96" height="11" rx="3"/>
+    <rect class="pv-fill-muted" x="12" y="70" width="132" height="11" rx="3"/>
+    <rect class="pv-fill-surface pv-stroke-ink" x="12" y="85" width="84" height="11" rx="3" stroke-width="1.5"/>
+    <rect class="pv-fill-accent" x="12" y="100" width="112" height="11" rx="3"/>
+    <rect class="pv-fill-muted" x="12" y="115" width="140" height="11" rx="3"/>
+    <rect class="pv-fill-muted" x="12" y="130" width="72" height="11" rx="3"/>
+    <rect class="pv-fill-surface pv-stroke-ink" x="12" y="145" width="104" height="11" rx="3" stroke-width="1.5"/>
+    <rect class="pv-fill-accent" x="12" y="160" width="128" height="11" rx="3" opacity="0.4"/>
+    <rect class="pv-fill-surface pv-stroke-ink" x="12" y="175" width="88" height="11" rx="3" stroke-width="1.5" opacity="0.4"/>
+    <rect class="pv-fill-muted" x="12" y="190" width="116" height="11" rx="3" opacity="0.4"/>
+    <rect class="pv-fill-accent" x="12" y="205" width="76" height="11" rx="3" opacity="0.4"/>
+    <rect class="pv-fill-surface pv-stroke-ink" x="12" y="220" width="136" height="11" rx="3" stroke-width="1.5" opacity="0.4"/>
+    <rect class="pv-fill-accent" x="12" y="235" width="100" height="11" rx="3" opacity="0.4"/>
+  </g>
+  <path class="pv-stroke-accent" d="M168 38v118M162 38h6M162 156h6" fill="none" stroke-width="2"/>
+  <text class="pv-fill-ink" x="180" y="102" font-size="15" font-weight="600">Read carefully</text>
+  <path class="pv-stroke-muted" d="M168 168v82M162 168h6M162 250h6" fill="none" stroke-width="2"/>
+  <text class="pv-fill-muted" x="180" y="214" font-size="15">Skimmed</text>
+  <g>
+    <rect class="pv-fill-accent" x="400" y="40" width="60" height="11" rx="3"/>
+    <rect class="pv-fill-accent" x="400" y="55" width="48" height="11" rx="3"/>
+    <rect class="pv-fill-accent" x="400" y="70" width="56" height="11" rx="3"/>
+    <rect class="pv-fill-accent" x="400" y="85" width="40" height="11" rx="3"/>
+    <rect class="pv-fill-accent" x="400" y="100" width="60" height="11" rx="3"/>
+    <rect class="pv-fill-accent" x="400" y="115" width="52" height="11" rx="3"/>
+    <rect class="pv-fill-muted" x="484" y="40" width="56" height="11" rx="3"/>
+    <rect class="pv-fill-muted" x="484" y="55" width="44" height="11" rx="3"/>
+    <rect class="pv-fill-muted" x="484" y="70" width="60" height="11" rx="3"/>
+    <rect class="pv-fill-muted" x="484" y="85" width="36" height="11" rx="3"/>
+    <rect class="pv-fill-surface pv-stroke-ink" x="568" y="40" width="52" height="11" rx="3" stroke-width="1.5"/>
+    <rect class="pv-fill-surface pv-stroke-ink" x="568" y="55" width="48" height="11" rx="3" stroke-width="1.5"/>
+    <rect class="pv-fill-surface pv-stroke-ink" x="568" y="70" width="40" height="11" rx="3" stroke-width="1.5"/>
+    <rect class="pv-fill-surface pv-stroke-ink" x="568" y="85" width="52" height="11" rx="3" stroke-width="1.5"/>
+  </g>
+</svg>

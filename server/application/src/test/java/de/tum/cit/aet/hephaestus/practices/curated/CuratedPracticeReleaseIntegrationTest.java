@@ -155,7 +155,9 @@ class CuratedPracticeReleaseIntegrationTest extends BaseIntegrationTest {
                 source.whyItMatters(),
                 source.whatGoodLooksLike(),
                 source.groupSlug(),
-                source.deliveryBehavior());
+                source.deliveryBehavior(),
+                source.visual(),
+                source.guide());
     }
 
     private static EntityTagPrecondition match(PracticeReleaseProposalDTO proposal) {

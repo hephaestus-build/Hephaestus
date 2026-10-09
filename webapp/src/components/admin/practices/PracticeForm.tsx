@@ -69,6 +69,8 @@ function asDefinitionValue(practice: Practice): PracticeDefinitionValue {
 		...(hasText(practice.whatGoodLooksLike)
 			? { whatGoodLooksLike: practice.whatGoodLooksLike }
 			: {}),
+		...(practice.visual ? { visual: practice.visual } : {}),
+		...(practice.guide ? { guide: practice.guide } : {}),
 		...(hasText(practice.precomputeScript) ? { precomputeScript: practice.precomputeScript } : {}),
 		automatedReviewPolicy: practice.automatedReviewPolicy,
 		deliveryBehavior: practice.deliveryBehavior,
@@ -98,6 +100,12 @@ export function PracticeForm(props: PracticeFormProps) {
 		if (!hasText(definition.whatGoodLooksLike)) {
 			clear.push("WHAT_GOOD_LOOKS_LIKE");
 		}
+		if (!definition.visual) {
+			clear.push("VISUAL");
+		}
+		if (!definition.guide) {
+			clear.push("GUIDE");
+		}
 		return props.onSubmit(
 			props.initialData.slug,
 			{
@@ -112,6 +120,8 @@ export function PracticeForm(props: PracticeFormProps) {
 					definitionChanges && definitionChanges.length > 0 ? definitionChanges : undefined,
 				whyItMatters: definition.whyItMatters,
 				whatGoodLooksLike: definition.whatGoodLooksLike,
+				visual: definition.visual,
+				guide: definition.guide,
 				precomputeScript: definition.precomputeScript,
 				automatedReviewPolicy: definition.automatedReviewPolicy,
 				deliveryBehavior: definition.deliveryBehavior,

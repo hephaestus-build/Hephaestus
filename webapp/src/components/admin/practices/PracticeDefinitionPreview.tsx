@@ -3,7 +3,9 @@ import type { CuratedPracticeDefinition, PracticeDefinitionOptions } from "@/api
 import { deliveryBehaviorSentences } from "@/components/admin/practice-editor/delivery-behavior-text";
 import { PracticeEvidenceSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
-import { Section } from "@/components/layout/Section";
+import { PracticeGuideMarkdown } from "@/components/practice-guidance/PracticeGuideMarkdown";
+import { PracticeIntro } from "@/components/practice-guidance/PracticeIntro";
+import { LabelledBlock } from "@/components/practice-profile/practice-profile-blocks";
 import {
 	Accordion,
 	AccordionContent,
@@ -20,7 +22,9 @@ export interface PracticeDefinitionPreviewProps {
 }
 
 /**
- * The practice first, the rule last. `criteria` addresses the *model* in the second person and runs to
+ * The practice first, the rule last. The practice is what developers read: its introduction exactly
+ * as their practice level draws it, then the guide in full, since an admin adopting a practice is
+ * deciding on that text too. `criteria` addresses the *model* in the second person and runs to
  * thousands of characters once the server composes its kind-of-work preamble in, so leading with it
  * buries `whyItMatters` — the field that answers "do we want this practice". It stays reachable behind
  * a disclosure, next to the precompute script, because adopting an automated critic without being
@@ -34,16 +38,16 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 
 	return (
 		<div className="space-y-6">
-			{hasText(definition.whyItMatters) && (
-				<p className="max-w-2xl text-lg leading-relaxed text-pretty">{definition.whyItMatters}</p>
-			)}
+			<PracticeIntro
+				practice={definition}
+				guidance={{ status: "ready", visual: definition.visual }}
+			/>
 
-			{hasText(definition.whatGoodLooksLike) && (
-				<Section size="sm" level={3} title="What good looks like">
-					<p className="max-w-2xl text-pretty text-muted-foreground">
-						{definition.whatGoodLooksLike}
-					</p>
-				</Section>
+			{definition.guide && (
+				// `h3`: the guide's own headings are `h4`, and the outline may not skip a level.
+				<LabelledBlock label="Guide" as="h3" className="flex flex-col gap-3">
+					<PracticeGuideMarkdown guide={definition.guide} />
+				</LabelledBlock>
 			)}
 
 			<Separator />

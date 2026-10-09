@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1791488096611-1" author="hephaestus">
+        <addColumn tableName="curated_practice_override">
+            <column name="guide" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791488096611-2" author="hephaestus">
+        <addColumn tableName="practice">
+            <column name="guide" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791488096611-3" author="hephaestus">
+        <addColumn tableName="practice_revision">
+            <column name="guide" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791488096611-4" author="hephaestus">
+        <addColumn tableName="curated_practice_override">
+            <column name="visual" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791488096611-5" author="hephaestus">
+        <addColumn tableName="practice">
+            <column name="visual" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791488096611-6" author="hephaestus">
+        <addColumn tableName="practice_revision">
+            <column name="visual" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791488096611-7" author="hephaestus">
+        <comment>A practice's current revision also records its visual and guide, so the projection check compares them.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.enforce_practice_current_revision_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM practice practice
+                JOIN practice_revision revision
+                  ON revision.id = practice.current_revision_id
+                 AND revision.practice_id = practice.id
+                LEFT JOIN practice_group practice_group
+                  ON practice_group.id = practice.practice_group_id
+                WHERE practice.id = NEW.id
+                  AND revision.slug = practice.slug
+                  AND revision.name = practice.name
+                  AND revision.applies_to = practice.applies_to
+                  AND revision.signals = practice.signals
+                  AND revision.evidence_requirements = practice.evidence_requirements
+                  AND revision.review_when = practice.review_when
+                  AND revision.subject = practice.subject
+                  AND revision.precondition IS NOT DISTINCT FROM practice.precondition
+                  AND revision.criteria = practice.criteria
+                  AND revision.precompute_script IS NOT DISTINCT FROM practice.precompute_script
+                  AND revision.automated_review_policy = practice.automated_review_policy
+                  AND revision.delivery_behavior = practice.delivery_behavior
+                  AND revision.why_it_matters IS NOT DISTINCT FROM practice.why_it_matters
+                  AND revision.what_good_looks_like IS NOT DISTINCT FROM practice.what_good_looks_like
+                  AND revision.visual IS NOT DISTINCT FROM practice.visual
+                  AND revision.guide IS NOT DISTINCT FROM practice.guide
+                  AND revision.group_slug IS NOT DISTINCT FROM practice_group.slug
+            ) THEN
+                RAISE EXCEPTION 'practice current revision does not match its current projection'
+                    USING ERRCODE = '23514';
+            END IF;
+            RETURN NULL;
+        END;
+        $$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.enforce_practice_current_revision_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM practice practice
+                JOIN practice_revision revision
+                  ON revision.id = practice.current_revision_id
+                 AND revision.practice_id = practice.id
+                LEFT JOIN practice_group practice_group
+                  ON practice_group.id = practice.practice_group_id
+                WHERE practice.id = NEW.id
+                  AND revision.slug = practice.slug
+                  AND revision.name = practice.name
+                  AND revision.applies_to = practice.applies_to
+                  AND revision.signals = practice.signals
+                  AND revision.evidence_requirements = practice.evidence_requirements
+                  AND revision.review_when = practice.review_when
+                  AND revision.subject = practice.subject
+                  AND revision.precondition IS NOT DISTINCT FROM practice.precondition
+                  AND revision.criteria = practice.criteria
+                  AND revision.precompute_script IS NOT DISTINCT FROM practice.precompute_script
+                  AND revision.automated_review_policy = practice.automated_review_policy
+                  AND revision.delivery_behavior = practice.delivery_behavior
+                  AND revision.why_it_matters IS NOT DISTINCT FROM practice.why_it_matters
+                  AND revision.what_good_looks_like IS NOT DISTINCT FROM practice.what_good_looks_like
+                  AND revision.group_slug IS NOT DISTINCT FROM practice_group.slug
+            ) THEN
+                RAISE EXCEPTION 'practice current revision does not match its current projection'
+                    USING ERRCODE = '23514';
+            END IF;
+            RETURN NULL;
+        END;
+        $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1791488096611-8" author="hephaestus">
+        <comment>A change to the visual or the guide alone also runs the projection check.</comment>
+        <sql><![CDATA[
+DROP TRIGGER practice_requires_current_revision_projection ON practice;
+CREATE CONSTRAINT TRIGGER practice_requires_current_revision_projection
+    AFTER INSERT OR UPDATE OF current_revision_id, slug, name, applies_to, signals, evidence_requirements, review_when,
+        subject, precondition, criteria, precompute_script, automated_review_policy, delivery_behavior, why_it_matters,
+        what_good_looks_like, visual, guide, practice_group_id ON practice
+    DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_practice_current_revision_projection();
+        ]]></sql>
+        <rollback>
+            <sql><![CDATA[
+DROP TRIGGER practice_requires_current_revision_projection ON practice;
+CREATE CONSTRAINT TRIGGER practice_requires_current_revision_projection
+    AFTER INSERT OR UPDATE OF current_revision_id, slug, name, applies_to, signals, evidence_requirements, review_when,
+        subject, precondition, criteria, precompute_script, automated_review_policy, delivery_behavior, why_it_matters,
+        what_good_looks_like, practice_group_id ON practice
+    DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_practice_current_revision_projection();
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

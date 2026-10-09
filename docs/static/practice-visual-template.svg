@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320">
+  <!-- Starter template for a Hephaestus practice visual: a contrast of "Not yet" and "Good". -->
+  <!-- Color every shape with a pv-* class. Keep text at font-size 15 or more. Replace every placeholder label. -->
+
+  <!-- Left: work that does not meet the practice yet. -->
+  <text class="pv-fill-muted" x="1" y="18" font-size="15" font-weight="600">Not yet</text>
+  <text class="pv-fill-ink" x="1" y="46" font-size="16" font-weight="600">Short title of the lapse</text>
+  <rect class="pv-fill-surface pv-stroke-line" x="1" y="62" width="300" height="256" rx="12" stroke-width="1.5"/>
+  <rect class="pv-fill-accent" x="17" y="82" width="132" height="10" rx="3"/>
+  <rect class="pv-fill-muted" x="17" y="96" width="100" height="10" rx="3"/>
+  <rect class="pv-fill-surface pv-stroke-ink" x="17" y="110" width="156" height="10" rx="3" stroke-width="1.5"/>
+  <rect class="pv-fill-accent" x="17" y="124" width="88" height="10" rx="3"/>
+  <rect class="pv-fill-muted" x="17" y="138" width="144" height="10" rx="3"/>
+  <rect class="pv-fill-surface pv-stroke-ink" x="17" y="152" width="116" height="10" rx="3" stroke-width="1.5"/>
+  <rect class="pv-fill-accent" x="17" y="166" width="124" height="10" rx="3" opacity="0.4"/>
+  <rect class="pv-fill-muted" x="17" y="180" width="96" height="10" rx="3" opacity="0.4"/>
+  <!-- A dashed line marks a limit. Delete it if the practice has no limit. -->
+  <line class="pv-stroke-accent" x1="17" y1="202" x2="285" y2="202" stroke-width="2" stroke-dasharray="6 5"/>
+  <text class="pv-fill-muted" x="17" y="286" font-size="15">What goes wrong</text>
+
+  <!-- Arrow: a line path and a filled triangle path. Markers need ids, which a visual cannot use. -->
+  <path class="pv-stroke-accent" d="M308 182h14" fill="none" stroke-width="2" stroke-linecap="round"/>
+  <path class="pv-fill-accent" d="M330 182l-8-5v10z"/>
+
+  <!-- Right: the same work when it meets the practice. -->
+  <text class="pv-fill-accent" x="339" y="18" font-size="15" font-weight="600">Good</text>
+  <text class="pv-fill-ink" x="339" y="46" font-size="16" font-weight="600">Short title of the fix</text>
+  <rect class="pv-fill-accent-soft" x="339" y="62" width="300" height="256" rx="12"/>
+  <rect class="pv-fill-accent" x="355" y="82" width="132" height="10" rx="3"/>
+  <rect class="pv-fill-accent" x="355" y="96" width="100" height="10" rx="3"/>
+  <rect class="pv-fill-accent" x="355" y="110" width="116" height="10" rx="3"/>
+  <rect class="pv-fill-accent" x="355" y="124" width="88" height="10" rx="3"/>
+  <text class="pv-fill-ink" x="355" y="286" font-size="15">What the reader gains</text>
+</svg>

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent } from "storybook/test";
+import { expect, userEvent, within } from "storybook/test";
 
 import type { CuratedPracticeDefinition } from "@/api/types.gen";
 import {
@@ -9,6 +9,7 @@ import {
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { realPracticeDefinition } from "@/mocks/fixtures/practice-catalog";
+import { bundledGuidance, bundledPractice } from "@/stories/practice-guidance-story-mock-data";
 import { expectNoOverflowingElement } from "@/stories/reflow";
 import { precedes } from "@/test/dom";
 
@@ -167,5 +168,39 @@ export const NarrowViewport: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvasElement }) => {
 		await expectNoOverflowingElement(canvasElement);
+	},
+};
+
+/**
+ * With a visual, what good looks like captions the picture instead of standing under a heading,
+ * exactly as the developer's practice level shows it. The guide follows in full under its label, so
+ * the admin reads all that developers will.
+ */
+export const WithVisualAndGuide: Story = {
+	args: {
+		definition: {
+			...definition,
+			...bundledPractice,
+			visual: bundledGuidance.visual,
+			guide: bundledGuidance.guide,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("figure", { name: bundledPractice.whatGoodLooksLike }),
+		).toBeVisible();
+		await expect(canvas.queryByRole("heading", { name: "What good looks like" })).toBeNull();
+		const guide = canvas.getByRole("region", { name: "Guide" });
+		await expect(
+			within(guide).getByRole("heading", { level: 4, name: "How to do it" }),
+		).toBeVisible();
+		await expect(
+			within(guide).getByRole("img", { name: /^Three changes in order: first a refactor/u }),
+		).toBeVisible();
+		// The guide comes before the review details, which stay behind their disclosures.
+		await expect(
+			precedes(guide, canvas.getByRole("button", { name: "Review scope and evidence" })),
+		).toBe(true);
+		await expect(canvas.queryByRole("button", { name: "Read more" })).not.toBeInTheDocument();
 	},
 };

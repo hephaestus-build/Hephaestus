@@ -15,12 +15,14 @@ import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CreateCuratedGroupRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CreateCuratedPracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CuratedCatalogDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CuratedGroupDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CuratedGroupRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CuratedPracticeDTO;
+import de.tum.cit.aet.hephaestus.practices.curated.dto.CuratedPracticeDefinitionDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CuratedPracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CuratedPracticeSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.UpdateCuratedStatusRequestDTO;
@@ -172,7 +174,9 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 before.definition().whyItMatters(),
                 before.definition().whatGoodLooksLike(),
                 before.definition().groupSlug(),
-                before.definition().deliveryBehavior());
+                before.definition().deliveryBehavior(),
+                before.definition().visual(),
+                before.definition().guide());
         PracticePrecondition gate = new PracticePrecondition(
                 "the change has no Swift code",
                 List.of(PracticePreconditionClause.changedPathMatches(List.of("**/*.swift"))));
@@ -189,7 +193,9 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 base.whyItMatters(),
                 base.whatGoodLooksLike(),
                 base.groupSlug(),
-                base.deliveryBehavior());
+                base.deliveryBehavior(),
+                base.visual(),
+                base.guide());
         CuratedPracticeDTO saved = putDefinition(
                         etagOf(before),
                         requestWithDefinition(
@@ -354,7 +360,9 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                         shipped.whatGoodLooksLike(),
                         shipped.groupSlug(),
                         Set.of(DefinitionChange.PRECONDITION, DefinitionChange.SUBJECT),
-                        shipped.deliveryBehavior()))
+                        shipped.deliveryBehavior(),
+                        shipped.visual(),
+                        shipped.guide()))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -1144,6 +1152,83 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                         Long.class,
                         PRACTICE))
                 .isEqualTo(2);
+    }
+
+    @Test
+    void shouldShowTheInstanceVisualUntilTheDefaultIsRestoredWhenAnAdminCustomizesABundledVisual() {
+        String slug = "scope-one-reviewable-change";
+        CuratedPracticeDTO before = getPractice(slug);
+        PracticeVisual bundled = required(before.definition().visual());
+        var custom = new PracticeVisual(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 32\">"
+                        + "<rect class=\"pv-fill-accent\" x=\"0\" y=\"0\" width=\"64\" height=\"32\"/></svg>",
+                "One wide box for one focused change.");
+        CuratedPracticeDefinitionDTO definition = before.definition();
+        var body = new CuratedPracticeRequestDTO(
+                definition.name(),
+                definition.signals(),
+                definition.evidenceRequirements(),
+                definition.reviewWhen(),
+                definition.subject(),
+                definition.precondition(),
+                definition.criteria(),
+                definition.precomputeScript(),
+                definition.automatedReviewPolicy(),
+                definition.whyItMatters(),
+                definition.whatGoodLooksLike(),
+                definition.groupSlug(),
+                null,
+                definition.deliveryBehavior(),
+                custom,
+                definition.guide());
+
+        CuratedPracticeDTO customized = required(webTestClient
+                .put()
+                .uri(CATALOG + "/practices/" + slug)
+                .headers(headers -> {
+                    headers.setBearerAuth(ADMIN_TOKEN);
+                    headers.set(HttpHeaders.IF_MATCH, tag(CATALOG + "/practices/" + slug));
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(CuratedPracticeDTO.class)
+                .returnResult()
+                .getResponseBody());
+
+        assertThat(customized.definition().visual()).isEqualTo(custom);
+        assertThat(customized.definition().guide()).isEqualTo(definition.guide());
+        assertThat(required(customized.shipped()).visual()).isEqualTo(bundled);
+        assertThat(customized.status().state()).isEqualTo(CatalogEntryState.EDITED_HERE);
+        // A picture is guidance, so the edit changes what people read and never what Hephaestus reviews.
+        assertThat(customized.status().changeKind()).isEqualTo(CatalogChangeKind.WORDING);
+        assertThat(getPractice(slug).definition().visual()).isEqualTo(custom);
+        assertThat(auditValues("CURATED_PRACTICE", slug))
+                .first()
+                .satisfies(value -> assertThat(value)
+                        .contains("visualSha256", "guideSha256")
+                        .doesNotContain("<svg"));
+
+        webTestClient
+                .delete()
+                .uri(CATALOG + "/practices/" + slug + "/override")
+                .headers(headers -> {
+                    headers.setBearerAuth(ADMIN_TOKEN);
+                    headers.set(HttpHeaders.IF_MATCH, tag(CATALOG + "/practices/" + slug));
+                })
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.status.state")
+                .isEqualTo("FROM_HEPHAESTUS")
+                .jsonPath("$.definition.visual.alt")
+                .isEqualTo(bundled.alt());
+
+        assertThat(getPractice(slug).definition().visual()).isEqualTo(bundled);
+        assertThat(overrideRows()).isZero();
     }
 
     private WebTestClient.ResponseSpec putDefinition(String ifMatch, CuratedPracticeRequestDTO request) {

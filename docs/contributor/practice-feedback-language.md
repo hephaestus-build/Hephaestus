@@ -21,6 +21,7 @@ When the two disagree, that is a bug in one of them, not a choice for the writer
 Within a surface already titled **Practice reviews**, shorten **practice feedback** to **feedback**.
 Use the full term when the surrounding context does not establish which kind of feedback is meant.
 Within **Practice setup** or **Practice catalog**, shorten **practice group** to **group**.
+In the practice editor, shorten **practice visual** to **Visual** and **practice guide** to **Guide**.
 
 **Practice group is the canonical noun at every layer.** Use `PracticeGroup`, `groupSlug`, and `/practice-groups` in Java and HTTP contracts as well as **practice group** in product copy.
 *Practice area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not internal synonyms.
@@ -66,6 +67,9 @@ Within **Practice setup** or **Practice catalog**, shorten **practice group** to
 | **Workspace practices**             | Independent definitions used for reviews in one workspace                                                                                                  | workspace catalog                                                    |
 | **Review rules**                    | Inputs and criteria that determine review behavior                                                                                                         | detector configuration                                               |
 | **Developer guidance**              | Explanatory text that does not change review behavior                                                                                                      | learner guidance                                                     |
+| **Practice visual**                 | The optional picture that introduces a practice on its panel, with a description of what it shows and means. It is developer guidance | illustration, hero image, diagram, explainer |
+| **Practice guide**                  | The optional longer explanation of a practice in the **Guide** tab of its panel: Markdown with figures. It is developer guidance | article, explainer, lesson, documentation |
+| **Figure**                          | One picture in a practice guide, with a description in the guide text | illustration, image, embedded image |
 | **Customize**                       | Change a default or catalog-based definition                                                                                                               | override                                                             |
 | **Include / exclude**               | Whether an instance entry is available for workspaces to adopt                                                                                                    | offer, retire                                                        |
 | **No Hephaestus default**           | An instance-maintained entry with no bundled definition                                                                                                    | ours, yours                                                          |

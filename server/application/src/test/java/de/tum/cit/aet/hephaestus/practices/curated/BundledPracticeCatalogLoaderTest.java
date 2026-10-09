@@ -22,7 +22,9 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
@@ -33,6 +35,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -266,6 +269,24 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                     .isEqualTo(preambleOf(catalog, "describe-what-and-why"))
                     .isNotEqualTo(preambleOf(catalog, "ships-tests-with-the-change"));
         }
+    }
+
+    @Test
+    void shouldReadTheVisualAndEveryFigureTheGuideShowsFromThePracticeGuidanceFolder() {
+        var definition = loader.catalog().practices().stream()
+                .filter(entry -> entry.slug().equals("scope-one-reviewable-change"))
+                .findFirst()
+                .orElseThrow()
+                .definition();
+
+        PracticeVisual visual = Objects.requireNonNull(definition.visual());
+        PracticeGuide guide = Objects.requireNonNull(definition.guide());
+
+        assertThat(visual.svg()).startsWith("<svg");
+        assertThat(visual.alt()).startsWith("One large change mixes three kinds of work.");
+        assertThat(guide.markdown()).startsWith("## How to do it");
+        assertThat(guide.figures()).containsOnlyKeys("split-order");
+        assertThat(guide.figures().get("split-order")).startsWith("<svg");
     }
 
     @Test

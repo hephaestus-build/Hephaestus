@@ -13,8 +13,10 @@ import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceSufficiency;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.curated.CuratedCatalogService;
 import de.tum.cit.aet.hephaestus.practices.curated.CuratedPracticeOverride;
 import de.tum.cit.aet.hephaestus.practices.curated.CuratedPracticeOverrideRepository;
@@ -249,6 +251,61 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
     @Test
     @WithAdminUser
+    void shouldCopyTheBundledVisualAndGuideIntoThePracticeAndItsFirstRevisionWhenAGuidedPracticeIsAdopted() {
+        ensureAdminMembership(workspace);
+        String slug = "scope-one-reviewable-change";
+        PracticeDefinition shipped =
+                Objects.requireNonNull(curatedCatalog.practice(slug).shipped());
+        PracticeVisual shippedVisual = required(shipped.visual());
+        PracticeGuide shippedGuide = required(shipped.guide());
+        String etag = required(webTestClient
+                .get()
+                .uri(BASE + "/" + slug, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.definition.visual.alt")
+                .isEqualTo(shippedVisual.alt())
+                .jsonPath("$.definition.guide.figures['split-order']")
+                .isEqualTo(shippedGuide.figures().get("split-order"))
+                .returnResult()
+                .getResponseHeaders()
+                .getETag());
+
+        webTestClient
+                .post()
+                .uri(BASE + "/" + slug, workspace.getWorkspaceSlug())
+                .headers(headers -> {
+                    TestAuthUtils.withCurrentUser().accept(headers);
+                    headers.set(HttpHeaders.IF_MATCH, etag);
+                })
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody()
+                .jsonPath("$.visual.alt")
+                .isEqualTo(shippedVisual.alt());
+
+        var practice = practiceRepository
+                .findByWorkspaceIdAndSlug(workspace.getId(), slug)
+                .orElseThrow();
+        assertThat(practice.getVisual()).isEqualTo(shippedVisual);
+        assertThat(practice.getGuide()).isEqualTo(shippedGuide);
+        PracticeDefinition adoptedBase = required(practice.getAdoptedBase());
+        assertThat(adoptedBase.visual()).isEqualTo(shippedVisual);
+        assertThat(adoptedBase.guide()).isEqualTo(shippedGuide);
+        var revision = revisionRepository
+                .findFirstByPracticeIdOrderByRevisionNumberDesc(practice.getId())
+                .orElseThrow();
+        assertThat(revision.getRevisionNumber()).isEqualTo(1);
+        assertThat(revision.getVisual()).isEqualTo(shippedVisual);
+        assertThat(revision.getGuide()).isEqualTo(shippedGuide);
+    }
+
+    @Test
+    @WithAdminUser
     void shouldAdoptTheCloseOutcomePracticeOffWhenNoAtCloseEvidenceIsCaptured() {
         ensureAdminMembership(workspace);
         String slug = "issue-closed-with-unmet-outcome";
@@ -365,7 +422,9 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 shipped.whyItMatters(),
                 shipped.whatGoodLooksLike(),
                 shipped.groupSlug(),
-                shipped.deliveryBehavior());
+                shipped.deliveryBehavior(),
+                shipped.visual(),
+                shipped.guide());
         var override = new CuratedPracticeOverride(slug, Instant.now());
         override.write(customized, null, Instant.now());
         practiceOverrides.save(override);
@@ -416,7 +475,9 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 shipped.whyItMatters(),
                 shipped.whatGoodLooksLike(),
                 shipped.groupSlug(),
-                shipped.deliveryBehavior());
+                shipped.deliveryBehavior(),
+                shipped.visual(),
+                shipped.guide());
         var override = new CuratedPracticeOverride(slug, Instant.now());
         override.write(automated, null, Instant.now());
         practiceOverrides.save(override);

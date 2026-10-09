@@ -38,6 +38,16 @@ public final class PracticeDefinitionValidator {
         }
         rejectReviewResultLabels("Why it matters", definition.whyItMatters());
         rejectReviewResultLabels("What good looks like", definition.whatGoodLooksLike());
+        PracticeVisual visual = definition.visual();
+        if (visual != null) {
+            PracticeGuidanceRules.validate(visual);
+            rejectReviewResultLabels("The visual's description", visual.alt());
+        }
+        PracticeGuide guide = definition.guide();
+        if (guide != null) {
+            PracticeGuidanceRules.validate(guide);
+            rejectReviewResultLabels("The guide", guide.markdown());
+        }
         validateEvidence(definition.artifactKind(), definition);
     }
 

@@ -169,8 +169,12 @@ jobs:
               - 'scripts/check-story-prose.ts'
               - 'scripts/check-story-sort.ts'
               - 'scripts/install-browser-deps.ts'
-              # The fixture tests compare the webapp's catalog fixtures with these server resources.
+              # The fixture tests compare the webapp's catalog fixtures with these server resources,
+              # the practice guidance stories render the bundled guidance, and the SVG sanitizer test
+              # compares its allowlist with the server's.
               - 'server/application/src/main/resources/practices/default-catalog.json'
+              - 'server/application/src/main/resources/practices/guidance/**'
+              - 'server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/PracticeGuidanceRules.java'
               - 'server/application/src/main/resources/contracts/source-use/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
@@ -253,6 +257,10 @@ jobs:
               - 'docker/agents/**'
               # format:load:check and test:load:syntax run on this leg.
               - 'load-tests/**'
+              # The catalog and guidance tests in scripts/ judge these bundled server resources.
+              - 'server/application/src/main/resources/practices/default-catalog.json'
+              - 'server/application/src/main/resources/practices/default-catalog.schema.json'
+              - 'server/application/src/main/resources/practices/guidance/**'
               - 'docs/**'
               - 'tsconfig.agents.json'
               - 'tsconfig.json'

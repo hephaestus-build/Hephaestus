@@ -6,7 +6,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeGuide;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.PracticeVisual;
 import de.tum.cit.aet.hephaestus.practices.ReviewRuleFingerprint;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -140,6 +142,16 @@ public class PracticeRevision {
     @ToString.Exclude
     private @Nullable String whatGoodLooksLike;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "visual", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable PracticeVisual visual;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "guide", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable PracticeGuide guide;
+
     @Column(name = "group_slug", length = 64)
     private @Nullable String groupSlug;
 
@@ -182,6 +194,8 @@ public class PracticeRevision {
         this.deliveryBehavior = practice.getDeliveryBehavior();
         this.whyItMatters = practice.getWhyItMatters();
         this.whatGoodLooksLike = practice.getWhatGoodLooksLike();
+        this.visual = practice.getVisual();
+        this.guide = practice.getGuide();
         PracticeGroup group = practice.getGroup();
         if (group != null) {
             this.groupSlug = group.getSlug();

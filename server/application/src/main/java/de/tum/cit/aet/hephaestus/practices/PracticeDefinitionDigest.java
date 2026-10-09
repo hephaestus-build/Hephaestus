@@ -27,6 +27,15 @@ final class PracticeDefinitionDigest {
                     .addNullable(definition.deliveryBehavior().overlapGroup())
                     .addNullable(definition.deliveryBehavior().redundantToSlug());
         }
+        // Absent guidance adds nothing, so a definition without a visual or guide matches the digest stored for it.
+        PracticeVisual visual = definition.visual();
+        if (visual != null) {
+            digest.add("visual").add(visual.digest());
+        }
+        PracticeGuide guide = definition.guide();
+        if (guide != null) {
+            digest.add("guide").add(guide.digest());
+        }
         return digest.hex();
     }
 }
