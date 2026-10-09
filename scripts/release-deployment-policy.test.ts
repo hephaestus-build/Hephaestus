@@ -224,6 +224,36 @@ await test("release publication requires native smoke tests for every supported 
 	assert.match(release, /gh release upload "\$TAG_NAME" host-smoke\/\*\.json/u);
 });
 
+await test("release evidence waits for the digest-bound sandbox check", () => {
+	const workflow: unknown = parseDocument(release).toJS();
+	const steps = asArray(
+		at(workflow, ["jobs", "tag-images", "steps"], "tag-images"),
+		"tag-images",
+	).map((value, index) => asRecord(value, `tag-images.steps[${index}]`));
+	const digests = steps.findIndex((step) => step.id === "retag");
+	const sandbox = steps.findIndex((step) => step.id === "sandbox-contract");
+	const security = steps.findIndex(
+		(step) => step.uses === "./.github/actions/setup-release-security-tools",
+	);
+	const database = steps.findIndex((step) => step.uses === "./.github/actions/download-trivy-db");
+	const join = steps.findIndex((step) => step.wait === "sandbox-contract");
+	const evidence = steps.findIndex((step) => step.name === "Generate and enforce release evidence");
+	assert.ok(digests !== -1 && sandbox > digests && security > sandbox && database > security);
+	assert.ok(join > database && evidence > join);
+	const sandboxStep = steps[sandbox];
+	assert.ok(sandboxStep);
+	assert.equal(sandboxStep.background, true);
+	assert.equal(typeof sandboxStep.run, "string");
+	assert.deepEqual(
+		steps.filter((step) => step.background === true).map((step) => step.id),
+		["sandbox-contract"],
+	);
+	for (const name of ["supported-host-smoke", "publish-release"]) {
+		const preparation = asArray(at(workflow, ["jobs", name, "steps"], name), name);
+		assert.ok(preparation.every((value) => asRecord(value, name).background !== true));
+	}
+});
+
 await test("the release smoke reaches the installation by the name the installer answers with", () => {
 	// Traefik routes on the hostname the installer answered with, so a rename in the script has to
 	// reach this curl or the ingress check fails for the first time at a release.

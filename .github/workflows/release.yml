@@ -121,6 +121,8 @@ jobs:
         run: node scripts/resolve-release-images.ts "$SOURCE_TAG" release-images.tsv
 
       - name: Verify Node-only agent-pi sandbox
+        id: sandbox-contract
+        background: true
         env:
           IMAGE: ghcr.io/hephaestus-build/agent-pi@${{ steps.retag.outputs.agent-pi-digest }}
           LAYOUT: server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/runtime/SandboxLayout.java
@@ -148,6 +150,8 @@ jobs:
           max-age-hours: "48"
           java-db: "true"
           metadata-path: evidence/trivy-db.json
+
+      - wait: sandbox-contract
 
       - name: Generate and enforce release evidence
         env:
