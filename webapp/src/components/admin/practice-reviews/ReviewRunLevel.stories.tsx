@@ -301,10 +301,11 @@ export const InProgressCanBeCancelled: Story = {
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByText("Running")).toBeVisible();
-		await expect(
-			panel.getByText("Observations will appear when the review finishes."),
-		).toBeVisible();
-		await expect(panel.getByText("Feedback will appear when the review finishes.")).toBeVisible();
+		const pending = panel.getAllByText("The review has not finished processing its results.");
+		await expect(pending).toHaveLength(2);
+		for (const section of pending) {
+			await expect(section).toBeVisible();
+		}
 		await expect(panel.queryByText("No observations were recorded")).not.toBeInTheDocument();
 		await expect(
 			panel.queryByRole("button", { name: "Retry result processing" }),

@@ -188,7 +188,7 @@ function PreviewSection<T>({
 			)}
 			{state.status === "pending" && (
 				<p className="text-sm text-muted-foreground">
-					{title} will appear when the review finishes.
+					The review has not finished processing its results.
 				</p>
 			)}
 			{state.status === "ready" &&

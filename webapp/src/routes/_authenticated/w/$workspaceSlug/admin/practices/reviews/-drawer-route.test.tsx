@@ -4,13 +4,20 @@ import { HttpResponse, http } from "msw";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+	getAgentJobQueryKey,
+	listPracticeReviewFeedbackQueryKey,
+	listPracticeReviewObservationsQueryKey,
 	listPracticeReviewsInfiniteQueryKey,
 	listPracticeReviewsQueryKey,
 	listTracedArtifactsInfiniteQueryKey,
 	listTracedArtifactsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
+import type { ArtifactTrace } from "@/api/types.gen";
 import {
+	feedbackCounts,
 	practiceCounts,
+	reviewFeedback,
+	reviewJob,
 	reviewFeedbackDetail,
 	reviewObservations,
 	reviewRuns,
@@ -21,7 +28,7 @@ import { artifactTrace, tracedArtifacts } from "@/components/practice-trace/fixt
 import { browserTimeZone } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { levelsOpenedBy } from "@/test/detail-stack";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, testQueryClient } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
 // deadlock backstop, not a budget these renders were meant to fit inside.
@@ -361,6 +368,7 @@ describe("practice review levels", () => {
 /** The fixture's trace with every practice answered, so nothing on it is still waiting. */
 const SETTLED_TRACE = {
 	...artifactTrace,
+	signals: artifactTrace.signals.filter((entry) => entry.state !== "PENDING"),
 	practices: artifactTrace.practices.filter(
 		(entry) => entry.outcome !== "PENDING" && entry.outcome !== "RUNNING",
 	),
@@ -425,8 +433,8 @@ describe("the reviewed-work level", () => {
 		within(level).getByText("The workspace's AI budget is used up.");
 		within(level).getByRole("link", { name: "Open AI usage" });
 		expect(bodies).toStrictEqual([{ artifactKind: "scm.pull_request", artifactId: 1423 }]);
-		// Nothing was started, so nothing was read again.
-		expect(requestsTo(TRACE_1423)).toHaveLength(1);
+		// The initial settled run refreshes the trace; refusing an ask adds no read.
+		expect(requestsTo(TRACE_1423)).toHaveLength(2);
 	});
 
 	/**
@@ -459,37 +467,239 @@ describe("the reviewed-work level", () => {
 		expect(requestsTo(TRACE_1423)).toHaveLength(1);
 	});
 
-	/** What a review said lands with its last answer, so the review settling reads it once more. */
-	it("reads the observations and feedback again once an asked review settles", async () => {
+	it("shows late feedback after assessments settle but result processing is still pending", async () => {
 		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
 		try {
-			// Still waiting on some practices, until the test says the review settled.
-			let trace: typeof artifactTrace = artifactTrace;
+			const jobId = "11111111-1111-1111-1111-111111111111";
+			const item = reviewFeedback.find((entry) => entry.agentJobId === jobId);
+			assert(item);
+			const observation = reviewObservations.find((entry) => entry.agentJobId === jobId);
+			assert(observation);
+			let observationPage = {
+				content: [{ ...observation, feedback: feedbackCounts([]) }],
+				page: { number: 0, size: 5, totalElements: 1, totalPages: 1 },
+			};
+			const queryClient = testQueryClient();
+			queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 30_000 } });
+			queryClient.setQueryData(
+				getAgentJobQueryKey({ path: { workspaceSlug: "acme", jobId } }),
+				reviewJob(jobId),
+			);
+			const job = reviewJob(jobId);
+			job.deliveryStatus = "PENDING";
+			let feedbackPage = {
+				content: reviewFeedback.slice(0, 0),
+				page: { number: 0, size: 5, totalElements: 0, totalPages: 0 },
+			};
+			const trace = {
+				...SETTLED_TRACE,
+				artifactId: 42,
+				signals: SETTLED_TRACE.signals,
+				practices: SETTLED_TRACE.practices.filter((entry) => entry.reviewId === jobId),
+			};
 			server.use(
 				http.get("*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId", () =>
 					HttpResponse.json(trace),
 				),
+				http.get("*/workspaces/:workspaceSlug/agents/jobs/:jobId", () => HttpResponse.json(job)),
+				http.get("*/workspaces/:workspaceSlug/practices/reviews/observations", () =>
+					HttpResponse.json(observationPage),
+				),
+				http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", () =>
+					HttpResponse.json(feedbackPage),
+				),
 			);
-			renderRouteAtWithRouter(`${REVIEWS}/work?detail=work:pull-request:1423`);
-			await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
-			const readsOf = () => ({
-				observations: requestsTo("/practices/reviews/observations").length,
-				feedback: requestsTo("/practices/reviews/feedback").length,
-			});
-			await vi.waitFor(() => {
-				expect(requestsTo(TRACE_1423)).toHaveLength(1);
-				expect(readsOf()).toStrictEqual({ observations: 1, feedback: 1 });
-			}, ROUTE_RENDER_WAIT);
-
-			trace = SETTLED_TRACE;
+			renderRouteAtWithRouter(`${REVIEWS}/work?detail=work:pull-request:42`, queryClient);
+			const level = await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
+			await within(level).findByText(
+				"The review has not finished processing its results.",
+				undefined,
+				ROUTE_RENDER_WAIT,
+			);
+			await waitFor(() =>
+				expect(
+					queryClient.getQueryData(getAgentJobQueryKey({ path: { workspaceSlug: "acme", jobId } })),
+				).toMatchObject({ deliveryStatus: "PENDING" }),
+			);
+			await within(level).findByText("No feedback composed");
+			job.deliveryStatus = "DELIVERED";
+			observationPage = {
+				...observationPage,
+				content: [{ ...observation, feedback: feedbackCounts(["DELIVERED"]) }],
+			};
+			feedbackPage = {
+				content: [{ ...item, bodyPreview: "A newly delivered explanation", bodyTruncated: false }],
+				page: { number: 0, size: 5, totalElements: 1, totalPages: 1 },
+			};
 			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS);
-			await vi.waitFor(() => {
-				expect(requestsTo(TRACE_1423)).toHaveLength(2);
-				expect(readsOf()).toStrictEqual({ observations: 2, feedback: 2 });
-			}, ROUTE_RENDER_WAIT);
+			await within(level).findByText("A newly delivered explanation", undefined, ROUTE_RENDER_WAIT);
+			await within(level).findByText("Feedback: 1 delivered");
+			expect(within(level).queryByText("No feedback was composed")).toBeNull();
+			const completedReads = requestsTo(`/agents/jobs/${jobId}`).length;
+			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS * 2);
+			expect(requestsTo(`/agents/jobs/${jobId}`)).toHaveLength(completedReads);
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it("discovers tied latest review occasions even when every displayed assessment belongs to an older run", async () => {
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+		try {
+			const olderId = "11111111-1111-1111-1111-111111111111";
+			const newerId = "22222222-2222-2222-2222-222222222222";
+			const tiedId = "33333333-3333-3333-3333-333333333333";
+			const item = reviewFeedback.find((entry) => entry.agentJobId === olderId);
+			assert(item);
+			const newer = reviewJob(olderId);
+			newer.id = newerId;
+			newer.status = "RUNNING";
+			newer.deliveryStatus = undefined;
+			const tied = { ...newer, id: tiedId };
+			const jobs = new Map([
+				[olderId, reviewJob(olderId)],
+				[newerId, newer],
+				[tiedId, tied],
+			]);
+			let feedbackPage = {
+				content: reviewFeedback.slice(0, 0),
+				page: { number: 0, size: 5, totalElements: 0, totalPages: 0 },
+			};
+			const signal = SETTLED_TRACE.signals.find((entry) => entry.reviewId === olderId);
+			assert(signal);
+			const admitted = {
+				...SETTLED_TRACE,
+				artifactId: 42,
+				practices: SETTLED_TRACE.practices.filter((entry) => entry.reviewId === olderId),
+				signals: [
+					{
+						...signal,
+						id: "tie",
+						reviewId: tiedId,
+						occurredAt: new Date("2026-08-08T09:00:00Z"),
+					},
+					signal,
+					{
+						...signal,
+						id: "new",
+						reviewId: newerId,
+						occurredAt: new Date("2026-08-08T09:00:00Z"),
+					},
+				],
+			};
+			let currentTrace: ArtifactTrace = {
+				...admitted,
+				signals: [
+					{
+						...signal,
+						id: "waiting",
+						reviewId: undefined,
+						state: "RECORDED",
+						occurredAt: new Date("2026-08-08T09:00:00Z"),
+					},
+				],
+			};
+			server.use(
+				http.get("*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId", () =>
+					HttpResponse.json(currentTrace),
+				),
+				http.get("*/workspaces/:workspaceSlug/agents/jobs/:jobId", ({ params }) =>
+					HttpResponse.json(jobs.get(String(params.jobId))),
+				),
+				http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", () =>
+					HttpResponse.json(feedbackPage),
+				),
+			);
+			renderRouteAtWithRouter(`${REVIEWS}/work?detail=work:pull-request:42`);
+			const level = await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
+			await waitFor(() =>
+				expect(
+					within(level).getAllByText("The review has not finished processing its results.").length,
+				).toBeGreaterThan(0),
+			);
+			currentTrace = admitted;
+			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS);
+			await waitFor(() => {
+				expect(requestsTo(`/agents/jobs/${newerId}`).length).toBeGreaterThan(0);
+				expect(requestsTo(`/agents/jobs/${tiedId}`).length).toBeGreaterThan(0);
+			});
+			newer.status = "COMPLETED";
+			newer.deliveryStatus = "DELIVERED";
+			tied.status = "COMPLETED";
+			tied.deliveryStatus = "DELIVERED";
+			feedbackPage = {
+				content: [
+					{
+						...item,
+						agentJobId: newerId,
+						bodyPreview: "Feedback from the later review",
+						bodyTruncated: false,
+					},
+				],
+				page: { number: 0, size: 5, totalElements: 1, totalPages: 1 },
+			};
+			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS);
+			await within(level).findByText(
+				"Feedback from the later review",
+				undefined,
+				ROUTE_RENDER_WAIT,
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("refreshes cached outputs when opened with an already settled review after a transient read error", async () => {
+		const jobId = "11111111-1111-1111-1111-111111111111";
+		const item = reviewFeedback.find((entry) => entry.agentJobId === jobId);
+		assert(item);
+		const queryClient = testQueryClient();
+		queryClient.setDefaultOptions({ queries: { retry: 1, retryDelay: 1, staleTime: 30_000 } });
+		const scope = {
+			path: { workspaceSlug: "acme" },
+			query: { artifactKind: "scm.pull_request", artifactId: 42, size: 5 },
+		};
+		const empty = { content: [], page: { number: 0, size: 5, totalElements: 0, totalPages: 0 } };
+		queryClient.setQueryData(listPracticeReviewFeedbackQueryKey(scope), empty);
+		queryClient.setQueryData(listPracticeReviewObservationsQueryKey(scope), empty);
+		queryClient.setQueryData(
+			getAgentJobQueryKey({ path: { workspaceSlug: "acme", jobId } }),
+			reviewJob(jobId),
+		);
+		server.use(
+			http.get(
+				"*/workspaces/:workspaceSlug/agents/jobs/:jobId",
+				() => HttpResponse.json({ title: "Temporarily unavailable" }, { status: 503 }),
+				{ once: true },
+			),
+			http.get("*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId", () =>
+				HttpResponse.json({
+					...SETTLED_TRACE,
+					artifactId: 42,
+					signals: SETTLED_TRACE.signals,
+					practices: SETTLED_TRACE.practices.filter((entry) => entry.reviewId === jobId),
+				}),
+			),
+			http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", () =>
+				HttpResponse.json({
+					content: [
+						{
+							...item,
+							bodyPreview: "Feedback received while the drawer was closed",
+							bodyTruncated: false,
+						},
+					],
+					page: { number: 0, size: 5, totalElements: 1, totalPages: 1 },
+				}),
+			),
+		);
+		renderRouteAtWithRouter(`${REVIEWS}/work?detail=work:pull-request:42`, queryClient);
+		const level = await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
+		await within(level).findByText(
+			"Feedback received while the drawer was closed",
+			undefined,
+			ROUTE_RENDER_WAIT,
+		);
 	});
 
 	it("reads the trace and the workspace's work and review lists again once an ask is accepted", async () => {
