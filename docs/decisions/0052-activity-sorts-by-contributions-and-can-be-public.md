@@ -51,7 +51,7 @@ The order of people:
 The default measure:
 
 1. **Commits, as the GitHub contributors graph uses.** Rejected. A squash merge removes them, and many small commits increase them. The unit of Hephaestus is reviewed work.
-2. **Pull requests opened.** Rejected. It hides the reviewers, who do half of the collaboration.
+2. **Pull requests opened.** Rejected. It hides the reviewers.
 3. **Comments added to the total.** Rejected. A comment is easy to add for a count. Comments stay in the drill-down.
 4. **Contributions: pull requests opened, pull requests reviewed, and issues opened.** Chosen. Each part is one piece of work with a link.
 
@@ -59,7 +59,7 @@ The position number:
 
 1. **No number, only the order.** Rejected. Readers count rows, and a tie is not visible.
 2. **Dense ranking (1, 2, 2, 3).** Rejected. It hides how many people are in front.
-3. **Standard competition ranking (1, 2, 2, 4) [6].** Chosen. It is SQL `RANK()` [7].
+3. **Standard competition ranking (1, 2, 2, 4) [6].** Chosen.
 
 The public view:
 
@@ -90,7 +90,8 @@ The notice to the people on the page:
 - No other total exists, and no count has a weight.
 - When the table sorts by a number column, each row shows a **position**.
   Positions use standard competition ranking (1, 2, 2, 4).
-  They come from the list before the table filters it, so a search does not renumber people.
+  They come from the counts that the table shows.
+  A name search hides rows but does not renumber them.
 - Provider bot accounts are never people.
   A workspace admin can mark a machine user account as automation.
   Automation is not in the people table, in a total, or in a position.
@@ -117,6 +118,7 @@ Three switches must all be on:
 1. The instance setting **Allow public activity pages**. It is off by default. hephaestus.build turns it on.
 2. The workspace admin's switch for the workspace, in the workspace settings. A confirmation dialog states what becomes public. Both directions take effect at once.
 3. The account-wide switch **Show me on public activity pages**. It is on by default. It works at once.
+   For a person without an account, an objection through the privacy contact takes its place.
 
 The page shows only this data:
 
@@ -137,7 +139,8 @@ The operator then applies the same hide to that person's verified provider ident
 
 There is no email, no banner and no notice period.
 
-- When a signed-in person first opens a public workspace, a workspace onboarding step says that the activity page is public.
+- A workspace with a public activity page shows a workspace onboarding step at the first visit of a signed-in person.
+  The step says that the page is public.
   It shows what is on the page.
   It offers **Show me** and **Hide me** with equal weight.
 - **User settings** has the same switch.
@@ -156,7 +159,7 @@ There is no email, no banner and no notice period.
 - Only that endpoint sends `Cache-Control: public, max-age=60`.
   It is rate-limited.
   It sends `noindex` unless an admin turns on **Allow search engines**.
-- A workspace goes public only after the activity data repair is verified on its instance.
+- A workspace goes public only after the activity data runbook's comparison with the provider passes for its repositories.
 - The docs advise course workspaces to stay private. Hephaestus does not enforce it.
 
 ## Consequences
@@ -174,8 +177,11 @@ There is no email, no banner and no notice period.
 - Hiding is from the public, not from the workspace.
   Members still see a hidden person, so an admin can find who is hidden by a comparison.
 - A self-hosted instance publishes nothing until its operator turns on the instance setting.
-- The anonymous surface becomes smaller than today.
-  One endpoint replaces a read of every workspace `GET` endpoint.
+- The anonymous surface shrinks.
+  One endpoint replaces the generic read of every workspace `GET` endpoint.
+- A member who does not open the workspace gets no individual notice before the first publication.
+  The privacy notice and the page notice inform people in public from the first moment.
+  The TUM coordinator decides if this meets Art. 14(3)(c) GDPR.
 
 ## Revisit trigger
 
@@ -194,4 +200,3 @@ There is no email, no banner and no notice period.
 4. Moldon, Strohmaier and Wachs, *How Gamification Affects Software Developers*, ICSE 2021: <https://arxiv.org/abs/2006.02371>
 5. Forsgren et al., *The SPACE of Developer Productivity*, ACM Queue 19(1), 2021: <https://queue.acm.org/detail.cfm?id=3454124>
 6. Wikipedia, *Ranking*, standard competition ranking: <https://en.wikipedia.org/wiki/Ranking#Standard_competition_ranking_(%221224%22_ranking)>
-7. PostgreSQL documentation, *Window Functions*: <https://www.postgresql.org/docs/current/functions-window.html>

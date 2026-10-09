@@ -1,4 +1,4 @@
-# ADR 0053: A workspace subdomain is a presentation origin, and sign-in stays on the apex
+# ADR 0053: A workspace address is a presentation origin, and sign-in stays on the apex
 
 **Status:** Accepted
 **Date:** 2026-10-09
@@ -17,7 +17,7 @@ The session is an ES256 JWT in `__Host-` cookies (ADR 0017).
 A `__Host-` cookie has no `Domain` attribute, so the browser sends it only to the host that set it [1].
 GitLab and Outline accept only exact redirect URIs.
 OAuth security guidance requires exact redirect matching [2].
-Today, the OAuth redirect URI uses `{baseUrl}`, which follows the `Host` header.
+Before this decision, the OAuth redirect URI used `{baseUrl}`, which follows the `Host` header.
 
 `<slug>.hephaestus.build` and `hephaestus.build` are different origins but the same site [3].
 A site is the registrable domain, which the Public Suffix List defines [4].
@@ -27,22 +27,24 @@ The server must allow the origin with `Access-Control-Allow-Credentials: true` [
 ## Decision drivers
 
 - One sign-in, one session, and unchanged `__Host-` cookies.
-- No change at the providers: one exact callback for each provider.
+- One exact callback for each provider. The GitHub App's optional subdomain wildcard [6] stays off.
 - Tenancy stays a server and SQL rule. A host name never grants access.
+- Nobody can probe which workspaces exist.
 - One instance switch turns the feature on and off.
 - A self-hosted instance changes nothing until its operator turns the feature on.
 
 ## Considered options
 
-1. **Paths only, as today.** Rejected. A project gets no own address, and the public page cannot be at a root.
-2. **A domain cookie (`Domain=hephaestus.build`) for every subdomain.** Rejected. It drops the `__Host-` prefix. Every subdomain, also docs and previews, then receives the session cookie. Any subdomain can also set a cookie for all others.
-3. **A sign-in broker for each host.** Each workspace host runs its own sign-in and session, for example through the ADR 0048 handoff. Rejected. It adds a session for each host and a sign-out that must reach every host. It also adds a CSRF state and a callback path for each host.
-4. **A custom domain for each workspace, such as `contributors.example.org`.** Rejected for now. It is a different site, so the browser treats the apex cookies as third-party cookies. It also needs a certificate for each domain.
-5. **The subdomain is a presentation origin. Sign-in and the API stay on the apex.** Chosen.
+1. **Paths only.** Rejected. A project gets no own address, and the public page cannot be at a root.
+2. **A host for the public page only.** The workspace host shows only the public activity page, and members use `/w/<slug>`. It needs no credentialed CORS and no CSRF token endpoint. Rejected. A workspace then has two addresses, and a private workspace gets none.
+3. **A domain cookie (`Domain=hephaestus.build`) for every subdomain.** Rejected. It drops the `__Host-` prefix. Every subdomain, also docs and previews, then receives the session cookie. Any subdomain can also set a cookie for all others.
+4. **A sign-in broker for each host.** Each workspace host runs its own sign-in and session, for example through the ADR 0048 handoff. Rejected. It adds a session for each host and a sign-out that must reach every host. It also adds a CSRF state and a callback path for each host.
+5. **A custom domain for each workspace, such as `contributors.example.org`.** Rejected for now. It is a different site, so the browser treats the apex cookies as third-party cookies. It also needs a certificate for each domain.
+6. **The workspace host is a presentation origin. Sign-in and the API stay on the apex.** Chosen.
 
 ## Decision
 
-Option 5.
+Option 6.
 
 - When the instance switch is on, `<slug>.<base domain>` is the main workspace address.
   `/w/<slug>` sends a 308 redirect to it.
@@ -51,12 +53,9 @@ Option 5.
   The web app calls `https://<apex>/api` with credentials.
 - Sign-in stays on the apex.
   The OAuth redirect URI is pinned to the apex, with one exact callback for each provider.
-  The GitHub App's wildcard redirect toggle is off.
-- CORS allows an origin only if all of these are true:
-  - It is HTTPS and matches an anchored pattern for the base domain.
-  - Its label is not reserved. `docs` is never allowed.
-  - Its label is a known workspace slug.
-
+- CORS allows an HTTPS origin that is one label under the base domain, with an anchored match.
+  The label must not be a reserved name.
+  The check does not look up the slug, so a CORS response does not show which workspaces exist.
   The response allows credentials and sends `Vary: Origin`.
 - A workspace host cannot read the apex CSRF cookie.
   Thus, an endpoint returns the raw CSRF token.
@@ -71,9 +70,9 @@ Option 5.
 - The base domain must not be on the Public Suffix List.
   If it is, the workspace host and the apex are different sites.
   The browser then does not send the session cookie.
-- hephaestus.build serves its hosts through a Cloudflare proxy.
-  Cloudflare is then a new processor for all traffic that it proxies.
-  The [processor checklist](../admin/dsms/processor-checklist.md) records it before it carries traffic.
+- hephaestus.build sends only the workspace hosts through a Cloudflare proxy.
+  The apex stays direct, so sign-in, the session cookies and the API never pass Cloudflare.
+  The [processor checklist](../admin/dsms/processor-checklist.md) records Cloudflare before it carries traffic.
 - The browser extension maps a pasted workspace host URL to the apex.
 
 ## Consequences
@@ -81,9 +80,12 @@ Option 5.
 - A project gets its own address, and the public page is at its root.
 - Sign-in, the session and the provider configuration do not change.
 - The credentialed CORS allowlist and the raw CSRF token endpoint are a new attack surface.
-  The anchored origin check and the slug lookup limit them to known workspace hosts.
+  A wildcard DNS record sends every label to Hephaestus, so every allowed origin is a Hephaestus host.
+  A host that another service runs must become a reserved name first.
 - All workspace hosts are the same site as the apex.
   Thus, `SameSite` gives no protection between them, and the CSRF token stays necessary.
+- Cloudflare sees the IP address, the request metadata and the static web app of each workspace host.
+  It does not see the session or the API content.
 - A reader answers the cookie choice once on each workspace host.
 - The decision is reversible.
   Turn off the instance switch, and `/w/<slug>` is the address again.
@@ -105,3 +107,4 @@ Option 5.
 3. MDN, *Site*: <https://developer.mozilla.org/en-US/docs/Glossary/Site>
 4. Public Suffix List, *Learn more*: <https://publicsuffix.org/learn/>
 5. MDN, *Access-Control-Allow-Credentials*: <https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Access-Control-Allow-Credentials>
+6. GitHub Docs, *About the user authorization callback URL*: <https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-user-authorization-callback-url>

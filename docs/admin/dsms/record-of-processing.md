@@ -201,7 +201,7 @@ Separate controller (not an Art. 28 processor):
 - Leibniz-Rechenzentrum (LRZ) der BAdW operates gitlab.lrz.de. The platform receives the contributor's identity from gitlab.lrz.de OIDC and syncs connected gitlab.lrz.de repositories. Inter-public-body transmission falls under Art. 5(1) Nr. 1 BayDSG.
 ```
 
-When workspace addresses are on, Cloudflare, Inc. (USA) proxies the hephaestus.build hosts. It processes the IP address, the request metadata and the content of all traffic that it proxies. It is not engaged yet. The [processor checklist](./processor-checklist.md) records it, and this section lists it, before the proxy carries traffic.
+When workspace addresses are on, Cloudflare, Inc. (USA) proxies the workspace hosts, not `hephaestus.build` itself. It processes the IP address, the request metadata and the static web app of each workspace host. Sign-in, session cookies and API content do not pass it. It is not engaged yet. The [processor checklist](./processor-checklist.md) records it, and this section lists it, before the proxy carries traffic.
 
 When SMTP is enabled, the configured mail relay receives recipient addresses, notification types and
 links for account-security/deletion email and opted-in notifications. Product-feedback bodies and
@@ -671,7 +671,7 @@ Markdown source under `webapp/public/legal/profiles/tumaet/`.
 
 For the public activity page, three more layers inform people:
 
-1. A workspace onboarding step opens at a signed-in member's first visit to a public workspace. It says that the page is public and what it shows. It offers Show me and Hide me with equal weight.
+1. A workspace onboarding step opens at a signed-in member's first visit to a workspace with a public activity page. It says that the page is public and what it shows. It offers Show me and Hide me with equal weight.
 2. The public page says what it shows and how to hide.
 3. For outside contributors with no contact data, the privacy notice makes the information public (Art. 14(5)(b) GDPR).
 
@@ -731,9 +731,11 @@ feedback text through ordinary administration. Ratings and other private respons
 Instance-admin **View as user** is a separate read-only, reasoned and audited access path. External
 feedback follows the destination's audience.
 
-Every workspace page needs sign-in. The only public view is the opt-out public activity page described
-above. It shows counts of work in public repositories and never practice profiles, feedback,
-observations or conversations.
+Every workspace page needs sign-in. The opt-out public activity page described above is the only
+public view of a workspace. It replaces an older public flag that a workspace admin can set only
+through the API. With that flag, anonymous API reads see the workspace's members, teams, repositories
+and practices, never Activity, practice profiles, feedback or conversations. ADR 0052 removes the flag
+before the first public activity page goes live.
 
 Disputes hold back the same point in later reviews while they stand. Withdrawal of the dispute
 allows it again, with the committed-secret exception. Admin withdrawal preserves feedback and its

@@ -91,6 +91,6 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0050](0050-one-practice-standard-one-outcome.md) | One practice standard, one outcome | Accepted |
 | [0051](0051-practices-across-the-workspace-counts-developers.md) | Practices across the workspace counts developers and never names one | Accepted (amended 2026-10-07 — no smallest count; 2026-10-09 — stays out of sorting and the public page). Builds on [0045](0045-activity-counts-work-and-never-ranks-people.md) and [0047](0047-the-practice-profile-has-one-reader.md). |
 | [0052](0052-activity-sorts-by-contributions-and-can-be-public.md) | Workspace activity sorts people by plain counts, and a workspace can publish it | Accepted. Supersedes parts of [0045](0045-activity-counts-work-and-never-ranks-people.md). |
-| [0053](0053-workspace-subdomains-are-a-presentation-origin.md) | A workspace subdomain is a presentation origin, and sign-in stays on the apex | Accepted. Builds on [0017](0017-replace-keycloak-with-spring-native-auth.md) and [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md). |
+| [0053](0053-workspace-addresses-are-a-presentation-origin.md) | A workspace address is a presentation origin, and sign-in stays on the apex | Accepted. Builds on [0017](0017-replace-keycloak-with-spring-native-auth.md) and [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md). |
 
 Template: [0000-template.md](0000-template.md).

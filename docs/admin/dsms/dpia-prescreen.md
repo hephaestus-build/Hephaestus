@@ -182,8 +182,9 @@ The TUM/AET data-protection coordinator confirms this reassessment in the full D
 ### Reassessment: the public activity page
 
 **Date:** 2026-10-09. **Trigger:** a new audience, the public. **Change:** [ADR 0052](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0052-activity-sorts-by-contributions-and-can-be-public.md).
-**Decided by:** the maintainer, as product owner. **Residual risk:** low for open-source project workspaces.
-**Open:** the TUM/AET data-protection coordinator confirms this reassessment before the first TUM workspace goes public.
+
+**Proposed by:** the maintainer, as product owner. **Proposed residual risk:** low for open-source project workspaces.
+**Controller decision:** pending. The TUM/AET data-protection coordinator confirms this reassessment before the first TUM workspace goes public.
 
 A workspace admin can publish the activity of the workspace's public repositories.
 For each person on the page, the public sees this data:
@@ -201,6 +202,13 @@ The publication is a transfer to the public.
 The BayLfD bases a publication on Art. 5(1) sentence 1 no. 1 BayDSG.
 The publication must be necessary for a task of TUM, and "mere usefulness" is not sufficient.
 The task is an open-source project in teaching and research that credits its contributors in public.
+
+Less intrusive options do not serve this task:
+
+- A page for members only does not reach the public or the outside contributors.
+- An opt-in leaves out most contributors, because most never sign in.
+- Counts without positions still let every reader sort the people by eye. Positions make ties fair and visible.
+
 The coordinator confirms this necessity.
 
 **Objection (Art. 21 GDPR).**
@@ -214,15 +222,19 @@ The onboarding step, the page notice and the privacy notice state this right sep
 **Information (Arts. 13 and 14 GDPR).**
 The data comes from the provider, so Art. 14 applies.
 
-- A signed-in member gets the onboarding step at the first visit to a public workspace. It offers **Show me** and **Hide me** with equal weight.
+- A signed-in member gets the onboarding step at the first visit to a workspace with a public activity page. It offers **Show me** and **Hide me** with equal weight.
 - The public page says what it shows and how to hide.
 - The privacy notice describes the page, the basis and the objection.
 - Outside contributors have no contact data in Hephaestus.
   For them, the controller makes the information public under Art. 14(5)(b).
 
 There is no email, no banner and no notice period.
-Thus, a member who does not visit the workspace learns of the page only from the page or the privacy notice.
-The maintainer accepts this gap.
+The workspace admin briefing asks the admin to tell the members before they publish the page.
+
+**Open for the coordinator:** Art. 14(3)(c) requires the information at the latest at the first disclosure.
+A member who does not open the workspace gets no individual notice from Hephaestus before the first publication.
+The privacy notice and the page notice inform people in public from the first moment.
+The coordinator decides if this meets Art. 14(3)(c) for members.
 
 **Course workspaces stay private.**
 Students in a course are graded by the people who run it.
@@ -262,23 +274,24 @@ Risks for the full DPIA:
 **Private self-hosters.**
 The DSK list addresses the non-public sector (§ 3).
 A private operator that publishes this page checks DSK list entries 7 and 8.
-Entry 7 covers a large-scale publication of data that third parties can use to evaluate people.
-Entry 8 covers employee behavior that can evaluate their work.
+Entry 7 covers a large-scale publication of data that evaluates the behavior of people.
+It applies when third parties can use the data for decisions with legal or similar effects.
+Entry 8 covers large-scale data about employee behavior that can evaluate their work with such effects.
 
 In Germany, a works council co-determines a technical system that can monitor employee behavior or performance (§ 87(1) no. 6 BetrVG).
 The [operator obligations](../legal-pages.mdx#the-public-activity-page) list the steps.
 
 ### Reassessment: workspace addresses
 
-**Date:** 2026-10-09. **Trigger:** a new processor. **Change:** [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-subdomains-are-a-presentation-origin.md).
-**Residual risk:** unchanged, after the processor record is complete.
+**Date:** 2026-10-09. **Trigger:** a new processor. **Change:** [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md).
+**Proposed residual risk:** low. **Controller decision:** pending. The coordinator confirms Cloudflare as a processor before the proxy carries traffic.
 
 Workspace addresses change no data category, purpose or audience.
-Sign-in and the session stay on `hephaestus.build`.
+Sign-in, the session cookies and the API stay on `hephaestus.build`, which Cloudflare does not proxy.
 A workspace host keeps its own cookie choice and theme.
-hephaestus.build serves its hosts through a Cloudflare proxy.
-Cloudflare then processes the IP address, the request metadata and the content of all traffic that it proxies.
-The [processor checklist](./processor-checklist.md) must record Cloudflare before the proxy carries traffic.
+Cloudflare proxies only the workspace hosts.
+It processes the IP address, the request metadata and the static web app of each workspace host.
+The [processor checklist](./processor-checklist.md) records Cloudflare and its transfer to the USA.
 
 The source-specific decision and test checklist lives in
 [`artifact-source-governance.md`](./artifact-source-governance.md). The controller's decision identifier and date

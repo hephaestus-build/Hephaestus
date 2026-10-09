@@ -167,7 +167,7 @@
 	"docs/contributor/workspace-context.mdx",
 	"docs/decisions/0051-practices-across-the-workspace-counts-developers.md",
 	"docs/decisions/0052-activity-sorts-by-contributions-and-can-be-public.md",
-	"docs/decisions/0053-workspace-subdomains-are-a-presentation-origin.md",
+	"docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",
