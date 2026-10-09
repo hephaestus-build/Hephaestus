@@ -3297,7 +3297,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
         static Stream<Arguments> unsafeGuidance() {
             return Stream.of(
-                    Arguments.of(
+                    Arguments.argumentSet(
                             "a script element",
                             new PracticeVisual(
                                     "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\">"
@@ -3306,7 +3306,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                             null,
                             "The visual uses <script>. A picture can only draw shapes and text: svg, g, path, rect, "
                                     + "circle, ellipse, line, polyline, polygon, text, tspan, title, desc."),
-                    Arguments.of(
+                    Arguments.argumentSet(
                             "an image from outside the guide",
                             null,
                             new PracticeGuide(
@@ -3316,11 +3316,11 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                                     + "![description](figures/name.svg)."));
         }
 
-        @ParameterizedTest(name = "{0}")
+        @ParameterizedTest(name = "{argumentSetName}")
         @MethodSource("unsafeGuidance")
         @WithAdminUser
         void shouldRejectTheGuidanceWithoutWritingWhenItCouldRunCodeOrLoadAnImage(
-                String unsafePart, @Nullable PracticeVisual visual, @Nullable PracticeGuide guide, String detail) {
+                @Nullable PracticeVisual visual, @Nullable PracticeGuide guide, String detail) {
             ensureAdminMembership(workspace);
             create(validCreateRequest("unsafe-guidance"))
                     .expectStatus()
