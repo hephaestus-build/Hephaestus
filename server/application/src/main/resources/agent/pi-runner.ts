@@ -743,12 +743,21 @@ const evidenceSchema = {
 const observationSchema: ToolDefinition["parameters"] = {
 	type: "object",
 	additionalProperties: false,
-	required: ["practiceSlug", "summary", "outcome", "severity", "evidence", "evidenceRationale"],
+	required: [
+		"revises",
+		"practiceSlug",
+		"summary",
+		"outcome",
+		"severity",
+		"evidence",
+		"evidenceRationale",
+	],
 	properties: {
 		revises: {
-			type: "string",
+			type: ["string", "null"],
+			minLength: 1,
 			description:
-				"To correct a draft already recorded in this review, copy its returned draft reference here and resend the complete observation. Omit for a new draft. A refused correction leaves the previous draft unchanged.",
+				"Use null for the first draft. To correct a draft already recorded in this review, copy its returned draft reference here and resend the complete observation. A refused correction leaves the previous draft unchanged.",
 		},
 		practiceSlug: { type: "string", minLength: 1 },
 		summary: {
@@ -1403,7 +1412,9 @@ function record(raw: unknown): Recorded {
 	}
 	const revises = isRecord(raw) ? raw.revises : undefined;
 	const index = reviewState.observations.findIndex((draft) => draft.practiceSlug === slug);
-	if (isRecord(raw) && Object.hasOwn(raw, "revises") && revises !== slug) {
+	if (
+		index === -1 ? revises !== null : revises !== null && revises !== undefined && revises !== slug
+	) {
 		countRefusal(slug);
 		return {
 			kind: "refused",
@@ -1411,7 +1422,7 @@ function record(raw: unknown): Recorded {
 			// Before a first draft no reference was ever returned, so naming one cannot be the correction.
 			reason:
 				index === -1
-					? `revises must name a recorded draft, and '${slug}' has none yet: omit revises for its first observation.`
+					? `No draft reference has been issued for '${slug}': use revises: null for its first observation.`
 					: `revises must name this practice's draft reference, '${slug}'.`,
 		};
 	}
@@ -1429,14 +1440,11 @@ function record(raw: unknown): Recorded {
 		return { kind: "refused", slug, reason };
 	}
 	const { observation, notes } = validated;
-	if (index === -1 && revises !== undefined) {
-		notes.push(`no draft '${slug}' existed to revise; stored as its first draft`);
-	}
 	const previous = reviewState.observations[index];
 	if (previous !== undefined && isDeepStrictEqual(previous, observation)) {
 		return { kind: "duplicate", slug };
 	}
-	if (previous !== undefined && revises === undefined) {
+	if (previous !== undefined && revises !== slug) {
 		countRefusal(slug);
 		return {
 			kind: "refused",
@@ -3699,6 +3707,7 @@ const OBSERVATION_EXAMPLE = (() => {
 	const context = taskEnvelope.paths.contextRoot;
 	const example = [
 		{
+			revises: null,
 			practiceSlug: "<the practice's slug>",
 			summary: "Added test asserts that malformed date input is rejected",
 			outcome: "MET",
@@ -3720,6 +3729,7 @@ const OBSERVATION_EXAMPLE = (() => {
 			},
 		},
 		{
+			revises: null,
 			practiceSlug: "<the practice's slug>",
 			summary: "New error branch of the parser ships without a test",
 			outcome: "NOT_MET",
@@ -3746,6 +3756,7 @@ const OBSERVATION_EXAMPLE = (() => {
 			},
 		},
 		{
+			revises: null,
 			practiceSlug: "<the practice's slug>",
 			summary: "No completed merge is recorded",
 			outcome: "NOT_APPLICABLE",

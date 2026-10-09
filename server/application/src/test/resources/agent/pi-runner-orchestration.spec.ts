@@ -290,6 +290,7 @@ const REVIEW_SUMMARY =
 
 function observation(slug: string, summary: string, citation: unknown = changeCitation) {
 	return {
+		revises: null,
 		practiceSlug: slug,
 		summary,
 		outcome: "NOT_MET",
@@ -301,6 +302,7 @@ function observation(slug: string, summary: string, citation: unknown = changeCi
 
 /** An observation that decides nothing; for a practice that reads the change, it must show it read it. */
 const undecided = (consulted: string[]) => ({
+	revises: null,
 	practiceSlug: "test-practice",
 	summary: "Nothing to assess in this change",
 	outcome: "NOT_APPLICABLE",
@@ -2093,23 +2095,17 @@ if (scenario !== undefined && scenario !== "") {
 								const negative = observation("test-practice", "Authentication call");
 								const readState = () =>
 									readObservations(nodePath.join(cwd, "out/review-state.json"));
-								// No draft exists yet, so there is no reference to name: the answer says to omit it.
-								await assert.rejects(
-									report.execute("wrong-draft", { ...positive, revises: "second-practice" }),
-									/revises must name[\s\S]*omit revises for its first observation/u,
-								);
-								// A null or empty reference that reaches the recorder is not an omitted one: both are refused
-								// and nothing is stored. (Pi's own validation drops a null one first; argument-repairs shows it.)
-								for (const revises of [null, ""]) {
+								// Before the first draft, even the practice's own slug is not an issued reference.
+								for (const revises of ["second-practice", "test-practice", ""]) {
 									await assert.rejects(
-										report.execute("blank-draft", { ...positive, revises }),
-										/omit revises for its first observation/u,
+										report.execute("unissued-draft", { ...positive, revises }),
+										/No draft reference has been issued[\s\S]*revises: null/u,
 									);
 								}
 								await assert.rejects(
 									report.execute("invalid-first", {
 										...positive,
-										revises: "test-practice",
+										revises: null,
 										evidence: {
 											citations: [{ ...changeCitation, quote: "notInTheDiff();" }],
 										},
@@ -2119,7 +2115,7 @@ if (scenario !== undefined && scenario !== "") {
 								assert.equal(existsSync(nodePath.join(cwd, "out/review-state.json")), false);
 								const first = await report.execute("first", {
 									...positive,
-									revises: "test-practice",
+									revises: null,
 								});
 								record(`draft-first:${JSON.stringify(first)}`);
 								assert.ok(isRecord(first) && isRecord(first.details));
@@ -2168,6 +2164,20 @@ if (scenario !== undefined && scenario !== "") {
 								assert.equal(corrected.details.inserted, 0);
 								assert.equal(corrected.details.totalObservations, 1);
 								record(`draft-corrected:${JSON.stringify(corrected)}`);
+								const { revises: noCorrection, ...omittedReference } = positive;
+								assert.equal(noCorrection, null);
+								const correctedState = readFileSync(
+									nodePath.join(cwd, "out/review-state.json"),
+									"utf8",
+								);
+								await assert.rejects(
+									report.execute("omitted-reference", omittedReference),
+									/resend the complete observation with revises/u,
+								);
+								assert.equal(
+									readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
+									correctedState,
+								);
 								const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
 								await assert.rejects(
 									report.execute(
@@ -2298,8 +2308,8 @@ if (scenario !== undefined && scenario !== "") {
 								undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
 							);
 							const revise = (summary: string, citation: unknown = changeCitation) => ({
-								revises: "test-practice",
 								...observation("test-practice", summary, citation),
+								revises: "test-practice",
 							});
 							const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
 							await assert.rejects(
@@ -3304,10 +3314,12 @@ for (const item of [
 ]) {
   assert.deepEqual(validate(item), item);
 }
-// Pi drops a null revises before the tool runs, so it arrives omitted. An empty or wrong string keeps the shape and
-// reaches the recorder, which refuses it.
-assert.deepEqual(validate({ ...base, revises: null }), base);
-for (const revises of ["", "another-practice"]) {
+// Required nullable references survive native SDK preparation and validation unchanged.
+assert.equal(validate({ ...base, revises: null }).revises, null);
+assert.throws(() => validate(without(base, "revises")));
+assert.throws(() => validate({ ...base, revises: "" }));
+// Nonempty references are shape-valid; the recorder owns whether they were issued.
+for (const revises of ["test-practice", "another-practice"]) {
   assert.deepEqual(validate({ ...base, revises }), { ...base, revises });
 }
 // The declaration leaves the SDK unchanged for an OpenAI-compatible endpoint: same model, no forced strict mode.
