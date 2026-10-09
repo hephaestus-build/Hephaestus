@@ -653,147 +653,161 @@ const goModule = (binary: string) => ({
 	locations: [{ path: binary, annotations: { evidence: "primary" } }],
 });
 
-await test("the gate runs Syft on the exact subject only when a component-bound exception applies", async () => {
-	const directory = await mkdtemp(nodePath.join(tmpdir(), "vulnerability-gate-"));
-	const repository = "registry.example/server";
-	const fixture = nodePath.join(directory, "native.syft.json");
+await test(
+	"the gate runs Syft on the exact subject only when a component-bound exception applies",
+	{ skip: process.platform === "win32" && "Linux image scans use POSIX executable stubs" },
+	async () => {
+		const directory = await mkdtemp(nodePath.join(tmpdir(), "vulnerability-gate-"));
+		const repository = "registry.example/server";
+		const fixture = nodePath.join(directory, "native.syft.json");
 
-	await writeFile(
-		fixture,
-		JSON.stringify({
-			descriptor: {
-				configuration: {
-					catalogers: {
-						used: [
-							"go-module-binary-cataloger",
-							"file-metadata-cataloger",
-							"file-digest-cataloger",
-						],
-					},
-					search: { scope: "squashed" },
-				},
-			},
-			source: {
-				type: "image",
-				name: repository,
-				metadata: {
-					manifestDigest: rebuilt,
-					mediaType: "application/vnd.oci.image.manifest.v1+json",
-					os: "linux",
-					architecture: "amd64",
-					repoDigests: [`${repository}@${rebuilt}`],
-				},
-			},
-			artifacts: [goModule(HELPER), goModule(LAUNCHER)],
-			files: inventory.files.map((file) => ({
-				location: { path: file.path },
-				digests: [{ algorithm: "sha256", value: file.sha256 }],
-			})),
-		}),
-	);
-	const preload = nodePath.join(directory, "fetch.mjs");
-	await writeFile(
-		preload,
-		`globalThis.fetch = async () => new Response(Buffer.from(${JSON.stringify(advisoryRaw.toString())}));`,
-	);
-	const bin = nodePath.join(directory, "bin");
-	await mkdir(bin);
-	// The vendor boundary: record the arguments and write the native document where `-o` asks.
-	await writeFile(
-		nodePath.join(bin, "syft"),
-		[
-			"#!/bin/sh",
-			`printf '%s\\n' "$@" > "${directory}/syft-arguments"`,
-			`for argument; do case "$argument" in syft-json=*) cp "${fixture}" "\${argument#syft-json=}" ;; esac; done`,
-			"",
-		].join("\n"),
-		{ mode: 0o755 },
-	);
-	const reportPath = nodePath.join(directory, "server-linux-amd64.json");
-	await writeFile(
-		reportPath,
-		JSON.stringify({ ArtifactName: rebuiltSubject.reference, Results: goResults }),
-	);
-	let runs = 0;
-	const gate = async (exceptions: unknown[]) => {
-		runs += 1;
-		const policyPath = nodePath.join(directory, `policy-${runs}.json`);
 		await writeFile(
-			policyPath,
+			fixture,
 			JSON.stringify({
-				...policy,
-				componentInventories: [inventory],
-				goAdvisories: [{ id: ADVISORY, sha256: sha256(advisoryRaw) }],
-				exceptions,
+				descriptor: {
+					configuration: {
+						catalogers: {
+							used: [
+								"go-module-binary-cataloger",
+								"file-metadata-cataloger",
+								"file-digest-cataloger",
+							],
+						},
+						search: { scope: "squashed" },
+					},
+				},
+				source: {
+					type: "image",
+					name: repository,
+					metadata: {
+						manifestDigest: rebuilt,
+						mediaType: "application/vnd.oci.image.manifest.v1+json",
+						os: "linux",
+						architecture: "amd64",
+						repoDigests: [`${repository}@${rebuilt}`],
+					},
+				},
+				artifacts: [goModule(HELPER), goModule(LAUNCHER)],
+				files: inventory.files.map((file) => ({
+					location: { path: file.path },
+					digests: [{ algorithm: "sha256", value: file.sha256 }],
+				})),
 			}),
 		);
-		const resultPath = nodePath.join(directory, `result-${runs}.json`);
-		const child = spawnSync(
-			process.execPath,
-			[
-				"--import",
-				preload,
-				nodePath.join(import.meta.dirname, "check-release-vulnerabilities.ts"),
-				"server",
-				"linux/amd64",
-				rebuilt,
-				repository,
-				reportPath,
-				policyPath,
-				resultPath,
-			],
-			{
-				encoding: "utf8",
-				env: { ...process.env, GITHUB_STEP_SUMMARY: "", PATH: `${bin}:${process.env.PATH ?? ""}` },
-			},
+		const preload = nodePath.join(directory, "fetch.mjs");
+		await writeFile(
+			preload,
+			`globalThis.fetch = async () => new Response(Buffer.from(${JSON.stringify(advisoryRaw.toString())}));`,
 		);
-		const result: unknown = JSON.parse(await readFile(resultPath, "utf8"));
-		assert.ok(isRecord(result));
-		assert.equal(typeof result.status, "string");
-		return { child, result };
-	};
+		const bin = nodePath.join(directory, "bin");
+		await mkdir(bin);
+		// The vendor boundary: record the arguments and write the native document where `-o` asks.
+		await writeFile(
+			nodePath.join(bin, "syft"),
+			[
+				"#!/bin/sh",
+				`printf '%s\\n' "$@" > "${directory}/syft-arguments"`,
+				`for argument; do case "$argument" in syft-json=*) cp "${fixture}" "\${argument#syft-json=}" ;; esac; done`,
+				"",
+			].join("\n"),
+			{ mode: 0o755 },
+		);
+		const reportPath = nodePath.join(directory, "server-linux-amd64.json");
+		await writeFile(
+			reportPath,
+			JSON.stringify({ ArtifactName: rebuiltSubject.reference, Results: goResults }),
+		);
+		let runs = 0;
+		const gate = async (exceptions: unknown[]) => {
+			runs += 1;
+			const policyPath = nodePath.join(directory, `policy-${runs}.json`);
+			await writeFile(
+				policyPath,
+				JSON.stringify({
+					...policy,
+					componentInventories: [inventory],
+					goAdvisories: [{ id: ADVISORY, sha256: sha256(advisoryRaw) }],
+					exceptions,
+				}),
+			);
+			const resultPath = nodePath.join(directory, `result-${runs}.json`);
+			const child = spawnSync(
+				process.execPath,
+				[
+					"--import",
+					preload,
+					nodePath.join(import.meta.dirname, "check-release-vulnerabilities.ts"),
+					"server",
+					"linux/amd64",
+					rebuilt,
+					repository,
+					reportPath,
+					policyPath,
+					resultPath,
+				],
+				{
+					encoding: "utf8",
+					env: {
+						...process.env,
+						GITHUB_STEP_SUMMARY: "",
+						PATH: `${bin}:${process.env.PATH ?? ""}`,
+					},
+				},
+			);
+			const result: unknown = JSON.parse(await readFile(resultPath, "utf8"));
+			assert.ok(isRecord(result));
+			assert.equal(typeof result.status, "string");
+			return { child, result };
+		};
 
-	// The CLI judges expiry against the real clock.
-	const expires = new Date(Date.now() + 86_400_000).toISOString().replace(/\.\d{3}Z$/u, "Z");
+		// The CLI judges expiry against the real clock.
+		const expires = new Date(Date.now() + 86_400_000).toISOString().replace(/\.\d{3}Z$/u, "Z");
 
-	// An exception bound to the reviewed manifest needs no component evidence, so Syft never runs.
-	const exact = await gate([
-		{ ...absence, expires, componentInventory: undefined, goAdvisory: undefined, digest: rebuilt },
-	]);
-	assert.equal(exact.result.status, "pass", exact.child.stderr);
-	assert.equal(existsSync(nodePath.join(directory, "syft-arguments")), false);
+		// An exception bound to the reviewed manifest needs no component evidence, so Syft never runs.
+		const exact = await gate([
+			{
+				...absence,
+				expires,
+				componentInventory: undefined,
+				goAdvisory: undefined,
+				digest: rebuilt,
+			},
+		]);
+		assert.equal(exact.result.status, "pass", exact.child.stderr);
+		assert.equal(existsSync(nodePath.join(directory, "syft-arguments")), false);
 
-	const component = await gate([{ ...absence, expires }]);
-	assert.equal(component.result.status, "pass", component.child.stderr);
-	const argumentText = await readFile(nodePath.join(directory, "syft-arguments"), "utf8");
-	const argumentsSent = argumentText.split("\n");
-	for (const expected of [
-		["--from", "registry"],
-		[`${repository}@${rebuilt}`, "--platform"],
-		["linux/amd64", "--scope"],
-		["squashed", "--config"],
-		["--override-default-catalogers", "go-module-binary-cataloger"],
-	]) {
-		const at = argumentsSent.indexOf(expected[0] ?? "");
-		assert.notEqual(at, -1, expected.join(" "));
-		assert.equal(argumentsSent[at + 1], expected[1], expected.join(" "));
-	}
-	assert.ok(
-		argumentsSent.some((argument) => argument.endsWith(nodePath.join("security", "syft.yaml"))),
-	);
-	assert.ok(
-		existsSync(nodePath.join(directory, "server-linux-amd64.syft.json")),
-		"the native document stays beside the report",
-	);
-	assert.deepEqual(
-		await readFile(nodePath.join(directory, `server-linux-amd64.${ADVISORY}.json`)),
-		advisoryRaw,
-	);
+		const component = await gate([{ ...absence, expires }]);
+		assert.equal(component.result.status, "pass", component.child.stderr);
+		const argumentText = await readFile(nodePath.join(directory, "syft-arguments"), "utf8");
+		const argumentsSent = argumentText.split("\n");
+		for (const expected of [
+			["--from", "registry"],
+			[`${repository}@${rebuilt}`, "--platform"],
+			["linux/amd64", "--scope"],
+			["squashed", "--config"],
+			["--override-default-catalogers", "go-module-binary-cataloger"],
+		]) {
+			const at = argumentsSent.indexOf(expected[0] ?? "");
+			assert.notEqual(at, -1, expected.join(" "));
+			assert.equal(argumentsSent[at + 1], expected[1], expected.join(" "));
+		}
+		assert.ok(
+			argumentsSent.some((argument) => argument.endsWith(nodePath.join("security", "syft.yaml"))),
+		);
+		assert.ok(
+			existsSync(nodePath.join(directory, "server-linux-amd64.syft.json")),
+			"the native document stays beside the report",
+		);
+		assert.deepEqual(
+			await readFile(nodePath.join(directory, `server-linux-amd64.${ADVISORY}.json`)),
+			advisoryRaw,
+		);
 
-	// A scan that fails grants nothing: the gate stops without a result.
-	await writeFile(nodePath.join(bin, "syft"), "#!/bin/sh\nexit 3\n", { mode: 0o755 });
-	await assert.rejects(gate([{ ...absence, expires }]), /ENOENT/u);
-});
+		// A scan that fails grants nothing: the gate stops without a result.
+		await writeFile(nodePath.join(bin, "syft"), "#!/bin/sh\nexit 3\n", { mode: 0o755 });
+		await assert.rejects(gate([{ ...absence, expires }]), /ENOENT/u);
+	},
+);
 
 await test("reads a schema 2 policy only to verify a stored bundle, bound to each exception's digest", () => {
 	const exception = {
