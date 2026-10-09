@@ -2153,7 +2153,34 @@ if (scenario !== undefined && scenario !== "") {
 									/artifact 'evidence\/never-captured\.json' was not staged by 'scm\.pull-request\.diff'/u,
 								);
 								assert.equal(existsSync(nodePath.join(cwd, "out/review-state.json")), false);
-								const reply = await report.execute("valid-transport", encoded("+ insecure();"));
+								const nullableEvidence = {
+									citations: [
+										{ ...changeCitation, side: null, revision: null, endLine: null, quote: null },
+									],
+									search: null,
+									inapplicability: null,
+									undecidability: null,
+								};
+								for (const [branch, warrant] of [
+									[
+										"inapplicability",
+										{ consulted: ["scm.pull-request.diff"], subject: "none", ruledOutBy: "none" },
+									],
+									["undecidability", { openQuestion: "none", wouldSettleIt: "none" }],
+								] as const) {
+									await assert.rejects(
+										report.execute("incompatible-warrant", {
+											...observation("test-practice", "Unsafe authentication call"),
+											evidence: { ...nullableEvidence, [branch]: warrant },
+										}),
+										new RegExp(`evidence\\.${branch} is permitted only`, "u"),
+									);
+								}
+								assert.equal(existsSync(nodePath.join(cwd, "out/review-state.json")), false);
+								const reply = await report.execute("valid-transport", {
+									...observation("test-practice", "Unsafe authentication call"),
+									evidence: nullableEvidence,
+								});
 								assert.ok(isRecord(reply) && isRecord(reply.details));
 								assert.equal(reply.details.inserted, 1);
 								assert.equal(reply.details.refused, 0);
@@ -3411,6 +3438,8 @@ if (scenario !== undefined && scenario !== "") {
 import { readFileSync } from "node:fs";
 const { validateToolArguments } = await import(import.meta.resolve("@earendil-works/pi-ai", import.meta.resolve("@earendil-works/pi-coding-agent")));
 const { stream } = await import(import.meta.resolve("@earendil-works/pi-ai/api/openai-completions", import.meta.resolve("@earendil-works/pi-coding-agent")));
+const { stream: responsesStream } = await import(import.meta.resolve("@earendil-works/pi-ai/api/openai-responses", import.meta.resolve("@earendil-works/pi-coding-agent")));
+const { convertResponsesTools } = await import(import.meta.resolve("@earendil-works/pi-ai/api/openai-responses-shared", import.meta.resolve("@earendil-works/pi-coding-agent")));
 const { prepareObservationArguments } = await import(process.argv[2]);
 const captured = JSON.parse(readFileSync(process.argv[1], "utf8"));
 const tool = { name: "report_observation", parameters: captured.parameters };
@@ -3451,6 +3480,41 @@ for (const item of [
 ]) {
   assert.deepEqual(validate(item), item);
 }
+// Nullable absence is valid for every outcome, including a provider that requires all declared fields.
+const absent = { search: null, inapplicability: null, undecidability: null };
+const withoutQuote = { ...citation, side: null, revision: null, endLine: null, quote: null };
+const nullableCases = [
+  { ...base, evidence: { citations: [withoutQuote], ...absent } },
+  { ...base, outcome: "MET", severity: null, evidence: { citations: [withoutQuote], ...absent } },
+  { ...base, outcome: "NOT_APPLICABLE", severity: null, evidence: { citations: [withoutQuote], ...absent, inapplicability: { consulted: [citation.sourceKind], subject: "Runtime behavior", ruledOutBy: "Only documentation changed." } } },
+  { ...base, outcome: "UNDETERMINED", severity: null, evidence: { citations: [withoutQuote], ...absent, undecidability: { openQuestion: "Was the described test run?", wouldSettleIt: "The referenced test report." } } },
+];
+const responseDeclaration = convertResponsesTools([{ ...tool, description: "Record observations." }])[0];
+assert.equal(responseDeclaration.strict, false);
+for (const item of nullableCases) {
+  assert.deepEqual(validate(item), item);
+  assert.deepEqual(validateToolArguments({ ...tool, parameters: responseDeclaration.parameters }, { name: tool.name, arguments: item }), item);
+}
+// Invalid primitives must not become null before outcome and citation validation sees them.
+for (const value of ["", false, true, 0, []]) {
+  for (const branch of Object.keys(absent)) {
+    assert.throws(() => validate({ ...base, evidence: { citations: [citation], [branch]: value } }));
+  }
+}
+for (const [field, invalid] of [
+  ["side", ["", false]], ["revision", ["", false]], ["endLine", ["", false]], ["quote", [false, 0]],
+]) {
+  for (const value of invalid) {
+    assert.throws(() => validate({ ...base, evidence: { citations: [{ ...citation, [field]: value }] } }));
+  }
+}
+for (const item of [
+  { ...base, evidence: { citations: [citation], inapplicability: {} } },
+  { ...base, evidence: { citations: [citation], undecidability: {} } },
+  { ...base, evidence: { citations: [citation], search: {} } },
+]) {
+  assert.throws(() => validate(item));
+}
 // Required nullable references survive native SDK preparation and validation unchanged.
 assert.equal(validate({ ...base, revises: null }).revises, null);
 assert.throws(() => validate(without(base, "revises")));
@@ -3482,7 +3546,19 @@ assert.equal(answer.stopReason, "error");
 assert.equal(payload.model, model.id);
 const outgoing = payload.tools.find((entry) => entry.function?.name === tool.name);
 assert.deepEqual(outgoing.function.parameters, tool.parameters);
-assert.notEqual(outgoing.function.strict, true);`,
+assert.notEqual(outgoing.function.strict, true);
+let responsesPayload;
+const responsesAnswer = await responsesStream(
+  { ...model, api: "openai-responses" },
+  { messages: [{ role: "system", content: "Record observations.", toolsAdded: [{ name: tool.name, description: "Record observations.", parameters: tool.parameters }], timestamp: 0 }, { role: "user", content: "Record it.", timestamp: 0 }] },
+  { apiKey: "test-key", onPayload: (params) => { responsesPayload = params; throw new Error("stopped before any request left"); } },
+).result();
+assert.equal(responsesAnswer.stopReason, "error");
+const responsesTool = responsesPayload.tools.find((entry) => entry.name === tool.name);
+assert.deepEqual(responsesTool.parameters, tool.parameters);
+for (const item of nullableCases) {
+  assert.deepEqual(validateToolArguments({ ...tool, parameters: responsesTool.parameters }, { name: tool.name, arguments: item }), item);
+}`,
 									nodePath.join(cwd, "observation-call.json"),
 									new URL("../../../main/resources/agent/pi-tool-arguments.ts", import.meta.url)
 										.href,

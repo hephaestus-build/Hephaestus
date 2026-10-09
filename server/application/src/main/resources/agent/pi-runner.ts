@@ -682,11 +682,11 @@ const evidenceSchema = {
 		"citations always: the lines that decide the outcome. Beside them, at most the one branch the " +
 		"outcome takes: search for a MET or NOT_MET that rests on something missing — what you looked " +
 		"for, where, and what the search did not cover; inapplicability for NOT_APPLICABLE; " +
-		"undecidability for UNDETERMINED.",
+		"undecidability for UNDETERMINED. Use null for branches that do not apply.",
 	properties: {
-		search: searchSchema,
-		inapplicability: inapplicabilitySchema,
-		undecidability: undecidabilitySchema,
+		search: { anyOf: [searchSchema, { type: "null" }] },
+		inapplicability: { anyOf: [inapplicabilitySchema, { type: "null" }] },
+		undecidability: { anyOf: [undecidabilitySchema, { type: "null" }] },
 		citations: {
 			type: "array",
 			minItems: 1,
@@ -706,13 +706,13 @@ const evidenceSchema = {
 					},
 					path: { type: "string", minLength: 1 },
 					side: {
-						type: "string",
-						enum: ["OLD", "NEW"],
+						type: ["string", "null"],
+						enum: ["OLD", "NEW", null],
 						description:
 							"For a quote of the change: artifactPath names the pinned change (change.json), path is the file as named on that side, and the lines are the [L<n>] coordinates of work/change/diff.patch.",
 					},
 					revision: {
-						type: "string",
+						type: ["string", "null"],
 						pattern: "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
 						description:
 							"For repository text: artifactPath names the captured .git/HEAD, path is repository-relative, and revision optionally selects a full commit SHA; omission means the captured HEAD.",
@@ -725,13 +725,13 @@ const evidenceSchema = {
 							"The 1-based line of the quoted text in the artifact; for a quote of the change, the [L<n>] coordinate of work/change/diff.patch.",
 					},
 					endLine: {
-						type: "integer",
+						type: ["integer", "null"],
 						minimum: 1,
 						maximum: 2_147_483_647,
 						description: "The last line of the quote, at least startLine; omitted means one line.",
 					},
 					quote: {
-						type: "string",
+						type: ["string", "null"],
 						description:
 							"The text at those lines, copied as shown; a diff marker, a [L<n>] prefix or a non-breaking space read as a space are tolerated. Omit it to cite the whole of the lines: what was recorded is echoed back.",
 					},
@@ -779,15 +779,7 @@ const observationSchema: ToolDefinition["parameters"] = {
 			enum: [...SEVERITY_VALUES, null],
 			description: `Required for a NOT_MET outcome, from the practice's Severity section; null otherwise. ${describeVocabulary(SEVERITY_VALUES, SEVERITY_DESCRIPTIONS)}`,
 		},
-		evidence: {
-			...evidenceSchema,
-			properties: {
-				citations: evidenceSchema.properties.citations,
-				search: searchSchema,
-				inapplicability: inapplicabilitySchema,
-				undecidability: undecidabilitySchema,
-			},
-		},
+		evidence: evidenceSchema,
 		evidenceRationale: {
 			type: "string",
 			minLength: 1,

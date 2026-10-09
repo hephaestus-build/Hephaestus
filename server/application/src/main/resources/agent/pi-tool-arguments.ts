@@ -41,6 +41,13 @@ export function prepareObservationArguments(args: unknown): Record<string, unkno
 	if (!isRecord(evidence) || Array.isArray(evidence)) {
 		return args;
 	}
+	// Pi may coerce an empty string or boolean to null; only explicit absence may omit evidence.
+	for (const branch of ["search", "inapplicability", "undecidability"]) {
+		const value = evidence[branch];
+		if (value != null && (!isRecord(value) || Array.isArray(value))) {
+			throw new Error(`evidence.${branch} must be an object or null`);
+		}
+	}
 	const citationList = container(evidence.citations, "array");
 	const citations =
 		isRecord(citationList) && !Array.isArray(citationList) ? [citationList] : citationList;
@@ -52,6 +59,18 @@ export function prepareObservationArguments(args: unknown): Record<string, unkno
 				? citations.map((citation: unknown) => {
 						if (!isRecord(citation) || Array.isArray(citation)) {
 							return citation;
+						}
+						for (const field of ["side", "revision", "quote"]) {
+							const value = citation[field];
+							if (value != null && typeof value !== "string") {
+								throw new Error(`evidence citation ${field} must be a string or null`);
+							}
+							if (field !== "quote" && typeof value === "string" && value.trim() === "") {
+								throw new Error(`evidence citation ${field} must be nonempty or null`);
+							}
+						}
+						if (citation.endLine != null && typeof line(citation.endLine) !== "number") {
+							throw new Error("evidence citation endLine must be a line coordinate or null");
 						}
 						return Object.fromEntries(
 							Object.entries(citation).map(([key, value]) => [
