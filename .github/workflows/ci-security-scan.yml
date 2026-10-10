@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: "false"
+      dependency_review_changed:
+        description: "Whether the changed paths require a new-dependency comparison"
+        required: false
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -15,7 +20,7 @@ jobs:
   dependency-review:
     name: "New dependency risk"
     runs-on: ubuntu-latest
-    if: inputs.should_skip != 'true' && github.event_name == 'pull_request'
+    if: inputs.should_skip != 'true' && github.event_name == 'pull_request' && inputs.dependency_review_changed
     timeout-minutes: 15
     permissions:
       contents: read
