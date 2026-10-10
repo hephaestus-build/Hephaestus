@@ -453,6 +453,29 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
+        void shouldListOnlyWhatAnAdminHidAndNeverAPersonWhoHidThemselves() {
+            TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
+            var identity = publicIdentities
+                    .findActiveByProviderSubject(
+                            Objects.requireNonNull(ada.getProvider().getId()),
+                            ada.getNativeId().toString(),
+                            null)
+                    .orElseThrow();
+            long accountId = Objects.requireNonNull(identity.getAccount().getId());
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2, DAY);
+            publicationChoice.setVisible(accountId, false);
+            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
+            assertThat(publicObjections.hiddenContributors(workspace.getId())).isEmpty();
+            var outside = persistUser("hidden-by-admin");
+            record(outside, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -3, DAY);
+            publicObjections.hide(workspace.getId(), outside.getId(), true);
+            assertThat(publicObjections.hiddenContributors(workspace.getId()))
+                    .extracting(person -> person.login())
+                    .containsExactly(outside.getLogin());
+        }
+
+        @Test
         void shouldExposeRobotsChoiceWithoutInternalIdentifiersAndSupportHead() {
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
             assertThat(page().allowSearchEngines()).isFalse();
@@ -889,6 +912,34 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
+        void shouldForgetTheSearchEngineChoiceWhenThePageTurnsOff() {
+            patchPublicActivity(true, true);
+            assertThat(page().allowSearchEngines()).isTrue();
+            patchPublicActivity(false, true);
+            assertThat(workspaceRepository
+                            .findById(workspace.getId())
+                            .orElseThrow()
+                            .isPublicActivitySearchEngines())
+                    .isFalse();
+            patchPublicActivity(true, false);
+            assertThat(page().allowSearchEngines()).isFalse();
+        }
+
+        private void patchPublicActivity(boolean enabled, boolean searchEngines) {
+            webTestClient
+                    .patch()
+                    .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
+                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                    .bodyValue(Map.of("publicActivityEnabled", enabled, "allowSearchEngines", searchEngines))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.allowSearchEngines")
+                    .isEqualTo(enabled && searchEngines);
+        }
+
+        @Test
         void shouldCacheOnlyAnonymousSuccessAndDefaultToNoIndex() {
             webTestClient
                     .get()
@@ -899,10 +950,15 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectHeader()
                     .valueEquals("Cache-Control", "max-age=60, public")
                     .expectHeader()
+                    .values(
+                            "Vary",
+                            values -> assertThat(String.join(",", values)).contains("Cookie", "Authorization"))
+                    .expectHeader()
                     .doesNotExist("Set-Cookie")
                     .expectHeader()
                     .valueEquals("X-Robots-Tag", "noindex")
                     .expectBody(Void.class);
+            // A signed-in reader sees their own choice at once, so no shared cache may hold it.
             webTestClient
                     .get()
                     .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
@@ -912,6 +968,10 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .isOk()
                     .expectHeader()
                     .valueEquals("Cache-Control", "no-store")
+                    .expectHeader()
+                    .values(
+                            "Vary",
+                            values -> assertThat(String.join(",", values)).contains("Cookie", "Authorization"))
                     .expectBody(Void.class);
             webTestClient
                     .get()
