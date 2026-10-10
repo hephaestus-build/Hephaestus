@@ -22,6 +22,51 @@
 		"workType": "pull_request"
 	},
 	{
+		"id": "guaranteed-location-update",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "MET"
+		},
+		"files": {
+			"repo/LocationManager.swift": "import CoreLocation\nimport Observation\n@Observable final class LocationManager: NSObject, CLLocationManagerDelegate {\n    var location: CLLocation?\n    var errorMessage: String?\n    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {\n        guard let latest = locations.last else { return }\n        location = latest\n    }\n    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {\n        errorMessage = error.localizedDescription\n    }\n}\n"
+		},
+		"reason": "The update callback's documented array is never empty, so its guard drops no failure; the failure callback records its error.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "guaranteed-location-update-only",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "NOT_APPLICABLE"
+		},
+		"files": {
+			"repo/LocationManager.swift": "import CoreLocation\nimport Observation\n@Observable final class LocationManager: NSObject, CLLocationManagerDelegate {\n    var location: CLLocation?\n    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {\n        guard let latest = locations.last else { return }\n        location = latest\n    }\n}\n"
+		},
+		"reason": "The exact update callback guarantees a nonempty locations array and no other failure path is added; the defensive guard does not make the practice applicable.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "dropped-location-failure",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "NOT_MET"
+		},
+		"files": {
+			"repo/LocationManager.swift": "import CoreLocation\nimport Observation\n@Observable final class LocationManager: NSObject, CLLocationManagerDelegate {\n    var location: CLLocation?\n    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {\n        guard let latest = locations.last else { return }\n        location = latest\n    }\n    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}\n}\n"
+		},
+		"reason": "The same guaranteed guard sits beside a failure callback that discards its error.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "discarded-runtime-amount-parse",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "NOT_MET"
+		},
+		"files": {
+			"context/description.md": "Parse a requested transfer amount and show whether it is ready or invalid.\n",
+			"repo/TransferModel.swift": "import Foundation\nfinal class TransferModel {\n    enum State { case idle, parsing, ready(Decimal), invalid }\n    private(set) var state = State.idle\n    func prepare(amountText: String) {\n        state = .parsing\n        guard let amount = Decimal(string: amountText) else { return }\n        state = .ready(amount)\n    }\n}\n"
+		},
+		"reason": "The amount comes from runtime input and can fail to parse; the return leaves parsing active, records no failure and supplies no established safe recovery.",
+		"workType": "pull_request"
+	},
+	{
 		"id": "recorded-error",
 		"expected": {
 			"handles-errors-instead-of-swallowing-them": "MET"

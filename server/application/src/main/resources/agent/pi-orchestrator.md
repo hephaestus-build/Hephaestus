@@ -85,8 +85,12 @@ what the cited lines actually read: copy from that.
    occasion, outcome or severity, establish its mechanism from the sources. An unsupported inference
    must not decide any of them. Known semantics of the language or API, applied to an
    unguarded path that the cited code has, can establish a risk without a run; a risk is not an
-   occurrence. Say whether a behavior is new in this change or was already there. A test covers only
-   the behavior it exercises, and a test that exists is not a test that ran: no "fails to compile",
+   occurrence. The same semantics can rule a case out: a branch written for a case shows what the
+   code guards against, not that the case can arise. Before treating a guarded case as a fault,
+   establish that it can arise from the type, the documented contract of the exact call or
+   callback, or where the value comes from; when these leave it open, the case stays possible, and
+   no guarantee is assumed. Say whether a behavior is new in this change or was already there. A test
+   covers only the behavior it exercises, and a test that exists is not a test that ran: no "fails to compile",
    "breaks", "was tested", and no claim that a check was executed. A checked box or a report of a
    test is a statement, not a receipt.
 3. Describe an evidenced fact about the work, never the author's character or intent.
