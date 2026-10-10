@@ -3657,9 +3657,22 @@ void test("Stories enforces visual evidence independently of preview publication
 	);
 	const chromatic = namedStep(workflow, jobPath, "Chromatic visual testing");
 	assert.equal(chromatic.get("if"), "success() && env.CHROMATIC_POLICY_SKIP != 'true'");
+	const preview = namedStep(workflow, jobPath, "Deploy public Storybook preview");
+	assert.equal(preview.get("continue-on-error"), true);
 	assert.equal(
-		namedStep(workflow, jobPath, "Deploy public Storybook preview").get("if"),
+		preview.get("if"),
 		"success() && github.event_name == 'pull_request' && env.CHROMATIC_POLICY_SKIP != 'true'",
+	);
+	for (const name of ["Prepare Storybook preview links", "Publish Storybook preview links"]) {
+		assert.equal(
+			namedStep(workflow, jobPath, name).get("if"),
+			"steps.storybook_preview.outcome == 'success'",
+		);
+	}
+	assert.equal(
+		namedStep(workflow, jobPath, "Create Storybook status check").get("if"),
+		"success() && ((github.event_name == 'pull_request' && steps.storybook_preview.outcome == 'success') || " +
+			"(github.event_name != 'pull_request' && startsWith(steps.chromatic.outputs.storybookUrl, 'http')))",
 	);
 	assert.equal(chromatic.getIn(["with", "autoAcceptChanges"]), false);
 	assert.equal(chromatic.getIn(["with", "exitZeroOnChanges"]), false);
