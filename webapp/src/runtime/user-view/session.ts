@@ -6,7 +6,7 @@ export const USER_VIEW_STORAGE_KEY = "hephaestus.user-view";
 
 const userViewSchema = z.object({
 	operatorAccountId: z.number().int().positive(),
-	workspaceSlug: z.string().regex(/^[a-z0-9][a-z0-9-]{2,50}$/u),
+	workspaceSlug: z.string().regex(/^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$/u),
 	workspaceName: z.string().min(1),
 	userId: z.number().int().positive(),
 	login: z.string().min(1),

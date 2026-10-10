@@ -12,7 +12,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class WorkspaceSlugServiceTest extends BaseUnitTest {
     @ParameterizedTest
-    @ValueSource(strings = {"docs", "pr123", "a", "über/team", "--", "team-", "xn--example"})
+    @ValueSource(strings = {"docs", "pr123", "a", "ab", "über/team", "--", "team-", "xn--example"})
     void shouldAllocateAssignableLabelWhenProviderNameIsNotASafeWorkspaceAddress(String desired) {
         var service = new WorkspaceSlugService(
                 mock(WorkspaceRepository.class),

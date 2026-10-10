@@ -56,10 +56,6 @@ Check that tenant hosts have the same registrable domain as the apex.
 A public suffix would put the apex and tenant hosts on different sites.
 The unchanged `SameSite` cookies would then prevent the tenant SPA from using the apex session.
 
-The list checked on 2026-10-09 contains `build`, but not `hephaestus.build` or `*.build`.
-It has no more-specific entries below `hephaestus.build`.
-Thus, `hephaestus.build` meets this precondition.
-Repeat the check for each self-hosted base domain and before deployment.
 See [MDN's site definition](https://developer.mozilla.org/en-US/docs/Glossary/Site).
 
 ## Register exact OAuth callbacks
@@ -102,34 +98,27 @@ A trusted origin can read the browser session through the apex API.
 The policy does not grant workspace membership.
 Every API request still passes the existing authorization checks.
 
-Spring's CORS filter sets `Vary: Origin` and allows credentials.
-SSE endpoints use the same HTTP filter.
-
-The worker and sandbox WebSockets are non-browser control channels.
-They retain their separate token authentication and default same-origin browser restriction.
-They do not accept tenant browser sessions.
-
 The tenant SPA cannot read the apex `__Host-XSRF-TOKEN` cookie.
 It must fetch `GET https://<apex>/api/auth/csrf` with credentials.
 The response contains the raw `token` and its `headerName`.
 Send that header on unsafe requests to the apex, with credentials.
-Fetch a new token after sign-in and sign-out.
+
+At startup and after sign-in or sign-out, fetch the token before any other credentialed request.
+Wait for the response before starting other requests.
+If an unsafe request fails with a CSRF 403, refetch the token once and retry that request once.
 OAuth sign-in and browser sign-out clear the previous CSRF cookie through Spring Security.
 
 The endpoint is available before sign-in and sends `Cache-Control: no-store`.
 Do not cache or compress this response at the edge.
 It must not appear in logs.
 
-The endpoint uses the token that Spring Security's filter already loaded.
-It does not disable BREACH masking elsewhere.
-See [Spring Security's SPA CSRF guidance](https://docs.spring.io/spring-security/reference/7.1/servlet/exploits/csrf.html).
 The auth cookies keep the `__Host-` prefix, `Secure`, `Path=/`, and no `Domain`.
 Return paths remain relative-only.
 Workspace detail and list responses expose the canonical `workspaceAddress` for the SPA.
 
 ## Workspace names and upgrade
 
-A slug is a lowercase ASCII DNS label with 1 to 63 characters.
+A slug is a lowercase ASCII DNS label with 3 to 51 characters.
 It cannot start or end with a hyphen.
 Consecutive hyphens are prohibited.
 This also excludes `xn--` names.
@@ -143,9 +132,9 @@ The migration preserves valid slugs.
 It replaces an invalid or reserved slug with `workspace-<id>`.
 If that address was already used, it adds a numeric suffix.
 The migration records the old address in slug history.
-Old workspace paths redirect directly to the current slug, with authorization unchanged.
+Old paths that match the previous slug format redirect directly to the current slug, with authorization unchanged.
 
-Rename redirects no longer expire or discard old entries.
+Rename redirects do not expire or discard old entries.
 A used slug cannot name another workspace, even after workspace deletion.
 Database reservations enforce this across concurrent writes.
 

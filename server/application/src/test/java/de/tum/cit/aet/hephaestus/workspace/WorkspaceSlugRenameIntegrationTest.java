@@ -78,14 +78,13 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
         ensureOwnerMembership(workspace);
         var history = new WorkspaceSlugHistory();
         history.setWorkspace(workspace);
-        history.setOldSlug("Mixed_Case");
+        history.setOldSlug("legacy--name");
         history.setNewSlug(workspace.getWorkspaceSlug());
-        history.setChangedAt(Instant.now());
-        history.setRedirectExpiresAt(Instant.now().minus(2, ChronoUnit.DAYS));
+        history.setChangedAt(Instant.now().minus(365, ChronoUnit.DAYS));
         workspaceSlugHistoryRepository.save(history);
         webTestClient
                 .get()
-                .uri("/workspaces/Mixed_Case")
+                .uri("/workspaces/legacy--name")
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
@@ -280,7 +279,7 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     @WithAdminUser
-    void shouldRejectReuseWhenLegacyHistoryHasExpired() {
+    void shouldRejectReuseWhenHistoryIsOld() {
         User owner = persistUser("expired-owner");
         Workspace workspace = createWorkspace("ttl-old", "Old", "old", AccountType.ORG, owner);
         ensureOwnerMembership(workspace);
@@ -290,7 +289,7 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
         WorkspaceSlugHistory history = workspaceSlugHistoryRepository
                 .findFirstByOldSlugOrderByChangedAtDesc("ttl-old")
                 .orElseThrow();
-        history.setRedirectExpiresAt(Instant.now().minus(2, ChronoUnit.DAYS));
+        history.setChangedAt(Instant.now().minus(365, ChronoUnit.DAYS));
         workspaceSlugHistoryRepository.save(history);
 
         assertThatThrownBy(() -> workspaceService.renameSlug(workspace.getId(), "ttl-old"))

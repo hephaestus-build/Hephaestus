@@ -10,8 +10,9 @@ import java.util.regex.Pattern;
  */
 public class WorkspaceSlugValidator implements ConstraintValidator<WorkspaceSlug, String> {
 
-    public static final int MAX_LENGTH = 63;
-    public static final String LABEL_PATTERN = "^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$";
+    public static final int MIN_LENGTH = 3;
+    public static final int MAX_LENGTH = 51;
+    public static final String LABEL_PATTERN = "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$";
     private static final Pattern LABEL = Pattern.compile(LABEL_PATTERN);
     private static final Set<String> RESERVED = Set.of(
             "www",
@@ -116,7 +117,7 @@ public class WorkspaceSlugValidator implements ConstraintValidator<WorkspaceSlug
             "notifications",
             "providers");
 
-    public static Set<String> reservedLabels() {
+    static Set<String> reservedLabels() {
         return RESERVED;
     }
 

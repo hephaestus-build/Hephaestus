@@ -351,24 +351,23 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
-    void shouldNotExposePrivateWorkspaceWhenLegacyRedirectHasExpired() {
-        User owner = persistUser("redirect-owner-expired");
-        Workspace workspace = createWorkspace("old-expired", "Expired", "expired", AccountType.ORG, owner);
+    void shouldNotExposePrivateWorkspaceWhenRedirectHistoryIsOld() {
+        User owner = persistUser("redirect-owner-private");
+        Workspace workspace = createWorkspace("old-private", "Private", "private", AccountType.ORG, owner);
 
         WorkspaceSlugHistory history = new WorkspaceSlugHistory();
         history.setWorkspace(workspace);
-        history.setOldSlug("old-expired");
-        history.setNewSlug("new-expired");
-        history.setChangedAt(Instant.now().minus(3, ChronoUnit.DAYS));
-        history.setRedirectExpiresAt(Instant.now().minus(1, ChronoUnit.DAYS));
+        history.setOldSlug("old-private");
+        history.setNewSlug("new-private");
+        history.setChangedAt(Instant.now().minus(365, ChronoUnit.DAYS));
         workspaceSlugHistoryRepository.save(history);
 
-        workspace.setWorkspaceSlug("new-expired");
+        workspace.setWorkspaceSlug("new-private");
         workspaceRepository.save(workspace);
 
         webTestClient
                 .get()
-                .uri("/workspaces/{workspaceSlug}/context-echo", "old-expired")
+                .uri("/workspaces/{workspaceSlug}/context-echo", "old-private")
                 .exchange()
                 .expectStatus()
                 .isNotFound()

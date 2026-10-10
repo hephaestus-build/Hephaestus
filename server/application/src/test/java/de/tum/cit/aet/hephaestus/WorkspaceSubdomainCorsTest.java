@@ -55,7 +55,7 @@ class WorkspaceSubdomainCorsTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"ls1intum", "unknown", "a", "1", "team-one"})
+    @ValueSource(strings = {"ls1intum", "unknown", "abc", "123", "team-one"})
     void shouldAllowCredentialsWithoutRevealingWorkspaceExistence(String label) throws Exception {
         String origin = "https://" + label + ".hephaestus.build";
         var response = preflight(source(true), origin);
@@ -70,6 +70,8 @@ class WorkspaceSubdomainCorsTest extends BaseUnitTest {
     @ValueSource(
             strings = {
                 "https://docs.hephaestus.build",
+                "https://a.hephaestus.build",
+                "https://ab.hephaestus.build",
                 "https://admin.hephaestus.build",
                 "https://pr123.hephaestus.build",
                 "https://postmaster.hephaestus.build",

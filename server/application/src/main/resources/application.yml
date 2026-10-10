@@ -277,7 +277,7 @@ hephaestus:
         # and first-login setup and account settings then omit the question entirely.
         research-organization: ${HEPHAESTUS_RESEARCH_ORGANIZATION:}
     auth:
-        issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:8080}
+        issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:${SERVER_PORT:8080}}
         audience: ${HEPHAESTUS_AUTH_AUDIENCE:hephaestus-spa}
         access-ttl: ${HEPHAESTUS_AUTH_ACCESS_TTL:24h}
         step-up-max-age: ${HEPHAESTUS_AUTH_STEP_UP_MAX_AGE:5m}

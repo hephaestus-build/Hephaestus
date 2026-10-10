@@ -1624,7 +1624,7 @@ export const getCsrfTokenQueryKey = (options?: Options<GetCsrfTokenData>) => cre
 /**
  * Get the raw CSRF token for the current browser
  *
- * Fetch with credentials after sign-in and sign-out. Send the token in the returned header on unsafe requests.
+ * Fetch with credentials before any other credentialed request at startup and after sign-in or sign-out. Wait for this response before starting other requests. Send the token in the returned header on unsafe requests. On a CSRF 403, refetch once and retry the rejected request once.
  */
 export const getCsrfTokenOptions = (options?: Options<GetCsrfTokenData>) => queryOptions<GetCsrfTokenResponse, DefaultError, GetCsrfTokenResponse, ReturnType<typeof getCsrfTokenQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {

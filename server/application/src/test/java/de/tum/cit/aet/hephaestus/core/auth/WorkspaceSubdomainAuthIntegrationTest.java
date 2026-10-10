@@ -14,19 +14,12 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-@TestPropertySource(
-        properties = {
-            "hephaestus.workspace.subdomains.enabled=true",
-                    "hephaestus.workspace.subdomains.base-domain=hephaestus.build",
-            "hephaestus.webapp.url=https://hephaestus.build", "hephaestus.auth.issuer=https://hephaestus.build",
-            "hephaestus.auth.api-base-path=/api"
-        })
 class WorkspaceSubdomainAuthIntegrationTest extends RealAuthIntegrationTest {
     private static final String ORIGIN = "https://auth-tenant.hephaestus.build";
     private static final String CSRF_COOKIE = "__Host-XSRF-TOKEN";
@@ -142,6 +135,53 @@ class WorkspaceSubdomainAuthIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isUnauthorized()
                 .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldRecoverWithOneRefetchWhenAnotherResponseReplacedTheCsrfCookie() {
+        var first = fetchCsrf(null);
+        var last = fetchCsrf(null);
+        assertThat(last.token()).isNotEqualTo(first.token());
+        var account = accounts.save(new Account("CSRF recovery"));
+        String session = issuer.issue(
+                        Objects.requireNonNull(account.getId()), TokenConstraints.session(null, null), null)
+                .value();
+        client.post()
+                .uri("/auth/logout")
+                .header(HttpHeaders.ORIGIN, ORIGIN)
+                .cookie(AuthProperties.DEFAULT_COOKIE_NAME, session)
+                .cookie(CSRF_COOKIE, last.token())
+                .header(first.headerName(), first.token())
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+
+        var refreshed = fetchCsrf(last.token());
+        assertThat(refreshed.token()).isEqualTo(last.token());
+        client.post()
+                .uri("/auth/logout")
+                .header(HttpHeaders.ORIGIN, ORIGIN)
+                .cookie(AuthProperties.DEFAULT_COOKIE_NAME, session)
+                .cookie(CSRF_COOKIE, last.token())
+                .header(refreshed.headerName(), refreshed.token())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+    }
+
+    private CsrfController.CsrfTokenDTO fetchCsrf(@Nullable String cookie) {
+        var request = client.get().uri("/auth/csrf").header(HttpHeaders.ORIGIN, ORIGIN);
+        if (cookie != null) {
+            request.cookie(CSRF_COOKIE, cookie);
+        }
+        return Objects.requireNonNull(request.exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(CsrfController.CsrfTokenDTO.class)
+                .returnResult()
+                .getResponseBody());
     }
 
     private Workspace persistWorkspace(String slug) {

@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class WorkspaceSlugService {
 
-    private static final int SLUG_MIN_LENGTH = 1;
+    private static final int SLUG_MIN_LENGTH = WorkspaceSlugValidator.MIN_LENGTH;
     private static final int SLUG_MAX_LENGTH = WorkspaceSlugValidator.MAX_LENGTH;
 
     private final WorkspaceRepository workspaceRepository;
@@ -132,7 +132,6 @@ public class WorkspaceSlugService {
         historyEntry.setOldSlug(oldSlug);
         historyEntry.setNewSlug(newSlug);
         historyEntry.setChangedAt(Instant.now());
-        historyEntry.setRedirectExpiresAt(null);
         workspaceSlugHistoryRepository.save(historyEntry);
     }
 

@@ -9,7 +9,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class WorkspaceSlugValidatorTest extends BaseUnitTest {
     @ParameterizedTest
-    @ValueSource(strings = {"a", "1", "ls1intum", "team-one", "ab-cd"})
+    @ValueSource(strings = {"abc", "123", "ls1intum", "team-one", "ab-cd"})
     void shouldAcceptSlugWhenItIsAnAssignableDnsLabel(String slug) {
         assertThat(WorkspaceSlugValidator.isAssignable(slug)).isTrue();
     }
@@ -18,6 +18,8 @@ class WorkspaceSlugValidatorTest extends BaseUnitTest {
     @ValueSource(
             strings = {
                 "",
+                "a",
+                "ab",
                 "Team",
                 "tëam",
                 "team_name",
@@ -64,8 +66,8 @@ class WorkspaceSlugValidatorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldBoundSlugLengthAtTheDnsLimit() {
-        assertThat(WorkspaceSlugValidator.isAssignable("a".repeat(63))).isTrue();
-        assertThat(WorkspaceSlugValidator.isAssignable("a".repeat(64))).isFalse();
+    void shouldKeepExistingSlugLengthBounds() {
+        assertThat(WorkspaceSlugValidator.isAssignable("a".repeat(51))).isTrue();
+        assertThat(WorkspaceSlugValidator.isAssignable("a".repeat(52))).isFalse();
     }
 }

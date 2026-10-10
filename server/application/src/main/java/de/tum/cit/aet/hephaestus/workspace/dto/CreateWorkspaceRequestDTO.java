@@ -27,7 +27,7 @@ public record CreateWorkspaceRequestDTO(
         @Schema(
                 description = "Non-reserved lowercase ASCII DNS label. Consecutive hyphens are prohibited.",
                 pattern = WorkspaceSlugValidator.LABEL_PATTERN,
-                minLength = 1,
+                minLength = WorkspaceSlugValidator.MIN_LENGTH,
                 maxLength = WorkspaceSlugValidator.MAX_LENGTH,
                 example = "my-workspace")
         @Nullable

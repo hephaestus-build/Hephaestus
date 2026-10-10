@@ -18,7 +18,7 @@ import java.lang.annotation.Target;
 @Target({FIELD, PARAMETER})
 @Retention(RUNTIME)
 public @interface WorkspaceSlug {
-    String message() default "Choose a non-reserved lowercase DNS label with at most 63 characters.";
+    String message() default "Choose a non-reserved lowercase DNS label with 3 to 51 characters.";
 
     Class<?>[] groups() default {};
 

@@ -20,7 +20,7 @@ LOCK TABLE workspace, workspace_slug_history IN ACCESS EXCLUSIVE MODE;
 
 CREATE FUNCTION workspace_slug_assignable(label text) RETURNS boolean
 LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
-    SELECT length(label) BETWEEN 1 AND 63
+    SELECT length(label) BETWEEN 3 AND 51
         AND label COLLATE "C" ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
         AND position('--' IN label) = 0
         AND label !~ '^pr[0-9]+$'
@@ -58,14 +58,13 @@ BEGIN
             replacement := 'workspace-' || tenant.id || '-' || attempt;
         END LOOP;
         INSERT INTO workspace_slug_reservation(slug) VALUES (replacement);
-        INSERT INTO workspace_slug_history(workspace_id, old_slug, new_slug, changed_at, redirect_expires_at)
-            VALUES (tenant.id, tenant.slug, replacement, CURRENT_TIMESTAMP, NULL);
+        INSERT INTO workspace_slug_history(workspace_id, old_slug, new_slug, changed_at)
+            VALUES (tenant.id, tenant.slug, replacement, CURRENT_TIMESTAMP);
         UPDATE workspace SET slug = replacement WHERE id = tenant.id;
     END LOOP;
 END;
 $$;
 
-UPDATE workspace_slug_history SET redirect_expires_at = NULL;
 ALTER TABLE workspace ADD CONSTRAINT chk_workspace_slug_assignable CHECK (workspace_slug_assignable(slug));
 
 CREATE FUNCTION reserve_workspace_slug() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -80,5 +79,8 @@ CREATE TRIGGER trg_reserve_workspace_slug BEFORE INSERT OR UPDATE OF slug ON wor
     FOR EACH ROW EXECUTE FUNCTION reserve_workspace_slug();
         ]]></sql>
         <rollback><stop>Workspace addresses and reservations cannot be undone safely. Restore a verified pre-upgrade database backup.</stop></rollback>
+    </changeSet>
+    <changeSet id="1791582260680-3" author="hephaestus">
+        <dropColumn columnName="redirect_expires_at" tableName="workspace_slug_history"/>
     </changeSet>
 </databaseChangeLog>

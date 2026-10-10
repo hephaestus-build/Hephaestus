@@ -1,11 +1,10 @@
-package de.tum.cit.aet.hephaestus;
+package de.tum.cit.aet.hephaestus.workspace.validation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
-import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -55,7 +54,11 @@ class WorkspaceSubdomainMigrationTest {
                            (997004, 'workspace-997001', 'collision', 'ORG', now(), 'Collision', false, 'ACTIVE'),
                            (997005, 'xn--old', 'old', 'ORG', now(), 'Old', false, 'ACTIVE'),
                            (997006, 'Mixed_Case', 'mixed', 'ORG', now(), 'Mixed', false, 'ACTIVE'),
-                           (997007, 'a--b', 'consecutive', 'ORG', now(), 'Consecutive', false, 'ACTIVE');
+                           (997007, 'a--b', 'consecutive', 'ORG', now(), 'Consecutive', false, 'ACTIVE'),
+                           (997008, 'a', 'short-one', 'ORG', now(), 'Short', false, 'ACTIVE'),
+                           (997009, 'ab', 'short-two', 'ORG', now(), 'Short', false, 'ACTIVE'),
+                           (997010, repeat('a', 52), 'long', 'ORG', now(), 'Long', false, 'ACTIVE'),
+                           (997011, repeat('a', 51), 'boundary', 'ORG', now(), 'Boundary', false, 'ACTIVE');
                     INSERT INTO workspace_slug_history(workspace_id, old_slug, new_slug, changed_at, redirect_expires_at)
                     VALUES (997003, 'historic-team', 'ls1intum', now(), now() - interval '1 day'),
                            (997003, 'workspace-997002', 'historic-team', now(), now() - interval '2 days');
@@ -73,7 +76,7 @@ class WorkspaceSubdomainMigrationTest {
     @Test
     void shouldPreserveValidLabelsAndRedirectInvalidLabelsWhenMigrationRuns() throws Exception {
         try (var connection = connect()) {
-            assertThat(strings(connection, "SELECT slug FROM workspace WHERE id BETWEEN 997001 AND 997007 ORDER BY id"))
+            assertThat(strings(connection, "SELECT slug FROM workspace WHERE id BETWEEN 997001 AND 997011 ORDER BY id"))
                     .containsExactly(
                             "workspace-997001-1",
                             "workspace-997002-1",
@@ -81,16 +84,29 @@ class WorkspaceSubdomainMigrationTest {
                             "workspace-997001",
                             "workspace-997005",
                             "workspace-997006",
-                            "workspace-997007");
+                            "workspace-997007",
+                            "workspace-997008",
+                            "workspace-997009",
+                            "workspace-997010",
+                            "a".repeat(51));
             assertThat(strings(
                             connection,
-                            "SELECT old_slug FROM workspace_slug_history WHERE workspace_id BETWEEN 997001 AND 997007"))
+                            "SELECT old_slug FROM workspace_slug_history WHERE workspace_id BETWEEN 997001 AND 997011"))
                     .containsExactlyInAnyOrder(
-                            "Mixed_Case", "docs", "historic-team", "team-", "workspace-997002", "xn--old", "a--b");
+                            "Mixed_Case",
+                            "docs",
+                            "historic-team",
+                            "team-",
+                            "workspace-997002",
+                            "xn--old",
+                            "a--b",
+                            "a",
+                            "ab",
+                            "a".repeat(52));
             assertThat(
                             strings(
                                     connection,
-                                    "SELECT old_slug FROM workspace_slug_history WHERE workspace_id BETWEEN 997001 AND 997007 AND redirect_expires_at IS NOT NULL"))
+                                    "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'workspace_slug_history' AND column_name = 'redirect_expires_at'"))
                     .isEmpty();
         }
     }
@@ -113,7 +129,8 @@ class WorkspaceSubdomainMigrationTest {
                 "tëam",
                 "with.dot",
                 "with_under",
-                "a".repeat(63),
+                "a".repeat(51),
+                "a".repeat(52),
                 "a".repeat(64),
                 ""));
         try (var connection = connect();

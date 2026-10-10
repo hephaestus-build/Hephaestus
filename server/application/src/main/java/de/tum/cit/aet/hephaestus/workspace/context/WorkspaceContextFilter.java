@@ -130,12 +130,7 @@ public class WorkspaceContextFilter implements Filter {
         var matcher = WORKSPACE_PATH_PATTERN.matcher(path);
 
         if (!matcher.matches()) {
-            String oldSlug = extractInvalidSlug(path);
-            String remaining = path.substring("/workspaces/".length() + oldSlug.length());
-            if (handleSlugRedirect(httpRequest, httpResponse, oldSlug, remaining)) {
-                return;
-            }
-            sendWorkspaceSlugValidationError(httpResponse, oldSlug);
+            sendWorkspaceSlugValidationError(httpResponse, extractInvalidSlug(path));
             return;
         }
 
