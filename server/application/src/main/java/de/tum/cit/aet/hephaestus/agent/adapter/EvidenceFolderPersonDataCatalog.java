@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService;
@@ -103,7 +104,8 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
             UUID copyId = UUID.randomUUID();
             long workspace = job.getWorkspace().getId();
             lease = EvidenceFolderLease.tryAcquire(layout.root(), workspace, job.getId())
-                    .orElseThrow(() -> new IllegalStateException("Another attempt still holds this evidence folder"));
+                    .orElseThrow(() ->
+                            new ReviewSourceNotReadyException("Another attempt still holds this evidence folder"));
             provenance = recorder.begin();
             ObjectNode receipt = mapper.createObjectNode();
             receipt.put("attempt", job.getRetryCount());

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService;
@@ -229,6 +230,42 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
         try (var transferred = catalog.finishCapture(next)) {
             assertThat(transferred).isNotNull();
         }
+    }
+
+    @Test
+    void shouldDeferTheCaptureUntilTheHolderOfTheJobsEvidenceFolderReleasesIt() throws Exception {
+        databaseTestUtils.cleanDatabase();
+        var catalog = catalog(root, new ExactPersonDataCopyRecorder(jdbc));
+        var job = job("held-evidence-folder");
+        long workspaceId = job.getWorkspace().getId();
+        var holder =
+                EvidenceFolderLease.tryAcquire(root, workspaceId, job.getId()).orElseThrow();
+        try (holder) {
+            assertThatThrownBy(() -> catalog.beginCapture(job)).isInstanceOf(ReviewSourceNotReadyException.class);
+
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM person_evidence_copy WHERE job_id=?", Long.class, job.getId()))
+                    .isZero();
+            assertThat(EvidenceFolderLease.tryAcquire(root, workspaceId, job.getId()))
+                    .as("the holder keeps the folder")
+                    .isEmpty();
+            assertThat(jdbc.queryForObject("""
+                            SELECT count(*) FROM pg_locks
+                            WHERE locktype='advisory' AND classid=2165 AND objid=1 AND objsubid=2
+                              AND database=(SELECT oid FROM pg_database WHERE datname=current_database())
+                              AND granted
+                            """, Long.class))
+                    .as("the deferred capture holds no copy admission")
+                    .isZero();
+        }
+
+        catalog.beginCapture(job);
+        try (var transferred = catalog.finishCapture(job)) {
+            assertThat(transferred).isNotNull();
+        }
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM person_evidence_copy WHERE job_id=?", String.class, job.getId()))
+                .isEqualTo("READY");
     }
 
     @Test
