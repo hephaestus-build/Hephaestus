@@ -15,8 +15,8 @@ import type { ObservationPage, ReviewContext, WorkFeedback } from "~/shared/revi
  * instance (and, locally, web app) origins the user typed in the options page, which the worker
  * validates again.
  */
-// The server's own slug rule (`Workspace.workspaceSlug`).
-const slug = z.string().regex(/^[a-z0-9][a-z0-9-]{2,50}$/u);
+// Mirrors WorkspaceSlugValidator.LABEL_PATTERN on the server; reserved names are checked there.
+const slug = z.string().regex(/^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$/u);
 
 /**
  * Which work a read is about: the tab's own page, or one row of the list the tab shows. The row's

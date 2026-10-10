@@ -48,6 +48,7 @@ public class WorkspaceScopedTables {
             // Tenant root + identity
             "workspace",
             "workspace_slug_history",
+            "workspace_slug_reservation",
             "user",
             "user_preferences",
             // Synced upstream identity (workspace linked separately via FK)

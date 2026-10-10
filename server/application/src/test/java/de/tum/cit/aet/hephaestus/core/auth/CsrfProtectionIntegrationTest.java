@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.web.CsrfController;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,47 @@ class CsrfProtectionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @Test
+    void shouldReturnRawCookieTokenWhenAnonymousBrowserFetchesCsrf() {
+        var result = webTestClient
+                .get()
+                .uri("/auth/csrf")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .valueEquals(HttpHeaders.CACHE_CONTROL, "no-store")
+                .expectBody(CsrfController.CsrfTokenDTO.class)
+                .returnResult();
+        var body = result.getResponseBody();
+        assertThat(body).isNotNull();
+        var cookie = result.getResponseCookies().getFirst(XSRF_COOKIE);
+        assertThat(cookie).isNotNull();
+        assertThat(body.token()).isEqualTo(cookie.getValue());
+        assertThat(body.headerName()).isEqualTo(XSRF_HEADER);
+        assertThat(cookie.isSecure()).isTrue();
+        assertThat(cookie.getPath()).isEqualTo("/");
+        assertThat(cookie.getDomain()).isNull();
+        webTestClient
+                .post()
+                .uri("/auth/logout")
+                .cookie(XSRF_COOKIE, body.token())
+                .header(body.headerName(), body.token())
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+        webTestClient
+                .get()
+                .uri("/auth/csrf")
+                .cookie(XSRF_COOKIE, body.token())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(CsrfController.CsrfTokenDTO.class)
+                .value(next -> assertThat(next.token()).isEqualTo(body.token()));
+    }
 
     @Test
     void csrfCookieIsIssuedOnSafeRequest() {

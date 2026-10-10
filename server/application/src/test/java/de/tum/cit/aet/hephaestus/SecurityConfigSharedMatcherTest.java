@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceOriginPolicy;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -89,6 +90,7 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
         assertThatThrownBy(() -> new SecurityConfig(
                         new CorsProperties(List.of("https://example.com")),
                         noClients(),
+                        new StaticListableBeanFactory().getBeanProvider(WorkspaceOriginPolicy.class),
                         environment,
                         false,
                         false,
@@ -105,6 +107,7 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
         assertThatThrownBy(() -> new SecurityConfig(
                         new CorsProperties(List.of("https://example.com")),
                         noClients(),
+                        new StaticListableBeanFactory().getBeanProvider(WorkspaceOriginPolicy.class),
                         environment,
                         false,
                         false,
@@ -121,6 +124,7 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
         assertThat(new SecurityConfig(
                         new CorsProperties(List.of("https://example.com")),
                         noClients(),
+                        new StaticListableBeanFactory().getBeanProvider(WorkspaceOriginPolicy.class),
                         dev,
                         false,
                         false,

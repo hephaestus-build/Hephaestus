@@ -49,27 +49,16 @@ public class LoginProviderAdminController {
 
     private final LoginProviderService loginProviderService;
 
-    /** Proxy-stripped API prefix re-added to the displayed callback URL — see {@code AuthProperties#apiBasePath}. */
-    private final String apiBasePath;
+    private final String callbackBase;
 
     public LoginProviderAdminController(LoginProviderService loginProviderService, AuthProperties authProperties) {
         this.loginProviderService = loginProviderService;
-        this.apiBasePath = authProperties.apiBasePath();
-    }
-
-    /**
-     * Public callback base the admin registers on the upstream OAuth app: the request origin (scheme +
-     * host, restored by native forward-headers) plus the proxy-stripped API prefix. The per-provider
-     * {@code /login/oauth2/code/{id}} segment is appended in {@link #toView}.
-     */
-    private String callbackBase() {
-        return ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString() + apiBasePath;
+        this.callbackBase = authProperties.oauthCallbackBase();
     }
 
     @GetMapping
     @Operation(summary = "List login providers", operationId = "adminListLoginProviders")
     public ResponseEntity<List<LoginProviderViewDTO>> list() {
-        String callbackBase = callbackBase();
         return ResponseEntity.ok(loginProviderService.listAll().stream()
                 .map(p -> toView(p, callbackBase))
                 .toList());
@@ -89,7 +78,7 @@ public class LoginProviderAdminController {
                 body.clientId(),
                 body.clientSecret(),
                 body.scopes()));
-        LoginProviderViewDTO view = toView(created, callbackBase());
+        LoginProviderViewDTO view = toView(created, callbackBase);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{registrationId}")
                 .buildAndExpand(created.getRegistrationId())
@@ -112,7 +101,7 @@ public class LoginProviderAdminController {
                         body.clientSecret(),
                         body.scopes(),
                         body.enabled()));
-        return ResponseEntity.ok(toView(updated, callbackBase()));
+        return ResponseEntity.ok(toView(updated, callbackBase));
     }
 
     @DeleteMapping("/{registrationId}")

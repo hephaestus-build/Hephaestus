@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +58,8 @@ public class WorkspaceQueryService {
     private final Map<IntegrationKind, WorkspaceProviderAvailability> providerAvailability;
 
     private final WorkspaceProperties workspaceProperties;
+    private final WorkspaceSubdomainProperties subdomains;
+    private final String webappUrl;
 
     public WorkspaceQueryService(
             WorkspaceRepository workspaceRepository,
@@ -65,6 +68,8 @@ public class WorkspaceQueryService {
             CurrentAccountUsers currentAccountUsers,
             ConnectionService connectionService,
             WorkspaceProperties workspaceProperties,
+            WorkspaceSubdomainProperties subdomains,
+            @Value("${hephaestus.webapp.url}") String webappUrl,
             List<WorkspaceProviderAvailability> providerAvailabilityList) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
@@ -72,6 +77,8 @@ public class WorkspaceQueryService {
         this.currentAccountUsers = currentAccountUsers;
         this.connectionService = connectionService;
         this.workspaceProperties = workspaceProperties;
+        this.subdomains = subdomains;
+        this.webappUrl = webappUrl;
         Map<IntegrationKind, WorkspaceProviderAvailability> map = new EnumMap<>(IntegrationKind.class);
         for (WorkspaceProviderAvailability a : providerAvailabilityList) {
             map.put(a.kind(), a);
@@ -86,7 +93,11 @@ public class WorkspaceQueryService {
      * DTO factory (keeps controllers under the 5-constructor-param arch rule).
      */
     public WorkspaceDTO toWorkspaceDTO(Workspace workspace) {
-        return WorkspaceDTO.from(workspace, connectionService);
+        return WorkspaceDTO.from(workspace, connectionService, workspaceAddress(workspace));
+    }
+
+    private String workspaceAddress(Workspace workspace) {
+        return subdomains.address(workspace.getWorkspaceSlug(), webappUrl);
     }
 
     /**
@@ -97,11 +108,12 @@ public class WorkspaceQueryService {
         var viewed = UserViewContextHolder.get();
         if (viewed != null) {
             return workspaceRepository.findById(viewed.workspaceId()).stream()
-                    .map(workspace -> WorkspaceListItemDTO.from(workspace, connectionService))
+                    .map(workspace ->
+                            WorkspaceListItemDTO.from(workspace, connectionService, workspaceAddress(workspace)))
                     .toList();
         }
         return findAccessibleWorkspaces().stream()
-                .map(w -> WorkspaceListItemDTO.from(w, connectionService))
+                .map(w -> WorkspaceListItemDTO.from(w, connectionService, workspaceAddress(w)))
                 .toList();
     }
 

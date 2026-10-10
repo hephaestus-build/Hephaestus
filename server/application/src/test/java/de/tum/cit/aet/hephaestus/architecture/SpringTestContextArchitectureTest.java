@@ -124,6 +124,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
+            "testconfig.RealAuthIntegrationTest",
             "agent.handler.PracticeReviewPipelineIntegrationTest",
             "agent.mentor.chat.MentorWorkerSplitIntegrationTest",
             "notification.AccountDeletionEmailIntegrationTest",

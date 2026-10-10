@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus;
 
 import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
 import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
@@ -344,7 +345,10 @@ public class OpenAPIConfiguration {
                             .in("path")
                             .required(true)
                             .description("Workspace slug")
-                            .schema(new StringSchema().pattern("^[a-z0-9][a-z0-9-]{2,50}$")));
+                            .schema(new StringSchema()
+                                    .pattern(WorkspaceSlugValidator.LABEL_PATTERN)
+                                    .minLength(WorkspaceSlugValidator.MIN_LENGTH)
+                                    .maxLength(WorkspaceSlugValidator.MAX_LENGTH)));
         }
     }
 

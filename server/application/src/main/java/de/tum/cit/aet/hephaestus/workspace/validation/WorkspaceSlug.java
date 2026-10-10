@@ -18,8 +18,7 @@ import java.lang.annotation.Target;
 @Target({FIELD, PARAMETER})
 @Retention(RUNTIME)
 public @interface WorkspaceSlug {
-    String message() default
-            "Slug must be 3 to 51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens";
+    String message() default "Choose a non-reserved lowercase DNS label with 3 to 51 characters.";
 
     Class<?>[] groups() default {};
 

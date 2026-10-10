@@ -396,7 +396,7 @@ class ProductionSchemaContractIntegrationTest {
     @ParameterizedTest
     @MethodSource("invalidDispatchStates")
     void shouldRejectContradictoryDispatchState(String assignment, String constraint) {
-        UUID dispatchId = insertDispatch("invalid-dispatch-" + UUID.randomUUID());
+        UUID dispatchId = insertDispatch("dispatch-" + UUID.randomUUID());
 
         assertThatThrownBy(() ->
                         jdbcTemplate.update("UPDATE feedback_dispatch SET " + assignment + " WHERE id = ?", dispatchId))
@@ -500,7 +500,7 @@ class ProductionSchemaContractIntegrationTest {
     @ParameterizedTest
     @MethodSource("invalidPracticeSlugs")
     void feedbackDispatchRequiresAStringArrayOfPracticeSlugs(String practiceSlugs) {
-        UUID dispatchId = insertDispatch("invalid-practice-slugs-" + UUID.randomUUID());
+        UUID dispatchId = insertDispatch("practice-slugs-" + UUID.randomUUID());
 
         assertThatThrownBy(() -> jdbcTemplate.update(
                         "UPDATE feedback_dispatch SET practice_slugs = CAST(? AS jsonb) WHERE id = ?",
@@ -571,9 +571,8 @@ class ProductionSchemaContractIntegrationTest {
     void feedbackWithdrawalKeepsRestorationFactsAfterAttributionErasure(String assignment, boolean accepted) {
         long account = Objects.requireNonNull(
                 accountRepository.save(new Account("Withdrawal actor")).getId());
-        DispatchOwner owner = insertDispatchOwner("withdrawal-restore-" + UUID.randomUUID());
-        UUID withdrawal =
-                insertWithdrawal(owner, insertFeedback(owner, "withdrawal-restore-" + UUID.randomUUID()), account);
+        DispatchOwner owner = insertDispatchOwner("restore-" + UUID.randomUUID());
+        UUID withdrawal = insertWithdrawal(owner, insertFeedback(owner, "restore-" + UUID.randomUUID()), account);
 
         String update = "UPDATE feedback_withdrawal SET " + assignment.formatted(account) + " WHERE id = ?";
         if (accepted) {
@@ -595,7 +594,7 @@ class ProductionSchemaContractIntegrationTest {
         long account = Objects.requireNonNull(
                 accountRepository.save(new Account("Withdrawal actor")).getId());
         DispatchOwner owner = insertDispatchOwner("withdrawal-" + UUID.randomUUID());
-        DispatchOwner other = insertDispatchOwner("withdrawal-other-" + UUID.randomUUID());
+        DispatchOwner other = insertDispatchOwner("other-" + UUID.randomUUID());
         UUID feedbackId = insertFeedback(owner, "withdrawal-" + UUID.randomUUID());
 
         assertThatThrownBy(() -> insertWithdrawal(other, feedbackId, account))

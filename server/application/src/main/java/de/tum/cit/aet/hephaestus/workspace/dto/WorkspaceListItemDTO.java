@@ -16,6 +16,9 @@ public record WorkspaceListItemDTO(
         @NonNull @Schema(description = "URL-friendly identifier for the workspace", example = "my-workspace")
         String workspaceSlug,
 
+        @NonNull @Schema(description = "Canonical workspace address. Uses the apex path when subdomains are off.")
+        String workspaceAddress,
+
         @NonNull @Schema(description = "Human-readable name of the workspace")
         String displayName,
 
@@ -34,7 +37,8 @@ public record WorkspaceListItemDTO(
 
         @NonNull @Schema(description = "Whether practice reviews are on")
         Boolean practicesEnabled) {
-    public static WorkspaceListItemDTO from(Workspace workspace, ConnectionService connectionService) {
+    public static WorkspaceListItemDTO from(
+            Workspace workspace, ConnectionService connectionService, String workspaceAddress) {
         IdentityProviderType providerType = connectionService
                 .findActiveProviderKind(workspace.getId())
                 .map(IdentityProviderType::from)
@@ -42,6 +46,7 @@ public record WorkspaceListItemDTO(
         return new WorkspaceListItemDTO(
                 workspace.getId(),
                 workspace.getWorkspaceSlug(),
+                workspaceAddress,
                 workspace.getDisplayName(),
                 workspace.getStatus().name(),
                 workspace.getAccountLogin(),
