@@ -15,6 +15,20 @@ Before you push, run `check`.
 Before you request review, run `verify`.
 `vp run` with no task name lists every task, and `vite.config.ts` is where each one is defined.
 
+## Dependency installation
+
+After changing dependency declarations, the lockfile, package-manager settings, or declared patches,
+reconcile the installed dependencies before local gates.
+This includes changes from a branch switch, rebase, or merge.
+
+```sh
+vp install --frozen-lockfile
+```
+
+The native package manager reconciles the installed graph and checks declared patches.
+A frozen install preserves the lockfile.
+See [Local development](./local-development.mdx#prerequisites) for the pinned toolchain.
+
 ## Affected selection
 
 The command compares committed, staged, unstaged, untracked, and deleted paths with the merge base of
