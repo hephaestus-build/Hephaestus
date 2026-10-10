@@ -48,6 +48,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Tracer;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -187,7 +188,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("a dead worker's RUNNING job is requeued (retry_count++) and becomes claimable again")
     void orphanRecoveryRequeuesAndBecomesClaimable() {
         UUID jobId = runningJobOwnedBy("dead-replica", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        registerStaleWorker("dead-replica", Instant.now().minus(Duration.ofMinutes(5)));
+        registerStaleWorker("dead-replica");
 
         sweeper.recoverOrphanedJobs();
 
@@ -205,7 +206,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("orphan requeue rotates the job token — the old token no longer authenticates, the new one does")
     void orphanRequeueRotatesTheJobToken() {
         UUID jobId = runningJobOwnedBy("dead-replica", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        registerStaleWorker("dead-replica", Instant.now().minus(Duration.ofMinutes(5)));
+        registerStaleWorker("dead-replica");
         AgentJob before = jobRepository.findById(jobId).orElseThrow();
         String oldTokenHash = before.getJobTokenHash();
 
@@ -232,7 +233,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("a direct claim attempt made WHILE still backed off does not succeed")
     void claimAttemptWhileStillBackedOffDoesNotSucceed() {
         UUID jobId = runningJobOwnedBy("dead-replica-5", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        registerStaleWorker("dead-replica-5", Instant.now().minus(Duration.ofMinutes(5)));
+        registerStaleWorker("dead-replica-5");
 
         sweeper.recoverOrphanedJobs();
 
@@ -251,7 +252,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("a job whose available_at is in the future is not offered as a poll candidate")
     void jobWithFutureAvailableAtIsNotClaimed() {
         UUID jobId = runningJobOwnedBy("dead-replica-4", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        registerStaleWorker("dead-replica-4", Instant.now().minus(Duration.ofMinutes(5)));
+        registerStaleWorker("dead-replica-4");
 
         sweeper.recoverOrphanedJobs();
 
@@ -269,7 +270,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("an orphan already at the retry cap is failed, not requeued again")
     void orphanPastRetryCapIsFailedNotRequeued() {
         UUID jobId = runningJobOwnedBy("dead-replica-2", Instant.now().minus(Duration.ofMinutes(5)), 5);
-        registerStaleWorker("dead-replica-2", Instant.now().minus(Duration.ofMinutes(5)));
+        registerStaleWorker("dead-replica-2");
 
         sweeper.recoverOrphanedJobs();
 
@@ -331,7 +332,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         UUID jobId = runningJobOwnedBy("dead-replica-6", Instant.now().minus(Duration.ofMinutes(5)), 0);
         Observation observed = admitWithObservation(jobId);
         changePracticeDefinition();
-        registerStaleWorker("dead-replica-6", Instant.now().minus(Duration.ofMinutes(5)));
+        registerStaleWorker("dead-replica-6");
         AgentJob before = jobRepository.findById(jobId).orElseThrow();
 
         sweeper.recoverOrphanedJobs();
@@ -391,7 +392,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("recovery waiting on the admission's row lock decides on what the admission left behind")
     void shouldDecideOnTheCommittedAdmissionWhenRecoveryWaitsForItsRowLock(boolean committed) throws Exception {
         UUID jobId = runningJobOwnedBy("dead-replica-7", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        registerStaleWorker("dead-replica-7", Instant.now().minus(Duration.ofMinutes(5)));
+        registerStaleWorker("dead-replica-7");
 
         whileRecoveryWaits(
                 jobId,
@@ -416,7 +417,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("recovery leaves alone an attempt a new claim took while it waited for the row lock")
     void shouldLeaveTheNewClaimAloneWhenTheOrphanWasReclaimedWhileRecoveryWaited() throws Exception {
         UUID jobId = runningJobOwnedBy("dead-replica-8", Instant.now().minus(Duration.ofMinutes(5)), 5);
-        registerStaleWorker("dead-replica-8", Instant.now().minus(Duration.ofMinutes(5)));
+        registerStaleWorker("dead-replica-8");
 
         whileRecoveryWaits(jobId, true, job -> {
             job.setWorkerId("live-sibling");
@@ -550,7 +551,13 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         return jobRepository.saveAndFlush(job).getId();
     }
 
-    private void registerStaleWorker(String workerId, Instant lastHeartbeat) {
+    private void registerStaleWorker(String workerId) {
+        // The orphan query judges the lease on the database clock.
+        Instant lastHeartbeat = requireNonNull(jdbc.queryForObject(
+                        "SELECT now() - make_interval(secs => ?)",
+                        OffsetDateTime.class,
+                        AgentProperties.WORKER_LEASE_TTL.plusMinutes(1).toSeconds()))
+                .toInstant();
         WorkerRegistry w = new WorkerRegistry();
         w.setWorkerId(workerId);
         w.setLastHeartbeat(lastHeartbeat);

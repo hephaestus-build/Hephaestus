@@ -160,6 +160,35 @@ and are excluded from every other tier. From `server/`, explicitly opt in with:
 
 Use `--tests ClassName` to select a suite. An unmatched filter fails.
 
+To send only some catalogue criteria cases to the model, name their `id` values from
+`src/test/resources/practices/criteria-cases.json`:
+
+```bash
+./gradlew :application:liveTest -PcriteriaCases=dependency-label,dependency-import-without-declaration-edit
+```
+
+The property first runs the selected fixture-staging checks, then those cases of
+`PracticeRunnerLiveLlmTest` and no other live test.
+Each case is reported under its `id`, not its position in the file.
+A blank, repeated or unknown `id` fails the run instead of sending every case.
+Without the property, the live tier runs every case.
+First check the same selection without credentials or a model:
+
+```bash
+./gradlew :application:integrationTest -PcriteriaCases=dependency-label,dependency-import-without-declaration-edit
+```
+
+This runs only the selected cases in `PracticeCriteriaCaseStagingIntegrationTest`.
+Each invocation stages the evidence and shipped criteria used by the live harness.
+It proves selection and fixture staging, not model outcomes.
+
+Gradle's test dry run does not execute a parameterized method's argument source.
+Use the staging results to count selected case IDs. A dry-run report cannot prove that count.
+The live credential gate remains in effect.
+
+Do not combine `criteriaCases` with `HEPHAESTUS_INTEGRATION_SHARD`.
+The tasks reject that combination instead of adding unrelated shard tests.
+
 ### Meta-annotation cheat sheet
 
 Use one of these composite annotations on the test class (or method) rather than wiring `@Tag("live") + @EnabledIfEnvironmentVariable` by hand. They keep gates uniform and put the env-var contract in one place.

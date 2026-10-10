@@ -516,7 +516,9 @@
 	},
 	{
 		"id": "issue-link-in-body-without-commit-capture",
-		"omit": ["context/commits.json"],
+		"omit": [
+			"context/commits.json"
+		],
 		"expected": {
 			"links-the-change-to-its-issue": "MET"
 		},
@@ -561,7 +563,9 @@
 	},
 	{
 		"id": "resolved-review-request-without-commit-capture",
-		"omit": ["context/commits.json"],
+		"omit": [
+			"context/commits.json"
+		],
 		"expected": {
 			"engaging-with-inline-review-comments": "MET"
 		},
@@ -1303,6 +1307,105 @@
 			"repo/package-lock.json": "{\"name\":\"reports\",\"version\":\"1.0.0\",\"lockfileVersion\":3,\"requires\":true,\"packages\":{\"\":{\"name\":\"reports\",\"version\":\"1.0.0\",\"dependencies\":{\"format-kit\":\"^1.0.0\"}},\"node_modules/format-kit\":{\"version\":\"1.0.1\",\"resolved\":\"https://registry.npmjs.org/format-kit/-/format-kit-1.0.1.tgz\"}}}\n"
 		},
 		"reason": "A resolution change on its own is an occasion. The patch resolution stays inside the unchanged manifest range, so the refresh is coherent and needs no prose.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "superseded-search-cancellation",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "MET"
+		},
+		"files": {
+			"repo/Sources/RecipeSearch.swift": "import Foundation\nimport OSLog\nimport SwiftUI\n\nstruct Recipe: Identifiable, Decodable, Sendable {\n    let id: Int\n    let name: String\n}\n\nstruct RecipeClient: Sendable {\n    func recipes(matching text: String) async throws -> [Recipe] {\n        var components = URLComponents(string: \"https://example.org/recipes\")\n        components?.queryItems = [URLQueryItem(name: \"q\", value: text)]\n        guard let url = components?.url else { throw URLError(.badURL) }\n        let (data, _) = try await URLSession.shared.data(from: url)\n        return try JSONDecoder().decode([Recipe].self, from: data)\n    }\n}\n\n@MainActor @Observable\nfinal class RecipeSearchModel {\n    enum State { case idle, loading, results([Recipe]), failed }\n\n    var text = \"\"\n    private(set) var state = State.idle\n    private let client = RecipeClient()\n    private let logger = Logger(subsystem: \"example\", category: \"search\")\n\n    func search() async {\n        guard !text.isEmpty else { state = .idle; return }\n        state = .loading\n        do {\n            try await Task.sleep(for: .milliseconds(300))\n            state = .results(try await client.recipes(matching: text))\n        } catch is CancellationError {\n            return\n        } catch let error as URLError where error.code == .cancelled {\n            return\n        } catch {\n            logger.error(\"Recipe search failed: \\(error)\")\n            state = .failed\n        }\n    }\n}\n\nstruct RecipeSearchView: View {\n    @State private var model = RecipeSearchModel()\n\n    var body: some View {\n        Group {\n            switch model.state {\n            case .idle: Text(\"Search for a recipe\")\n            case .loading: ProgressView()\n            case let .results(recipes): List(recipes) { Text($0.name) }\n            case .failed: Text(\"Search failed. Try again.\")\n            }\n        }\n        .searchable(text: $model.text)\n        .task(id: model.text) { await model.search() }\n    }\n}\n"
+		},
+		"reason": "Each new search text cancels the previous task, whose successor then sets the state, so the quiet cancellation catches are control flow; the real request and decoding failures are logged and shown.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "refused-challenge-reported-as-cancellation",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "NOT_MET"
+		},
+		"files": {
+			"repo/Sources/RecipeFeed.swift": "import Foundation\nimport OSLog\nimport SwiftUI\n\nstruct Recipe: Identifiable, Decodable, Sendable {\n    let id: Int\n    let name: String\n}\n\nstruct RecipeClient {\n    func load(from url: URL) async throws -> Data {\n        let (data, response) = try await URLSession.shared.data(from: url)\n        guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {\n            throw URLError(.cancelled)\n        }\n        return data\n    }\n}\n\n@MainActor @Observable\nfinal class RecipeFeedModel {\n    enum State { case idle, loading, loaded([Recipe]), failed }\n\n    private(set) var state = State.idle\n    private let client = RecipeClient()\n    private let logger = Logger(subsystem: \"example\", category: \"feed\")\n\n    func refresh() async {\n        guard let url = URL(string: \"https://example.org/recipes/today\") else { return }\n        state = .loading\n        do {\n            let data = try await client.load(from: url)\n            state = .loaded(try JSONDecoder().decode([Recipe].self, from: data))\n        } catch let error as URLError where error.code == .cancelled {\n            return\n        } catch {\n            logger.error(\"Recipe refresh failed: \\(error)\")\n            state = .failed\n        }\n    }\n}\n\nstruct RecipeFeedView: View {\n    @State private var model = RecipeFeedModel()\n\n    var body: some View {\n        VStack {\n            switch model.state {\n            case .idle: Text(\"Today's recipes\")\n            case .loading: ProgressView()\n            case let .loaded(recipes): List(recipes) { Text($0.name) }\n            case .failed: Text(\"Couldn't load recipes.\")\n            }\n            Button(\"Refresh\") { Task { await model.refresh() } }\n        }\n    }\n}\n"
+		},
+		"reason": "The client explicitly maps a refused or invalid HTTP response to a cancellation error. Nothing cancels the refresh task or replaces its state; the quiet catch leaves loading unfinished and records no failure. The error's name does not make that response failure expected cancellation.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "debounce-cancellation-only",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "NOT_APPLICABLE"
+		},
+		"files": {
+			"repo/Sources/DraftEditor.swift": "import SwiftUI\n\n@MainActor @Observable\nfinal class DraftModel {\n    var text = \"\"\n    private(set) var wordCount = 0\n\n    func textChanged() async {\n        try? await Task.sleep(for: .milliseconds(400))\n        guard !Task.isCancelled else { return }\n        wordCount = text.split(whereSeparator: \\.isWhitespace).count\n    }\n}\n\nstruct DraftEditor: View {\n    @State private var model = DraftModel()\n\n    var body: some View {\n        VStack(alignment: .leading) {\n            TextEditor(text: $model.text)\n            Text(\"\\(model.wordCount) words\").font(.footnote)\n        }\n        .task(id: model.text) { await model.textChanged() }\n    }\n}\n"
+		},
+		"reason": "The sleep can end only by cancellation, which a newer edit causes and whose successor updates the count; the change adds no other failure path.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "artwork-hidden-beside-its-title",
+		"expected": {
+			"makes-ui-accessible-by-default": "MET"
+		},
+		"files": {
+			"repo/Sources/AlbumRow.swift": "import SwiftUI\n\nstruct Album: Identifiable {\n    let id: Int\n    let title: String\n    let artist: String\n    let artworkURL: URL?\n}\n\nstruct AlbumRow: View {\n    let album: Album\n    @ScaledMetric(relativeTo: .headline) private var artworkSize: CGFloat = 56\n\n    var body: some View {\n        HStack(spacing: 12) {\n            AsyncImage(url: album.artworkURL) { image in\n                image.resizable().scaledToFill()\n            } placeholder: {\n                Image(systemName: \"music.note\")\n            }\n            .frame(width: artworkSize, height: artworkSize)\n            .clipShape(.rect(cornerRadius: 6))\n            .accessibilityHidden(true)\n\n            VStack(alignment: .leading) {\n                Text(album.title).font(.headline)\n                Text(album.artist).font(.subheadline).foregroundStyle(.secondary)\n            }\n        }\n        .accessibilityElement(children: .combine)\n    }\n}\n"
+		},
+		"reason": "The row is read as one element whose title and artist already name the album, so hiding the artwork avoids repeating them.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "artwork-only-identifier-hidden",
+		"expected": {
+			"makes-ui-accessible-by-default": "NOT_MET"
+		},
+		"files": {
+			"repo/Sources/RecentShelf.swift": "import SwiftUI\n\nstruct Album: Identifiable {\n    let id: Int\n    let title: String\n    let artworkURL: URL?\n}\n\nstruct RecentShelf: View {\n    let albums: [Album]\n\n    var body: some View {\n        VStack(alignment: .leading) {\n            Text(\"Recently Played\").font(.headline)\n            ScrollView(.horizontal) {\n                HStack {\n                    ForEach(albums) { album in\n                        AsyncImage(url: album.artworkURL) { image in\n                            image.resizable().scaledToFit()\n                        } placeholder: {\n                            Color.secondary.opacity(0.2)\n                        }\n                        .frame(width: 96, height: 96)\n                        .accessibilityHidden(true)\n                    }\n                }\n            }\n        }\n    }\n}\n"
+		},
+		"reason": "Each artwork is the only thing that identifies its album and no text gives the title, so hiding it removes the shelf's content from a screen reader.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "preview-appearance-variants",
+		"expected": {
+			"removes-duplication-instead-of-copy-pasting": "MET"
+		},
+		"files": {
+			"repo/Sources/ReadingProgressView.swift": "import SwiftUI\n\nstruct Reading: Identifiable {\n    let id: Int\n    let title: String\n    let pagesRead: Int\n    let pageCount: Int\n}\n\nstruct ReadingProgressView: View {\n    let readings: [Reading]\n\n    var body: some View {\n        List(readings) { reading in\n            VStack(alignment: .leading) {\n                Text(reading.title).font(.headline)\n                ProgressView(value: Double(reading.pagesRead), total: Double(reading.pageCount))\n            }\n        }\n    }\n}\n\n#Preview(\"Light\") {\n    ReadingProgressView(readings: [\n        Reading(id: 1, title: \"The Left Hand of Darkness\", pagesRead: 120, pageCount: 304),\n        Reading(id: 2, title: \"Piranesi\", pagesRead: 245, pageCount: 245)\n    ])\n}\n\n#Preview(\"Dark\") {\n    ReadingProgressView(readings: [\n        Reading(id: 1, title: \"The Left Hand of Darkness\", pagesRead: 120, pageCount: 304),\n        Reading(id: 2, title: \"Piranesi\", pagesRead: 245, pageCount: 245)\n    ])\n    .preferredColorScheme(.dark)\n}\n\n#Preview(\"Large Text\") {\n    ReadingProgressView(readings: [\n        Reading(id: 1, title: \"The Left Hand of Darkness\", pagesRead: 120, pageCount: 304),\n        Reading(id: 2, title: \"Piranesi\", pagesRead: 245, pageCount: 245)\n    ])\n    .dynamicTypeSize(.accessibility3)\n}\n"
+		},
+		"reason": "The previews show one sample in other appearances; their repeated setup is parallel fixture data, not a maintained rule.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "repeated-due-rule-beside-preview-variants",
+		"expected": {
+			"removes-duplication-instead-of-copy-pasting": "NOT_MET"
+		},
+		"files": {
+			"repo/Sources/Chores.swift": "import SwiftUI\n\nstruct Chore: Identifiable {\n    let id: Int\n    let title: String\n    let due: Date\n    let isDone: Bool\n}\n\nstruct ChoreRow: View {\n    let chore: Chore\n    let now: Date\n\n    var body: some View {\n        HStack {\n            Text(chore.title)\n            Spacer()\n            if !chore.isDone && chore.due < now {\n                Text(\"Overdue\").foregroundStyle(.red)\n            } else if !chore.isDone && chore.due < now.addingTimeInterval(86_400) {\n                Text(\"Due soon\").foregroundStyle(.orange)\n            }\n        }\n    }\n}\n\nstruct ChoreSummary: View {\n    let chores: [Chore]\n    let now: Date\n\n    var body: some View {\n        let overdue = chores.filter { !$0.isDone && $0.due < now }.count\n        let dueSoon = chores.filter { !$0.isDone && $0.due >= now && $0.due < now.addingTimeInterval(86_400) }.count\n        Text(\"\\(overdue) overdue, \\(dueSoon) due soon\")\n    }\n}\n\n#Preview(\"Light\") {\n    ChoreSummary(chores: [\n        Chore(id: 1, title: \"Water plants\", due: .now.addingTimeInterval(-3_600), isDone: false),\n        Chore(id: 2, title: \"Take out recycling\", due: .now.addingTimeInterval(7_200), isDone: false)\n    ], now: .now)\n}\n\n#Preview(\"Dark\") {\n    ChoreSummary(chores: [\n        Chore(id: 1, title: \"Water plants\", due: .now.addingTimeInterval(-3_600), isDone: false),\n        Chore(id: 2, title: \"Take out recycling\", due: .now.addingTimeInterval(7_200), isDone: false)\n    ], now: .now)\n    .preferredColorScheme(.dark)\n}\n"
+		},
+		"reason": "The row and the summary each define when an open chore is overdue or due soon, so changing that rule needs the same correction in both views; the repeated preview samples are not the lapse.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "preview-host-default-idle-and-held-loading",
+		"expected": {
+			"ships-a-preview-with-each-new-view": "MET"
+		},
+		"files": {
+			"repo/Sources/StationSearchView.swift": "import SwiftUI\n\nstruct Station: Identifiable, Decodable, Sendable {\n    let id: String\n    let name: String\n    let minutesAway: Int\n}\n\nprotocol StationSearching: Sendable {\n    func stations(near query: String) async throws -> [Station]\n}\n\nstruct LiveStationSearch: StationSearching {\n    func stations(near query: String) async throws -> [Station] {\n        var components = URLComponents(string: \"https://example.org/stations\")\n        components?.queryItems = [URLQueryItem(name: \"q\", value: query)]\n        guard let url = components?.url else { throw URLError(.badURL) }\n        let (data, _) = try await URLSession.shared.data(from: url)\n        return try JSONDecoder().decode([Station].self, from: data)\n    }\n}\n\n@MainActor @Observable\nfinal class StationSearchModel {\n    enum State { case idle, loading, results([Station]), failed }\n\n    var query: String\n    private(set) var state = State.idle\n    private let client: any StationSearching\n\n    init(query: String = \"\", client: any StationSearching = LiveStationSearch()) {\n        self.query = query\n        self.client = client\n    }\n\n    func search() async {\n        guard !query.isEmpty else { state = .idle; return }\n        state = .loading\n        do { state = .results(try await client.stations(near: query)) }\n        catch { state = .failed }\n    }\n}\n\nstruct StationSearchView: View {\n    @State private var model: StationSearchModel\n\n    init(model: StationSearchModel = StationSearchModel()) {\n        _model = State(initialValue: model)\n    }\n\n    var body: some View {\n        StationSearchContent(state: model.state)\n            .navigationTitle(\"Stations\")\n            .searchable(text: $model.query)\n            .task(id: model.query) { await model.search() }\n    }\n}\n\nprivate struct StationSearchContent: View {\n    let state: StationSearchModel.State\n\n    var body: some View {\n        switch state {\n        case .idle:\n            ContentUnavailableView(\"Find a Station\", systemImage: \"tram\", description: Text(\"Search by stop name.\"))\n        case .loading:\n            ProgressView(\"Searching…\")\n        case let .results(stations):\n            List(stations) { station in\n                LabeledContent(station.name, value: \"\\(station.minutesAway) min\")\n            }\n        case .failed:\n            ContentUnavailableView(\"Stations Unavailable\", systemImage: \"wifi.exclamationmark\", description: Text(\"Try again in a moment.\"))\n        }\n    }\n}\n\nprivate struct SampleStationSearch: StationSearching {\n    var results: [Station] = []\n    var fails = false\n\n    func stations(near query: String) async throws -> [Station] {\n        if fails { throw URLError(.notConnectedToInternet) }\n        return results\n    }\n}\n\n#Preview(\"Results\") {\n    NavigationStack {\n        StationSearchView(model: StationSearchModel(query: \"Main\", client: SampleStationSearch(results: [\n            Station(id: \"1\", name: \"Main Street\", minutesAway: 2),\n            Station(id: \"2\", name: \"Main Square\", minutesAway: 11)\n        ])))\n    }\n}\n\n#Preview(\"Start\") {\n    NavigationStack { StationSearchView() }\n}\n\n#Preview(\"Loading\") {\n    StationSearchContent(state: .loading)\n}\n\n#Preview(\"Unavailable\") {\n    NavigationStack {\n        StationSearchView(model: StationSearchModel(query: \"Main\", client: SampleStationSearch(fails: true)))\n    }\n}\n"
+		},
+		"reason": "The default-constructed host starts idle and its empty query keeps it idle without a fetch, so that preview supplies the idle state; samples supply results and failure, and a preview holds the loading state.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "preview-host-passes-through-loading-only",
+		"expected": {
+			"ships-a-preview-with-each-new-view": "NOT_MET"
+		},
+		"files": {
+			"repo/Sources/StationSearchView.swift": "import SwiftUI\n\nstruct Station: Identifiable, Decodable, Sendable {\n    let id: String\n    let name: String\n    let minutesAway: Int\n}\n\nprotocol StationSearching: Sendable {\n    func stations(near query: String) async throws -> [Station]\n}\n\nstruct LiveStationSearch: StationSearching {\n    func stations(near query: String) async throws -> [Station] {\n        var components = URLComponents(string: \"https://example.org/stations\")\n        components?.queryItems = [URLQueryItem(name: \"q\", value: query)]\n        guard let url = components?.url else { throw URLError(.badURL) }\n        let (data, _) = try await URLSession.shared.data(from: url)\n        return try JSONDecoder().decode([Station].self, from: data)\n    }\n}\n\n@MainActor @Observable\nfinal class StationSearchModel {\n    enum State { case idle, loading, results([Station]), failed }\n\n    var query: String\n    private(set) var state = State.idle\n    private let client: any StationSearching\n\n    init(query: String = \"\", client: any StationSearching = LiveStationSearch()) {\n        self.query = query\n        self.client = client\n    }\n\n    func search() async {\n        guard !query.isEmpty else { state = .idle; return }\n        state = .loading\n        do { state = .results(try await client.stations(near: query)) }\n        catch { state = .failed }\n    }\n}\n\nstruct StationSearchView: View {\n    @State private var model: StationSearchModel\n\n    init(model: StationSearchModel = StationSearchModel()) {\n        _model = State(initialValue: model)\n    }\n\n    var body: some View {\n        StationSearchContent(state: model.state)\n            .navigationTitle(\"Stations\")\n            .searchable(text: $model.query)\n            .task(id: model.query) { await model.search() }\n    }\n}\n\nprivate struct StationSearchContent: View {\n    let state: StationSearchModel.State\n\n    var body: some View {\n        switch state {\n        case .idle:\n            ContentUnavailableView(\"Find a Station\", systemImage: \"tram\", description: Text(\"Search by stop name.\"))\n        case .loading:\n            ProgressView(\"Searching…\")\n        case let .results(stations):\n            List(stations) { station in\n                LabeledContent(station.name, value: \"\\(station.minutesAway) min\")\n            }\n        case .failed:\n            ContentUnavailableView(\"Stations Unavailable\", systemImage: \"wifi.exclamationmark\", description: Text(\"Try again in a moment.\"))\n        }\n    }\n}\n\nprivate struct SampleStationSearch: StationSearching {\n    var results: [Station] = []\n    var fails = false\n\n    func stations(near query: String) async throws -> [Station] {\n        if fails { throw URLError(.notConnectedToInternet) }\n        return results\n    }\n}\n\n#Preview(\"Results\") {\n    NavigationStack {\n        StationSearchView(model: StationSearchModel(query: \"Main\", client: SampleStationSearch(results: [\n            Station(id: \"1\", name: \"Main Street\", minutesAway: 2),\n            Station(id: \"2\", name: \"Main Square\", minutesAway: 11)\n        ])))\n    }\n}\n\n#Preview(\"Start\") {\n    NavigationStack { StationSearchView() }\n}\n\n#Preview(\"Unavailable\") {\n    NavigationStack {\n        StationSearchView(model: StationSearchModel(query: \"Main\", client: SampleStationSearch(fails: true)))\n    }\n}\n"
+		},
+		"reason": "The same previews supply idle, results and failure, but loading appears only on the way to a sample result, so no preview holds the loading state the content view declares.",
 		"workType": "pull_request"
 	}
 ]

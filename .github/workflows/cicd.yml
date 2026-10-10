@@ -408,6 +408,7 @@ jobs:
               - '.github/workflows/ci-build.yml'
               - 'scripts/postgres-backup-restore-test.ts'
               - 'scripts/postgres-pitr-test.ts'
+              - 'scripts/lib/database-migration.ts'
               - '.github/workflows/reusable-docker-build.yml'
               - '.github/actions/setup-toolchain/**'
               - '.github/actions/setup-caches/**'

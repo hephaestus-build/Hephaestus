@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -61,6 +62,9 @@ class AgentJobPollFairnessIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private LlmModel instanceModel;
 
@@ -254,7 +258,12 @@ class AgentJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         // — created_at is `updatable=false`, so a second UPDATE after the initial INSERT would silently
         // no-op instead of changing it.
         job.setCreatedAt(createdAt);
-        return jobRepository.saveAndFlush(job).getId();
+        UUID jobId = jobRepository.saveAndFlush(job).getId();
+        // The candidate query compares available_at with the database clock; an older createdAt keeps its order.
+        jdbc.update(
+                "UPDATE agent_job SET available_at = LEAST(created_at, now() - interval '1 second') WHERE id = ?",
+                jobId);
+        return jobId;
     }
 
     private ObjectNode snapshot(@Nullable DataHandlingTier tier) {

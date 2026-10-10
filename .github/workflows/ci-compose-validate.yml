@@ -23,6 +23,9 @@ jobs:
         with:
           install: "frozen"
 
+      - name: Verify workspace subdomain routing and reversal
+        run: vp run test:workspace-subdomains
+
       - name: Render the self-hosted stack
         working-directory: docker/self-host
         run: |
@@ -143,14 +146,16 @@ jobs:
             'contentsecuritypolicy' \
             'default-src' \
             'stsseconds' \
-            '2592000' \
-            'minversion' \
-            'versiontls12'; do
+            '2592000'; do
             grep -Fiq "$required" <<< "$rendered" || {
               echo "::error::runtime edge envelope is missing '$required'"; exit 1; }
           done
-          edge_csp=$(sed -n 's/.*contentSecurityPolicy=\(.*\)"/\1/p' ../compose.proxy.yaml)
-          selfhost_csp=$(sed -n 's/.*contentSecurityPolicy=\(.*\)"/\1/p' compose.single-host.yaml)
+          jq -er '.configs["traefik-dynamic"].content' <<< "$rendered_json" \
+            | grep -Eq '^[[:space:]]*minVersion:[[:space:]]*VersionTLS12[[:space:]]*$' || {
+              echo "::error::the rendered file-provider config does not require TLS 1.2"; exit 1; }
+          edge_csp=$(docker compose --env-file .env --env-file smoke-lock.env -f ../compose.proxy.yaml config --format json \
+            | jq -r '.services["reverse-proxy"].labels["traefik.http.middlewares.security-headers.headers.contentSecurityPolicy"]')
+          selfhost_csp=$(jq -r '.services["reverse-proxy"].labels["traefik.http.middlewares.security-headers.headers.contentSecurityPolicy"]' <<< "$rendered_json")
           nginx_csp=$(sed -n 's/add_header Content-Security-Policy "\(.*\)" always;/\1/p' ../../webapp/docker/security-headers.conf)
           [ "$edge_csp" = "$nginx_csp" ] || {
             echo "::error::Traefik and nginx Content-Security-Policy values differ"; exit 1; }

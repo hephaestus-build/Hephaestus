@@ -187,8 +187,8 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-  # Each drill runs Gradle against its own named containers, so it takes its own checkout rather
-  # than queueing behind databaseTest's Gradle invocation.
+  # Each drill migrates its own named containers from the packaged JAR, so it takes its own job
+  # rather than queueing behind databaseTest's Gradle invocation.
   postgres-drill:
     name: "App Server: PostgreSQL drill (${{ matrix.drill }})"
     if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true'
@@ -209,6 +209,7 @@ jobs:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
       - uses: ./.github/actions/restore-server-build
+        id: server
         with:
           artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
       - uses: ./.github/actions/postgres-image
@@ -219,6 +220,7 @@ jobs:
       - name: Run the PostgreSQL ${{ matrix.drill }} drill
         env:
           DRILL: ${{ matrix.drill }}
+          HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
         run: node "scripts/postgres-$DRILL-test.ts" --target-image hephaestus-postgres:ci
 
   webapp-e2e:
