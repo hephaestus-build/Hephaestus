@@ -166,6 +166,16 @@ void test("copies whole native sessions without the attempt credential and summa
 				modelFailures: {},
 				lastModelFailureAt: null,
 				finalModelFailure: null,
+				unattributedModelFailures: 0,
+				// A message without a call span is not timed, never timed as zero.
+				modelCallTiming: {
+					timedCalls: 0,
+					respondedCalls: 0,
+					elapsedMs: 0,
+					failedElapsedMs: 0,
+					maxElapsedMs: 0,
+					responseMs: 0,
+				},
 			},
 		},
 	]);
@@ -197,6 +207,21 @@ function failedCall(id: string, stopReason: string, diagnostics: unknown): strin
 	});
 }
 
+const span = (details: unknown) => ({
+	type: "openai_completions_call",
+	timestamp: 1_760_000_000_000,
+	details,
+});
+
+const timing = (timed: number, responded: number, elapsed: number, response: number) => ({
+	timedCalls: timed,
+	respondedCalls: responded,
+	elapsedMs: elapsed,
+	failedElapsedMs: timed === 0 ? 0 : 1200,
+	maxElapsedMs: timed === 0 ? 0 : 1200,
+	responseMs: response,
+});
+
 void test("keeps only the adapter's closed failure facts, and clears the final failure after a success", async (context) => {
 	const { sessions, out } = await collected(context);
 	const header = JSON.stringify({
@@ -206,12 +231,15 @@ void test("keeps only the adapter's closed failure facts, and clears the final f
 		timestamp: "2026-10-09T12:00:00.000Z",
 		cwd: "/workspace",
 	});
+
+	// The request got no response: a span without a response time.
 	const safe = [
 		{
 			type: "openai_completions_failure",
 			timestamp: 1_760_000_000_000,
 			details: { kind: "HTTP_ERROR", phase: "request", status: 503 },
 		},
+		span({ elapsedMs: 1200 }),
 	];
 	const malicious = [
 		{
@@ -220,37 +248,87 @@ void test("keeps only the adapter's closed failure facts, and clears the final f
 			error: { message: CREDENTIAL, stack: CREDENTIAL },
 			details: { kind: CREDENTIAL, phase: CREDENTIAL, status: 200, body: CREDENTIAL },
 		},
+		span({ elapsedMs: -1, responseMs: CREDENTIAL }),
 	];
-	const success = failedCall("e3", "stop", undefined);
+	// The adapter itself stated UNKNOWN: attributed, though its cause is not known.
+	const stated = [
+		{ type: "openai_completions_failure", timestamp: 1, details: { kind: "UNKNOWN" } },
+	];
+	const success = failedCall("e3", "stop", [span({ elapsedMs: 900, responseMs: 300 })]);
 	await writeFile(
 		path.join(sessions, "a.jsonl"),
-		`${[header, failedCall("e1", "error", safe), failedCall("e2", "aborted", malicious)].join("\n")}\n`,
+		`${[header, failedCall("e1", "error", safe), failedCall("e2", "aborted", malicious), failedCall("e4", "error", stated)].join("\n")}\n`,
 	);
 	await writeFile(
 		path.join(sessions, "b.jsonl"),
 		`${[header, failedCall("e1", "error", safe), success].join("\n")}\n`,
 	);
+	// A failure from before call spans, or from another protocol: no diagnostic at all.
+	await writeFile(
+		path.join(sessions, "c.jsonl"),
+		`${[header, failedCall("e1", "error", undefined)].join("\n")}\n`,
+	);
 	await collectTraces(sessions, out, CREDENTIAL);
 	const text = await readFile(path.join(out, "traces", "manifest.json"), "utf8");
 	assert.ok(!text.includes(CREDENTIAL));
 	const summaries = traceManifest(text).sessions.map((session) => omission(session).summary);
+
+	const none = { phase: null, status: null, at: null };
 	assert.deepEqual(
 		summaries.map((summary) => {
 			assert.ok(typeof summary === "object" && summary !== null);
-			const failures: unknown = Reflect.get(summary, "modelFailures");
-			const lastAt: unknown = Reflect.get(summary, "lastModelFailureAt");
-			const final: unknown = Reflect.get(summary, "finalModelFailure");
-			return [failures, lastAt, final];
+			return [
+				"modelFailures",
+				"lastModelFailureAt",
+				"finalModelFailure",
+				"unattributedModelFailures",
+				"modelCallTiming",
+			].map((key): unknown => Reflect.get(summary, key));
 		}),
 		[
 			[
-				{ HTTP_ERROR: 1, UNKNOWN: 1 },
-				1_760_000_000_000,
-				{ kind: "UNKNOWN", phase: null, status: null, at: null },
+				{ HTTP_ERROR: 1, UNKNOWN: 2 },
+				1,
+				{ kind: "UNKNOWN", source: "ADAPTER", ...none, at: 1 },
+				1,
+				timing(1, 0, 1200, 0),
 			],
-			[{ HTTP_ERROR: 1 }, 1_760_000_000_000, null],
+			[{ HTTP_ERROR: 1 }, 1_760_000_000_000, null, 0, timing(2, 1, 2100, 300)],
+			[
+				{ UNKNOWN: 1 },
+				null,
+				{ kind: "UNKNOWN", source: "MISSING", ...none },
+				1,
+				timing(0, 0, 0, 0),
+			],
 		],
 	);
+});
+
+void test("leaves an overflowing call untimed without changing prior session totals", async (context) => {
+	const { sessions, out } = await collected(context);
+	const details = { elapsedMs: Number.MAX_SAFE_INTEGER, responseMs: Number.MAX_SAFE_INTEGER };
+	await writeFile(
+		path.join(sessions, "overflow.jsonl"),
+		`${[
+			failedCall("e1", "error", [span(details)]),
+			failedCall("e2", "error", [span({ elapsedMs: 1, responseMs: 1 })]),
+		].join("\n")}\n`,
+	);
+	await collectTraces(sessions, out, CREDENTIAL);
+	const manifest = traceManifest(await readFile(path.join(out, "traces", "manifest.json"), "utf8"));
+	const [entry] = manifest.sessions;
+	const { summary } = omission(entry);
+	assert.ok(typeof summary === "object" && summary !== null);
+	assert.equal(Reflect.get(summary, "assistantCalls"), 2);
+	assert.deepEqual(Reflect.get(summary, "modelCallTiming"), {
+		timedCalls: 1,
+		respondedCalls: 1,
+		elapsedMs: Number.MAX_SAFE_INTEGER,
+		failedElapsedMs: Number.MAX_SAFE_INTEGER,
+		maxElapsedMs: Number.MAX_SAFE_INTEGER,
+		responseMs: Number.MAX_SAFE_INTEGER,
+	});
 });
 
 void test("omits a session past the per-file bound and keeps nothing when the result leaves no room", async (context) => {

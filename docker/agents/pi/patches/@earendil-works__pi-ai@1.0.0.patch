@@ -1,5 +1,5 @@
 diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
-index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae2fa1cf9e 100644
+index eecd83c753e3b758b8e44628f560b862f8252839..d8ad416020f362d5674cbd59dba0a959fcd6b8a4 100644
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
 @@ -14,6 +14,8 @@ import { getDeclaredTools, resolveTranscript, resolveTranscriptTools, } from "..
@@ -11,7 +11,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
  import { buildBaseOptions, clampThinkingBudgetToAnswerRoom, thinkingBudgetForLevel } from "./simple-options.js";
  import { transformMessages } from "./transform-messages.js";
  /**
-@@ -148,6 +150,31 @@ function resolveCacheRetention(cacheRetention, env) {
+@@ -148,6 +150,43 @@ function resolveCacheRetention(cacheRetention, env) {
      }
      return "short";
  }
@@ -40,28 +40,50 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
 +    }
 +    return status === undefined ? { kind, phase } : { kind, phase, status };
 +}
++/**
++ * When one call reached its boundaries, in whole milliseconds of the monotonic clock from just before the SDK request:
++ * the SDK response (its headers, not a first token) and the end of this message. The span includes request retries
++ * and their waits within the adapter. A boundary the call never reached is left out.
++ */
++function callDetails(requestStartedAt, responseAt) {
++    const details = { elapsedMs: Math.round(performance.now() - requestStartedAt) };
++    if (responseAt !== undefined) {
++        details.responseMs = Math.round(responseAt - requestStartedAt);
++    }
++    return details;
++}
  export const stream = (model, context, options) => {
      const stream = new AssistantMessageEventStream();
      const normalizedContext = resolveTranscript(context, getCompat(model).supportsMidConvoSystemMessages);
-@@ -177,6 +204,9 @@ export const stream = (model, context, options) => {
+@@ -177,6 +216,12 @@ export const stream = (model, context, options) => {
                  block.thinkingSignature = JSON.stringify(streamedReasoningDetails);
              }
          };
 +        // What a failure diagnostic may state: where the call failed, and the adapter's own end-of-stream cause.
 +        let failurePhase = "request";
 +        let adapterFailure;
++        // Monotonic call boundaries: the SDK request starts, and its response arrives.
++        let requestStartedAt;
++        let responseAt;
          try {
              const apiKey = getClientApiKey(model.provider, options?.apiKey, options?.headers);
              const compat = getCompat(model);
-@@ -199,6 +229,7 @@ export const stream = (model, context, options) => {
+@@ -194,11 +239,14 @@ export const stream = (model, context, options) => {
+                 ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+                 maxRetries: 0,
+             };
++            requestStartedAt = performance.now();
+             const { data: openaiStream, response } = await retryProviderRequest(() => client.chat.completions.create(params, requestOptions).withResponse(), {
+                 maxRetries: options?.maxRetries,
                  maxRetryDelayMs: options?.maxRetryDelayMs,
                  signal: options?.signal,
              });
++            responseAt = performance.now();
 +            failurePhase = "response_body";
              await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
              stream.push({ type: "start", partial: output });
              let textBlock = null;
-@@ -361,7 +392,7 @@ export const stream = (model, context, options) => {
+@@ -361,7 +409,7 @@ export const stream = (model, context, options) => {
                      output.responseModel ||= chunk.model;
                  }
                  if (chunk.usage) {
@@ -70,7 +92,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
                  }
                  const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined;
                  if (!choice)
-@@ -369,7 +400,7 @@ export const stream = (model, context, options) => {
+@@ -369,7 +417,7 @@ export const stream = (model, context, options) => {
                  // Fallback: some providers (e.g., Moonshot) return usage
                  // in choice.usage instead of the standard chunk.usage
                  if (!chunk.usage && choice.usage) {
@@ -79,8 +101,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
                  }
                  if (choice.finish_reason) {
                      output.rawStopReason = choice.finish_reason;
-@@ -473,16 +504,19 @@ export const stream = (model, context, options) => {
-             if (options?.signal?.aborted) {
+@@ -474,17 +522,25 @@ export const stream = (model, context, options) => {
                  throw new Error("Request was aborted");
              }
              if (output.stopReason === "aborted") {
@@ -98,8 +119,15 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
 +                adapterFailure = "STREAM_INCOMPLETE";
                  throw new Error("Stream ended without finish_reason");
              }
++            appendAssistantMessageDiagnostic(output, {
++                type: "openai_completions_call",
++                timestamp: Date.now(),
++                details: callDetails(requestStartedAt, responseAt),
++            });
              stream.push({ type: "done", reason: output.stopReason, message: output });
-@@ -509,6 +543,11 @@ export const stream = (model, context, options) => {
+             stream.end();
+         }
+@@ -509,6 +565,18 @@ export const stream = (model, context, options) => {
              if (rawMetadata && !output.errorMessage.includes(String(rawMetadata))) {
                  output.errorMessage += `\n${rawMetadata}`;
              }
@@ -108,10 +136,17 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
 +                timestamp: Date.now(),
 +                details: failureDetails(error, options?.signal, adapterFailure, failurePhase),
 +            });
++            if (requestStartedAt !== undefined) {
++                appendAssistantMessageDiagnostic(output, {
++                    type: "openai_completions_call",
++                    timestamp: Date.now(),
++                    details: callDetails(requestStartedAt, responseAt),
++                });
++            }
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -1158,9 +1197,6 @@ function convertTools(tools, compat) {
+@@ -1158,9 +1226,6 @@ function convertTools(tools, compat) {
      });
  }
  function parseChunkUsage(rawUsage, model) {
@@ -121,7 +156,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
      // Follow documented OpenAI/OpenRouter semantics: cached_tokens is cache-read
      // tokens (hits). Providers disagree on placement: OpenAI/OpenRouter use
      // prompt_tokens_details.cached_tokens, DeepSeek uses prompt_cache_hit_tokens,
-@@ -1172,19 +1208,17 @@ function parseChunkUsage(rawUsage, model) {
+@@ -1172,19 +1237,17 @@ function parseChunkUsage(rawUsage, model) {
      // Do not subtract writes from cached_tokens, otherwise spec-compliant
      // providers are under-reported. DS4 mirrors this contract too:
      // https://github.com/antirez/ds4/pull/29

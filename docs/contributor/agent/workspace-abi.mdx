@@ -452,18 +452,38 @@ Its `details` hold only these values:
 The diagnostic never holds the error message, the response body, headers, the request or a URL.
 Diagnostics from other provider protocols are not interpreted by this contract. Their failures read as `UNKNOWN`.
 
+The same adapter attaches an `openai_completions_call` diagnostic to every completed, failed or aborted message whose SDK request began.
+Its `details` hold whole milliseconds of the monotonic clock, measured from just before the SDK request:
+
+- `elapsedMs`: until the adapter ends the message.
+- `responseMs`: until the SDK returns the HTTP response, which is the headers and not a first token.
+  It is present only when a response arrived.
+
+The span includes request retries and their waits within the adapter for one call.
+It excludes the session's automatic retries, because each of those is a separate message.
+It is adapter time, not provider generation or queue time.
+Other provider protocols attach no span.
+
 Each runner turn in `runner-debug.json`, and each session summary in the transcript manifest, record:
 
 - `modelFailures`: the failed or aborted calls, counted by kind.
 - `lastModelFailureAt`: the most recent available adapter failure timestamp.
   A newer failure without that timestamp leaves its own `finalModelFailure.at` null.
 - `finalModelFailure`: the failure the last call ended on, or `null` once a later call succeeded.
+  Its `source` is `ADAPTER` when the adapter stated the kind, `UNKNOWN` included.
+  It is `MISSING` when the message has no failure diagnostic, and `INVALID` when the diagnostic cannot be read.
+- `unattributedModelFailures`: the failed or aborted calls whose source is `MISSING` or `INVALID`.
+- `modelCallTiming`: `timedCalls` and `respondedCalls`, and the sums `elapsedMs`, `failedElapsedMs` and `responseMs`, with `maxElapsedMs`.
+  A call without a readable span, or whose span would overflow a sum, is not counted.
+  Subtract `timedCalls` from the session's `assistantCalls` or the runner turn's `calls` to identify calls with unknown timing.
+  These are not zero-length calls.
+  A `responseMs` larger than its own `elapsedMs` is dropped.
 
 In a runner turn, `finalModelFailure` also records `retryEndedUnsuccessfully` when the native retry-end event reported failure.
 A missing diagnostic, invalid type, invalid details or unowned kind reads as `UNKNOWN`, with no phase, status or time.
 For an owned kind, an invalid phase, status or time is omitted individually.
 A metadata-only record keeps these fields as the worker validates them again.
-These facts describe a failure. They do not change retries, deadlines, budgets or how a failed composition is classified.
+These facts describe calls. They do not change retries, deadlines, budgets or how a failed composition is classified.
 
 ## Exit codes
 

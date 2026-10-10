@@ -374,16 +374,43 @@ for (const total of [undefined, 999]) {
 
 const SECRET = "sk-diagnostic-secret";
 
-/** The adapter's own failure diagnostic, and that nothing the server sent reached any diagnostic. */
+/** The call's monotonic span: whole milliseconds only, with a response time only when the response arrived. */
+function assertCall(
+	message: Message,
+	responded: boolean,
+): { elapsedMs: number; responseMs?: number } {
+	const call = message.diagnostics?.find(
+		(diagnostic) => diagnostic.type === "openai_completions_call",
+	);
+	assert.ok(call);
+	assert.equal(call.error, undefined);
+	const details: unknown = call.details;
+	assert.ok(typeof details === "object" && details !== null);
+	const elapsedMs: unknown = Reflect.get(details, "elapsedMs");
+	const responseMs: unknown = Reflect.get(details, "responseMs");
+	assert.deepEqual(Object.keys(details), responded ? ["elapsedMs", "responseMs"] : ["elapsedMs"]);
+	assert.ok(typeof elapsedMs === "number" && Number.isSafeInteger(elapsedMs) && elapsedMs >= 0);
+	if (!responded) {
+		return { elapsedMs };
+	}
+	assert.ok(typeof responseMs === "number" && Number.isSafeInteger(responseMs));
+	assert.ok(responseMs >= 0 && responseMs <= elapsedMs);
+	return { elapsedMs, responseMs };
+}
+
+/** The adapter's own failure diagnostic and call span, and that nothing the server sent reached any diagnostic. */
 function assertFailure(message: Message, details: Raw): void {
 	assert.equal(message.stopReason, details.kind === "ABORTED" ? "aborted" : "error");
-	assert.equal(message.diagnostics?.length, 1);
+	assert.deepEqual(
+		message.diagnostics?.map((diagnostic) => diagnostic.type),
+		["openai_completions_failure", "openai_completions_call"],
+	);
 	const [diagnostic] = message.diagnostics ?? [];
 	assert.ok(diagnostic);
-	assert.equal(diagnostic.type, "openai_completions_failure");
 	assert.equal(typeof diagnostic.timestamp, "number");
 	assert.equal(diagnostic.error, undefined);
 	assert.deepEqual(diagnostic.details, details);
+	assertCall(message, details.phase === "response_body");
 	assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
 }
 
@@ -418,10 +445,36 @@ void test("openai-completions records an aborted call as aborted", async () => {
 	assertFailure(message, { kind: "ABORTED", phase: "request" });
 });
 
-void test("openai-completions attaches no failure diagnostic to a completed call", async () => {
+void test("openai-completions attaches only its call span to a completed call", async () => {
 	const message = await complete("openai-completions", [usageOf("openai-completions", null)]);
 	assert.equal(message.stopReason, "stop");
-	assert.equal(message.diagnostics, undefined);
+	assert.deepEqual(
+		message.diagnostics?.map((diagnostic) => diagnostic.type),
+		["openai_completions_call"],
+	);
+	assertCall(message, true);
+});
+
+void test("openai-completions times a call across an adapter request retry and wait", async () => {
+	let requests = 0;
+	const message = await completeWith(
+		"openai-completions",
+		(response) => {
+			requests += 1;
+			if (requests === 1) {
+				response.writeHead(503, { "content-type": "application/json", "retry-after-ms": "80" });
+				response.end(JSON.stringify({ error: { message: SECRET } }));
+				return;
+			}
+			send(response, reply("openai-completions", [usageOf("openai-completions", null)], false));
+		},
+		{ maxRetries: 1 },
+	);
+	assert.equal(requests, 2);
+	assert.equal(message.stopReason, "stop");
+	const { responseMs } = assertCall(message, true);
+	assert.ok(responseMs !== undefined && responseMs >= 80);
+	assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
 });
 
 void test("openai-completions keeps an error finish reason as an adapter condition, not provider text", async () => {

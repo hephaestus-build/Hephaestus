@@ -13,6 +13,10 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { mock, test } from "node:test";
 
+import {
+	addModelCall,
+	newModelCallTiming,
+} from "../../../main/resources/agent/pi-model-failure.ts";
 import { isRecord } from "../../../main/resources/agent/pi-observation-normalize.ts";
 import { STANDARD_REFERENCE } from "../../../main/resources/agent/pi-runner-composition.ts";
 
@@ -54,6 +58,15 @@ const admittedObservation = {
 		search: { consulted: ["scm.pull-request.diff"], lookedFor: "x", boundary: "y" },
 	},
 };
+
+const timing = (calls: number[][], failedElapsedMs: number) => ({
+	timedCalls: calls.length,
+	respondedCalls: calls.filter((call) => call.length > 1).length,
+	elapsedMs: calls.reduce((sum, [elapsed = 0]) => sum + elapsed, 0),
+	failedElapsedMs,
+	maxElapsedMs: Math.max(0, ...calls.map(([elapsed = 0]) => elapsed)),
+	responseMs: calls.reduce((sum, [, response = 0]) => sum + response, 0),
+});
 
 function reviewPracticesOf(text: string): unknown {
 	const practices = [...text.matchAll(/```json\n(?<context>[\s\S]*?)\n```/gu)].flatMap((block) => {
@@ -1155,6 +1168,12 @@ if (scenario !== undefined && scenario !== "") {
 													timestamp: 1_760_000_000_000,
 													details: { kind: "HTTP_ERROR", phase: "request", status: 503 },
 												},
+												// The call never got its response, so it states no response time.
+												{
+													type: "openai_completions_call",
+													timestamp: 1_760_000_000_000,
+													details: { elapsedMs: 1200 },
+												},
 											],
 										},
 									});
@@ -1169,6 +1188,13 @@ if (scenario !== undefined && scenario !== "") {
 											stopReason: "toolUse",
 											usage: callUsage(19),
 											content: [],
+											diagnostics: [
+												{
+													type: "openai_completions_call",
+													timestamp: 1_760_000_001_000,
+													details: { elapsedMs: 900, responseMs: 300 },
+												},
+											],
 										},
 									});
 								}
@@ -3276,33 +3302,43 @@ if (scenario !== undefined && scenario !== "") {
 								assert.ok(isRecord(payload) && Array.isArray(payload.units));
 								assert.equal(payload.units.length, 1);
 							}
-							const failures: Record<string, [string, unknown][]> = {
-								// The last call failed with a stated native status.
+
+							const failures: Record<string, [string, unknown, number, unknown][]> = {
+								// The last call failed with a stated native status, before any response.
 								"compose-public-error": [
 									[
 										"review composition",
 										{
 											kind: "HTTP_ERROR",
+											source: "ADAPTER",
 											phase: "request",
 											status: 503,
 											at: 1_760_000_000_000,
 											retryEndedUnsuccessfully: false,
 										},
+										0,
+										timing([[1200]], 1200),
 									],
 								],
-								// A later successful call clears the earlier failure; its count stays.
-								"compose-recovered-error": [["review composition", null]],
-								// A malformed diagnostic is UNKNOWN; the native unsuccessful retry-end event marks it.
+								// A later successful call clears the earlier failure; its count and time stay.
+								"compose-recovered-error": [
+									["review composition", null, 0, timing([[1200], [900, 300]], 1200)],
+								],
+								// A malformed diagnostic is UNKNOWN and unattributed; the native unsuccessful retry-end
+								// event marks it. A call without a span is not timed, not timed as zero.
 								"compose-private-error": [
 									[
 										"composition",
 										{
 											kind: "UNKNOWN",
+											source: "INVALID",
 											phase: null,
 											status: null,
 											at: null,
 											retryEndedUnsuccessfully: true,
 										},
+										1,
+										timing([], 0),
 									],
 								],
 							};
@@ -3310,12 +3346,14 @@ if (scenario !== undefined && scenario !== "") {
 							assert.ok(!debugText.includes("sk-orchestration-secret"));
 							const debug: unknown = JSON.parse(debugText);
 							assert.ok(isRecord(debug) && Array.isArray(debug.turns));
-							for (const [label, final] of failures[stage] ?? []) {
+							for (const [label, final, unattributed, callTiming] of failures[stage] ?? []) {
 								const turn: unknown = debug.turns.find(
 									(entry: unknown) => isRecord(entry) && entry.label === label,
 								);
 								assert.ok(isRecord(turn), label);
 								assert.deepEqual(turn.finalModelFailure, final, `${stage} ${label}`);
+								assert.equal(turn.unattributedModelFailures, unattributed, `${stage} ${label}`);
+								assert.deepEqual(turn.modelCallTiming, callTiming, `${stage} ${label}`);
 								assert.ok(isRecord(turn.modelFailures));
 								assert.equal(
 									Object.values(turn.modelFailures).reduce(
@@ -5233,3 +5271,33 @@ for (const item of nullableCases) {
 		);
 	}
 }
+
+void test("model timing leaves an overflowing call untimed without changing prior totals", () => {
+	const result = newModelCallTiming();
+	addModelCall(
+		result,
+		{
+			diagnostics: [
+				{
+					type: "openai_completions_call",
+					details: { elapsedMs: Number.MAX_SAFE_INTEGER, responseMs: Number.MAX_SAFE_INTEGER },
+				},
+			],
+		},
+		true,
+	);
+	const prior = { ...result };
+	assert.equal(prior.timedCalls, 1);
+	assert.equal(prior.respondedCalls, 1);
+	assert.equal(prior.elapsedMs, Number.MAX_SAFE_INTEGER);
+	assert.equal(prior.failedElapsedMs, Number.MAX_SAFE_INTEGER);
+	assert.equal(prior.responseMs, Number.MAX_SAFE_INTEGER);
+	addModelCall(
+		result,
+		{
+			diagnostics: [{ type: "openai_completions_call", details: { elapsedMs: 1, responseMs: 1 } }],
+		},
+		true,
+	);
+	assert.deepEqual(result, prior);
+});

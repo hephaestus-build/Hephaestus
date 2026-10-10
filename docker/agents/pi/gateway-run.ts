@@ -153,6 +153,17 @@ export interface SessionSummary {
 	lastModelFailureAt: number | null;
 	/** The failure the session's last call ended on; null once a later call succeeded. */
 	finalModelFailure: ModelFailure | null;
+	/** Failed or aborted calls whose failure diagnostic was missing or unreadable; their kind reads UNKNOWN. */
+	unattributedModelFailures: number;
+	/** The adapter's own call spans in milliseconds, failed calls included; calls without one are not counted. */
+	modelCallTiming: {
+		timedCalls: number;
+		respondedCalls: number;
+		elapsedMs: number;
+		failedElapsedMs: number;
+		maxElapsedMs: number;
+		responseMs: number;
+	};
 }
 
 /**
@@ -162,6 +173,8 @@ export interface SessionSummary {
  */
 interface ModelFailure {
 	kind: string;
+	/** ADAPTER when the adapter stated the kind, UNKNOWN included; MISSING without a diagnostic; INVALID if unreadable. */
+	source: "ADAPTER" | "MISSING" | "INVALID";
 	phase: string | null;
 	status: number | null;
 	at: number | null;
@@ -178,22 +191,38 @@ const MODEL_FAILURE_KINDS = new Set([
 const MAX_EPOCH_MS = 8_640_000_000_000_000;
 
 /** A failed message's own diagnostic as closed values; anything malformed is UNKNOWN and claims nothing more. */
-function modelFailure(diagnostics: unknown): ModelFailure {
-	const unknown: ModelFailure = { kind: "UNKNOWN", phase: null, status: null, at: null };
+function lastDiagnostic(diagnostics: unknown, type: string): unknown {
 	const list: unknown[] = Array.isArray(diagnostics) ? diagnostics : [];
-	const diagnostic = list.findLast(
-		(entry) => isRecord(entry) && entry.type === "openai_completions_failure",
-	);
+	return list.findLast((entry) => isRecord(entry) && entry.type === type);
+}
+
+function unknownFailure(source: "MISSING" | "INVALID"): ModelFailure {
+	return {
+		kind: "UNKNOWN",
+		source,
+		phase: null,
+		status: null,
+		at: null,
+	};
+}
+
+function modelFailure(diagnostics: unknown): ModelFailure {
+	const diagnostic = lastDiagnostic(diagnostics, "openai_completions_failure");
+
+	if (diagnostic === undefined) {
+		return unknownFailure("MISSING");
+	}
 	if (!isRecord(diagnostic) || !isRecord(diagnostic.details)) {
-		return unknown;
+		return unknownFailure("INVALID");
 	}
 	const { kind, phase, status } = diagnostic.details;
 	if (typeof kind !== "string" || !MODEL_FAILURE_KINDS.has(kind)) {
-		return unknown;
+		return unknownFailure("INVALID");
 	}
 	const at = diagnostic.timestamp;
 	return {
 		kind,
+		source: "ADAPTER",
 		phase: phase === "request" || phase === "response_body" ? phase : null,
 		status:
 			kind === "HTTP_ERROR" &&
@@ -205,6 +234,47 @@ function modelFailure(diagnostics: unknown): ModelFailure {
 		at:
 			Number.isSafeInteger(at) && Number(at) >= 0 && Number(at) <= MAX_EPOCH_MS ? Number(at) : null,
 	};
+}
+
+function canAddMilliseconds(total: number, value: number): boolean {
+	return value <= Number.MAX_SAFE_INTEGER - total;
+}
+
+function duration(value: unknown): number | null {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+/** Adds one message's adapter call span; an unreadable span is not counted, and a response beyond it is dropped. */
+function addModelCall(
+	timing: SessionSummary["modelCallTiming"],
+	diagnostics: unknown,
+	failed: boolean,
+): void {
+	const diagnostic = lastDiagnostic(diagnostics, "openai_completions_call");
+	const details = isRecord(diagnostic) && isRecord(diagnostic.details) ? diagnostic.details : null;
+	const elapsed = duration(details?.elapsedMs);
+	if (elapsed === null) {
+		return;
+	}
+	const response = duration(details?.responseMs);
+	const validResponse = response !== null && response <= elapsed ? response : null;
+	if (
+		!canAddMilliseconds(timing.elapsedMs, elapsed) ||
+		(failed && !canAddMilliseconds(timing.failedElapsedMs, elapsed)) ||
+		(validResponse !== null && !canAddMilliseconds(timing.responseMs, validResponse))
+	) {
+		return;
+	}
+	timing.timedCalls += 1;
+	timing.elapsedMs += elapsed;
+	timing.maxElapsedMs = Math.max(timing.maxElapsedMs, elapsed);
+	if (failed) {
+		timing.failedElapsedMs += elapsed;
+	}
+	if (validResponse !== null) {
+		timing.respondedCalls += 1;
+		timing.responseMs += validResponse;
+	}
 }
 
 export interface TraceManifest {
@@ -294,6 +364,15 @@ export function summarize(entries: FileEntry[]): SessionSummary {
 		modelFailures: {},
 		lastModelFailureAt: null,
 		finalModelFailure: null,
+		unattributedModelFailures: 0,
+		modelCallTiming: {
+			timedCalls: 0,
+			respondedCalls: 0,
+			elapsedMs: 0,
+			failedElapsedMs: 0,
+			maxElapsedMs: 0,
+			responseMs: 0,
+		},
 	};
 	for (const entry of entries) {
 		if (entry.type === "custom" && entry.customType === REVIEW_SESSION_ENTRY) {
@@ -315,9 +394,12 @@ export function summarize(entries: FileEntry[]): SessionSummary {
 				for (const name of toolNames(message.content)) {
 					count(summary.toolCalls, name);
 				}
-				if (reason === "error" || reason === "aborted") {
+				const failed = reason === "error" || reason === "aborted";
+				addModelCall(summary.modelCallTiming, message.diagnostics, failed);
+				if (failed) {
 					const failure = modelFailure(message.diagnostics);
 					count(summary.modelFailures, failure.kind);
+					summary.unattributedModelFailures += failure.source === "ADAPTER" ? 0 : 1;
 					summary.lastModelFailureAt = failure.at ?? summary.lastModelFailureAt;
 					summary.finalModelFailure = failure;
 				} else {
