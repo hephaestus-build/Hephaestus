@@ -75,6 +75,11 @@ vp run test:webapp
 vp run test:server:unit
 ```
 
+For handwritten Java or Spring test configuration changes, run `vp run test:server:architecture`.
+See `server/AGENTS.md` § Test tiers for other affected tiers.
+
+For documentation changes, run `vp run docs:build`.
+
 ## 6. Re-run format + check
 
 Regeneration produces unformatted output.
