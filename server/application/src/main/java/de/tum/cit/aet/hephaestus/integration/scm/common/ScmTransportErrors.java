@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.graphql.client.GraphQlTransportException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.netty.http.client.PrematureCloseException;
 
 /**
@@ -27,6 +28,10 @@ public final class ScmTransportErrors {
     public static boolean isTransportError(Throwable throwable) {
         // GraphQlTransportException is Spring GraphQL's wrapper for transport failures
         if (throwable instanceof GraphQlTransportException) {
+            if (throwable.getCause() instanceof WebClientResponseException response
+                    && response.getStatusCode().is4xxClientError()) {
+                return false;
+            }
             log.debug("Transport error detected: GraphQlTransportException");
             return true;
         }

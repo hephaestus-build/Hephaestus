@@ -144,8 +144,13 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
 
     private GitHubRepositorySyncService graphQlService(
             String body, RepositoryRepository repositories, OrganizationRepository organizations) {
+        return graphQlService(HttpStatus.OK, body, repositories, organizations);
+    }
+
+    private GitHubRepositorySyncService graphQlService(
+            HttpStatus status, String body, RepositoryRepository repositories, OrganizationRepository organizations) {
         upstream.enqueue(new MockResponse.Builder()
-                .code(200)
+                .code(status.value())
                 .addHeader("Content-Type", "application/json")
                 .body(body)
                 .build());
@@ -170,6 +175,23 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 .thenAnswer(invocation -> classifier.classifyGraphQlResponse(invocation.getArgument(0)));
         return new GitHubRepositorySyncService(
                 clients, repositories, organizations, properties, classifier, coordinator, webClient);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {403, 404, 429})
+    void shouldClassifyHttpErrorsWithoutRetryingThemAsNetworkFailures(int status) {
+        var repositories = mock(RepositoryRepository.class);
+        var organizations = mock(OrganizationRepository.class);
+        var service = graphQlService(HttpStatus.valueOf(status), "{}", repositories, organizations);
+        if (status == 429) {
+            assertThat(service.syncRepository(7L, "course/project", new IdentityProvider(), null))
+                    .isEmpty();
+        } else {
+            assertThatThrownBy(() -> service.syncRepository(7L, "course/project", new IdentityProvider(), null))
+                    .isInstanceOf(RepositoryNotFoundOnGitProviderException.class);
+        }
+        assertThat(upstream.getRequestCount()).isEqualTo(1);
+        verifyNoInteractions(repositories, organizations);
     }
 
     @Test
