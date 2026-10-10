@@ -1268,5 +1268,41 @@
 		},
 		"reason": "On GitHub a dismissed state without its original state may have been a request for changes, and its dismissal time is unknown, so it may have stood at merge beside A's approval.",
 		"workType": "pull_request"
+	},
+	{
+		"id": "dependency-import-without-declaration-edit",
+		"expected": {
+			"changes-dependencies-deliberately": "NOT_APPLICABLE"
+		},
+		"baseFiles": {
+			"repo/build.gradle": "plugins {\n    id 'java'\n}\n\nrepositories {\n    mavenCentral()\n}\n\ndependencies {\n    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'\n}\n",
+			"repo/src/main/java/reports/Report.java": "package reports;\n\npublic final class Report {\n    public String title(String name) {\n        return \"Report: \" + name;\n    }\n}\n"
+		},
+		"files": {
+			"context/description.md": "Show the report date in the title.\n",
+			"context/metadata.json": "{\"title\":\"Show the report date\"}",
+			"repo/build.gradle": "plugins {\n    id 'java'\n}\n\nrepositories {\n    mavenCentral()\n}\n\ndependencies {\n    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'\n}\n",
+			"repo/src/main/java/reports/Report.java": "package reports;\n\nimport java.time.LocalDate;\nimport java.time.format.DateTimeFormatter;\n\npublic final class Report {\n    public String title(String name, LocalDate date) {\n        return \"Report: \" + name + \" (\" + date.format(DateTimeFormatter.ISO_LOCAL_DATE) + \")\";\n    }\n}\n"
+		},
+		"reason": "The change imports and uses a library in source code but adds, removes or changes no declaration, version constraint, source, resolution or pin; the unchanged build manifest declares what the build resolves.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "dependency-routine-lockfile-refresh",
+		"expected": {
+			"changes-dependencies-deliberately": "MET"
+		},
+		"baseFiles": {
+			"repo/package.json": "{\"name\":\"reports\",\"version\":\"1.0.0\",\"dependencies\":{\"format-kit\":\"^1.0.0\"}}\n",
+			"repo/package-lock.json": "{\"name\":\"reports\",\"version\":\"1.0.0\",\"lockfileVersion\":3,\"requires\":true,\"packages\":{\"\":{\"name\":\"reports\",\"version\":\"1.0.0\",\"dependencies\":{\"format-kit\":\"^1.0.0\"}},\"node_modules/format-kit\":{\"version\":\"1.0.0\",\"resolved\":\"https://registry.npmjs.org/format-kit/-/format-kit-1.0.0.tgz\"}}}\n"
+		},
+		"files": {
+			"context/description.md": "Refresh the lockfile.\n",
+			"context/metadata.json": "{\"title\":\"Refresh the lockfile\"}",
+			"repo/package.json": "{\"name\":\"reports\",\"version\":\"1.0.0\",\"dependencies\":{\"format-kit\":\"^1.0.0\"}}\n",
+			"repo/package-lock.json": "{\"name\":\"reports\",\"version\":\"1.0.0\",\"lockfileVersion\":3,\"requires\":true,\"packages\":{\"\":{\"name\":\"reports\",\"version\":\"1.0.0\",\"dependencies\":{\"format-kit\":\"^1.0.0\"}},\"node_modules/format-kit\":{\"version\":\"1.0.1\",\"resolved\":\"https://registry.npmjs.org/format-kit/-/format-kit-1.0.1.tgz\"}}}\n"
+		},
+		"reason": "A resolution change on its own is an occasion. The patch resolution stays inside the unchanged manifest range, so the refresh is coherent and needs no prose.",
+		"workType": "pull_request"
 	}
 ]

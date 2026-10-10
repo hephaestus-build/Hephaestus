@@ -92,9 +92,18 @@ function reply(protocol: Protocol, usages: Raw[], incomplete: boolean): unknown[
 }
 
 async function complete(protocol: Protocol, usages: Raw[], incomplete = false) {
+	return completeWith(protocol, (response) => send(response, reply(protocol, usages, incomplete)));
+}
+
+/** One completion against a local server that answers with `respond`. */
+async function completeWith(
+	protocol: Protocol,
+	respond: (response: ServerResponse) => void,
+	options?: Parameters<ModelRuntime["completeSimple"]>[2],
+) {
 	const server = createServer((request, response) => {
 		request.resume();
-		request.on("end", () => send(response, reply(protocol, usages, incomplete)));
+		request.on("end", () => respond(response));
 	});
 	server.listen(0, "127.0.0.1");
 	await once(server, "listening");
@@ -120,9 +129,11 @@ async function complete(protocol: Protocol, usages: Raw[], incomplete = false) {
 		const model = runtime.getModel("hephaestus", "gpt-5");
 		assert.ok(model);
 		process.env.LLM_PROXY_TOKEN = "t";
-		return await runtime.completeSimple(model, {
-			messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
-		});
+		return await runtime.completeSimple(
+			model,
+			{ messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
+			options,
+		);
 	} finally {
 		if (token === undefined) {
 			delete process.env.LLM_PROXY_TOKEN;
@@ -360,3 +371,84 @@ for (const total of [undefined, 999]) {
 		assert.equal(message.usage.totalTokens, 107);
 	});
 }
+
+const SECRET = "sk-diagnostic-secret";
+
+/** The adapter's own failure diagnostic, and that nothing the server sent reached any diagnostic. */
+function assertFailure(message: Message, details: Raw): void {
+	assert.equal(message.stopReason, details.kind === "ABORTED" ? "aborted" : "error");
+	assert.equal(message.diagnostics?.length, 1);
+	const [diagnostic] = message.diagnostics ?? [];
+	assert.ok(diagnostic);
+	assert.equal(diagnostic.type, "openai_completions_failure");
+	assert.equal(typeof diagnostic.timestamp, "number");
+	assert.equal(diagnostic.error, undefined);
+	assert.deepEqual(diagnostic.details, details);
+	assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
+}
+
+void test("openai-completions records a server error as its native status, without the body", async () => {
+	const message = await completeWith("openai-completions", (response) => {
+		response.writeHead(500, { "content-type": "application/json", "x-should-retry": "false" });
+		response.end(JSON.stringify({ error: { message: `upstream failed: ${SECRET}` } }));
+	});
+	assertFailure(message, { kind: "HTTP_ERROR", phase: "request", status: 500 });
+});
+
+void test("openai-completions records a stream that ends without a finish reason", async () => {
+	const chunk = { id: "c", object: "chat.completion.chunk", created: 0, model: "gpt-5" };
+	const message = await completeWith("openai-completions", (response) =>
+		send(response, [
+			{ ...chunk, choices: [{ index: 0, delta: { role: "assistant", content: SECRET } }] },
+		]),
+	);
+	assertFailure(message, { kind: "STREAM_INCOMPLETE", phase: "response_body" });
+});
+
+void test("openai-completions records an aborted call as aborted", async () => {
+	const controller = new AbortController();
+	const message = await completeWith(
+		"openai-completions",
+		(response) => {
+			controller.abort();
+			response.end();
+		},
+		{ signal: controller.signal, maxRetries: 0 },
+	);
+	assertFailure(message, { kind: "ABORTED", phase: "request" });
+});
+
+void test("openai-completions attaches no failure diagnostic to a completed call", async () => {
+	const message = await complete("openai-completions", [usageOf("openai-completions", null)]);
+	assert.equal(message.stopReason, "stop");
+	assert.equal(message.diagnostics, undefined);
+});
+
+void test("openai-completions keeps an error finish reason as an adapter condition, not provider text", async () => {
+	const chunk = { id: "c", object: "chat.completion.chunk", created: 0, model: "gpt-5" };
+	const message = await completeWith("openai-completions", (response) =>
+		send(response, [{ ...chunk, choices: [{ index: 0, delta: {}, finish_reason: SECRET }] }]),
+	);
+	assertFailure(message, { kind: "FINISH_REASON_ERROR", phase: "response_body" });
+});
+
+void test("openai-completions distinguishes the native request timeout from an abort", async () => {
+	const message = await completeWith("openai-completions", () => undefined, {
+		timeoutMs: 150,
+		maxRetries: 0,
+	});
+	assertFailure(message, { kind: "CONNECTION_TIMEOUT", phase: "request" });
+});
+
+void test("openai-completions retains a native connection error without an HTTP status", async () => {
+	const message = await completeWith(
+		"openai-completions",
+		(response) => {
+			response.destroy();
+		},
+		{
+			maxRetries: 0,
+		},
+	);
+	assertFailure(message, { kind: "CONNECTION_ERROR", phase: "request" });
+});
