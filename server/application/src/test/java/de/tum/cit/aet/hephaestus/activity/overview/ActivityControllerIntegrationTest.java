@@ -278,6 +278,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             syncTargets.recordRepositoryUnavailable(workspace.getId(), monitor.getId());
             assertThat(page().people()).isEmpty();
             assertThat(page().repositories()).isEmpty();
+            jdbc.update(
+                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now()-interval '49 hours' WHERE id=?",
+                    monitor.getId());
             syncTargets.clearRepositoryUnavailable(workspace.getId(), monitor.getId());
             syncTargets.updateSyncTimestamp(
                     monitor.getId(), SyncTargetProvider.SyncType.REPOSITORY_VISIBILITY, Instant.now());
