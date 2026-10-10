@@ -1,4 +1,3 @@
-import { PeopleIcon, SearchIcon } from "@primer/octicons-react";
 import {
 	createColumnHelper,
 	FlexRender,
@@ -7,6 +6,7 @@ import {
 	type SortingState,
 	useTable,
 } from "@tanstack/react-table";
+import { SearchIcon } from "lucide-react";
 // oxlint-disable-next-line no-restricted-imports -- TanStack Table keys its column and row models on the identity of `columns`, `data` and controlled state, which the compiler memoises as an optimisation rather than a promise.
 import { useMemo, useState } from "react";
 
@@ -21,17 +21,20 @@ import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { Badge } from "@/components/ui/badge";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
-import { artifactKindNoun, ARTIFACT_KIND } from "@/lib/artifact-kinds";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ProviderType } from "@/lib/provider/provider-terms";
-import { capitalise, nameOrder } from "@/lib/text";
+import { nameOrder } from "@/lib/text";
 
+import { NoneMark } from "./ActionChip";
 import { type PeopleSort, PEOPLE_SORTS, personLevel } from "./activity-search";
 import { STALE } from "./activity-tones";
-import { ActivityEmpty } from "./ActivityEmpty";
+import { ActivityCountCell, ActivityCountHeader, type CountedCategory } from "./ActivityCountCell";
+import { ActivityEmpty, PEOPLE_EMPTY_ICON } from "./ActivityEmpty";
 import { ActivitySparkline } from "./ActivitySparkline";
 import { MemberAvatar } from "./MemberAvatar";
 import { competitionPositions, PEOPLE_COUNTS } from "./people-positions";
@@ -70,6 +73,9 @@ const fold = (text: string): string =>
 
 const columnHelper = createColumnHelper<DataTableFeatures, ActivityPerson>();
 
+/** A number column fits its figures and leaves the rest of the row to the person. */
+const NUMBER_COLUMN = { numeric: true, className: "w-px" };
+
 /**
  * Everyone who contributed in the scope, one row per person, sorted in the browser by any count.
  * Sorted by a count, each row shows its position: two people with the same count share it, and the
@@ -90,7 +96,8 @@ export function ActivityPeopleTable({
 	const people = state.status === "ready" ? state.people.people : undefined;
 	const from = state.status === "ready" ? state.people.from : undefined;
 	const to = state.status === "ready" ? state.people.to : undefined;
-	const pullRequests = capitalise(artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType));
+	const firstContributorIds =
+		state.status === "ready" ? state.people.highlights.firstContributors : undefined;
 
 	// The table's `data`, in name order: the sorted row model keeps the data's order on a tie, so
 	// people with the same count stay in name order in either direction.
@@ -104,73 +111,73 @@ export function ActivityPeopleTable({
 		() => [{ id: order.sort, desc: order.desc }],
 		[order.sort, order.desc],
 	);
-	const columns = useMemo(
-		() =>
-			columnHelper.columns([
-				columnHelper.display({
-					id: "position",
-					header: () => (
-						<>
-							<span aria-hidden>#</span>
-							<span className="sr-only">Position</span>
-						</>
-					),
-					cell: ({ row }) => (
-						<span className="text-muted-foreground tabular-nums">
-							{positions.get(row.original.person.id)}
-						</span>
-					),
-				}),
-				columnHelper.accessor((row) => row.person.name, {
-					id: "name" satisfies PeopleSort,
-					header: "Person",
-					sortFn: (a, b) => nameOrder.compare(a.original.person.name, b.original.person.name),
-					cell: ({ row }) => <PersonCell person={row.original} />,
-				}),
-				columnHelper.accessor(PEOPLE_COUNTS.contributions, {
-					id: "contributions" satisfies PeopleSort,
-					header: "Contributions",
-					cell: ({ getValue }) => <span className="font-medium tabular-nums">{getValue()}</span>,
-				}),
-				columnHelper.accessor(PEOPLE_COUNTS["pull-requests"], {
-					id: "pull-requests" satisfies PeopleSort,
-					header: pullRequests,
-					cell: ({ row }) => (
-						<CountPair
-							count={row.original.counts.pullRequestsOpened}
-							detail={`${row.original.counts.pullRequestsMerged} merged`}
-						/>
-					),
-				}),
-				columnHelper.accessor(PEOPLE_COUNTS.reviews, {
-					id: "reviews" satisfies PeopleSort,
-					header: "Reviews",
-					cell: ({ row }) => (
-						<CountPair
-							count={row.original.counts.pullRequestsReviewed}
-							detail={peopleHelped(row.original.counts.peopleHelped)}
-						/>
-					),
-				}),
-				columnHelper.accessor(PEOPLE_COUNTS.issues, {
-					id: "issues" satisfies PeopleSort,
-					header: "Issues",
-					cell: ({ getValue }) => <span className="tabular-nums">{getValue()}</span>,
-				}),
-				columnHelper.accessor(PEOPLE_COUNTS["active-weeks"], {
-					id: "active-weeks" satisfies PeopleSort,
-					header: "Active weeks",
-					cell: ({ getValue }) => <span className="tabular-nums">{getValue()}</span>,
-				}),
-				columnHelper.display({
-					id: "trend",
-					header: "Each week",
-					cell: ({ row }) =>
-						from && to && <ActivitySparkline weeks={row.original.weeks} span={{ from, to }} />,
-				}),
-			]),
-		[positions, pullRequests, from, to],
-	);
+	const columns = useMemo(() => {
+		const firstContributors = new Set(firstContributorIds);
+		const countColumn = (category: CountedCategory) =>
+			columnHelper.accessor(PEOPLE_COUNTS[category], {
+				id: category,
+				header: () => <ActivityCountHeader category={category} providerType={providerType} />,
+				meta: NUMBER_COLUMN,
+				cell: ({ row }) => (
+					<ActivityCountCell
+						category={category}
+						counts={row.original.counts}
+						providerType={providerType}
+					/>
+				),
+			});
+		return columnHelper.columns([
+			columnHelper.display({
+				id: "position",
+				header: () => (
+					<>
+						<span aria-hidden>#</span>
+						<span className="sr-only">Position</span>
+					</>
+				),
+				meta: { numeric: true, className: "w-px pl-3" },
+				cell: ({ row }) => (
+					<span className="text-muted-foreground">{positions.get(row.original.person.id)}</span>
+				),
+			}),
+			columnHelper.accessor((row) => row.person.name, {
+				id: "name" satisfies PeopleSort,
+				header: "Person",
+				sortFn: (a, b) => nameOrder.compare(a.original.person.name, b.original.person.name),
+				meta: { className: "min-w-48" },
+				cell: ({ row }) => (
+					<PersonCell person={row.original} first={firstContributors.has(row.original.person.id)} />
+				),
+			}),
+			columnHelper.accessor(PEOPLE_COUNTS.contributions, {
+				id: "contributions" satisfies PeopleSort,
+				header: "Contributions",
+				meta: NUMBER_COLUMN,
+				cell: ({ getValue }) => <Figure count={getValue()} unit="contribution" strong />,
+			}),
+			countColumn("pull-requests"),
+			countColumn("reviews"),
+			countColumn("issues"),
+			columnHelper.accessor(PEOPLE_COUNTS["active-weeks"], {
+				id: "active-weeks" satisfies PeopleSort,
+				header: () => (
+					<span title="Active weeks: weeks with any work in the range">
+						<span aria-hidden>Weeks</span>
+						<span className="sr-only">Active weeks</span>
+					</span>
+				),
+				meta: NUMBER_COLUMN,
+				cell: ({ getValue }) => <Figure count={getValue()} unit="active week" />,
+			}),
+			columnHelper.display({
+				id: "trend",
+				header: "Weekly",
+				meta: { className: "w-px pr-3" },
+				cell: ({ row }) =>
+					from && to && <ActivitySparkline weeks={row.original.weeks} span={{ from, to }} />,
+			}),
+		]);
+	}, [positions, providerType, from, to, firstContributorIds]);
 
 	const table = useTable({
 		features: dataTableFeatures,
@@ -234,11 +241,12 @@ export function ActivityPeopleTable({
 	const found = table.getFilteredRowModel().rows.length;
 	const columnCount = table.getVisibleLeafColumns().length;
 	const empty = state.status === "ready" && data.length === 0;
+	const EmptyIcon = PEOPLE_EMPTY_ICON(providerType);
 	// The toolbar and the count stay mounted through every state, so the count's live region exists
 	// before its first words.
 	return (
 		<div className="space-y-3">
-			<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+			<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
 				{toolbar}
 				<p role="status" className="text-sm text-muted-foreground tabular-nums">
 					{state.status === "ready" && !empty && peopleCount(found, data.length, search)}
@@ -254,7 +262,7 @@ export function ActivityPeopleTable({
 			{empty && (
 				<div aria-busy={stale || undefined} className={cn(stale && STALE)}>
 					<ActivityEmpty
-						icon={<PeopleIcon />}
+						icon={<EmptyIcon />}
 						title={
 							repo.length > 0
 								? "No contributions to these repositories in this range"
@@ -299,11 +307,18 @@ export function ActivityPeopleTable({
 							)}
 							{table.getRowModel().rows.map((row) => (
 								<TableRow key={row.id} className="relative">
-									{row.getVisibleCells().map((cell) => (
-										<TableCell key={cell.id}>
-											<FlexRender cell={cell} />
-										</TableCell>
-									))}
+									{row.getVisibleCells().map((cell) => {
+										const { meta } = cell.column.columnDef;
+										return (
+											<TableCell
+												key={cell.id}
+												numeric={meta?.numeric}
+												className={cn(meta?.numeric === true && "text-right", meta?.className)}
+											>
+												<FlexRender cell={cell} />
+											</TableCell>
+										);
+									})}
 								</TableRow>
 							))}
 						</TableBody>
@@ -321,33 +336,59 @@ export function ActivityPeopleTable({
 
 /**
  * The name is the row's link and its keyboard stop, stretched over the row so the whole row is the
- * pointer target.
+ * pointer target. A person whose first contribution to the workspace is in the range is new here.
  */
-function PersonCell({ person }: { person: ActivityPerson }) {
+function PersonCell({ person, first }: { person: ActivityPerson; first: boolean }) {
 	return (
 		<div className="flex min-w-0 items-center gap-3">
 			<MemberAvatar user={person.person} />
 			<div className="min-w-0">
-				<InlineLink
-					render={<DetailStackLink entry={personLevel(person.person.login)} />}
-					className="block truncate font-medium after:absolute after:inset-0"
-				>
-					{person.person.name}
-				</InlineLink>
+				<div className="flex min-w-0 items-center gap-2">
+					<InlineLink
+						render={<DetailStackLink entry={personLevel(person.person.login)} />}
+						className="truncate font-medium after:absolute after:inset-0"
+					>
+						{person.person.name}
+					</InlineLink>
+					{first && <NewBadge />}
+				</div>
 				<p className="truncate text-xs text-muted-foreground">{person.person.login}</p>
 			</div>
 		</div>
 	);
 }
 
-/** "12 · 10 merged": the count the column sorts by, then what it holds. */
-function CountPair({ count, detail }: { count: number; detail: string }) {
+const FIRST_CONTRIBUTION = "First contribution in this range";
+
+/** Quiet, beside the name: someone to welcome, not a status. */
+function NewBadge() {
 	return (
-		<span className="whitespace-nowrap tabular-nums">
-			{count}
-			<span className="text-muted-foreground"> · {detail}</span>
-		</span>
+		<Tooltip>
+			<TooltipTrigger
+				render={<Badge variant="muted" role="img" aria-label={FIRST_CONTRIBUTION} />}
+				className="relative z-10"
+			>
+				<span aria-hidden>New</span>
+			</TooltipTrigger>
+			<TooltipContent>{FIRST_CONTRIBUTION}</TooltipContent>
+		</Tooltip>
 	);
+}
+
+/** One figure in a number column, or a dash for none: "17", "—". */
+function Figure({
+	count,
+	unit,
+	strong = false,
+}: {
+	count: number;
+	unit: string;
+	strong?: boolean;
+}) {
+	if (count === 0) {
+		return <NoneMark phrase={`0 ${unit}s`} />;
+	}
+	return <span className={cn(strong && "font-semibold")}>{count}</span>;
 }
 
 /** "12 people", or what a search leaves of them: "3 of 12 people". */
@@ -356,8 +397,4 @@ function peopleCount(found: number, total: number, search: string): string {
 		return `${found} of ${total} people`;
 	}
 	return `${total} ${total === 1 ? "person" : "people"}`;
-}
-
-function peopleHelped(count: number): string {
-	return `${count} ${count === 1 ? "person" : "people"}`;
 }

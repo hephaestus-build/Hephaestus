@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { ada, OVERVIEW, readyOverview, WORK_LOG } from "@/stories/activity-story-data";
-import { withPageBehind } from "@/stories/decorators";
+import { withPageBehind, withProvider } from "@/stories/decorators";
 import { settledDrawerPanel } from "@/stories/overlay";
 import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
@@ -151,3 +151,16 @@ export const WithAutomationAction: Story = {
 		await expect(panel.getByRole("button", { name: "Treat as automation" })).toBeVisible();
 	},
 };
+
+export const GitLab: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+};
+
+export const GitLabDark: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+	globals: { theme: "dark" },
+};
+
+export const Dark: Story = { globals: { theme: "dark" } };

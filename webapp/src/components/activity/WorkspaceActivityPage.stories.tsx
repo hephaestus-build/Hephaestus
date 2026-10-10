@@ -37,7 +37,7 @@ const meta = {
 		onRepoChange: fn(),
 		order: { sort: "contributions", desc: true },
 		onOrderChange: fn(),
-		people: readyPeople(peopleOf(PEOPLE, { automation: AUTOMATION, highlights: true })),
+		people: readyPeople(peopleOf(PEOPLE, { automation: AUTOMATION })),
 		facets: { teams: TEAMS, repositories: REPOSITORIES },
 		timeline: {
 			status: "ready",
@@ -59,7 +59,7 @@ export const Default: Story = {
 		const headings = canvas
 			.getAllByRole("heading", { level: 2 })
 			.map((heading) => heading.textContent);
-		await expect(headings).toStrictEqual(["Highlights", "People", "Automation", "Timeline"]);
+		await expect(headings).toStrictEqual(["People", "Automation", "Timeline"]);
 		await expect(canvas.getByText(/^History since .* for 2 of 2 repositories\.$/u)).toBeVisible();
 		await userEvent.click(canvas.getByRole("combobox", { name: "Team: Everyone" }));
 		const options = within(await settledPopup()).getAllByRole("option");
@@ -79,8 +79,10 @@ export const AutomationApart: Story = {
 	play: async ({ canvas }) => {
 		const people = canvas.getByRole("table", { name: "People" });
 		await expect(within(people).queryByText("dependabot[bot]")).not.toBeInTheDocument();
-		await expect(canvas.getByText(/^Bot account · 14 contributions$/u)).toBeVisible();
-		await expect(canvas.getByText(/^Treated as automation · 4 contributions$/u)).toBeVisible();
+		const automation = within(canvas.getByRole("region", { name: "Automation" }));
+		await expect(automation.getByText("Bot")).toBeVisible();
+		await expect(automation.getByText("Treated as automation")).toBeVisible();
+		await expect(automation.getByText("14 contributions")).toBeVisible();
 	},
 };
 
@@ -98,7 +100,7 @@ export const Stale: Story = {
 	args: {
 		people: {
 			status: "ready",
-			people: peopleOf(PEOPLE, { automation: AUTOMATION, highlights: true }),
+			people: peopleOf(PEOPLE, { automation: AUTOMATION }),
 			stale: true,
 		},
 	},
@@ -107,10 +109,8 @@ export const Stale: Story = {
 			"aria-busy",
 			"true",
 		);
-		for (const name of ["Highlights", "Automation"]) {
-			const region = canvas.getByRole("region", { name });
-			await expect(region.querySelector("[aria-busy='true']")).not.toBeNull();
-		}
+		const automation = canvas.getByRole("region", { name: "Automation" });
+		await expect(automation.querySelector("[aria-busy='true']")).not.toBeNull();
 	},
 };
 
@@ -164,7 +164,6 @@ export const Empty: Story = {
 	args: { people: readyPeople(peopleOf([])) },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No contributions in this range")).toBeVisible();
-		await expect(canvas.queryByRole("heading", { name: "Highlights" })).not.toBeInTheDocument();
 		await expect(canvas.getByRole("combobox", { name: "Team: Everyone" })).toBeVisible();
 	},
 };
@@ -177,7 +176,22 @@ export const GitLab: Story = {
 	},
 };
 
+export const GitLabDark: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+	globals: { theme: "dark" },
+};
+
 export const Dark: Story = { globals: { theme: "dark" } };
+
+/** Wide screens keep the page to its readable width, so names and figures stay close. */
+export const Wide: Story = {
+	parameters: { chromatic: { viewports: [1920] } },
+	play: async ({ canvas }) => {
+		const table = canvas.getByRole("table", { name: "People" });
+		await expect(table.getBoundingClientRect().width).toBeLessThanOrEqual(896);
+	},
+};
 
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
@@ -186,7 +200,6 @@ export const Reflow: Story = {
 	},
 };
 
-/** The highlights hold their place while the people load. */
 export const Loading: Story = {
 	args: { people: { status: "loading" }, facets: undefined, timeline: { status: "loading" } },
 	play: async ({ canvas }) => {
@@ -194,7 +207,6 @@ export const Loading: Story = {
 			"aria-busy",
 			"true",
 		);
-		await expect(canvas.getByRole("heading", { name: "Highlights" })).toBeVisible();
 	},
 };
 

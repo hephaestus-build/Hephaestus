@@ -1,4 +1,3 @@
-import { HistoryIcon } from "@primer/octicons-react";
 import { isSameDay, startOfDay, subDays } from "date-fns";
 import { type ReactNode, useId } from "react";
 
@@ -27,7 +26,7 @@ import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 import { ActionChips } from "./ActionChip";
 import { goneWork, workOf } from "./activity-kind-defs";
 import { STALE } from "./activity-tones";
-import { ActivityEmpty } from "./ActivityEmpty";
+import { ActivityEmpty, HistoryMark } from "./ActivityEmpty";
 import { PeopleStack } from "./PeopleStack";
 import { goneWorkVisual, workStateVisual } from "./work-state-defs";
 
@@ -82,7 +81,12 @@ export function ActivityWorkLog({ state, providerType, subject }: ActivityWorkLo
 		);
 	}
 	if (state.items.length === 0) {
-		return <ActivityEmpty icon={<HistoryIcon />} title="No activity in this range" />;
+		return (
+			<ActivityEmpty
+				icon={<HistoryMark providerType={providerType} />}
+				title="No activity in this range"
+			/>
+		);
 	}
 	const today = new Date(nowMs);
 	return (

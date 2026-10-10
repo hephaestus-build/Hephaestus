@@ -1,4 +1,3 @@
-import { HistoryIcon } from "@primer/octicons-react";
 import type { ReactElement } from "react";
 
 import type { UserInfo } from "@/api/types.gen";
@@ -11,7 +10,7 @@ import { hasText } from "@/lib/text";
 
 import type { ActivityOverviewState } from "./activity-buckets";
 import type { ActivityPeriod } from "./activity-period";
-import { ActivityEmpty } from "./ActivityEmpty";
+import { ActivityEmpty, HistoryMark } from "./ActivityEmpty";
 import type { ActivityWorkLogState } from "./ActivityWorkLog";
 import { MemberAvatar } from "./MemberAvatar";
 import { PersonActivitySections } from "./PersonActivitySections";
@@ -69,7 +68,10 @@ export function PersonActivityLevel({
 			/>
 			<DrawerBody className="flex flex-col gap-8 pt-2">
 				{absent ? (
-					<ActivityEmpty icon={<HistoryIcon />} title="No activity in this range" />
+					<ActivityEmpty
+						icon={<HistoryMark providerType={providerType} />}
+						title="No activity in this range"
+					/>
 				) : (
 					<PersonActivitySections
 						level={3}

@@ -48,3 +48,11 @@ export const Reflow: Story = {
 		await expectNoPageOverflow();
 	},
 };
+
+export const Dark: Story = { globals: { theme: "dark" } };
+
+export const GitLabDark: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+	globals: { theme: "dark" },
+};

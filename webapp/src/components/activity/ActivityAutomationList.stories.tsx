@@ -23,8 +23,8 @@ export const Default: Story = {
 			"dependabot[bot]",
 			"Release Robot",
 		]);
-		await expect(canvas.getByText(/^Bot account/u)).toBeVisible();
-		await expect(canvas.getByText(/^Treated as automation/u)).toBeVisible();
+		await expect(canvas.getByText("Bot")).toBeVisible();
+		await expect(canvas.getByText("Treated as automation")).toBeVisible();
 	},
 };
 
@@ -34,3 +34,5 @@ export const Empty: Story = {
 		await expect(canvas.queryAllByRole("link")).toHaveLength(0);
 	},
 };
+
+export const Dark: Story = { globals: { theme: "dark" } };

@@ -1,6 +1,7 @@
 import type { ActivityPerson } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { Badge } from "@/components/ui/badge";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { nameOrder } from "@/lib/text";
 
@@ -33,10 +34,10 @@ export function ActivityAutomationList({ automation }: ActivityAutomationListPro
 							>
 								{person.name}
 							</InlineLink>
+							<Badge variant="muted">{kind === "BOT" ? "Bot" : "Treated as automation"}</Badge>
 						</ItemTitle>
-						<ItemDescription className="text-xs">
-							{kind === "BOT" ? "Bot account" : "Treated as automation"} · {counts.contributions}{" "}
-							{counts.contributions === 1 ? "contribution" : "contributions"}
+						<ItemDescription className="text-xs tabular-nums">
+							{counts.contributions} {counts.contributions === 1 ? "contribution" : "contributions"}
 						</ItemDescription>
 					</ItemContent>
 				</Item>

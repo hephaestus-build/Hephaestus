@@ -1,7 +1,7 @@
 import { Building2 } from "lucide-react";
 
 import { cn } from "cn";
-import type { ActivityPeople, ActivityPerson } from "@/api/types.gen";
+import type { ActivityPeople } from "@/api/types.gen";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
@@ -12,7 +12,6 @@ import type { ProviderType } from "@/lib/provider/provider-terms";
 import type { ActivityPeriod } from "./activity-period";
 import { STALE } from "./activity-tones";
 import { ActivityAutomationList } from "./ActivityAutomationList";
-import { ActivityHighlights, ActivityHighlightsSkeleton } from "./ActivityHighlights";
 import {
 	type ActivityPeopleState,
 	ActivityPeopleTable,
@@ -67,7 +66,7 @@ export function WorkspaceActivityPage({
 	const stale = people.status === "ready" && people.stale;
 	const pullRequests = artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType);
 	return (
-		<PageLayout className="space-y-8">
+		<PageLayout className="max-w-4xl space-y-8">
 			<PageHeader
 				icon={<Building2 />}
 				title="Workspace activity"
@@ -81,16 +80,10 @@ export function WorkspaceActivityPage({
 					updating={stale || (timeline.status === "ready" && timeline.stale)}
 				/>
 			</div>
-			{people.status === "loading" && (
-				<Section size="lg" title="Highlights">
-					<ActivityHighlightsSkeleton />
-				</Section>
-			)}
-			{ready && <Highlights people={ready} stale={stale} />}
 			<Section
 				size="lg"
 				title="People"
-				description={`Contributions are the ${pullRequests} a person opened and reviewed, and the issues they opened.`}
+				description={`Contributions are ${pullRequests} opened and reviewed, plus issues opened.`}
 			>
 				<ActivityPeopleTable
 					state={people}
@@ -106,7 +99,7 @@ export function WorkspaceActivityPage({
 				<Section
 					size="lg"
 					title="Automation"
-					description="Bot accounts and accounts treated as automation. Their work is not counted for people."
+					description="Bots and accounts treated as automation, counted apart from people."
 				>
 					<div aria-busy={stale || undefined} className={cn(stale && STALE)}>
 						<ActivityAutomationList automation={ready.automation} />
@@ -151,28 +144,4 @@ function coverageNote({ coverage }: ActivityPeople): string | undefined {
 		return `The history of ${which} is not complete yet, so the counts can be low.`;
 	}
 	return `History since ${formatDate(since)} for ${completeRepositories} of ${totalRepositories} ${repositories}.`;
-}
-
-function Highlights({ people, stale }: { people: ActivityPeople; stale: boolean }) {
-	const byId = new Map(people.people.map((person) => [person.person.id, person]));
-	const resolve = (ids: readonly number[]): ActivityPerson[] =>
-		ids.flatMap((id) => {
-			const person = byId.get(id);
-			return person ? [person] : [];
-		});
-	const firstContributors = resolve(people.highlights.firstContributors);
-	const mostPeopleHelped = resolve(people.highlights.mostPeopleHelped);
-	if (firstContributors.length === 0 && mostPeopleHelped.length === 0) {
-		return null;
-	}
-	return (
-		<Section size="lg" title="Highlights">
-			<div aria-busy={stale || undefined} className={cn(stale && STALE)}>
-				<ActivityHighlights
-					firstContributors={firstContributors}
-					mostPeopleHelped={mostPeopleHelped}
-				/>
-			</div>
-		</Section>
-	);
 }

@@ -1,5 +1,3 @@
-import { HistoryIcon } from "@primer/octicons-react";
-
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
@@ -8,7 +6,7 @@ import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import type { ActivityOverviewState } from "./activity-buckets";
 import { ACTIVITY_CATEGORY_DEFS, type ActivityCategory } from "./activity-kind-defs";
-import { ActivityEmpty } from "./ActivityEmpty";
+import { ActivityEmpty, HistoryMark } from "./ActivityEmpty";
 import { ActivityTrendChart } from "./ActivityTrendChart";
 import { ActivityWorkLog, type ActivityWorkLogState, type WorkLogSubject } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
@@ -47,7 +45,10 @@ export function ActivityCategoryLevel({
 			<LevelHeader nested={nested} path={path} current={title} description={description} />
 			<DrawerBody className="flex flex-col gap-8 pt-2">
 				{absent ? (
-					<ActivityEmpty icon={<HistoryIcon />} title="No activity in this range" />
+					<ActivityEmpty
+						icon={<HistoryMark providerType={providerType} />}
+						title="No activity in this range"
+					/>
 				) : (
 					<>
 						<ActivityTrendChart state={overview} category={category} providerType={providerType} />

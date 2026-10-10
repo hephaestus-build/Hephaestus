@@ -1,5 +1,6 @@
-import { CheckCircleIcon, ChevronRightIcon } from "@primer/octicons-react";
+import { CheckCircleIcon } from "@primer/octicons-react";
 import { cn } from "cn";
+import { ChevronRightIcon } from "lucide-react";
 import type { OpenWork, WorkItem, WorkItemList } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -188,8 +189,8 @@ function WaitingOnOthers({ items, ...rest }: Omit<GroupListsProps, "groups">) {
 		<Collapsible>
 			<CollapsibleTrigger render={<Button variant="ghost" size="sm" className="group -ml-2" />}>
 				<ChevronRightIcon
-					size={16}
-					className="transition-transform group-aria-expanded:rotate-90 motion-reduce:transition-none"
+					aria-hidden
+					className="size-4 transition-transform group-aria-expanded:rotate-90 motion-reduce:transition-none"
 				/>
 				Waiting on others
 				<span className="text-muted-foreground tabular-nums">· {count}</span>

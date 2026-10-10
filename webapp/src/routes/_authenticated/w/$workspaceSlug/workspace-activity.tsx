@@ -13,6 +13,8 @@ import {
 import {
 	PERIOD_SEARCH_KEYS,
 	parseActivityStack,
+	peopleDir,
+	peopleOrder,
 	WORKSPACE_ACTIVITY_LEVEL_KINDS,
 	WORKSPACE_ACTIVITY_SEARCH_DEFAULTS,
 	type WorkspaceActivitySearch,
@@ -163,9 +165,9 @@ function WorkspaceActivity() {
 				onTeamChange={(team) => setView({ team })}
 				repo={search.repo ?? []}
 				onRepoChange={(repo) => setView({ repo: nonEmpty(repo) })}
-				order={{ sort: search.sort, desc: search.dir === "desc" }}
+				order={peopleOrder(search.sort, search.dir)}
 				onOrderChange={({ sort, desc }: PeopleOrder) =>
-					setView({ sort, dir: desc ? "desc" : "asc" })
+					setView({ sort, dir: peopleDir(sort, desc) })
 				}
 				people={people}
 				facets={facets}

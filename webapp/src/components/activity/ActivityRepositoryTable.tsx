@@ -7,16 +7,22 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { ARTIFACT_KIND, artifactKindNoun } from "@/lib/artifact-kinds";
 import type { ProviderType } from "@/lib/provider/provider-terms";
-import { capitalise } from "@/lib/text";
+
+import { NoneMark } from "./ActionChip";
+import { ActivityCountCell, ActivityCountHeader, type CountedCategory } from "./ActivityCountCell";
 
 export interface ActivityRepositoryTableProps {
 	repositories: readonly ActivityRepositoryCounts[];
 	providerType: ProviderType;
 }
 
-/** One person's counts in each repository, most contributions first, by the table's own columns. */
+const CATEGORIES: readonly CountedCategory[] = ["pull-requests", "reviews", "issues"];
+
+/**
+ * One person's counts in each repository, most contributions first, in the people table's own
+ * cells, so a row here reads like that person's row there.
+ */
 export function ActivityRepositoryTable({
 	repositories,
 	providerType,
@@ -30,26 +36,41 @@ export function ActivityRepositoryTable({
 		<Table bordered aria-label="Repositories">
 			<TableHeader>
 				<TableRow variant="static">
-					<TableHead>Repository</TableHead>
-					<TableHead>Contributions</TableHead>
-					<TableHead>
-						{capitalise(artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType))}
+					<TableHead className="pl-3 text-muted-foreground">Repository</TableHead>
+					<TableHead numeric className="w-px text-right text-muted-foreground">
+						Contributions
 					</TableHead>
-					<TableHead>Reviews</TableHead>
-					<TableHead>Issues</TableHead>
+					{CATEGORIES.map((category) => (
+						<TableHead
+							key={category}
+							numeric
+							className="w-px text-right text-muted-foreground last:pr-3"
+						>
+							<ActivityCountHeader category={category} providerType={providerType} />
+						</TableHead>
+					))}
 				</TableRow>
 			</TableHeader>
 			<TableBody>
 				{rows.map(({ repository, counts }) => (
 					<TableRow key={repository.id} variant="static">
-						<TableCell className="font-medium">{repository.key}</TableCell>
-						<TableCell numeric>{counts.contributions}</TableCell>
-						<TableCell numeric>
-							{counts.pullRequestsOpened}
-							<span className="text-muted-foreground"> · {counts.pullRequestsMerged} merged</span>
+						<TableCell className="pl-3 font-medium">{repository.key}</TableCell>
+						<TableCell numeric className="text-right font-semibold">
+							{counts.contributions === 0 ? (
+								<NoneMark phrase="0 contributions" />
+							) : (
+								counts.contributions
+							)}
 						</TableCell>
-						<TableCell numeric>{counts.pullRequestsReviewed}</TableCell>
-						<TableCell numeric>{counts.issuesOpened}</TableCell>
+						{CATEGORIES.map((category) => (
+							<TableCell key={category} numeric className="text-right last:pr-3">
+								<ActivityCountCell
+									category={category}
+									counts={counts}
+									providerType={providerType}
+								/>
+							</TableCell>
+						))}
 					</TableRow>
 				))}
 			</TableBody>

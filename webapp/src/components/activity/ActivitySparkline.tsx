@@ -1,6 +1,8 @@
+import { cn } from "cn";
 import type { ActivitySparklineWeek } from "@/api/types.gen";
 
 import { weekStarts } from "./activity-tally";
+import { ACTIVITY_TONES } from "./activity-tones";
 
 export interface ActivitySparklineProps {
 	/** The weeks with contributions; the server leaves out a week without any. */
@@ -9,15 +11,17 @@ export interface ActivitySparklineProps {
 	span: { from: Date; to: Date };
 }
 
-const WIDTH = 96;
+const WIDTH = 80;
 const HEIGHT = 24;
 /** Room for the stroke at the top and the bottom, so a peak or a zero is not cut in half. */
 const INSET = 1.5;
 
 /**
  * Contributions per week over the period, on the row's own scale from zero: the shape of a person's
- * work, never a comparison with the next row. A plain SVG, because a chart library per row of a
- * table of hundreds costs far more than the line it draws. Its words say the busiest week.
+ * work, never a comparison with the next row. It takes the provider's accent, because a grey line
+ * reads as disabled, and the accent drains with the rest of a stale row. A plain SVG, because a chart
+ * library per row of a table of hundreds costs far more than the line it draws. Its words say the
+ * busiest week.
  */
 export function ActivitySparkline({ weeks, span }: ActivitySparklineProps) {
 	const counted = new Map(weeks.map((week) => [week.start.getTime(), week.contributions]));
@@ -42,7 +46,7 @@ export function ActivitySparkline({ weeks, span }: ActivitySparklineProps) {
 			viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
 			width={WIDTH}
 			height={HEIGHT}
-			className="overflow-visible text-muted-foreground"
+			className={cn("overflow-visible", ACTIVITY_TONES.accent.text)}
 		>
 			<polyline
 				points={line}

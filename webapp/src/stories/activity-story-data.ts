@@ -655,10 +655,13 @@ export const AUTOMATION: ActivityPerson[] = [
 	),
 ];
 
-/** The response the people table reads, for `people` in the last 30 days. */
+/**
+ * The response the people table reads, for `people` in the last 30 days. Élodie's first contribution
+ * is in it, unless `firstContributors` says whose is.
+ */
 export function peopleOf(
 	people: ActivityPerson[],
-	options: { automation?: ActivityPerson[]; highlights?: boolean } = {},
+	options: { automation?: ActivityPerson[]; firstContributors?: readonly number[] } = {},
 ): ActivityPeople {
 	const span = spanOf("30d");
 	return {
@@ -666,10 +669,12 @@ export function peopleOf(
 		people,
 		automation: options.automation ?? [],
 		coverage: { since: daysBefore(400), completeRepositories: 2, totalRepositories: 2 },
-		highlights:
-			options.highlights === true
-				? { firstContributors: [elodie.id], mostPeopleHelped: [ada.id] }
-				: { firstContributors: [], mostPeopleHelped: [] },
+		highlights: {
+			firstContributors: [...(options.firstContributors ?? [elodie.id])].filter((id) =>
+				people.some(({ person }) => person.id === id),
+			),
+			mostPeopleHelped: [],
+		},
 		repositories: REPOSITORIES,
 		teams: TEAMS,
 	};

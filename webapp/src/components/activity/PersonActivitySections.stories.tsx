@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
 import { ada, OVERVIEW, readyOverview, WORK_LOG } from "@/stories/activity-story-data";
-import { withStandardPage } from "@/stories/decorators";
+import { withProvider, withStandardPage } from "@/stories/decorators";
 
 import { PersonActivitySections } from "./PersonActivitySections";
 
@@ -62,3 +62,16 @@ export const Failed: Story = {
 		await expect(canvas.getAllByRole("alert")).toHaveLength(2);
 	},
 };
+
+export const GitLab: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+};
+
+export const GitLabDark: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+	globals: { theme: "dark" },
+};
+
+export const Dark: Story = { globals: { theme: "dark" } };

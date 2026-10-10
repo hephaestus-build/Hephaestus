@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
 import { PEOPLE, spanOf } from "@/stories/activity-story-data";
+import { withProvider } from "@/stories/decorators";
 
 import { weekStarts } from "./activity-tally";
 import { ActivitySparkline } from "./ActivitySparkline";
@@ -46,3 +47,8 @@ export const Year: Story = {
 		await expect(canvas.getByRole("img", { name: "Busiest week: 4 contributions" })).toBeVisible();
 	},
 };
+
+/** The line takes the provider's accent: GitLab's, here. */
+export const GitLab: Story = { decorators: [withProvider("GITLAB")] };
+
+export const Dark: Story = { globals: { theme: "dark" } };

@@ -8,7 +8,7 @@ import {
 	readyPeople,
 	REPOSITORIES,
 } from "@/stories/activity-story-data";
-import { withStandardPage } from "@/stories/decorators";
+import { withProvider, withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
@@ -69,6 +69,17 @@ export const Default: Story = {
 			["5", "Élodie Brière"],
 		]);
 		await expect(within(table).getByRole("columnheader", { name: "Position" })).toBeVisible();
+		// Figures read right-aligned, a part with nothing in it is a dash that still says what it is,
+		// and a first contribution in the range is marked new.
+		const contributions = within(table).getAllByRole("cell")[2];
+		await expect(contributions && getComputedStyle(contributions).textAlign).toBe("right");
+		const chen = within(table).getByRole("row", { name: /Chen Wei/u });
+		within(chen).getByText("0 pull requests opened");
+		await expect(within(chen).queryByText("New")).not.toBeInTheDocument();
+		const elodie = within(table).getByRole("row", { name: /Élodie Brière/u });
+		await expect(
+			within(elodie).getByRole("img", { name: "First contribution in this range" }),
+		).toBeVisible();
 		await expect(
 			within(table).getByRole("columnheader", { name: /^Contributions/u }),
 		).toHaveAttribute("aria-sort", "descending");
@@ -150,13 +161,13 @@ export const EmptyForRepositories: Story = {
 	},
 };
 
+/** The previous range's figures stand in drained of their state colours, never as the new range's. */
 export const Stale: Story = {
 	args: { state: { status: "ready", people: peopleOf(PEOPLE), stale: true } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("table", { name: "People" })).toHaveAttribute(
-			"aria-busy",
-			"true",
-		);
+		const table = canvas.getByRole("table", { name: "People" });
+		await expect(table).toHaveAttribute("aria-busy", "true");
+		await expect(getComputedStyle(table).filter).toContain("grayscale");
 	},
 };
 
@@ -208,6 +219,22 @@ export const FailedForUnknownRepository: Story = {
 };
 
 export const Dark: Story = { globals: { theme: "dark" } };
+
+/** GitLab's own icons and colours: Pajamas merge requests, merged in blue. */
+export const GitLab: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("columnheader", { name: /Merge requests/u })).toBeVisible();
+		await expect(canvas.getAllByRole("img", { name: /merged$/u }).length).toBeGreaterThan(0);
+	},
+};
+
+export const GitLabDark: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+	globals: { theme: "dark" },
+};
 
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },

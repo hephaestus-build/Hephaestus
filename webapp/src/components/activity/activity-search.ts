@@ -137,7 +137,8 @@ const workspaceActivityFilterSchema = periodSearchSchema.extend({
 	team: z.coerce.string().min(1).optional().catch(undefined),
 	repo: multiValue,
 	sort: z.enum(PEOPLE_SORTS).default("contributions").catch("contributions"),
-	dir: z.enum(["asc", "desc"]).default("desc").catch("desc"),
+	// Absent is the column's own first direction: most first for a count, A to Z for a name.
+	dir: z.enum(["asc", "desc"]).optional().catch(undefined),
 });
 
 export const WORKSPACE_ACTIVITY_SEARCH_DEFAULTS = workspaceActivityFilterSchema.parse({});
@@ -147,3 +148,21 @@ export const workspaceActivitySearchSchema = workspaceActivityFilterSchema.exten
 );
 
 export type WorkspaceActivitySearch = z.infer<typeof workspaceActivitySearchSchema>;
+
+/** Whether a column first lists most first: every count does, and a name runs A to Z. */
+function sortsDescFirst(sort: PeopleSort): boolean {
+	return sort !== "name";
+}
+
+/** The order the URL's sort and direction name; an absent direction is the column's first one. */
+export function peopleOrder(sort: PeopleSort, dir: "asc" | "desc" | undefined) {
+	return { sort, desc: dir === undefined ? sortsDescFirst(sort) : dir === "desc" };
+}
+
+/** The direction to write for an order, none when it is the column's first one. */
+export function peopleDir(sort: PeopleSort, desc: boolean): "asc" | "desc" | undefined {
+	if (desc === sortsDescFirst(sort)) {
+		return undefined;
+	}
+	return desc ? "desc" : "asc";
+}

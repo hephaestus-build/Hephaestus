@@ -1,4 +1,4 @@
-import { ChevronRightIcon } from "@primer/octicons-react";
+import { ChevronRightIcon } from "lucide-react";
 import { useId } from "react";
 import { Bar, BarChart, ReferenceLine, XAxis, YAxis } from "recharts";
 
@@ -279,8 +279,8 @@ function BucketTable({
 		<Collapsible>
 			<CollapsibleTrigger render={<Button variant="ghost" size="sm" className="group -ml-2" />}>
 				<ChevronRightIcon
-					size={16}
-					className="transition-transform group-aria-expanded:rotate-90 motion-reduce:transition-none"
+					aria-hidden
+					className="size-4 transition-transform group-aria-expanded:rotate-90 motion-reduce:transition-none"
 				/>
 				Show as table
 			</CollapsibleTrigger>
