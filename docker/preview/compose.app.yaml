@@ -133,6 +133,21 @@ services:
 
         echo "Applying the preview policy"
         psql -h "$$TARGET" -U hephaestus -d hephaestus -v ON_ERROR_STOP=1 <<'SQL'
+        -- Staging has its own schema until this head runs Liquibase. A clone must not publish
+        -- a snapshot whose repository visibility and personal choices can no longer refresh.
+        DO 'BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = ''public'' AND table_name = ''instance_settings''
+                AND column_name = ''public_activity_allowed'') THEN
+            UPDATE instance_settings SET public_activity_allowed = FALSE;
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = ''public'' AND table_name = ''workspace''
+                AND column_name = ''public_activity_enabled'') THEN
+            UPDATE workspace SET public_activity_enabled = FALSE;
+          END IF;
+        END';
+
         -- 1. Silence: a clone must not act.
         UPDATE workspace
            SET practice_review_auto_trigger_enabled = FALSE,
@@ -205,7 +220,10 @@ services:
         echo "Verifying the preview policy took effect"
         LIVE=$$(psql -h "$$TARGET" -U hephaestus -d hephaestus -tAX -v ON_ERROR_STOP=1 -c "
           SELECT (SELECT count(*) FROM workspace
-                   WHERE practice_review_auto_trigger_enabled OR practice_review_manual_trigger_enabled)
+                   WHERE practice_review_auto_trigger_enabled OR practice_review_manual_trigger_enabled
+                      OR coalesce(to_jsonb(workspace)->>'public_activity_enabled', 'false') = 'true')
+               + (SELECT count(*) FROM instance_settings settings
+                   WHERE coalesce(to_jsonb(settings)->>'public_activity_allowed', 'false') = 'true')
                + (SELECT count(*) FROM workspace_agent_binding WHERE enabled AND purpose = 'PRACTICE_REVIEW')
                + (SELECT count(*) FROM review_sweep_schedule WHERE enabled)
                + (SELECT count(*) FROM agent_job WHERE status IN ('QUEUED', 'RUNNING'))

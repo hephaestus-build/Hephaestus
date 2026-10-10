@@ -189,6 +189,8 @@ services:
       - "8080"
     environment:
       HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED: ${HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED:-false}
+      HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_CAPACITY: ${HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_CAPACITY:-60}
+      HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_PERIOD: ${HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_PERIOD:-1m}
       # Compose preserves the placeholder; Spring resolves it on shared-network, not sandbox interfaces.
       MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       # The buildpack's 10M MaxDirectMemorySize sits below this role's steady NIO
