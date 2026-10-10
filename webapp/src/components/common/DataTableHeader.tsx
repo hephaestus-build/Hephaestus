@@ -33,7 +33,11 @@ export function DataTableHeader<TData extends RowData>({
 								{column.getCanSort() ? (
 									<SortButton
 										sorted={sorted}
-										onToggle={() => column.toggleSorting(sorted === "asc")}
+										// The first press takes the column's own first direction — most first for
+										// a count — then each press flips it.
+										onToggle={() =>
+											column.toggleSorting(sorted === false ? undefined : sorted === "asc")
+										}
 									>
 										{label}
 									</SortButton>

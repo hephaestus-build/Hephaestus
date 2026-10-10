@@ -1,15 +1,12 @@
-import {
-	addDays,
-	addMinutes,
-	addMonths,
-	addWeeks,
-	startOfDay,
-	startOfMonth,
-	startOfWeek,
-	subDays,
-} from "date-fns";
+import { addMinutes, startOfDay, subDays } from "date-fns";
+
 import type {
 	ActivityAction,
+	ActivityPeople,
+	ActivityPerson,
+	ActivityRepository,
+	ActivityRepositoryCounts,
+	ActivityTeam,
 	ActivityWork,
 	OpenWork,
 	RepositoryInfo,
@@ -19,20 +16,20 @@ import type {
 	WorkItemList,
 } from "@/api/types.gen";
 import type { ActivityOverviewState, DateSpan } from "@/components/activity/activity-buckets";
-import { ACTIVITY_RANGE_DEFS, rangeStart } from "@/components/activity/activity-range";
-import type {
-	ActivitySummary,
-	ActivityBucket,
-	ActivityOverview,
-	MemberActivity,
-} from "@/components/activity/activity-view";
-
-import type { MemberActivityState } from "@/components/activity/MemberActivityTable";
+import { ACTIVITY_KINDS, type ActivityKind } from "@/components/activity/activity-kind-defs";
+import type { ActivityPreset } from "@/components/activity/activity-period";
+import { ACTIVITY_RANGE_DEFS } from "@/components/activity/activity-range";
+import {
+	type ActivityOverview,
+	type ActivityTally,
+	weekStarts,
+} from "@/components/activity/activity-tally";
+import type { ActivityPeopleState } from "@/components/activity/ActivityPeopleTable";
 
 import { daysBefore, hoursBefore, minutesBefore, STORY_NOW } from "./story-clock";
 
-// The reader is Ada. Her pull requests are open or merged, never both; her open work, her tiles and
-// her timeline describe the same weeks; and a workspace's totals are the sum of its members'.
+// The reader is Ada. Her pull requests are open or merged, never both; and her open work, her tiles
+// and her timeline describe the same weeks.
 
 /** No avatar address, so a story never waits on the network and shows the initials. */
 function user(id: number, login: string, name: string): UserInfo {
@@ -349,256 +346,339 @@ export const GITLAB_OPEN_WORK: OpenWork = {
 	issues: list(OPEN_WORK.issues.content.map(onGitLab)),
 };
 
-// -- Summaries and buckets -------------------------------------------------------------------------
+// -- Repositories and teams ----------------------------------------------------------------------
 
-const ZERO: ActivitySummary = {
-	pullRequestsOpened: 0,
-	pullRequestsMerged: 0,
-	pullRequestsClosed: 0,
-	approvals: 0,
-	changeRequests: 0,
-	commentReviews: 0,
-	comments: 0,
-	codeComments: 0,
-	issuesOpened: 0,
-	issuesClosed: 0,
-};
-
-const FIELDS = Object.keys(ZERO).filter(
-	(key): key is Exclude<keyof ActivitySummary, "pullRequestsReviewed" | "totalComments"> =>
-		Object.hasOwn(ZERO, key),
+export const REPOSITORIES: ActivityRepository[] = [hephaestusRepo, artemisRepo].map(
+	({ id, name, nameWithOwner }) => ({ id, name, key: nameWithOwner }),
 );
 
-export function summaryOf(counts: Partial<ActivitySummary>): ActivitySummary {
-	return { ...ZERO, ...counts };
+export const TEAMS: ActivityTeam[] = [
+	{ id: 31, key: "platform", name: "Platform" },
+	{ id: 32, key: "payments", name: "Payments", parentId: 31 },
+	{ id: 33, key: "web", name: "Web" },
+];
+
+// -- Tallies and weeks ----------------------------------------------------------------------------
+
+const KIND_ZERO: Record<ActivityKind, number> = {
+	PULL_REQUEST_OPENED: 0,
+	PULL_REQUEST_MERGED: 0,
+	PULL_REQUEST_CLOSED: 0,
+	REVIEW_APPROVED: 0,
+	REVIEW_CHANGES_REQUESTED: 0,
+	REVIEW_COMMENTED: 0,
+	COMMENTED: 0,
+	CODE_COMMENTED: 0,
+	ISSUE_OPENED: 0,
+	ISSUE_CLOSED: 0,
+};
+
+/** The fields a story spreads over weeks; the totals the server derives follow from them. */
+type StoryCounts = Partial<Record<ActivityKind, number>> & { pullRequestsReviewed?: number };
+
+/** A tally whose Contributions and comments add up the way the server's do. */
+export function tallyOf(counts: StoryCounts): ActivityTally {
+	const kinds = { ...KIND_ZERO, ...counts };
+	const pullRequestsReviewed = counts.pullRequestsReviewed ?? 0;
+	return {
+		...kinds,
+		pullRequestsReviewed,
+		contributions: kinds.PULL_REQUEST_OPENED + pullRequestsReviewed + kinds.ISSUE_OPENED,
+		comments: kinds.COMMENTED + kinds.CODE_COMMENTED,
+	};
 }
 
-export function sumSummaries(summaries: readonly ActivitySummary[]): ActivitySummary {
-	const total = { ...ZERO };
-	for (const summary of summaries) {
-		for (const field of FIELDS) {
-			total[field] += summary[field];
-		}
-	}
-	return total;
-}
+const SPREAD_FIELDS = [...ACTIVITY_KINDS, "pullRequestsReviewed"] as const;
 
 /**
- * Ada's month, as skewed as a reviewer's month is: one issue, three merged, 18 reviews and 142
- * comments. Kinds of such different sizes are why no two share an axis.
+ * Ada's month, as skewed as a reviewer's month is: one issue, three merged, 12 pull requests reviewed
+ * and 142 comments. Kinds of such different sizes are why no two share an axis.
  */
-export const SUMMARY = summaryOf({
-	pullRequestsOpened: 4,
-	pullRequestsMerged: 3,
-	pullRequestsClosed: 1,
-	approvals: 11,
-	changeRequests: 3,
-	commentReviews: 4,
-	comments: 60,
-	codeComments: 82,
-	issuesOpened: 1,
+export const TALLY = tallyOf({
+	PULL_REQUEST_OPENED: 4,
+	PULL_REQUEST_MERGED: 3,
+	PULL_REQUEST_CLOSED: 1,
+	REVIEW_APPROVED: 11,
+	REVIEW_CHANGES_REQUESTED: 3,
+	REVIEW_COMMENTED: 4,
+	COMMENTED: 60,
+	CODE_COMMENTED: 82,
+	ISSUE_OPENED: 1,
+	pullRequestsReviewed: 12,
 });
 
-export const QUIET_SUMMARY = ZERO;
+/**
+ * Ada's month before this one: fewer merged, more pull requests reviewed, fewer comments — so each
+ * tile says a different thing about the change.
+ */
+export const PREVIOUS_TALLY = tallyOf({
+	PULL_REQUEST_OPENED: 3,
+	PULL_REQUEST_MERGED: 1,
+	REVIEW_APPROVED: 14,
+	REVIEW_CHANGES_REQUESTED: 3,
+	REVIEW_COMMENTED: 4,
+	COMMENTED: 50,
+	CODE_COMMENTED: 70,
+	ISSUE_OPENED: 1,
+	pullRequestsReviewed: 15,
+});
 
-type StoryRange = "30d" | "90d" | "1y";
+type StoryPreset = Exclude<ActivityPreset, "all">;
 
-/** Where the server starts each bucket of a range that ends now, in the browser's time zone. */
-function bucketStarts(range: StoryRange): { bucket: ActivityOverview["bucket"]; starts: Date[] } {
-	const from = rangeStart(STORY_NOW, range);
-	const now = new Date(STORY_NOW);
-	const starts: Date[] = [];
-	if (range === "30d") {
-		for (let day = startOfDay(from); day <= now; day = addDays(day, 1)) {
-			starts.push(day);
-		}
-		return { bucket: "DAY", starts };
-	}
-	if (range === "90d") {
-		for (let week = startOfWeek(from, { weekStartsOn: 1 }); week <= now; week = addWeeks(week, 1)) {
-			starts.push(week);
-		}
-		return { bucket: "WEEK", starts };
-	}
-	for (let month = startOfMonth(from); month <= now; month = addMonths(month, 1)) {
-		starts.push(month);
-	}
-	return { bucket: "MONTH", starts };
+/** The span a preset counts, ending at the story's clock, as the server reads it. */
+export function spanOf(preset: StoryPreset): DateSpan {
+	return {
+		from: subDays(STORY_NOW, ACTIVITY_RANGE_DEFS[preset].days),
+		to: new Date(STORY_NOW),
+	};
 }
 
-/** A fixed, uneven rhythm — quiet weekends, a busy stretch — so the bars look like somebody's. */
+/** A fixed, uneven rhythm — quiet weeks, a busy stretch — so the bars look like somebody's. */
 const RHYTHM = [
 	3, 5, 2, 6, 4, 0, 1, 7, 2, 5, 3, 8, 0, 0, 4, 6, 1, 3, 9, 2, 5, 0, 1, 4, 7, 3, 2, 6, 0, 5,
 ];
 
 /**
- * Spreads each count over the buckets by the rhythm, shifted per kind so no two kinds peak together,
- * and makes the buckets add up to the summary exactly, as the server's do.
+ * Spreads each count over the weeks by the rhythm, shifted per field so no two peak together, and
+ * makes the weeks add up to the total exactly, as the server's do.
  */
-function spread(summary: ActivitySummary, count: number): ActivitySummary[] {
-	const buckets = Array.from({ length: count }, () => ({ ...ZERO }));
-	for (const [shift, field] of FIELDS.entries()) {
-		const weights = buckets.map((_, index) => RHYTHM[(index + shift * 3) % RHYTHM.length] ?? 1);
+function spread(total: ActivityTally, count: number): ActivityTally[] {
+	const weeks = Array.from({ length: count }, (): StoryCounts => ({}));
+	for (const [shift, field] of SPREAD_FIELDS.entries()) {
+		const weights = weeks.map((_, index) => RHYTHM[(index + shift * 3) % RHYTHM.length] ?? 1);
 		const totalWeight = Math.max(
 			1,
 			weights.reduce((sum, weight) => sum + weight, 0),
 		);
-		let left = summary[field];
-		for (const [index, weight] of weights.entries()) {
-			const share = Math.floor((summary[field] * weight) / totalWeight);
-			const bucket = buckets[index];
-			if (bucket) {
-				bucket[field] += share;
-			}
-			left -= share;
-		}
-		// The remainder goes to the heaviest buckets, one each, so a small count still lands somewhere.
+		const shares = weights.map((weight) => Math.floor((total[field] * weight) / totalWeight));
+		let left = total[field] - shares.reduce((sum, share) => sum + share, 0);
+		// The remainder goes to the heaviest weeks, one each, so a small count still lands somewhere.
 		const heaviest = weights
 			.map((weight, index) => ({ weight, index }))
 			.sort((a, b) => b.weight - a.weight);
 		for (let index = 0; left > 0; index = (index + 1) % heaviest.length) {
-			const bucket = buckets[heaviest[index]?.index ?? 0];
-			if (bucket) {
-				bucket[field] += 1;
-			}
+			const at = heaviest[index]?.index ?? 0;
+			shares[at] = (shares[at] ?? 0) + 1;
 			left -= 1;
 		}
+		for (const [index, week] of weeks.entries()) {
+			week[field] = shares[index] ?? 0;
+		}
 	}
-	return buckets;
+	return weeks.map(tallyOf);
 }
 
-/** An overview of `summary` over `range`, dense and adding up, for a presentational chart. */
-export function overviewOf(summary: ActivitySummary, range: StoryRange): ActivityOverview {
-	const { bucket, starts } = bucketStarts(range);
-	const summaries = spread(summary, starts.length);
-	const buckets: ActivityBucket[] = starts.map((start, index) => ({
-		start,
-		summary: summaries[index] ?? ZERO,
-	}));
-	return { summary, bucket, buckets };
+const REPOSITORY_SPLIT = [0.7, 0.3];
+
+/** A person's counts in the two story repositories, most in Hephaestus. */
+function repositoriesOf(total: ActivityTally): ActivityRepositoryCounts[] {
+	return REPOSITORIES.slice(0, 2).map((repository, index) => {
+		const share = (value: number) => Math.round(value * (REPOSITORY_SPLIT[index] ?? 0));
+		return {
+			repository,
+			counts: {
+				contributions: share(total.contributions),
+				pullRequestsOpened: share(total.PULL_REQUEST_OPENED),
+				pullRequestsMerged: share(total.PULL_REQUEST_MERGED),
+				pullRequestsReviewed: share(total.pullRequestsReviewed),
+				peopleHelped: share(total.pullRequestsReviewed),
+				issuesOpened: share(total.ISSUE_OPENED),
+				comments: share(total.comments),
+				activeWeeks: 1,
+			},
+			breakdown: {
+				approvals: share(total.REVIEW_APPROVED),
+				changeRequests: share(total.REVIEW_CHANGES_REQUESTED),
+				commentReviews: share(total.REVIEW_COMMENTED),
+				discussionComments: share(total.COMMENTED),
+				codeComments: share(total.CODE_COMMENTED),
+				issuesClosed: share(total.ISSUE_CLOSED),
+				pullRequestsClosed: share(total.PULL_REQUEST_CLOSED),
+			},
+		};
+	});
 }
 
-/** The span a range's overview was read for, ending at the story's clock. */
-export function spanOf(range: StoryRange): DateSpan {
-	return { from: rangeStart(STORY_NOW, range), to: new Date(STORY_NOW) };
+/** An overview of `total` over a preset, one tally per week and adding up, for a presentational chart. */
+export function overviewOf(total: ActivityTally, preset: StoryPreset): ActivityOverview {
+	const span = spanOf(preset);
+	const starts = weekStarts(span.from, span.to);
+	const weeks = spread(total, starts.length);
+	return {
+		tally: total,
+		weeks: starts.map((start, index) => ({ start, tally: weeks[index] ?? tallyOf({}) })),
+		repositories: repositoriesOf(total),
+	};
 }
 
-/** An overview as the page receives it once it is in and current. */
 /**
  * An overview as the page receives it once it is in and current — with the period before it, when
  * the story sets a figure against one.
  */
 export function readyOverview(
 	overview: ActivityOverview,
-	range: StoryRange = "30d",
-	previous?: ActivitySummary,
+	preset: StoryPreset = "30d",
+	previous?: ActivityTally,
 ): ActivityOverviewState {
 	return {
 		status: "ready",
 		overview,
-		span: spanOf(range),
+		span: spanOf(preset),
 		stale: false,
-		previous: previous && { summary: previous, name: ACTIVITY_RANGE_DEFS[range].previous },
+		previous: previous && { tally: previous, name: ACTIVITY_RANGE_DEFS[preset].previous },
 	};
 }
 
 /**
- * Ada's month before this one: fewer merged, more reviews, fewer comments — so each tile says a
- * different thing about the change.
+ * A quiet month drawn week by week by hand, so its figures are known: one merge three weeks ago and
+ * two last week, one approval, and nothing else.
  */
-export const PREVIOUS_SUMMARY = summaryOf({
-	pullRequestsOpened: 3,
-	pullRequestsMerged: 1,
-	approvals: 14,
-	changeRequests: 3,
-	commentReviews: 4,
-	comments: 50,
-	codeComments: 70,
-	issuesOpened: 1,
-});
-
-/**
- * A quiet month drawn day by day by hand, so its figures are known: one merge 20 days ago and two
- * 5 days ago, one approval, and nothing else.
- */
-const MERGED_DAYS_AGO = new Map([
-	[20, 1],
-	[5, 2],
-]);
-
 export const SPARSE_OVERVIEW: ActivityOverview = (() => {
-	const { bucket, starts } = bucketStarts("30d");
-	const buckets = starts.map((start, index) => {
-		const daysAgo = starts.length - 1 - index;
-		const merged = MERGED_DAYS_AGO.get(daysAgo) ?? 0;
+	const span = spanOf("30d");
+	const starts = weekStarts(span.from, span.to);
+	const weeks = starts.map((start, index) => {
+		const weeksAgo = starts.length - 1 - index;
 		return {
 			start,
-			summary: summaryOf({ pullRequestsMerged: merged, approvals: daysAgo === 5 ? 1 : 0 }),
+			tally: tallyOf({
+				PULL_REQUEST_MERGED: { 3: 1, 1: 2 }[weeksAgo] ?? 0,
+				REVIEW_APPROVED: weeksAgo === 1 ? 1 : 0,
+				pullRequestsReviewed: weeksAgo === 1 ? 1 : 0,
+			}),
 		};
 	});
 	return {
-		bucket,
-		buckets,
-		summary: sumSummaries(buckets.map((entry) => entry.summary)),
+		tally: tallyOf({ PULL_REQUEST_MERGED: 3, REVIEW_APPROVED: 1, pullRequestsReviewed: 1 }),
+		weeks,
+		repositories: [],
 	};
 })();
 
-export function readyMembers(members: MemberActivity[]): MemberActivityState {
-	return { status: "ready", members, stale: false };
-}
+export const OVERVIEW = overviewOf(TALLY, "30d");
 
-export const OVERVIEW = overviewOf(SUMMARY, "30d");
+export const QUIET_OVERVIEW = overviewOf(tallyOf({}), "30d");
 
-export const WEEK_OVERVIEW = overviewOf(
-	summaryOf({ pullRequestsMerged: 1, approvals: 3, comments: 9, codeComments: 14 }),
-	"30d",
-);
-
-export const QUIET_OVERVIEW = overviewOf(QUIET_SUMMARY, "30d");
-
-/** A year of activity, one bucket per calendar month touched by the range. */
+/** A year of activity, one tally per week. */
 export const YEAR_OVERVIEW = overviewOf(
-	summaryOf({
-		pullRequestsOpened: 48,
-		pullRequestsMerged: 41,
-		pullRequestsClosed: 5,
-		approvals: 132,
-		changeRequests: 29,
-		commentReviews: 51,
-		comments: 704,
-		codeComments: 988,
-		issuesOpened: 12,
-		issuesClosed: 7,
+	tallyOf({
+		PULL_REQUEST_OPENED: 48,
+		PULL_REQUEST_MERGED: 41,
+		PULL_REQUEST_CLOSED: 5,
+		REVIEW_APPROVED: 132,
+		REVIEW_CHANGES_REQUESTED: 29,
+		REVIEW_COMMENTED: 51,
+		COMMENTED: 704,
+		CODE_COMMENTED: 988,
+		ISSUE_OPENED: 12,
+		ISSUE_CLOSED: 7,
+		pullRequestsReviewed: 160,
 	}),
 	"1y",
 );
 
-// -- Members ---------------------------------------------------------------------------------------
+// -- People ----------------------------------------------------------------------------------------
 
-/** A small team, by name as the server lists them; Bob is the most active, so a count order would differ. */
-export const MEMBERS: MemberActivity[] = [
-	{ user: ada, summary: SUMMARY },
-	{
-		user: bob,
-		summary: summaryOf({
-			pullRequestsOpened: 5,
-			pullRequestsMerged: 4,
-			approvals: 16,
-			changeRequests: 2,
-			commentReviews: 1,
-			comments: 31,
-			codeComments: 45,
-			issuesClosed: 1,
-		}),
-	},
-	{ user: chen, summary: QUIET_SUMMARY },
-	{ user: dana, summary: summaryOf({ comments: 3 }) },
-	{ user: elodie, summary: QUIET_SUMMARY },
+/** One row of the people table: its counts, and its weeks in the period, spread by the rhythm. */
+function personOf(
+	who: UserInfo,
+	counts: StoryCounts & { peopleHelped?: number },
+	options: { automation?: "bot" | "treated"; firstContributionAt?: Date } = {},
+): ActivityPerson {
+	const total = tallyOf(counts);
+	const span = spanOf("30d");
+	const starts = weekStarts(span.from, span.to);
+	const weeks = spread(total, starts.length);
+	return {
+		person: who,
+		automation: options.automation !== undefined,
+		treatedAsAutomation: options.automation === "treated",
+		firstContributionAt: options.firstContributionAt,
+		counts: {
+			contributions: total.contributions,
+			pullRequestsOpened: total.PULL_REQUEST_OPENED,
+			pullRequestsMerged: total.PULL_REQUEST_MERGED,
+			pullRequestsReviewed: total.pullRequestsReviewed,
+			peopleHelped: counts.peopleHelped ?? 0,
+			issuesOpened: total.ISSUE_OPENED,
+			comments: total.comments,
+			activeWeeks: weeks.filter((week) => week.contributions > 0).length,
+		},
+		weeks: starts
+			.map((start, index) => ({ start, contributions: weeks[index]?.contributions ?? 0 }))
+			.filter((week) => week.contributions > 0),
+	};
+}
+
+/**
+ * A small team in name order. Bob and Dana tie on Contributions, so they share a position, and Ada,
+ * the most active, comes first only once the table sorts by a count.
+ */
+export const PEOPLE: ActivityPerson[] = [
+	personOf(ada, { ...TALLY, peopleHelped: 9 }),
+	personOf(bob, {
+		PULL_REQUEST_OPENED: 5,
+		PULL_REQUEST_MERGED: 4,
+		REVIEW_APPROVED: 9,
+		pullRequestsReviewed: 7,
+		ISSUE_OPENED: 1,
+		peopleHelped: 4,
+	}),
+	personOf(chen, { pullRequestsReviewed: 2, REVIEW_APPROVED: 2, peopleHelped: 2 }),
+	personOf(dana, {
+		PULL_REQUEST_OPENED: 6,
+		PULL_REQUEST_MERGED: 5,
+		pullRequestsReviewed: 6,
+		REVIEW_APPROVED: 6,
+		ISSUE_OPENED: 1,
+		peopleHelped: 3,
+	}),
+	personOf(
+		elodie,
+		{ PULL_REQUEST_OPENED: 1, PULL_REQUEST_MERGED: 1 },
+		{ firstContributionAt: daysBefore(6) },
+	),
 ];
 
-export const WORKSPACE_SUMMARY = sumSummaries(MEMBERS.map((member) => member.summary));
+export const AUTOMATION: ActivityPerson[] = [
+	personOf(
+		user(90, "dependabot[bot]", "dependabot[bot]"),
+		{ PULL_REQUEST_OPENED: 14 },
+		{
+			automation: "bot",
+		},
+	),
+	personOf(
+		user(91, "release-robot", "Release Robot"),
+		{ PULL_REQUEST_OPENED: 4 },
+		{
+			automation: "treated",
+		},
+	),
+];
 
-export const WORKSPACE_OVERVIEW = overviewOf(WORKSPACE_SUMMARY, "30d");
+/** The response the people table reads, for `people` in the last 30 days. */
+export function peopleOf(
+	people: ActivityPerson[],
+	options: { automation?: ActivityPerson[]; highlights?: boolean } = {},
+): ActivityPeople {
+	const span = spanOf("30d");
+	return {
+		...span,
+		people,
+		automation: options.automation ?? [],
+		coverage: { since: daysBefore(400), completeRepositories: 2, totalRepositories: 2 },
+		highlights:
+			options.highlights === true
+				? { firstContributors: [elodie.id], mostPeopleHelped: [ada.id] }
+				: { firstContributors: [], mostPeopleHelped: [] },
+		repositories: REPOSITORIES,
+		teams: TEAMS,
+	};
+}
+
+export function readyPeople(people: ActivityPeople): ActivityPeopleState {
+	return { status: "ready", people, stale: false };
+}
 
 const FIRST_NAMES = [
 	"Amara",
@@ -643,39 +723,32 @@ const LAST_NAMES = [
 ];
 
 /**
- * A workspace of 250: most members did nothing in the range, some only commented or only
- * reviewed, a few did a bit of everything — the shape a large course or company workspace has.
+ * A workspace of 250 contributors: many with one or two pieces of work, some who only review, a
+ * few who do a bit of everything — the shape a large course or open-source workspace has.
  */
-const byName = new Intl.Collator("en", { sensitivity: "base" });
-
-export const LARGE_ROSTER: MemberActivity[] = Array.from({ length: 250 }, (_, index) => {
+export const LARGE_PEOPLE: ActivityPerson[] = Array.from({ length: 250 }, (_, index) => {
 	const first = FIRST_NAMES[index % FIRST_NAMES.length] ?? "Sam";
 	const last = LAST_NAMES[Math.floor(index / FIRST_NAMES.length) % LAST_NAMES.length] ?? "Lee";
-	const person = user(1000 + index, `${first}-${last}-${index}`.toLowerCase(), `${first} ${last}`);
+	const who = user(1000 + index, `${first}-${last}-${index}`.toLowerCase(), `${first} ${last}`);
 	const seed = RHYTHM[index % RHYTHM.length] ?? 0;
-	let summary = QUIET_SUMMARY;
-	if (index % 10 === 3) {
-		summary = summaryOf({ comments: seed + 1 });
-	} else if (index % 10 === 7) {
-		summary = summaryOf({ approvals: seed + 2 });
-	} else if (index % 17 === 0) {
-		summary = summaryOf({
-			pullRequestsOpened: 1 + (seed % 3),
-			pullRequestsMerged: seed % 3,
-			approvals: seed,
-			comments: seed * 4,
-			codeComments: seed * 6,
-			issuesOpened: seed % 2,
+	if (index % 10 === 7) {
+		return personOf(who, {
+			pullRequestsReviewed: seed + 1,
+			REVIEW_APPROVED: seed + 2,
+			peopleHelped: 1,
 		});
 	}
-	return { user: person, summary };
-	// By name, as the server lists members.
-}).sort((a, b) => byName.compare(a.user.name, b.user.name));
-
-export const LARGE_WORKSPACE_OVERVIEW = overviewOf(
-	sumSummaries(LARGE_ROSTER.map((member) => member.summary)),
-	"30d",
-);
+	if (index % 17 === 0) {
+		return personOf(who, {
+			PULL_REQUEST_OPENED: 1 + (seed % 3),
+			PULL_REQUEST_MERGED: seed % 3,
+			pullRequestsReviewed: seed,
+			ISSUE_OPENED: seed % 2,
+			peopleHelped: Math.min(seed, 4),
+		});
+	}
+	return personOf(who, { ISSUE_OPENED: 1 + (index % 2) });
+});
 
 // -- Timeline --------------------------------------------------------------------------------------
 

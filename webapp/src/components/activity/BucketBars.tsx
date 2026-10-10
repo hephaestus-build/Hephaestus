@@ -1,3 +1,4 @@
+import { startOfDay } from "date-fns";
 import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
 
 import { useNow } from "@/components/common/use-now";
@@ -36,13 +37,18 @@ export interface BucketBarsProps {
 /**
  * A stat tile's chart: one column per bucket on its own scale from zero, each standing in a faint
  * full-height track so an empty day reads as present and zero, over the range's first bucket and
- * "Today". Only the peak carries its value; the tile's number and its sentence carry the rest, so
+ * its last day, "Today" for a range that ends now. Only the peak carries its value; the tile's number and its sentence carry the rest, so
  * the chart is hidden from assistive technology.
  */
 export function BucketBars({ rows, bucket, span, name, fill }: BucketBarsProps) {
 	const nowMs = useNow();
 	const tracked = trackRows(rows);
 	const first = rows.at(0);
+	// A span that ends before today, a custom range, names its last day instead of "Today".
+	const lastDay =
+		span === undefined || span.to.getTime() > startOfDay(nowMs).getTime()
+			? "Today"
+			: startLabel(new Date(span.to.getTime() - 1), "DAY", nowMs);
 	const config = { count: { label: name, color: fill } } satisfies ChartConfig;
 	return (
 		<div aria-hidden className="space-y-1">
@@ -87,7 +93,7 @@ export function BucketBars({ rows, bucket, span, name, fill }: BucketBarsProps) 
 			{first !== undefined && (
 				<div className="flex justify-between text-xs text-muted-foreground">
 					<span>{startLabel(new Date(first.start), bucket, nowMs)}</span>
-					<span>Today</span>
+					<span>{lastDay}</span>
 				</div>
 			)}
 		</div>

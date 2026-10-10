@@ -3,7 +3,6 @@ import { useId } from "react";
 import { Bar, BarChart, ReferenceLine, XAxis, YAxis } from "recharts";
 
 import { cn } from "cn";
-import type { ActivityOverview } from "@/components/activity/activity-view";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { useNow } from "@/components/common/use-now";
 import { Button } from "@/components/ui/button";
@@ -19,19 +18,19 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import type { ProviderType } from "@/lib/provider/provider-terms";
-import { capitalise } from "@/lib/text";
+import { capitalise, hasText } from "@/lib/text";
 
 import {
 	type ActivityOverviewState,
 	averagePerBucket,
 	BUCKET_SIZE_DEFS,
 	bucketLabel,
-	bucketSummary,
-	busiestBucket,
+	busiestWeek,
 	type DateSpan,
 	readSpan,
 	startLabel,
-	totalRows,
+	weekRows,
+	weeksSummary,
 } from "./activity-buckets";
 import { BAR_RADIUS, BarTooltip, MAX_BAR_SIZE } from "./activity-chart";
 import {
@@ -40,16 +39,13 @@ import {
 	type ActivityCategory,
 	type ActivityCategoryDef,
 	type ActivityKind,
-	kindsTotal,
 } from "./activity-kind-defs";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "./activity-range";
+import type { ActivityOverview } from "./activity-tally";
 import { ACTIVITY_TONES, markTone, STALE } from "./activity-tones";
 
 export interface ActivityTrendChartProps {
 	state: ActivityOverviewState;
 	category: ActivityCategory;
-	/** The range, for what an empty row says: "None in the last 30 days". */
-	range: ActivityRange;
 	providerType: ProviderType;
 }
 
@@ -62,12 +58,7 @@ export interface ActivityTrendChartProps {
  * change request's red is a pair a red-green colour-blind reader cannot tell apart. Every value is
  * also in the table under the charts, which is the path that needs no pointer.
  */
-export function ActivityTrendChart({
-	state,
-	category,
-	range,
-	providerType,
-}: ActivityTrendChartProps) {
+export function ActivityTrendChart({ state, category, providerType }: ActivityTrendChartProps) {
 	const nowMs = useNow();
 	const summaryId = useId();
 	if (state.status === "error") {
@@ -92,28 +83,28 @@ export function ActivityTrendChart({
 	const span = readSpan(state);
 	const previous = state.stale ? undefined : state.previous;
 	const def: ActivityCategoryDef = ACTIVITY_CATEGORY_DEFS[category];
-	const size = BUCKET_SIZE_DEFS[overview.bucket];
-	const headline = kindsTotal(overview.summary, def.headline.kinds);
-	const busiest = busiestBucket(overview.buckets, def.headline.kinds);
-	const difference = previous && headline - kindsTotal(previous.summary, def.headline.kinds);
+	const size = BUCKET_SIZE_DEFS.WEEK;
+	const headline = def.headline.count(overview.tally);
+	const busiest = busiestWeek(overview.weeks, def.headline.count);
+	const difference = previous && headline - def.headline.count(previous.tally);
 	const scaleMax = Math.max(
 		0,
-		...def.kinds.flatMap((kind) => totalRows(overview.buckets, [kind]).map((row) => row.count)),
+		...def.kinds.flatMap((kind) => overview.weeks.map(({ tally }) => tally[kind])),
 	);
-	const label = (start: Date) => capitalise(bucketLabel(start, overview.bucket, span));
+	const label = (start: Date) => capitalise(bucketLabel(start, "WEEK", span));
 	return (
 		<div aria-busy={state.stale || undefined} className={cn("space-y-5", state.stale && STALE)}>
 			<dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
 				<Figure term={capitalise(def.headline.qualifier ?? "total")} value={String(headline)} />
 				<Figure
 					term={`Average per ${size.noun}`}
-					value={averagePerBucket(headline, overview.buckets.length)}
+					value={averagePerBucket(headline, overview.weeks.length)}
 				/>
 				{busiest && (
 					<Figure
 						term={`Busiest ${size.noun}`}
 						value={String(busiest.count)}
-						note={label(busiest.bucket.start)}
+						note={label(busiest.week.start)}
 					/>
 				)}
 				{previous && difference !== undefined && (
@@ -129,7 +120,7 @@ export function ActivityTrendChart({
 							overview={overview}
 							scaleMax={scaleMax}
 							label={label}
-							none={`None in ${ACTIVITY_RANGE_DEFS[range].inSentence}`}
+							none="None in this range"
 							nowMs={nowMs}
 							providerType={providerType}
 							last={index === def.kinds.length - 1}
@@ -137,7 +128,7 @@ export function ActivityTrendChart({
 					))}
 				</ul>
 				<figcaption id={summaryId} className="sr-only">
-					{bucketSummary(overview, span, def.headline.kinds, def.headline.noun(providerType))}
+					{weeksSummary(overview, span, def.headline.count, def.headline.noun(providerType))}
 				</figcaption>
 			</figure>
 			<BucketTable def={def} overview={overview} span={span} providerType={providerType} />
@@ -196,10 +187,10 @@ function KindRow({
 	const def = ACTIVITY_KIND_DEFS[kind];
 	const Icon = def.icon(providerType);
 	const tone = ACTIVITY_TONES[markTone(def.tone)];
-	const rows = totalRows(overview.buckets, [kind]);
+	const rows = weekRows(overview.weeks, (tally) => tally[kind]);
 	const config = { count: { label: def.label, color: tone.fill } } satisfies ChartConfig;
-	const { tick } = BUCKET_SIZE_DEFS[overview.bucket];
-	const total = kindsTotal(overview.summary, [kind]);
+	const { tick } = BUCKET_SIZE_DEFS.WEEK;
+	const total = overview.tally[kind];
 	return (
 		<li className="space-y-1">
 			<p className="flex items-center gap-2 text-sm">
@@ -235,9 +226,7 @@ function KindRow({
 							tickFormatter={(start: number, index: number) =>
 								// The first tick carries the year when it is not this one, so a year of months
 								// never reads "Sep" … "Sep".
-								index === 0
-									? startLabel(new Date(start), overview.bucket, nowMs)
-									: tick(new Date(start))
+								index === 0 ? startLabel(new Date(start), "WEEK", nowMs) : tick(new Date(start))
 							}
 						/>
 						<ReferenceLine y={0} stroke="var(--color-border)" />
@@ -271,8 +260,8 @@ function KindRow({
 }
 
 /**
- * The charts as a table, one row per bucket and one column per kind — and a total where the kinds
- * add up to one — for a reader who cannot or would rather not point at bars.
+ * The charts as a table, one row per week and one column per kind — and the headline's own column
+ * where it is not one of the kinds — for a reader who cannot or would rather not point at bars.
  */
 function BucketTable({
 	def,
@@ -285,7 +274,7 @@ function BucketTable({
 	span: DateSpan | undefined;
 	providerType: ProviderType;
 }) {
-	const size = BUCKET_SIZE_DEFS[overview.bucket];
+	const size = BUCKET_SIZE_DEFS.WEEK;
 	return (
 		<Collapsible>
 			<CollapsibleTrigger render={<Button variant="ghost" size="sm" className="group -ml-2" />}>
@@ -305,23 +294,23 @@ function BucketTable({
 									{ACTIVITY_KIND_DEFS[kind].label}
 								</TableHead>
 							))}
-							{def.partitioned && (
+							{hasText(def.headline.column) && (
 								<TableHead numeric className="text-right">
-									Total
+									{def.headline.column}
 								</TableHead>
 							)}
 						</TableRow>
 					</TableHeader>
 					<TableBody>
-						{overview.buckets.map((bucket) => (
-							<TableRow key={bucket.start.getTime()} variant="static">
-								<TableCell>
-									{capitalise(bucketLabel(bucket.start, overview.bucket, span))}
-								</TableCell>
+						{overview.weeks.map((week) => (
+							<TableRow key={week.start.getTime()} variant="static">
+								<TableCell>{capitalise(bucketLabel(week.start, "WEEK", span))}</TableCell>
 								{def.kinds.map((kind) => (
-									<CountCell key={kind} count={kindsTotal(bucket.summary, [kind])} />
+									<CountCell key={kind} count={week.tally[kind]} />
 								))}
-								{def.partitioned && <CountCell count={kindsTotal(bucket.summary, def.kinds)} />}
+								{hasText(def.headline.column) && (
+									<CountCell count={def.headline.count(week.tally)} />
+								)}
 							</TableRow>
 						))}
 					</TableBody>

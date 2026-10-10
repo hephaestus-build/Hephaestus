@@ -1,16 +1,12 @@
 import { addDays, addMonths, format, isSameYear, max, min } from "date-fns";
-import type {
-	ActivitySummary,
-	ActivityBucket,
-	ActivityOverview,
-} from "@/components/activity/activity-view";
 
 import type { PanelState } from "@/components/common/panel-state";
 import { formatDayRange } from "@/lib/dates";
 
-import { type ActivityKind, kindsTotal, type Noun } from "./activity-kind-defs";
+import type { Noun } from "./activity-kind-defs";
+import type { ActivityOverview, ActivityTally, ActivityWeek } from "./activity-tally";
 
-export type BucketSize = ActivityOverview["bucket"];
+export type BucketSize = "DAY" | "WEEK" | "MONTH";
 
 /** The instants a view counts between: from inclusive, to exclusive. */
 export interface DateSpan {
@@ -20,7 +16,7 @@ export interface DateSpan {
 
 /** The period before the range, of the same length, that a figure is set against. */
 export interface PreviousPeriod {
-	summary: ActivitySummary;
+	tally: ActivityTally;
 	/** "the previous 30 days": the period after "than" or "as". */
 	name: string;
 }
@@ -82,8 +78,9 @@ interface BucketSizeDef {
 }
 
 /**
- * How a bucket reads at each size. The server starts every bucket at midnight in the browser's
- * time zone, so formatting its instant locally names the day, week or month it counted.
+ * How a bucket reads at each size, formatted in local time. Practice reviews start a bucket at
+ * midnight in the browser's time zone. Activity starts a week at Monday 00:00 UTC, which is still
+ * Monday everywhere east of UTC.
  */
 export const BUCKET_SIZE_DEFS = {
 	DAY: { noun: "day", tick: (start) => format(start, "d MMM"), end: (start) => addDays(start, 1) },
@@ -116,42 +113,40 @@ export function bucketLabel(start: Date, size: BucketSize, span?: DateSpan): str
 	return whole && size === "MONTH" ? format(start, "MMMM yyyy") : formatDayRange(first, last);
 }
 
-/** The bucket with the most of `kinds`, the earliest on a tie; none when nothing happened. */
-export function busiestBucket(
-	buckets: readonly ActivityBucket[],
-	kinds: readonly ActivityKind[],
-): { bucket: ActivityBucket; count: number } | undefined {
-	let busiest: { bucket: ActivityBucket; count: number } | undefined;
-	for (const bucket of buckets) {
-		const count = kindsTotal(bucket.summary, kinds);
-		if (count > 0 && (busiest === undefined || count > busiest.count)) {
-			busiest = { bucket, count };
+/** The week with the highest count, the earliest on a tie; none when nothing happened. */
+export function busiestWeek(
+	weeks: readonly ActivityWeek[],
+	count: (tally: ActivityTally) => number,
+): { week: ActivityWeek; count: number } | undefined {
+	let busiest: { week: ActivityWeek; count: number } | undefined;
+	for (const week of weeks) {
+		const value = count(week.tally);
+		if (value > 0 && (busiest === undefined || value > busiest.count)) {
+			busiest = { week, count: value };
 		}
 	}
 	return busiest;
 }
 
 /**
- * A chart's words for a reader who does not see it, in actual values and no adjectives: "3 merged;
- * busiest day Tuesday 23 September, 2".
+ * A chart's words for a reader who does not see it, in actual values and no adjectives: "3 pull
+ * requests merged. Busiest week 21–27 September 2026, 2".
  */
-export function bucketSummary(
-	overview: Pick<ActivityOverview, "bucket" | "buckets" | "summary">,
+export function weeksSummary(
+	overview: Pick<ActivityOverview, "tally" | "weeks">,
 	span: DateSpan | undefined,
-	kinds: readonly ActivityKind[],
+	count: (tally: ActivityTally) => number,
 	unit: Noun,
 ): string {
-	const total = kindsTotal(overview.summary, kinds);
+	const total = count(overview.tally);
 	const headline = `${total} ${total === 1 ? unit.one : unit.many}`;
-	const busiest = busiestBucket(overview.buckets, kinds);
+	const busiest = busiestWeek(overview.weeks, count);
 	if (busiest === undefined) {
 		return headline;
 	}
-	const label = bucketLabel(busiest.bucket.start, overview.bucket, span);
-	return `${headline}. Busiest ${BUCKET_SIZE_DEFS[overview.bucket].noun} ${label}, ${busiest.count}`;
+	return `${headline}. Busiest week ${bucketLabel(busiest.week.start, "WEEK", span)}, ${busiest.count}`;
 }
 
-/** One chart row per bucket with one column: how often any of `kinds` happened in it, together. */
 /**
  * Each bucket's count and the rest of the way to the top of the scale, stacked so every bucket
  * draws a full-height track — Recharts draws nothing, not even a background, for a zero.
@@ -163,12 +158,10 @@ export function trackRows(
 	return rows.map((row) => ({ ...row, rest: top - row.count }));
 }
 
-export function totalRows(
-	buckets: readonly ActivityBucket[],
-	kinds: readonly ActivityKind[],
+/** One chart row per week: its start, and its count. */
+export function weekRows(
+	weeks: readonly ActivityWeek[],
+	count: (tally: ActivityTally) => number,
 ): { start: number; count: number }[] {
-	return buckets.map(({ start, summary }) => ({
-		start: start.getTime(),
-		count: kindsTotal(summary, kinds),
-	}));
+	return weeks.map(({ start, tally }) => ({ start: start.getTime(), count: count(tally) }));
 }

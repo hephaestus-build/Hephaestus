@@ -2,12 +2,11 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, within } from "storybook/test";
 
 import {
-	LARGE_ROSTER,
-	LARGE_WORKSPACE_OVERVIEW,
-	MEMBERS,
-	readyMembers,
-	readyOverview,
-	WORKSPACE_OVERVIEW,
+	AUTOMATION,
+	LARGE_PEOPLE,
+	PEOPLE,
+	peopleOf,
+	readyPeople,
 	WORKSPACE_WORK_LOG,
 } from "@/stories/activity-story-data";
 import { withProvider, withStandardPage } from "@/stories/decorators";
@@ -27,19 +26,15 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		providerType: "GITHUB",
-		range: "30d",
-		onRangeChange: fn(),
-		teams: {
-			status: "ready",
-			teams: [
-				{ id: 1, name: "Platform" },
-				{ id: 2, name: "Platform / Payments" },
-			],
-		},
-		teamId: undefined,
+		period: { kind: "preset", preset: "30d" },
+		onPeriodChange: fn(),
+		team: undefined,
 		onTeamChange: fn(),
-		overview: readyOverview(WORKSPACE_OVERVIEW),
-		members: readyMembers(MEMBERS),
+		repo: [],
+		onRepoChange: fn(),
+		order: { sort: "contributions", desc: true },
+		onOrderChange: fn(),
+		people: readyPeople(peopleOf(PEOPLE, { automation: AUTOMATION, highlights: true })),
 		timeline: {
 			status: "ready",
 			stale: false,
@@ -60,73 +55,63 @@ export const Default: Story = {
 		const headings = canvas
 			.getAllByRole("heading", { level: 2 })
 			.map((heading) => heading.textContent);
-		await expect(headings).toStrictEqual(["Last 30 days", "Members", "Timeline"]);
-		// The workspace's tiles add up its members' rows.
-		await expect(canvas.getByRole("link", { name: /^Pull requests\s*7 merged/u })).toBeVisible();
-		await userEvent.click(canvas.getByRole("combobox", { name: "Team" }));
+		await expect(headings).toStrictEqual(["Highlights", "People", "Automation", "Timeline"]);
+		await expect(canvas.getByText(/^History since .* for 2 of 2 repositories\.$/u)).toBeVisible();
+		await userEvent.click(canvas.getByRole("combobox", { name: "Team: Everyone" }));
 		const options = within(await settledPopup()).getAllByRole("option");
 		await expect(options.map((option) => option.textContent)).toStrictEqual([
 			"Everyone",
 			"Platform",
 			"Platform / Payments",
+			"Web",
 		]);
 		await userEvent.click(screen.getByRole("option", { name: "Platform / Payments" }));
-		await expect(args.onTeamChange).toHaveBeenCalledWith(2);
+		await expect(args.onTeamChange).toHaveBeenCalledWith("payments");
 	},
 };
 
-/** 250 members, most of them quiet: the table shows 50 by name and finds the rest. */
-export const LargeWorkspace: Story = {
-	args: {
-		overview: readyOverview(LARGE_WORKSPACE_OVERVIEW),
-		members: readyMembers(LARGE_ROSTER),
-	},
+/** Automation stays out of the people and their positions. */
+export const AutomationApart: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Show all 250" })).toBeVisible();
+		const people = canvas.getByRole("table", { name: "People" });
+		await expect(within(people).queryByText("dependabot[bot]")).not.toBeInTheDocument();
+		await expect(canvas.getByText(/^Bot account · 14 contributions$/u)).toBeVisible();
+		await expect(canvas.getByText(/^Treated as automation · 4 contributions$/u)).toBeVisible();
+	},
+};
+
+/** 250 people: the table renders 50 rows and the next 50 as its end scrolls into view. */
+export const LargeWorkspace: Story = {
+	args: { people: readyPeople(peopleOf(LARGE_PEOPLE)) },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("250 people")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Show more people" })).toBeVisible();
 	},
 };
 
 export const OneTeam: Story = {
-	args: { teamId: 2 },
+	args: { team: "payments" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("combobox", { name: "Team" })).toHaveTextContent(
-			"Platform / Payments",
-		);
+		await expect(canvas.getByRole("combobox", { name: "Team: Platform / Payments" })).toBeVisible();
 	},
 };
 
-export const NoTeams: Story = {
-	args: { teams: { status: "ready", teams: [] } },
+/** Nobody contributed in the period; the period and the team can still change. */
+export const Empty: Story = {
+	args: { people: readyPeople(peopleOf([])) },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("combobox", { name: "Team" })).not.toBeInTheDocument();
-	},
-};
-
-/** The team filter waits for the teams; the rest of the page does not. */
-export const TeamsLoading: Story = {
-	args: { teams: { status: "loading" } },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("combobox", { name: "Team" })).not.toBeInTheDocument();
-		await expect(canvas.getByText("5 members · 3 active")).toBeVisible();
-	},
-};
-
-const retryTeams = fn();
-
-export const TeamsFailed: Story = {
-	args: { teams: { status: "error", error: new Error("Network down"), onRetry: retryTeams } },
-	play: async ({ canvas, userEvent }) => {
-		await expect(canvas.queryByRole("combobox", { name: "Team" })).not.toBeInTheDocument();
-		const alert = canvas.getByRole("alert");
-		await expect(alert).toHaveTextContent("We could not load teams");
-		await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
-		await expect(retryTeams).toHaveBeenCalledOnce();
+		await expect(canvas.getByText("No contributions in this range")).toBeVisible();
+		await expect(canvas.queryByRole("heading", { name: "Highlights" })).not.toBeInTheDocument();
+		await expect(canvas.getByRole("combobox", { name: "Team: Everyone" })).toBeVisible();
 	},
 };
 
 export const GitLab: Story = {
 	decorators: [withProvider("GITLAB")],
 	args: { providerType: "GITLAB" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("columnheader", { name: /Merge requests/u })).toBeVisible();
+	},
 };
 
 export const Dark: Story = { globals: { theme: "dark" } };
@@ -139,13 +124,29 @@ export const Reflow: Story = {
 };
 
 export const Loading: Story = {
-	args: {
-		overview: { status: "loading" },
-		members: { status: "loading" },
-		timeline: { status: "loading" },
-	},
+	args: { people: { status: "loading" }, timeline: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText(/members ·/u)).not.toBeInTheDocument();
-		await expect(canvas.queryAllByRole("link")).toHaveLength(0);
+		await expect(canvas.getByRole("table", { name: "People" })).toHaveAttribute(
+			"aria-busy",
+			"true",
+		);
+		await expect(canvas.queryByRole("heading", { name: "Highlights" })).not.toBeInTheDocument();
+	},
+};
+
+const retry = fn();
+
+export const Failed: Story = {
+	args: {
+		team: "gone",
+		people: { status: "error", error: new Error("Team not found"), onRetry: retry },
+	},
+	play: async ({ canvas, userEvent }) => {
+		const alert = canvas.getByRole("alert");
+		await expect(alert).toHaveTextContent("We could not load people");
+		await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+		await expect(retry).toHaveBeenCalledOnce();
+		// The team still says what the page asked for, so the reader can pick another.
+		await expect(canvas.getByRole("combobox", { name: "Team: gone" })).toBeVisible();
 	},
 };

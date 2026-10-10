@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import type { UserInfo } from "@/api/types.gen";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
@@ -7,16 +7,16 @@ import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import type { ActivityOverviewState } from "./activity-buckets";
 import { ACTIVITY_CATEGORY_DEFS } from "./activity-kind-defs";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "./activity-range";
+import { type ActivityPeriod, periodLabel } from "./activity-period";
 import type { ActivityStackEntry } from "./activity-search";
 import { ActivityCategoryLevel } from "./ActivityCategoryLevel";
-import type { ActivityWorkLogState, WorkLogSubject } from "./ActivityWorkLog";
-import { MemberActivityLevel } from "./MemberActivityLevel";
-import type { OpenWorkState } from "./OpenWorkSections";
+import type { ActivityWorkLogState } from "./ActivityWorkLog";
+import { PersonActivityLevel } from "./PersonActivityLevel";
 
-/** One owner's reads for its levels: the range's overview, and its timeline of the open category. */
+/** One owner's reads for its levels: the period's overview, its timeline, and one category's. */
 export interface ActivityLevelReads {
 	overview: ActivityOverviewState;
+	workLog: ActivityWorkLogState;
 	categoryWorkLog: ActivityWorkLogState;
 }
 
@@ -26,21 +26,17 @@ export interface ActivityDetailDrawerProps {
 	/** The page under the stack, as the first crumb: "Activity" or "Workspace activity". */
 	pageLabel: string;
 	providerType: ProviderType;
-	range: ActivityRange;
-	/** Whose the page is, after the range in a category level's description: "Platform". */
-	scope?: string;
-	/** Whose the page's timelines are, which a category level of the page lists the same way. */
-	subject: WorkLogSubject;
-	/** The page's own reads, for a category level opened from the page. */
-	page: ActivityLevelReads;
+	period: ActivityPeriod;
 	/**
-	 * The open member level's reads, on a page whose stack opens members, and the category level
-	 * stacked over it.
+	 * Whose activity the levels show: the reader's own on Your Activity, or the person opened on
+	 * Workspace activity, with an admin's automation action where it applies.
 	 */
-	member?: ActivityLevelReads & {
+	owner: ActivityLevelReads & {
+		login: string | undefined;
 		user?: UserInfo;
-		openWork: OpenWorkState;
-		workLog: ActivityWorkLogState;
+		/** The people are in, and the person the URL opens is not among them. */
+		absent?: boolean;
+		automationAction?: ReactElement;
 	};
 }
 
@@ -50,22 +46,15 @@ export function ActivityDetailDrawer({
 	onClose,
 	pageLabel,
 	providerType,
-	range,
-	scope,
-	subject,
-	page,
-	member,
+	period,
+	owner,
 }: ActivityDetailDrawerProps) {
-	const rangeLabel = ACTIVITY_RANGE_DEFS[range].label;
-	const nameOf = (login: string): string =>
-		member?.user?.login === login ? member.user.name : login;
+	const nameOf = (login: string): string => (owner.user?.login === login ? owner.user.name : login);
 	const labelOf = ({ target }: ActivityStackEntry): string =>
-		target.kind === "member"
+		target.kind === "person"
 			? nameOf(target.login)
 			: ACTIVITY_CATEGORY_DEFS[target.category].label(providerType);
 	const pathAt = levelPathAt(stack, { pageLabel, labelOf, onClose });
-	const described = (owner: string | undefined) =>
-		owner === undefined ? rangeLabel : `${rangeLabel} · ${owner}`;
 
 	return (
 		<DetailDrawerStack stack={stack} size="detailWide" onClose={onClose}>
@@ -73,53 +62,38 @@ export function ActivityDetailDrawer({
 				const target = stack[level.depth]?.target;
 				switch (target?.kind) {
 					case "activity": {
-						const owner = target.member;
-						if (owner === undefined) {
-							return (
-								<ActivityCategoryLevel
-									nested={level.nested}
-									path={pathAt(level.depth)}
-									category={target.category}
-									range={range}
-									description={described(scope)}
-									providerType={providerType}
-									overview={page.overview}
-									workLog={page.categoryWorkLog}
-									subject={subject}
-								/>
-							);
-						}
+						const { person } = target;
 						return (
-							member && (
-								<ActivityCategoryLevel
-									nested={level.nested}
-									path={pathAt(level.depth)}
-									category={target.category}
-									range={range}
-									description={described(nameOf(owner))}
-									providerType={providerType}
-									overview={member.overview}
-									workLog={member.categoryWorkLog}
-									subject={{ people: "one", login: owner }}
-								/>
-							)
+							<ActivityCategoryLevel
+								nested={level.nested}
+								path={pathAt(level.depth)}
+								category={target.category}
+								description={
+									person === undefined
+										? periodLabel(period)
+										: `${periodLabel(period)} · ${nameOf(person)}`
+								}
+								providerType={providerType}
+								overview={owner.overview}
+								workLog={owner.categoryWorkLog}
+								subject={{ people: "one", login: person ?? owner.login }}
+							/>
 						);
 					}
-					case "member": {
+					case "person": {
 						return (
-							member && (
-								<MemberActivityLevel
-									nested={level.nested}
-									path={pathAt(level.depth)}
-									login={target.login}
-									user={member.user}
-									providerType={providerType}
-									range={range}
-									openWork={member.openWork}
-									overview={member.overview}
-									workLog={member.workLog}
-								/>
-							)
+							<PersonActivityLevel
+								nested={level.nested}
+								path={pathAt(level.depth)}
+								login={target.login}
+								user={owner.user}
+								absent={owner.absent}
+								providerType={providerType}
+								period={period}
+								overview={owner.overview}
+								workLog={owner.workLog}
+								automationAction={owner.automationAction}
+							/>
 						);
 					}
 					case undefined: {

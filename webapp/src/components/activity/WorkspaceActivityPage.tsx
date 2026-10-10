@@ -1,128 +1,104 @@
 import { Building2 } from "lucide-react";
 
-import type { PanelState } from "@/components/common/panel-state";
-import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import type { ActivityPeople, ActivityPerson } from "@/api/types.gen";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
+import { ARTIFACT_KIND, artifactKindNoun } from "@/lib/artifact-kinds";
+import { formatDate } from "@/lib/dates";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 
-import { RangeControls } from "@/components/common/RangeControls";
-import type { ActivityOverviewState } from "./activity-buckets";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange, ACTIVITY_RANGE_OPTIONS } from "./activity-range";
-import { ActivityTiles } from "./ActivityTiles";
+import type { ActivityPeriod } from "./activity-period";
+import { ActivityAutomationList } from "./ActivityAutomationList";
+import { ActivityHighlights } from "./ActivityHighlights";
+import {
+	type ActivityPeopleState,
+	ActivityPeopleTable,
+	type PeopleOrder,
+} from "./ActivityPeopleTable";
+import { ActivityPeriodPicker } from "./ActivityPeriodPicker";
+import { ActivityTeamPicker } from "./ActivityTeamPicker";
 import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
-import { type MemberActivityState, MemberActivityTable } from "./MemberActivityTable";
-
-export interface WorkspaceActivityTeam {
-	id: number;
-	/** The team's path through the teams a member can see, parent first: "Platform / Payments". */
-	name: string;
-}
 
 export interface WorkspaceActivityPageProps {
 	providerType: ProviderType;
-	range: ActivityRange;
-	onRangeChange: (range: ActivityRange) => void;
-	/** The teams shown in workspace activity; the page offers them as a filter when there are any. */
-	teams: PanelState<{ teams: WorkspaceActivityTeam[] }>;
-	/** The team whose activity is shown; undefined is everyone. */
-	teamId?: number;
-	onTeamChange: (teamId: number | undefined) => void;
-	overview: ActivityOverviewState;
-	members: MemberActivityState;
+	period: ActivityPeriod;
+	onPeriodChange: (period: ActivityPeriod) => void;
+	/** The team's slug; undefined is everyone. */
+	team: string | undefined;
+	onTeamChange: (team: string | undefined) => void;
+	/** Repositories by full path; none is every repository. */
+	repo: readonly string[];
+	onRepoChange: (repo: string[]) => void;
+	order: PeopleOrder;
+	onOrderChange: (order: PeopleOrder) => void;
+	people: ActivityPeopleState;
 	timeline: ActivityWorkLogState;
 }
 
-const EVERYONE = "everyone";
-
 /**
- * Everyone's activity, or one team's, in the parts of your own Activity page at a wider scope: what
- * the range adds up to, who is carrying what by name, and the timeline of the work.
+ * Who contributed to the workspace, or to one team, in a period: everyone in one table that sorts
+ * by any count, what is worth a thank-you, the automation apart from the people, and the timeline
+ * of the work.
  */
 export function WorkspaceActivityPage({
 	providerType,
-	range,
-	onRangeChange,
-	teams,
-	teamId,
+	period,
+	onPeriodChange,
+	team,
 	onTeamChange,
-	overview,
-	members,
+	repo,
+	onRepoChange,
+	order,
+	onOrderChange,
+	people,
 	timeline,
 }: WorkspaceActivityPageProps) {
-	const offered = teams.status === "ready" ? teams.teams : [];
+	const ready = people.status === "ready" ? people.people : undefined;
+	const pullRequests = artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType);
 	return (
 		<PageLayout className="space-y-8">
 			<PageHeader
 				icon={<Building2 />}
 				title="Workspace activity"
-				actions={
-					offered.length > 0 ? (
-						<Select
-							items={[
-								{ value: EVERYONE, label: "Everyone" },
-								...offered.map((candidate) => ({
-									value: String(candidate.id),
-									label: candidate.name,
-								})),
-							]}
-							value={teamId === undefined ? EVERYONE : String(teamId)}
-							onValueChange={(next) =>
-								onTeamChange(next === null || next === EVERYONE ? undefined : Number(next))
-							}
-						>
-							<SelectTrigger className="w-full sm:w-56" aria-label="Team">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent aria-label="Team">
-								<SelectItem value={EVERYONE}>Everyone</SelectItem>
-								{offered.map((candidate) => (
-									<SelectItem key={candidate.id} value={String(candidate.id)}>
-										{candidate.name}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					) : undefined
-				}
+				description={ready && coverageNote(ready)}
 			/>
-			{teams.status === "error" && (
-				<QueryErrorAlert
-					error={teams.error}
-					title="We could not load teams"
-					onRetry={teams.onRetry}
+			<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+				<ActivityTeamPicker teams={ready?.teams} value={team} onChange={onTeamChange} />
+				<ActivityPeriodPicker
+					period={period}
+					onPeriodChange={onPeriodChange}
+					updating={
+						(people.status === "ready" && people.stale) ||
+						(timeline.status === "ready" && timeline.stale)
+					}
 				/>
-			)}
+			</div>
+			{ready && <Highlights people={ready} />}
 			<Section
 				size="lg"
-				title={ACTIVITY_RANGE_DEFS[range].label}
-				actions={
-					<RangeControls
-						options={ACTIVITY_RANGE_OPTIONS}
-						range={range}
-						onRangeChange={onRangeChange}
-						updating={
-							(overview.status === "ready" && overview.stale) ||
-							(members.status === "ready" && members.stale) ||
-							(timeline.status === "ready" && timeline.stale)
-						}
-					/>
-				}
+				title="People"
+				description={`Contributions are the ${pullRequests} a person opened and reviewed, and the issues they opened.`}
 			>
-				<ActivityTiles state={overview} providerType={providerType} />
+				<ActivityPeopleTable
+					state={people}
+					providerType={providerType}
+					order={order}
+					onOrderChange={onOrderChange}
+					repo={repo}
+					onRepoChange={onRepoChange}
+				/>
 			</Section>
-			<Section size="lg" title="Members">
-				<MemberActivityTable state={members} providerType={providerType} />
-			</Section>
+			{ready && ready.automation.length > 0 && (
+				<Section
+					size="lg"
+					title="Automation"
+					description="Bot accounts and accounts treated as automation. Their work is not counted for people."
+				>
+					<ActivityAutomationList automation={ready.automation} />
+				</Section>
+			)}
 			<Section
 				size="lg"
 				title="Timeline"
@@ -139,5 +115,37 @@ export function WorkspaceActivityPage({
 				/>
 			</Section>
 		</PageLayout>
+	);
+}
+
+/** "History since 3 March 2024 for 12 of 14 repositories": how far back the counts are complete. */
+function coverageNote({ coverage }: ActivityPeople): string | undefined {
+	const { since, completeRepositories, totalRepositories } = coverage;
+	if (since === undefined || totalRepositories === 0) {
+		return undefined;
+	}
+	const repositories = totalRepositories === 1 ? "repository" : "repositories";
+	return `History since ${formatDate(since)} for ${completeRepositories} of ${totalRepositories} ${repositories}.`;
+}
+
+function Highlights({ people }: { people: ActivityPeople }) {
+	const byId = new Map(people.people.map((person) => [person.person.id, person]));
+	const resolve = (ids: readonly number[]): ActivityPerson[] =>
+		ids.flatMap((id) => {
+			const person = byId.get(id);
+			return person ? [person] : [];
+		});
+	const firstContributors = resolve(people.highlights.firstContributors);
+	const mostPeopleHelped = resolve(people.highlights.mostPeopleHelped);
+	if (firstContributors.length === 0 && mostPeopleHelped.length === 0) {
+		return null;
+	}
+	return (
+		<Section size="lg" title="Highlights">
+			<ActivityHighlights
+				firstContributors={firstContributors}
+				mostPeopleHelped={mostPeopleHelped}
+			/>
+		</Section>
 	);
 }

@@ -4,7 +4,6 @@ import type { ReactElement } from "react";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
-import { Section } from "@/components/layout/Section";
 import {
 	Empty,
 	EmptyContent,
@@ -15,13 +14,12 @@ import {
 } from "@/components/ui/empty";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 
-import { RangeControls } from "@/components/common/RangeControls";
 import type { ActivityOverviewState } from "./activity-buckets";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange, ACTIVITY_RANGE_OPTIONS } from "./activity-range";
-import { ActivityTiles } from "./ActivityTiles";
-import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
-import { CopyMarkdownButton } from "./CopyMarkdownButton";
+import type { ActivityPeriod } from "./activity-period";
+import { ActivityPeriodPicker } from "./ActivityPeriodPicker";
+import type { ActivityWorkLogState } from "./ActivityWorkLog";
 import { type OpenWorkReviewNow, OpenWorkSections, type OpenWorkState } from "./OpenWorkSections";
+import { PersonActivitySections } from "./PersonActivitySections";
 
 /** Whose activity the page reads: the account's login in this workspace, once the membership says. */
 export type ActivityAccount =
@@ -37,8 +35,8 @@ export type ActivityAccount =
 export interface ActivityPageProps {
 	providerType: ProviderType;
 	account: ActivityAccount;
-	range: ActivityRange;
-	onRangeChange: (range: ActivityRange) => void;
+	period: ActivityPeriod;
+	onPeriodChange: (period: ActivityPeriod) => void;
 	openWork: OpenWorkState;
 	overview: ActivityOverviewState;
 	timeline: ActivityWorkLogState;
@@ -48,13 +46,13 @@ export interface ActivityPageProps {
 
 /**
  * Your own activity, action before history: what needs you and what is assigned to you, then what
- * the range adds up to, then the timeline of the work you did.
+ * the period adds up to, by kind of work and by repository, then the timeline of the work you did.
  */
 export function ActivityPage({
 	providerType,
 	account,
-	range,
-	onRangeChange,
+	period,
+	onPeriodChange,
 	openWork,
 	overview,
 	timeline,
@@ -99,44 +97,25 @@ export function ActivityPage({
 	return (
 		<PageLayout className="space-y-8">
 			{header}
-			<OpenWorkSections
-				state={openWork}
-				providerType={providerType}
-				perspective="self"
-				reviewNow={reviewNow}
-			/>
-			<Section
-				size="lg"
-				title={ACTIVITY_RANGE_DEFS[range].label}
-				actions={
-					<RangeControls
-						options={ACTIVITY_RANGE_OPTIONS}
-						range={range}
-						onRangeChange={onRangeChange}
+			<OpenWorkSections state={openWork} providerType={providerType} reviewNow={reviewNow} />
+			<PersonActivitySections
+				level={2}
+				period={period}
+				periodActions={
+					<ActivityPeriodPicker
+						period={period}
+						onPeriodChange={onPeriodChange}
 						updating={
 							(overview.status === "ready" && overview.stale) ||
 							(timeline.status === "ready" && timeline.stale)
 						}
 					/>
 				}
-			>
-				<ActivityTiles state={overview} providerType={providerType} />
-			</Section>
-			<Section
-				size="lg"
-				title="Timeline"
-				actions={
-					timeline.status === "ready" && timeline.items.length > 0 ? (
-						<CopyMarkdownButton onCopy={timeline.onCopy} />
-					) : undefined
-				}
-			>
-				<ActivityWorkLog
-					state={timeline}
-					providerType={providerType}
-					subject={{ people: "one", login }}
-				/>
-			</Section>
+				overview={overview}
+				workLog={timeline}
+				providerType={providerType}
+				subject={{ people: "one", login }}
+			/>
 		</PageLayout>
 	);
 }

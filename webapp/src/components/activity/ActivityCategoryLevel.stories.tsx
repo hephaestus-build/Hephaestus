@@ -2,11 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
-import {
-	readyOverview,
-	WORKSPACE_OVERVIEW,
-	WORKSPACE_WORK_LOG,
-} from "@/stories/activity-story-data";
+import { readyOverview, OVERVIEW, WORK_LOG } from "@/stories/activity-story-data";
 import { withPageBehind } from "@/stories/decorators";
 import { settledDrawerPanel } from "@/stories/overlay";
 import { expectNoPanelOverflow } from "@/stories/reflow";
@@ -19,7 +15,7 @@ const onCopy = fn(async () => {
 	/* the copy is the route's */
 });
 
-const reviews = WORKSPACE_WORK_LOG.flatMap((item) => {
+const reviews = WORK_LOG.flatMap((item) => {
 	const actions = item.actions.filter((action) => action.kind.startsWith("REVIEW_"));
 	return actions.length > 0 ? [{ ...item, actions }] : [];
 });
@@ -32,10 +28,9 @@ const meta = {
 	args: {
 		path: { behind: [{ label: "Workspace activity", depth: 0 }], onClose: fn() },
 		category: "reviews",
-		range: "30d",
-		description: "Last 30 days · Platform / Payments",
+		description: "Last 30 days · Ada Lovelace",
 		providerType: "GITHUB",
-		overview: readyOverview(WORKSPACE_OVERVIEW),
+		overview: readyOverview(OVERVIEW),
 		workLog: {
 			status: "ready",
 			stale: false,
@@ -45,7 +40,7 @@ const meta = {
 			onLoadMore: fn(),
 			onCopy,
 		},
-		subject: { people: "several" },
+		subject: { people: "one", login: "ada" },
 	},
 	argTypes: { path: { control: false } },
 	render: (args) => (
@@ -80,8 +75,8 @@ export const Default: Story = {
 	play: async ({ userEvent }) => {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { level: 2, name: "Reviews" })).toBeVisible();
-		await expect(panel.getByText("Last 30 days · Platform / Payments")).toBeVisible();
-		await expect(panel.getByRole("figure")).toHaveAccessibleName(/reviews\. Busiest day/u);
+		await expect(panel.getByText("Last 30 days · Ada Lovelace")).toBeVisible();
+		await expect(panel.getByRole("figure")).toHaveAccessibleName(/reviewed\. Busiest week/u);
 		await userEvent.click(panel.getByRole("button", { name: "Copy as Markdown" }));
 		await expect(onCopy).toHaveBeenCalledOnce();
 	},

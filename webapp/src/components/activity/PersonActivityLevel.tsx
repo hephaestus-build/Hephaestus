@@ -1,55 +1,59 @@
+import { HistoryIcon } from "@primer/octicons-react";
+import type { ReactElement } from "react";
+
 import type { UserInfo } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
-import { Section } from "@/components/layout/Section";
-import { DrawerBody } from "@/components/ui/drawer";
+import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 import { hasText } from "@/lib/text";
 
 import type { ActivityOverviewState } from "./activity-buckets";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "./activity-range";
-import { ActivityTiles } from "./ActivityTiles";
-import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
-import { CopyMarkdownButton } from "./CopyMarkdownButton";
+import type { ActivityPeriod } from "./activity-period";
+import { ActivityEmpty } from "./ActivityEmpty";
+import type { ActivityWorkLogState } from "./ActivityWorkLog";
 import { MemberAvatar } from "./MemberAvatar";
-import { OpenWorkSections, type OpenWorkState } from "./OpenWorkSections";
+import { PersonActivitySections } from "./PersonActivitySections";
 
-export interface MemberActivityLevelProps {
+export interface PersonActivityLevelProps {
 	nested?: boolean;
 	path: LevelPath;
 	login: string;
-	/** The member as the member list carries them; the login stands in until it arrives. */
+	/** The person as the people list carries them; the login stands in until it arrives. */
 	user?: UserInfo;
+	/** Nobody by this login contributed in the period and scope, so there is nothing to count. */
+	absent?: boolean;
 	providerType: ProviderType;
-	range: ActivityRange;
-	openWork: OpenWorkState;
+	period: ActivityPeriod;
 	overview: ActivityOverviewState;
 	workLog: ActivityWorkLogState;
+	/** An admin's way to count the account as automation or as a person, where they may. */
+	automationAction?: ReactElement;
 }
 
 /**
- * One member's activity over the workspace page, in the parts and order of your own Activity page:
- * what is open, the range's tiles, then the timeline. Their provider profile is one link away.
+ * One person's activity over workspace activity: their tiles, repositories and timeline in the
+ * page's period and scope. Their provider profile is one link away.
  */
-export function MemberActivityLevel({
+export function PersonActivityLevel({
 	nested,
 	path,
 	login,
 	user,
+	absent = false,
 	providerType,
-	range,
-	openWork,
+	period,
 	overview,
 	workLog,
-}: MemberActivityLevelProps) {
-	const name = user?.name ?? login;
+	automationAction,
+}: PersonActivityLevelProps) {
 	return (
 		<>
 			<LevelHeader
 				nested={nested}
 				path={path}
-				current={name}
+				current={user?.name ?? login}
 				mark={user && <MemberAvatar user={user} size="lg" />}
 				description={
 					user !== undefined && hasText(user.htmlUrl) ? (
@@ -64,27 +68,20 @@ export function MemberActivityLevel({
 				}
 			/>
 			<DrawerBody className="flex flex-col gap-8 pt-2">
-				<OpenWorkSections state={openWork} providerType={providerType} perspective="member" />
-				<Section level={3} size="lg" title={ACTIVITY_RANGE_DEFS[range].label}>
-					<ActivityTiles state={overview} providerType={providerType} />
-				</Section>
-				<Section
-					level={3}
-					size="lg"
-					title="Timeline"
-					actions={
-						workLog.status === "ready" && workLog.items.length > 0 ? (
-							<CopyMarkdownButton onCopy={workLog.onCopy} />
-						) : undefined
-					}
-				>
-					<ActivityWorkLog
-						state={workLog}
+				{absent ? (
+					<ActivityEmpty icon={<HistoryIcon />} title="No activity in this range" />
+				) : (
+					<PersonActivitySections
+						level={3}
+						period={period}
+						overview={overview}
+						workLog={workLog}
 						providerType={providerType}
 						subject={{ people: "one", login }}
 					/>
-				</Section>
+				)}
 			</DrawerBody>
+			{automationAction && <DrawerFooter>{automationAction}</DrawerFooter>}
 		</>
 	);
 }

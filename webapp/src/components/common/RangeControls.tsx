@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useSpinDelay } from "spin-delay";
 
 import { FilterToggle, type FilterOption } from "./FilterToggle";
@@ -5,13 +6,16 @@ import { FilterToggle, type FilterOption } from "./FilterToggle";
 export interface RangeControlsProps<TRange extends string> {
 	/** The ranges the page offers, in the order the toggle shows them. */
 	options: readonly FilterOption<TRange>[];
-	range: TRange;
+	/** Undefined while the page counts a range that no option names, such as a custom one. */
+	range: TRange | undefined;
 	onRangeChange: (range: TRange) => void;
 	/**
 	 * Whether what the page shows is still the previous range's while the one just chosen loads,
 	 * which the regions show by draining their colours; this says it in words as well.
 	 */
 	updating: boolean;
+	/** A control after the toggle that picks a range the options do not name: a custom one. */
+	children?: ReactNode;
 }
 
 /**
@@ -24,6 +28,7 @@ export function RangeControls<TRange extends string>({
 	range,
 	onRangeChange,
 	updating,
+	children,
 }: RangeControlsProps<TRange>) {
 	const showUpdating = useSpinDelay(updating, { delay: 1000, minDuration: 500 });
 	return (
@@ -32,6 +37,7 @@ export function RangeControls<TRange extends string>({
 				{showUpdating ? "Updating…" : ""}
 			</span>
 			<FilterToggle label="Time range" options={options} value={range} onChange={onRangeChange} />
+			{children}
 		</div>
 	);
 }

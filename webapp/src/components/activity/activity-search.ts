@@ -5,19 +5,19 @@ import {
 	detailStackSchema,
 	parseDetailStack,
 } from "@/components/layout/detail-drawer/detail-stack";
+import { multiValue } from "@/lib/search-params";
 
 import { ACTIVITY_CATEGORIES, type ActivityCategory } from "./activity-kind-defs";
-import { ACTIVITY_RANGES, DEFAULT_ACTIVITY_RANGE } from "./activity-range";
+import { ACTIVITY_PRESETS, DEFAULT_ACTIVITY_PRESET } from "./activity-period";
 
 /** Your Activity opens one category of your own activity: `activity:reviews`. */
 export const SELF_ACTIVITY_LEVEL_KINDS = ["activity"] as const;
 
 /**
- * Workspace activity also opens a member: `member:ada`. A category level belongs to the member level
- * beneath it — `[member:ada, activity:reviews]` is Ada's reviews — and without one to the page's scope,
- * the workspace or a team.
+ * Workspace activity opens a person by login, `person:ada`, and one category of that person's
+ * activity over it: `[person:ada, activity:reviews]` is Ada's reviews.
  */
-export const WORKSPACE_ACTIVITY_LEVEL_KINDS = ["activity", "member"] as const;
+export const WORKSPACE_ACTIVITY_LEVEL_KINDS = ["person", "activity"] as const;
 
 export type ActivityLevel = DetailStackEntry<(typeof WORKSPACE_ACTIVITY_LEVEL_KINDS)[number]>;
 
@@ -25,8 +25,8 @@ export function categoryLevel(category: ActivityCategory): ActivityLevel {
 	return { kind: "activity", id: category };
 }
 
-export function memberLevel(login: string): ActivityLevel {
-	return { kind: "member", id: login };
+export function personLevel(login: string): ActivityLevel {
+	return { kind: "person", id: login };
 }
 
 type ActivityLevelTarget =
@@ -34,17 +34,18 @@ type ActivityLevelTarget =
 			kind: "activity";
 			category: ActivityCategory;
 			/** Whose activity the level lists; without one, the page's. */
-			member?: string;
+			person?: string;
 	  }
-	| { kind: "member"; login: string };
+	| { kind: "person"; login: string };
 
 /** A level of the stack, with what it shows. */
 export type ActivityStackEntry = ActivityLevel & { target: ActivityLevelTarget };
 
 /**
  * The levels the URL opens on a page with these kinds, up to the first a hand-edited URL could not
- * have reached: a category the page does not know, a second member, or a second category level for
- * the same owner. A level past that point would open a drawer with nothing true to fill it.
+ * have reached: a category the page does not know, a second person, a second category level for
+ * the same owner, or a category with no owner on a page that opens people. A level past that point
+ * would open a drawer with nothing true to fill it.
  */
 export function parseActivityStack(
 	raw: string[] | undefined,
@@ -52,16 +53,18 @@ export function parseActivityStack(
 ): ActivityStackEntry[] {
 	const entries: ActivityStackEntry[] = [];
 	const owners = new Set<string>();
-	let member: string | undefined;
+	let person: string | undefined;
 	for (const level of parseDetailStack(raw, kinds)) {
-		const target = levelTarget(level, member);
-		const owner = level.kind === "member" ? "member" : `activity:${member ?? ""}`;
-		if (target === undefined || owners.has(owner)) {
+		const target = levelTarget(level, person);
+		const owner = level.kind === "person" ? "person" : `activity:${person ?? ""}`;
+		const ownerless =
+			target?.kind === "activity" && person === undefined && kinds.includes("person");
+		if (target === undefined || ownerless || owners.has(owner)) {
 			break;
 		}
 		owners.add(owner);
-		if (target.kind === "member") {
-			member = target.login;
+		if (target.kind === "person") {
+			person = target.login;
 		}
 		entries.push({ ...level, target });
 	}
@@ -70,13 +73,13 @@ export function parseActivityStack(
 
 function levelTarget(
 	level: ActivityLevel,
-	member: string | undefined,
+	person: string | undefined,
 ): ActivityLevelTarget | undefined {
-	if (level.kind === "member") {
-		return { kind: "member", login: level.id };
+	if (level.kind === "person") {
+		return { kind: "person", login: level.id };
 	}
 	return isActivityCategory(level.id)
-		? { kind: "activity", category: level.id, member }
+		? { kind: "activity", category: level.id, person }
 		: undefined;
 }
 
@@ -84,28 +87,48 @@ function isActivityCategory(value: string): value is ActivityCategory {
 	return (ACTIVITY_CATEGORIES as readonly string[]).includes(value);
 }
 
-const rangeSchema = z
-	.enum(ACTIVITY_RANGES)
-	.default(DEFAULT_ACTIVITY_RANGE)
-	.catch(DEFAULT_ACTIVITY_RANGE);
+/**
+ * The period every activity page counts: a preset, `?range=1y`, or the days of a custom range,
+ * `?from=2026-01-01&to=2026-03-31`, which win over the preset when both are valid.
+ */
+const periodSearchSchema = z.object({
+	range: z.enum(ACTIVITY_PRESETS).default(DEFAULT_ACTIVITY_PRESET).catch(DEFAULT_ACTIVITY_PRESET),
+	from: z.iso.date().optional().catch(undefined),
+	to: z.iso.date().optional().catch(undefined),
+});
 
-const activityFilterSchema = z.object({ range: rangeSchema });
+/** The keys that follow the reader to the other activity page, and to another workspace. */
+export const PERIOD_SEARCH_KEYS = ["range", "from", "to"] as const;
 
-export const ACTIVITY_SEARCH_DEFAULTS = activityFilterSchema.parse({});
+export const ACTIVITY_SEARCH_DEFAULTS = periodSearchSchema.parse({});
 
-export const activitySearchSchema = activityFilterSchema.extend(
+export const activitySearchSchema = periodSearchSchema.extend(
 	detailStackSchema(SELF_ACTIVITY_LEVEL_KINDS).shape,
 );
 
 export type ActivitySearch = z.infer<typeof activitySearchSchema>;
 
+/** The columns the people table sorts by, as the URL names them. */
+export const PEOPLE_SORTS = [
+	"contributions",
+	"pull-requests",
+	"reviews",
+	"issues",
+	"active-weeks",
+	"name",
+] as const;
+
+export type PeopleSort = (typeof PEOPLE_SORTS)[number];
+
 /**
- * The team whose activity workspace activity shows: its members, in the repositories and labels its
- * team settings name. No team is the whole workspace.
+ * Workspace activity's scope and order, by the names a reader can read: a team by its slug, each
+ * repository by its full path, `?team=core&repo=acme/api&sort=reviews`.
  */
-const workspaceActivityFilterSchema = z.object({
-	range: rangeSchema,
-	team: z.coerce.number().int().positive().optional().catch(undefined),
+const workspaceActivityFilterSchema = periodSearchSchema.extend({
+	team: z.string().min(1).optional().catch(undefined),
+	repo: multiValue,
+	sort: z.enum(PEOPLE_SORTS).default("contributions").catch("contributions"),
+	dir: z.enum(["asc", "desc"]).default("desc").catch("desc"),
 });
 
 export const WORKSPACE_ACTIVITY_SEARCH_DEFAULTS = workspaceActivityFilterSchema.parse({});
