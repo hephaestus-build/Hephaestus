@@ -22,6 +22,8 @@ services:
     profiles: ["reference-deployment-only"]
 
   reverse-proxy:
+    environment:
+      HEPHAESTUS_EDGE_MAINTENANCE_ENABLED: "false"
     ports: !override
       - "80:80"
       - "443:443"
@@ -55,8 +57,7 @@ services:
       - "--serversTransport.forwardingTimeouts.responseHeaderTimeout=30s"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=http"
+      - "--certificatesresolvers.letsencrypt.acme.${ACME_CHALLENGE:-httpchallenge.entrypoint}=${ACME_CHALLENGE_VALUE:-http}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?Set ACME_EMAIL in .env (Let's Encrypt expiry notices)}"
       # The TLS floor comes from compose.proxy.yaml's file-provider fragment.
