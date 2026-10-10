@@ -4,13 +4,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
+import de.tum.cit.aet.hephaestus.agent.context.providers.LinkedWorkItemContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
+import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -30,6 +41,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -38,9 +50,11 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -51,11 +65,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -93,6 +110,12 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
 
     @Autowired
     private RepositoryToMonitorRepository monitors;
+
+    @Autowired
+    private IssueRepository issueRepository;
+
+    @Autowired
+    private ReviewedWorkChanges reviewedWorkChanges;
 
     private Workspace workspace;
     private UUID jobId;
@@ -255,6 +278,196 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
         });
 
         assertThat(revision).isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
+    }
+
+    // Admission retires the staged files and their inventories; the reviewed identity and source facts stay.
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldReserveAgainstTheRetainedCaptureAfterAdmissionRetiresItsFiles(boolean gitLab) {
+        var work = reviewedPullRequest(gitLab, ReviewedWorkFixtures.BASE);
+        JsonNode before = snapshot();
+        assertThat(before.path("manifest").path("artifacts")).isNotEmpty();
+
+        JsonNode after = retire();
+
+        assertThat(after.path("manifest").path("artifacts")).isEmpty();
+        assertThat(after.path("manifest").path("refusals")).isEmpty();
+        JsonNode sourcesBefore = before.path("manifest").path("sources");
+        JsonNode sourcesAfter = after.path("manifest").path("sources");
+        assertThat(sourcesAfter).hasSameSizeAs(sourcesBefore);
+        for (int i = 0; i < sourcesAfter.size(); i++) {
+            assertThat(sourcesAfter.get(i).path("artifacts")).isEmpty();
+            assertThat(sourcesAfter.get(i).path("kind"))
+                    .isEqualTo(sourcesBefore.get(i).path("kind"));
+            assertThat(sourcesAfter.get(i).path("state"))
+                    .isEqualTo(sourcesBefore.get(i).path("state"));
+        }
+        assertThat(after.path(ReviewedWork.SNAPSHOT_KEY)).isEqualTo(before.path(ReviewedWork.SNAPSHOT_KEY));
+        assertThat(reviewedWorkChanges.deliverableCapture(workspace.getId(), jobId, work.getId()))
+                .contains(new ReviewedWorkChanges.CapturedIdentity(
+                        Objects.requireNonNull(work.getHeadRefOid()),
+                        ReviewedWorkFixtures.BASE,
+                        ReviewedWork.revision(ArtifactKinds.PULL_REQUEST, work.getTitle(), work.getBody())));
+
+        UUID dispatchId = claimedDispatch("retained-current-" + gitLab);
+        assertThat(reserve(dispatchId)).isEqualTo(FeedbackDispatchStateMachine.Reservation.RESERVED);
+        assertThat(writeStarted(dispatchId)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"head", "base", "body"})
+    void shouldReserveNothingWhenTheWorkMovedAfterItsCaptureWasRetired(String moved) {
+        var work = reviewedPullRequest(true, ReviewedWorkFixtures.BASE);
+        retire();
+        switch (moved) {
+            case "head" ->
+                jdbcTemplate.update("UPDATE issue SET head_ref_oid = ? WHERE id = ?", "c".repeat(40), work.getId());
+            case "base" ->
+                jdbcTemplate.update("UPDATE issue SET base_ref_oid = ? WHERE id = ?", "d".repeat(40), work.getId());
+            case "body" -> jdbcTemplate.update("UPDATE issue SET body = 'New description' WHERE id = ?", work.getId());
+            default -> throw new IllegalArgumentException(moved);
+        }
+
+        UUID dispatchId = claimedDispatch("retained-moved-" + moved);
+        assertThat(reserve(dispatchId)).isEqualTo(FeedbackDispatchStateMachine.Reservation.STALE);
+        assertThat(writeStarted(dispatchId)).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing change", "malformed range"})
+    void shouldReserveNothingWhenTheRetainedChangeIdentityCannotBeRead(String damage) {
+        reviewedPullRequest(true, ReviewedWorkFixtures.BASE);
+        ObjectNode retired = (ObjectNode) retire();
+        ArrayNode sources = (ArrayNode) retired.path("manifest").path("sources");
+        for (int i = 0; i < sources.size(); i++) {
+            if (!PullRequestContentSource.DIFF
+                    .value()
+                    .equals(sources.get(i).path("kind").asString())) continue;
+            if (damage.equals("missing change")) {
+                sources.remove(i);
+            } else {
+                ((ObjectNode) sources.get(i).path("state").path("facts"))
+                        .put("immutableIdentity", "base:" + "b".repeat(40));
+            }
+            break;
+        }
+        jdbcTemplate.update(
+                "UPDATE agent_job SET evidence_snapshot = ?::jsonb WHERE id = ?", retired.toString(), jobId);
+
+        UUID dispatchId = claimedDispatch("retained-unreadable-" + damage.replace(' ', '-'));
+        assertThat(reserve(dispatchId)).isEqualTo(FeedbackDispatchStateMachine.Reservation.UNKNOWN);
+        assertThat(writeStarted(dispatchId)).isFalse();
+    }
+
+    // A linked issue's material is compared through its captured file digest, which retirement removes.
+    @Test
+    void shouldNotConfirmLinkedMaterialOnceItsCapturedFileDigestIsRetired() {
+        var mapper = JsonMapper.builder().build();
+        var work = reviewedPullRequest(true, ReviewedWorkFixtures.BASE);
+        var issue = new Issue();
+        issue.setProvider(work.getProvider());
+        issue.setRepository(work.getRepository());
+        issue.setNativeId(70203L);
+        issue.setNumber(18);
+        issue.setState(Issue.State.CLOSED);
+        issue.setTitle("Acceptance criteria");
+        issue.setBody("- [x] Confirm repair");
+        issue.setCreatedAt(Instant.parse("2026-10-01T08:00:00Z"));
+        issue.setClosedAt(Instant.parse("2026-10-02T08:00:00Z"));
+        long issueId = issueRepository.saveAndFlush(issue).getId();
+        transactions.executeWithoutResult(status -> {
+            PullRequest merged = pullRequests.findById(work.getId()).orElseThrow();
+            merged.setState(Issue.State.MERGED);
+            merged.setMerged(true);
+            merged.replaceClosingIssues(Set.of(issueRepository.getReferenceById(issueId)));
+            pullRequests.saveAndFlush(merged);
+        });
+        Issue closing = issueRepository.findById(issueId).orElseThrow();
+        PullRequest mergedWork = pullRequests.findById(work.getId()).orElseThrow();
+        byte[] text = LinkedWorkItemContentSource.asText(closing);
+        var linked = new SourceCapture(
+                LinkedWorkItemContentSource.KIND,
+                new SourceCaptureState.Available(
+                        SourceContentState.NON_EMPTY,
+                        SourceCompleteness.COMPLETE,
+                        new SourceCaptureFacts(Instant.now(), null, null, null)),
+                List.of(new SourceArtifact(
+                        "context/linked_work_items/18.md",
+                        "text/markdown",
+                        ProvenanceDigest.sha256Hex(text),
+                        text.length)));
+        AgentJob job = jobRepository.findById(jobId).orElseThrow();
+        ObjectNode snapshot = (ObjectNode) Objects.requireNonNull(job.getEvidenceSnapshot());
+        JobFolderIndex original = mapper.treeToValue(snapshot.path("manifest"), JobFolderIndex.class);
+        var sources = new ArrayList<>(original.sources());
+        sources.add(linked);
+        snapshot.set(
+                "manifest",
+                mapper.valueToTree(new JobFolderIndex(
+                        original.contractVersion(),
+                        original.catalogDigest(),
+                        original.artifactKind(),
+                        original.capturedAt(),
+                        sources)));
+        job.setEvidenceSnapshot(snapshot);
+        jobRepository.saveAndFlush(job);
+        String revision = LinkedWorkItemContentSource.currentClosingMaterialKey(
+                        workspace.getId(), mergedWork, List.of(closing))
+                .orElseThrow()
+                .revision()
+                .value();
+
+        assertThat(reviewedWorkChanges.linkedCaptureCurrent(workspace.getId(), jobId, work.getId(), revision))
+                .isTrue();
+
+        retire();
+
+        assertThat(LinkedWorkItemContentSource.currentClosingMaterialKey(
+                                workspace.getId(),
+                                pullRequests.findById(work.getId()).orElseThrow(),
+                                List.of(issueRepository.findById(issueId).orElseThrow()))
+                        .orElseThrow()
+                        .revision()
+                        .value())
+                .isEqualTo(revision);
+        assertThat(reviewedWorkChanges.linkedCaptureCurrent(workspace.getId(), jobId, work.getId(), revision))
+                .isFalse();
+    }
+
+    private JsonNode snapshot() {
+        return Objects.requireNonNull(
+                jobRepository.findById(jobId).orElseThrow().getEvidenceSnapshot());
+    }
+
+    /** Retires the completed job's staged files through the repository's own admission-time update. */
+    private JsonNode retire() {
+        AgentJob job = jobRepository.findById(jobId).orElseThrow();
+        job.setWorkerId("retirement-worker");
+        jobRepository.saveAndFlush(job);
+        Integer retired = transactions.execute(status ->
+                jobRepository.discardRetiredArtifactInventory(jobId, workspace.getId(), 0, "retirement-worker"));
+        assertThat(retired).isEqualTo(1);
+        return snapshot();
+    }
+
+    private UUID claimedDispatch(String destination) {
+        UUID dispatchId = insertDispatch(workspace.getId(), jobId, destination);
+        assertThat(claim(dispatchId, "reserving", Instant.now().plusSeconds(60)))
+                .isEqualTo(1);
+        return dispatchId;
+    }
+
+    /** The final locked check of the real policy bean, then the lease-guarded write reservation. */
+    private FeedbackDispatchStateMachine.Reservation reserve(UUID dispatchId) {
+        AgentJob job = jobRepository.findById(jobId).orElseThrow();
+        return stateMachine.reserve(
+                () -> PracticeFeedbackDeliveryPolicy.Decision.allowed(deliveryPolicy.lockedReviewedRevision(job, null)),
+                () -> dispatchRepository.beginWrite(dispatchId, workspace.getId(), "reserving"));
+    }
+
+    private boolean writeStarted(UUID dispatchId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT write_started FROM feedback_dispatch WHERE id = ?", Boolean.class, dispatchId));
     }
 
     private static void await(CountDownLatch latch) {

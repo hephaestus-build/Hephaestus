@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -37,7 +38,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 class CapturedReviewedWorkChangesTest extends BaseUnitTest {
     private static final UUID RUN = UUID.randomUUID();
@@ -159,9 +163,13 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
     }
 
     private void captured(String reviewedWork, JobFolderIndex manifest) {
+        captured(reviewedWork, mapper.writeValueAsString(manifest));
+    }
+
+    private void captured(String reviewedWork, String manifestJson) {
         var row = mock(AgentJobRepository.CapturedReviewedWorkRow.class);
         lenient().when(row.getReviewedWork()).thenReturn(reviewedWork);
-        lenient().when(row.getManifest()).thenReturn(mapper.writeValueAsString(manifest));
+        lenient().when(row.getManifest()).thenReturn(manifestJson);
         lenient().when(row.getContractVersion()).thenReturn("1.3.0");
         lenient().when(row.getId()).thenReturn(RUN);
         when(jobs.findCapturedReviewedWork(7, Set.of(RUN))).thenReturn(List.of(row));
@@ -177,6 +185,78 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
                         HEAD,
                         ReviewedWorkFixtures.BASE,
                         ReviewedWork.revision(ArtifactKinds.PULL_REQUEST, "Title", "Body")));
+    }
+
+    @Test
+    void shouldDeliverAgainstTheSameIdentityAfterAdmissionRetiresTheManifestArtifacts() {
+        // The shape AgentJobRepository.discardRetiredArtifactInventory leaves once observations are admitted:
+        // the folder's artifacts and refusals and every source's artifacts emptied, each source's state and facts kept.
+        ObjectNode retired = mapper.valueToTree(ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD));
+        retired.putArray("artifacts");
+        retired.putArray("refusals");
+        for (var source : retired.get("sources")) {
+            ((ObjectNode) source).putArray("artifacts");
+        }
+        captured(capture(42, HEAD), mapper.writeValueAsString(retired));
+
+        assertThat(changes.deliverableCapture(7, RUN, 42))
+                .contains(new ReviewedWorkChanges.CapturedIdentity(
+                        HEAD,
+                        ReviewedWorkFixtures.BASE,
+                        ReviewedWork.revision(ArtifactKinds.PULL_REQUEST, "Title", "Body")));
+        // The whole manifest still refuses a non-empty source without files: retirement is read, never re-admitted.
+        assertThatThrownBy(() -> mapper.readValue(mapper.writeValueAsString(retired), JobFolderIndex.class))
+                .isInstanceOf(JacksonException.class)
+                .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Non-empty source must contain at least one artifact");
+    }
+
+    private ObjectNode retired(JobFolderIndex manifest) {
+        ObjectNode retired = mapper.valueToTree(manifest);
+        retired.putArray("artifacts");
+        retired.putArray("refusals");
+        for (var source : retired.get("sources")) {
+            ((ObjectNode) source).putArray("artifacts");
+        }
+        return retired;
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {"moved head", "other work", "duplicate source", "no sources", "unknown state", "bad digest"})
+    void shouldNotDeliverAgainstARetiredManifestThatDoesNotProveItsIdentity(String retirement) {
+        ObjectNode manifest = retired(ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD));
+        String reviewedWork = capture(42, HEAD);
+        switch (retirement) {
+            case "moved head" -> reviewedWork = capture(42, "2".repeat(40));
+            case "other work" -> reviewedWork = capture(43, HEAD);
+            case "duplicate source" ->
+                ((ArrayNode) manifest.get("sources"))
+                        .add(manifest.get("sources").get(1).deepCopy());
+            case "no sources" -> manifest.putArray("sources");
+            case "unknown state" ->
+                ((ObjectNode) manifest.get("sources").get(1).get("state")).put("availability", "RECOVERED");
+            case "bad digest" -> manifest.put("catalogDigest", "not-a-digest");
+            default -> throw new IllegalArgumentException(retirement);
+        }
+        captured(reviewedWork, mapper.writeValueAsString(manifest));
+
+        assertThat(changes.deliverableCapture(7, RUN, 42)).isEmpty();
+    }
+
+    @Test
+    void shouldNotDeliverAgainstARetiredManifestWhoseContractNoLongerPermitsDelivery() {
+        captured(
+                capture(42, HEAD),
+                mapper.writeValueAsString(
+                        retired(ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD))));
+        when(catalogs.isSourceUsePermitted(
+                        new SourceContractVersion("1.3.0"),
+                        PullRequestContentSource.DIFF,
+                        SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .thenReturn(false);
+
+        assertThat(changes.deliverableCapture(7, RUN, 42)).isEmpty();
     }
 
     @ParameterizedTest

@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
-import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
@@ -242,11 +241,21 @@ public record ReviewedWork(
 
     /** The pinned head a manifest captured with its core: null unless both the core and the change were available. */
     public static @Nullable String capturedHead(JobFolderIndex manifest) {
+        return capturedHead(manifest.retained());
+    }
+
+    /** As {@link #capturedHead(JobFolderIndex)}, from what stays of the manifest once its files are retired. */
+    public static @Nullable String capturedHead(JobFolderIndex.Retained manifest) {
         return available(manifest, PullRequestContentSource.CORE) == null ? null : pinnedHead(manifest);
     }
 
     /** The pinned base of the same change identity as {@link #capturedHead}, under the same conditions. */
     public static @Nullable String capturedBase(JobFolderIndex manifest) {
+        return capturedBase(manifest.retained());
+    }
+
+    /** As {@link #capturedBase(JobFolderIndex)}, from what stays of the manifest once its files are retired. */
+    public static @Nullable String capturedBase(JobFolderIndex.Retained manifest) {
         if (available(manifest, PullRequestContentSource.CORE) == null) return null;
         SourceCaptureState.Available diff = available(manifest, PullRequestContentSource.DIFF);
         String[] parts = diff == null ? null : pinnedRange(diff.facts().immutableIdentity());
@@ -254,6 +263,10 @@ public record ReviewedWork(
     }
 
     private static @Nullable String pinnedHead(JobFolderIndex manifest) {
+        return pinnedHead(manifest.retained());
+    }
+
+    private static @Nullable String pinnedHead(JobFolderIndex.Retained manifest) {
         SourceCaptureState.Available diff = available(manifest, PullRequestContentSource.DIFF);
         return diff == null ? null : headOf(diff.facts().immutableIdentity());
     }
@@ -269,7 +282,11 @@ public record ReviewedWork(
     }
 
     private static SourceCaptureState.@Nullable Available available(JobFolderIndex manifest, SourceKind kind) {
-        for (SourceCapture source : manifest.sources()) {
+        return available(manifest.retained(), kind);
+    }
+
+    private static SourceCaptureState.@Nullable Available available(JobFolderIndex.Retained manifest, SourceKind kind) {
+        for (JobFolderIndex.RetainedSource source : manifest.sources()) {
             if (source.kind().equals(kind) && source.state() instanceof SourceCaptureState.Available available) {
                 return available;
             }

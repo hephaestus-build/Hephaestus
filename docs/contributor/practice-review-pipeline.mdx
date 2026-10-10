@@ -346,6 +346,8 @@ A practice is left out only when all of the following hold:
   The change identity is `base:head`, and the tree identity is `commit:tree`.
   Its generated-path policy and source contract also match.
   These states survive the admission cleanup that retires artifact inventories.
+  Public feedback's final freshness check reads the same retained contract, kind, source facts and reviewed identity.
+  A linked issue's material still needs its captured file digest, so a retired linked capture cannot confirm it.
 
 Rechecked practices are never left out.
 Only `synchronized` and `edited` reviews of the author are trimmed.
