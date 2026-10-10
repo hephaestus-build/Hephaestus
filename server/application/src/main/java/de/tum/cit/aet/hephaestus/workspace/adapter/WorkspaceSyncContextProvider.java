@@ -24,8 +24,7 @@ public class WorkspaceSyncContextProvider implements SyncContextProvider {
                 context.slug(),
                 context.displayName(),
                 null, // accountType not needed for sync operations
-                context.installationId(),
-                false, // publicActivityEnabled not relevant for sync
+                context.installationId(), // publicActivityEnabled not relevant for sync
                 Set.of() // No roles for system sync operations
                 );
 

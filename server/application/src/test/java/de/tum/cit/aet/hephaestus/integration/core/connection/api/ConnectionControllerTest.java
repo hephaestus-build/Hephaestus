@@ -414,7 +414,6 @@ class ConnectionControllerTest extends BaseUnitTest {
                 "Workspace " + workspaceId,
                 AccountType.ORG,
                 null,
-                false,
                 Set.of(WorkspaceRole.ADMIN));
     }
 

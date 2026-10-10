@@ -132,7 +132,7 @@ class MentorChatControllerTest extends BaseUnitTest {
     }
 
     private static WorkspaceContext stubContext() {
-        return new WorkspaceContext(1L, "test-ws", "Test", AccountType.ORG, null, false, Set.of(WorkspaceRole.MEMBER));
+        return new WorkspaceContext(1L, "test-ws", "Test", AccountType.ORG, null, Set.of(WorkspaceRole.MEMBER));
     }
 
     private static MentorChatRequestBody validBody(UUID threadId, String text) {
