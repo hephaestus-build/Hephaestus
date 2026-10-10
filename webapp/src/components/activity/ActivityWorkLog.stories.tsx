@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn } from "storybook/test";
+import { expect, fn, waitFor } from "storybook/test";
 
 import {
 	ada,
@@ -113,9 +113,10 @@ export const MoreToLoad: Story = {
 			onCopy,
 		},
 	},
-	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Show more" }));
-		await expect(onLoadMore).toHaveBeenCalledOnce();
+	play: async ({ canvas }) => {
+		// The end of the log is in view, so the next page loads with no press; the press stays.
+		await waitFor(async () => expect(onLoadMore).toHaveBeenCalled());
+		await expect(canvas.getByRole("button", { name: "Show earlier activity" })).toBeVisible();
 	},
 };
 
@@ -151,7 +152,10 @@ export const LoadingMore: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Loading…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Loading…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 
@@ -169,7 +173,9 @@ export const LoadMoreFailed: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("alert")).toHaveTextContent("We could not load more activity.");
+		await expect(canvas.getByRole("alert")).toHaveTextContent(
+			"We could not load earlier activity.",
+		);
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 	},
 };

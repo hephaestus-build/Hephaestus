@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { isRecord } from "@/lib/is-record";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { hasText } from "@/lib/text";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
@@ -14,6 +15,7 @@ vi.setConfig({ testTimeout: 15_000 });
 
 function newRouter(url?: string) {
 	return createRouter({
+		...ROUTER_SEARCH,
 		routeTree,
 		...(hasText(url) ? { history: createMemoryHistory({ initialEntries: [url] }) } : {}),
 		// A fresh client per case: a shared cache would let one role's answer satisfy another's guard.

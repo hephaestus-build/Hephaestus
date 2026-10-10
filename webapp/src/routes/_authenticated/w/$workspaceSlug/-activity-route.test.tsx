@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +8,6 @@ import type {
 	ActivityWork,
 	ActivityWorkPage,
 	OpenWork,
-	TeamInfo,
 	WorkItem,
 } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
@@ -17,11 +16,17 @@ import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { clearUserView } from "@/runtime/user-view/session";
 import { deferred } from "@/test/async";
+import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
 
 // A case mounts the whole app chrome, whose route modules are imported lazily.
 vi.setConfig({ testTimeout: 40_000 });
+
+// The end of a list asks for the next page as it scrolls into view, which jsdom cannot report.
+beforeEach(() => {
+	vi.stubGlobal("IntersectionObserver", ObserverStub);
+});
 
 const counts = {
 	contributions: 5,
@@ -36,31 +41,38 @@ const counts = {
 const people = {
 	from: "2026-09-01T00:00:00Z",
 	to: "2026-10-01T00:00:00Z",
-	people: ["ada-lrz", "bob"].map((login, index) => ({
+	// The server lists people by id, not by name: a tie must still read in name order.
+	people: ["bob", "ada-lrz"].map((login) => ({
 		person: {
-			id: index + 7,
+			id: login === "bob" ? 8 : 7,
 			login,
 			name: login === "bob" ? "Bob" : "Ada",
 			email: "",
 			avatarUrl: "",
 			htmlUrl: "",
 		},
-		automation: false,
-		counts,
+		kind: "PERSON",
+		counts: { ...counts, pullRequestsReviewed: login === "bob" ? 9 : 3 },
 		weeks: [{ start: "2026-09-21T00:00:00Z", contributions: counts.contributions }],
 	})),
 	automation: [],
 	coverage: { completeRepositories: 1, totalRepositories: 1 },
 	highlights: { firstContributors: [], mostPeopleHelped: [] },
-	repositories: [],
-	teams: [{ id: 5, key: "core", name: "Core" }],
+	repositories: [
+		{ id: 1, key: "acme/api", name: "api" },
+		{ id: 2, key: "acme/web", name: "web" },
+	],
+	teams: [
+		{ id: 5, key: "core", name: "Core" },
+		{ id: 8, key: "backend", name: "Backend", parentId: 5 },
+	],
 } satisfies Wire<ActivityPeople>;
 
 const personDetail = {
 	from: people.from,
 	to: people.to,
-	person: people.people[0]?.person,
-	automation: false,
+	person: people.people[1]?.person,
+	kind: "PERSON",
 	counts,
 	breakdown: {
 		pullRequestsClosed: 0,
@@ -128,25 +140,6 @@ function pagedWork(record: (request: Request) => void) {
 		const cursor = new URL(request.url).searchParams.get("cursor") ?? "first";
 		return HttpResponse.json(pages[cursor]);
 	});
-}
-
-function team(
-	id: number,
-	name: string,
-	options: { hidden?: boolean; parentId?: number } = {},
-): TeamInfo {
-	return {
-		id,
-		name,
-		hidden: options.hidden ?? false,
-		parentId: options.parentId,
-		labels: [],
-		members: [],
-		membershipCount: 0,
-		repositories: [],
-		repoPermissionCount: 0,
-		slug: id === 5 ? "core" : `team-${id}`,
-	};
 }
 
 const ownPullRequest = {
@@ -222,14 +215,6 @@ describe("Activity", () => {
 				record(request);
 				return HttpResponse.json(openWork);
 			}),
-			http.get("*/workspaces/:workspaceSlug/team", () =>
-				HttpResponse.json([
-					team(5, "Platform"),
-					team(8, "Backend", { parentId: 5 }),
-					team(6, "Secret", { hidden: true }),
-					team(7, "Payments", { parentId: 6 }),
-				]),
-			),
 		);
 	});
 
@@ -367,43 +352,34 @@ describe("Activity", () => {
 		});
 	});
 
-	it("reads UTC weekly counts without a browser time zone", async () => {
-		renderRouteAtWithRouter("/w/acme/activity");
-
-		await waitFor(
-			() => expect(readsOf("/activity/people/7").length).toBeGreaterThan(0),
-			ROUTE_RENDER_WAIT,
-		);
-		expect(readsOf("/activity/people/7")[0]?.searchParams.get("zone")).toBeNull();
-	});
-
-	it("pages the timeline by the server's cursor and sends no end of its own", async () => {
+	it("pages your timeline by the server's cursor and asks the server for the period", async () => {
 		server.use(pagedWork(record));
 		const user = userEvent.setup();
 		renderRouteAtWithRouter("/w/acme/activity");
 
-		await user.click(await screen.findByRole("button", { name: "Show more" }, ROUTE_RENDER_WAIT));
+		await user.click(
+			await screen.findByRole("button", { name: "Show earlier activity" }, ROUTE_RENDER_WAIT),
+		);
 
 		await waitFor(() =>
 			expect(
 				readsOf("/activity/people/7/work").map((url) => url.searchParams.get("cursor")),
 			).toContain("page-2"),
 		);
-		// The range runs to whenever the server reads it; the cursor carries that end between pages.
-		expect(
-			readsOf("/activity/people/7/work").map((url) => url.searchParams.has("to")),
-		).not.toContain(true);
-		const [first, next] = readsOf("/activity/people/7/work");
-		const from = first?.searchParams.get("from");
-		expect(next?.searchParams.get("from")).toBe(from);
-		// The one summary read with an end is the period before, which ends where the range begins.
-		const ended = readsOf("/activity/people/7").filter((url) => url.searchParams.has("to"));
-		expect(ended.map((url) => url.searchParams.get("to"))).toContain(from);
-		expect(ended.map((url) => url.searchParams.get("from"))).not.toContain(from);
+		// A preset is the server's to resolve, so no read names a start or an end of its own.
+		for (const url of readsOf("/activity/people/7/work")) {
+			expect(url.searchParams.get("range")).toBe("90d");
+			expect(url.searchParams.has("from")).toBe(false);
+		}
+		// The one read with days of its own is the period before, which ends where this one begins.
+		const earlier = readsOf("/activity/people/7").filter((url) => url.searchParams.has("to"));
+		expect(earlier.map((url) => url.searchParams.get("to"))).toStrictEqual([
+			"2026-09-01T00:00:00.000Z",
+		]);
 	});
 
-	it("reads the summary from local midnight of the range's first day", async () => {
-		renderRouteAtWithRouter("/w/acme/activity?range=30d");
+	it("reads a custom range from local midnight of its first day to the night after its last", async () => {
+		renderRouteAtWithRouter("/w/acme/activity?from=2026-03-01&to=2026-03-31");
 
 		await waitFor(
 			() => expect(readsOf("/activity/people/7").length).toBeGreaterThan(0),
@@ -411,13 +387,9 @@ describe("Activity", () => {
 		);
 		const [first] = readsOf("/activity/people/7");
 		assert(first);
-		const from = new Date(String(first.searchParams.get("from")));
-		expect(from.getHours()).toBe(0);
-		expect(from.getMinutes()).toBe(0);
-		// oxlint-disable-next-line eslint/no-restricted-properties -- the test compares the request against the real clock the route read
-		const days = Math.round((Date.now() - from.getTime()) / 86_400_000);
-		expect(days).toBeGreaterThanOrEqual(29);
-		expect(days).toBeLessThanOrEqual(30);
+		expect(first.searchParams.get("range")).toBe("custom");
+		expect(new Date(String(first.searchParams.get("from")))).toStrictEqual(new Date(2026, 2, 1));
+		expect(new Date(String(first.searchParams.get("to")))).toStrictEqual(new Date(2026, 3, 1));
 	});
 
 	it("lists only a category's kinds when its level is open", async () => {
@@ -465,60 +437,6 @@ describe("Activity", () => {
 		);
 	});
 
-	it("shows a failed team lookup and retries it instead of staying in loading", async () => {
-		server.use(
-			http.get("*/workspaces/:workspaceSlug/team", ({ request }) => {
-				record(request);
-				return new HttpResponse(null, { status: 503 });
-			}),
-		);
-		const user = userEvent.setup();
-		renderRouteAtWithRouter("/w/acme/workspace-activity?team=5");
-		await screen.findByText("We could not load teams", undefined, ROUTE_RENDER_WAIT);
-		server.use(
-			http.get("*/workspaces/:workspaceSlug/team", ({ request }) => {
-				record(request);
-				return HttpResponse.json([team(5, "Platform")]);
-			}),
-		);
-		const [retry] = await screen.findAllByRole("button", { name: "Retry" });
-		assert(retry);
-		await user.click(retry);
-		await screen.findByText("Bob", undefined, ROUTE_RENDER_WAIT);
-		expect(readsOf("/activity/people").map((url) => url.searchParams.get("team"))).toContain(
-			"core",
-		);
-	});
-
-	it("reads a team's activity", async () => {
-		renderRouteAtWithRouter("/w/acme/workspace-activity?team=5");
-
-		await screen.findByRole("heading", { name: "Members" }, ROUTE_RENDER_WAIT);
-		await waitFor(() =>
-			expect(readsOf("/activity/people").map((url) => url.searchParams.get("team"))).toContain(
-				"core",
-			),
-		);
-		expect(readsOf("/activity/people")).toHaveLength(2);
-		expect(
-			readsOf("/activity/people").every((url) => url.searchParams.get("team") === "core"),
-		).toBe(true);
-	});
-
-	it("offers only teams that are not hidden, naming a sub-team by its path through visible teams", async () => {
-		const user = userEvent.setup();
-		renderRouteAtWithRouter("/w/acme/workspace-activity");
-
-		await user.click(await screen.findByRole("combobox", { name: "Team" }, ROUTE_RENDER_WAIT));
-		const options = await screen.findAllByRole("option");
-		expect(options.map((option) => option.textContent)).toStrictEqual([
-			"Everyone",
-			"Payments",
-			"Platform",
-			"Platform / Backend",
-		]);
-	});
-
 	it("tells a member with no connected account in the workspace how to connect one", async () => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/members/me", () =>
@@ -531,7 +449,7 @@ describe("Activity", () => {
 		expect(screen.getByRole("link", { name: "Connect an account" }).getAttribute("href")).toBe(
 			"/settings#linked-accounts-heading",
 		);
-		expect(readsOf("/activity/people")).toStrictEqual([]);
+		expect(readsOf("/activity/people/7")).toStrictEqual([]);
 	});
 
 	it("reads nobody's activity when the membership cannot be read, and says so", async () => {
@@ -547,19 +465,7 @@ describe("Activity", () => {
 			undefined,
 			ROUTE_RENDER_WAIT,
 		);
-		expect(reads.some((url) => url.searchParams.get("login") === "ada")).toBe(false);
-		expect(readsOf("/open-work")).toStrictEqual([]);
-	});
-
-	it("drops a team the page does not offer and never reads its activity", async () => {
-		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity?team=6");
-
-		await waitFor(
-			() => expect(router.state.location.search).not.toHaveProperty("team"),
-			ROUTE_RENDER_WAIT,
-		);
-		await waitFor(() => expect(readsOf("/activity/people").length).toBeGreaterThan(0));
-		expect(reads.some((url) => url.searchParams.get("teamId") === "6")).toBe(false);
+		expect(reads.filter((url) => url.pathname.includes("/activity/"))).toStrictEqual([]);
 	});
 
 	it("opens one category level per owner, stopping at a second", async () => {
@@ -580,84 +486,430 @@ describe("Activity", () => {
 		).not.toContain("ISSUE_OPENED");
 	});
 
-	it("reads a category stacked over a member as that member's", async () => {
-		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=member:bob&detail=activity:reviews");
-
-		await waitFor(
-			() =>
-				expect(
-					readsOf("/activity/people/8/work").map((url) => [
-						url.pathname,
-						url.searchParams.getAll("kinds").join(","),
-					]),
-				).toContainEqual([
-					"/workspaces/acme/activity/people/8/work",
-					"REVIEW_APPROVED,REVIEW_CHANGES_REQUESTED,REVIEW_COMMENTED",
-				]),
-			ROUTE_RENDER_WAIT,
-		);
-		const categoryReads = readsOf("/activity/people/8/work").filter((url) =>
-			url.searchParams.has("kinds"),
-		);
-		expect(categoryReads.every((url) => !url.searchParams.has("login"))).toBe(true);
-	});
-
-	it("reads a category under a member as the page's, with the member opened over it", async () => {
-		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=activity:reviews&detail=member:bob");
-
-		await waitFor(
-			() =>
-				expect(
-					readsOf("/activity/work").map((url) => [
-						url.searchParams.get("login"),
-						url.searchParams.getAll("kinds").join(","),
-					]),
-				).toContainEqual([null, "REVIEW_APPROVED,REVIEW_CHANGES_REQUESTED,REVIEW_COMMENTED"]),
-			ROUTE_RENDER_WAIT,
-		);
-		await waitFor(() => expect(screen.getAllByText("Bob").length).toBeGreaterThan(0));
-	});
-
 	it("opens no level for a category it does not know", async () => {
 		renderRouteAtWithRouter("/w/acme/activity?detail=activity:bogus");
 
 		await screen.findByRole("heading", { name: "Needs you" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("dialog")).toBeNull();
 	});
+});
 
-	it("reads a member's own activity in their level", async () => {
-		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=member:bob");
+/** Each row's position and name, in the order the table shows them. */
+function positions(): (string | null | undefined)[][] {
+	return within(screen.getByRole("table", { name: "People" }))
+		.getAllByRole("row")
+		.slice(1)
+		.map((row) => [
+			within(row).getAllByRole("cell")[0]?.textContent,
+			within(row).getByRole("link").textContent,
+		]);
+}
+
+/** The people at once for the first read; every later read waits until `held` settles. */
+function firstAtOnce(held: Promise<void>) {
+	let answered = false;
+	return async () => {
+		if (answered) {
+			await held;
+		}
+		answered = true;
+		return HttpResponse.json(people);
+	};
+}
+
+/** The people for every scope but one that names a repository, which the server does not know. */
+function unknownRepository(request: Request) {
+	return new URL(request.url).searchParams.has("repo")
+		? HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 })
+		: HttpResponse.json(people);
+}
+
+describe("Workspace activity", () => {
+	let reads: URL[] = [];
+	let automation: URL[] = [];
+	let role = "MEMBER";
+	const record = (request: Request) => {
+		reads.push(new URL(request.url));
+	};
+	const readsOf = (path: string) => reads.filter((url) => url.pathname.endsWith(path));
+	beforeEach(() => {
+		reads = [];
+		automation = [];
+		role = "MEMBER";
+		server.use(
+			http.get("*/user", () => HttpResponse.json({ ...currentUser, username: "ada" })),
+			http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+			http.get("*/workspaces/:workspaceSlug", () => HttpResponse.json(workspaceListItem("acme"))),
+			http.get("*/workspaces/:workspaceSlug/members/me", () =>
+				HttpResponse.json({ role, userId: 7, userLogin: "ada-lrz", userName: "Ada" }),
+			),
+			http.get("*/workspaces/:workspaceSlug/activity/people", ({ request }) => {
+				record(request);
+				return HttpResponse.json(people);
+			}),
+			http.get("*/workspaces/:workspaceSlug/activity/people/:userId", ({ request }) => {
+				record(request);
+				return HttpResponse.json(personDetail);
+			}),
+			http.get(/\/workspaces\/[^/]+\/activity\/(?:people\/\d+\/)?work/u, ({ request }) => {
+				record(request);
+				return HttpResponse.json(workPage);
+			}),
+			http.patch(
+				"*/workspaces/:workspaceSlug/activity/people/:userId/automation",
+				({ request }) => {
+					automation.push(new URL(request.url));
+					return new HttpResponse(null, { status: 204 });
+				},
+			),
+		);
+	});
+
+	it("reads everyone in the last 90 days and keeps the defaults out of the address", async () => {
+		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity");
+
+		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(readsOf("/activity/people").length).toBeGreaterThan(0));
+		const [first] = readsOf("/activity/people");
+		expect(first?.search).toBe("?range=90d");
+		expect(router.state.location.href).toBe("/w/acme/workspace-activity");
+	});
+
+	it("reads the scope a readable address names, by slug and path", async () => {
+		const address =
+			"/w/acme/workspace-activity?range=1y&team=core&repo=acme/api&repo=acme/web&sort=reviews&dir=asc";
+		const { router } = renderRouteAtWithRouter(address);
+
+		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(readsOf("/activity/people").length).toBeGreaterThan(0));
+		const [first] = readsOf("/activity/people");
+		expect(first?.searchParams.get("range")).toBe("1y");
+		expect(first?.searchParams.get("team")).toBe("core");
+		expect(first?.searchParams.getAll("repo")).toStrictEqual(["acme/api", "acme/web"]);
+		expect(router.state.location.href).toBe(address);
+		expect(screen.getByRole("columnheader", { name: /^Reviews/u }).getAttribute("aria-sort")).toBe(
+			"ascending",
+		);
+	});
+
+	it("falls back to the defaults for values it does not know", async () => {
+		renderRouteAtWithRouter(
+			"/w/acme/workspace-activity?range=5y&sort=score&dir=up&from=2026-13-01",
+		);
+
+		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(readsOf("/activity/people").length).toBeGreaterThan(0));
+		expect(readsOf("/activity/people")[0]?.search).toBe("?range=90d");
+		expect(
+			screen.getByRole("columnheader", { name: /^Contributions/u }).getAttribute("aria-sort"),
+		).toBe("descending");
+	});
+
+	it("writes a sort to the address and drops it again at the default", async () => {
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity");
+
+		await user.click(await screen.findByRole("button", { name: /^Reviews/u }, ROUTE_RENDER_WAIT));
+		await waitFor(() => expect(router.state.location.searchStr).toBe("?sort=reviews"));
+		// Sorted by Reviews, Bob comes first, at position 1.
+		expect(positions()).toStrictEqual([
+			["1", "Bob"],
+			["2", "Ada"],
+		]);
+		await user.click(screen.getByRole("button", { name: /^Contributions/u }));
+		await waitFor(() => expect(router.state.location.href).toBe("/w/acme/workspace-activity"));
+		// The same count is the same position, and a tie stays in name order.
+		expect(positions()).toStrictEqual([
+			["1", "Ada"],
+			["1", "Bob"],
+		]);
+	});
+
+	it("flips a sort to the fewest first, with the positions running backwards", async () => {
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity");
+
+		await user.click(await screen.findByRole("button", { name: /^Reviews/u }, ROUTE_RENDER_WAIT));
+		await user.click(screen.getByRole("button", { name: /^Reviews/u }));
+
+		await waitFor(() => expect(router.state.location.searchStr).toBe("?sort=reviews&dir=asc"));
+		expect(positions()).toStrictEqual([
+			["2", "Ada"],
+			["1", "Bob"],
+		]);
+	});
+
+	it("writes each repository as its own key, and Reset clears them", async () => {
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity");
+
+		await user.click(
+			await screen.findByRole("combobox", { name: "Repository" }, ROUTE_RENDER_WAIT),
+		);
+		await user.click(await screen.findByRole("option", { name: "acme/api" }));
+		await user.click(await screen.findByRole("option", { name: "acme/web" }));
+
+		await waitFor(() =>
+			expect(router.state.location.searchStr).toBe("?repo=acme/api&repo=acme/web"),
+		);
+		await waitFor(() =>
+			expect(readsOf("/activity/people").at(-1)?.searchParams.getAll("repo")).toStrictEqual([
+				"acme/api",
+				"acme/web",
+			]),
+		);
+		await user.keyboard("{Escape}");
+		await user.click(screen.getByRole("button", { name: "Reset" }));
+		await waitFor(() => expect(router.state.location.href).toBe("/w/acme/workspace-activity"));
+	});
+
+	it("keeps a repository the server does not know clearable", async () => {
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/activity/people", ({ request }) =>
+				unknownRepository(request),
+			),
+		);
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity?repo=acme/old");
+
+		await screen.findByRole("alert", undefined, ROUTE_RENDER_WAIT);
+		await user.click(screen.getByRole("button", { name: "Reset" }));
+
+		await waitFor(() => expect(router.state.location.href).toBe("/w/acme/workspace-activity"));
+		await screen.findByRole("table", { name: "People" });
+	});
+
+	it("writes a preset over a custom range and drops the custom days", async () => {
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter(
+			"/w/acme/workspace-activity?from=2026-03-01&to=2026-03-31",
+		);
+		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		expect(readsOf("/activity/people")[0]?.searchParams.get("range")).toBe("custom");
+
+		await user.click(screen.getByRole("button", { name: "12 months" }));
+
+		await waitFor(() =>
+			expect(router.state.location.href).toBe("/w/acme/workspace-activity?range=1y"),
+		);
+	});
+
+	it.each([
+		["a last day after today", "from=2026-01-01&to=2999-12-31"],
+		["a first day before any history", "from=1970-01-01&to=2026-01-31"],
+	])("drops a custom range with %s", async (_case, days) => {
+		renderRouteAtWithRouter(`/w/acme/workspace-activity?${days}`);
+
+		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		expect(readsOf("/activity/people")[0]?.search).toBe("?range=90d");
+	});
+
+	it("keeps the pickers' options while another team's people load", async () => {
+		const held = deferred();
+		server.use(http.get("*/workspaces/:workspaceSlug/activity/people", firstAtOnce(held.promise)));
+		const user = userEvent.setup();
+		renderRouteAtWithRouter("/w/acme/workspace-activity");
+
+		await user.click(
+			await screen.findByRole("combobox", { name: "Team: Everyone" }, ROUTE_RENDER_WAIT),
+		);
+		await user.click(await screen.findByRole("option", { name: "Core" }));
+		await waitFor(() =>
+			expect(screen.getByRole("table", { name: "People" }).getAttribute("aria-busy")).toBe("true"),
+		);
+
+		screen.getByRole("combobox", { name: "Team: Core" });
+		await user.click(screen.getByRole("combobox", { name: "Repository" }));
+		const options = await screen.findAllByRole("option");
+		expect(options.map((option) => option.textContent)).toStrictEqual(["acme/api", "acme/web"]);
+		held.resolve();
+	});
+
+	it("lists none of everyone's work as a person's before the people say who they are", async () => {
+		const held = deferred();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/activity/people", async () => {
+				await held.promise;
+				return HttpResponse.json(people);
+			}),
+			http.get(/\/workspaces\/[^/]+\/activity\/(?:people\/\d+\/)?work/u, () =>
+				HttpResponse.json({ content: [workItem(1)] }),
+			),
+		);
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		// The page's own timeline has the work; the level, whose person is not known yet, does not.
+		await waitFor(() => expect(screen.getAllByText("Pull request 1")).toHaveLength(1));
+		expect(within(level).queryByText("Pull request 1")).toBeNull();
+		expect(within(level).queryByRole("button", { name: /Copy as Markdown/u })).toBeNull();
+		held.resolve();
+	});
+
+	it("writes a team by its slug, never its id", async () => {
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity");
+
+		await user.click(
+			await screen.findByRole("combobox", { name: "Team: Everyone" }, ROUTE_RENDER_WAIT),
+		);
+		const options = await screen.findAllByRole("option");
+		expect(options.map((option) => option.textContent)).toStrictEqual([
+			"Everyone",
+			"Core",
+			"Core / Backend",
+		]);
+		await user.click(screen.getByRole("option", { name: "Core / Backend" }));
+		await waitFor(() =>
+			expect(router.state.location.href).toBe("/w/acme/workspace-activity?team=backend"),
+		);
+		await waitFor(() =>
+			expect(readsOf("/activity/people").map((url) => url.searchParams.get("team"))).toContain(
+				"backend",
+			),
+		);
+	});
+
+	it("carries the period, and only the period, to your own Activity", async () => {
+		const { router } = renderRouteAtWithRouter(
+			"/w/acme/workspace-activity?from=2026-03-01&to=2026-03-31&team=core",
+		);
+		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+
+		await router.navigate({ to: "/w/$workspaceSlug/activity", params: { workspaceSlug: "acme" } });
+
+		expect(router.state.location.href).toBe("/w/acme/activity?from=2026-03-01&to=2026-03-31");
+	});
+
+	it("reads a person opened by login in the page's scope", async () => {
+		renderRouteAtWithRouter("/w/acme/workspace-activity?team=core&detail=person:bob");
+
+		await waitFor(
+			() => expect(readsOf("/activity/people/8").length).toBeGreaterThan(0),
+			ROUTE_RENDER_WAIT,
+		);
+		expect(readsOf("/activity/people/8")[0]?.searchParams.get("team")).toBe("core");
+		expect(readsOf("/activity/people/8/work")[0]?.searchParams.get("team")).toBe("core");
+	});
+
+	it("reads a category stacked over a person as that person's", async () => {
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob&detail=activity:reviews");
 
 		await waitFor(
 			() =>
-				expect(readsOf("/open-work").map((url) => url.pathname)).toContain(
-					"/workspaces/acme/activity/members/bob/open-work",
-				),
-			ROUTE_RENDER_WAIT,
-		);
-		expect(screen.getAllByText("Bob").length).toBeGreaterThan(0);
-	});
-
-	it("reads a member opened under a team in that team's scope", async () => {
-		renderRouteAtWithRouter("/w/acme/workspace-activity?team=5&detail=member:bob");
-
-		await waitFor(
-			() =>
-				expect(readsOf("/activity/people").map((url) => url.searchParams.get("team"))).toContain(
-					"core",
-				),
+				expect(
+					readsOf("/activity/people/8/work").map((url) =>
+						url.searchParams.getAll("kinds").join(","),
+					),
+				).toContain("REVIEW_APPROVED,REVIEW_CHANGES_REQUESTED,REVIEW_COMMENTED"),
 			ROUTE_RENDER_WAIT,
 		);
 	});
 
-	it("sends an old profile address to the member on Workspace activity", async () => {
+	it("opens no category without a person to own it", async () => {
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=activity:reviews");
+
+		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("dialog")).toBeNull();
+	});
+
+	it("says a person opened by address did nothing in the period", async () => {
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:carol");
+
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await within(level).findByText("No activity in this range");
+		expect(reads.filter((url) => /\/people\/\d+/u.test(url.pathname))).toStrictEqual([]);
+	});
+
+	it("says a category of a person who did nothing has nothing, rather than loading", async () => {
+		renderRouteAtWithRouter(
+			"/w/acme/workspace-activity?detail=person:carol&detail=activity:reviews",
+		);
+
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await within(level).findByRole("heading", { name: "Reviews" });
+		await within(level).findByText("No activity in this range");
+	});
+
+	it("lets an admin treat a person as automation, and nobody else", async () => {
+		role = "ADMIN";
+		const user = userEvent.setup();
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		const action = await screen.findByRole(
+			"button",
+			{ name: "Treat as automation" },
+			ROUTE_RENDER_WAIT,
+		);
+		const readsBefore = readsOf("/activity/people").length;
+		await user.click(action);
+
+		await waitFor(() =>
+			expect(automation.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+				"/workspaces/acme/activity/people/8/automation?treatAsAutomation=true",
+			]),
+		);
+		// The people are read again, so the account moves between the lists at once.
+		await waitFor(() => expect(readsOf("/activity/people").length).toBeGreaterThan(readsBefore));
+	});
+
+	it("lets an admin count an account treated as automation as a person again", async () => {
+		role = "ADMIN";
+		const [bob, ada] = people.people;
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/activity/people", () =>
+				HttpResponse.json({
+					...people,
+					people: [ada],
+					automation: [{ ...bob, kind: "AUTOMATION" }],
+				}),
+			),
+		);
+		const user = userEvent.setup();
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		await user.click(
+			await screen.findByRole("button", { name: "Count as a person" }, ROUTE_RENDER_WAIT),
+		);
+
+		await waitFor(() =>
+			expect(automation.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+				"/workspaces/acme/activity/people/8/automation?treatAsAutomation=false",
+			]),
+		);
+	});
+
+	it("offers no action for a provider's bot account", async () => {
+		role = "ADMIN";
+		const [bob, ada] = people.people;
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/activity/people", () =>
+				HttpResponse.json({ ...people, people: [ada], automation: [{ ...bob, kind: "BOT" }] }),
+			),
+		);
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await within(level).findByRole("heading", { name: "Bob" });
+		expect(within(level).queryByRole("button", { name: /automation|as a person/u })).toBeNull();
+	});
+
+	it("offers a member no automation action", async () => {
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await within(level).findByRole("heading", { name: "Bob" });
+		expect(within(level).queryByRole("button", { name: "Treat as automation" })).toBeNull();
+	});
+
+	it("sends an old profile address to the person on Workspace activity", async () => {
 		const { router } = renderRouteAtWithRouter("/w/acme/user/bob");
 
 		await waitFor(
 			() => expect(router.state.location.pathname).toBe("/w/acme/workspace-activity"),
 			ROUTE_RENDER_WAIT,
 		);
-		expect(router.state.location.search).toMatchObject({ detail: ["member:bob"] });
+		expect(router.state.location.href).toBe("/w/acme/workspace-activity?detail=person:bob");
 	});
 
 	it("sends someone else's old practice group page to them on Workspace activity", async () => {
@@ -669,7 +921,7 @@ describe("Activity", () => {
 			() => expect(router.state.location.pathname).toBe("/w/acme/workspace-activity"),
 			ROUTE_RENDER_WAIT,
 		);
-		expect(router.state.location.search).toMatchObject({ detail: ["member:bob"] });
+		expect(router.state.location.href).toBe("/w/acme/workspace-activity?detail=person:bob");
 	});
 
 	it("sends an old practice group page to its level on the practice profile", async () => {
@@ -681,8 +933,8 @@ describe("Activity", () => {
 			() => expect(router.state.location.pathname).toBe("/w/acme/practice-profile"),
 			ROUTE_RENDER_WAIT,
 		);
-		expect(router.state.location.search).toMatchObject({
-			detail: ["practice-group:review-ready-work"],
-		});
+		expect(router.state.location.href).toBe(
+			"/w/acme/practice-profile?detail=practice-group:review-ready-work",
+		);
 	});
 });

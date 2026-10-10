@@ -65,9 +65,9 @@ export const Default: Story = {
 		await expect(canvas.queryByText("Keep pull requests focused")).not.toBeInTheDocument();
 		await expect(
 			detailParamOf(canvas.getByRole("link", { name: /Describe what changed and why/u })),
-		).toBe('["catalog-practice:describe-what-and-why"]');
+		).toBe("catalog-practice:describe-what-and-why");
 		await expect(detailParamOf(canvas.getByRole("link", { name: /Review 1 practice/u }))).toBe(
-			'["catalog-group:review-ready-work"]',
+			"catalog-group:review-ready-work",
 		);
 	},
 };
@@ -78,7 +78,7 @@ export const DeletedGroupStillHasSomethingToAdd: Story = {
 		await expect(canvas.getByRole("link", { name: /Add group · 1 practice/u })).toBeVisible();
 		await expect(
 			detailParamOf(canvas.getByRole("link", { name: /Keep pull requests focused/u })),
-		).toBe('["practice:review-scope"]');
+		).toBe("practice:review-scope");
 	},
 };
 

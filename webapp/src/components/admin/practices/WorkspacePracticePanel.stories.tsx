@@ -52,9 +52,7 @@ export const Default: Story = {
 		await expectSettledVisible(edit);
 		// Editing is another level on top of this one, so leaving the editor lands back on the panel
 		// it was opened from rather than on the bare tree.
-		await expect(edit.getAttribute("href")).toContain(
-			encodeURIComponent(`practice-edit:${practice.slug}`),
-		);
+		await expect(edit.getAttribute("href")).toContain(`detail=practice-edit:${practice.slug}`);
 		// Level 2 is the panel's own title; criteria headings render below it at level 4.
 		await expect(screen.getByRole("heading", { name: practice.name, level: 2 })).toBeVisible();
 		// The path says where the level sits, and its crumb closes back down to the page.

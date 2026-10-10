@@ -1,5 +1,6 @@
-import { CheckCircleIcon, ChevronRightIcon } from "@primer/octicons-react";
+import { CheckCircleIcon } from "@primer/octicons-react";
 import { cn } from "cn";
+import { ChevronRightIcon } from "lucide-react";
 import type { OpenWork, WorkItem, WorkItemList } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -20,7 +21,6 @@ import {
 	OPEN_WORK_GROUP_DEFS,
 	OPEN_WORK_GROUPS,
 	type OpenWorkGroup,
-	type OpenWorkPerspective,
 } from "./open-work-groups";
 import { WorkItemRow } from "./WorkItemRow";
 
@@ -40,11 +40,6 @@ export interface OpenWorkReviewNow {
 export interface OpenWorkSectionsProps {
 	state: OpenWorkState;
 	providerType: ProviderType;
-	/**
-	 * Whose open work: your own page speaks to you and its sections are the page's; a member's level
-	 * names the work plainly and nests its sections under the level's title.
-	 */
-	perspective: OpenWorkPerspective;
 	reviewNow?: OpenWorkReviewNow;
 }
 
@@ -59,20 +54,11 @@ const WAITING = OPEN_WORK_GROUPS.filter((group) => !OPEN_WORK_GROUP_DEFS[group].
  * first; then, folded away, what waits on someone else — a request other reviewers already covered
  * sits there, never among the work to do. Assigned issues are their own section.
  */
-export function OpenWorkSections({
-	state,
-	providerType,
-	perspective,
-	reviewNow,
-}: OpenWorkSectionsProps) {
-	const self = perspective === "self";
-	const level = self ? 2 : 3;
-	const title = self ? "Needs you" : "Open work";
-	const whose = self ? "your" : "their";
+export function OpenWorkSections({ state, providerType, reviewNow }: OpenWorkSectionsProps) {
 	const NothingIcon = NOTHING_ICON(providerType);
 	if (state.status === "error") {
 		return (
-			<Section level={level} size="lg" title={title}>
+			<Section size="lg" title="Needs you">
 				<QueryErrorAlert
 					error={state.error}
 					title="We could not load open work"
@@ -87,37 +73,35 @@ export function OpenWorkSections({
 			: undefined;
 	return (
 		<>
-			<Section level={level} size="lg" title={title}>
+			<Section size="lg" title="Needs you">
 				{ready ? (
 					<div className="space-y-4">
 						<GroupLists
 							groups={COUNTED}
 							items={ready.groups}
 							providerType={providerType}
-							perspective={perspective}
 							login={ready.login}
 							reviewNow={reviewNow}
 						/>
 						{COUNTED.every((group) => ready.groups[group].length === 0) && (
 							<p className="flex items-center gap-2 text-sm text-muted-foreground">
 								<NothingIcon size={16} className={cn("shrink-0", ACTIVITY_TONES.success.text)} />
-								{self ? "Nothing needs you" : "Nothing needs their attention"}
+								Nothing needs you
 							</p>
 						)}
 						<WaitingOnOthers
 							items={ready.groups}
 							providerType={providerType}
-							perspective={perspective}
 							login={ready.login}
 							reviewNow={reviewNow}
 						/>
 						<Truncation
 							lists={[
-								{ list: ready.openWork.reviewRequests, of: `${whose} review requests` },
-								{ list: ready.openWork.teamReviewRequests, of: `${whose} teams’ review requests` },
+								{ list: ready.openWork.reviewRequests, of: "your review requests" },
+								{ list: ready.openWork.teamReviewRequests, of: "your teams’ review requests" },
 								{
 									list: ready.openWork.pullRequests,
-									of: `${whose} open ${artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType)}`,
+									of: `your open ${artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType)}`,
 								},
 							]}
 						/>
@@ -126,7 +110,7 @@ export function OpenWorkSections({
 					<GroupSkeleton rows={2} />
 				)}
 			</Section>
-			<Section level={level} size="lg" title="Assigned issues">
+			<Section size="lg" title="Assigned issues">
 				{ready ? (
 					<div className="space-y-4">
 						<WorkList
@@ -134,9 +118,9 @@ export function OpenWorkSections({
 							providerType={providerType}
 							login={ready.login}
 							reviewNow={reviewNow}
-							empty={self ? "No issues assigned to you" : "No issues assigned"}
+							empty="No issues assigned to you"
 						/>
-						<Truncation lists={[{ list: ready.openWork.issues, of: `${whose} assigned issues` }]} />
+						<Truncation lists={[{ list: ready.openWork.issues, of: "your assigned issues" }]} />
 					</div>
 				) : (
 					<GroupSkeleton rows={1} />
@@ -150,21 +134,12 @@ interface GroupListsProps {
 	groups: readonly OpenWorkGroup[];
 	items: Record<OpenWorkGroup, WorkItem[]>;
 	providerType: ProviderType;
-	perspective: OpenWorkPerspective;
 	login: string;
 	reviewNow?: OpenWorkReviewNow;
 }
 
 /** Each group that holds anything, as a small header over its bordered list. */
-function GroupLists({
-	groups,
-	items,
-	providerType,
-	perspective,
-	login,
-	reviewNow,
-}: GroupListsProps) {
-	const Heading = perspective === "self" ? "h3" : "h4";
+function GroupLists({ groups, items, providerType, login, reviewNow }: GroupListsProps) {
 	return groups
 		.filter((group) => items[group].length > 0)
 		.map((group) => {
@@ -173,11 +148,11 @@ function GroupLists({
 			const count = items[group].length;
 			return (
 				<div key={group} className="space-y-2">
-					<Heading className="flex items-center gap-2 text-sm font-semibold">
+					<h3 className="flex items-center gap-2 text-sm font-semibold">
 						<Icon size={16} className={cn("shrink-0", ACTIVITY_TONES[def.tone].text)} />
-						{def.label(perspective)}
+						{def.label}
 						<Badge variant="secondary">{count}</Badge>
-					</Heading>
+					</h3>
 					<WorkList
 						items={items[group]}
 						providerType={providerType}
@@ -214,8 +189,8 @@ function WaitingOnOthers({ items, ...rest }: Omit<GroupListsProps, "groups">) {
 		<Collapsible>
 			<CollapsibleTrigger render={<Button variant="ghost" size="sm" className="group -ml-2" />}>
 				<ChevronRightIcon
-					size={16}
-					className="transition-transform group-aria-expanded:rotate-90 motion-reduce:transition-none"
+					aria-hidden
+					className="size-4 transition-transform group-aria-expanded:rotate-90 motion-reduce:transition-none"
 				/>
 				Waiting on others
 				<span className="text-muted-foreground tabular-nums">· {count}</span>

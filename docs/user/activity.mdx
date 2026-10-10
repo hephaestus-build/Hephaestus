@@ -5,7 +5,7 @@ description: See what needs you, what you did over a time range, and what your w
 ---
 
 Use Activity to find work that needs you or prepare a record of your recent work.
-It lists GitHub or GitLab work without scoring it or ranking people.
+It counts GitHub or GitLab work and never scores it.
 
 1. Under **Dashboards**, select **Activity**.
 2. For work that needs you now, read **Needs you**.
@@ -14,7 +14,7 @@ It lists GitHub or GitLab work without scoring it or ranking people.
 The sidebar has two pages under **Dashboards**:
 
 - **Activity** is your own page. A workspace without practice reviews opens here. A workspace with practice reviews opens on your [Practice profile](./practice-profile.mdx).
-- **Workspace activity** shows everyone in the workspace or one team.
+- **Workspace activity** shows everyone with work in the workspace or one team.
 
 Every workspace has both pages, and no setting turns them on.
 They show work in the workspace’s repositories.
@@ -97,37 +97,41 @@ After the review records a result about your work, it appears under [Reviews of 
 
 ## Your work over a time range
 
-1. Choose the last 7 days, 30 days, 90 days, or 12 months.
+1. Choose the last 30 days, 90 days, or 12 months, or **All time**.
+   For other days, select **Custom range**, select the first and the last day, and then select **Apply**.
 2. Open a tile to see its work in detail.
 
 The page shows one tile for each kind of work:
 
-| Tile              | Its number                                   | Also shown                                                            |
-| ----------------- | -------------------------------------------- | --------------------------------------------------------------------- |
-| **Pull requests** | Your merged pull requests                    | Pull requests you opened, and yours closed without a merge            |
-| **Reviews**       | Your reviews of other people’s pull requests | Approvals, requests for changes, and reviews with comments only       |
-| **Comments**      | Your comments                                | Comments in pull request or issue conversations, and comments on code |
-| **Issues**        | Issues you opened                            | Your closed issues                                                    |
+| Tile              | Its number                                               | Also shown                                                            |
+| ----------------- | -------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Pull requests** | Your merged pull requests                                | Pull requests you opened, and yours closed without a merge            |
+| **Reviews**       | Other people’s pull requests you reviewed, each one once | Approvals, requests for changes, and reviews with comments only       |
+| **Comments**      | Your comments                                            | Comments in pull request or issue conversations, and comments on code |
+| **Issues**        | Issues you opened                                        | Your closed issues                                                    |
 
 Below the number, each tile compares it with the previous period of the same length.
 For example, *4 more than the previous 30 days*.
-Bars then show the number over the range, from the first day to today, in your time zone.
-Each bar is one day for 7 or 30 days, one week for 90 days, or one month for 12 months.
+**All time** has no previous period, so it shows no comparison.
+Bars then show the number for each week of the range.
+A week starts on Monday.
 
-Every day has a faint track, so a day without work reads as zero.
+Every week has a faint track, so a week without work reads as zero.
 The busiest bar shows its number.
 Each tile has its own scale, so you can compare bars within one tile but not across tiles.
-The first and last week or month can cover only part of that period.
+The first and last week can cover only part of a week.
 A tile with no work in the range does not open.
 
 Hover over a bar to see the days it covers.
 
-The detail shows the total, the average per day, week, or month, the busiest period, and the comparison with the previous period.
+The detail shows the total, the average per week, the busiest week, and the comparison with the previous period.
 It then shows a row of bars for each kind of work.
 For reviews, these are approved, changes requested, and commented.
 Rows share one scale, so their heights are comparable.
 The number above each row is the maximum value on its scale.
-**Show as table** lists the same numbers for each day, week, or month.
+**Show as table** lists the same numbers for each week.
+
+When your work is in more than one repository, **Repositories** shows your counts in each one.
 
 When you change the range, the previous figures stay visible without their colors until the new figures arrive.
 If this takes more than a moment, **Updating…** appears beside the range.
@@ -148,7 +152,8 @@ Planning, pairing, and help in chat do not appear here.
 Each pull request or issue has one row.
 The row shows its events, such as *Merged*, *Approved*, *Commented*, or your number of comments.
 Forty comments on one pull request produce one row with *40*, not forty rows.
-**Show more** loads older work.
+Older work loads as you scroll down.
+You can also select **Show earlier activity**.
 
 Timeline counts and tile counts follow the same criteria, so the rows for a range add up to its tiles.
 If GitHub or GitLab removes a pull request or issue, its row stays without a link.
@@ -166,22 +171,75 @@ A plain text field pastes Markdown.
 
 ## Workspace activity
 
-Workspace activity shows the same tiles and timeline for everyone.
-Use **Team** to filter to one team, or **Everyone** to see the whole workspace.
+Workspace activity lists everyone with work in the range, one row for each person.
+Work includes comments, so a person with only comments has a row with 0 contributions.
+The list includes people without a workspace role who worked in the workspace’s repositories.
+
+1. In the team list, select **Everyone** or one team. Type to find a team.
+2. Choose the range, as on your own page.
+3. To count only some repositories, select them under **Repository**.
+4. To sort the table, select a column heading. Select it again to change the direction.
+5. Open a person to see their tiles, repositories, and timeline.
+
 A team includes its sub-teams and counts activity in the repositories its settings include.
 If a team filters reviews by label, it counts only reviews of pull requests with one of those labels.
-Workspace totals count only current members.
 
-The page includes:
+Below the page title, the page says how far back the counts are complete.
+For example, *History since 3 March 2024 for 12 of 14 repositories*.
+Counts for an earlier range can be lower than the real work.
+Before any history is complete, the page says how many repositories are still incomplete, because all counts can be low.
 
-- **The tiles** count workspace or team work in the range.
-- **Members** lists members by name, with each person’s pull requests, reviews, comments, and issues. Search finds a member by name or username. The table first shows 50 members. **Show all** shows the rest. The table stays in name order, with no sorting by count, because Activity never ranks people.
-- **Timeline** lists the work and who did it, with a Markdown copy control.
+### People
 
-1. Open a member to see what needs them, their tiles, and their timeline.
+The table sorts by **Contributions**, most first.
+Contributions are the pull requests a person opened, the pull requests they reviewed, and the issues they opened.
+Each reviewed pull request counts once.
+A review of your own pull request does not count.
+No kind of work counts more than another.
 
-The member view includes a GitHub or GitLab profile link.
-With a team selected, counts apply to that team and match the member’s table row.
+| Column            | What it shows                                                                  |
+| ----------------- | ------------------------------------------------------------------------------ |
+| **Contributions** | The sum above                                                                  |
+| **Pull requests** | Pull requests opened, then pull requests merged in the range                   |
+| **Reviews**       | Pull requests reviewed, then how many people’s work these reviews were on      |
+| **Issues**        | Issues opened                                                                  |
+| **Weeks**         | Active weeks: weeks with any work this page counts, comments included          |
+| **Weekly**        | A small chart of contributions in each week                                    |
+
+Each figure uses the icon and colour that GitHub or GitLab gives it, such as the merge icon for merged pull requests.
+Hover over a figure to read what it counts.
+A dash means none.
+
+A **New** badge beside a name marks a first contribution to the workspace in the range.
+Hephaestus shows it only when it has the complete history of the selected repositories.
+
+When the table sorts by a count, each row shows its position.
+People with the same count share a position, and the next position skips: 1, 2, 2, 4.
+People with the same count appear in name order.
+Search finds a person by name or username.
+It hides the other rows, but each row keeps its position.
+More rows appear as you scroll down.
+
+The address of the page keeps the range, the team, the repositories, and the sort.
+Share it, and others see the same view.
+
+### Automation
+
+Bot accounts never count as people.
+They appear under **Automation** with a **Bot** badge, in name order and without positions.
+A workspace admin can count a machine user account as automation too:
+
+1. Open the account from the table.
+2. Select **Treat as automation**.
+
+To undo this, open the account under **Automation** and select **Count as a person**.
+A bot account from GitHub or GitLab always stays automation.
+
+### Workspace timeline
+
+**Timeline** lists the work of everyone in the view and who did it, with **Copy as Markdown**.
+
+### Hidden people
 
 A workspace admin can hide a member or team from workspace activity.
 A hidden member does not appear in the counts and lists on Workspace activity.

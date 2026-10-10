@@ -21,7 +21,8 @@ export interface FilterOption<TValue extends string> {
 export interface FilterToggleProps<TValue extends string> {
 	label: string;
 	options: readonly FilterOption<TValue>[];
-	value: TValue;
+	/** Undefined when what the page shows is none of the options, such as a custom date range. */
+	value: TValue | undefined;
 	onChange: (value: TValue) => void;
 	className?: string;
 }
@@ -48,7 +49,7 @@ export function FilterToggle<TValue extends string>({
 					value: optionValue,
 					label: optionLabel,
 				}))}
-				value={value}
+				value={value ?? null}
 				onValueChange={(next) => {
 					if (hasText(next)) {
 						onChange(next);
@@ -56,7 +57,7 @@ export function FilterToggle<TValue extends string>({
 				}}
 			>
 				<SelectTrigger className="w-full sm:hidden" aria-label={label}>
-					<SelectValue />
+					<SelectValue placeholder={label} />
 				</SelectTrigger>
 				<SelectContent aria-label={label}>
 					{options.map((option) => (
@@ -68,7 +69,7 @@ export function FilterToggle<TValue extends string>({
 			</Select>
 			<ToggleGroup
 				role="toolbar"
-				value={[value]}
+				value={value === undefined ? [] : [value]}
 				onValueChange={(next) => {
 					const chosen = next[0];
 					if (hasText(chosen)) {

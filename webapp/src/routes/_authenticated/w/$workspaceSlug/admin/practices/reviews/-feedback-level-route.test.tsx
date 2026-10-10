@@ -14,6 +14,7 @@ import {
 	reviewFeedbackDetail,
 } from "@/components/admin/practice-reviews/fixtures";
 import { reviewHandlers } from "@/components/admin/practice-reviews/story-mock-server";
+import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { server } from "@/mocks/server";
 import { deferred, sleep } from "@/test/async";
 import { levelsOpenedBy } from "@/test/detail-stack";
@@ -269,7 +270,10 @@ describe("feedback approval level", () => {
 			await userEvent.click(screen.getByRole("button", { name: "Approve and open next" }));
 
 			await waitFor(
-				() => expect(router.state.location.search.detail).toStrictEqual([`feedback:${second.id}`]),
+				() =>
+					expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+						`feedback:${second.id}`,
+					]),
 				ROUTE_RENDER_WAIT,
 			);
 			expect(approved).toStrictEqual([oldest.id]);
@@ -297,7 +301,10 @@ describe("feedback approval level", () => {
 			await userEvent.click(screen.getByRole("button", { name: "Approve and open next" }));
 
 			await waitFor(
-				() => expect(router.state.location.search.detail).toStrictEqual([`feedback:${oldest.id}`]),
+				() =>
+					expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+						`feedback:${oldest.id}`,
+					]),
 				ROUTE_RENDER_WAIT,
 			);
 			expect(approved).toStrictEqual([newest.id]);
@@ -344,7 +351,10 @@ describe("feedback approval level", () => {
 
 			await screen.findByText("This proposal has already been decided");
 			await waitFor(
-				() => expect(router.state.location.search.detail).toStrictEqual([`feedback:${second.id}`]),
+				() =>
+					expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+						`feedback:${second.id}`,
+					]),
 				ROUTE_RENDER_WAIT,
 			);
 		});
@@ -369,7 +379,9 @@ describe("feedback approval level", () => {
 					screen.getByRole("button", { name: "Approve and open next" }).hasAttribute("disabled"),
 				).toBe(false),
 			);
-			expect(router.state.location.search.detail).toStrictEqual([`feedback:${oldest.id}`]);
+			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+				`feedback:${oldest.id}`,
+			]);
 			await queueSteps("1 of 3");
 		});
 
@@ -414,7 +426,9 @@ describe("feedback approval level", () => {
 			}, ROUTE_RENDER_WAIT);
 			await userEvent.click(row);
 			await screen.findByRole("dialog", { name: /^Feedback for/u }, ROUTE_RENDER_WAIT);
-			expect(router.state.location.search.detail).toStrictEqual([`feedback:${second.id}`]);
+			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+				`feedback:${second.id}`,
+			]);
 		});
 
 		/** A record opened over the queue while a decision is in flight is still there once it lands. */
@@ -439,7 +453,7 @@ describe("feedback approval level", () => {
 			await userEvent.click(within(feedbackLevel).getByRole("link", { name: source.summary }));
 			const opened = [`feedback:${oldest.id}`, `observation:${source.observationId}`];
 			await waitFor(
-				() => expect(router.state.location.search.detail).toStrictEqual(opened),
+				() => expect(stackInSearch(router.state.location.search.detail)).toStrictEqual(opened),
 				ROUTE_RENDER_WAIT,
 			);
 			decision.resolve();
@@ -453,7 +467,7 @@ describe("feedback approval level", () => {
 				).toBeNull(),
 			);
 			await sleep(100);
-			expect(router.state.location.search.detail).toStrictEqual(opened);
+			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual(opened);
 			screen.getByRole("dialog", { name: source.summary });
 		});
 
@@ -480,7 +494,10 @@ describe("feedback approval level", () => {
 			queueRead.resolve();
 
 			await waitFor(
-				() => expect(router.state.location.search.detail).toStrictEqual([`feedback:${second.id}`]),
+				() =>
+					expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+						`feedback:${second.id}`,
+					]),
 				ROUTE_RENDER_WAIT,
 			);
 			expect(router.state.location.search).toMatchObject({ queue: "approvals" });
@@ -511,7 +528,10 @@ describe("feedback approval level", () => {
 			await userEvent.click(screen.getByRole("button", { name: "Approve and open next" }));
 
 			await waitFor(
-				() => expect(router.state.location.search.detail).toStrictEqual([`feedback:${oldest.id}`]),
+				() =>
+					expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+						`feedback:${oldest.id}`,
+					]),
 				ROUTE_RENDER_WAIT,
 			);
 			expect(approved).toStrictEqual([newest.id]);
@@ -531,7 +551,7 @@ describe("feedback approval level", () => {
 			await within(level).findByText("1 of 3", undefined, ROUTE_RENDER_WAIT);
 			within(level).getByRole("button", { name: "Approve and open next" });
 			expect(router.state.location.search).toMatchObject({
-				detail: [`feedback:${oldest.id}`],
+				detail: `feedback:${oldest.id}`,
 				queue: "approvals",
 			});
 		});

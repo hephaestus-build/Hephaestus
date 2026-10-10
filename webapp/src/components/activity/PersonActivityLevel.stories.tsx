@@ -1,19 +1,21 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
+import { Button } from "@/components/ui/button";
+
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
-import { ada, OPEN_WORK, OVERVIEW, readyOverview, WORK_LOG } from "@/stories/activity-story-data";
-import { withPageBehind } from "@/stories/decorators";
+import { ada, OVERVIEW, readyOverview, WORK_LOG } from "@/stories/activity-story-data";
+import { withPageBehind, withProvider } from "@/stories/decorators";
 import { settledDrawerPanel } from "@/stories/overlay";
 import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
-import { memberLevel } from "./activity-search";
-import { MemberActivityLevel } from "./MemberActivityLevel";
+import { personLevel } from "./activity-search";
+import { PersonActivityLevel } from "./PersonActivityLevel";
 
 // The level has no page of its own, so every story mounts a real drawer over a real page.
 const meta = {
-	component: MemberActivityLevel,
+	component: PersonActivityLevel,
 	parameters: { layout: "fullscreen" },
 	decorators: [withPageBehind],
 	args: {
@@ -21,8 +23,7 @@ const meta = {
 		login: ada.login,
 		user: ada,
 		providerType: "GITHUB",
-		range: "30d",
-		openWork: { status: "ready", openWork: OPEN_WORK, login: ada.login },
+		period: { kind: "preset", preset: "90d" },
 		overview: readyOverview(OVERVIEW),
 		workLog: {
 			status: "ready",
@@ -39,15 +40,15 @@ const meta = {
 	argTypes: { path: { control: false } },
 	tags: ["autodocs"],
 	render: (args) => (
-		<Stateful initial={[memberLevel(ada.login)]}>
+		<Stateful initial={[personLevel(ada.login)]}>
 			{(stack, setStack) => (
 				<DetailDrawerStack
 					stack={stack}
-					size="detailWide"
+					size="detail"
 					onClose={(depth) => setStack(stack.slice(0, depth))}
 				>
 					{(_entry, level) => (
-						<MemberActivityLevel
+						<PersonActivityLevel
 							{...args}
 							nested={level.nested}
 							path={{
@@ -60,7 +61,7 @@ const meta = {
 			)}
 		</Stateful>
 	),
-} satisfies Meta<typeof MemberActivityLevel>;
+} satisfies Meta<typeof PersonActivityLevel>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -73,28 +74,23 @@ export const Default: Story = {
 			"href",
 			"https://github.com/ada",
 		);
-		// The same parts as the Activity page, named from the outside.
+		// The same parts as the Activity page, after what needs you.
 		const sections = panel
 			.getAllByRole("heading", { level: 3 })
 			.map((heading) => heading.textContent);
-		await expect(sections).toStrictEqual([
-			"Open work",
-			"Assigned issues",
-			"Last 30 days",
-			"Timeline",
-		]);
-		// A tile stacks its category over this member, which makes it this member's.
+		await expect(sections).toStrictEqual(["Last 90 days", "Repositories", "Timeline"]);
+		// A tile stacks its category over this person, which makes it this person's.
 		await expect(panel.getByRole("link", { name: /^Reviews/u })).toHaveAttribute(
 			"href",
-			expect.stringContaining("activity%3Areviews"),
+			expect.stringContaining("detail=activity:reviews"),
 		);
 	},
 };
 
-export const BeforeTheMemberListArrives: Story = {
+export const BeforeThePeopleArrive: Story = {
 	args: { user: undefined },
 	play: async () => {
-		// The login stands in for the name until the member list names them.
+		// The login stands in for the name until the people list names them.
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { name: "ada" })).toBeVisible();
 	},
@@ -109,7 +105,6 @@ export const Reflow: Story = {
 
 export const Loading: Story = {
 	args: {
-		openWork: { status: "loading" },
 		overview: { status: "loading" },
 		workLog: { status: "loading" },
 	},
@@ -118,3 +113,54 @@ export const Loading: Story = {
 		await expect(panel.queryByRole("link", { name: /^Reviews/u })).not.toBeInTheDocument();
 	},
 };
+
+/** Nobody by this login contributed in the period, which the level says instead of zeros. */
+export const Absent: Story = {
+	args: { user: undefined, absent: true },
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.getByText("No activity in this range")).toBeVisible();
+		await expect(panel.queryByRole("heading", { name: "Timeline" })).not.toBeInTheDocument();
+	},
+};
+
+const retry = fn();
+
+export const Failed: Story = {
+	args: {
+		overview: { status: "error", error: new Error("Network down"), onRetry: retry },
+		workLog: { status: "error", error: new Error("Network down"), onRetry: retry },
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.getAllByRole("alert")).toHaveLength(2);
+	},
+};
+
+/** A workspace admin sees how the account counts, in the level's footer. */
+export const WithAutomationAction: Story = {
+	args: {
+		automationAction: (
+			<Button variant="outline" size="sm">
+				Treat as automation
+			</Button>
+		),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.getByRole("button", { name: "Treat as automation" })).toBeVisible();
+	},
+};
+
+export const GitLab: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+};
+
+export const GitLabDark: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+	globals: { theme: "dark" },
+};
+
+export const Dark: Story = { globals: { theme: "dark" } };

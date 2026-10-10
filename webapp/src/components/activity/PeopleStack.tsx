@@ -38,7 +38,7 @@ export function PeopleStack({ people, providerType, "aria-label": label }: Peopl
 	const shown = people.slice(0, SHOWN);
 	const rest = people.slice(SHOWN);
 	return (
-		<ul aria-label={label} className="flex shrink-0 items-center gap-1">
+		<ul aria-label={label} className="flex shrink-0 items-center gap-1.5">
 			{shown.map((person) => {
 				const def = person.state === undefined ? undefined : REVIEWER_STATE_DEFS[person.state];
 				const StateIcon = def?.icon(providerType);
@@ -53,7 +53,7 @@ export function PeopleStack({ people, providerType, "aria-label": label }: Peopl
 								{def && StateIcon && (
 									<span
 										aria-hidden
-										className="absolute -right-1 -bottom-1 flex size-3.5 items-center justify-center rounded-full bg-card"
+										className="absolute -right-1.5 -bottom-1.5 flex size-3.5 items-center justify-center rounded-full bg-card"
 									>
 										<StateIcon
 											size={12}

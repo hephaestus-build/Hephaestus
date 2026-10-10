@@ -3,11 +3,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 
 import type { WorkItem, WorkspaceMembership } from "@/api/types.gen";
 import { ACTIVITY_CATEGORY_DEFS } from "@/components/activity/activity-kind-defs";
-import { rangeStart } from "@/components/activity/activity-range";
+import { periodFromSearch, periodSearch } from "@/components/activity/activity-period";
 import {
 	ACTIVITY_SEARCH_DEFAULTS,
 	type ActivitySearch,
 	activitySearchSchema,
+	PERIOD_SEARCH_KEYS,
 	parseActivityStack,
 	SELF_ACTIVITY_LEVEL_KINDS,
 } from "@/components/activity/activity-search";
@@ -15,11 +16,10 @@ import { ActivityDetailDrawer } from "@/components/activity/ActivityDetailDrawer
 import { type ActivityAccount, ActivityPage } from "@/components/activity/ActivityPage";
 import type { OpenWorkReviewNow } from "@/components/activity/OpenWorkSections";
 import { workLogTitle } from "@/components/activity/work-log-markdown";
-import { useNow } from "@/components/common/use-now";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
 import { buttonVariants } from "@/components/ui/button";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { useActivityOverview, useActivityWork, useOpenWork } from "@/hooks/use-activity";
+import { useActivityPerson, useActivityWork, useOpenWork } from "@/hooks/use-activity";
 import { useRequestPracticeReview } from "@/hooks/use-request-practice-review";
 import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
 import { pageHead } from "@/lib/page-title";
@@ -34,7 +34,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/activity"
 	head: pageHead("Activity"),
 	validateSearch: activitySearchSchema,
 	search: {
-		middlewares: carriedSearchParams<ActivitySearch>(["range"], ACTIVITY_SEARCH_DEFAULTS),
+		middlewares: carriedSearchParams<ActivitySearch>(PERIOD_SEARCH_KEYS, ACTIVITY_SEARCH_DEFAULTS),
 	},
 });
 
@@ -56,17 +56,18 @@ function Activity() {
 	const stackControls = useDetailStack(detailStack);
 	const openCategory = detailStack.at(-1)?.target;
 
-	const from = rangeStart(useNow(), search.range);
+	const period = periodFromSearch(search);
+	const userId = membership.data?.userId;
+	// Your own activity by your account, which the server counts even while you are hidden.
 	const scope = {
 		workspaceSlug,
-		login,
-		userId: membership.data?.userId,
-		from,
-		enabled: login !== undefined,
+		period,
+		userId,
+		enabled: login !== undefined && userId !== undefined,
 	};
 	const category = openCategory?.kind === "activity" ? openCategory.category : undefined;
 	const openWork = useOpenWork({ workspaceSlug, login });
-	const overview = useActivityOverview({ ...scope, range: search.range });
+	const overview = useActivityPerson(scope);
 	const timeline = useActivityWork({
 		...scope,
 		// Your own copy is headed by what it is; a member's or a team's names whose it is.
@@ -102,9 +103,12 @@ function Activity() {
 			<ActivityPage
 				providerType={providerType}
 				account={accountOf(membership, userView === undefined)}
-				range={search.range}
-				onRangeChange={(range) => {
-					void setSearch((previous) => ({ ...previous, range }), { state: true, replace: true });
+				period={period}
+				onPeriodChange={(next) => {
+					void setSearch((previous) => ({ ...previous, ...periodSearch(next) }), {
+						state: true,
+						replace: true,
+					});
 				}}
 				openWork={openWork}
 				overview={overview}
@@ -116,9 +120,8 @@ function Activity() {
 				onClose={stackControls.close}
 				pageLabel="Activity"
 				providerType={providerType}
-				range={search.range}
-				subject={{ people: "one", login }}
-				page={{ overview, categoryWorkLog }}
+				period={period}
+				owner={{ login, overview, workLog: timeline, categoryWorkLog }}
 			/>
 		</>
 	);

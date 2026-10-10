@@ -1,11 +1,14 @@
+import type { ReactNode } from "react";
+
 import { cn } from "cn";
 import type { ActivityAction } from "@/api/types.gen";
+import type { IconComponent } from "@/components/icons/provider-icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { capitalise } from "@/lib/text";
 
 import { ACTIVITY_KIND_DEFS, actionPhrase, countPhrase } from "./activity-kind-defs";
-import { ACTIVITY_TONES } from "./activity-tones";
+import { ACTIVITY_TONES, type ActivityTone } from "./activity-tones";
 
 /**
  * How a chip names what happened, by the room it has. `labelled` — a tile, a chart's legend — is
@@ -30,7 +33,6 @@ export interface ActionChipProps {
  */
 export function ActionChip({ action, providerType, display }: ActionChipProps) {
 	const def = ACTIVITY_KIND_DEFS[action.kind];
-	const Icon = def.icon(providerType);
 	const byLabel = display === "work" && def.chip === "label";
 	const phrase = capitalise(
 		byLabel
@@ -38,31 +40,62 @@ export function ActionChip({ action, providerType, display }: ActionChipProps) {
 			: countPhrase(action.kind, action.count, providerType),
 	);
 	return (
+		<CountChip icon={def.icon(providerType)} tone={def.tone} phrase={phrase}>
+			<span
+				aria-hidden
+				className={cn(byLabel ? "text-muted-foreground" : "font-medium tabular-nums")}
+			>
+				{byLabel ? def.label : action.count.toLocaleString("en-GB")}
+			</span>
+			{byLabel && action.count > 1 && (
+				<span aria-hidden className="font-medium tabular-nums">
+					×{action.count}
+				</span>
+			)}
+			{display === "labelled" && (
+				<span aria-hidden className="text-muted-foreground">
+					{def.countLabel}
+				</span>
+			)}
+		</CountChip>
+	);
+}
+
+export interface CountChipProps {
+	icon: IconComponent;
+	tone: ActivityTone;
+	/** The whole phrase, its tooltip and its accessible name: "12 pull requests reviewed". */
+	phrase: string;
+	/** What the chip shows after its icon, hidden from assistive technology, which reads `phrase`. */
+	children: ReactNode;
+}
+
+/** An icon in its tone and what it counts, spoken as one phrase: every chip's shape. */
+export function CountChip({ icon: Icon, tone, phrase, children }: CountChipProps) {
+	return (
 		<Tooltip>
 			<TooltipTrigger
 				render={<span role="img" aria-label={phrase} />}
-				className="inline-flex items-center gap-1 text-sm whitespace-nowrap"
+				className="inline-flex items-center gap-1 align-middle text-sm whitespace-nowrap"
 			>
-				<Icon size={16} className={cn("shrink-0", ACTIVITY_TONES[def.tone].text)} />
-				<span
-					aria-hidden
-					className={cn(byLabel ? "text-muted-foreground" : "font-medium tabular-nums")}
-				>
-					{byLabel ? def.label : action.count}
-				</span>
-				{byLabel && action.count > 1 && (
-					<span aria-hidden className="font-medium tabular-nums">
-						×{action.count}
-					</span>
-				)}
-				{display === "labelled" && (
-					<span aria-hidden className="text-muted-foreground">
-						{def.countLabel}
-					</span>
-				)}
+				<Icon size={16} className={cn("shrink-0", ACTIVITY_TONES[tone].text)} />
+				{children}
 			</TooltipTrigger>
 			<TooltipContent>{phrase}</TooltipContent>
 		</Tooltip>
+	);
+}
+
+/**
+ * A table cell with nothing in it: one muted dash, which a column of figures reads past, read as
+ * "None" under its column's header.
+ */
+export function NoneMark() {
+	return (
+		<span className="text-muted-foreground">
+			<span aria-hidden>—</span>
+			<span className="sr-only">None</span>
+		</span>
 	);
 }
 

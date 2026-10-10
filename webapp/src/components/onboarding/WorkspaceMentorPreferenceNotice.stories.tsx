@@ -27,7 +27,7 @@ export const Default: Story = {
 		);
 		await expect(canvas.getByRole("link", { name: "Change your AI choice" })).toHaveAttribute(
 			"href",
-			expect.stringContaining("returnTo=%2Fw%2Facme%2Fmentor"),
+			expect.stringContaining("returnTo=/w/acme/mentor"),
 		);
 	},
 };
@@ -40,7 +40,7 @@ export const ChoiceRequired: Story = {
 		);
 		await expect(canvas.getByRole("link", { name: "Make your AI choice" })).toHaveAttribute(
 			"href",
-			expect.stringContaining("returnTo=%2Fw%2Facme%2Fmentor"),
+			expect.stringContaining("returnTo=/w/acme/mentor"),
 		);
 	},
 };
@@ -72,7 +72,7 @@ export const Unavailable: Story = {
 		);
 		await expect(canvas.getByRole("link", { name: "Change your AI choice" })).toHaveAttribute(
 			"href",
-			expect.stringContaining("returnTo=%2Fw%2Facme%2Fmentor"),
+			expect.stringContaining("returnTo=/w/acme/mentor"),
 		);
 	},
 };

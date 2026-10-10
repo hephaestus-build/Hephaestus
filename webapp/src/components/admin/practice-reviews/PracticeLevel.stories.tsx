@@ -94,8 +94,8 @@ export const Default: Story = {
 		const negative = new URL(
 			observed.getByRole<HTMLAnchorElement>("link", { name: "9 not met observations" }).href,
 		);
-		await expect(negative.searchParams.get("outcome")).toBe('["NOT_MET"]');
-		await expect(negative.searchParams.get("practiceSlug")).toBe(`["${SLUG}"]`);
+		await expect(negative.searchParams.getAll("outcome")).toStrictEqual(["NOT_MET"]);
+		await expect(negative.searchParams.getAll("practiceSlug")).toStrictEqual([SLUG]);
 		// What an admin marked incorrect, out of all of them, and what that share means.
 		within(panel.getByRole("list", { name: "Observations checked by an admin" })).getByRole(
 			"link",
@@ -116,7 +116,7 @@ export const Default: Story = {
 			cited.getByRole<HTMLAnchorElement>("link", { name: "2 awaiting approval" }).href,
 		);
 		await expect(awaiting.pathname).toBe("/w/demo/admin/practices/reviews/feedback");
-		await expect(awaiting.searchParams.get("practiceSlug")).toBe(`["${SLUG}"]`);
+		await expect(awaiting.searchParams.getAll("practiceSlug")).toStrictEqual([SLUG]);
 
 		const [firstRow] = within(panel.getByRole("list", { name: "Observations" })).getAllByRole(
 			"link",
@@ -130,7 +130,7 @@ export const Default: Story = {
 			panel.getByRole<HTMLAnchorElement>("link", { name: "See all 9 observations" }).href,
 		);
 		await expect(all.searchParams.get("order")).toBeNull();
-		await expect(all.searchParams.get("practiceSlug")).toBe(`["${SLUG}"]`);
+		await expect(all.searchParams.getAll("practiceSlug")).toStrictEqual([SLUG]);
 		// One primary: edit the definition. Reading it in setup is the secondary.
 		await expect(levelsOpenedBy(panel.getByRole("link", { name: "Edit practice" }))).toEqual([
 			`practice-edit:${SLUG}`,

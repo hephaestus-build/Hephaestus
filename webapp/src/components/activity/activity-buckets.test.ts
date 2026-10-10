@@ -1,71 +1,67 @@
 import { describe, expect, it } from "vitest";
-import type { ActivitySummary, ActivityBucket } from "@/components/activity/activity-view";
 
 import {
 	averagePerBucket,
 	bucketLabel,
-	bucketSummary,
 	deltaPhrase,
 	startLabel,
-	totalRows,
+	weekRows,
+	weeksSummary,
 } from "./activity-buckets";
+import { type ActivityTally, tallyOf } from "./activity-tally";
 
-const ZERO: ActivitySummary = {
-	pullRequestsOpened: 0,
-	pullRequestsMerged: 0,
-	pullRequestsClosed: 0,
-	approvals: 0,
-	changeRequests: 0,
-	commentReviews: 0,
-	comments: 0,
-	codeComments: 0,
-	issuesOpened: 0,
-	issuesClosed: 0,
-};
+const ZERO = tallyOf(
+	{
+		activeWeeks: 0,
+		comments: 0,
+		contributions: 0,
+		issuesOpened: 0,
+		peopleHelped: 0,
+		pullRequestsMerged: 0,
+		pullRequestsOpened: 0,
+		pullRequestsReviewed: 0,
+	},
+	{
+		approvals: 0,
+		changeRequests: 0,
+		codeComments: 0,
+		commentReviews: 0,
+		discussionComments: 0,
+		issuesClosed: 0,
+		pullRequestsClosed: 0,
+	},
+);
 
-const bucket = (day: number, counts: Partial<ActivitySummary>): ActivityBucket => ({
+const week = (day: number, counts: Partial<ActivityTally>) => ({
 	start: new Date(2026, 8, day),
-	summary: { ...ZERO, ...counts },
+	tally: { ...ZERO, ...counts },
 });
 
-const buckets = [
-	bucket(21, { approvals: 1 }),
-	bucket(22, { approvals: 2, changeRequests: 1 }),
-	bucket(23, { approvals: 3 }),
-	bucket(24, {}),
+const weeks = [
+	week(7, { REVIEW_APPROVED: 1 }),
+	week(14, { REVIEW_APPROVED: 2, pullRequestsReviewed: 3 }),
+	week(21, { REVIEW_APPROVED: 3, pullRequestsReviewed: 3 }),
+	week(28, {}),
 ];
 
-const summary = { ...ZERO, approvals: 6, changeRequests: 1 };
+const tally = { ...ZERO, REVIEW_APPROVED: 6, pullRequestsReviewed: 6 };
 
-/** All of September 2026, which every fixture bucket falls in. */
-const span = { from: new Date(2026, 8, 1), to: new Date(2026, 9, 1) };
+/** All of September 2026 and the first days of October. */
+const span = { from: new Date(2026, 8, 7), to: new Date(2026, 9, 5) };
 
-const reviews = ["REVIEW_APPROVED", "REVIEW_CHANGES_REQUESTED", "REVIEW_COMMENTED"] as const;
-
-describe("bucketSummary", () => {
-	it("says the total and the busiest bucket in numbers, the earliest on a tie", () => {
+describe("weeksSummary", () => {
+	it("says the total and the busiest week in numbers, the earliest on a tie", () => {
 		expect(
-			bucketSummary({ bucket: "DAY", buckets, summary }, span, reviews, {
-				one: "review",
-				many: "reviews",
+			weeksSummary({ tally, weeks }, span, (counted) => counted.pullRequestsReviewed, {
+				one: "pull request reviewed",
+				many: "pull requests reviewed",
 			}),
-		).toBe("7 reviews. Busiest day Tuesday 22 September, 3");
+		).toBe("6 pull requests reviewed. Busiest week 14–20 September 2026, 3");
 	});
 
-	it("names a week and a month the way a sentence does", () => {
-		const weekly = { bucket: "WEEK" as const, buckets, summary };
+	it("names no busiest week when nothing happened", () => {
 		expect(
-			bucketSummary(weekly, span, ["REVIEW_APPROVED"], { one: "approval", many: "approvals" }),
-		).toBe("6 approvals. Busiest week 23–29 September 2026, 3");
-		const monthly = { bucket: "MONTH" as const, buckets: [bucket(1, { approvals: 6 })], summary };
-		expect(
-			bucketSummary(monthly, span, ["REVIEW_APPROVED"], { one: "approval", many: "approvals" }),
-		).toBe("6 approvals. Busiest month September 2026, 6");
-	});
-
-	it("names no busiest bucket when nothing happened", () => {
-		expect(
-			bucketSummary({ bucket: "DAY", buckets, summary }, span, ["ISSUE_OPENED"], {
+			weeksSummary({ tally, weeks }, span, (counted) => counted.ISSUE_OPENED, {
 				one: "opened",
 				many: "opened",
 			}),
@@ -94,13 +90,13 @@ describe("bucketLabel", () => {
 	});
 });
 
-describe("totalRows", () => {
-	it("gives every bucket a row, zeros included, counting the kinds together", () => {
-		expect(totalRows(buckets, ["REVIEW_APPROVED", "REVIEW_CHANGES_REQUESTED"])).toStrictEqual([
-			{ start: buckets[0]?.start.getTime(), count: 1 },
-			{ start: buckets[1]?.start.getTime(), count: 3 },
-			{ start: buckets[2]?.start.getTime(), count: 3 },
-			{ start: buckets[3]?.start.getTime(), count: 0 },
+describe("weekRows", () => {
+	it("gives every week a row, zeros included", () => {
+		expect(weekRows(weeks, (counted) => counted.REVIEW_APPROVED)).toStrictEqual([
+			{ start: weeks[0]?.start.getTime(), count: 1 },
+			{ start: weeks[1]?.start.getTime(), count: 2 },
+			{ start: weeks[2]?.start.getTime(), count: 3 },
+			{ start: weeks[3]?.start.getTime(), count: 0 },
 		]);
 	});
 });

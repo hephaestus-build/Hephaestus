@@ -65,7 +65,7 @@ export const Default: Story = {
 		// A real link: the level it opens is an address, so it opens in a new tab and reloads.
 		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toHaveAttribute(
 			"href",
-			expect.stringContaining("practice-groups%3Aall"),
+			expect.stringContaining("practice-groups:all"),
 		);
 		// The paragraph names two things and counts the rest, which unfolds in place.
 		await expect(canvas.getByRole("button", { name: /^Show the/u })).toBeVisible();
