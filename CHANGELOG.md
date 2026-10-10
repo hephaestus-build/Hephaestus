@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.89.1
+
+### Patch Changes
+
+- Error-handling review standards judge severity from a path's source-established role and consequence. An optional or best-effort operation does not automatically count as a major shortfall.
+
 ## 0.89.0
 
 ### Minor Changes
