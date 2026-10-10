@@ -13,7 +13,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -30,16 +29,8 @@ class PracticeCriteriaCaseStagingIntegrationTest {
     @TempDir
     Path root;
 
-    static Stream<JsonNode> criteriaCases() throws IOException {
-        var cases = JsonMapper.builder()
-                .build()
-                .readTree(Path.of("src/test/resources/practices/criteria-cases.json")
-                        .toFile());
-        return StreamSupport.stream(cases.spliterator(), false);
-    }
-
-    @ParameterizedTest(name = "criteria case {index}")
-    @MethodSource("criteriaCases")
+    @ParameterizedTest(name = CriteriaCaseSelection.NAME)
+    @MethodSource(CriteriaCaseSelection.SOURCE)
     void shouldStageCompleteSourcesAndShippedCriteriaWithoutReferenceAnswers(JsonNode scenario) throws Exception {
         var mapper = JsonMapper.builder().build();
         Path workspace = root.resolve(scenario.path("id").asString());
