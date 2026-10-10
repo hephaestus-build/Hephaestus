@@ -5,8 +5,6 @@ readonly HTML_DIR="/usr/share/nginx/html"
 readonly INDEX_HTML="${HTML_DIR}/index.html"
 readonly ENV_TS="/app/src/environment/index.ts"
 
-readonly WORKSPACE_BASE_DOMAIN_PATTERN='^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]([a-z0-9-]{0,61}[a-z0-9])?$'
-
 # Must match LEGAL_PROFILE_PATTERN_SOURCE in webapp/src/lib/legal.ts. A unit
 # test pins them together — keep both in sync if you widen the policy.
 readonly LEGAL_PROFILE_PATTERN='^[a-z0-9][a-z0-9_-]{0,31}$'
@@ -36,25 +34,6 @@ extract_env_vars() {
 }
 
 main() {
-  # nginx envsubst substitutes these values into configuration, not just JavaScript.
-  case "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}" in
-    true|false) ;;
-    *) log "ERROR: HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED must be true or false"; exit 1 ;;
-  esac
-  if [[ "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}" == "true" ]]; then
-    local base="${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}"
-    if [[ ! "$base" =~ $WORKSPACE_BASE_DOMAIN_PATTERN || ${#base} -gt 189 ||
-          "${APPLICATION_CLIENT_URL:-}" != "https://${base}" ||
-          "${APPLICATION_SERVER_URL:-}" != "https://${base}/api" ]]; then
-      log "ERROR: Subdomains require a DNS base domain and matching HTTPS apex client and API URLs"
-      exit 1
-    fi
-  elif [[ -n "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}" &&
-          ! "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN}" =~ $WORKSPACE_BASE_DOMAIN_PATTERN ]]; then
-    log "ERROR: Invalid workspace subdomain base domain"
-    exit 1
-  fi
-
   # Recover git metadata from build-time variables if runtime vars are empty/missing
   # Coolify tends to inject empty GIT_COMMIT/SOURCE_COMMIT at runtime, overriding baked ENV vars.
   if [[ -z "${GIT_COMMIT:-}" && -n "${BUILD_GIT_COMMIT:-}" ]]; then

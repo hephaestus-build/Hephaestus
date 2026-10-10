@@ -62,8 +62,6 @@ services:
       APPLICATION_VERSION: ${IMAGE_TAG}
       APPLICATION_CLIENT_URL: https://${APP_HOSTNAME}
       APPLICATION_SERVER_URL: https://${APP_HOSTNAME}/api
-      HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}
-      HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}
       # Imprint/privacy source. Leave unset and bind-mount a host directory
       # onto /usr/share/nginx/html/legal-overrides for forks. Use "tumaet" only
       # for the canonical AET deployment. See docs/admin/legal-pages.mdx.

@@ -164,10 +164,20 @@ await test("capability-link pages suppress referrers before scripts or assets lo
 		"../docker/compose.proxy.yaml",
 		"../docker/self-host/compose.single-host.yaml",
 	]) {
-		assert.match(
+		const configuredLabels = parseDocument(
 			readFileSync(new URL(file, import.meta.url), "utf8"),
-			/traefik\.http\.middlewares\.security-headers\.headers\.referrerPolicy=no-referrer/u,
-		);
+		).getIn(["services", "reverse-proxy", "labels"], true);
+		const key = "traefik.http.middlewares.security-headers.headers.referrerPolicy";
+		if (isSeq(configuredLabels)) {
+			assert.ok(
+				configuredLabels.items.some(
+					(item) => isScalar(item) && item.value === `${key}=no-referrer`,
+				),
+			);
+		} else {
+			assert.ok(isMap(configuredLabels));
+			assert.equal(configuredLabels.get(key), "no-referrer");
+		}
 	}
 });
 

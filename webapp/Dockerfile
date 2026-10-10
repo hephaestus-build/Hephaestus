@@ -45,11 +45,8 @@ ENV BUILD_GIT_BRANCH=$COOLIFY_BRANCH BUILD_GIT_COMMIT=$SOURCE_COMMIT
 COPY --from=build /repo/webapp/dist /usr/share/nginx/html
 COPY webapp/docker/entrypoint.sh /entrypoint.sh
 COPY webapp/docker/nginx.conf /etc/nginx/conf.d/default.conf
-COPY webapp/docker/workspace-subdomains.conf.template /etc/nginx/templates/workspace-subdomains.conf.template
-ENV HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED=false HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN=""
-ENV NGINX_ENVSUBST_FILTER="^HEPHAESTUS_WORKSPACE_SUBDOMAINS_(ENABLED|BASE_DOMAIN)$"
 COPY webapp/docker/security-headers.conf /etc/nginx/security-headers.conf
 COPY webapp/src/environment/index.ts /app/src/environment/index.ts
 RUN chmod +x /entrypoint.sh
 EXPOSE 80
-ENTRYPOINT ["/bin/bash", "-c", "/entrypoint.sh && exec /docker-entrypoint.sh nginx -g 'daemon off;'"]
+ENTRYPOINT ["/bin/bash", "-c", "/entrypoint.sh && exec nginx -g 'daemon off;'"]

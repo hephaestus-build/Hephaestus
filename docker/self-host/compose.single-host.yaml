@@ -152,8 +152,3 @@ networks:
       config:
         - subnet: 172.29.47.0/24
           ip_range: 172.29.47.128/25
-
-configs:
-  traefik-dynamic:
-    # include sets the project directory to docker/self-host, not docker.
-    file: ../traefik/dynamic.yml

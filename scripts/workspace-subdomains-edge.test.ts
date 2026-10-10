@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
 import { parseDocument } from "yaml";
 import { asString, parseJson } from "./lib/json.ts";
 
 const read = (file: string) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
-const edge = read("docker/traefik/dynamic.yml");
-const nginx = read("webapp/docker/workspace-subdomains.conf.template");
+const compose = parseDocument(read("docker/compose.proxy.yaml"));
+const edge = asString(compose.get("x-traefik-dynamic"), "edge template").replaceAll("$$", "$");
+const start = asString(compose.get("x-traefik-start"), "proxy validation").replaceAll("$$", "$");
 
 await test("the file-provider TLS default requires TLS 1.2", () => {
 	const configuration = parseDocument(edge.slice(0, edge.indexOf("{{")));
@@ -30,69 +29,47 @@ await test("tenant host and redirect policies reserve every server label", () =>
 	assert.ok(labels.length > 0);
 	const expected = new Set([...labels, "pr[0-9]+"]);
 	const edgeLabels = /\$reserved := "(?<labels>[^"]+)"/u.exec(edge)?.groups?.labels;
-	const redirectLabels = /\^\/w\/\((?<labels>[^)]+)\)/u.exec(nginx)?.groups?.labels;
-	for (const actual of [edgeLabels, redirectLabels]) {
-		assert.ok(actual !== undefined);
-		assert.deepEqual(new Set(actual.split("|")), expected);
-	}
+	assert.ok(edgeLabels !== undefined);
+	assert.deepEqual(new Set(edgeLabels.split("|")), expected);
 });
 
-await test("only the webapp gets public runtime settings and only the proxy gets DNS credentials", () => {
+await test("DNS credential values stay outside Compose and only the proxy mounts them", () => {
 	const proxy = read("docker/compose.proxy.yaml");
-	assert.match(proxy, /path: \$\{TRAEFIK_DNS_ENV_FILE:/u);
+	assert.doesNotMatch(proxy, /env_file:/u);
+	assert.match(proxy, /:\/run\/secrets\/dns:ro/u);
+	assert.match(start, /export "\$variable=\/run\/secrets\/dns\/token"/u);
 	for (const file of [
 		"docker/compose.app.yaml",
 		"docker/compose.core.yaml",
 		"docker/preview/compose.app.yaml",
 	]) {
-		assert.doesNotMatch(read(file), /CF_DNS_API_TOKEN|TRAEFIK_DNS_ENV_FILE/u);
+		assert.doesNotMatch(read(file), /CF_DNS_API_TOKEN|TRAEFIK_DNS_CREDENTIAL/u);
 	}
 	assert.match(read("webapp/docker/security-headers.conf"), /connect-src 'self' https:/u);
-	assert.match(
-		read("webapp/Dockerfile"),
-		/NGINX_ENVSUBST_FILTER="\^HEPHAESTUS_WORKSPACE_SUBDOMAINS_\(ENABLED\|BASE_DOMAIN\)\$"/u,
-	);
 });
 
-await test("the proxy and nginx use the server's DNS base-domain constraints", () => {
+await test("proxy startup and routing use the server's DNS base-domain constraints", () => {
 	const server = read(
 		"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/WorkspaceSubdomainProperties.java",
 	);
 	const encoded = /Pattern.compile\(\s*(?<pattern>"[^"]*")/u.exec(server)?.groups?.pattern;
 	assert.ok(encoded !== undefined);
 	const pattern = `^${asString(parseJson(encoded), "domain pattern").replaceAll("(?:", "(")}$`;
-	const shell = /readonly WORKSPACE_BASE_DOMAIN_PATTERN='(?<pattern>[^']*)'/u.exec(
-		read("webapp/docker/entrypoint.sh"),
-	)?.groups?.pattern;
-	assert.equal(shell, pattern);
-	assert.ok(edge.includes(pattern.replaceAll(String.raw`\.`, "[.]")));
+	assert.ok(start.includes(pattern.replaceAll(String.raw`\.`, "[.]")));
 });
 
-await test("nginx startup rejects untrusted template values before writing configuration", () => {
-	for (const domain of [
-		"",
-		"https://example.com",
-		"Example.com",
-		`${"a".repeat(64)}.com`,
-		'example.com"; #',
-		"example.com\n}",
-		"example.123",
-	]) {
-		const result = spawnSync(
-			"bash",
-			[fileURLToPath(new URL("../webapp/docker/entrypoint.sh", import.meta.url))],
-			{
-				encoding: "utf8",
-				env: {
-					...process.env,
-					HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "true",
-					HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: domain,
-					APPLICATION_CLIENT_URL: `https://${domain}`,
-					APPLICATION_SERVER_URL: `https://${domain}/api`,
-				},
-			},
-		);
-		assert.equal(result.status, 1, domain);
-		assert.match(result.stderr, /Subdomains require a DNS base domain/u);
-	}
+await test("tenant hosts and apex redirects use the server's slug constraints", () => {
+	const server = read(
+		"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/validation/WorkspaceSlugValidator.java",
+	);
+	const pattern = /LABEL_PATTERN = "(?<pattern>[^"]+)"/u.exec(server)?.groups?.pattern;
+	assert.ok(pattern !== undefined);
+	assert.equal(pattern, "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$");
+	assert.match(server, /MIN_LENGTH = 3;/u);
+	assert.match(server, /MAX_LENGTH = 51;/u);
+	assert.ok(edge.includes("HostRegexp(`^[a-z0-9][a-z0-9-]{1,49}[a-z0-9][.]"));
+	assert.ok(edge.includes("!HostRegexp(`^.*--.*$`)"));
+	assert.ok(edge.includes("PathRegexp(`^/w/[a-z0-9][a-z0-9-]{1,49}[a-z0-9](/|$)`)"));
+	assert.ok(edge.includes("!PathRegexp(`^/w/[a-z0-9-]*--`)"));
+	assert.ok(edge.includes("!PathRegexp(`^/w/({{ $reserved }})(/|$)`"));
 });

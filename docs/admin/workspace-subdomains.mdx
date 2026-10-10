@@ -7,6 +7,9 @@ sidebar_position: 18
 Workspace subdomains give each workspace an address such as `https://ls1intum.hephaestus.build`.
 Authentication and the API stay on the apex, `https://hephaestus.build`.
 The instance switch is off by default.
+Keep it off until a later release supports workspace addresses in the web app.
+This release prepares the edge.
+It does not add tenant-host navigation.
 
 ## Configure the server
 
@@ -36,18 +39,20 @@ hephaestus:
     api-base-path: /api
 ```
 
-Keep the switch off until the edge and SPA support tenant hosts.
 The server switch alone does not configure DNS, TLS, redirects, or SPA routes.
 Use DNS-only records and a DNS-01 wildcard certificate, as [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md) requires.
 Cloudflare must not proxy these hosts.
 
-Before you turn it on, configure the edge and deploy the tenant-host SPA.
-To turn it off, set `enabled` to `false` and restart the server.
+Before you turn it on in a supported release, configure DNS, TLS, and the apex callbacks.
+To turn it off, set `enabled` to `false` in the app and proxy settings and recreate both.
 Keep the apex workspace paths available.
 
 ## Configure DNS and the edge
 
-DNS and TLS can be prepared before the tenant-host SPA is deployed.
+DNS and TLS can be prepared while the switch stays off.
+If the zone has CAA records, allow `letsencrypt.org` in `issue` for the apex.
+If it has `issuewild` records, they must also allow `letsencrypt.org` for the wildcard.
+See [CAA guidance](https://letsencrypt.org/docs/caa/).
 The edge serves the same trusted SPA on every valid tenant host.
 It does not check whether a workspace exists.
 
@@ -60,7 +65,7 @@ It does not check whether a workspace exists.
 5. Open **My Profile → API Tokens → Create Token** and select **Edit zone DNS**.
 6. Add **Zone → Zone → Read** and **Zone → DNS → Edit** permissions.
 7. Set **Zone Resources** to **Include → Specific zone → hephaestus.build**.
-8. Save the token in the proxy host's credential file, not in Git or the webapp environment.
+8. Save only the raw token in `/etc/hephaestus/dns/token`, with file mode `0600`.
 
 Use one zone-scoped token with both permissions.
 Do not use the account's global API key.
@@ -80,22 +85,27 @@ The proxy chooses one ACME challenge through these optional variables:
 | --- | --- | --- |
 | `ACME_CHALLENGE` | `httpchallenge.entrypoint` | `dnschallenge.provider` |
 | `ACME_CHALLENGE_VALUE` | `http` | Your lego DNS provider, such as `cloudflare` |
-| `TRAEFIK_DNS_ENV_FILE` | `/etc/hephaestus/dns.env` | Absolute path to the proxy-only credential file |
+| `TRAEFIK_DNS_CREDENTIALS_DIRECTORY` | `/etc/hephaestus/dns` | Absolute path to the proxy-only credential directory |
+| `TRAEFIK_DNS_CREDENTIAL_VARIABLE` | `CF_DNS_API_TOKEN_FILE` | Your provider's credential variable with the `_FILE` suffix |
 
-For Cloudflare, put this entry in the credential file:
+For Cloudflare, create the credential directory with mode `0700`.
+Put only the raw zone-scoped token in its `token` file, with mode `0600`.
+Keep the directory outside release trees.
 
-```dotenv
-CF_DNS_API_TOKEN=<zone-scoped-token>
-```
-
-Create the file with mode `0600` and limit host access to the deployment operator.
-Compose passes it only to Traefik.
-The file is optional for HTTP-01 deployments.
-Cloudflare DNS-01 needs the token before certificate issuance.
-Never print its contents in diagnostics or add it to a release artifact.
+The proxy mounts it read-only at `/run/secrets/dns`.
+lego reads the token through `CF_DNS_API_TOKEN_FILE=/run/secrets/dns/token`.
+Compose output and container environment values contain paths, not the token.
+Never add the token to an environment file, diagnostics, or a release artifact.
+HTTP-01 deployments need no token.
 
 For another provider, use its name and required variables from [lego's provider list](https://go-acme.github.io/lego/dns/).
 Choose a provider that supports certificates for both a wildcard and its apex.
+Set `TRAEFIK_DNS_CREDENTIAL_VARIABLE` to its `_FILE` credential name.
+
+For a provider with multiple credentials, store the other files in the same directory.
+Add its other `_FILE` variables to the proxy environment through a Compose override.
+Each value must point to its file under `/run/secrets/dns`.
+See [lego credential files](https://go-acme.github.io/lego/dns/#configuration-and-credentials).
 Do not disable DNS propagation checks.
 Allow the proxy to reach the provider API and public DNS servers.
 
@@ -107,11 +117,12 @@ HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED=true
 HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN=hephaestus.build
 ACME_CHALLENGE=dnschallenge.provider
 ACME_CHALLENGE_VALUE=cloudflare
-TRAEFIK_DNS_ENV_FILE=/etc/hephaestus/dns.env
+TRAEFIK_DNS_CREDENTIALS_DIRECTORY=/etc/hephaestus/dns
+TRAEFIK_DNS_CREDENTIAL_VARIABLE=CF_DNS_API_TOKEN_FILE
 ```
 
 In pull-based production deployment, set the switch and base domain in both `app.env` and `proxy.env`.
-Set the ACME variables and credential-file path in `proxy.env` only.
+Set the ACME variables and credential-directory path in `proxy.env` only.
 The promotion workflow selects a verified release.
 It does not upload or replace host secrets.
 See [pull-based deployment](./pull-based-deployment.mdx).
@@ -125,30 +136,23 @@ With subdomains off, the default remains HTTP-01.
 Keep a working DNS-01 configuration during switch reversal if other services still use the wildcard certificate.
 See [Traefik ACME](https://doc.traefik.io/traefik/reference/install-configuration/tls/certificate-resolvers/acme/).
 
-### Routing and reversal
+### Check and turn off
 
-The proxy's native file-provider template enables tenant routers only when the switch is `true`.
-They use an anchored, single-label host expression and reject the server's reserved labels.
-The tenant SPA router has priority 6, above the canonical-host redirect at priority 4.
-Maintenance uses the same tenant host and path restrictions at priority 1.
+In a release that supports tenant-host navigation, set the switch and base domain in both app and proxy settings.
+Recreate the app and proxy with Compose's `--wait` option.
+Invalid edge settings stop the proxy with a clear startup error instead of serving a partial configuration.
+Check the container logs if Compose reports a startup failure.
 
-Tenant `/api`, auth, OAuth, sign-in, consent, webhook, and management paths have no application route.
+Check that a valid workspace host has a trusted certificate and serves the web app.
+Check that an apex `/w/<slug>` link redirects to the same path and query on its workspace host.
+Apex sign-in, consent, auth, legal, unsubscribe, instance administration, and settings stay on the apex.
+Tenant hosts must not serve API or OAuth paths.
 Do not add tenant hosts or broad wildcard expressions to `APP_HOST_MATCH`.
 That variable is only for the apex and explicit instance aliases.
 
-The webapp container's nginx owns the `/w/<slug>` redirect, not the client router.
-On the apex, it returns 308 and keeps the escaped path and query.
-It rejects invalid and reserved tenant labels.
-The redirect sends `Cache-Control: no-store`, so a browser does not keep it after switch reversal.
-
-Apex sign-in, consent, auth, legal, unsubscribe, instance administration, and settings paths remain unchanged.
-The tenant runtime configuration points `APPLICATION_SERVER_URL` at the HTTPS apex `/api`.
-The existing CSP permits HTTPS API connections.
-
-Turn the switch off in the app and proxy settings and recreate both containers.
-Tenant routes disappear and apex workspace paths serve the SPA again.
+To turn it off, set the switch to `false` in app and proxy settings and recreate both with `--wait`.
+Apex workspace links then serve the web app without a tenant redirect.
 No DNS record, credential, or ACME-state deletion is needed.
-See [Traefik file templates](https://doc.traefik.io/traefik/reference/dynamic-configuration/file/) and [nginx return](https://nginx.org/en/docs/http/ngx_http_rewrite_module.html#return).
 
 ### Check the same-site precondition
 

@@ -384,8 +384,6 @@ services:
     restart: unless-stopped
     environment:
       APPLICATION_VERSION: preview
-      HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "false"
-      HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: ""
       APPLICATION_CLIENT_URL: https://${SERVICE_FQDN_WEBAPP}
       GIT_BRANCH: ${COOLIFY_BRANCH:-}
       # One origin, as production has: the API answers under the app's own hostname at /api, and

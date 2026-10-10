@@ -1,3 +1,98 @@
+x-traefik-dynamic: &traefik-dynamic |
+  tls:
+    options:
+      default:
+        minVersion: VersionTLS12
+
+  {{ if eq (env "HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED") "true" }}
+  {{ $$base := env "HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN" }}
+  {{ $$domain := regexQuoteMeta $$base }}
+  {{ $$reserved := "www|api|docs|admin|auth|login|mail|status|staging|preview|info|marketing|sales|support|abuse|noc|security|postmaster|hostmaster|usenet|news|webmaster|uucp|ftp|w|settings|integrations|consent|legal|privacy|terms|unsubscribe|landing|oauth|oauth2|webhooks|actuator|livez|readyz|error|swagger-ui|v3|identity-providers|workspaces|workers|mentor|feedback|practices|activity|about|imprint|audit|catalog|login-providers|models|person-data|surveys|usage|users|onboarding|practice-profile|practices-across-the-workspace|workspace-activity|new|github|gitlab|members|teams|outline|scm|slack|releases|review|reviews|user|observations|runs|work|practice-groups|assets|static|cdn|traefik|grafana|prometheus|nats|postgres|registry|agents|config-audit|connections|contributors|internal|llm|practice-catalog|product-feedback|sync|team|user-view|notifications|providers|pr[0-9]+" }}
+  {{ $$tenant := printf "HostRegexp(`^[a-z0-9][a-z0-9-]{1,49}[a-z0-9][.]%s$$`) && !HostRegexp(`^(%s)[.]%s$$`) && !HostRegexp(`^.*--.*$$`)" $$domain $$reserved $$domain }}
+  {{ $$paths := "!PathRegexp(`^/(api|auth|oauth|oauth2|login|consent|webhooks|actuator)(/|$$)`)" }}
+  http:
+    middlewares:
+      workspace-no-cache:
+        headers:
+          customResponseHeaders:
+            Cache-Control: no-store
+      workspace-address:
+        redirectRegex:
+          regex: '{{ printf `^https://%s/w/([a-z0-9][a-z0-9-]{1,49}[a-z0-9])(?:/([^?]*))?(\?.*)?$$` $$domain }}'
+          replacement: 'https://$${1}.{{ $$base }}/$${2}$${3}'
+          permanent: true
+    routers:
+      https-workspace-address:
+        entryPoints: [https]
+        rule: 'Host(`{{ $$base }}`) && (Method(`GET`) || Method(`HEAD`)) && PathRegexp(`^/w/[a-z0-9][a-z0-9-]{1,49}[a-z0-9](/|$$)`) && !PathRegexp(`^/w/[a-z0-9-]*--`) && !PathRegexp(`^/w/({{ $$reserved }})(/|$$)`)'
+        priority: 6
+        middlewares: [app-hsts@docker, workspace-no-cache, workspace-address]
+        service: noop@internal
+        tls:
+          certResolver: letsencrypt
+          domains:
+            - main: '{{ $$base }}'
+              sans: ['*.{{ $$base }}']
+      http-tenant:
+        entryPoints: [http]
+        rule: '{{ $$tenant }} && {{ $$paths }}'
+        priority: 6
+        middlewares: [redirect-to-https@docker]
+        service: https-webapp@docker
+      https-tenant:
+        entryPoints: [https]
+        rule: '{{ $$tenant }} && {{ $$paths }}'
+        priority: 6
+        middlewares: [app-hsts@docker, webapp-body-limit@docker]
+        service: https-webapp@docker
+        tls:
+          certResolver: letsencrypt
+          domains:
+            - main: '{{ $$base }}'
+              sans: ['*.{{ $$base }}']
+  {{ if eq (env "HEPHAESTUS_EDGE_MAINTENANCE_ENABLED") "true" }}
+      http-tenant-maintenance:
+        entryPoints: [http]
+        rule: '{{ $$tenant }} && {{ $$paths }}'
+        priority: 1
+        middlewares: [redirect-to-https@docker]
+        service: maintenance@docker
+      https-tenant-maintenance:
+        entryPoints: [https]
+        rule: '{{ $$tenant }} && {{ $$paths }}'
+        priority: 1
+        service: maintenance@docker
+        tls:
+          certResolver: letsencrypt
+          domains:
+            - main: '{{ $$base }}'
+              sans: ['*.{{ $$base }}']
+  {{ end }}
+  {{ end }}
+
+x-traefik-start: &traefik-start |
+  #!/bin/sh
+  set -eu
+  fail() { printf '%s\n' "Invalid workspace edge configuration: $$1" >&2; exit 1; }
+  case "$$HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED" in
+    true|false) ;;
+    *) fail 'subdomain switch must be true or false' ;;
+  esac
+  if [ "$$HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED" = true ]; then
+    base=$$HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN
+    [ "$$base" = "$$APP_HOSTNAME" ] && [ "$${#base}" -le 189 ] &&
+      printf '%s\n' "$$base" | grep -Eq '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?([.][a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*[.][a-z]([a-z0-9-]{0,61}[a-z0-9])?$$' ||
+      fail 'base domain must be a lowercase DNS name equal to APP_HOSTNAME'
+    [ "$$ACME_CHALLENGE" = dnschallenge.provider ] || fail 'subdomains require DNS-01'
+  fi
+  if [ "$$ACME_CHALLENGE" = dnschallenge.provider ]; then
+    variable=$$TRAEFIK_DNS_CREDENTIAL_VARIABLE
+    printf '%s\n' "$$variable" | grep -Eq '^[A-Z][A-Z0-9_]*_FILE$$' || fail 'DNS credential variable must end in _FILE'
+    [ -s /run/secrets/dns/token ] || fail 'DNS credential file is missing or empty'
+    export "$$variable=/run/secrets/dns/token"
+  fi
+  exec /entrypoint.sh "$$@"
+
 services:
   reverse-proxy:
     # Keep at >=3.3: below it the app-server sticky.cookie.path label (workspace replica affinity)
@@ -16,10 +111,10 @@ services:
       # state that a release replaces. Traefik would then re-issue on every deployment and Let's
       # Encrypt would rate-limit the domain into serving an untrusted certificate.
       - letsencrypt:/letsencrypt
-    env_file:
-      - path: ${TRAEFIK_DNS_ENV_FILE:-/etc/hephaestus/dns.env}
-        required: false
+      - ${TRAEFIK_DNS_CREDENTIALS_DIRECTORY:-/etc/hephaestus/dns}:/run/secrets/dns:ro
+    entrypoint: ["/bin/sh", "/etc/traefik/start.sh"]
     environment:
+      TRAEFIK_DNS_CREDENTIAL_VARIABLE: ${TRAEFIK_DNS_CREDENTIAL_VARIABLE:-CF_DNS_API_TOKEN_FILE}
       HEPHAESTUS_EDGE_MAINTENANCE_ENABLED: "true"
       HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}
       HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}
@@ -62,20 +157,27 @@ services:
       # Docker labels cannot define TLS options, so load them through the file provider.
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
     configs:
+      - source: traefik-start
+        target: /etc/traefik/start.sh
       - source: traefik-dynamic
         target: /etc/traefik/dynamic.yml
     labels:
-      - traefik.enable=true
-      - traefik.http.middlewares.security-headers.headers.stsSeconds=2592000
-      - traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true
-      - traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true
-      - traefik.http.middlewares.security-headers.headers.frameDeny=true
-      - traefik.http.middlewares.security-headers.headers.referrerPolicy=no-referrer
-      - traefik.http.middlewares.security-headers.headers.permissionsPolicy=geolocation=(), camera=(), microphone=(), payment=()
-      - "traefik.http.middlewares.security-headers.headers.contentSecurityPolicy=default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"
-      - traefik.http.middlewares.errorpage.errors.status=501,502,503,504
-      - traefik.http.middlewares.errorpage.errors.service=maintenance
-      - traefik.http.middlewares.errorpage.errors.query=/index.html
+      # Compose 2.37 ignores config content in its service hash.
+      # https://github.com/docker/compose/issues/13045
+      # Aliases keep one source and make content changes recreate the proxy.
+      build.hephaestus.traefik.dynamic-config: *traefik-dynamic
+      build.hephaestus.traefik.start-config: *traefik-start
+      traefik.enable: 'true'
+      traefik.http.middlewares.security-headers.headers.stsSeconds: '2592000'
+      traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains: 'true'
+      traefik.http.middlewares.security-headers.headers.contentTypeNosniff: 'true'
+      traefik.http.middlewares.security-headers.headers.frameDeny: 'true'
+      traefik.http.middlewares.security-headers.headers.referrerPolicy: 'no-referrer'
+      traefik.http.middlewares.security-headers.headers.permissionsPolicy: 'geolocation=(), camera=(), microphone=(), payment=()'
+      traefik.http.middlewares.security-headers.headers.contentSecurityPolicy: 'default-src ''self''; base-uri ''self''; object-src ''none''; frame-ancestors ''none''; form-action ''self''; script-src ''self''; style-src ''self'' ''unsafe-inline''; img-src ''self'' data: blob: https:; font-src ''self'' data:; connect-src ''self'' https: wss:; worker-src ''self'' blob:; manifest-src ''self''; upgrade-insecure-requests'
+      traefik.http.middlewares.errorpage.errors.status: '501,502,503,504'
+      traefik.http.middlewares.errorpage.errors.service: 'maintenance'
+      traefik.http.middlewares.errorpage.errors.query: '/index.html'
     healthcheck:
       test: "wget -qO- http://localhost:80/ping || exit 1"
       interval: 4s
@@ -137,7 +239,9 @@ networks:
 
 configs:
   traefik-dynamic:
-    file: ./traefik/dynamic.yml
+    content: *traefik-dynamic
+  traefik-start:
+    content: *traefik-start
   nginx-default-config:
     content: |
       server {

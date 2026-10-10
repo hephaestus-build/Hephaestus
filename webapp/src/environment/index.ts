@@ -15,8 +15,6 @@ declare global {
 }
 
 interface RuntimeEnvVars {
-	HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED?: string;
-	HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN?: string;
 	APPLICATION_VERSION?: string;
 	APPLICATION_CLIENT_URL?: string;
 	APPLICATION_SERVER_URL?: string;
@@ -42,8 +40,6 @@ const SECURE_XSRF_COOKIE_NAME = "__Host-XSRF-TOKEN";
 
 // Dev defaults (used when window.__ENV__ is not set)
 const defaults: RuntimeEnvVars = {
-	HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "false",
-	HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: "",
 	APPLICATION_VERSION: "DEV",
 	APPLICATION_CLIENT_URL: "http://localhost:4200",
 	APPLICATION_SERVER_URL: "http://localhost:8080",
@@ -96,10 +92,6 @@ const environment = {
 		name: DEPLOYMENT_NAMES[deploymentEnvironment] ?? "Local",
 		isProduction: deploymentEnvironment === "production",
 		pullRequest: previewPullRequest,
-	},
-	workspaceSubdomains: {
-		enabled: env("HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED") === "true",
-		baseDomain: env("HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN"),
 	},
 	clientUrl: env("APPLICATION_CLIENT_URL"),
 	serverUrl: env("APPLICATION_SERVER_URL"),

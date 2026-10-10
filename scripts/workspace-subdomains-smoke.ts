@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { mkdtemp, readFile, mkdir, writeFile, cp, rm } from "node:fs/promises";
@@ -10,8 +11,8 @@ import { setTimeout } from "node:timers/promises";
 import { Document, isMap, isScalar, isSeq, parseDocument } from "yaml";
 
 import { readInventory } from "./commit-image-lock.ts";
-import { asRecord, asString, parseJson } from "./lib/json.ts";
-import { output, run, succeeds } from "./lib/process.ts";
+import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import { CAPTURE_LIMIT_BYTES, output, run, succeeds } from "./lib/process.ts";
 
 const root = path.join(import.meta.dirname, "..");
 const project = `hephaestus-edge-${randomUUID().slice(0, 8)}`;
@@ -22,18 +23,21 @@ const image = `${project}-webapp:smoke`;
 const env: NodeJS.ProcessEnv = {
 	...process.env,
 	COMPOSE_ENV_FILES: "",
-	TRAEFIK_DNS_ENV_FILE: path.join(directory, "no-dns-credentials.env"),
+	TRAEFIK_DNS_CREDENTIALS_DIRECTORY: path.join(directory, "dns"),
 	GH_APP_PRIVATE_KEY: "",
 	GH_AUTH_TOKEN: "",
 	APP_HOSTNAME: base,
 	IMAGE_TAG: "smoke",
 	SENTRY_DSN: "",
 };
-const composeFiles = ["proxy", "app"].map((stack) =>
+const productionFiles = ["proxy", "app"].map((stack) =>
 	path.join(root, `docker/compose.${stack}.yaml`),
 );
+const composeFiles = productionFiles.map((file) =>
+	path.join(directory, "release-1", path.basename(file)),
+);
 const sources = await Promise.all(
-	[...composeFiles, path.join(root, "docker/compose.core.yaml")].map(async (file) =>
+	[...productionFiles, path.join(root, "docker/compose.core.yaml")].map(async (file) =>
 		readFile(file, "utf8"),
 	),
 );
@@ -67,6 +71,7 @@ command.push(
 	"--api.insecure=true",
 );
 const override = path.join(directory, "override.yaml");
+let composePrepared = false;
 const args = [
 	"compose",
 	"--project-name",
@@ -78,6 +83,14 @@ const args = [
 const dockerfile = await readFile(path.join(root, "webapp/Dockerfile"), "utf8");
 const runtime = dockerfile.slice(dockerfile.indexOf("FROM nginx:"));
 assert.ok(runtime.startsWith("FROM nginx:"));
+
+function selectRelease(release: string) {
+	for (const file of productionFiles) {
+		const index = args.findIndex((arg) => arg.endsWith(path.basename(file)));
+		assert.ok(index !== -1);
+		args[index] = path.join(directory, release, path.basename(file));
+	}
+}
 
 async function get(port: number, host: string, url: string, method = "GET") {
 	const { promise, resolve, reject } = Promise.withResolvers<{
@@ -150,6 +163,12 @@ async function waitForBody(port: number, host: string, url: string, expected: st
 }
 
 try {
+	for (const release of ["release-1", "release-2", "release-3"]) {
+		await mkdir(path.join(directory, release));
+		for (const file of productionFiles) {
+			await cp(file, path.join(directory, release, path.basename(file)));
+		}
+	}
 	await run(
 		"openssl",
 		[
@@ -201,14 +220,24 @@ try {
 		{ stdout: "ignore", stderr: "ignore" },
 	);
 	ca = await readFile(path.join(directory, "ca.pem"));
-	const dynamicTemplate = await readFile(path.join(root, "docker/traefik/dynamic.yml"), "utf8");
-	await writeFile(
-		path.join(directory, "dynamic.yml"),
-		dynamicTemplate.replace(
-			"tls:\n",
-			"tls:\n  stores:\n    default:\n      defaultCertificate:\n        certFile: /smoke/tls.pem\n        keyFile: /smoke/tls.key\n",
-		),
+	const dynamicTemplate = asString(
+		parseDocument(sources[0] ?? "").get("x-traefik-dynamic"),
+		"inline edge template",
 	);
+	const testDynamic = dynamicTemplate.replace(
+		"tls:\n",
+		"tls:\n  stores:\n    default:\n      defaultCertificate:\n        certFile: /smoke/tls.pem\n        keyFile: /smoke/tls.key\n",
+	);
+	const proxyFixture = parseDocument(sources[0] ?? "");
+	const dynamicNode = proxyFixture.get("x-traefik-dynamic", true);
+	assert.ok(isScalar(dynamicNode));
+	dynamicNode.value = testDynamic;
+	for (const release of ["release-1", "release-2", "release-3"]) {
+		await writeFile(path.join(directory, release, "compose.proxy.yaml"), proxyFixture.toString());
+	}
+	await mkdir(path.join(directory, "dns"));
+	const credential = `smoke-token-${randomUUID()}`;
+	await writeFile(path.join(directory, "dns/token"), credential, { mode: 0o600 });
 	await mkdir(path.join(directory, "fixture"));
 	await writeFile(
 		path.join(directory, "fixture/index.html"),
@@ -249,7 +278,6 @@ try {
 			},
 		},
 		networks: { "shared-network": { name: project } },
-		configs: { "traefik-dynamic": { file: path.join(directory, "dynamic.yml") } },
 	});
 
 	for (const service of ["reverse-proxy", "webapp"]) {
@@ -263,8 +291,39 @@ try {
 		dependencies.tag = "!reset";
 	}
 	await writeFile(override, overrideDocument.toString());
+	composePrepared = true;
 
 	await run("docker", ["build", "--tag", image, directory]);
+	for (const invalid of [
+		{ HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "invalid" },
+		{
+			HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "true",
+			HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: "wrong.example.invalid",
+		},
+		{
+			HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "true",
+			HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: base,
+			ACME_CHALLENGE: "httpchallenge.entrypoint",
+		},
+		{
+			ACME_CHALLENGE: "dnschallenge.provider",
+			TRAEFIK_DNS_CREDENTIAL_VARIABLE: "CF_DNS_API_TOKEN",
+		},
+		{
+			ACME_CHALLENGE: "dnschallenge.provider",
+			TRAEFIK_DNS_CREDENTIALS_DIRECTORY: path.join(directory, "empty-dns"),
+		},
+	]) {
+		const result = spawnSync("docker", [...args, "run", "--rm", "--no-deps", "reverse-proxy"], {
+			env: { ...env, ...invalid },
+			encoding: "utf8",
+			maxBuffer: CAPTURE_LIMIT_BYTES,
+			timeout: 30_000,
+		});
+		assert.equal(result.status, 1, result.stderr);
+		assert.match(result.stdout + result.stderr, /Invalid workspace edge configuration:/u);
+	}
+
 	for (const enabled of ["false", "true", "false"]) {
 		env.HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED = enabled;
 		env.HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN = base;
@@ -298,10 +357,20 @@ try {
 		);
 		const configs = asRecord(selfHost.configs, "self-host configs");
 		const dynamic = asRecord(configs["traefik-dynamic"], "self-host dynamic config");
+		assert.equal(dynamic.file, undefined);
+		const content = asString(dynamic.content, "rendered edge template").replaceAll("$$", "$");
 		assert.equal(
-			asString(dynamic.file, "dynamic config path"),
-			path.join(root, "docker/traefik/dynamic.yml"),
+			parseDocument(content.slice(0, content.indexOf("{{"))).getIn([
+				"tls",
+				"options",
+				"default",
+				"minVersion",
+			]),
+			"VersionTLS12",
 		);
+		assert.ok(content.includes("{{ $base :="));
+		assert.ok(content.includes(`https://\${1}.`));
+		assert.ok(!JSON.stringify(selfHost).includes(credential));
 		// Docker's random port allocator does not exclude other host listeners.
 		const probes = [80, 443, 8080].map((target) => ({
 			target,
@@ -371,6 +440,76 @@ try {
 			assert.equal(tls.certResolver, "letsencrypt");
 		}
 
+		const proxyListing = await output("docker", [...args, "ps", "--quiet", "reverse-proxy"], {
+			env,
+		});
+		const proxyId = proxyListing.trim();
+		const inspection = await output("docker", ["inspect", proxyId]);
+		assert.ok(!inspection.includes(credential));
+		const mountedDynamic = await output("docker", [
+			"exec",
+			proxyId,
+			"cat",
+			"/etc/traefik/dynamic.yml",
+		]);
+		assert.equal(
+			parseDocument(mountedDynamic.slice(0, mountedDynamic.indexOf("{{"))).getIn([
+				"tls",
+				"options",
+				"default",
+				"minVersion",
+			]),
+			"VersionTLS12",
+		);
+		const container = asRecord(
+			asArray(parseJson(inspection), "proxy inspect")[0],
+			"proxy container",
+		);
+		const mounts = asArray(container.Mounts, "proxy mounts").map((mount) =>
+			asRecord(mount, "mount"),
+		);
+		assert.equal(mounts.find((mount) => mount.Destination === "/run/secrets/dns")?.RW, false);
+		for (const slug of ["abc", "a".repeat(51)]) {
+			await expectStatus(port, base, `/w/${slug}`, enabled === "true" ? 301 : 200);
+			await expectStatus(port, `${slug}.${base}`, "/", enabled === "true" ? 200 : 404);
+		}
+		if (enabled === "false" && args.includes(composeFiles[0] ?? "")) {
+			dynamicNode.value = `${testDynamic}\n# Config revision\n`;
+			for (const release of ["release-1", "release-2", "release-3"]) {
+				await writeFile(
+					path.join(directory, release, "compose.proxy.yaml"),
+					proxyFixture.toString(),
+				);
+			}
+			await run("docker", [...args, "up", "--detach", "--no-deps", "reverse-proxy"], { env });
+			const changedListing = await output("docker", [...args, "ps", "--quiet", "reverse-proxy"], {
+				env,
+			});
+			assert.notEqual(
+				changedListing.trim(),
+				proxyId,
+				"An inline config change must recreate the proxy",
+			);
+			for (const release of ["release-2", "release-3"]) {
+				selectRelease(release);
+				await run("docker", [...args, "up", "--detach", "--no-deps", "reverse-proxy"], { env });
+			}
+			await rm(path.join(directory, "release-1"), { recursive: true });
+			await rm(path.join(directory, "release-2"), { recursive: true });
+			const retainedListing = await output("docker", [...args, "ps", "--quiet", "reverse-proxy"], {
+				env,
+			});
+			assert.equal(
+				retainedListing.trim(),
+				changedListing.trim(),
+				"Moving an unchanged Compose model must keep its proxy",
+			);
+			await run("docker", ["stop", retainedListing.trim()]);
+			await run("docker", ["start", retainedListing.trim()]);
+			await waitForBody(port, base, "/", "tenant-spa");
+		}
+		const post = await get(port, base, "/w/acme", "POST");
+		assert.equal(post.status, 405);
 		const api = await get(port, base, "/api/auth/csrf");
 		assert.equal(api.body, "apex-api");
 		for (const url of [
@@ -394,7 +533,7 @@ try {
 		]) {
 			assert.ok(url !== undefined && tail !== undefined);
 			const response = await get(port, base, url);
-			assert.equal(response.status, enabled === "true" ? 308 : 200, url);
+			assert.equal(response.status, enabled === "true" ? 301 : 200, url);
 			if (enabled === "true") {
 				assert.equal(response.location, `https://acme.${base}${tail}`);
 				assert.equal(response.cache, "no-store");
@@ -427,7 +566,6 @@ try {
 			assert.ok(configPath !== undefined);
 			const config = await get(port, `acme.${base}`, configPath);
 			assert.ok(config.body.includes(`APPLICATION_SERVER_URL: "https://${base}/api"`));
-			assert.ok(config.body.includes(`HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: "${base}"`));
 			const head = await get(port, base, "/w/acme/activity?x=1", "HEAD");
 			assert.equal(head.status, 308);
 			await run("docker", [...args, "stop", "webapp"], { env });
@@ -440,10 +578,14 @@ try {
 		);
 	}
 } catch (error) {
-	await run("docker", [...args, "logs", "--no-color", "--tail", "60"], { env });
+	if (composePrepared) {
+		await run("docker", [...args, "logs", "--no-color", "--tail", "60"], { env });
+	}
 	throw error;
 } finally {
-	await run("docker", [...args, "down", "--volumes", "--remove-orphans"], { env });
+	if (composePrepared) {
+		await run("docker", [...args, "down", "--volumes", "--remove-orphans"], { env });
+	}
 	await succeeds("docker", ["image", "rm", image]);
 	await rm(directory, { recursive: true, force: true });
 }
