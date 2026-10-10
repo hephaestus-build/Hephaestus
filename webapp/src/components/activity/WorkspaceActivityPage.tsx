@@ -1,5 +1,6 @@
 import { Building2 } from "lucide-react";
 
+import { cn } from "cn";
 import type { ActivityPeople, ActivityPerson } from "@/api/types.gen";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -9,8 +10,9 @@ import { formatDate } from "@/lib/dates";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import type { ActivityPeriod } from "./activity-period";
+import { STALE } from "./activity-tones";
 import { ActivityAutomationList } from "./ActivityAutomationList";
-import { ActivityHighlights } from "./ActivityHighlights";
+import { ActivityHighlights, ActivityHighlightsSkeleton } from "./ActivityHighlights";
 import {
 	type ActivityPeopleState,
 	ActivityPeopleTable,
@@ -20,6 +22,9 @@ import { ActivityPeriodPicker } from "./ActivityPeriodPicker";
 import { ActivityTeamPicker } from "./ActivityTeamPicker";
 import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
+
+/** What the team and repository pickers offer: the same in every scope. */
+export type ActivityFacets = Pick<ActivityPeople, "teams" | "repositories">;
 
 export interface WorkspaceActivityPageProps {
 	providerType: ProviderType;
@@ -34,6 +39,8 @@ export interface WorkspaceActivityPageProps {
 	order: PeopleOrder;
 	onOrderChange: (order: PeopleOrder) => void;
 	people: ActivityPeopleState;
+	/** Undefined until the first people arrive; the previous scope's while another loads. */
+	facets: ActivityFacets | undefined;
 	timeline: ActivityWorkLogState;
 }
 
@@ -53,9 +60,11 @@ export function WorkspaceActivityPage({
 	order,
 	onOrderChange,
 	people,
+	facets,
 	timeline,
 }: WorkspaceActivityPageProps) {
 	const ready = people.status === "ready" ? people.people : undefined;
+	const stale = people.status === "ready" && people.stale;
 	const pullRequests = artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType);
 	return (
 		<PageLayout className="space-y-8">
@@ -65,17 +74,24 @@ export function WorkspaceActivityPage({
 				description={ready && coverageNote(ready)}
 			/>
 			<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-				<ActivityTeamPicker teams={ready?.teams} value={team} onChange={onTeamChange} />
+				<ActivityTeamPicker
+					teams={facets?.teams}
+					failed={people.status === "error"}
+					value={team}
+					onChange={onTeamChange}
+				/>
 				<ActivityPeriodPicker
 					period={period}
 					onPeriodChange={onPeriodChange}
-					updating={
-						(people.status === "ready" && people.stale) ||
-						(timeline.status === "ready" && timeline.stale)
-					}
+					updating={stale || (timeline.status === "ready" && timeline.stale)}
 				/>
 			</div>
-			{ready && <Highlights people={ready} />}
+			{people.status === "loading" && (
+				<Section size="lg" title="Highlights">
+					<ActivityHighlightsSkeleton />
+				</Section>
+			)}
+			{ready && <Highlights people={ready} stale={stale} />}
 			<Section
 				size="lg"
 				title="People"
@@ -86,6 +102,7 @@ export function WorkspaceActivityPage({
 					providerType={providerType}
 					order={order}
 					onOrderChange={onOrderChange}
+					repositories={facets?.repositories ?? []}
 					repo={repo}
 					onRepoChange={onRepoChange}
 				/>
@@ -96,7 +113,9 @@ export function WorkspaceActivityPage({
 					title="Automation"
 					description="Bot accounts and accounts treated as automation. Their work is not counted for people."
 				>
-					<ActivityAutomationList automation={ready.automation} />
+					<div aria-busy={stale || undefined} className={cn(stale && STALE)}>
+						<ActivityAutomationList automation={ready.automation} />
+					</div>
 				</Section>
 			)}
 			<Section
@@ -128,7 +147,7 @@ function coverageNote({ coverage }: ActivityPeople): string | undefined {
 	return `History since ${formatDate(since)} for ${completeRepositories} of ${totalRepositories} ${repositories}.`;
 }
 
-function Highlights({ people }: { people: ActivityPeople }) {
+function Highlights({ people, stale }: { people: ActivityPeople; stale: boolean }) {
 	const byId = new Map(people.people.map((person) => [person.person.id, person]));
 	const resolve = (ids: readonly number[]): ActivityPerson[] =>
 		ids.flatMap((id) => {
@@ -142,10 +161,12 @@ function Highlights({ people }: { people: ActivityPeople }) {
 	}
 	return (
 		<Section size="lg" title="Highlights">
-			<ActivityHighlights
-				firstContributors={firstContributors}
-				mostPeopleHelped={mostPeopleHelped}
-			/>
+			<div aria-busy={stale || undefined} className={cn(stale && STALE)}>
+				<ActivityHighlights
+					firstContributors={firstContributors}
+					mostPeopleHelped={mostPeopleHelped}
+				/>
+			</div>
 		</Section>
 	);
 }

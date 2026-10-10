@@ -39,7 +39,11 @@ export function ActivityPeriodPicker({
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger
 					render={
-						<Button variant={custom ? "secondary" : "outline"} size="sm">
+						<Button
+							variant={custom ? "secondary" : "outline"}
+							size="sm"
+							aria-label={custom ? `${periodLabel(custom)}, custom range` : undefined}
+						>
 							<CalendarIcon aria-hidden />
 							{custom ? periodLabel(custom) : "Custom range"}
 						</Button>

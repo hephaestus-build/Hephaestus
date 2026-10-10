@@ -2,7 +2,8 @@ import type { ActivityPerson } from "@/api/types.gen";
 
 import type { PeopleSort } from "./activity-search";
 
-const SORT_VALUES = {
+/** The count each number column shows and sorts by. */
+export const PEOPLE_COUNTS = {
 	contributions: (row) => row.counts.contributions,
 	"pull-requests": (row) => row.counts.pullRequestsOpened,
 	reviews: (row) => row.counts.pullRequestsReviewed,
@@ -21,13 +22,7 @@ export function competitionPositions(
 	if (sort === "name") {
 		return new Map();
 	}
-	const value = SORT_VALUES[sort];
-	const sorted = people.map(value).sort((a, b) => b - a);
-	const firstAt = new Map<number, number>();
-	for (const [index, count] of sorted.entries()) {
-		if (!firstAt.has(count)) {
-			firstAt.set(count, index + 1);
-		}
-	}
-	return new Map(people.map((row) => [row.person.id, firstAt.get(value(row)) ?? 0]));
+	const count = PEOPLE_COUNTS[sort];
+	const mostFirst = people.map(count).sort((a, b) => b - a);
+	return new Map(people.map((row) => [row.person.id, mostFirst.indexOf(count(row)) + 1]));
 }

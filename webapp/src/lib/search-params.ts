@@ -42,6 +42,9 @@ export function parseSearch(searchStr: string): Record<string, unknown> {
 	return search;
 }
 
+/** The app's search serialisation, for every router: the app's, a test's, and Storybook's. */
+export const ROUTER_SEARCH = { parseSearch, stringifySearch };
+
 function isScalar(value: unknown): boolean {
 	return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }

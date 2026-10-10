@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { expect, it, vi } from "vitest";
 
+import { ROUTER_SEARCH } from "@/lib/search-params";
 import { RouteError } from "./RouteError";
 
 const { captureException } = vi.hoisted(() => ({ captureException: vi.fn() }));
@@ -31,6 +32,7 @@ it("reports a thrown route error once and renders recovery controls", async () =
 		},
 	});
 	const router = createRouter({
+		...ROUTER_SEARCH,
 		routeTree: rootRoute.addChildren([route]),
 		history: createMemoryHistory({ initialEntries: ["/"] }),
 		defaultErrorComponent: RouteError,

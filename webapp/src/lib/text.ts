@@ -28,3 +28,6 @@ export function capitalise(value: string): string {
 
 /** "A", "A and B", "A, B and C": a run of things read as a sentence, with no comma before the "and". */
 export const andList = new Intl.ListFormat("en-GB", { type: "conjunction" });
+
+/** Orders names as a reader does, without regard to case or accents: "Élodie" sits with "Elodie". */
+export const nameOrder = new Intl.Collator(undefined, { sensitivity: "base" });

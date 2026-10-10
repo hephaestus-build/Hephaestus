@@ -41,17 +41,17 @@ const counts = {
 const people = {
 	from: "2026-09-01T00:00:00Z",
 	to: "2026-10-01T00:00:00Z",
-	people: ["ada-lrz", "bob"].map((login, index) => ({
+	// The server lists people by id, not by name: a tie must still read in name order.
+	people: ["bob", "ada-lrz"].map((login) => ({
 		person: {
-			id: index + 7,
+			id: login === "bob" ? 8 : 7,
 			login,
 			name: login === "bob" ? "Bob" : "Ada",
 			email: "",
 			avatarUrl: "",
 			htmlUrl: "",
 		},
-		automation: false,
-		treatedAsAutomation: false,
+		kind: "PERSON",
 		counts: { ...counts, pullRequestsReviewed: login === "bob" ? 9 : 3 },
 		weeks: [{ start: "2026-09-21T00:00:00Z", contributions: counts.contributions }],
 	})),
@@ -71,9 +71,8 @@ const people = {
 const personDetail = {
 	from: people.from,
 	to: people.to,
-	person: people.people[0]?.person,
-	automation: false,
-	treatedAsAutomation: false,
+	person: people.people[1]?.person,
+	kind: "PERSON",
 	counts,
 	breakdown: {
 		pullRequestsClosed: 0,
@@ -506,6 +505,13 @@ function positions(): (string | null | undefined)[][] {
 		]);
 }
 
+/** The people for every scope but one that names a repository, which the server does not know. */
+function unknownRepository(request: Request) {
+	return new URL(request.url).searchParams.has("repo")
+		? HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 })
+		: HttpResponse.json(people);
+}
+
 describe("Workspace activity", () => {
 	let reads: URL[] = [];
 	let automation: URL[] = [];
@@ -607,6 +613,82 @@ describe("Workspace activity", () => {
 		]);
 	});
 
+	it("flips a sort to the fewest first, with the positions running backwards", async () => {
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity");
+
+		await user.click(await screen.findByRole("button", { name: /^Reviews/u }, ROUTE_RENDER_WAIT));
+		await user.click(screen.getByRole("button", { name: /^Reviews/u }));
+
+		await waitFor(() => expect(router.state.location.searchStr).toBe("?sort=reviews&dir=asc"));
+		expect(positions()).toStrictEqual([
+			["2", "Ada"],
+			["1", "Bob"],
+		]);
+	});
+
+	it("writes each repository as its own key, and Reset clears them", async () => {
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity");
+
+		await user.click(
+			await screen.findByRole("combobox", { name: "Repository" }, ROUTE_RENDER_WAIT),
+		);
+		await user.click(await screen.findByRole("option", { name: "acme/api" }));
+		await user.click(await screen.findByRole("option", { name: "acme/web" }));
+
+		await waitFor(() =>
+			expect(router.state.location.searchStr).toBe("?repo=acme/api&repo=acme/web"),
+		);
+		await waitFor(() =>
+			expect(readsOf("/activity/people").at(-1)?.searchParams.getAll("repo")).toStrictEqual([
+				"acme/api",
+				"acme/web",
+			]),
+		);
+		await user.keyboard("{Escape}");
+		await user.click(screen.getByRole("button", { name: "Reset" }));
+		await waitFor(() => expect(router.state.location.href).toBe("/w/acme/workspace-activity"));
+	});
+
+	it("keeps a repository the server does not know clearable", async () => {
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/activity/people", ({ request }) =>
+				unknownRepository(request),
+			),
+		);
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity?repo=acme/old");
+
+		await screen.findByRole("alert", undefined, ROUTE_RENDER_WAIT);
+		await user.click(screen.getByRole("button", { name: "Reset" }));
+
+		await waitFor(() => expect(router.state.location.href).toBe("/w/acme/workspace-activity"));
+		await screen.findByRole("table", { name: "People" });
+	});
+
+	it("writes a preset over a custom range and drops the custom days", async () => {
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter(
+			"/w/acme/workspace-activity?from=2026-03-01&to=2026-03-31",
+		);
+		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		expect(readsOf("/activity/people")[0]?.searchParams.get("range")).toBe("custom");
+
+		await user.click(screen.getByRole("button", { name: "12 months" }));
+
+		await waitFor(() =>
+			expect(router.state.location.href).toBe("/w/acme/workspace-activity?range=1y"),
+		);
+	});
+
+	it("drops custom days after today or before any history", async () => {
+		renderRouteAtWithRouter("/w/acme/workspace-activity?from=1970-01-01&to=2999-12-31");
+
+		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		expect(readsOf("/activity/people")[0]?.search).toBe("?range=90d");
+	});
+
 	it("writes a team by its slug, never its id", async () => {
 		const user = userEvent.setup();
 		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity");
@@ -682,6 +764,14 @@ describe("Workspace activity", () => {
 		expect(reads.filter((url) => /\/people\/\d+/u.test(url.pathname))).toStrictEqual([]);
 	});
 
+	it("says a category of a person who did nothing has nothing, rather than loading", async () => {
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:carol&detail=activity:reviews");
+
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await within(level).findByRole("heading", { name: "Reviews" });
+		await within(level).findByText("No activity in this range");
+	});
+
 	it("lets an admin treat a person as automation, and nobody else", async () => {
 		role = "ADMIN";
 		const user = userEvent.setup();
@@ -696,6 +786,49 @@ describe("Workspace activity", () => {
 				"/workspaces/acme/activity/people/8/automation?treatAsAutomation=true",
 			]),
 		);
+	});
+
+	it("lets an admin count an account treated as automation as a person again", async () => {
+		role = "ADMIN";
+		const [bob, ada] = people.people;
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/activity/people", () =>
+				HttpResponse.json({
+					...people,
+					people: [ada],
+					automation: [{ ...bob, kind: "AUTOMATION" }],
+				}),
+			),
+		);
+		const user = userEvent.setup();
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		await user.click(
+			await screen.findByRole("button", { name: "Count as a person" }, ROUTE_RENDER_WAIT),
+		);
+
+		await waitFor(() =>
+			expect(automation.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+				"/workspaces/acme/activity/people/8/automation?treatAsAutomation=false",
+			]),
+		);
+	});
+
+	it("offers no action for a provider's bot account", async () => {
+		role = "ADMIN";
+		const [bob, ada] = people.people;
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/activity/people", () =>
+				HttpResponse.json({ ...people, people: [ada], automation: [{ ...bob, kind: "BOT" }] }),
+			),
+		);
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		await waitFor(
+			() => expect(readsOf("/activity/people/8").length).toBeGreaterThan(0),
+			ROUTE_RENDER_WAIT,
+		);
+		expect(screen.queryByRole("button", { name: /automation|as a person/u })).toBeNull();
 	});
 
 	it("offers a member no automation action", async () => {

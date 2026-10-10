@@ -5,6 +5,7 @@ import type { ActivityPerson } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { personLevel } from "./activity-search";
 import { MemberAvatar } from "./MemberAvatar";
@@ -47,6 +48,25 @@ export function ActivityHighlights({
 					people={mostPeopleHelped}
 				/>
 			)}
+		</div>
+	);
+}
+
+/** The two cards' shape while the people load. */
+export function ActivityHighlightsSkeleton() {
+	return (
+		<div aria-hidden className="grid gap-3 sm:grid-cols-2">
+			{["first", "helped"].map((card) => (
+				<Card key={card} size="sm">
+					<CardHeader>
+						<Skeleton className="h-4 w-40" />
+						<Skeleton className="h-4 w-56" />
+					</CardHeader>
+					<CardContent>
+						<Skeleton className="h-6 w-32" />
+					</CardContent>
+				</Card>
+			))}
 		</div>
 	);
 }

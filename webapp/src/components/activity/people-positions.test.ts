@@ -6,8 +6,7 @@ import { competitionPositions } from "./people-positions";
 
 const person = (id: number, contributions: number, reviews = 0): ActivityPerson => ({
 	person: { id, login: `p${id}`, name: `P${id}`, avatarUrl: "", htmlUrl: "" },
-	automation: false,
-	treatedAsAutomation: false,
+	kind: "PERSON",
 	counts: {
 		contributions,
 		pullRequestsOpened: 0,
@@ -32,7 +31,7 @@ describe("competitionPositions", () => {
 		]);
 	});
 
-	it("ranks by the sorted column's own count", () => {
+	it("positions by the sorted column's own count", () => {
 		const people = [person(1, 9, 0), person(2, 1, 4)];
 		expect(competitionPositions(people, "reviews").get(2)).toBe(1);
 	});

@@ -7,6 +7,8 @@ import {
 	PEOPLE,
 	peopleOf,
 	readyPeople,
+	REPOSITORIES,
+	TEAMS,
 	WORKSPACE_WORK_LOG,
 } from "@/stories/activity-story-data";
 import { withProvider, withStandardPage } from "@/stories/decorators";
@@ -35,6 +37,7 @@ const meta = {
 		order: { sort: "contributions", desc: true },
 		onOrderChange: fn(),
 		people: readyPeople(peopleOf(PEOPLE, { automation: AUTOMATION, highlights: true })),
+		facets: { teams: TEAMS, repositories: REPOSITORIES },
 		timeline: {
 			status: "ready",
 			stale: false,
@@ -80,12 +83,41 @@ export const AutomationApart: Story = {
 	},
 };
 
-/** 250 people: the table renders 50 rows and the next 50 as its end scrolls into view. */
+/** 250 people: the table renders 50 rows, and more as its end scrolls into view. */
 export const LargeWorkspace: Story = {
 	args: { people: readyPeople(peopleOf(LARGE_PEOPLE)) },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("250 people")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Show more people" })).toBeVisible();
+	},
+};
+
+/** While the next period loads, everything that counts it is marked as the previous one's. */
+export const Stale: Story = {
+	args: {
+		people: {
+			status: "ready",
+			people: peopleOf(PEOPLE, { automation: AUTOMATION, highlights: true }),
+			stale: true,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("table", { name: "People" })).toHaveAttribute(
+			"aria-busy",
+			"true",
+		);
+		for (const name of ["Highlights", "Automation"]) {
+			const region = canvas.getByRole("region", { name });
+			await expect(region.querySelector("[aria-busy='true']")).not.toBeNull();
+		}
+	},
+};
+
+/** A workspace with no teams has no team to pick. */
+export const NoTeams: Story = {
+	args: { facets: { teams: [], repositories: REPOSITORIES } },
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("combobox", { name: /^Team/u })).not.toBeInTheDocument();
 	},
 };
 
@@ -123,14 +155,15 @@ export const Reflow: Story = {
 	},
 };
 
+/** The highlights keep their place while the people load, so the table does not move. */
 export const Loading: Story = {
-	args: { people: { status: "loading" }, timeline: { status: "loading" } },
+	args: { people: { status: "loading" }, facets: undefined, timeline: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("table", { name: "People" })).toHaveAttribute(
 			"aria-busy",
 			"true",
 		);
-		await expect(canvas.queryByRole("heading", { name: "Highlights" })).not.toBeInTheDocument();
+		await expect(canvas.getByRole("heading", { name: "Highlights" })).toBeVisible();
 	},
 };
 
@@ -140,6 +173,7 @@ export const Failed: Story = {
 	args: {
 		team: "gone",
 		people: { status: "error", error: new Error("Team not found"), onRetry: retry },
+		facets: undefined,
 	},
 	play: async ({ canvas, userEvent }) => {
 		const alert = canvas.getByRole("alert");

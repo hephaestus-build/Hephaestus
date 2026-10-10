@@ -27,7 +27,12 @@ import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-sta
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { useActivityPeople, useActivityPerson, useActivityWork } from "@/hooks/use-activity";
+import {
+	useActivityFacets,
+	useActivityPeople,
+	useActivityPerson,
+	useActivityWork,
+} from "@/hooks/use-activity";
 import { pageHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
@@ -69,8 +74,9 @@ function WorkspaceActivity() {
 	const period = periodFromSearch(search);
 	const scope = { workspaceSlug, period, team: search.team, repo: search.repo };
 	const people = useActivityPeople(scope);
+	const facets = useActivityFacets(scope);
 	const ready = people.status === "ready" ? people.people : undefined;
-	const teamName = teamPaths(ready?.teams ?? []).find(({ key }) => key === search.team)?.label;
+	const teamName = teamPaths(facets?.teams ?? []).find(({ key }) => key === search.team)?.label;
 
 	const detailStack = parseActivityStack(search.detail, WORKSPACE_ACTIVITY_LEVEL_KINDS);
 	const stackControls = useDetailStack(detailStack);
@@ -123,23 +129,23 @@ function WorkspaceActivity() {
 				description: problemDetailOf(error),
 			}),
 	});
-	// A provider's bot account is automation whatever an admin says, so only a person, or an account
-	// an admin treats as automation, has the action.
+	// A provider's bot account is automation whatever an admin says, so it has no action.
 	const automationAction =
-		isAdmin && person && (!person.automation || person.treatedAsAutomation) ? (
+		isAdmin && person && person.kind !== "BOT" ? (
 			<Button
 				variant="outline"
 				size="sm"
 				disabled={automation.isPending}
+				focusableWhenDisabled
 				onClick={() =>
 					automation.mutate({
 						path: { workspaceSlug, userId: person.person.id },
-						query: { treatAsAutomation: !person.automation },
+						query: { treatAsAutomation: person.kind === "PERSON" },
 					})
 				}
 			>
 				{automation.isPending && <Spinner />}
-				{person.automation ? "Count as a person" : "Treat as automation"}
+				{automationLabel(person.kind, automation.isPending)}
 			</Button>
 		) : undefined;
 
@@ -162,6 +168,7 @@ function WorkspaceActivity() {
 					setView({ sort, dir: desc ? "desc" : "asc" })
 				}
 				people={people}
+				facets={facets}
 				timeline={timeline}
 			/>
 			<ActivityDetailDrawer
@@ -173,13 +180,26 @@ function WorkspaceActivity() {
 				owner={{
 					login,
 					user: person?.person,
-					absent: ready !== undefined && login !== undefined && person === undefined,
-					overview,
-					workLog,
-					categoryWorkLog,
+					// Only the people of this period say who is not among them.
+					absent:
+						people.status === "ready" &&
+						!people.stale &&
+						login !== undefined &&
+						person === undefined,
+					// Without the people, nothing says whose activity the levels would read.
+					overview: people.status === "error" ? people : overview,
+					workLog: people.status === "error" ? people : workLog,
+					categoryWorkLog: people.status === "error" ? people : categoryWorkLog,
 					automationAction,
 				}}
 			/>
 		</>
 	);
+}
+
+function automationLabel(kind: ActivityPerson["kind"], pending: boolean): string {
+	if (pending) {
+		return "Saving…";
+	}
+	return kind === "AUTOMATION" ? "Count as a person" : "Treat as automation";
 }

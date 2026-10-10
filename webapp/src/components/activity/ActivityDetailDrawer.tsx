@@ -77,6 +77,7 @@ export function ActivityDetailDrawer({
 								overview={owner.overview}
 								workLog={owner.categoryWorkLog}
 								subject={{ people: "one", login: person ?? owner.login }}
+								absent={owner.absent}
 							/>
 						);
 					}

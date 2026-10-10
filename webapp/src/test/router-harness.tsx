@@ -10,7 +10,7 @@ import {
 import { act, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 
-import { parseSearch, stringifySearch } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/search-params";
 import { routeTree } from "@/routeTree.gen";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 
@@ -32,11 +32,10 @@ export function renderRouteAtWithRouter(
 	queryClient: QueryClient = testQueryClient(),
 ) {
 	const router = createRouter({
+		...ROUTER_SEARCH,
 		routeTree,
 		history: createMemoryHistory({ initialEntries: Array.isArray(path) ? path : [path] }),
 		context: { queryClient, auth: undefined },
-		parseSearch,
-		stringifySearch,
 	});
 	render(
 		<QueryClientProvider client={queryClient}>
@@ -66,6 +65,7 @@ export async function renderWithRouter(node: ReactNode, initialPath: string) {
 		createRoute({ getParentRoute: () => rootRoute, path: "$", component: () => null }),
 	]);
 	const router = createRouter({
+		...ROUTER_SEARCH,
 		routeTree: stubTree,
 		history: createMemoryHistory({ initialEntries: [initialPath] }),
 	});

@@ -5,7 +5,7 @@ import ReactDOM from "react-dom/client";
 
 import { client } from "@/api/client.gen";
 import environment from "@/environment";
-import { parseSearch, stringifySearch } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/search-params";
 import { RouteError } from "@/runtime/sentry/RouteError";
 
 import "./styles.css";
@@ -49,6 +49,7 @@ client.interceptors.response.use((response) => {
 });
 
 const router = createRouter({
+	...ROUTER_SEARCH,
 	routeTree,
 	context: {
 		...TanstackQuery.getContext(),
@@ -62,8 +63,6 @@ const router = createRouter({
 	defaultStructuralSharing: true,
 	defaultPreloadStaleTime: 0,
 	defaultErrorComponent: RouteError,
-	parseSearch,
-	stringifySearch,
 });
 
 declare module "@tanstack/react-router" {

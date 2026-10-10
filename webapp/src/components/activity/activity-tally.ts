@@ -15,7 +15,10 @@ export type ActivityTally = Record<ActivityKind, number> &
 	Pick<ActivityCounts, "contributions" | "pullRequestsReviewed" | "comments">;
 
 export interface ActivityWeek {
-	/** Monday 00:00 UTC, where the server starts a week. */
+	/**
+	 * Local midnight of the Monday the server starts the week on, at 00:00 UTC. The server's instant
+	 * formats as Sunday west of UTC; this day reads as that Monday in every time zone.
+	 */
 	start: Date;
 	tally: ActivityTally;
 }
@@ -74,7 +77,7 @@ export function overviewOf(detail: ActivityPersonDetail): ActivityOverview {
 	return {
 		tally: tallyOf(detail.counts, detail.breakdown),
 		weeks: weekStarts(detail.from, detail.to).map((start) => ({
-			start,
+			start: new Date(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()),
 			tally: counted.get(start.getTime()) ?? EMPTY_TALLY,
 		})),
 		repositories: detail.repositories,

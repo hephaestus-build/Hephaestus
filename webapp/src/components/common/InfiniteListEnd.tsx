@@ -4,24 +4,27 @@ import { type ReactNode, useEffect, useEffectEvent, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
-export interface InfiniteListEndProps extends MorePages {
+export interface InfiniteListEndProps extends Omit<MorePages, "isLoadingMore"> {
+	/** Absent for a list that reveals rows it already holds, which never waits. */
+	isLoadingMore?: boolean;
 	/** "View earlier reviews". */
 	moreLabel: string;
-	/** "We could not load earlier reviews." */
-	failedLabel: string;
-	/** A skeleton in the shape of the list's own row. */
-	loadingRow: ReactNode;
+	/** "We could not load earlier reviews."; absent where nothing is requested, so nothing fails. */
+	failedLabel?: string;
+	/** A skeleton in the shape of the list's own row, for a list that waits for its next page. */
+	loadingRow?: ReactNode;
 }
 
 /**
- * The end of a paged list: it asks for the next page when it scrolls into view. The button stays,
+ * The end of a paged list: it asks for more when it scrolls into view — the next page of a
+ * `useInfiniteQuery` (through `MorePages`), or the next rows of a list held whole. The button stays,
  * because a keyboard needs it, and it is the only retry after a failure, so a failed page never
- * loads again on its own. TanStack Query ships no sentinel, so this pairs `useInfiniteQuery`'s
- * `fetchNextPage` (through `MorePages`) with motion's `useInView`.
+ * loads again on its own. TanStack Query ships no sentinel, so this pairs it with motion's
+ * `useInView`.
  */
 export function InfiniteListEnd({
 	hasMore,
-	isLoadingMore,
+	isLoadingMore = false,
 	isRefreshing = false,
 	loadMoreError,
 	onLoadMore,

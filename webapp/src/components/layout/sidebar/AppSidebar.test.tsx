@@ -9,6 +9,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { ROUTER_SEARCH } from "@/lib/search-params";
 
 import { AppSidebar } from "./AppSidebar";
 
@@ -49,6 +50,7 @@ function renderMobileSidebar() {
 		component: () => null,
 	});
 	const router = createRouter({
+		...ROUTER_SEARCH,
 		routeTree: rootRoute.addChildren([activityRoute]),
 		history: createMemoryHistory({ initialEntries: ["/w/acme/activity"] }),
 	});

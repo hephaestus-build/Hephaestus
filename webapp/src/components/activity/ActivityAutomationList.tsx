@@ -2,6 +2,7 @@ import type { ActivityPerson } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { nameOrder } from "@/lib/text";
 
 import { personLevel } from "./activity-search";
 import { MemberAvatar } from "./MemberAvatar";
@@ -11,17 +12,15 @@ export interface ActivityAutomationListProps {
 	automation: readonly ActivityPerson[];
 }
 
-const NAMES = new Intl.Collator(undefined, { sensitivity: "base" });
-
 /**
  * Accounts whose work is automation: never a person, never in a position, and in name order, so the
  * list compares no one. Each opens its activity like a person does.
  */
 export function ActivityAutomationList({ automation }: ActivityAutomationListProps) {
-	const sorted = [...automation].sort((a, b) => NAMES.compare(a.person.name, b.person.name));
+	const sorted = [...automation].sort((a, b) => nameOrder.compare(a.person.name, b.person.name));
 	return (
 		<ul className="overflow-hidden rounded-xl border bg-card">
-			{sorted.map(({ person, counts, treatedAsAutomation }) => (
+			{sorted.map(({ person, counts, kind }) => (
 				<Item key={person.id} render={<li />} variant="row" size="sm" className="relative">
 					<ItemMedia>
 						<MemberAvatar user={person} size="sm" />
@@ -36,8 +35,8 @@ export function ActivityAutomationList({ automation }: ActivityAutomationListPro
 							</InlineLink>
 						</ItemTitle>
 						<ItemDescription className="text-xs">
-							{treatedAsAutomation ? "Treated as automation" : "Bot account"} ·{" "}
-							{counts.contributions} {counts.contributions === 1 ? "contribution" : "contributions"}
+							{kind === "BOT" ? "Bot account" : "Treated as automation"} · {counts.contributions}{" "}
+							{counts.contributions === 1 ? "contribution" : "contributions"}
 						</ItemDescription>
 					</ItemContent>
 				</Item>

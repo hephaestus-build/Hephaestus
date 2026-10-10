@@ -582,7 +582,7 @@ export const YEAR_OVERVIEW = overviewOf(
 function personOf(
 	who: UserInfo,
 	counts: StoryCounts & { peopleHelped?: number },
-	options: { automation?: "bot" | "treated"; firstContributionAt?: Date } = {},
+	options: { kind?: ActivityPerson["kind"]; firstContributionAt?: Date } = {},
 ): ActivityPerson {
 	const total = tallyOf(counts);
 	const span = spanOf("30d");
@@ -590,8 +590,7 @@ function personOf(
 	const weeks = spread(total, starts.length);
 	return {
 		person: who,
-		automation: options.automation !== undefined,
-		treatedAsAutomation: options.automation === "treated",
+		kind: options.kind ?? "PERSON",
 		firstContributionAt: options.firstContributionAt,
 		counts: {
 			contributions: total.contributions,
@@ -644,14 +643,14 @@ export const AUTOMATION: ActivityPerson[] = [
 		user(90, "dependabot[bot]", "dependabot[bot]"),
 		{ PULL_REQUEST_OPENED: 14 },
 		{
-			automation: "bot",
+			kind: "BOT",
 		},
 	),
 	personOf(
 		user(91, "release-robot", "Release Robot"),
 		{ PULL_REQUEST_OPENED: 4 },
 		{
-			automation: "treated",
+			kind: "AUTOMATION",
 		},
 	),
 ];

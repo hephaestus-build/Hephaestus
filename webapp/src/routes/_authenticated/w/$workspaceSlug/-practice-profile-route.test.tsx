@@ -10,9 +10,9 @@ import type {
 	PracticeTraceEntry,
 	ProfileReviewRun,
 } from "@/api/types.gen";
-import { rangeStart } from "@/components/activity/activity-range";
 import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
+import { reviewRangeStart } from "@/components/practice-profile/practice-profile-search";
 import { artifactTrace } from "@/components/practice-trace/fixtures";
 import { formatDayTime, type Wire } from "@/lib/dates";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -426,7 +426,7 @@ describe("practice profile route", () => {
 
 			await waitFor(() => expect(router.state.location.search.reviewSince).toBe("30d"));
 			await waitFor(() =>
-				expect(asked.at(-1)).toBe(rangeStart(noon.getTime(), "30d").toISOString()),
+				expect(asked.at(-1)).toBe(reviewRangeStart(noon.getTime(), "30d").toISOString()),
 			);
 		} finally {
 			vi.useRealTimers();

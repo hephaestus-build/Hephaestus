@@ -12,7 +12,7 @@ import { initialize, mswLoader } from "msw-storybook-addon";
 import type { ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
-import { parseSearch, stringifySearch } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/search-params";
 import { handlers } from "@/mocks/handlers";
 import { ThemeProvider } from "@/runtime/theme/ThemeContext";
 
@@ -60,10 +60,9 @@ const withQueryClient: Decorator = (Story) => {
 const withRouter: Decorator = (Story, { parameters }) => {
 	const url = initialUrl(parameters.router);
 	const router = createRouter({
+		...ROUTER_SEARCH,
 		routeTree: createRootRoute({ component: () => <Story /> }),
 		history: url === undefined ? undefined : createMemoryHistory({ initialEntries: [url] }),
-		parseSearch,
-		stringifySearch,
 	});
 	return <RouterProvider router={router} />;
 };

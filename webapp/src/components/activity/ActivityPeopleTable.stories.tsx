@@ -1,7 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
-import { LARGE_PEOPLE, PEOPLE, peopleOf, readyPeople } from "@/stories/activity-story-data";
+import {
+	LARGE_PEOPLE,
+	PEOPLE,
+	peopleOf,
+	readyPeople,
+	REPOSITORIES,
+} from "@/stories/activity-story-data";
 import { withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
@@ -17,6 +23,7 @@ const meta = {
 		providerType: "GITHUB",
 		order: { sort: "contributions", desc: true },
 		onOrderChange: fn(),
+		repositories: REPOSITORIES,
 		repo: [],
 		onRepoChange: fn(),
 	},
@@ -61,6 +68,7 @@ export const Default: Story = {
 			["4", "Chen Wei"],
 			["5", "Élodie Brière"],
 		]);
+		await expect(within(table).getByRole("columnheader", { name: "Position" })).toBeVisible();
 		await expect(
 			within(table).getByRole("columnheader", { name: /^Contributions/u }),
 		).toHaveAttribute("aria-sort", "descending");
@@ -79,7 +87,7 @@ export const SortByReviews: Story = {
 	},
 };
 
-/** In name order no row has a position, since a name ranks nobody. */
+/** In name order no row has a position. */
 export const ByName: Story = {
 	args: { order: { sort: "name", desc: false } },
 	play: async ({ canvas }) => {
@@ -108,8 +116,11 @@ export const NoMatch: Story = {
 /** 250 people render 50 at a time; the end's press stays for the keyboard. */
 export const Large: Story = {
 	args: { state: readyPeople(peopleOf(LARGE_PEOPLE)) },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Show more people" })).toBeVisible();
+	play: async ({ canvas, userEvent }) => {
+		const table = canvas.getByRole("table", { name: "People" });
+		await expect(rows(table)).toHaveLength(50);
+		await userEvent.click(canvas.getByRole("button", { name: "Show more people" }));
+		await expect(rows(table)).toHaveLength(100);
 	},
 };
 
@@ -125,6 +136,17 @@ export const Empty: Story = {
 	args: { state: readyPeople(peopleOf([])) },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No contributions in this range")).toBeVisible();
+	},
+};
+
+/** With repositories picked, the empty table says the pick is why, and the pick stays clearable. */
+export const EmptyForRepositories: Story = {
+	args: { state: readyPeople(peopleOf([])), repo: ["hephaestus-build/Hephaestus"] },
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("No contributions to these repositories in this range"),
+		).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Reset" })).toBeVisible();
 	},
 };
 
@@ -156,6 +178,22 @@ export const Failed: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /Retry/u }));
 		await expect(onRetry).toHaveBeenCalledOnce();
+	},
+};
+
+/**
+ * A repository the workspace no longer has fails the read; the pick stays in the toolbar, named,
+ * so it can be cleared.
+ */
+export const FailedForUnknownRepository: Story = {
+	args: {
+		state: { status: "error", error: new Error("Repository not found"), onRetry },
+		repo: ["acme/old"],
+	},
+	play: async ({ args, canvas, userEvent }) => {
+		await expect(canvas.getByRole("combobox", { name: "Repository: acme/old" })).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
+		await expect(args.onRepoChange).toHaveBeenCalledWith([]);
 	},
 };
 

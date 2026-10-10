@@ -1,3 +1,5 @@
+import { HistoryIcon } from "@primer/octicons-react";
+
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
@@ -6,6 +8,7 @@ import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import type { ActivityOverviewState } from "./activity-buckets";
 import { ACTIVITY_CATEGORY_DEFS, type ActivityCategory } from "./activity-kind-defs";
+import { ActivityEmpty } from "./ActivityEmpty";
 import { ActivityTrendChart } from "./ActivityTrendChart";
 import { ActivityWorkLog, type ActivityWorkLogState, type WorkLogSubject } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
@@ -22,6 +25,8 @@ export interface ActivityCategoryLevelProps {
 	/** The owner's timeline, filtered to the category's kinds. */
 	workLog: ActivityWorkLogState;
 	subject: WorkLogSubject;
+	/** Nobody by the owner's login contributed in the period and scope, so there is nothing to count. */
+	absent?: boolean;
 }
 
 /** One category of activity grown out of its tile: the same bars with a date axis, then its timeline. */
@@ -34,25 +39,32 @@ export function ActivityCategoryLevel({
 	overview,
 	workLog,
 	subject,
+	absent = false,
 }: ActivityCategoryLevelProps) {
 	const title = ACTIVITY_CATEGORY_DEFS[category].label(providerType);
 	return (
 		<>
 			<LevelHeader nested={nested} path={path} current={title} description={description} />
 			<DrawerBody className="flex flex-col gap-8 pt-2">
-				<ActivityTrendChart state={overview} category={category} providerType={providerType} />
-				<Section
-					level={3}
-					size="lg"
-					title="Timeline"
-					actions={
-						workLog.status === "ready" && workLog.items.length > 0 ? (
-							<CopyMarkdownButton onCopy={workLog.onCopy} />
-						) : undefined
-					}
-				>
-					<ActivityWorkLog state={workLog} providerType={providerType} subject={subject} />
-				</Section>
+				{absent ? (
+					<ActivityEmpty icon={<HistoryIcon />} title="No activity in this range" />
+				) : (
+					<>
+						<ActivityTrendChart state={overview} category={category} providerType={providerType} />
+						<Section
+							level={3}
+							size="lg"
+							title="Timeline"
+							actions={
+								workLog.status === "ready" && workLog.items.length > 0 ? (
+									<CopyMarkdownButton onCopy={workLog.onCopy} />
+								) : undefined
+							}
+						>
+							<ActivityWorkLog state={workLog} providerType={providerType} subject={subject} />
+						</Section>
+					</>
+				)}
 			</DrawerBody>
 		</>
 	);

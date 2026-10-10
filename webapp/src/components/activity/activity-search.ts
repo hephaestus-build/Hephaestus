@@ -5,6 +5,7 @@ import {
 	detailStackSchema,
 	parseDetailStack,
 } from "@/components/layout/detail-drawer/detail-stack";
+import { toDayParam } from "@/lib/date-range-search";
 import { multiValue } from "@/lib/search-params";
 
 import { ACTIVITY_CATEGORIES, type ActivityCategory } from "./activity-kind-defs";
@@ -88,13 +89,24 @@ function isActivityCategory(value: string): value is ActivityCategory {
 }
 
 /**
+ * A day of a custom range, from the first year any provider history could have to today. A day out
+ * of that span drops, so the preset counts instead: a future day has nothing to count, and a day
+ * centuries back would only draw a hundred thousand empty weeks.
+ */
+const customDay = z.iso
+	.date()
+	.refine((day) => day >= "2000-01-01" && day <= toDayParam(new Date()))
+	.optional()
+	.catch(undefined);
+
+/**
  * The period every activity page counts: a preset, `?range=1y`, or the days of a custom range,
  * `?from=2026-01-01&to=2026-03-31`, which win over the preset when both are valid.
  */
 const periodSearchSchema = z.object({
 	range: z.enum(ACTIVITY_PRESETS).default(DEFAULT_ACTIVITY_PRESET).catch(DEFAULT_ACTIVITY_PRESET),
-	from: z.iso.date().optional().catch(undefined),
-	to: z.iso.date().optional().catch(undefined),
+	from: customDay,
+	to: customDay,
 });
 
 /** The keys that follow the reader to the other activity page, and to another workspace. */
@@ -125,7 +137,8 @@ export type PeopleSort = (typeof PEOPLE_SORTS)[number];
  * repository by its full path, `?team=core&repo=acme/api&sort=reviews`.
  */
 const workspaceActivityFilterSchema = periodSearchSchema.extend({
-	team: z.string().min(1).optional().catch(undefined),
+	// The default parser reads `team=2024` as a number; a slug is text either way.
+	team: z.coerce.string().min(1).optional().catch(undefined),
 	repo: multiValue,
 	sort: z.enum(PEOPLE_SORTS).default("contributions").catch("contributions"),
 	dir: z.enum(["asc", "desc"]).default("desc").catch("desc"),

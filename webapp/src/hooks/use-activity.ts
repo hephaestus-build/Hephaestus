@@ -9,7 +9,7 @@ import {
 	getActivityWorkOptions,
 	getOpenWorkOptions,
 } from "@/api/@tanstack/react-query.gen";
-import type { ActivityWork } from "@/api/types.gen";
+import type { ActivityPeople, ActivityWork } from "@/api/types.gen";
 import type { ActivityOverviewState } from "@/components/activity/activity-buckets";
 import type { ActivityKind } from "@/components/activity/activity-kind-defs";
 import {
@@ -23,6 +23,7 @@ import type { ActivityPeopleState } from "@/components/activity/ActivityPeopleTa
 import type { ActivityWorkLogState } from "@/components/activity/ActivityWorkLog";
 import type { OpenWorkState } from "@/components/activity/OpenWorkSections";
 import { workLogMarkdown } from "@/components/activity/work-log-markdown";
+import type { ActivityFacets } from "@/components/activity/WorkspaceActivityPage";
 import { panelState } from "@/components/common/panel-state";
 import { copyRichText } from "@/lib/clipboard";
 import type { ProviderType } from "@/lib/provider/provider-terms";
@@ -70,6 +71,22 @@ export function useActivityPeople(scope: ActivityScope): ActivityPeopleState {
 		people,
 		stale: query.isPlaceholderData,
 	}));
+}
+
+/**
+ * The teams and repositories the scope picks from, which no scope changes. While another scope
+ * loads, the previous one's stand in, so a picker keeps its options. It observes the people read's
+ * own query, so it sends no request of its own.
+ */
+export function useActivityFacets(scope: ActivityScope): ActivityFacets | undefined {
+	const { workspaceSlug } = scope;
+	const query = useQuery({
+		...getActivityPeopleOptions({ path: { workspaceSlug }, query: scopeQuery(scope) }),
+		placeholderData: (previous, previousQuery) =>
+			previousQuery?.queryKey[0].path.workspaceSlug === workspaceSlug ? previous : undefined,
+		select: ({ teams, repositories }: ActivityPeople) => ({ teams, repositories }),
+	});
+	return query.data;
 }
 
 /**

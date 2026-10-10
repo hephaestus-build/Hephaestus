@@ -1,12 +1,13 @@
 import { addDays, addMonths, format, isSameYear, max, min } from "date-fns";
 
+import type { TimeBucketSize } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
 import { formatDayRange } from "@/lib/dates";
 
 import type { Noun } from "./activity-kind-defs";
 import type { ActivityOverview, ActivityTally, ActivityWeek } from "./activity-tally";
 
-export type BucketSize = "DAY" | "WEEK" | "MONTH";
+export type BucketSize = TimeBucketSize;
 
 /** The instants a view counts between: from inclusive, to exclusive. */
 export interface DateSpan {
@@ -77,11 +78,7 @@ interface BucketSizeDef {
 	end: (start: Date) => Date;
 }
 
-/**
- * How a bucket reads at each size, formatted in local time. Practice reviews start a bucket at
- * midnight in the browser's time zone. Activity starts a week at Monday 00:00 UTC, which is still
- * Monday everywhere east of UTC.
- */
+/** How a bucket reads at each size: its start is local midnight of its first day. */
 export const BUCKET_SIZE_DEFS = {
 	DAY: { noun: "day", tick: (start) => format(start, "d MMM"), end: (start) => addDays(start, 1) },
 	WEEK: {

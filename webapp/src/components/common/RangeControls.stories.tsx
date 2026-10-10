@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
-import { ACTIVITY_RANGE_OPTIONS } from "@/components/activity/activity-range";
+import { ACTIVITY_PRESET_OPTIONS } from "@/components/activity/activity-period";
 import { withStandardPage } from "@/stories/decorators";
 
 import { RangeControls } from "./RangeControls";
@@ -10,7 +10,7 @@ const meta = {
 	component: RangeControls,
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
-	args: { options: ACTIVITY_RANGE_OPTIONS, range: "30d", onRangeChange: fn(), updating: false },
+	args: { options: ACTIVITY_PRESET_OPTIONS, range: "30d", onRangeChange: fn(), updating: false },
 } satisfies Meta<typeof RangeControls>;
 
 export default meta;
