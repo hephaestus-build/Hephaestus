@@ -67,30 +67,32 @@ class ProxyStandInLifecycleTest {
                                     + "Host: localhost\r\nContent-Length: 2\r\nExpect: 100-continue\r\n\r\n")
                             .getBytes(StandardCharsets.US_ASCII));
             socket.getOutputStream().flush();
-            var headers = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
-            assertThat(headers.readLine()).contains(" 100 ");
-            String header;
-            while ((header = headers.readLine()) != null && !header.isEmpty()) {
-                // Consume the provisional response before withholding the second body byte.
+            try (var headers =
+                    new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII))) {
+                assertThat(headers.readLine()).contains(" 100 ");
+                String header;
+                while ((header = headers.readLine()) != null && !header.isEmpty()) {
+                    // Consume the provisional response before withholding the second body byte.
+                }
+                socket.getOutputStream().write('{');
+                socket.getOutputStream().flush();
+
+                harness.closeProxy();
+
+                assertThat(harness.tasks
+                                .submit(() -> {
+                                    try {
+                                        return socket.getInputStream().read() == -1;
+                                    } catch (SocketException connectionReset) {
+                                        return true;
+                                    }
+                                })
+                                .get(3, TimeUnit.SECONDS))
+                        .isTrue();
+                assertThat(harness.accepted.getCount())
+                        .as("an incomplete request is never forwarded")
+                        .isEqualTo(1);
             }
-            socket.getOutputStream().write('{');
-            socket.getOutputStream().flush();
-
-            harness.closeProxy();
-
-            assertThat(harness.tasks
-                            .submit(() -> {
-                                try {
-                                    return socket.getInputStream().read() == -1;
-                                } catch (SocketException connectionReset) {
-                                    return true;
-                                }
-                            })
-                            .get(3, TimeUnit.SECONDS))
-                    .isTrue();
-            assertThat(harness.accepted.getCount())
-                    .as("an incomplete request is never forwarded")
-                    .isEqualTo(1);
         }
     }
 
