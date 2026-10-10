@@ -53,7 +53,6 @@ export function PublicActivitySection({ state }: PublicActivitySectionProps) {
 						id="public-activity-visible"
 						checked={state.visible}
 						onCheckedChange={(next) => state.onVisibleChange(next)}
-						// Read-only, not disabled: a disabled switch leaves the tab order and drops keyboard focus.
 						readOnly={state.pending}
 					/>
 				</Field>
