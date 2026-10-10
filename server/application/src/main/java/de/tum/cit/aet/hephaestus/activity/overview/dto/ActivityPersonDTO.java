@@ -11,6 +11,7 @@ import org.jspecify.annotations.Nullable;
 public record ActivityPersonDTO(
         @NonNull UserInfoDTO person,
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean automation,
+        @Schema(requiredMode = RequiredMode.REQUIRED) boolean treatedAsAutomation,
         @NonNull ActivityCountsDTO counts,
         @Nullable Instant firstContributionAt,
         @NonNull List<ActivitySparklineWeekDTO> weeks) {}

@@ -9695,6 +9695,8 @@ components:
           format: date-time
         person:
           $ref: "#/components/schemas/UserInfo"
+        treatedAsAutomation:
+          type: boolean
         weeks:
           type: array
           items:
@@ -9703,6 +9705,7 @@ components:
       - automation
       - counts
       - person
+      - treatedAsAutomation
       - weeks
     ActivityPersonDetail:
       type: object
@@ -9728,6 +9731,8 @@ components:
         to:
           type: string
           format: date-time
+        treatedAsAutomation:
+          type: boolean
         weeks:
           type: array
           items:
@@ -9740,6 +9745,7 @@ components:
       - person
       - repositories
       - to
+      - treatedAsAutomation
       - weeks
     ActivityRepository:
       type: object

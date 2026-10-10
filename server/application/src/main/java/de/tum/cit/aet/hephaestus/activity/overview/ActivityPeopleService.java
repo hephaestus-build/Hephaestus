@@ -60,6 +60,7 @@ public class ActivityPeopleService {
                 .map(row -> new ActivityPersonDTO(
                         row.person(),
                         row.getAutomation(),
+                        row.getTreatedAsAutomation(),
                         row.counts(),
                         row.getFirstContribution(),
                         List.copyOf(weeks.getOrDefault(row.getActorId(), List.of()))))
@@ -116,6 +117,7 @@ public class ActivityPeopleService {
                 .orElseGet(() -> new ActivityPeopleQueryRepository.PersonCount(
                         contributor.person(),
                         contributor.automation(),
+                        contributor.treatedAsAutomation(),
                         true,
                         null,
                         null,
@@ -141,6 +143,7 @@ public class ActivityPeopleService {
                 range.to(),
                 total.person(),
                 total.automation(),
+                total.treatedAsAutomation(),
                 total.counts(),
                 total.firstContribution(),
                 total.breakdown(),

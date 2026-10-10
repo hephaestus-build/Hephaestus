@@ -12,6 +12,7 @@ public record ActivityPersonDetailDTO(
         @NonNull Instant to,
         @NonNull UserInfoDTO person,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean automation,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean treatedAsAutomation,
         @NonNull ActivityCountsDTO counts,
         @Nullable Instant firstContributionAt,
         @NonNull ActivityBreakdownDTO breakdown,

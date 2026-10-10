@@ -99,6 +99,7 @@ export type ActivityPerson = {
     counts: ActivityCounts;
     firstContributionAt?: string;
     person: UserInfo;
+    treatedAsAutomation: boolean;
     weeks: Array<ActivitySparklineWeek>;
 };
 
@@ -111,6 +112,7 @@ export type ActivityPersonDetail = {
     person: UserInfo;
     repositories: Array<ActivityRepositoryCounts>;
     to: string;
+    treatedAsAutomation: boolean;
     weeks: Array<ActivityWeek>;
 };
 
