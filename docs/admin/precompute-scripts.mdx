@@ -1,0 +1,730 @@
+---
+id: precompute-scripts
+title: Write a precompute script
+description: Write a precompute script that points a practice review at places to check, with code first and models only where code cannot decide.
+---
+
+# Write a precompute script
+
+A practice can have a precompute script.
+The script runs before each review of the practice and points the review at places to check.
+This page tells a workspace admin how to write one, try it, and read what it did.
+
+You write the script in the practice editor, in the section **Precompute script**.
+It is TypeScript.
+The editor saves it with the practice, and the next review of that practice runs it.
+
+Other pages own the adjacent facts:
+
+| Fact | Home |
+| --- | --- |
+| The review criteria that a script supports | [Writing effective practices](./writing-practices.mdx) |
+| How to assign the decision, embedding and reranking models, and what they cost | [Precompute models](./ai-providers.mdx#precompute-models) |
+| How to read what a script did in one review | [Practice review operations](./practice-review-operations.mdx#precompute-scripts) |
+| How the runner runs a script, isolates it, and accounts for its calls | [Precompute runner internals](/contributor/practice-precompute) |
+
+## What a script is for
+
+A review checks a practice against the reviewed work.
+A script finds the places in the work that the review must look at for that practice.
+Such a place is a **lead**: a citation, a kind, and optional facts.
+The review reads the leads after the practice's criterion, checks each lead against the criterion, and decides.
+
+A lead is never a claim about the work.
+It does not become an observation, and it does not become feedback.
+Thus, a wrong lead costs the review one look.
+A missing lead costs nothing that the review cannot find alone.
+
+A script can fail, run out of time, or lose its model.
+Then the review continues without the script's leads.
+The script's section tells the review what was not rated and why.
+A failure of a script or a model never becomes a statement about the developer's work.
+
+Most of a script is code.
+A script can also call models: a decision model, an embedding model, a reranking model, and the review's own chat model.
+Use a model only at a point where code cannot decide.
+
+The bundled practices have scripts in an earlier form, with a plain function as the default export.
+Hephaestus still runs them.
+Write each new script with `definePrecompute`, as this page shows.
+
+## Write your first script
+
+This tutorial writes a script for a practice with this criterion: *Each TODO that the change adds names a tracking item, such as an issue.*
+
+### 1. List the places to look at
+
+Read the criterion.
+Then write down the places that a reviewer must look at to judge it:
+
+- Each comment that the change adds and that marks open work, such as a `TODO` or `FIXME`.
+- Of those, each comment without a tracking reference: an issue number, a ticket key, or a URL.
+
+Code can find both.
+Thus, the first version of the script uses no model.
+
+### 2. Find the places with code
+
+```ts
+import { addedComments, definePrecompute, type Lead } from "../lib/precompute.ts";
+
+const OPEN_WORK = /\b(TODO|FIXME|HACK|XXX)\b/u;
+const TRACKING = /#\d+|\b[A-Z][A-Z0-9]+-\d+\b|https?:\/\/\S+/u;
+
+export default definePrecompute({
+  meta: {
+    kinds: { "untracked-todo": "A TODO that the change adds, with no tracking reference." },
+  },
+  async run(ctx) {
+    const leads: Lead[] = addedComments(ctx.change)
+      .filter((comment) => OPEN_WORK.test(comment.text) && !TRACKING.test(comment.text))
+      .map((comment) => ({ at: comment.at, kind: "untracked-todo" }));
+    return { leads };
+  },
+});
+```
+
+`addedComments` returns each comment that the change adds, with its citation.
+`meta.kinds` declares each kind of lead with the sentence that the review reads for it.
+The script returns one lead for each comment that marks open work and has no tracking reference.
+
+### 3. Add an optional model
+
+Some temporary work has no marker, such as `// remove before the release`.
+Code cannot find it, but a decision model can rate each comment against a fixed set of kinds.
+Declare the decision model as `optional`, so that the script still gives its code leads without the model:
+
+```ts
+import {
+  addedComments,
+  classify,
+  commentKinds,
+  definePrecompute,
+  type Lead,
+} from "../lib/precompute.ts";
+
+const OPEN_WORK = /\b(TODO|FIXME|HACK|XXX)\b/u;
+const TRACKING = /#\d+|\b[A-Z][A-Z0-9]+-\d+\b|https?:\/\/\S+/u;
+const NEEDS_A_LOOK = new Set(["untracked-todo", "temporary-stub"]);
+
+export default definePrecompute({
+  meta: {
+    models: { decision: "optional" },
+    kinds: {
+      "untracked-todo": "A TODO that the change adds, with no tracking reference.",
+      "open-work": "An added comment that a model rated as untracked or temporary work.",
+    },
+  },
+  async run(ctx) {
+    const comments = addedComments(ctx.change);
+    const leads: Lead[] = [];
+    const unmarked: typeof comments = [];
+    for (const comment of comments) {
+      if (!OPEN_WORK.test(comment.text)) {
+        unmarked.push(comment);
+      } else if (!TRACKING.test(comment.text)) {
+        leads.push({ at: comment.at, kind: "untracked-todo" });
+      }
+    }
+
+    const { ratings, unrated } = await classify({
+      model: ctx.models.decision,
+      set: commentKinds,
+      items: unmarked,
+      what: "added comments without a TODO marker",
+    });
+    for (const [comment, rating] of ratings) {
+      if (NEEDS_A_LOOK.has(rating.value)) {
+        leads.push({
+          at: comment.at,
+          kind: "open-work",
+          rating: { value: rating.value, score: rating.score },
+        });
+      }
+    }
+
+    return { leads, facts: { addedComments: comments.length }, unrated };
+  },
+});
+```
+
+`classify` sends the comments that code did not flag to the decision model.
+Code then decides which kinds deserve a lead.
+Without a decision model, `classify` returns every comment as not rated, with the reason `unavailable`.
+The script returns that `unrated` entry, so the review knows what it must read itself.
+
+### 4. Run it on a change
+
+Run the script on a change of your own before you save it.
+[Run a script on your own change](#run-a-script-on-your-own-change) gives the command.
+Read the section that the command prints.
+It shows each `untracked-todo` lead, and one `Not rated` line for the comments without a TODO marker.
+
+### 5. Save it and assign the model
+
+1. Open the practice in the editor.
+2. Open **Precompute script**.
+3. Paste the script.
+4. Save the practice.
+5. Wait for the next review of the practice.
+6. If the script uses a model that the workspace has not assigned, open the practice under **Practice setup**.
+7. In **Precompute script**, follow the link of the model that the script needs.
+8. Assign the model, as [Assign a precompute model](./ai-providers.mdx#assign-a-precompute-model) tells.
+
+[Which practices use a precompute model](./ai-providers.mdx#which-practices-use-a-precompute-model) tells when the needs of a script appear.
+
+## Patterns
+
+Each pattern below gives the case for it, its shape, and what the script gives without its model.
+All fragments run inside `run(ctx)` and import from `../lib/precompute.ts`.
+They add to three values that `run` returns at its end:
+
+```ts
+const leads: Lead[] = [];
+const facts: Facts = {};
+const unrated: Unrated[] = [];
+```
+
+`comments` is `addedComments(ctx.change)`.
+
+### Code only
+
+**When:** code can find every place, such as a pattern, a count, or a path.
+**Degrades to:** nothing. It needs no model.
+
+The tutorial's first version is this pattern.
+Code gives the same leads for the same work, costs nothing, and needs no assignment.
+Start each script here.
+
+### Code finds, a decision model filters
+
+**When:** code finds the candidates, and a fixed set of answers decides which candidates deserve a look.
+**Degrades to:** the leads that code finds, and one `Not rated` line for the candidates.
+
+```ts
+const { ratings, unrated } = await classify({
+  model: ctx.models.decision,
+  set: commentKinds,
+  items: comments,
+  what: "added comments",
+});
+```
+
+The tutorial's second version is this pattern.
+`commentKinds` is a complete question set for added comments.
+To rate other items, write your own question set, as [`classify` and question sets](#classify-and-question-sets) tells.
+
+### Embeddings for near-duplicates
+
+**When:** you must find items that are almost the same, such as copied comments or near-copies of a function.
+**Degrades to:** the leads that code finds, and one `Not rated` line for the compared items.
+
+```ts
+const { embedding } = ctx.models;
+if (embedding === undefined) {
+  unrated.push({ what: "added comments compared for copies", count: comments.length, reason: "unavailable" });
+} else if (comments.length > 1) {
+  const embedded = await step("embed", async () =>
+    embedMany({ model: embedding, values: comments.map((c) => c.text) }),
+  );
+  if ("unrated" in embedded) {
+    unrated.push({ what: "added comments compared for copies", count: comments.length, reason: embedded.unrated });
+  } else {
+    const vectors = embedded.value.embeddings;
+    for (const [i, a] of vectors.entries()) {
+      for (const [j, b] of vectors.entries()) {
+        const copy = comments[j];
+        if (j > i && copy !== undefined && cosineSimilarity(a, b) > 0.9) {
+          leads.push({ at: copy.at, kind: "near-copy", facts: { copyOfLine: comments[i]?.at.line ?? 0 } });
+        }
+      }
+    }
+  }
+}
+```
+
+An embedding has no meaning alone.
+Compare only vectors from the same model in one run.
+Set the threshold in code.
+
+### Rerank to the top N
+
+**When:** code finds more candidates than the review can read, and one description says which matter most.
+**Degrades to:** the candidates in the order that code gives, cut to the same N.
+
+`candidates` holds the items that code found, each with its `text`.
+
+```ts
+const TOP = 5;
+const { reranking } = ctx.models;
+let chosen = candidates.slice(0, TOP);
+if (reranking !== undefined && candidates.length > TOP) {
+  const ranked = await step("rerank", async () =>
+    rerank({
+      model: reranking,
+      query: "temporary or unfinished work that should not be merged",
+      documents: candidates.map((c) => c.text),
+      topN: TOP,
+    }),
+  );
+  if ("unrated" in ranked) {
+    unrated.push({ what: "ranking of the candidates", count: candidates.length, reason: ranked.unrated });
+  } else {
+    chosen = ranked.value.ranking.flatMap((r) => candidates[r.originalIndex] ?? []);
+  }
+}
+```
+
+A reranking score orders the items.
+Do not use it as a rating of an item.
+
+### One structured answer
+
+**When:** one fact about the whole work needs a model, and the answer has a fixed shape.
+**Degrades to:** the leads that code finds, without that fact.
+
+```ts
+const { chat } = ctx.models;
+if (chat !== undefined) {
+  const kind = await step("change kind", async () => {
+    const { output } = await generateText({
+      model: chat,
+      output: Output.choice({ options: ["code", "documentation", "configuration", "mixed"] }),
+      prompt: `Which kind of change adds these files: ${[...ctx.change.keys()].join(", ")}?`,
+    });
+    return output;
+  });
+  if ("value" in kind) {
+    facts.changeKind = kind.value;
+  }
+}
+```
+
+Read `output` inside the `step`.
+When the answer has no output, reading it throws, and `step` turns the error into `off-format`.
+Use `Output.object` with a `z` schema for an answer with more than one field.
+The [AI SDK documentation](https://ai-sdk.dev/docs/ai-sdk-core/generating-structured-data) describes both.
+
+### Locate code with `agent`
+
+**When:** the place is in the repository, outside the change, and finding it needs several searches that code cannot plan.
+**Degrades to:** the leads that code finds, without that place.
+
+```ts
+const { chat } = ctx.models;
+if (chat !== undefined) {
+  const found = await step("locate", async () =>
+    agent({
+      model: chat,
+      tools: ctx.tools,
+      instructions: "You locate code in a repository. Use the tools to look. Do not guess.",
+      prompt: "Find where the function parseDiff is declared.",
+      schema: z.object({ file: z.string(), line: z.int().positive() }),
+      maxSteps: 8,
+      signal: ctx.signal,
+    }),
+  );
+  if ("value" in found) {
+    leads.push({ at: { file: found.value.output.file, line: found.value.output.line }, kind: "declaration" });
+  }
+}
+```
+
+Of all primitives, `agent` costs the most.
+Give it a narrow question and a small `maxSteps`.
+Cite what it found as a `file` lead, so that the runner checks that the lines exist.
+
+### Independent steps together
+
+**When:** a script has two or more steps that do not depend on each other.
+**Degrades to:** each step degrades alone.
+
+Write each step as a function that returns its own leads, facts and `unrated` entries.
+Start the steps together.
+Then join what they return:
+
+```ts
+interface Part {
+  leads?: Lead[];
+  facts?: Facts;
+  unrated?: Unrated[];
+}
+
+const parts: Part[] = await Promise.all([
+  rateComments(ctx, comments),
+  findCopies(ctx, comments),
+  rankUnfinished(ctx, comments),
+]);
+return {
+  leads: parts.flatMap((part) => part.leads ?? []),
+  facts: Object.fromEntries(parts.flatMap((part) => Object.entries(part.facts ?? {}))),
+  unrated: parts.flatMap((part) => part.unrated ?? []),
+};
+```
+
+Then a slow model costs only its own step, and the other steps still finish before the deadline.
+Steps that run together share one limit of requests in flight, as [Requests in flight](#requests-in-flight) tells.
+To type `ctx` in such a function, declare `meta` as a constant with `as const`.
+Then type `ctx` as `PrecomputeContext<typeof meta.models>`.
+
+### When not to write a script
+
+Do not write a script in these cases:
+
+- The review can judge the criterion from the change alone, and the change is small.
+- Every line of the change is a place to look at. A lead for each line adds nothing.
+- Only a model can find the places, and it must read the whole change to do so. The review reads the change already.
+- The criterion is about intent, a decision, or a conversation, and no pattern finds the candidates.
+
+## Run a script on your own change
+
+Run the script on a real change before you save it.
+The run uses no model, so each model slot is not available.
+An `optional` slot then gives `Not rated` lines, and a `required` slot stops the script with the status `skipped`.
+
+You need a checkout of Hephaestus at the version of your instance, and Node.js at the version that the checkout pins.
+
+1. In the checkout, go to `docker/agents/precompute`.
+2. Install the dependencies with `pnpm install --frozen-lockfile`.
+3. Write the change as a unified diff, for example with `git -C <clone> diff main...HEAD > change.patch`.
+4. Run the script:
+
+   ```bash
+   node validate.ts --script <script.ts> --repo <clone> --diff change.patch
+   ```
+
+5. Read the output.
+   It prints the result `<slug>.json` and the section `<slug>.md` that the review reads.
+   The command exits with 1 when the script failed or ran out of time.
+   It exits with 2 when an option or an input is not valid.
+   An example is a `--repo` that is not a folder.
+6. Fix the script.
+7. Run the command again until the section shows the leads that you expect.
+
+The command accepts these options:
+
+| Option | Value |
+| --- | --- |
+| `--script` | The script file. Its name, less `.ts`, is the practice's identifier: lowercase letters, digits and hyphens. |
+| `--repo` | A checkout of the repository at the head of the change. |
+| `--diff` | The change as a unified diff. Without it, the change is empty. |
+| `--metadata` | A JSON file with the metadata of the reviewed work, for a script that reads `ctx.metadata`. |
+| `--context` | A folder with captured context records, for a script that reads `ctx.context`. |
+| `--out` | A folder that keeps `<slug>.json` and `<slug>.md` after the run. |
+
+## Use an AI assistant
+
+An AI assistant can write a script from this page.
+Give the assistant this page and the brief below.
+Replace each «…» with your facts.
+
+```text
+Follow the attached guide exactly. Criterion: «…». Places the review must look at: «…». Models this workspace assigns: «…». Return one TypeScript file whose default export is `definePrecompute({ meta, run })`.
+```
+
+1. Copy the criterion from the practice's **What to look for**.
+2. List the places, as in [step 1 of the tutorial](#1-list-the-places-to-look-at).
+3. List the precompute models that **AI models** assigns. If it assigns none, write `none`.
+4. Run the file that you get, as [Run a script on your own change](#run-a-script-on-your-own-change) tells.
+5. Give the output back to the assistant until the section is correct.
+6. Read the script yourself before you save it. Check it against [Anti-patterns](#anti-patterns).
+
+## Reference
+
+### `meta`
+
+A script has one default export:
+
+```ts
+import { definePrecompute } from "../lib/precompute.ts";
+
+export default definePrecompute({
+  meta: {
+    models: { decision: "optional" },
+    tokens: 20_000,
+    kinds: { "untracked-todo": "A TODO without a tracking reference." },
+  },
+  async run() {
+    return { leads: [] };
+  },
+});
+```
+
+The runner reads `meta` before `run` starts.
+A `meta` that is not valid stops the script with an error.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `models` | slot → `"required"` or `"optional"` | The model slots that the script uses. A slot that is not declared is never available. |
+| `tokens` | positive integer, at most 500 000 | The token limit of this practice. The default is 20 000. The attempt token limit applies too. [Limits](#limits) gives both. |
+| `kinds` | lead kind → one sentence | Each lead kind that the script can return, with the sentence that the review reads for it. |
+
+A kind has 2 to 48 characters and matches `^[a-z][a-z0-9-]{1,47}$`.
+Name it by what the place is, such as `untracked-todo`.
+Its sentence is one line of at most 300 characters.
+
+### Model slots and needs
+
+A **model slot** is one kind of model that a script can call.
+
+| Slot | AI SDK type | The model that the slot gets |
+| --- | --- | --- |
+| `chat` | `LanguageModel` | The practice review's own model. You assign nothing for it. |
+| `decision` | `Experimental_DecisionModel` | The **Decision model** on **AI models** |
+| `embedding` | `EmbeddingModel` | The **Embedding model** on **AI models** |
+| `reranking` | `RerankingModel` | The **Reranking model** on **AI models** |
+
+For each review, Hephaestus chooses each model through the reviewed developer's AI choice.
+[Privacy](./ai-providers.mdx#privacy) gives the rule.
+
+The runner decides which slots are available before `run` starts:
+
+1. A declared slot is available when the review has a model for it.
+2. If a `required` slot is not available, the script does not run. Its status is `skipped`.
+3. If an `optional` slot is not available, `ctx.models.<slot>` is `undefined`.
+
+The types follow `meta.models`.
+A `required` slot is a model.
+An `optional` slot is a model or `undefined`.
+An undeclared slot does not exist on `ctx.models`.
+
+Prefer `optional`.
+A script with `optional` slots still gives the leads that its code finds when the workspace assigns no model.
+Use `required` only when the script has nothing useful to say without the model.
+
+### The context
+
+`run(ctx)` receives these fields:
+
+| Field | What it holds |
+| --- | --- |
+| `practice.slug` | The identifier of the practice. |
+| `repo` | The absolute path of the repository checkout under review. |
+| `change` | The parsed change: path → added and removed lines, keyed by line number. |
+| `changeDir` | The folder of the change view: `diff.patch`, `diff_stat.txt` and `files.json`. A review without a change, such as an issue review, has no such folder. The local command gives an empty string. Prefer `change`. |
+| `metadata` | The metadata of the reviewed work, as an object of unknown values. For a pull request, it holds fields such as `title`, `body` and `labels`. [Pull request records](/contributor/agent/agent-workspace-abi#pull-request-records) lists them. Validate each field that you read. The local command gives `{}` without `--metadata`. |
+| `context.dir`, `context.reference` | The folder of the captured context, and its reference, to cite records. |
+| `now` | The time of the review. Use it instead of the clock. |
+| `models` | The available model slots, as AI SDK model objects. |
+| `tools` | `readFile`, `listFiles` and `grep` over the repository, as AI SDK tools. |
+| `remaining()` | The tokens and milliseconds that this practice has left. |
+| `signal` | An `AbortSignal` that aborts shortly before the deadline of this practice. |
+| `log(text)` | One line to the runner's log. The runner keeps at most 2 000 characters of each line. |
+
+### Primitives and tools
+
+`../lib/precompute.ts` is the one library import of a script.
+It exports `definePrecompute`, the primitives below, the reader `addedComments`, the question set `commentKinds`, and the types.
+
+| You need to | Use | Slot | Calls |
+| --- | --- | --- | --- |
+| Find a pattern, count lines, or match a path | Plain TypeScript and the readers | none | none |
+| Rate many items against a fixed set of answers | `classify` with a question set | `decision` | One for each pack of 30 items |
+| Find items that are almost the same | `embedMany` and `cosineSimilarity` | `embedding` | One for each 64 values |
+| Find the items closest to one description | `rerank` with at most 256 documents | `reranking` | One |
+| Get one structured answer about the work | `generateText` with `Output` | `chat` | One |
+| Find something that needs several searches in the repository | `agent` with `ctx.tools` | `chat` | Up to `maxSteps` |
+| Contain a failure and label its model calls | `step` | any | none |
+
+#### `step`
+
+`step(label, run)` runs one unit of work.
+It returns `{ value }`, or `{ unrated: reason }` when the work throws.
+When a model call in the step fails, the runner's log names the label.
+A nested step joins the labels with `›`.
+
+Put each model call that is not in `classify` inside a `step`.
+Then one failure leaves one unit not rated, and the rest of the script continues.
+
+#### `classify` and question sets
+
+`classify({ model, set, items, what })` rates items through a decision model.
+`set` is a `QuestionSet` with these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `name` | The name of the vocabulary, such as `comment kind`. |
+| `noun` | What one item is, such as `added code comment with the code around it`. |
+| `question` | The question for each item. |
+| `values` | Value → definition. A value has the shape of a lead kind, such as `restates-code`. |
+| `render` | The item as the model reads it. |
+
+`classify` tells the model that the items are data, and that instructions inside an item are part of the data.
+It returns a `Rating` for each item that the model answered: `value`, `score` and `probabilities`.
+Every other item is in `unrated`:
+
+- If the model is `undefined`, all items are not rated, with `unavailable`.
+- If a call fails, all items of its pack are not rated, with the reason of the failure.
+- If the model answers an item in a form that is not valid, that item is not rated, with `off-format`.
+
+#### `agent` and the repository tools
+
+`agent` runs a bounded AI SDK `ToolLoopAgent` that reads the repository and answers with your schema.
+
+- It must call a tool at each step.
+- It answers through a final `submit` tool with your schema.
+- It stops at `submit` or after `maxSteps` steps. The default is 8.
+- Without a model, it throws `UnratedError` with `unavailable`.
+- Without a `submit` call, it throws `UnratedError` with `budget`.
+
+`ctx.tools` holds three read-only tools:
+
+| Tool | Limit |
+| --- | --- |
+| `readFile` | 200 numbered lines for each call. It does not read a file larger than 2 MiB. |
+| `listFiles` | 200 entries |
+| `grep` | 50 matches |
+
+`readFile` and `listFiles` refuse a path outside the repository.
+
+#### Other model calls
+
+`generateText` sets the temperature to 0 when the call does not set it.
+`streamText` is not available.
+A string model ID fails, so a script reaches a model only through `ctx.models`.
+A model call runs once.
+Nothing retries it.
+
+### Result and citations
+
+`run` returns this value:
+
+| Field | Limit | Meaning |
+| --- | --- | --- |
+| `leads` | 200 | Places to look at. |
+| `facts` | 32 keys | Facts about the whole work, such as a count. |
+| `unrated` | 20 entries | What the script could not rate, how many, and why. |
+| `directions` | 10 lines of 300 characters | Instructions to the review. Write them yourself. Never pass model text. |
+
+A lead has these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `at` | The citation. |
+| `kind` | A kind that `meta.kinds` declares. |
+| `facts` | Optional facts about this place. |
+| `rating` | Optional `{ value, score }` from a model. `value` has the shape of a lead kind. `score` is from 0 to 1. |
+
+A fact is a one-line string of at most 200 characters, a finite number, or a boolean.
+Its key has at most 64 characters, starts with a letter, and has only letters and digits, such as `similarCommentPairs`.
+
+A citation has one of three shapes:
+
+| Shape | Points at |
+| --- | --- |
+| `{ change, line, endLine?, side? }` | Lines that the change adds (`NEW`, the default) or removes (`OLD`) |
+| `{ file, line, endLine? }` | Lines of a file in the repository |
+| `{ record, line? }` | A captured record in the context folder. Line 0 or no line cites the whole record. |
+
+An `unrated` entry is `{ what, count, reason }`.
+`what` names the items for the review, such as `added comments`, in at most 160 characters.
+
+### How leads are settled
+
+The runner settles each lead before the review sees it:
+
+1. It drops a lead whose kind `meta.kinds` does not declare.
+2. It drops a lead whose citation the source does not hold.
+   A quote spans at most 20 lines, and a quoted file has at most 2 MiB.
+3. It writes the quote of each lead that it keeps, from the source.
+   A script never writes a quote.
+4. It counts the dropped leads and shows them as one `Not rated` line with `off-format`.
+
+### Reasons
+
+A reason tells why something was not rated.
+It never means "nothing found".
+A script uses one of seven reasons: `unavailable`, `budget`, `deadline`, `too-large`, `off-format`, `refused` and `error`.
+[Calls that were not rated](./practice-review-operations.mdx#calls-that-were-not-rated) gives the meaning of each reason and what to do.
+It also tells which reasons the review's pages show.
+
+`reasonOf(error)` maps an error to a reason.
+`step` and `classify` use it.
+`UnratedError` carries the reason of a call that the runner refused or could not finish.
+
+### Limits
+
+| Limit | Value |
+| --- | --- |
+| The token limit of the practice | `meta.tokens`, default 20 000 |
+| The attempt token limit: the tokens of one review attempt, all scripts together | Default 200 000. [Cost and limits](./ai-providers.mdx#cost-and-limits) tells who sets it. |
+| Model calls in flight, all scripts together | 4 |
+| Requests in flight from one script: model calls and `ctx.tools.grep` searches | 32. One more stops the script with an error. |
+| Output tokens of one chat call | 4 096 |
+| Entries in one call | 64 decision questions, 64 embedding inputs, 256 reranking documents |
+| Time | The deadline of each script and of the stage, in the [workspace ABI](/contributor/agent/agent-workspace-abi#precompute-validation-and-limits) |
+
+Read `ctx.remaining()` before an expensive step.
+Pass `ctx.signal` to long work, such as `agent`.
+
+#### Requests in flight
+
+A script that sends more than 32 requests at the same time stops with an error.
+The runner sends only 4 model calls at a time, so the other requests wait in the runner.
+Some primitives send many calls at once:
+
+- `classify` sends all its packs of 30 items at the same time.
+  Thus, more than 960 items in one `classify` stop the script.
+- `embedMany` sends all its calls of 64 values at the same time.
+  Thus, more than 2 048 values in one `embedMany` stop the script.
+  Set `maxParallelCalls` on `embedMany` to send fewer calls at a time.
+- `Promise.all` over model calls or `grep` sends all of them at once.
+
+Cut a large set of items into parts.
+Send the next part only after the previous part is complete.
+
+#### Token reservations
+
+The runner reserves tokens for each model call before the call starts.
+A call waits for its turn among the 4 calls in flight, and then makes its reservation.
+If the token limit of the practice or the attempt token limit cannot hold the reservation, the call is not rated, with `budget`.
+When the call ends, the runner keeps only the tokens that the provider reported, and frees the rest.
+A call that fails, is cancelled, or reports no tokens keeps its whole reservation.
+
+A reservation is one token for each four characters of the request, plus an output allowance:
+
+| Call | Output allowance |
+| --- | --- |
+| Chat | Its `maxOutputTokens`, at most 4 096. Without it, 4 096. |
+| Decision | 12 tokens for each question, plus 16 |
+| Embedding or reranking | 64 tokens |
+
+Thus, with the default 20 000 tokens, a practice can hold only a few chat calls in flight at the same time.
+Set `maxOutputTokens` on a chat call to the length that its answer needs.
+Raise `meta.tokens` for a script that makes many chat calls.
+
+### What the review reads
+
+The runner turns the result into one section, which the review reads after the practice's criterion.
+The section holds these lines:
+
+- The directions.
+- The sentence of each lead kind that the section shows, once.
+- For each lead: its kind, its place, the first line of its quote, and its facts as `key=value`.
+- `(model-rated)` after the kind of a rated lead. The review never sees the score or the rated value.
+- The facts about the whole work.
+- One `Not rated` line for each `unrated` entry, such as `Not rated: 3 added comments (unavailable). Read those yourself.`
+
+A section has at most 3 000 characters, so one script cannot push the leads of another practice out.
+When the lines do not fit, the runner cuts the section at a line break and ends it with a pointer to the full result.
+The cut removes the last lines first: the `Not rated` lines, then the facts, then the last leads.
+Thus, return only the leads that the review needs, so that the `Not rated` lines stay in the section.
+
+If the script fails or runs out of time, the section says so, and the review assesses the practice from the sources.
+If the script does not run because a `required` slot is not available, the section names the slots.
+
+## Anti-patterns
+
+| Do not | Do this instead | Reason |
+| --- | --- | --- |
+| Ask a model what code can compute | Compute it, and use the model only for the judgment. | Code is free, gives the same answer each time, and needs no assignment. |
+| Ask a model whether the practice is met | Return places. | The review judges against the criterion. A script that judges hides its evidence. |
+| Pass model text into `directions`, `facts`, or a kind | Map the answer to a declared kind or a fact. | Model text in the review's turn can carry instructions from the work. |
+| Return no leads when a model was not available | Return the `unrated` entries that `classify` or `step` gives. | An empty list alone tells the review that nothing was found. |
+| Use `required` when code alone finds useful leads | Use `optional`. | A workspace without the model still gets the code leads. |
+| Read `Date.now()` or `Math.random()` | Use `ctx.now`. Keep the output a function of the input. | The same work must give the same leads. |
+| Send the whole repository to `agent` | Give it a narrow question and a small `maxSteps`. | Of all primitives, `agent` costs the most, and the deadline is short. |
+| Cite a file when you mean one line | Cite the line or the smallest range. | The review reads the first line of the quote. |
+| Catch an error and return an empty result | Let `step` turn it into a reason. | The review must know what it must read itself. |
+| Name a lead kind by a verdict, such as `violation` | Name it by what the place is, such as `untracked-todo`. | A lead is a place, not a claim. |
+| Ask for a model by name | Use `ctx.models`. | The workspace owns the assignment and its data handling. |

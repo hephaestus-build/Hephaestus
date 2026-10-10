@@ -63,7 +63,12 @@ public class LlmBudgetService {
                 workspace.getId(),
                 jobType);
         meterRegistry
-                .counter(AgentMetrics.LLM_BUDGET_BLOCKED, "surface", "agent_job", "cap", capTag(block.purse()))
+                .counter(
+                        AgentMetrics.LLM_BUDGET_BLOCKED,
+                        "surface",
+                        "agent_job",
+                        "cap",
+                        FundingSource.capTag(block.purse()))
                 .increment();
         return true;
     }
@@ -74,10 +79,6 @@ public class LlmBudgetService {
 
     private static String reasonLabel(LlmBudgetBlockReason reason) {
         return reason == LlmBudgetBlockReason.EXHAUSTED ? "exhausted" : "unverifiable (some spend has no price)";
-    }
-
-    private static String capTag(@Nullable FundingSource purse) {
-        return purse == FundingSource.WORKSPACE ? "byo" : "instance";
     }
 
     @Transactional(readOnly = true)

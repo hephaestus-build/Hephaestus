@@ -94,16 +94,18 @@ export function BudgetExhaustedAlert({
 	);
 }
 
+/**
+ * The count is the month's runs with no price on both purses, so a counted subject names no purse.
+ * Without a count, the verdict alone says that some of this purse's runs have no price.
+ */
 function unpricedRunsSubject(scope: CapScope, count: number | undefined): string {
-	const own = scope === "own";
 	if (count === 1) {
-		return own ? "1 run on your models has" : "1 shared-model run has";
+		return "1 run has";
 	}
 	if (count != null && count > 1) {
-		const n = count.toLocaleString();
-		return own ? `${n} runs on your models have` : `${n} shared-model runs have`;
+		return `${count.toLocaleString()} runs have`;
 	}
-	return own ? "Some runs on your models have" : "Some shared-model runs have";
+	return scope === "own" ? "Some runs on your models have" : "Some shared-model runs have";
 }
 
 interface PauseActionProps {

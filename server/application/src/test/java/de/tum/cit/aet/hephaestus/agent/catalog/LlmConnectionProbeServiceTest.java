@@ -144,7 +144,7 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
 
     private ProbeLlmConnectionRequestDTO request() {
         return new ProbeLlmConnectionRequestDTO(
-                upstream.url("/v1").toString(), "openai-completions", LlmAuthMode.BEARER, null);
+                upstream.url("/v1").toString(), LlmApiProtocol.OPENAI_COMPLETIONS, LlmAuthMode.BEARER, null);
     }
 
     private static MockResponse jsonResponse(String body) {

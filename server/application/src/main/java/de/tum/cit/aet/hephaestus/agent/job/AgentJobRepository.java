@@ -874,6 +874,50 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             @Param("id") UUID id, @Param("attempt") int attempt, @Param("usage") AgentJobLlmUsageDelta usage);
 
     /**
+     * Adds one proxied precompute call to the row of its attempt, kind, and practice, creating the row on
+     * the first call. The attempt froze one model per kind, so the first call's tier is the tier of every
+     * call. The workspace comes from the job row, never from the caller.
+     *
+     * <p>Fenced like {@link #accumulateLlmUsage}: only a {@code RUNNING} job that is
+     * still on {@code attempt} takes the write. {@code FOR SHARE} waits for a terminal transition that
+     * holds the job row, so a call either lands before the terminal ledger append reads these rows or
+     * is dropped. It is never lost between the two.
+     *
+     * @return 1 if the attempt still owns the job, 0 if it has been superseded (a safe no-op)
+     */
+    @WorkspaceAgnostic("ID-based per-call usage accumulation from the worker-local proxy; the job row supplies it")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+                    INSERT INTO agent_job_precompute_usage
+                        (job_id, attempt, model_kind, practice_slug, workspace_id, data_handling_tier, calls,
+                         input_tokens, output_tokens)
+                    SELECT j.id, j.retry_count, :#{#call.modelKindName()}, :#{#call.practiceSlug()}, j.workspace_id,
+                        CAST(:#{#call.dataHandlingTierName()} AS varchar), 1, :#{#call.inputTokens()},
+                        :#{#call.outputTokens()}
+                    FROM agent_job j
+                    WHERE j.id = :jobId AND j.retry_count = :attempt AND j.status = 'RUNNING'
+                    FOR SHARE
+                    ON CONFLICT (job_id, attempt, model_kind, practice_slug) DO UPDATE SET
+                        calls = agent_job_precompute_usage.calls + 1,
+                        input_tokens = agent_job_precompute_usage.input_tokens + EXCLUDED.input_tokens,
+                        output_tokens = agent_job_precompute_usage.output_tokens + EXCLUDED.output_tokens
+                    """, nativeQuery = true)
+    int accumulatePrecomputeUsage(
+            @Param("jobId") UUID jobId, @Param("attempt") int attempt, @Param("call") PrecomputeCallUsage call);
+
+    /**
+     * Each kind of precompute model that one attempt called, summed over its practices and read from the
+     * committed rows.
+     */
+    @Query("SELECT new de.tum.cit.aet.hephaestus.agent.job.PrecomputeKindTotal("
+            + "u.id.modelKind, SUM(u.calls), SUM(u.inputTokens), SUM(u.outputTokens)) "
+            + "FROM AgentJobPrecomputeUsage u "
+            + "WHERE u.workspace.id = :workspaceId AND u.id.jobId = :jobId AND u.id.attempt = :attempt "
+            + "GROUP BY u.id.modelKind ORDER BY u.id.modelKind")
+    List<PrecomputeKindTotal> sumPrecomputeUsageByKind(
+            @Param("workspaceId") Long workspaceId, @Param("jobId") UUID jobId, @Param("attempt") int attempt);
+
+    /**
      * Reads the totals straight from the row rather than from a possibly stale in-memory entity, so
      * committed proxy accumulations are included.
      */

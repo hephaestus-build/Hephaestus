@@ -10,6 +10,9 @@
 		"@actions/expressions": "0.3.61",
 		"@actions/languageservice": "0.3.61",
 		"@actions/workflow-parser": "0.3.61",
+		"@ai-sdk/openai": "4.0.85",
+		"@ai-sdk/openai-compatible": "3.0.63",
+		"@ai-sdk/provider": "4.0.22",
 		"@changesets/cli": "3.0.2",
 		"@commitlint/cli": "21.2.2",
 		"@commitlint/config-conventional": "21.2.2",
@@ -23,6 +26,7 @@
 		"@types/npm-package-arg": "6.1.4",
 		"@types/pg": "8.23.1",
 		"@types/ws": "8.18.1",
+		"ai": "7.0.128",
 		"ajv": "8.20.0",
 		"ajv-formats": "3.0.1",
 		"commander": "15.0.0",
@@ -50,7 +54,8 @@
 		"vite-plus": "0.3.2",
 		"vscode-languageserver-textdocument": "1.0.12",
 		"ws": "8.21.3",
-		"yaml": "2.9.0"
+		"yaml": "2.9.0",
+		"zod": "4.5.4"
 	},
 	"devEngines": {
 		"packageManager": {

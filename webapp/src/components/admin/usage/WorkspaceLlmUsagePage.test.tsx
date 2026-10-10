@@ -57,24 +57,39 @@ describe("WorkspaceLlmUsagePage", () => {
 	it("separates shared-model and provider spend in every rollup", async () => {
 		await renderPage();
 
-		screen.getByText("Shared-model spend so far");
-		screen.getByText("Shared-model budget · set by an instance admin");
-		screen.getByText("Your provider spend so far");
-		screen.getByText("Provider cap · set by you, billed by your provider");
+		const tiles = screen.getByRole("region", { name: "Spend this month" });
+		within(tiles).getByText("of $25");
+		within(tiles).getByText("Set by an instance admin");
+		within(tiles).getByText("of $10");
+		within(tiles).getByText("Billed to you by your provider");
 
 		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
 		within(byJobType).getByRole("columnheader", { name: "Shared models" });
-		within(byJobType).getByRole("columnheader", { name: "Your provider" });
+		within(byJobType).getByRole("columnheader", { name: "Own provider" });
 		within(byJobType).getByRole("columnheader", { name: "No price set" });
 		within(byJobType).getByText("$8.20");
 		within(byJobType).getByText("$1.92");
 
 		const byDay = screen.getByRole("table", { name: "AI spend by day" });
 		within(byDay).getByRole("columnheader", { name: "Shared models" });
-		within(byDay).getByRole("columnheader", { name: "Your provider" });
+		within(byDay).getByRole("columnheader", { name: "Own provider" });
 		within(byDay).getByRole("columnheader", { name: "No price set" });
 		within(byDay).getByText("$5.63");
 		within(byDay).getByText("$1.92");
+	});
+
+	it("leaves the own-provider columns out of every table while the workspace has none", async () => {
+		await renderPage(usageReport("2026-07"));
+
+		for (const name of ["AI spend by run type", "AI spend by day"]) {
+			const table = screen.getByRole("table", { name });
+			expect(within(table).queryByRole("columnheader", { name: "Own provider" })).toBeNull();
+			expect(within(table).queryByRole("columnheader", { name: "No price set" })).toBeNull();
+		}
+		// The tile stays: it is where a workspace learns it can bring its own provider. While that
+		// provider is not in use, there is no provider cap to set from here.
+		screen.getByText(/^Work on a provider you connect in/u);
+		expect(screen.queryByRole("button", { name: /provider cap/u })).toBeNull();
 	});
 
 	it("gives each cap its own meter, named for whose money it is", async () => {
@@ -87,7 +102,7 @@ describe("WorkspaceLlmUsagePage", () => {
 	it("gives the right pricing owner an actionable no-price-set warning", async () => {
 		await renderPage();
 
-		screen.getByText("2 runs are not counted in these totals");
+		screen.getByText("2 runs have no price");
 		screen.getByText(
 			/Add prices for your own models in .*\. For shared models, ask an instance admin\./u,
 		);
@@ -97,12 +112,15 @@ describe("WorkspaceLlmUsagePage", () => {
 		await renderPage();
 
 		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
-		within(byJobType).getByRole("columnheader", { name: "Avg per run" });
+		expect(within(byJobType).getAllByRole("columnheader", { name: "Avg per run" })).toHaveLength(2);
 		const mentorTurns = within(byJobType).getByRole("row", { name: /^Heph turn/u });
-		within(mentorTurns).getByText("$0.06");
-		within(mentorTurns).getByText("shared models");
-		within(mentorTurns).getByText("$0.03");
-		within(mentorTurns).getByText("your provider");
+		// $3.84 and $1.92 over 64 turns, each in its own purse's column.
+		expect(
+			within(mentorTurns)
+				.getAllByRole("cell")
+				.slice(1, 5)
+				.map((cell) => cell.textContent),
+		).toStrictEqual(["$3.84", "$0.06", "$1.92", "$0.03"]);
 	});
 
 	describe("pause banners", () => {
@@ -122,7 +140,7 @@ describe("WorkspaceLlmUsagePage", () => {
 				"an unenforceable provider cap",
 				{ ownProviderPaused: true, ownProviderBudgetVerdict: "UNVERIFIABLE" },
 				"Your provider cap cannot be enforced",
-				"2 runs on your models have no price, so the cap cannot be checked and your provider is paused. Add a price to resume, or remove the cap.",
+				"2 runs have no price, so the cap cannot be checked and your provider is paused. Add a price to resume, or remove the cap.",
 				"/w/acme/admin/models",
 			],
 			[
@@ -136,7 +154,7 @@ describe("WorkspaceLlmUsagePage", () => {
 				"an unverifiable shared budget",
 				{ instancePaused: true, instanceBudgetVerdict: "UNVERIFIABLE" },
 				"Shared-model spend cannot be verified",
-				"2 shared-model runs have no price, so the budget cannot be checked and shared models are paused. Only an instance admin can price them.",
+				"2 runs have no price, so the budget cannot be checked and shared models are paused. Only an instance admin can price them.",
 				null,
 			],
 		])(
@@ -216,28 +234,32 @@ describe("WorkspaceLlmUsagePage", () => {
 	});
 
 	describe("provider card", () => {
-		it.each<[string, Partial<WorkspaceLlmUsageReport>, string | RegExp]>([
-			[
-				"nothing has run on it",
-				{ ownProviderTotalCostUsd: 0, byJobType: [], byDay: [] },
-				/Connect your own provider in/u,
-			],
-			["there is uncapped spend", {}, "No provider cap set · billed to you by your provider"],
-		])("offers a cap when %s", async (_name, patch, copy) => {
-			const onEditOwnProviderCap = vi.fn<WorkspaceLlmUsagePageProps["onEditOwnProviderCap"]>();
-			await renderPage(
-				{ ...baseReport, ownProviderMonthlyBudgetUsd: undefined, ...patch },
-				{ onEditOwnProviderCap },
-			);
+		it("offers a provider cap once the provider is in use, before its first call", async () => {
+			await renderPage({
+				...baseReport,
+				ownProviderMonthlyBudgetUsd: undefined,
+				ownProviderTotalCostUsd: 0,
+				byJobType: [],
+				byDay: [],
+			});
 
-			screen.getByText(copy);
-			fireEvent.click(screen.getByRole("button", { name: "Set cap" }));
-			expect(onEditOwnProviderCap).toHaveBeenCalledOnce();
+			screen.getByRole("button", { name: "Set provider cap" });
+		});
+
+		it("names the purse its cap belongs to", async () => {
+			await renderPage(baseReport);
+
+			screen.getByRole("button", { name: "Change provider cap" });
+		});
+
+		it("offers no cap while the provider is not in use, whatever the cap and spend fields say", async () => {
+			await renderPage({ ...baseReport, ownProviderInUse: false, byJobType: [], byDay: [] });
+			expect(screen.queryByRole("button", { name: /cap/u })).toBeNull();
 		});
 
 		it.each<[string, Partial<WorkspaceLlmUsageReport>, string]>([
-			["a cap in force", {}, "Change cap"],
-			["no cap yet", { ownProviderMonthlyBudgetUsd: undefined }, "Set cap"],
+			["a cap in force", {}, "Change provider cap"],
+			["no cap yet", { ownProviderMonthlyBudgetUsd: undefined }, "Set provider cap"],
 		])(
 			"withdraws the editor on a closed month and says where to change it, with %s",
 			async (_name, patch, label) => {
@@ -282,12 +304,14 @@ describe("WorkspaceLlmUsagePage", () => {
 			fx: eurRate,
 		};
 
-		it("discloses the rate when only the table footers convert", async () => {
+		it("keeps the table footers in USD, so they alone never call for a rate", async () => {
 			await renderPage({ ...uncapped, byDay: twoDaysWithATotalRow, instanceTotalCostUsd: 12.4 });
 
 			const table = screen.getByRole("table", { name: "AI spend by day" });
-			expect(within(table).getByRole("row", { name: /^Total/u }).textContent).toContain("≈ €10.90");
-			screen.getByText(/reference rate published on/u);
+			const footer = within(table).getByRole("row", { name: /^Total/u });
+			expect(footer.textContent).toContain("$12.40");
+			expect(footer.textContent).not.toContain("€");
+			expect(screen.queryByText(/reference rate published on/u)).toBeNull();
 		});
 
 		it("says nothing about the rate when nothing on the page converted", async () => {

@@ -28,6 +28,7 @@ const sidebars: SidebarsConfig = {
 			items: [
 				"practice-catalog",
 				"writing-practices",
+				"precompute-scripts",
 				"ai-providers",
 				"practice-review",
 				"practice-review-operations",

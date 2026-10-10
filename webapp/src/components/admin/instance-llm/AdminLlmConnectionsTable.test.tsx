@@ -16,6 +16,7 @@ const connection: LlmConnection = {
 	displayName: "OpenAI production",
 	baseUrl: "https://api.openai.com/v1",
 	apiProtocol: "openai-responses",
+	purposes: ["PRACTICE_REVIEW", "MENTOR"],
 	authMode: "BEARER",
 	hasApiKey: true,
 	enabled: true,

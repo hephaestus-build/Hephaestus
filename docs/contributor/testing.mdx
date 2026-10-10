@@ -210,6 +210,46 @@ The annotations use `Execution(SAME_THREAD)`. Gradle also runs one test JVM at a
 3. Read credentials from `LiveLlmCredentials.fromEnv()` or the provider helpers. Never inline secrets or commit local credential files.
 4. Per-test wall-clock timeouts: 90s is reasonable for a single mentor turn. 5 minutes for a full practice run.
 
+### Live precompute models
+
+Two live tests run a precompute script that uses every model slot against real models.
+
+| Test | Runs | What it proves |
+| --- | --- | --- |
+| `docker/agents/precompute/live.test.ts` | The precompute runner and `fixtures/every-slot.ts`. The proxy stand-in forwards each call to the real endpoint. | Each bound slot was called and rated, and each lead quotes a line that the source holds. |
+| `PrecomputeLiveLlmTest` | The same fixture behind the real LLM proxy on the sandbox gateway, with the precompute token and the models file of the job | The proxy routes each slot and records the usage of the attempt. The end of the attempt adds one ledger row for each bound decision, embedding and reranking model. |
+
+The server test carries `@LiveLlmTest`.
+Both tests read the same variables:
+
+| Variable | Slot | Required |
+| --- | --- | --- |
+| `HEPHAESTUS_LIVE_LLM_BASE_URL`, `HEPHAESTUS_LIVE_LLM_API_KEY`, `HEPHAESTUS_LIVE_LLM_MODEL` | `chat` | Yes. Without them, the test skips itself. |
+| `HEPHAESTUS_LIVE_EMBEDDING_MODEL` | `embedding`, on the chat endpoint | No |
+| `HEPHAESTUS_LIVE_RERANKING_MODEL` | `reranking`, on the chat endpoint | No |
+| `HEPHAESTUS_LIVE_DECISION_BASE_URL`, `HEPHAESTUS_LIVE_DECISION_API_KEY`, `HEPHAESTUS_LIVE_DECISION_MODEL` | `decision`, on an OpenAI Decisions endpoint | No. Without them, the runner test lets the chat model serve the decision slot through its log probabilities. The server test leaves the slot unbound. |
+
+A slot without its variables is not bound.
+The runner test does not assert it.
+The server test asserts that the script reports it as not available.
+The chat model must return `top_logprobs` when no decision endpoint is set.
+The tests assert what the runner guarantees, never the wording of a model.
+
+To run the runner test from the repository root:
+
+```bash
+HEPHAESTUS_LIVE_LLM_BASE_URL=… HEPHAESTUS_LIVE_LLM_API_KEY=… HEPHAESTUS_LIVE_LLM_MODEL=… \
+  node --test docker/agents/precompute/live.test.ts
+```
+
+To run the server test, from `server/`:
+
+```bash
+./gradlew :application:liveTest --tests PrecomputeLiveLlmTest
+```
+
+`vp run test:agents` also runs `live.test.ts`, which skips itself without the chat variables.
+
 ### GitHub live API tests
 
 We ship a focused suite that exercises the live GitHub App installation and verifies end-to-end sync behavior (repository metadata, labels, milestones, and teams).

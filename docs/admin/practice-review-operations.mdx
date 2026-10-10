@@ -36,6 +36,11 @@ Work, not time, bounds the set.
 Each value is multiplied by the number of practices in the set, with a minimum of three.
 A set of five practices can make 60 model calls and write 80,000 output tokens.
 
+The model calls of precompute scripts have their own attempt token limit.
+`PRACTICE_REVIEW_PRECOMPUTE_MAX_TOKENS_PER_ATTEMPT` (default 200000) sets it.
+See [Cost and limits](./ai-providers.mdx#cost-and-limits).
+[Precompute scripts](#precompute-scripts) tells you how to read what each script did.
+
 The defaults cap excessive work at several times a set's normal use.
 A review spends what its practices need, and no more.
 Each set has its own budget, independent of previous sets' spend.
@@ -47,11 +52,14 @@ All passes share the remaining whole-run safety ceiling.
 
 1. For a model that reasons at length, raise the output tokens.
 
-The workspace's practice-review model binding timeout is the whole-run safety ceiling.
+The timeout of the workspace's **Practice reviews** assignment is the whole-run safety ceiling.
 It can stop a productive review and leave later practices `NOT_REACHED`.
 Independent set budgets do not reserve time for every set.
 If a set has no streamed token or tool progress for five minutes, it stops.
 Two consecutive stalls end measurement with its recorded results.
+
+A timeout below 151 seconds runs at 151 seconds.
+The precompute scripts run first, inside the same timeout, as the [workspace ABI](/contributor/agent/agent-workspace-abi#precompute-validation-and-limits) describes.
 
 `PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review model calls, not mentor calls.
 If unset, the provider default applies.
@@ -112,6 +120,11 @@ Use them for alerts instead of application logs.
 - **`agent.job.delivery.recovered`** — deliveries stopped by an executor crash and successfully retried.
 - **`agent.job.retention.stripped`** / **`agent.job.retention.deleted`** — rows pruned by the retention sweep.
 - **`llm.budget.exhausted`** / **`llm.budget.blocked`** — a crossed cap and work refused at a cap.
+- **`llm.proxy.budget.blocked`** — model calls of a running job that the LLM proxy refused at a cap, tagged by `apiProtocol` and `cap`.
+  `instance` names the shared-model budget, and `byo` names the provider cap.
+  An admin raises it.
+  `precompute_attempt` names the [attempt token limit](./ai-providers.mdx#cost-and-limits).
+  An operator raises it with `PRACTICE_REVIEW_PRECOMPUTE_MAX_TOKENS_PER_ATTEMPT`.
 - **`practice.review.occasions`** — live issue-update recording attempts, tagged by `signal` and `outcome` (`deferred` or `duplicate`).
   These exclude issue opening and closing.
 - **`practice.review.refused`** — refused reviews, tagged by `phase` (`submission` or `execution`) and `reason`.
@@ -129,12 +142,144 @@ An authorized response includes the **`practiceReview`** component.
 An enabled review worker reports `OUT_OF_SERVICE` with `GIT_CHECKOUT_DISABLED` when repository checkout is disabled.
 It reports `SOURCE_AUTHORIZATION_EXPIRED` when an automated-review source authorization has expired.
 
-Missing model bindings are workspace-specific.
+Missing model assignments are workspace-specific.
 They stay visible under **Practices → Practice reviews → Work** and in the refusal counter.
 They do not remove the worker from service.
 Gauges have periodic samples.
 Timers and counters record their corresponding events.
 Metric names in the instrumented code are authoritative for dashboards and alerts.
+
+### Precompute scripts
+
+A practice's precompute script runs before the review and points it at places to check.
+For each review, Hephaestus records what each script did.
+Workspace admins see it in two places:
+
+- **The trace line.** Open the work under **Practice reviews → Work**, then **Every practice**.
+  The column **What it saw** has one line for each practice with a script.
+- **The section Precompute scripts of the review.** Open the review under **Practice reviews → Reviews**, or select **Details** in the trace line.
+
+[Write a precompute script](./precompute-scripts.mdx) tells how to write and try a script.
+
+#### The trace line
+
+The line starts with how the script ended.
+If some model calls of the script were not rated, the line adds their count.
+An example is `5 calls were not rated.`
+Then it has at most one link that fixes the cause, and **Details**.
+**Details** opens the review's section **Precompute scripts**.
+
+| The line starts with | What it means | What to do |
+| --- | --- | --- |
+| **Precompute script found** | The script ran to its end. It gave the review the places that the line counts. | Nothing. If the line links **Check the decision model**, or the model that it names, a model caused calls that were not rated. Open its row and check it. |
+| **Precompute script handed the review no places** | The script ran to its end and gave no places, but some of its model calls were not rated. It does not mean that the work has nothing to check. | Select **Details** and read the reasons. If the line links **Check the decision model**, or the model that it names, open its row and check it. |
+| **Precompute script did not run** | The review had no model that the script requires. Either no model is assigned for the reviewed developer's AI choice, or the assigned model does not meet the rule in [Privacy](./ai-providers.mdx#privacy). The line names the model, such as `no decision model was set for this review`. The review checked the practice without the script. | Select **Assign a decision model**, or the link for the model that the line names. Assign a model for that tier. If the review ran on an In-house model, assign an In-house model. |
+| **Precompute script failed** | The script stopped with an error, returned a result that is not valid, or its process ended without a result. | Select **Edit the script**. The review's section shows the first line of the error. To reproduce it, [run the script on the same change](./precompute-scripts.mdx#run-a-script-on-your-own-change). |
+| **Precompute script ran out of time** | The script passed its deadline, or the precompute stage ended before the script started. | If many scripts in one review run out of time, raise the timeout of the **Practice reviews** assignment on **AI models**. Otherwise, make the script faster. |
+| **Precompute script did not finish** | The script was staged, but the stage stopped before the script reported a result. | Same as for a script that ran out of time. If it continues, read the container logs that the job record keeps. When the stage fails, they hold the end of the precompute runner's log. |
+
+A script that failed, ran out of time, or did not finish can still have given the review places.
+Then the line adds them.
+An example is `Precompute script ran out of time but found 3 places to check.`
+
+Some causes have no single fix in the workspace.
+For them, the link opens a section of this page:
+
+- A script that ran out of time or did not finish links **Why scripts stop early**.
+  It opens [The trace line](#the-trace-line), and the table above tells what to do.
+- A script that ran to its end can have calls that were not rated only for such causes.
+  These causes are a spent token limit, budget or cap, a slow model, and a call with too many entries.
+  Then the script links **Why calls go unrated**.
+  It opens [Calls that were not rated](#calls-that-were-not-rated), which tells who fixes each cause, and where.
+
+The stage takes its time from the timeout of the **Practice reviews** assignment.
+The [workspace ABI](/contributor/agent/agent-workspace-abi#precompute-validation-and-limits) gives the time limits of the stage and of each script.
+
+#### The review's precompute scripts
+
+A review that ran at least one script has the section **Precompute scripts**.
+It is between the review's output and **How this review ran**.
+It has one row for each script:
+
+| Column | What it shows |
+| --- | --- |
+| **Practice** | The practice. It links to the practice. A practice that the workspace no longer has shows its identifier and **Not a current practice**. |
+| **Result** | **Found 3 places**, **Found no places**, **Handed the review no places**, **Did not run**, **Failed**, **Ran out of time**, or **Did not finish**. A script that ended early but gave places adds them, such as **Failed, found 2 places**. Below the result is the same fix link as in the trace line. A practice that the workspace no longer has shows no **Edit the script**. For a script that failed, the first line of the error comes last. |
+| **Models** | Each decision, embedding or reranking model that the script declared or called. An icon shows the tier of the model that the review had for it. A declared model that the review did not have and that made no calls shows **No model**. The review's own chat model never shows here. |
+| **Not rated** | The model calls that were not rated, with one line below for each reason, such as `5 too slow` and `1 wrong format`. [Calls that were not rated](#calls-that-were-not-rated) gives what to do for each reason. |
+| **Calls** | The decision, embedding and reranking calls that the proxy recorded for the script. A script that did not run, or that uses no such model, shows a dash. |
+| **Time** | How long the script ran, such as `4.2 s` or `2 min 5 s`. A run shorter than 0.1 seconds shows `< 0.1 s`. A script that did not run or did not finish shows a dash. |
+
+A script that gave no places while some of its calls were not rated shows **Handed the review no places**.
+It does not mean that the work has nothing to check.
+
+The section shows no cost.
+Its note says `Spend is on AI usage.`
+**AI usage** shows the cost of precompute models by practice.
+The card **How this review ran** shows the review's **Model** with an icon for its tier.
+Its **Review model calls** and token counts include the chat calls of the scripts, because those calls use the review's model.
+They do not include the decision, embedding and reranking calls.
+
+#### Calls that were not rated
+
+A model call that was not rated has a reason.
+The count is model calls, not places.
+A reason never means that the script found nothing.
+This table is the one list of reasons.
+The column **In a script** gives the name that a script and the section that the review reads use.
+
+| Reason | In a script | What it means | What to do |
+| --- | --- | --- | --- |
+| model missing | `unavailable` | No model of that slot was available to the script. | Assign the model. **Check the decision model**, or the link for the model that the row names, opens its row. |
+| limit reached | `budget` | A token limit cannot hold the call, or the shared-model budget or the provider cap is spent. For `agent`, no `submit` call came within `maxSteps`. | Raise the limit that was spent. The list below tells who raises each limit, and where. |
+| too slow | `deadline` | The script's deadline passed before the model answered, for example because the model was slow or had to load first. A call that the script aborted also has this reason. | Ask the operator of the model's host to keep the model loaded, or assign a faster model. |
+| too large | `too-large` | The call held more entries than one call can send, or the script found an item too large to send. The runner refuses a call with too many entries before it reaches the model. | Ask the script's author to send fewer entries in one call. [Limits](./precompute-scripts.mdx#limits) gives the limits. |
+| wrong format | `off-format` | The model's answer did not have the expected shape. In the section that the review reads, a lead that did not resolve also has this reason. | The model is not suitable for this purpose. Choose another model. |
+| declined | `refused` | The model declined to answer. The script sets this reason. | Choose another model. |
+| failed | `error` | Any other failure, such as an error from the provider or a rate limit. | Check the provider and the connection. |
+
+The column **Not rated** counts only the model calls that the runner could not finish.
+Thus, it never shows `refused`.
+The `unrated` entries that a script returns reach only the section that the review reads, as [What the review reads](./precompute-scripts.mdx#what-the-review-reads) tells.
+
+A token limit, a budget or a cap stops calls in one of these places:
+
+- **The token limit of the practice**, `meta.tokens`, or the `maxSteps` of `agent`.
+  The script's author raises it in the script, or makes the script send less.
+  [Limits](./precompute-scripts.mdx#limits) gives the limits.
+- **The attempt token limit.**
+  An operator raises it with `PRACTICE_REVIEW_PRECOMPUTE_MAX_TOKENS_PER_ATTEMPT`.
+  See [Cost and limits](./ai-providers.mdx#cost-and-limits).
+- **The shared-model budget.**
+  Only an instance admin raises it on **Instance admin → AI usage** with **Change budget**.
+- **The provider cap of the workspace's own provider.**
+  A workspace admin raises it on **AI usage** with **Change provider cap**.
+
+On **AI usage**, the tile of a purse whose budget or cap is spent shows **Paused**.
+A purse with a budget or cap also pauses when some of its usage has no price.
+Its tile then shows **No price set**, and an alert gives the number of runs that have usage without a price.
+
+A failed or stopped script never becomes a claim about the developer's work.
+The review checks the practice from the sources.
+
+#### Precompute metrics
+
+Two metrics count precompute events on the worker:
+
+- **`agent.review.precompute.scripts`** — one count for each script run that the report of a review attempt records, tagged by `status`: `ok`, `skipped`, `failed`, `timed_out` or `not_finished`.
+  A staged script that a complete report does not name counts as `not_finished`.
+  A missing report adds no count.
+  A truncated report adds no count for the scripts that it does not name.
+  An entry that is not valid adds no count.
+  It counts when the attempt's results are stored.
+  A growing share of `failed`, `timed_out` or `not_finished` needs attention.
+  `skipped` usually means a missing assignment.
+- **`llm.proxy.precompute.unattributed`** — precompute calls that the proxy refused with HTTP 400, because they named no valid practice.
+  It is 0 when the server and the agent image come from the same release.
+  A value above 0 means that the agent image does not send the practice of each call.
+  Run the agent image of the server's release.
+
+[Queue health](#queue-health) lists `llm.proxy.budget.blocked`, which also counts the precompute calls that a budget, a cap or the attempt token limit refused.
 
 ### Issue-update queue
 

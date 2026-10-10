@@ -21,7 +21,7 @@ export function FactList({ facts }: { facts: readonly Fact[] }) {
 					<dt className="col-span-2 flex items-center gap-3 text-sm font-medium">
 						<span
 							aria-hidden="true"
-							className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-mentor/10 text-mentor [&_svg]:size-4"
+							className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-4"
 						>
 							<Icon />
 						</span>

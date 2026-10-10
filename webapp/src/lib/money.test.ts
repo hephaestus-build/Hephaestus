@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCapUsd, formatCostUsd, formatRateUsd } from "./money";
+import {
+	averageFractionDigits,
+	formatAverageUsd,
+	formatCapUsd,
+	formatCostUsd,
+	formatRateUsd,
+} from "./money";
 
 describe("formatCostUsd", () => {
-	it("renders nothing spent as $0, with no decimals at all", () => {
-		expect(formatCostUsd(0)).toBe("$0");
+	it("renders nothing spent in cents, so it lines up with the figures around it", () => {
+		expect(formatCostUsd(0)).toBe("$0.00");
 	});
 
 	it("renders an amount too small for cents as <$0.01 rather than claiming $0.00", () => {
@@ -54,5 +60,47 @@ describe("formatRateUsd", () => {
 
 	it("renders an absent rate as an em dash", () => {
 		expect(formatRateUsd(undefined)).toBe("—");
+	});
+});
+
+describe("averageFractionDigits", () => {
+	it("gives a column of cents and nothing two decimals", () => {
+		expect(averageFractionDigits([0.02, 0, 12.5, null])).toBe(2);
+		expect(averageFractionDigits([])).toBe(2);
+	});
+
+	it("gives the whole column the decimals its smallest real cost needs, up to four", () => {
+		expect(averageFractionDigits([0.02, 0.005])).toBe(3);
+		expect(averageFractionDigits([0.02, 0.005, 0.00047, null])).toBe(4);
+		expect(averageFractionDigits([0.0000123])).toBe(4);
+	});
+});
+
+describe("formatAverageUsd", () => {
+	it("prints every figure of a column with the column's decimals, so the points line up", () => {
+		const digits = averageFractionDigits([0.02, 0.005, 0.0077]);
+		expect([0.02, 0.005, 0.0077, 0].map((value) => formatAverageUsd(value, digits))).toStrictEqual([
+			"$0.020",
+			"$0.005",
+			"$0.008",
+			"$0.000",
+		]);
+		const finest = averageFractionDigits([0.02, 0.005, 0.00047]);
+		expect([0.02, 0.005, 0.0077].map((value) => formatAverageUsd(value, finest))).toStrictEqual([
+			"$0.0200",
+			"$0.0050",
+			"$0.0077",
+		]);
+	});
+
+	it("keeps an average of a cent or more in cents, like every other figure", () => {
+		expect(formatAverageUsd(0.0158, 2)).toBe("$0.02");
+		expect(formatAverageUsd(12.5, 2)).toBe("$12.50");
+	});
+
+	it("never prints a real cost as nothing", () => {
+		expect(formatAverageUsd(0.0000123, 4)).toBe("<$0.0001");
+		expect(formatAverageUsd(0.00005, 4)).toBe("$0.0001");
+		expect(formatAverageUsd(0, 4)).toBe("$0.0000");
 	});
 });

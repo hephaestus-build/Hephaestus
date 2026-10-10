@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelKind;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -34,7 +36,7 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
                 LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
         byte[] notJson = "<html>502 upstream</html>".getBytes(StandardCharsets.UTF_8);
 
-        assertThatCode(() -> accounting.recordUsage(attempt, notJson, false))
+        assertThatCode(() -> accounting.recordUsage(attempt, null, LlmApiProtocol.OPENAI_COMPLETIONS, notJson))
                 .as("accounting must never turn a call the provider already charged us for into an error")
                 .doesNotThrowAnyException();
 
@@ -57,7 +59,7 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
             "completion_tokens_details":{"reasoning_tokens":2}}}\
             """.getBytes(StandardCharsets.UTF_8);
 
-        accounting.recordUsage(attempt, body, false);
+        accounting.recordUsage(attempt, null, LlmApiProtocol.OPENAI_COMPLETIONS, body);
 
         assertThat(meterRegistry
                         .counter("llm.proxy.usage.unparseable", "sourceType", "AGENT_JOB")
@@ -75,12 +77,29 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
             {"usage":{"prompt_tokens":3,"prompt_tokens_details":{"cached_tokens":4}}}
             """.getBytes(StandardCharsets.UTF_8);
 
-        accounting.recordUsage(attempt, body, false);
+        accounting.recordUsage(attempt, null, LlmApiProtocol.OPENAI_COMPLETIONS, body);
 
         assertThat(meterRegistry
                         .counter("llm.proxy.usage.unparseable", "sourceType", "AGENT_JOB")
                         .count())
                 .isEqualTo(1.0);
         verify(usageAccumulator, never()).accumulate(any(), any());
+    }
+
+    @Test
+    void shouldStillCountThePrecomputeCallWhenItsBodyIsUnreadable() {
+        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
+                LlmUsageSourceType.PRECOMPUTE_EMBEDDING, UUID.randomUUID(), 0, BigDecimal.ZERO, "worker-1");
+        byte[] notJson = "<html>502 upstream</html>".getBytes(StandardCharsets.UTF_8);
+
+        PrecomputeCall call = new PrecomputeCall(ModelKind.EMBEDDING, null, "comment-quality");
+
+        accounting.recordUsage(attempt, call, LlmApiProtocol.OPENAI_EMBEDDINGS, notJson);
+
+        assertThat(meterRegistry
+                        .counter("llm.proxy.usage.unparseable", "sourceType", "PRECOMPUTE_EMBEDDING")
+                        .count())
+                .isEqualTo(1.0);
+        verify(usageAccumulator).accumulatePrecompute(attempt, call, null);
     }
 }

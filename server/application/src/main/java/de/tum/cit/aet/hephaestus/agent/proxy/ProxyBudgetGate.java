@@ -4,6 +4,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import java.time.Duration;
 import org.springframework.stereotype.Component;
 
@@ -15,16 +17,19 @@ import org.springframework.stereotype.Component;
  * holds: {@code docs/decisions/0026-per-purpose-agent-bindings-and-llm-governance.md}.
  */
 @Component
+@ConditionalOnWorkerRole
 class ProxyBudgetGate {
 
     private static final Duration TTL = Duration.ofSeconds(30);
     private static final long MAX_CACHED_WORKSPACES = 10_000;
 
     private final LlmBudgetService budgetService;
+    private final long precomputeMaxTokensPerAttempt;
     private final Cache<Long, LlmBudgetHeadroom> headroomByWorkspace;
 
-    ProxyBudgetGate(LlmBudgetService budgetService) {
+    ProxyBudgetGate(LlmBudgetService budgetService, PracticeReviewProperties properties) {
         this.budgetService = budgetService;
+        this.precomputeMaxTokensPerAttempt = properties.precomputeMaxTokensPerAttempt();
         this.headroomByWorkspace = Caffeine.newBuilder()
                 .expireAfterWrite(TTL)
                 .maximumSize(MAX_CACHED_WORKSPACES)
@@ -44,5 +49,15 @@ class ProxyBudgetGate {
         return (headroom != null
                 && headroom.decideWith(routing.connectionScope(), routing.inFlightSpendUsd())
                         .blocks(routing.connectionScope()));
+    }
+
+    /**
+     * Whether one attempt's precompute calls have used the tokens that they may spend, on every model and
+     * for every practice together. This bounds a leaked precompute credential, also on a connection with no
+     * monthly cap. Only committed calls count, so calls in flight together can each pass and end above the
+     * cap.
+     */
+    boolean isPrecomputeCapReached(ProxyRouting.BilledAttempt attempt) {
+        return attempt.precomputeTokens() >= precomputeMaxTokensPerAttempt;
     }
 }

@@ -6,11 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
@@ -23,9 +25,12 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -33,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import tools.jackson.databind.ObjectMapper;
 
 class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
 
@@ -83,7 +89,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
                 "openai-prod",
                 "OpenAI",
                 "https://api.openai.com",
-                "openai-completions",
+                LlmApiProtocol.OPENAI_COMPLETIONS,
                 LlmAuthMode.BEARER,
                 "sk-abc",
                 null,
@@ -188,6 +194,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
         void declaredConnectionPlatformCanBeChangedAndCleared() {
             WorkspaceLlmConnection connection = new WorkspaceLlmConnection();
             connection.setId(5L);
+            connection.setApiProtocol(LlmApiProtocol.OPENAI_RESPONSES);
             when(connectionRepository.findByIdAndWorkspaceIdForUpdate(5L, 1L)).thenReturn(Optional.of(connection));
             when(connectionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -324,6 +331,41 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
             assertThat(result.reachable()).isFalse();
             assertThat(result.modelCount()).isEqualTo(0);
             assertThat(result.message()).isEqualTo("The provider answered with HTTP 503.");
+        }
+
+        // The page tells an embedding or reranking provider that lists no models apart from a broken one by
+        // this status.
+        @Test
+        @DisplayName("a provider whose /models answers 404 reports that status")
+        void shouldReportTheProvidersStatusWhenItsModelListAnswers404() throws IOException, InterruptedException {
+            try (MockWebServer upstream = new MockWebServer()) {
+                upstream.start();
+                upstream.enqueue(new MockResponse.Builder().code(404).build());
+                when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
+                        .thenReturn(Optional.of(
+                                new LlmProbeTarget(upstream.url("/v1").toString(), LlmAuthMode.BEARER, null)));
+                var probing = new WorkspaceLlmConnectionService(
+                        connectionRepository,
+                        modelRepository,
+                        workspaceRepository,
+                        egressPolicy,
+                        instanceLlmSettingsService,
+                        new LlmConnectionProbeService(
+                                mock(LlmConnectionRepository.class),
+                                egressPolicy,
+                                new ObjectMapper(),
+                                new LlmProperties(
+                                        "",
+                                        new LlmProperties.Egress(true),
+                                        new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL))),
+                        configAudit);
+
+                WorkspaceLlmProbeResultDTO result = probing.probe(workspaceContext, 5L);
+
+                assertThat(result.reachable()).isFalse();
+                assertThat(result.statusCode()).isEqualTo(404);
+                assertThat(upstream.takeRequest().getTarget()).isEqualTo("/v1/models");
+            }
         }
 
         /**

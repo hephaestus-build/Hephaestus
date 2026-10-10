@@ -7,7 +7,7 @@ description: Register an OpenAI-compatible provider. Test it. Price and share it
 Hephaestus ships with **no** provider, model, or key.
 Provider configuration does not use environment variables.
 Connections, models, prices, and grants are runtime catalog data you enter in the UI.
-Practice review and the mentor stay inactive until a model is registered, priced, and bound to a purpose.
+Practice review and the mentor stay inactive until a model is registered, priced, and assigned to a purpose.
 
 The catalog you use determines whose provider account pays:
 
@@ -38,7 +38,8 @@ The server refuses model activation until the model has a cost declaration.
 5. Enable the connection.
 6. Enable the model.
 7. Share it publicly with all workspaces or grant it to a list.
-8. As a workspace admin, bind it to **Practice reviews** or **Heph** on your workspace's **AI models** page.
+8. As a workspace admin, assign it to a purpose on your workspace's **AI models** page.
+   Examples are **Practice reviews** and **Heph**.
 
 Nothing runs until the last step.
 A ready **Heph** row on **AI models** offers Heph to every workspace member.
@@ -68,27 +69,27 @@ Only `displayName`, `baseUrl`, and `apiProtocol` are required.
 | ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Display name**               | yes      | Free text, ≤ 128 characters. Editable after creation. Display name, service declaration, API key, and enabled state can change. Routing identity and slug cannot.                                                                                                                                                                                                                                                                                                                                                                                |
 | **Base URL**                   | yes      | The provider's OpenAI-compatible root, ≤ 2048 characters. Examples: `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Requires HTTPS. Must have no credentials, query string, or fragment. **Immutable after create.**                                                                                                                                                                                                                                                                                  |
-| **API shape**                  | yes      | `openai-responses` (Responses API) or `openai-completions` (Chat Completions). The form's exact checkbox label is “Use the Responses API”. It is selected for new connections. Prefer Responses API for reviews and the mentor, which call tools across many turns. It can preserve reasoning between tool calls for supported models and providers. OpenAI, Vercel AI Gateway, OpenRouter, and vLLM offer it. Support depends on the model and deployment. For Chat Completions-only endpoints, clear the checkbox. **Immutable after create.** |
+| **API**                        | yes      | The API that the endpoint serves. Under **Chat models**: **Responses API** (`openai-responses`), the default, and **Chat Completions API** (`openai-completions`). Under **For precompute scripts**: **Decisions API**, **Embeddings API**, and **Rerank API (Cohere-compatible)**. [Precompute models](#precompute-models) describes these three. Prefer Responses API for reviews and the mentor, which call tools across many turns. It can preserve reasoning between tool calls for supported models and providers. OpenAI, Vercel AI Gateway, OpenRouter, and vLLM offer it. Support depends on the model and deployment. For Chat Completions-only endpoints, choose **Chat Completions API**. **Immutable after create.** The edit form shows the API as text.                     |
 | **Authentication**             | no       | `BEARER` → `Authorization: Bearer <key>`, or `API_KEY` → `api-key: <key>`. Defaults to `BEARER`. Azure needs `API_KEY`. **Immutable after create.**                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Service receiving requests** | no       | Search for the service that receives requests from the configured endpoint, such as Logos, Azure, or Vercel AI Gateway. If absent or uncertain, leave **Not listed or unknown**. This display declaration does not prove where inference runs or who operates the model. You can change or clear it later.                                                                                                                                                                                                                                       |
 | **API key**                    | no       | Write-only and encrypted at rest. Never returned. A saved connection reports only `hasApiKey` and the last four characters. On edit, leave blank to keep the stored key. To delete it, select **Remove stored API key**. Optional: a self-hosted vLLM or Ollama gateway may need no credential.                                                                                                                                                                                                                                                  |
 | **Slug**                       | no       | Internal identifier, ≤ 63 characters. Derived from the display name if omitted. **Immutable after create.**                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 **Three fields are immutable on purpose.**
-Base URL, API shape, and authentication mode form the connection's *routing identity*.
+Base URL, API, and authentication mode form the connection's *routing identity*.
 Every job preserves that identity in its provenance snapshot.
 An in-place edit would silently point historical runs at an endpoint they never used.
 The form's exact explanation is:
 
 ```text
-Endpoint, API shape and authentication cannot change. Add a connection instead.
+Endpoint, API and authentication cannot change. Add a connection instead.
 ```
 
 To move providers:
 
 1. Create a replacement connection.
 2. Test it.
-3. Point the bindings to it.
+3. Point the assignments to it.
 4. Disable the old connection.
 
 **A slug you type is taken literally.**
@@ -106,8 +107,11 @@ The create form offers these presets:
 
 They only prefill the two fields.
 Nothing about the preset is stored.
-On edit, an Azure connection appears as "Other" because the preset itself is not persisted.
 For an Azure mark beside a workspace model, use the separate **Service receiving requests** declaration.
+
+Neither OpenAI nor Azure OpenAI serves a rerank API.
+Thus, when you choose **Rerank API (Cohere-compatible)** with one of these presets, the form changes the preset to **Other OpenAI-compatible endpoint**.
+A base URL that you typed stays.
 
 For a gateway, name the gateway that receives the request, not an unknown downstream service.
 If you cannot confirm the connection, leave it blank.
@@ -156,7 +160,7 @@ The probe has these limits:
 - **It does not follow redirects.** A 3xx fails.
   Only your entered URL passed the egress check.
   A redirect could send your API key to the `Location` host.
-- **It does not validate the API shape.** It always calls `/models`, whether the connection declares Chat Completions or Responses.
+- **It does not validate the API.** It always calls `/models`, whatever API the connection declares.
   A green probe confirms the endpoint exists and accepts your key, not that a completion works.
 - **It does not hold a database connection.** It runs outside a transaction.
   A stalled provider cannot occupy the pool while admins probe it.
@@ -206,6 +210,18 @@ Connected. N models available.
 
 Failures show the same message, but provider model IDs never appear.
 
+Many endpoints for precompute scripts do not serve `/models`.
+When the probe of a connection with a precompute API gets HTTP 404, 405 or 501, the result shows this text instead of a failure:
+
+```text
+No model list at this address. Add the model by its ID. If its calls fail too, check the base URL.
+```
+
+A wrong path in the base URL also gives HTTP 404.
+Thus, the text tells you to check the base URL when the calls of the model also fail.
+
+Any other failure of such a probe, such as HTTP 401 or no answer, shows as a failure.
+
 ### Reasoning effort
 
 **Reasoning effort** sets how hard a reasoning model thinks on every review or mentor call.
@@ -246,6 +262,7 @@ Each model has one of these states:
 
 - **Price per 1M tokens** (`PRICED`): you supply the rates below.
 - **No metered API cost** (`NO_CHARGE`): declares a real $0, counts as confirmed $0 spend, and satisfies a cap.
+  Its usage is a confirmed $0 also when the provider reports no tokens.
   It requires a note with the reason, such as an internal endpoint with infrastructure billed separately.
   Infrastructure can still cost money.
   This declaration covers only per-token API charges.
@@ -338,7 +355,14 @@ Two further limits apply:
   The excess charge is less than a millionth of a dollar per call.
 - **The UI rounds differently from the ledger.** Published *rates* show up to four decimals (`$0.075 / 1M`) for price-list checks.
   *Spend* appears as cents, with `<$0.01` for a non-zero amount below one cent.
-  Neither display is the stored number.
+  Each cell of an *average* column, such as **Avg per run**, has the same decimals.
+  Thus, the decimal points line up.
+  The column shows whole cents when no average in it is below one cent.
+  If an average is below one cent, the column shows three decimals, such as `$0.004`.
+  If an average is below a tenth of a cent, it shows four, such as `$0.0004`.
+  Thus, a small unit cost stays visible.
+  An average above zero but below `$0.00005` shows `<$0.0001`.
+  No display is the stored number.
 
 Set `HEPHAESTUS_LLM_DISPLAY_CURRENCY=EUR` to show a converted amount **alongside** USD.
 This is display-only, never an input to a price, budget, or ledger.
@@ -353,8 +377,8 @@ Only named workspaces can use it.
 To share it with every workspace, switch it to **public**.
 This also clears the grant list.
 
-A revoked grant or disabled connection stops every workspace bound to that model.
-The binding stays in place and appears correct.
+A revoked grant or disabled connection stops every workspace that has an assignment to that model.
+The assignment stays in place and appears correct.
 This is a common cause of silently stopped workspace reviews.
 If that happens, use [the triage list](./practice-review#when-a-workspace-goes-quiet).
 
@@ -370,7 +394,7 @@ The UI shows the title.
 | Status | `type`                           | When                                                                                                                                                                                                             |
 | ------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 409    | `llm-connection-in-use`          | A connection still has models. Delete the models before the connection.                                                                                                                                          |
-| 409    | `llm-model-in-use`               | A model still has an assignment. Re-bind that workspace before deletion.                                                                                                                                         |
+| 409    | `llm-model-in-use`               | A model still has an assignment. Assign another model in that workspace before deletion.                                                                                                                       |
 | 409    | `llm-connection-slug-conflict`   | Your supplied slug is taken.                                                                                                                                                                                     |
 | 409    | `llm-model-slug-conflict`        | The model slug is taken on this connection.                                                                                                                                                                      |
 | 409    | `llm-model-upstream-id-conflict` | Two catalog entries would use the same upstream id on one connection. This is refused because price selection would be nondeterministic. A `NO_CHARGE` copy could silently replace a `PRICED` model for billing. |
@@ -382,6 +406,7 @@ The UI shows the title.
 - **Budgets, caps, and what a cap pauses:** [Workspace budgets and alerting](./production-setup#workspace-budgets-and-alerting).
 - **The environment variables that *are* deploy-time facts:** [Instance-wide LLM settings](./production-setup#instance-wide-llm-settings).
 - **Nothing is being reviewed:** [When a workspace goes quiet](./practice-review#when-a-workspace-goes-quiet).
+- **Models for precompute scripts:** [Precompute models](#precompute-models).
 
 ## Data handling and members' AI choices
 
@@ -428,7 +453,7 @@ From **Operated by**, Hephaestus derives **In-house** or **Cloud**.
 It shows that tier as a badge wherever the model appears.
 Token limits and the reasoning switch are under **Advanced**.
 
-In workspace **AI models**, each purpose (**Practice reviews** and **Heph**) has three rows:
+In workspace **AI models**, each purpose has three rows:
 
 - **In-house**.
 - **Cloud**.
@@ -556,3 +581,308 @@ It never silently selects another handling tier.
 Before you delete a model, remove or replace its assignments.
 The server refuses deletion of an assigned model.
 Provider unavailability does not remove recorded feedback or earlier conversations.
+
+## Precompute models
+
+Before a practice review measures a practice, the practice's precompute script can look for places that the review must check.
+A script can ask models to rate or find those places.
+It never writes feedback, and the review checks each place against the practice.
+[Write a precompute script](./precompute-scripts.mdx) tells how to write one.
+
+A script can use four kinds of model.
+The chat model is always the practice review's own model.
+You assign the three other kinds on **AI models**, under **Models for precompute scripts**:
+
+| Purpose | API in the connection form | `apiProtocol` | Endpoint the proxy calls | Example providers |
+| --- | --- | --- | --- | --- |
+| **Decision model** | **Decisions API** | `openai-decisions` | `{baseUrl}/decisions` | The [OpenAI Decisions API](https://developers.openai.com/api/docs/guides/decisions) |
+| **Decision model** | **Chat Completions API** | `openai-completions` | `{baseUrl}/chat/completions` | A chat model that returns `top_logprobs`, such as a vLLM deployment |
+| **Embedding model** | **Embeddings API** | `openai-embeddings` | `{baseUrl}/embeddings` | OpenAI, Azure OpenAI, vLLM |
+| **Reranking model** | **Rerank API (Cohere-compatible)** | `cohere-rerank` | `{baseUrl}/rerank` | Cohere, Jina, vLLM |
+
+The **Decision model** accepts a model on a Decisions API or a Chat Completions API connection.
+With a chat completions model, Hephaestus reads each answer from the token log probabilities.
+That model must return `top_logprobs`.
+If the model has a reasoning effort, Hephaestus sends `reasoning_effort: none` for these calls, and the model must accept it.
+The model must give its answer without reasoning first.
+A model that always reasons, such as gpt-oss, cannot serve this purpose, and its calls stay not rated.
+
+These purposes are optional.
+If you assign none of them, nothing breaks:
+
+- Practice reviews run without them.
+- A script that needs a missing model does not run. The review reads the sources for that practice itself.
+- A script that can work without the model gives the places it finds without it.
+
+The bundled practice scripts call no precompute model.
+Assign one when a customized precompute script uses it.
+
+A host that loads models on demand can take minutes to load a model after a pause.
+A precompute call that waits longer than its script's deadline is not rated, and the review runs without it.
+On such a host, keep the precompute models loaded, or expect calls that are not rated after a pause.
+
+### Assign a precompute model
+
+1. Create the connection.
+   An instance admin uses **Instance admin → AI models**.
+   A workspace admin uses **Your providers** at the bottom of the workspace's **AI models** page.
+   Under each provider's name, an icon for each kind of model that its API serves comes before the API's name.
+2. In **API**, choose the API from the table above.
+   The three precompute APIs are under **For precompute scripts**.
+3. Do steps 2 to 6 of [the staged flow](#1-the-staged-flow-and-why-it-is-staged).
+   These steps test the connection, add and price the model, and enable both.
+   For an instance model, also do step 7 and share it.
+   If the probe cannot list the models, enter the model ID yourself.
+4. Open the workspace's **AI models** page.
+   Under **Models for precompute scripts**, open the row of the purpose, such as **Embedding model**.
+5. Choose a model for each tier that must have one, and select **Save assignment**.
+
+Each purpose offers only the models that can serve it.
+A model that you add under **Your providers** appears in the list at once.
+When no model can serve the purpose, the model list tells you what to do:
+
+- If the workspace can add its own providers, it sends you to **Your providers**.
+  An example is `No embedding model yet. Connect a provider with the Embeddings API under Your providers, then add its model.`
+  The link **Your providers** scrolls to that section.
+- If not, it tells you to ask an instance admin to share a model.
+
+The list also gives two warnings:
+
+- For a decision model with a reasoning effort: a decision needs a model that answers at once with token probabilities.
+- For a reranking model without **No metered API cost**: a provider that reports no tokens gives unpriced calls.
+  For a self-hosted reranker, set **No metered API cost** on the model.
+  The workspace sets it on its own model.
+  On a shared model, only an instance admin can set it, so the warning tells you to ask one.
+  See the caution in [Usage by practice](#usage-by-practice).
+
+A **Cloud** model of a precompute purpose is not used while **Practice reviews** has no ready **Cloud** model.
+Then its form shows this note:
+
+```text
+Cloud members’ reviews run on an In-house model, so this model is not used. Assign a Cloud model for practice reviews to use it.
+```
+
+[Privacy](#privacy) gives the rule.
+
+Through the API, the connection field is `apiProtocol`, with the values in the table.
+The server refuses a model of the wrong kind for a purpose with HTTP 400.
+For example:
+
+```text
+This is a chat model. Choose an embedding model here.
+```
+
+### Which practices use a precompute model
+
+A script declares its models in its code, as **required** or **optional**.
+Hephaestus reads that declaration only when a review runs the script.
+Thus, a practice's needs appear only after a review in which the script declared its models.
+A script that fails before it declares them says nothing about them.
+After a change to the script, the needs appear again after the next review.
+
+Each purpose row under **Models for precompute scripts** shows these facts:
+
+- **The collapsed row**: one column for each tier, **In-house** and **Cloud**.
+  While the member choice is optional, a third column, **Not chosen**, shows the model for members who have not chosen.
+  A cell shows the model that serves that tier, or "—" when none does.
+  A house icon after a model marks an In-house model that serves a less strict tier.
+  **Not used** after a muted model in the **Cloud** cell means that Cloud members do not get it.
+  Their reviews run on an In-house model.
+- **Below the purpose name**: **Used by 2 practices** or **No practice uses it**.
+- **The status badge**, only when the row needs a decision:
+  - **Not set for some members**: some members get no model for this purpose. The tier columns show which.
+  - **Not set**: no member gets a model for this purpose.
+  - **Needs attention**: an assigned model cannot run, or a practice requires a model that some members do not get.
+  - **Off**: practice reviews are off, so no precompute model is used.
+
+  While practice reviews are on, a purpose that serves every member shows no badge.
+  A precompute purpose that no practice uses also shows no badge then, whatever it assigns.
+- **Used by**, when you open the row: each practice that uses the model.
+  A practice that requires the model shows **Required**.
+  A practice that uses the model only when it is available shows no badge.
+  The practices whose required model some members do not get come first.
+  Below each of them, a line such as **Not set for In-house members** names the members without a model.
+  The note **As of each practice’s newest review.** tells you where the list comes from.
+  The list shows five practices, and **Show all** shows the rest.
+
+A row with **Needs attention** opens when the page loads.
+Practices can require the model while some members do not get one.
+Then the row shows a warning with the count of those practices and the tier, for example:
+
+```text
+2 practices need a decision model for In-house members. Until you assign one, their precompute scripts do not run, and the reviews check those practices without their help.
+```
+
+**Used by** names the practices.
+Until you assign a model for that tier, the script does not run for those members' work.
+
+Add `?purpose=` to the address of **AI models** to open one row and scroll to it, such as `?purpose=PRACTICE_EMBEDDING`.
+The values are `PRACTICE_REVIEW`, `MENTOR`, `PRACTICE_DECISION`, `PRACTICE_EMBEDDING` and `PRACTICE_RERANKING`.
+Links such as **Assign a decision model** and **Check the decision model** use this address.
+
+The same needs appear for one practice under **Practice setup**:
+
+- An alert at the top says when some members do not get a model that the script requires.
+  An example is `The precompute script does not run for In-house members’ work: no decision model is assigned for them.`
+  **Assign a decision model** opens the purpose row.
+- The item **Precompute script** shows the needs above the script's code.
+  Each need is one row with the kind of model, such as **Decision model**.
+  The review's own chat model has no row, because it always runs the review.
+  A precompute model that the script requires shows **Required**.
+  A line with tier icons names the members without a model, such as **Not set for In-house members**.
+  A link beside the line opens the purpose row.
+- `It uses no model.` when the script declares no model.
+- `It uses only the review model.` when the script declares only the chat model.
+- `Its models show after its next review.` when no review has run the script, or the script failed each time before it declared its models.
+- `The script changed. Its models show after its next review.` when the newest review that reported the needs ran an earlier version of the script.
+
+Below the needs, **As of the review on**, with a date such as 3 Oct, opens the review that reported them.
+[Practice review operations](./practice-review-operations.mdx#precompute-scripts) tells you how to read what a script did in one review.
+
+### Privacy
+
+A precompute model follows the same data-handling rules as the review model.
+For each review, Hephaestus chooses each precompute model through the reviewed developer's AI choice, like the review model.
+A precompute model is at least as strict as the review's own model.
+If a developer's review runs on an In-house model, the scripts of that review use only In-house models.
+The description of **Models for precompute scripts** on **AI models** states this rule.
+
+If no row of a purpose fits, the slot stays empty, and the review runs without it.
+The proxy checks the developer's AI choice again before each call.
+
+A script sends parts of the reviewed work to the model, such as added code and comments.
+Declare **Operated by** for a precompute model with the same care as for a review model.
+
+### Cost and limits
+
+Price a precompute model like any other model.
+Its calls count against the shared-model budget or the provider cap of the purse that pays for it.
+
+| Model | How Hephaestus bills it |
+| --- | --- |
+| Chat | On the review's own usage row, with the review's price. |
+| Decision, embedding, reranking | One usage row for each kind and review attempt, with the price frozen when the attempt was admitted. The source types are `PRECOMPUTE_DECISION`, `PRECOMPUTE_EMBEDDING` and `PRECOMPUTE_RERANKING`. |
+
+One review attempt has an attempt token limit for the model calls of all its precompute scripts together, chat calls included.
+The environment variable `PRACTICE_REVIEW_PRECOMPUTE_MAX_TOKENS_PER_ATTEMPT` sets it.
+Its property is `hephaestus.practice-review.precompute-max-tokens-per-attempt`.
+The default is 200 000 tokens.
+Only an operator can change it.
+
+The shared-model budget and the provider cap show on **AI usage**.
+The attempt token limit also bounds spend on a workspace's own provider that has no provider cap.
+
+The precompute runner checks the attempt token limit before each call, and the proxy enforces it.
+When the attempt token limit, the shared-model budget or the provider cap is spent, the proxy refuses further precompute calls with HTTP 402.
+The scripts then report the rest as not rated, and the review continues.
+
+Each precompute call names the practice whose script makes it.
+The proxy refuses a call without a practice with HTTP 400.
+The [workspace ABI](/contributor/agent/agent-workspace-abi#precompute-models) gives the header, and [Practice review operations](./practice-review-operations.mdx#precompute-metrics) gives the metric that counts these refusals.
+
+### Usage by practice
+
+The workspace's **AI usage** page has four sections: **Spend this month**, **By run type**, **Precompute models by practice**, and **By day**.
+For an earlier month, the first section is **Spend in** and the month, such as **Spend in September 2026**.
+The first section shows one tile for each purse: **Shared models** and **Own provider**.
+
+The **Shared models** tile shows the shared-model budget, and the **Own provider** tile shows the provider cap.
+A tile with a budget or cap shows it, such as `of $25`.
+It also shows a state when it applies: **Paused**, **Near the budget** or **Near the cap**, or **No price set**.
+A tile without one shows **No budget set** or **No cap set**.
+When the workspace does not use its own provider in the month, the **Own provider** tile is muted and shows $0.
+It tells you that work on a provider that you connect in **AI models** shows there.
+
+In the current month, **Set provider cap** or **Change provider cap** in the heading of the section sets the cap of the workspace's own provider.
+The button appears only when the workspace uses its own provider in that month.
+
+A workspace uses its own provider in a month when one of these conditions is true:
+
+- The month has at least one call on a provider of the workspace. A call without a price or a call that costs $0 also counts.
+- The month is the current month, and the workspace has an enabled model on an enabled connection of its own.
+
+Thus, an admin can set the provider cap before the first call.
+A provider cap alone does not make a workspace use its own provider.
+The tables show **Own provider** columns only when the workspace uses its own provider in the month.
+On **Instance admin → AI usage**, the **Own provider** columns appear when at least one workspace uses its own provider in the month.
+
+While the workspace does not use its own provider, its provider cap pauses nothing.
+Thus, no page shows a state for that cap, and **Instance admin → AI usage** shows no provider cap for the workspace.
+This is also true for a $0 cap.
+
+Each table has its own money columns for **Shared models** and for **Own provider**.
+The two purses are never added together.
+Two tables show an average next to the spend of each purse:
+
+- **By run type** shows **Spend** and **Avg per run**.
+- **Precompute models by practice** shows **Spend** and **Avg per review**.
+
+**By day** shows only the spend of each purse.
+The table of workspaces on **Instance admin → AI usage** shows the spend of each purse, the shared-model budget, and the provider cap.
+[Usage](./instance-admin.mdx#usage) describes its columns.
+On a narrow screen, the token and call columns are hidden.
+
+**No price set** appears only when a row has usage without a price.
+In **By run type** and **By day**, it counts the runs that have usage without a price.
+A run is one review attempt or one Heph turn, with all of its usage rows.
+In **Precompute models by practice**, it counts reviews.
+
+**Precompute models by practice** appears only in a month with decision, embedding, or reranking usage.
+On **Instance admin → AI usage**, the same table appears when you select **Details** for a workspace.
+The instance console has no table of practices across all workspaces.
+To see the practices of one workspace, open its details.
+
+The table has one row for each practice:
+
+| Column | What it shows |
+| --- | --- |
+| **Practice** | The practice. A practice that the workspace no longer has shows its identifier and **Not a current practice**. |
+| **Models** | The precompute models that its script called: decision, embedding, or reranking. Each kind has its own icon. |
+| **Shared models**: **Spend**, **Avg per review** | Its share of the cost on the instance catalog's models, and that cost divided by its reviews. |
+| **Own provider**: **Spend**, **Avg per review** | Its share of the cost on the workspace's own provider, and that cost divided by its reviews. |
+| **Reviews** | The reviews whose scripts called its models. |
+| **No price set** | The reviews with a usage row without a price that it had a share in. |
+| **Input tokens**, **Output tokens**, **Calls** | Its own counts from the proxy. |
+
+The rows show the highest spend first.
+Select the heading of any column except **Models** to sort by that column.
+The [worked example](#worked-example) tells how an amount and an average round.
+
+With two rows or more, the table ends with a **Total** row.
+The total comes from the usage rows themselves, so the costs of the practices and **Not attributed** add up to it.
+A review can count for several practices.
+Thus, the **Reviews** and **No price set** of the rows can add up to more than the total.
+
+A **Not attributed** row shows the cost that no practice can carry.
+An example is the usage of a review whose job was deleted.
+The row stays last, above **Total**, whatever the sort.
+
+Hephaestus bills one usage row for each model kind and review attempt.
+It splits the cost of that row between the practices whose scripts made its calls:
+
+1. Each practice gets a weight: its input tokens × the input rate, plus its output tokens × the output rate.
+   The rates are those that the usage row applied.
+2. Each practice gets the cost × its weight ÷ the sum of the weights, truncated to six decimals.
+3. The practice with the largest weight also gets the remainder.
+   Thus, the shares of one usage row add up to its cost exactly.
+4. If no practice has a weight, each share is $0, and the table still shows the tokens.
+
+A usage row without a price adds no cost to any practice.
+Its review counts one time in **No price set** for each practice that had a share in it.
+A model with **No metered API cost** adds a confirmed $0.
+
+The table shows the usage of finished reviews, to date in the current month.
+These costs are already part of the run types above it.
+Chat calls from a script are not in this table, because they are part of each review's own cost.
+On **By run type** and **By day**, **Runs** counts review attempts and Heph turns only.
+A precompute usage row adds its calls and cost to its review, but it is not a run.
+
+:::caution CAUTION: A priced reranking model that reports no tokens
+
+Some reranking providers, such as Cohere, bill search units and report no token usage.
+Hephaestus cannot price a call without tokens, so it records the call without a price.
+In a purse with a budget or a cap, unpriced usage makes the month **UNVERIFIABLE**, and reviews pause.
+In such a purse, choose a reranking provider that reports token usage.
+For a self-hosted reranker, declare **No metered API cost**.
+
+:::

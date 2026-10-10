@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -117,9 +118,17 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                         timeoutSeconds,
                         false,
                         null,
+                        null,
                         null)
                 .withPriceSnapshot(new LlmPriceSnapshot(
-                        FundingSource.INSTANCE, PricingState.NO_CHARGE, null, null, null, null, null, null));
+                        FundingSource.INSTANCE,
+                        PricingState.PRICED,
+                        1L,
+                        null,
+                        BigDecimal.ONE,
+                        BigDecimal.ONE,
+                        BigDecimal.ONE,
+                        BigDecimal.ONE));
     }
 
     private AgentJob runningJob(UUID id, Instant startedAt, int timeoutSeconds) {
@@ -253,6 +262,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                             snapshot.allowInternet(),
                             null // the point of the fixture: an orphan frozen before admission pricing existed
                             ,
+                            null,
                             null)
                     .toJson(objectMapper));
             when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(legacyJob));
@@ -471,7 +481,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             assertThat(sample.reasoningTokens()).isEqualTo(50L);
             assertThat(sample.cacheReadTokens()).isEqualTo(120L);
             assertThat(sample.totalCalls()).isEqualTo(3);
-            assertThat(sample.price().pricingState()).isEqualTo(PricingState.NO_CHARGE);
+            assertThat(sample.price().pricingState()).isEqualTo(PricingState.PRICED);
             assertThat(sample.price().fundingSource()).isEqualTo(FundingSource.INSTANCE);
             assertThat(meterRegistry.counter("agent.job.zombie.reaped").count()).isEqualTo(1.0);
         }

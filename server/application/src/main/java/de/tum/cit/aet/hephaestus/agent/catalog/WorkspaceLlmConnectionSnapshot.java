@@ -16,7 +16,7 @@ record WorkspaceLlmConnectionSnapshot(
         String displayName,
         @Nullable LlmConnectionPlatform connectionPlatform,
         @Nullable String baseUrl,
-        String apiProtocol,
+        LlmApiProtocol apiProtocol,
         LlmAuthMode authMode,
         boolean llmApiKeySet,
         boolean enabled)

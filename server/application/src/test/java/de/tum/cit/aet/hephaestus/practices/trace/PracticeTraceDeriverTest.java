@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeSignalDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.spi.PrecomputeRunDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.PrecomputeRunStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.PracticeCoverageOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.PracticeReadinessOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewOutcome;
@@ -98,7 +100,8 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     AT.plusSeconds(600),
                     Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null, null)),
                     Map.of(),
-                    Map.of("slug", RUN));
+                    Map.of("slug", RUN),
+                    Map.of());
 
             var entry = only(
                     practice(PracticeAutonomy.AUTOMATIC, READY),
@@ -115,6 +118,40 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
             assertThat(entry.explanation())
                     .contains("earlier review", "did not assess it again")
                     .doesNotContain("nothing to report");
+        }
+
+        @Test
+        void shouldCarryThePrecomputeRunOfTheReviewTheEntryNames() {
+            var run = new PrecomputeRunDTO(PrecomputeRunStatus.SKIPPED, 0, List.of());
+            var review = new ReviewOutcome(
+                    ReviewRunState.COMPLETED,
+                    false,
+                    AT,
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null, null)),
+                    Map.of("slug", PracticeCoverageOutcome.EVALUATED),
+                    Map.of(),
+                    Map.of("slug", run, "other-practice", new PrecomputeRunDTO(PrecomputeRunStatus.OK, 4, List.of())));
+
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(triggered(READY, RUN)),
+                    Map.of(RUN, review),
+                    Map.of());
+
+            assertThat(entry.reviewId()).isEqualTo(RUN);
+            assertThat(entry.precompute()).isEqualTo(run);
+        }
+
+        @Test
+        void shouldCarryNoPrecomputeRunWhenTheReviewReportedNoneForThePractice() {
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(triggered(READY, RUN)),
+                    Map.of(RUN, completed(Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null, null)))),
+                    Map.of());
+
+            assertThat(entry.reviewId()).isEqualTo(RUN);
+            assertThat(entry.precompute()).isNull();
         }
 
         @Test

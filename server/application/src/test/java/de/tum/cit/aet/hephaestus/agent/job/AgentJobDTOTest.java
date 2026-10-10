@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -114,6 +115,22 @@ class AgentJobDTOTest extends BaseUnitTest {
         assertThat(other.coveringJobId()).isNull();
     }
 
+    @Test
+    void shouldNameTheTierOfTheReviewModelOnlyWhenTheSnapshotFrozeOne() {
+        AgentJob job = jobWithSnapshot(snapshotWithScope(FundingSource.INSTANCE));
+        ObjectNode snapshot = (ObjectNode) job.getConfigSnapshot();
+        assertThat(AgentJobDTO.from(job, ReviewRunTargetMapper.from(job)).dataHandlingTier())
+                .isNull();
+
+        snapshot.put("dataHandlingTier", "CLOUD");
+        assertThat(AgentJobDTO.from(job, ReviewRunTargetMapper.from(job)).dataHandlingTier())
+                .isEqualTo(DataHandlingTier.CLOUD);
+
+        snapshot.put("dataHandlingTier", "ORBITAL");
+        assertThat(AgentJobDTO.from(job, ReviewRunTargetMapper.from(job)).dataHandlingTier())
+                .isNull();
+    }
+
     private static AgentJob jobWithSnapshot(ConfigSnapshot snapshot) {
         AgentJob job = new AgentJob();
         job.prePersist();
@@ -139,6 +156,7 @@ class AgentJobDTOTest extends BaseUnitTest {
                 null,
                 600,
                 false,
+                null,
                 null,
                 null);
     }

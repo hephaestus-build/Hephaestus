@@ -1,5 +1,7 @@
 /** Precomputation types — hints and directions, never verdicts */
 
+import type { RunStatus } from "./contract.ts";
+
 export interface Hint {
 	file: string;
 	line: number;
@@ -16,23 +18,30 @@ export type HintFlag = boolean | number | string;
 export type ArtifactMetadata = Record<string, unknown>;
 
 /**
- * What a precompute script returns. `practice` and `status` are NOT part of it: the runner stamps
- * those on, so the filename slug stays the single source of truth for a script's identity.
+ * What a positional precompute script returns. `practice` and `status` are NOT part of it: the runner
+ * stamps those on, so the filename slug stays the single source of truth for a script's identity.
  */
-export interface PracticeFindings {
+export interface PositionalResult {
 	hints: Hint[];
 	metrics: Record<string, number>;
 	directions: string[];
 }
 
-/** A validated `PracticeFindings` attributed to a practice — the shape of `{output}/{slug}.json`. */
-export interface PracticeResult extends PracticeFindings {
+/**
+ * A validated `PositionalResult` attributed to a practice — the shape of `{output}/{slug}.json`. A
+ * script that failed before it said which contract it uses has this shape too.
+ */
+export interface PracticeResult extends PositionalResult {
 	practice: string;
-	status: "ok" | "error" | "timeout";
+	status: Exclude<RunStatus, "skipped">;
+	/** Changed-line hints held back because the change does not hold their file and line. */
+	dropped?: number;
+	/** Why the script failed or was stopped. */
+	error?: string;
 }
 
 /**
- * Injected scripts are untrusted; the runner validates their results with parseFindings.
+ * Injected scripts are untrusted; the runner validates their results with parsePositionalResult.
  *
  * @param contextDir the task-declared context directory, read with `lib/context.ts`
  * @param changeDir the change view this container derived (`work/change`), read with `lib/change.ts`
@@ -45,7 +54,7 @@ export type PracticeScript = (
 	contextDir?: string,
 	changeDir?: string,
 	contextReference?: string,
-) => PracticeFindings | Promise<PracticeFindings>;
+) => PositionalResult | Promise<PositionalResult>;
 
 export interface DiffFile {
 	path: string;

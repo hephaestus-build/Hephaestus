@@ -2,6 +2,11 @@ package de.tum.cit.aet.hephaestus.agent.usage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRate;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -40,6 +45,12 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private FxRateRepository fxRateRepository;
+
+    @Autowired
+    private WorkspaceLlmConnectionRepository workspaceLlmConnectionRepository;
+
+    @Autowired
+    private WorkspaceLlmModelRepository workspaceLlmModelRepository;
 
     private Workspace setupWorkspace(String slug) {
         User owner = persistUser(slug + "-owner");
@@ -143,6 +154,35 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(row.ownProviderBudgetVerdict()).isEqualTo(LlmBudgetVerdict.UNVERIFIABLE);
         assertThat(row.instancePaused()).isFalse();
         assertThat(row.ownProviderPaused()).isTrue();
+    }
+
+    @Test
+    void theRollupMarksAWorkspaceOwnProviderInUseFromAConnectedModelOrAnOwnProviderCall() {
+        Workspace connected = setupWorkspace("adm-own-connected");
+        WorkspaceLlmConnection connection = new WorkspaceLlmConnection();
+        connection.setWorkspace(connected);
+        connection.setSlug("own-connection");
+        connection.setDisplayName("Own connection");
+        connection.setBaseUrl("https://api.openai.com");
+        connection.setApiProtocol(LlmApiProtocol.OPENAI_COMPLETIONS);
+        connection.setEnabled(true);
+        connection = workspaceLlmConnectionRepository.save(connection);
+        WorkspaceLlmModel model = new WorkspaceLlmModel();
+        model.setWorkspace(connected);
+        model.setConnection(connection);
+        model.setSlug("own-model");
+        model.setDisplayName("Own model");
+        model.setUpstreamModelId("gpt-5");
+        model.setEnabled(true);
+        workspaceLlmModelRepository.save(model);
+        Workspace zeroCalls = setupWorkspace("adm-own-zero-calls");
+        seedEvent(zeroCalls, "0.00", FundingSource.WORKSPACE, PricingState.NO_CHARGE);
+        Workspace sharedOnly = setupWorkspace("adm-own-shared-only");
+        seedEvent(sharedOnly, "1.00");
+
+        assertThat(rollupFor(connected).ownProviderInUse()).isTrue();
+        assertThat(rollupFor(zeroCalls).ownProviderInUse()).isTrue();
+        assertThat(rollupFor(sharedOnly).ownProviderInUse()).isFalse();
     }
 
     @Test

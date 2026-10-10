@@ -13,8 +13,11 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelKind;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
@@ -44,6 +47,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.Convert;
 import java.lang.reflect.Field;
 import java.util.List;
@@ -126,7 +130,7 @@ class AgentJobServiceTest extends BaseUnitTest {
                 handlerRegistry,
                 objectMapper,
                 transactionTemplate,
-                new PracticeReviewProperties(false, 15, 5, null, 12, 16000),
+                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000),
                 practiceRepository,
                 llmBudgetService,
                 llmModelResolver,
@@ -429,6 +433,78 @@ class AgentJobServiceTest extends BaseUnitTest {
             assertThat(Objects.requireNonNull(job.getMetadata()).path("review_state"))
                     .isEqualTo(objectMapper.readTree("{\"state\":\"OPEN\",\"draftStatus\":\"NOT_DRAFT\"}"));
             assertThat(job.getTraceId()).isEqualTo("0123456789abcdef0123456789abcdef");
+        }
+
+        private AgentJob submitCreatingAJob() {
+            when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
+            when(agentJobRepository.findByWorkspaceIdAndIdempotencyKeyAndStatusIn(anyLong(), any(), any()))
+                    .thenReturn(Optional.empty());
+            when(agentJobRepository.saveAndFlush(any(AgentJob.class))).thenAnswer(inv -> {
+                AgentJob j = inv.getArgument(0);
+                j.prePersist();
+                return j;
+            });
+            return service.submit(1L, AgentJobType.PULL_REQUEST_REVIEW, mock(JobSubmissionRequest.class), null)
+                    .orElseThrow();
+        }
+
+        @Test
+        void shouldFreezeABoundPrecomputeModelWhenTheReviewIsSubmitted() {
+            var embeddingBinding = new WorkspaceAgentBinding();
+            embeddingBinding.setId(11L);
+            embeddingBinding.setWorkspace(workspace);
+            embeddingBinding.setPurpose(AgentPurpose.PRACTICE_EMBEDDING);
+            embeddingBinding.setDataHandlingTier(DataHandlingTier.CLOUD);
+            when(memberAiPolicy.precomputeBinding(
+                            eq(1L), eq(AgentPurpose.PRACTICE_DECISION), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
+                    .thenReturn(Optional.empty());
+            when(memberAiPolicy.precomputeBinding(
+                            eq(1L), eq(AgentPurpose.PRACTICE_EMBEDDING), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
+                    .thenReturn(Optional.of(embeddingBinding));
+            when(memberAiPolicy.precomputeBinding(
+                            eq(1L), eq(AgentPurpose.PRACTICE_RERANKING), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
+                    .thenReturn(Optional.empty());
+            when(llmModelResolver.resolve(embeddingBinding))
+                    .thenReturn(new ResolvedLlmModel(
+                            "https://api.openai.com/v1",
+                            "openai-embeddings",
+                            "text-embedding-3-small",
+                            8191,
+                            null,
+                            null));
+            when(llmModelResolver.connectionRef(embeddingBinding))
+                    .thenReturn(new LlmModelResolver.ConnectionRef(FundingSource.WORKSPACE, 5L, 6L, 1L));
+
+            AgentJob job = submitCreatingAJob();
+
+            ConfigSnapshot snapshot =
+                    ConfigSnapshot.fromJson(Objects.requireNonNull(job.getConfigSnapshot()), objectMapper);
+            assertThat(snapshot.upstreamModelId()).isEqualTo("claude-sonnet-4");
+            assertThat(snapshot.precompute())
+                    .as("the price is frozen at admission, not at submit")
+                    .containsOnly(Map.entry(
+                            ModelKind.EMBEDDING,
+                            new FrozenModel(
+                                    "openai-embeddings",
+                                    "https://api.openai.com/v1",
+                                    "text-embedding-3-small",
+                                    FundingSource.WORKSPACE,
+                                    5L,
+                                    6L,
+                                    1L,
+                                    DataHandlingTier.CLOUD,
+                                    null,
+                                    null)));
+        }
+
+        @Test
+        void shouldSubmitTheReviewWithoutPrecomputeModelsWhenNoneIsReady() {
+            AgentJob job = submitCreatingAJob();
+
+            ConfigSnapshot snapshot =
+                    ConfigSnapshot.fromJson(Objects.requireNonNull(job.getConfigSnapshot()), objectMapper);
+            assertThat(job.getStatus()).isEqualTo(AgentJobStatus.QUEUED);
+            assertThat(snapshot.precompute()).isNull();
         }
 
         @Test

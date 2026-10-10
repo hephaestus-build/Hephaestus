@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.trace;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.spi.PrecomputeRunDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.PracticeCoverageOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.PracticeReadinessOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewOutcome;
@@ -47,11 +48,12 @@ final class PracticeTraceDeriver {
             Map<Long, PracticeOutput> outputsByPracticeId) {
         List<PracticeTraceEntryDTO> entries = new ArrayList<>(practices.size());
         for (TracedPractice practice : practices) {
-            entries.add(derive(
+            PracticeTraceEntryDTO entry = derive(
                     practice,
                     occurrences,
                     reviews,
-                    outputsByPracticeId.getOrDefault(practice.id(), PracticeOutput.NONE)));
+                    outputsByPracticeId.getOrDefault(practice.id(), PracticeOutput.NONE));
+            entries.add(entry.withPrecompute(precompute(entry, reviews)));
         }
         return entries.stream()
                 .sorted(Comparator.comparingInt((PracticeTraceEntryDTO entry) -> RANK.getOrDefault(entry.outcome(), 99))
@@ -318,6 +320,13 @@ final class PracticeTraceDeriver {
                 output);
     }
 
+    /** The precompute run of the review the entry names, which is the review a reader opens from it. */
+    private static @Nullable PrecomputeRunDTO precompute(
+            PracticeTraceEntryDTO entry, Map<UUID, ReviewOutcome> reviews) {
+        ReviewOutcome review = entry.reviewId() == null ? null : reviews.get(entry.reviewId());
+        return review == null ? null : review.precomputeByPracticeSlug().get(entry.practiceSlug());
+    }
+
     private static boolean watches(TracedPractice practice, SignalOccurrence occurrence) {
         return practice.watches().stream()
                 .anyMatch(watched -> watched.signal().equals(occurrence.signal().signal()));
@@ -346,7 +355,8 @@ final class PracticeTraceDeriver {
                 reviewId,
                 output.observations(),
                 output.delivered(),
-                output.withheldReasons());
+                output.withheldReasons(),
+                null);
     }
 
     /** The refusal, then each blocker in its own sentence as the lookup wrote it. */

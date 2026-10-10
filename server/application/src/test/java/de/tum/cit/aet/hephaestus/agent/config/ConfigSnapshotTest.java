@@ -6,13 +6,16 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelKind;
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
+import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -146,6 +149,83 @@ class ConfigSnapshotTest extends BaseUnitTest {
             assertThat(deserialized).isEqualTo(original);
             assertThat(deserialized.schemaVersion()).isEqualTo(ConfigSnapshot.SCHEMA_VERSION);
             assertThat(deserialized.timeoutSeconds()).isEqualTo(600);
+        }
+
+        @Test
+        void shouldRoundTripThePrecomputeModelsWhenTheJobHasThem() {
+            WorkspaceAgentBinding binding = createBinding();
+            stubResolver(binding);
+            var embedding = new FrozenModel(
+                    "openai-embeddings",
+                    "https://api.openai.com/v1",
+                    "text-embedding-3-small",
+                    FundingSource.WORKSPACE,
+                    8L,
+                    21L,
+                    1L,
+                    DataHandlingTier.CLOUD,
+                    null,
+                    null);
+            var decision = new FrozenModel(
+                            "openai-completions",
+                            "https://gpu.example.com/v1",
+                            "gpt-oss-20b",
+                            FundingSource.INSTANCE,
+                            9L,
+                            22L,
+                            1L,
+                            DataHandlingTier.IN_HOUSE,
+                            ReasoningEffort.LOW,
+                            null)
+                    .withPriceSnapshot(LlmPriceSnapshot.unpricedInstance());
+            ConfigSnapshot original = ConfigSnapshot.from(binding, resolver)
+                    .withPrecompute(Map.of(ModelKind.EMBEDDING, embedding, ModelKind.DECISION, decision));
+
+            JsonNode json = original.toJson(OBJECT_MAPPER);
+            ConfigSnapshot deserialized = ConfigSnapshot.fromJson(json, OBJECT_MAPPER);
+
+            assertThat(deserialized).isEqualTo(original);
+            assertThat(json.path("precompute").path("EMBEDDING").has("connectionRef"))
+                    .as("only the record components are stored")
+                    .isFalse();
+            assertThat(json.toString()).doesNotContain("apiKey");
+        }
+
+        @Test
+        void shouldReadNoPrecomputeModelsWhenTheRowPredatesThem() {
+            WorkspaceAgentBinding binding = createBinding();
+            stubResolver(binding);
+            ObjectNode json =
+                    (ObjectNode) ConfigSnapshot.from(binding, resolver).toJson(OBJECT_MAPPER);
+            json.remove("precompute");
+
+            ConfigSnapshot deserialized = ConfigSnapshot.fromJson(json, OBJECT_MAPPER);
+
+            assertThat(deserialized.precompute()).isNull();
+            assertThat(deserialized.upstreamModelId()).isEqualTo("claude-sonnet-4-20250514");
+        }
+
+        @Test
+        void shouldKeepThePrecomputeModelsWhenTheReviewPriceIsFrozen() {
+            WorkspaceAgentBinding binding = createBinding();
+            stubResolver(binding);
+            var reranking = new FrozenModel(
+                    "cohere-rerank",
+                    "https://api.cohere.com/v2",
+                    "rerank-v3.5",
+                    FundingSource.WORKSPACE,
+                    8L,
+                    23L,
+                    1L,
+                    DataHandlingTier.UNDECLARED,
+                    null,
+                    null);
+
+            ConfigSnapshot priced = ConfigSnapshot.from(binding, resolver)
+                    .withPrecompute(Map.of(ModelKind.RERANKING, reranking))
+                    .withPriceSnapshot(LlmPriceSnapshot.unpricedInstance());
+
+            assertThat(priced.precomputeSlot(ModelKind.RERANKING)).isEqualTo(reranking);
         }
 
         @Test
@@ -314,6 +394,32 @@ class ConfigSnapshotTest extends BaseUnitTest {
         }
     }
 
+    @Test
+    void shouldOfferTheReviewModelAsThePrecomputeChatModelWhenOtherKindsAreBound() {
+        WorkspaceAgentBinding binding = createBinding();
+        stubResolver(binding);
+        var embedding = new FrozenModel(
+                "openai-embeddings",
+                "https://api.openai.com/v1",
+                "text-embedding-3-small",
+                FundingSource.WORKSPACE,
+                8L,
+                21L,
+                1L,
+                DataHandlingTier.CLOUD,
+                null,
+                null);
+
+        ConfigSnapshot snapshot =
+                ConfigSnapshot.from(binding, resolver).withPrecompute(Map.of(ModelKind.EMBEDDING, embedding));
+
+        assertThat(snapshot.precomputeModels())
+                .containsOnly(Map.entry(ModelKind.CHAT, snapshot.model()), Map.entry(ModelKind.EMBEDDING, embedding));
+        assertThat(snapshot.model().upstreamModelId()).isEqualTo("claude-sonnet-4-20250514");
+        assertThat(snapshot.model().connectionRef())
+                .isEqualTo(new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 7L, null, null));
+    }
+
     @Nested
     class Validation {
 
@@ -334,6 +440,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
                     timeoutSeconds,
                     false,
                     null,
+                    null,
                     null);
         }
 
@@ -345,6 +452,13 @@ class ConfigSnapshotTest extends BaseUnitTest {
             assertThatThrownBy(() -> snapshot(apiProtocol, baseUrl, 600))
                     .as(missingField)
                     .isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        void shouldRaiseTheTimeoutToThePracticeFloorWhenTheBindingIsShorter() {
+            assertThat(snapshot("openai-completions", "https://api.openai.com", 30)
+                            .timeoutSeconds())
+                    .isEqualTo(PracticePiAdapter.MIN_TIMEOUT_SECONDS);
         }
 
         @ParameterizedTest(name = "a timeout of {0}s cannot be built")

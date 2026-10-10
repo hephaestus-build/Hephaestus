@@ -11,6 +11,10 @@ import { cn } from "cn";
  *    `highlighted` for the reader's own row.
  * 4. `TableHeader` and `TableFooter` take `sticky`, pinned over the scrolling rows on an opaque
  *    surface.
+ * 5. `TableHead` is `text-muted-foreground`, not `text-foreground`: the header row reads as structure,
+ *    not as a first body row, and matches `SortButton` at rest.
+ * 6. `TableHead` takes `variant`: `body` for a row header beside top-aligned cells whose content
+ *    takes several lines. It wraps, and its first line sits on the cells' first line.
  */
 function Table({
 	className,
@@ -109,13 +113,19 @@ interface NumericCell {
 	numeric?: boolean;
 }
 
-function TableHead({ className, numeric, ...props }: React.ComponentProps<"th"> & NumericCell) {
+function TableHead({
+	className,
+	numeric,
+	variant = "default",
+	...props
+}: React.ComponentProps<"th"> & NumericCell & { variant?: "default" | "body" }) {
 	return (
 		<th
 			data-slot="table-head"
 			className={cn(
-				"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
+				"h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
 				numeric === true && "tabular-nums",
+				variant === "body" && "h-auto py-2 align-top whitespace-normal",
 				className,
 			)}
 			{...props}

@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted (amended 2026-09-17 — the image installs the SDK with pnpm). Supersedes
+Accepted (amended 2026-09-17 — the image installs the SDK with pnpm; 2026-10-09 — each precompute
+script runs in its own process without the child-process grant). Supersedes
 [ADR 0030](0030-agent-runtime-is-typescript-on-bun.md) for the sandbox image. Repository tooling is
 governed by [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md), which superseded
 [ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md).
@@ -71,3 +72,24 @@ runtime stage, which removes npm, npx, Corepack, Yarn and pnpm and fails the bui
 survives on the filesystem; the shipped image carries Node and no package manager. The other build
 checks, the runner flags and the runtime-contract label (`SandboxLayout.RUNTIME_CONTRACT_VERSION = 2`)
 are as decided.
+
+## Update — 2026-10-09: each precompute script runs in its own process
+
+Supersedes the precompute paragraph of § Decision and the precompute sentence of § Consequences.
+
+A precompute script could start a program through the stage's `--allow-child-process` grant. Node's
+filesystem grants do not confine that program, so a script could read the container environment and
+the review's job token in it. Thus, the third control of § Context did not hold for a script that a
+workspace admin wrote.
+
+The precompute runner keeps the grant and starts one Node process for each script. That process has
+`--permission`, no child-process grant, no write grant, an empty environment, a bounded heap and its
+own deadline. The library's `grep` sends a search to the runner, which starts `grep` with a fixed
+argument list inside the same read grants. The runner holds the precompute credential of
+[ADR 0054](0054-precompute-calls-models-through-the-runner.md), and a script's process holds no
+credential. Node permissions stay defense in depth, and Docker isolation stays the outer boundary.
+
+[Workspace ABI § Precompute validation and limits](../contributor/agent/workspace-abi.mdx#precompute-validation-and-limits)
+owns the current grants and limits.
+[What a script can reach](../contributor/practice-precompute.mdx#what-a-script-can-reach) owns the
+threat model.

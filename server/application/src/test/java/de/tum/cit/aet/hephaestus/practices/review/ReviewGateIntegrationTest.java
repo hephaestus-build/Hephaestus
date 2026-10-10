@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
@@ -97,7 +98,7 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
         connection.setSlug("gate-connection");
         connection.setDisplayName("Gate connection");
         connection.setBaseUrl("https://api.openai.com");
-        connection.setApiProtocol("openai-completions");
+        connection.setApiProtocol(LlmApiProtocol.OPENAI_COMPLETIONS);
         connection.setEnabled(true);
         connection = workspaceLlmConnectionRepository.save(connection);
 

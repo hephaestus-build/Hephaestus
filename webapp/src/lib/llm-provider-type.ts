@@ -1,3 +1,5 @@
+import type { LlmConnection } from "@/api/types.gen";
+
 /**
  * Create-time presets, presentation only: a persisted connection keeps its endpoint, protocol and
  * credential shape but not the preset it was seeded from.
@@ -22,18 +24,7 @@ export const PROVIDER_PRESET_SELECT_ITEMS = PROVIDER_PRESET_ORDER.map((preset) =
 	label: PROVIDER_PRESET_LABELS[preset],
 }));
 
-export const API_PROTOCOLS = {
-	OPENAI_COMPLETIONS: "openai-completions",
-	OPENAI_RESPONSES: "openai-responses",
-} as const;
-
-export function defaultProtocolFor(useResponsesApi = true): string {
-	return useResponsesApi ? API_PROTOCOLS.OPENAI_RESPONSES : API_PROTOCOLS.OPENAI_COMPLETIONS;
-}
-
-export function usesResponsesApi(apiProtocol: string): boolean {
-	return apiProtocol === API_PROTOCOLS.OPENAI_RESPONSES;
-}
+export type LlmApiProtocol = LlmConnection["apiProtocol"];
 
 export function authModeDefaultFor(preset: ProviderPreset): LlmAuthMode {
 	return preset === "AZURE_OPENAI_V1" ? "API_KEY" : "BEARER";
@@ -54,7 +45,7 @@ export function baseUrlDefaultFor(preset: ProviderPreset): string {
 }
 
 export interface OpenAiConnectionIdentity {
-	apiProtocol: string;
+	apiProtocol: LlmApiProtocol;
 	baseUrl: string;
 }
 

@@ -2,6 +2,11 @@ package de.tum.cit.aet.hephaestus.agent.usage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRate;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateRepository;
 import de.tum.cit.aet.hephaestus.core.audit.ConfigAuditEvent;
@@ -49,6 +54,12 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private FxRateRepository fxRateRepository;
+
+    @Autowired
+    private WorkspaceLlmConnectionRepository workspaceLlmConnectionRepository;
+
+    @Autowired
+    private WorkspaceLlmModelRepository workspaceLlmModelRepository;
 
     private static final YearMonth CURRENT = YearMonth.now(ZoneOffset.UTC);
     private static final YearMonth PREVIOUS = CURRENT.minusMonths(1);
@@ -132,6 +143,88 @@ class LlmUsageControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     private LlmUsageSourceType sourceType(LlmUsageJobType type) {
         return type == LlmUsageJobType.MENTOR_TURN ? LlmUsageSourceType.MENTOR_TURN : LlmUsageSourceType.AGENT_JOB;
+    }
+
+    private void connectOwnProvider(Workspace workspace, boolean modelEnabled) {
+        connectOwnProvider(workspace, true, modelEnabled);
+    }
+
+    private void connectOwnProvider(Workspace workspace, boolean connectionEnabled, boolean modelEnabled) {
+        WorkspaceLlmConnection connection = new WorkspaceLlmConnection();
+        connection.setWorkspace(workspace);
+        connection.setSlug("own-connection");
+        connection.setDisplayName("Own connection");
+        connection.setBaseUrl("https://api.openai.com");
+        connection.setApiProtocol(LlmApiProtocol.OPENAI_COMPLETIONS);
+        connection.setEnabled(connectionEnabled);
+        connection = workspaceLlmConnectionRepository.save(connection);
+
+        WorkspaceLlmModel model = new WorkspaceLlmModel();
+        model.setWorkspace(workspace);
+        model.setConnection(connection);
+        model.setSlug("own-model");
+        model.setDisplayName("Own model");
+        model.setUpstreamModelId("gpt-5");
+        model.setEnabled(modelEnabled);
+        workspaceLlmModelRepository.save(model);
+    }
+
+    private WorkspaceLlmUsageReportDTO reportFor(Workspace workspace, YearMonth month) {
+        WorkspaceLlmUsageReportDTO report = webTestClient
+                .get()
+                .uri("/workspaces/{slug}/llm/usage?month={month}", workspace.getWorkspaceSlug(), month.toString())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(WorkspaceLlmUsageReportDTO.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(report).isNotNull();
+        return report;
+    }
+
+    @Test
+    @WithAdminUser
+    void ownProviderIsInUseWhenAModelIsConnectedBeforeAnySpend() {
+        Workspace workspace = setupWorkspaceWithAdmin("own-provider-connected");
+        connectOwnProvider(workspace, true);
+
+        WorkspaceLlmUsageReportDTO current = reportFor(workspace, CURRENT);
+        assertThat(current.ownProviderTotalCostUsd()).isEqualByComparingTo("0");
+        assertThat(current.ownProviderMonthlyBudgetUsd()).isNull();
+        assertThat(current.ownProviderInUse()).isTrue();
+        // A connection has no history, so it says nothing about a month that is already closed.
+        assertThat(reportFor(workspace, PREVIOUS).ownProviderInUse()).isFalse();
+    }
+
+    @Test
+    @WithAdminUser
+    void ownProviderIsNotInUseWithoutAnEnabledModelOnAnEnabledConnectionOrAnyOwnProviderCall() {
+        Workspace idle = setupWorkspaceWithAdmin("own-provider-idle");
+        seedEvent(idle, LlmUsageJobType.MENTOR_TURN, "1.00", CURRENT, 1);
+        Workspace disabled = setupWorkspaceWithAdmin("own-provider-disabled");
+        connectOwnProvider(disabled, false);
+        Workspace connectionOff = setupWorkspaceWithAdmin("own-provider-connection-off");
+        connectOwnProvider(connectionOff, false, true);
+
+        assertThat(reportFor(idle, CURRENT).ownProviderInUse()).isFalse();
+        assertThat(reportFor(disabled, CURRENT).ownProviderInUse()).isFalse();
+        assertThat(reportFor(connectionOff, CURRENT).ownProviderInUse()).isFalse();
+    }
+
+    @Test
+    @WithAdminUser
+    void aMonthOfConfirmedZeroCostOwnProviderCallsIsInUse() {
+        Workspace workspace = setupWorkspaceWithAdmin("own-provider-zero-calls");
+        seedByoEvent(workspace, LlmUsageJobType.PULL_REQUEST_REVIEW, "0.00", PREVIOUS, 2);
+
+        WorkspaceLlmUsageReportDTO report = reportFor(workspace, PREVIOUS);
+
+        assertThat(report.ownProviderTotalCostUsd()).isEqualByComparingTo("0");
+        assertThat(report.ownProviderBudgetVerdict()).isEqualTo(LlmBudgetVerdict.WITHIN);
+        assertThat(report.ownProviderInUse()).isTrue();
+        assertThat(reportFor(workspace, CURRENT).ownProviderInUse()).isFalse();
     }
 
     @Test

@@ -20,13 +20,19 @@ const model: LlmModel = {
 	createdAt: new Date("2026-07-01T00:00:00Z"),
 };
 
+const connection: AdminLlmModelsSectionProps["connection"] = {
+	displayName: "OpenAI",
+	apiProtocol: "openai-responses",
+	purposes: ["PRACTICE_REVIEW", "MENTOR"],
+	enabled: true,
+};
+
 describe("AdminLlmModelsSection", () => {
 	it("offers a discoverable access-management action", () => {
 		const onManageAccess = vi.fn<AdminLlmModelsSectionProps["onManageAccess"]>();
 		render(
 			<AdminLlmModelsSection
-				connectionDisplayName="OpenAI"
-				connectionEnabled
+				connection={connection}
 				workspaceOptions={[{ id: 10, displayName: "Alpha", workspaceSlug: "alpha" }]}
 				models={[model]}
 				mutatingIds={new Set<number>()}
@@ -37,6 +43,8 @@ describe("AdminLlmModelsSection", () => {
 			/>,
 		);
 
+		screen.getByRole("heading", { name: "Models on OpenAI" });
+		screen.getByText("Responses API");
 		fireEvent.click(screen.getByRole("button", { name: "Manage access for GPT-5" }));
 		expect(onManageAccess).toHaveBeenCalledWith(model);
 		screen.getByRole("columnheader", { name: "Workspace access" });
@@ -46,8 +54,7 @@ describe("AdminLlmModelsSection", () => {
 	it("closes the delete confirm on confirming, while the DELETE is still in flight", async () => {
 		const onDelete = vi.fn();
 		const props = {
-			connectionDisplayName: "OpenAI",
-			connectionEnabled: true,
+			connection,
 			workspaceOptions: [{ id: 10, displayName: "Alpha", workspaceSlug: "alpha" }],
 			onAdd: vi.fn(),
 			onEdit: vi.fn(),
@@ -65,6 +72,6 @@ describe("AdminLlmModelsSection", () => {
 		rerender(<AdminLlmModelsSection {...props} models={[]} mutatingIds={new Set([model.id])} />);
 
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
-		screen.getByText("No models yet");
+		screen.getByRole("cell", { name: "No models yet. Add a model so workspaces can pick it." });
 	});
 });

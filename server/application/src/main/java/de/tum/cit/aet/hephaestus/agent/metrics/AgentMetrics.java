@@ -35,6 +35,7 @@ public final class AgentMetrics {
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_ELIGIBLE = "agent.review.practice.coverage.eligible";
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_EVALUATED = "agent.review.practice.coverage.evaluated";
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_RATIO = "agent.review.practice.coverage.ratio";
+    public static final String AGENT_REVIEW_PRECOMPUTE_SCRIPTS = "agent.review.precompute.scripts";
     public static final String FEEDBACK_LANE_SWEEP_FAILURE = "feedback.lane.sweep.failure";
     public static final String FEEDBACK_LANE_SWEEP_RECOVERED = "feedback.lane.sweep.recovered";
     public static final String LLM_BUDGET_ALERT_FAILURE = "llm.budget.alert.failure";
@@ -43,6 +44,7 @@ public final class AgentMetrics {
     public static final String LLM_PROXY_BUDGET_BLOCKED = "llm.proxy.budget.blocked";
     public static final String LLM_PROXY_DURATION = "llm.proxy.duration";
     public static final String LLM_PROXY_ERRORS = "llm.proxy.errors";
+    public static final String LLM_PROXY_PRECOMPUTE_UNATTRIBUTED = "llm.proxy.precompute.unattributed";
     public static final String LLM_PROXY_STREAM_USAGE_UNSUPPORTED = "llm.proxy.stream.usage.unsupported";
     public static final String LLM_PROXY_UNBILLABLE_REFUSED = "llm.proxy.unbillable.refused";
     public static final String LLM_PROXY_USAGE_ACCUMULATE_FAILURE = "llm.proxy.usage.accumulate.failure";

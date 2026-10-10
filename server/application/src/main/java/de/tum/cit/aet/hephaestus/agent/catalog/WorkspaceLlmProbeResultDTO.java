@@ -16,12 +16,15 @@ public record WorkspaceLlmProbeResultDTO(
         @NonNull @Schema(description = "How many models the provider listed (0 if unreachable)")
         Integer modelCount,
 
+        @Nullable @Schema(description = "HTTP status returned by the provider, if any")
+        Integer statusCode,
+
         @Nullable @Schema(description = "Human-readable diagnostic when not reachable")
         String message) {
     static WorkspaceLlmProbeResultDTO from(LlmProbeResultDTO raw) {
         if (!raw.reachable()) {
-            return new WorkspaceLlmProbeResultDTO(false, 0, raw.message());
+            return new WorkspaceLlmProbeResultDTO(false, 0, raw.statusCode(), raw.message());
         }
-        return new WorkspaceLlmProbeResultDTO(true, raw.models().size(), null);
+        return new WorkspaceLlmProbeResultDTO(true, raw.models().size(), raw.statusCode(), null);
     }
 }

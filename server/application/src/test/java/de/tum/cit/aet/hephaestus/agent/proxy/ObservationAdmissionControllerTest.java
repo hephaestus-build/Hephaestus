@@ -187,7 +187,9 @@ class ObservationAdmissionControllerTest extends BaseUnitTest {
                 null,
                 null,
                 1L,
-                new ProxyRouting.BilledAttempt(sourceType, sourceId, 0, BigDecimal.ZERO, "worker-1"));
+                new ProxyRouting.BilledAttempt(sourceType, sourceId, 0, BigDecimal.ZERO, "worker-1"),
+                null,
+                null);
         return new TestingAuthenticationToken(routing, "[REDACTED]");
     }
 

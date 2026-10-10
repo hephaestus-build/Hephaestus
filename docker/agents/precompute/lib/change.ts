@@ -1,8 +1,8 @@
-/** Read captured commit metadata and the container-derived change file list. */
+/** Read the captured commit metadata. */
 
 import { readFile } from "node:fs/promises";
 
-import { isJsonObject, text } from "./practice-contract.ts";
+import { isJsonObject, text } from "./json.ts";
 
 export interface ChangeCommit {
 	sha: string;
@@ -24,7 +24,7 @@ export interface ChangedFile {
 	status: string;
 	path: string;
 	oldPath?: string;
-	/** Changed-line counts where the record carries them (the commit record does; the change view does not). */
+	/** Changed-line counts, when the record carries them. */
 	additions?: number;
 	deletions?: number;
 }
@@ -128,10 +128,4 @@ export async function readCapturedCommits(
 					: lines.findIndex((line) => new RegExp(`"sha"\\s*:\\s*"${sha}"`, "u").test(line)) + 1,
 		};
 	});
-}
-
-/** The files the change touches, with renames under both names; empty when no change view was derived. */
-export async function readChangedFiles(changeDir: string | undefined): Promise<ChangedFile[]> {
-	const parsed = parseJson(await readChangeText(changeDir, "files.json"));
-	return isJsonObject(parsed) ? changedFiles(parsed.files) : [];
 }

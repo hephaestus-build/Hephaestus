@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmConnectionRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditActorKind;
@@ -618,7 +619,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         slug,
                         "My Provider",
                         "https://api.openai.com",
-                        "openai-completions",
+                        LlmApiProtocol.OPENAI_COMPLETIONS,
                         LlmAuthMode.BEARER,
                         "sk-workspace-secret-9999",
                         true,

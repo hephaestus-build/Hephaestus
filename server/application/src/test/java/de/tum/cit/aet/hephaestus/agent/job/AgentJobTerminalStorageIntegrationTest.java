@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
@@ -22,9 +24,11 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPrice;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPriceRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelKind;
 import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
@@ -33,6 +37,8 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
+import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
@@ -42,6 +48,13 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -103,6 +116,18 @@ class AgentJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     private LlmUsageRecorder usageRecorder;
 
     @Autowired
+    private PiResultParser parser;
+
+    @Autowired
+    private AgentJobPrecomputeRunRepository precomputeRunRepository;
+
+    @Autowired
+    private PracticeRepository practices;
+
+    @Autowired
+    private PracticeRevisionRepository revisions;
+
+    @Autowired
     private TransactionTemplate transactions;
 
     @Autowired
@@ -125,7 +150,7 @@ class AgentJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     void setUp() {
         workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("terminal-" + UUID.randomUUID()));
         doReturn(true).when(policy).permitsReview(anyLong(), any(), any());
-        var binding = binding();
+        var binding = binding(AgentPurpose.PRACTICE_REVIEW, LlmApiProtocol.OPENAI_COMPLETIONS);
         when(policy.binding(anyLong(), any(), any())).thenReturn(Optional.of(binding));
         var registry = mock(JobTypeHandlerRegistry.class);
         when(registry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
@@ -147,7 +172,7 @@ class AgentJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
                 .execute(any(Runnable.class));
         var metrics = new SimpleMeterRegistry();
         var issuer = mock(WorkerJwtIssuer.class);
-        when(issuer.issueForJobUntil(any(), anyLong(), anyInt(), any())).thenReturn("test-job-token");
+        when(issuer.issueForJobUntil(any(), anyLong(), anyInt(), any(), any())).thenReturn("test-job-token");
         executor = new AgentJobExecutor(
                 properties,
                 jobs,
@@ -163,6 +188,7 @@ class AgentJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
                 new PracticeReviewRefusalMetrics(metrics),
                 new AgentJobTelemetry(metrics, Tracer.NOOP),
                 usageRecorder,
+                new PrecomputeRunRecorder(parser, precomputeRunRepository, metrics, mapper),
                 budgets,
                 admission,
                 mock(ArtifactSourceCatalogRegistry.class),
@@ -227,6 +253,30 @@ class AgentJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("a runner report that covers the proxy is booked with the precompute chat calls it could not see")
+    void shouldBookThePrecomputeChatCallsWithTheRunnersReport() {
+        AgentJob job = queued();
+        var reported = new AgentResult.LlmUsage("provider-name", 300, 120, null, null, null, null, 3);
+        when(runner.parseResult(any())).thenReturn(new AgentResult(true, Map.of("review", "LGTM"), reported));
+        when(sandbox.execute(any())).thenAnswer(invocation -> {
+            // One precompute call on the chat model, as the proxy counts it: on its practice row and in the
+            // job's own counters.
+            transactions.executeWithoutResult(status -> {
+                jobs.accumulatePrecomputeUsage(
+                        job.getId(), 0, new PrecomputeCallUsage(ModelKind.CHAT, "comment-quality", null, 40, 10));
+                jobs.accumulateLlmUsage(job.getId(), 0, new AgentJobLlmUsageDelta(40, 10, 0, 0, 0));
+            });
+            return new SandboxResult(0, Map.of(), "transcript", false, Duration.ofSeconds(1));
+        });
+
+        executor.processJob(job.getId());
+
+        AgentJob stored = jobs.findById(job.getId()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(AgentJobStatus.COMPLETED);
+        assertBooked(stored, 4, 340, 130, "RUNNER");
+    }
+
+    @Test
     @DisplayName("a transcript with a NUL is replaced whole, and the valid result still completes")
     void shouldReplaceAnUnstorableTranscriptWholeAndKeepTheResult() {
         Map<String, Object> result = Map.of("review", "LGTM");
@@ -260,6 +310,92 @@ class AgentJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         assertThat(stored.getOutput()).isNull();
         assertThat(usageRows(job.getId())).isZero();
         verify(handler, never()).deliver(any());
+    }
+
+    @Test
+    @DisplayName("a completed attempt books each precompute model the proxy counted, at the price its slot froze")
+    void shouldBookEachPrecomputeModelWhenTheAttemptCompletes() {
+        var embedding = binding(AgentPurpose.PRACTICE_EMBEDDING, LlmApiProtocol.OPENAI_EMBEDDINGS);
+        when(policy.precomputeBinding(anyLong(), eq(AgentPurpose.PRACTICE_EMBEDDING), any(), any()))
+                .thenReturn(Optional.of(embedding));
+        AgentJob job = queued(Map.of(ModelKind.EMBEDDING, FrozenModel.from(embedding, resolver)));
+        when(runner.parseResult(any())).thenReturn(new AgentResult(true, Map.of("review", "LGTM")));
+        when(sandbox.execute(any())).thenAnswer(invocation -> {
+            transactions.executeWithoutResult(status -> jobs.accumulatePrecomputeUsage(
+                    job.getId(), 0, new PrecomputeCallUsage(ModelKind.EMBEDDING, "comment-quality", null, 40, 0)));
+            return new SandboxResult(0, Map.of(), "transcript", false, Duration.ofSeconds(1));
+        });
+
+        executor.processJob(job.getId());
+
+        var row = jdbc.queryForMap(
+                "SELECT model, total_calls, input_tokens, pricing_state FROM llm_usage_event "
+                        + "WHERE source_id = ? AND source_type = 'PRECOMPUTE_EMBEDDING'",
+                job.getId());
+        assertThat(row.get("model"))
+                .isEqualTo(Objects.requireNonNull(embedding.getInstanceModel()).getUpstreamModelId());
+        assertThat(number(row, "total_calls").intValue()).isEqualTo(1);
+        assertThat(number(row, "input_tokens").longValue()).isEqualTo(40);
+        assertThat(row.get("pricing_state")).isEqualTo("NO_CHARGE");
+    }
+
+    @Test
+    @DisplayName("a completed attempt records what each staged precompute script did, as the runner reported it")
+    void shouldRecordEachStagedScriptsRunWhenTheAttemptCompletes() {
+        Practice decides = practice("comment-quality", "decide()");
+        Practice scans = practice("error-handling", "scan()");
+        AgentJob job = queued();
+        var snapshot = mapper.createObjectNode();
+        var admitted = snapshot.putArray("practices");
+        for (Practice practice : List.of(decides, scans)) {
+            admitted.addObject()
+                    .put("slug", practice.getSlug())
+                    .put(
+                            "revisionId",
+                            Objects.requireNonNull(practice.getCurrentRevision())
+                                    .getId());
+        }
+        byte[] report = """
+                {"practices":[{"slug":"comment-quality","status":"ok","leads":3,
+                  "models":[{"slot":"decision","need":"required","bound":true,"notRated":{"deadline":2}}]}],
+                 "truncated":false}""".getBytes(StandardCharsets.UTF_8);
+        when(runner.parseResult(any())).thenReturn(new AgentResult(true, Map.of("review", "LGTM")));
+        when(sandbox.execute(any())).thenAnswer(invocation -> {
+            // The practices the attempt admitted, as its preparation records them before the sandbox runs.
+            jdbc.update(
+                    "UPDATE agent_job SET evidence_snapshot = CAST(? AS jsonb) WHERE id = ?",
+                    mapper.writeValueAsString(snapshot),
+                    job.getId());
+            return new SandboxResult(
+                    0,
+                    Map.of(SandboxLayout.PRECOMPUTE_REPORT_FILE, report),
+                    "transcript",
+                    false,
+                    Duration.ofSeconds(1));
+        });
+
+        executor.processJob(job.getId());
+
+        var runs = jdbc.queryForList(
+                "SELECT practice_slug, attempt, status, leads, practice_revision_id, CAST(models AS text) AS models "
+                        + "FROM agent_job_precompute_run WHERE job_id = ? ORDER BY practice_slug",
+                job.getId());
+        assertThat(runs).hasSize(2);
+        assertThat(runs.get(0))
+                .containsEntry("practice_slug", "comment-quality")
+                .containsEntry("attempt", 0)
+                .containsEntry("status", "OK")
+                .containsEntry("leads", 3)
+                .containsEntry(
+                        "practice_revision_id",
+                        Objects.requireNonNull(decides.getCurrentRevision()).getId());
+        assertThat(mapper.readTree(String.valueOf(runs.get(0).get("models")))).isEqualTo(mapper.readTree("""
+                        [{"purpose":"PRACTICE_DECISION","need":"REQUIRED","bound":true,
+                          "notRated":[{"reason":"DEADLINE","count":2}]}]"""));
+        assertThat(runs.get(1))
+                .containsEntry("practice_slug", "error-handling")
+                .containsEntry("status", "NOT_FINISHED")
+                .containsEntry("models", null);
     }
 
     private void assertFailedOnceWithoutTheResult(Map<String, Object> result) {
@@ -318,9 +454,27 @@ class AgentJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         return rows == null ? 0 : rows;
     }
 
-    private WorkspaceAgentBinding binding() {
+    /** A practice of the workspace whose current revision holds this precompute script. */
+    private Practice practice(String slug, String script) {
+        Practice practice = new Practice();
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
+        practice.setWorkspace(workspace);
+        practice.setSlug(slug);
+        practice.setName(slug);
+        practice.setCriteria("Review the change");
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
+        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
+        practice.setPrecomputeScript(script);
+        practice = practices.save(practice);
+        practice.setCurrentRevision(revisions.save(new PracticeRevision(practice, 1)));
+        return practices.save(practice);
+    }
+
+    private WorkspaceAgentBinding binding(AgentPurpose purpose, LlmApiProtocol apiProtocol) {
         String slug = "terminal-" + UUID.randomUUID();
-        var connection = connections.save(LlmCatalogTestFixtures.connection(slug));
+        var connection = LlmCatalogTestFixtures.connection(slug);
+        connection.setApiProtocol(apiProtocol);
+        connection = connections.save(connection);
         LlmModel model = LlmCatalogTestFixtures.model(connection, slug, slug);
         model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
         model = models.save(model);
@@ -331,7 +485,7 @@ class AgentJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         prices.saveAndFlush(price);
         var binding = new WorkspaceAgentBinding();
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setPurpose(purpose);
         binding.setDataHandlingTier(DataHandlingTier.IN_HOUSE);
         binding.setInstanceModel(model);
         binding.setEnabled(true);
@@ -341,6 +495,10 @@ class AgentJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
 
     /** A queued review whose proxy already counted two calls, so its terminal write books real usage. */
     private AgentJob queued() {
+        return queued(null);
+    }
+
+    private AgentJob queued(@Nullable Map<ModelKind, FrozenModel> precompute) {
         return Objects.requireNonNull(transactions.execute(status -> {
             var binding = bindings.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                             workspace.getId(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.IN_HOUSE)
@@ -352,6 +510,7 @@ class AgentJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
             job.setMetadata(mapper.createObjectNode());
             job.setConfigSnapshot(ConfigSnapshot.from(binding, resolver)
                     .withPriceSnapshot(admission.admit(binding).price())
+                    .withPrecompute(precompute)
                     .toJson(mapper));
             job.setLlmTotalCalls(2);
             job.setLlmTotalInputTokens(100);

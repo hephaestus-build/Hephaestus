@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
@@ -30,7 +31,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 slug,
                 "Test Connection",
                 LlmCatalogTestFixtures.PUBLIC_BASE_URL,
-                "openai-completions",
+                LlmApiProtocol.OPENAI_COMPLETIONS,
                 LlmAuthMode.BEARER,
                 "sk-test-secret-1234",
                 true,
@@ -57,6 +58,9 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
         assertThat(created.hasApiKey()).isTrue();
         assertThat(created.apiKeyLast4()).isEqualTo("1234");
         assertThat(created.connectionPlatform()).isEqualTo(LlmConnectionPlatform.AZURE);
+        // A chat completions model also answers the decisions of precompute scripts.
+        assertThat(created.purposes())
+                .containsExactly(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR, AgentPurpose.PRACTICE_DECISION);
 
         webTestClient
                 .get()
@@ -131,7 +135,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                         "redaction-test",
                         "Redaction Test",
                         LlmCatalogTestFixtures.PUBLIC_BASE_URL,
-                        "openai-completions",
+                        LlmApiProtocol.OPENAI_COMPLETIONS,
                         LlmAuthMode.BEARER,
                         "sk-super-secret-value",
                         true,

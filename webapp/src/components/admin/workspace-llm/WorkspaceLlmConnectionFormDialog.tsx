@@ -28,7 +28,6 @@ import {
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import type { FieldErrors, LlmConnectionFormField } from "@/lib/llm-form-validation";
-import { defaultProtocolFor } from "@/lib/llm-provider-type";
 
 export interface WorkspaceLlmConnectionFormDialogProps {
 	open: boolean;
@@ -108,7 +107,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 		onCreate({
 			displayName: fields.displayName.trim(),
 			baseUrl: fields.baseUrl.trim(),
-			apiProtocol: defaultProtocolFor(fields.useResponsesApi),
+			apiProtocol: fields.apiProtocol,
 			authMode: fields.authMode,
 			connectionPlatform: fields.connectionPlatform,
 			apiKey: fields.apiKey.trim() || undefined,
@@ -122,7 +121,8 @@ function WorkspaceLlmConnectionFormDialogContent({
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit connection" : "Add connection"}</DialogTitle>
 					<DialogDescription>
-						Connect an endpoint that implements an OpenAI API. Add and price its models next.
+						Connect an OpenAI-compatible or Cohere-compatible endpoint. Add and price its models
+						next.
 					</DialogDescription>
 				</DialogHeader>
 

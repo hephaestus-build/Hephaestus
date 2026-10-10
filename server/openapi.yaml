@@ -3938,6 +3938,41 @@ paths:
       summary: Retry delivery for a completed agent job
       tags:
       - Agent Jobs
+  /workspaces/{workspaceSlug}/agents/jobs/{jobId}/precompute:
+    get:
+      operationId: getAgentJobPrecompute
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReviewPrecompute"
+          description: One entry per staged script; empty when no script ran or the
+            attempt has not ended
+        "404":
+          description: Job not found in this workspace
+      summary: List what each practice's precompute script did in the current attempt
+        of a review
+      tags:
+      - Agent Jobs
   /workspaces/{workspaceSlug}/agents/{purpose}:
     delete:
       operationId: deleteAgent
@@ -3959,6 +3994,9 @@ paths:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
+          - PRACTICE_DECISION
+          - PRACTICE_EMBEDDING
+          - PRACTICE_RERANKING
       - in: query
         name: dataHandlingTier
         required: false
@@ -3995,6 +4033,9 @@ paths:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
+          - PRACTICE_DECISION
+          - PRACTICE_EMBEDDING
+          - PRACTICE_RERANKING
       - in: query
         name: dataHandlingTier
         required: false
@@ -7152,6 +7193,36 @@ paths:
       summary: Get observation detail
       tags:
       - Practice Observations
+  /workspaces/{workspaceSlug}/practices/precompute:
+    get:
+      description: "One entry per practice with a precompute script: the models the\
+        \ script declared in the newest review that ran it, and for each model the\
+        \ member tiers that no ready binding serves today. A script declares its models\
+        \ only when it runs, so a practice whose script no review ran yet, or whose\
+        \ script changed since, has no needs and no asOf review."
+      operationId: listPrecomputeNeeds
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PracticePrecomputeSummary"
+          description: Precompute needs returned
+      summary: List what each practice's precompute script needs
+      tags:
+      - Practice Catalog
   /workspaces/{workspaceSlug}/practices/releases:
     get:
       operationId: listPracticeReleases
@@ -10541,7 +10612,8 @@ components:
         events:
           type: integer
           format: int64
-          description: "Ledger events (jobs / mentor turns) this month, either purse"
+          description: "Runs this month, either purse: job attempts and mentor turns.\
+            \ Precompute model rows are not runs."
         instanceBudgetVerdict:
           type: string
           description: "Whether shared-model spend is within the instance cap, has\
@@ -10573,6 +10645,10 @@ components:
           - WITHIN
           - EXHAUSTED
           - UNVERIFIABLE
+        ownProviderInUse:
+          type: boolean
+          description: Whether this month has an own-provider purse to show for the
+            workspace. Same rule as WorkspaceLlmUsageReport.ownProviderInUse.
         ownProviderMonthlyBudgetUsd:
           type: number
           format: decimal
@@ -10599,6 +10675,7 @@ components:
       - instancePaused
       - instanceTotalCostUsd
       - ownProviderBudgetVerdict
+      - ownProviderInUse
       - ownProviderPaused
       - ownProviderTotalCostUsd
       - workspaceSlug
@@ -10669,9 +10746,25 @@ components:
           enum:
           - PRACTICE_REVIEW
           - MENTOR
+          - PRACTICE_DECISION
+          - PRACTICE_EMBEDDING
+          - PRACTICE_RERANKING
         ready:
           type: boolean
           description: True when the bound model is available to run right now
+        servedTiers:
+          type: array
+          description: "The members this binding serves now, named by the tier of\
+            \ their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED\
+            \ for the members who have not chosen. A decision, embedding or reranking\
+            \ binding serves no member whose review model is stricter. Empty when\
+            \ the binding serves no member."
+          items:
+            type: string
+            enum:
+            - IN_HOUSE
+            - CLOUD
+            - UNDECLARED
         timeoutSeconds:
           type: integer
           format: int32
@@ -10683,6 +10776,7 @@ components:
       - enabled
       - purpose
       - ready
+      - servedTiers
     AgentBindingRequest:
       type: object
       description: Bind a model and execution limits to an agent purpose
@@ -10748,6 +10842,15 @@ components:
           type: string
           format: date-time
           description: Timestamp when the job was created
+        dataHandlingTier:
+          type: string
+          description: "Data handling tier of the slot whose model this job was admitted\
+            \ on, frozen at submit time. Absent when the snapshot names no tier that\
+            \ this server knows."
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
         deliveryCommentId:
           type: string
           description: Git provider comment/note ID for posted feedback
@@ -11142,6 +11245,18 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
+        purposes:
+          type: array
+          description: "The purposes a binding may assign this model to, from its\
+            \ connection's protocol"
+          items:
+            type: string
+            enum:
+            - PRACTICE_REVIEW
+            - MENTOR
+            - PRACTICE_DECISION
+            - PRACTICE_EMBEDDING
+            - PRACTICE_RERANKING
         reasoningEffort:
           type: string
           description: "Reasoning effort requested of the model; null sends none,\
@@ -11166,6 +11281,7 @@ components:
       - displayName
       - id
       - pricingMode
+      - purposes
       - scope
     BackfillSummary:
       type: object
@@ -12016,9 +12132,13 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
+          enum:
+          - openai-completions
+          - openai-responses
+          - openai-decisions
+          - openai-embeddings
+          - cohere-rerank
           example: openai-responses
-          minLength: 1
-          pattern: openai-completions|openai-responses
         authMode:
           type: string
           description: Credential shape (default BEARER)
@@ -12259,7 +12379,8 @@ components:
           minLength: 3
         precomputeScript:
           type: string
-          description: TypeScript/Node static analysis run before automated review
+          description: TypeScript precompute script that runs before the review and
+            points it at places to check
           maxLength: 100000
           minLength: 0
         precondition:
@@ -12441,9 +12562,13 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
+          enum:
+          - openai-completions
+          - openai-responses
+          - openai-decisions
+          - openai-embeddings
+          - cohere-rerank
           example: openai-responses
-          minLength: 1
-          pattern: openai-completions|openai-responses
         authMode:
           type: string
           description: Credential shape (default BEARER)
@@ -14357,6 +14482,12 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
+          enum:
+          - openai-completions
+          - openai-responses
+          - openai-decisions
+          - openai-embeddings
+          - cohere-rerank
           example: openai-responses
         authMode:
           type: string
@@ -14405,6 +14536,18 @@ components:
           type: integer
           format: int64
           description: Connection ID
+        purposes:
+          type: array
+          description: "The purposes a model on this connection can serve, from its\
+            \ protocol"
+          items:
+            type: string
+            enum:
+            - PRACTICE_REVIEW
+            - MENTOR
+            - PRACTICE_DECISION
+            - PRACTICE_EMBEDDING
+            - PRACTICE_RERANKING
         slug:
           type: string
           description: Unique slug
@@ -14422,6 +14565,7 @@ components:
       - enabled
       - hasApiKey
       - id
+      - purposes
       - slug
     LlmModel:
       type: object
@@ -14621,6 +14765,8 @@ components:
         events:
           type: integer
           format: int64
+          description: "Runs: job attempts and mentor turns. Precompute model rows\
+            \ are not runs."
         instanceTotalCostUsd:
           type: number
           format: decimal
@@ -14634,8 +14780,9 @@ components:
         unpricedEventCount:
           type: integer
           format: int64
-          description: Calls this day whose price is not yet known. Excluded from
-            both totals above.
+          description: Runs this day with at least one ledger row whose price is not
+            yet known. A precompute row counts toward the run of its review. Those
+            rows are excluded from both totals above.
       required:
       - day
       - events
@@ -14655,7 +14802,8 @@ components:
         events:
           type: integer
           format: int64
-          description: Ledger events (jobs / mentor turns)
+          description: "Runs: job attempts and mentor turns. Precompute model rows\
+            \ are not runs."
         inputTokens:
           type: integer
           format: int64
@@ -14689,8 +14837,9 @@ components:
         unpricedEventCount:
           type: integer
           format: int64
-          description: Calls for this job type whose price is not yet known. Excluded
-            from both totals above.
+          description: Runs of this job type with at least one ledger row whose price
+            is not yet known. A precompute row counts toward the run of its review.
+            Those rows are excluded from both totals above.
       required:
       - cacheReadTokens
       - cacheWriteTokens
@@ -14701,6 +14850,114 @@ components:
       - outputTokens
       - ownProviderTotalCostUsd
       - totalCalls
+      - unpricedEventCount
+    LlmUsageByPractice:
+      type: object
+      description: "The decision, embedding and reranking calls that one practice's\
+        \ precompute script made in finished reviews this month. The cost of each\
+        \ review's calls is split between its practices by the priced tokens that\
+        \ each used."
+      properties:
+        calls:
+          type: integer
+          format: int64
+        inputTokens:
+          type: integer
+          format: int64
+        instanceTotalCostUsd:
+          type: number
+          format: decimal
+          description: "This practice's share of the spend on shared (instance) models,\
+            \ in USD."
+        outputTokens:
+          type: integer
+          format: int64
+        ownProviderTotalCostUsd:
+          type: number
+          format: decimal
+          description: "This practice's share of the spend on this workspace's own\
+            \ provider(s), in USD."
+        practiceName:
+          type: string
+          description: The practice name. Null when the slug names no current practice.
+        practiceSlug:
+          type: string
+          description: "The practice slug. Null for calls that cannot be split by\
+            \ practice any more, such as those of a deleted review."
+        purposes:
+          type: array
+          description: The precompute models that the script called.
+          items:
+            type: string
+            enum:
+            - PRACTICE_REVIEW
+            - MENTOR
+            - PRACTICE_DECISION
+            - PRACTICE_EMBEDDING
+            - PRACTICE_RERANKING
+        reviews:
+          type: integer
+          format: int64
+          description: Reviews in which the script called a precompute model. A review
+            with several practices counts for each of them.
+        unpricedEventCount:
+          type: integer
+          format: int64
+          description: "Reviews with a precompute ledger row whose price is not yet\
+            \ known and that holds this practice's calls, each review counted once.\
+            \ Those rows are excluded from both totals above. A review with several\
+            \ practices counts for each of them."
+      required:
+      - calls
+      - inputTokens
+      - instanceTotalCostUsd
+      - outputTokens
+      - ownProviderTotalCostUsd
+      - purposes
+      - reviews
+      - unpricedEventCount
+    LlmUsagePrecomputeTotal:
+      type: object
+      description: "The decision, embedding and reranking calls of finished reviews\
+        \ this month, in total. calls, inputTokens, outputTokens and both costs equal\
+        \ the sums of the byPractice entries. reviews and unpricedEventCount do not:\
+        \ one review can count for several practices there."
+      properties:
+        calls:
+          type: integer
+          format: int64
+        inputTokens:
+          type: integer
+          format: int64
+        instanceTotalCostUsd:
+          type: number
+          format: decimal
+          description: "Confirmed precompute spend on shared (instance) models, in\
+            \ USD."
+        outputTokens:
+          type: integer
+          format: int64
+        ownProviderTotalCostUsd:
+          type: number
+          format: decimal
+          description: "Precompute spend on this workspace's own provider(s), in USD."
+        reviews:
+          type: integer
+          format: int64
+          description: Distinct reviews in which a precompute script called a precompute
+            model.
+        unpricedEventCount:
+          type: integer
+          format: int64
+          description: Distinct reviews with a precompute ledger row whose price is
+            not yet known. Those rows are excluded from both totals above.
+      required:
+      - calls
+      - inputTokens
+      - instanceTotalCostUsd
+      - outputTokens
+      - ownProviderTotalCostUsd
+      - reviews
       - unpricedEventCount
     LoginProviderView:
       type: object
@@ -15706,8 +15963,8 @@ components:
           description: Human-readable name
         precomputeScript:
           type: string
-          description: TypeScript/Node precompute script for static analysis before
-            AI review
+          description: TypeScript precompute script that runs before the review and
+            points it at places to check
         precondition:
           $ref: "#/components/schemas/PracticePrecondition"
         reviewWhen:
@@ -16248,6 +16505,34 @@ components:
       required:
       - group
       - practices
+    PracticePrecomputeSummary:
+      type: object
+      description: "What one practice's precompute script needs, as its newest review\
+        \ reported it"
+      properties:
+        asOf:
+          $ref: "#/components/schemas/PrecomputeAsOf"
+          description: The review that reported the needs; null when no review ran
+            the current script yet
+        needs:
+          type: array
+          description: The models the script declared; empty when it declares none
+            or asOf is null
+          items:
+            $ref: "#/components/schemas/PrecomputeNeed"
+        practiceName:
+          type: string
+        practiceSlug:
+          type: string
+        scriptChanged:
+          type: boolean
+          description: "True when the newest review ran an earlier version of the\
+            \ script, so its needs are not shown"
+      required:
+      - needs
+      - practiceName
+      - practiceSlug
+      - scriptChanged
     PracticePrecondition:
       type: object
       additionalProperties: false
@@ -16878,6 +17163,11 @@ components:
           type: string
         practiceSlug:
           type: string
+        precompute:
+          $ref: "#/components/schemas/PrecomputeRun"
+          description: What this practice's precompute script did in the named review;
+            null when the practice has no script there or the review reported nothing
+            about it
         reviewId:
           type: string
           format: uuid
@@ -17096,6 +17386,132 @@ components:
       - reviewedWork
       - window
       - yourPractices
+    PrecomputeAsOf:
+      type: object
+      description: The review whose precompute run reported a practice's needs
+      properties:
+        finishedAt:
+          type: string
+          format: date-time
+        jobId:
+          type: string
+          format: uuid
+      required:
+      - finishedAt
+      - jobId
+    PrecomputeModelUse:
+      type: object
+      description: "One model a precompute script declared, and what became of its\
+        \ calls in one review"
+      properties:
+        bound:
+          type: boolean
+          description: Whether the review had a model bound for this purpose
+        need:
+          type: string
+          enum:
+          - REQUIRED
+          - OPTIONAL
+        notRated:
+          type: array
+          description: "Calls to this model that were not rated, by reason. Empty\
+            \ when every call was rated."
+          items:
+            $ref: "#/components/schemas/PrecomputeNotRated"
+        purpose:
+          type: string
+          description: The purpose whose binding serves this model
+          enum:
+          - PRACTICE_REVIEW
+          - PRACTICE_DECISION
+          - PRACTICE_EMBEDDING
+          - PRACTICE_RERANKING
+      required:
+      - bound
+      - need
+      - notRated
+      - purpose
+    PrecomputeNeed:
+      type: object
+      description: "One model a practice's precompute script needs, and for which\
+        \ members no model is ready"
+      properties:
+        need:
+          type: string
+          enum:
+          - REQUIRED
+          - OPTIONAL
+        purpose:
+          type: string
+          description: The purpose whose binding serves this model
+          enum:
+          - PRACTICE_REVIEW
+          - PRACTICE_DECISION
+          - PRACTICE_EMBEDDING
+          - PRACTICE_RERANKING
+        unmetTiers:
+          type: array
+          description: The member tiers that no ready binding of this purpose serves
+            today. UNDECLARED appears only when members may leave their AI choice
+            open.
+          items:
+            type: string
+            enum:
+            - IN_HOUSE
+            - CLOUD
+            - UNDECLARED
+      required:
+      - need
+      - purpose
+      - unmetTiers
+    PrecomputeNotRated:
+      type: object
+      description: "Model calls that were not rated, for one reason"
+      properties:
+        count:
+          type: integer
+          format: int32
+        reason:
+          type: string
+          enum:
+          - UNAVAILABLE
+          - BUDGET
+          - DEADLINE
+          - TOO_LARGE
+          - OFF_FORMAT
+          - REFUSED
+          - ERROR
+      required:
+      - count
+      - reason
+    PrecomputeRun:
+      type: object
+      description: What one practice's precompute script did in one review
+      properties:
+        leads:
+          type: integer
+          format: int32
+          description: Places to check that the script gave the review; 0 when it
+            did not run
+        models:
+          type: array
+          description: "The models the script declared and what became of their calls.\
+            \ Empty for a script that declares none, and for one that ended before\
+            \ it declared them."
+          items:
+            $ref: "#/components/schemas/PrecomputeModelUse"
+        status:
+          type: string
+          enum:
+          - OK
+          - SKIPPED
+          - FAILED
+          - TIMED_OUT
+          - NOT_FINISHED
+      required:
+      - leads
+      - models
+      - status
     PreviewRequest:
       type: object
       properties:
@@ -17121,8 +17537,12 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
-          minLength: 1
-          pattern: openai-completions|openai-responses
+          enum:
+          - openai-completions
+          - openai-responses
+          - openai-decisions
+          - openai-embeddings
+          - cohere-rerank
         authMode:
           type: string
           description: Credential shape (default BEARER)
@@ -18725,6 +19145,78 @@ components:
       - notApplicable
       - notMet
       - undetermined
+    ReviewPrecompute:
+      type: object
+      description: What one practice's precompute script did in the latest attempt
+        of one review that recorded precompute runs
+      properties:
+        durationMs:
+          type: integer
+          format: int32
+          description: "How long the script ran, in milliseconds. Absent when the\
+            \ script did not run or did not finish, or the runner did not say."
+        error:
+          type: string
+          description: The first line of the script's error. Set only when the script
+            failed.
+        models:
+          type: array
+          description: "The decision, embedding and reranking models of the script,\
+            \ with the calls the proxy counted for each. Calls to the review's own\
+            \ model count toward the review."
+          items:
+            $ref: "#/components/schemas/ReviewPrecomputeModel"
+        practiceName:
+          type: string
+          description: The practice's current name. Absent when the practice no longer
+            exists.
+        practiceSlug:
+          type: string
+        run:
+          $ref: "#/components/schemas/PrecomputeRun"
+      required:
+      - models
+      - practiceSlug
+      - run
+    ReviewPrecomputeModel:
+      type: object
+      description: "One precompute model of a practice's script in one review, with\
+        \ the calls the proxy counted"
+      properties:
+        calls:
+          type: integer
+          format: int64
+          description: Calls that the proxy forwarded to this model
+        inputTokens:
+          type: integer
+          format: int64
+          description: Input tokens of those calls
+        outputTokens:
+          type: integer
+          format: int64
+          description: Output tokens of those calls
+        purpose:
+          type: string
+          description: The purpose whose binding serves this model
+          enum:
+          - PRACTICE_REVIEW
+          - MENTOR
+          - PRACTICE_DECISION
+          - PRACTICE_EMBEDDING
+          - PRACTICE_RERANKING
+        tier:
+          type: string
+          description: Data handling tier of the slot that served the model in this
+            review. Absent when the attempt froze no tier for the model of this purpose.
+          enum:
+          - IN_HOUSE
+          - CLOUD
+          - UNDECLARED
+      required:
+      - calls
+      - inputTokens
+      - outputTokens
+      - purpose
     ReviewProposedPlacement:
       type: object
       description: One exact provider message included in a review awaiting approval
@@ -20470,7 +20962,8 @@ components:
           pattern: .*\S.*
         precomputeScript:
           type: string
-          description: TypeScript/Node static analysis run before automated review
+          description: TypeScript precompute script that runs before the review and
+            points it at places to check
           maxLength: 100000
           minLength: 0
         precondition:
@@ -21336,6 +21829,12 @@ components:
         apiProtocol:
           type: string
           description: Wire protocol
+          enum:
+          - openai-completions
+          - openai-responses
+          - openai-decisions
+          - openai-embeddings
+          - cohere-rerank
           example: openai-responses
         authMode:
           type: string
@@ -21384,6 +21883,18 @@ components:
           type: integer
           format: int64
           description: Connection ID
+        purposes:
+          type: array
+          description: "The purposes a model on this connection can serve, from its\
+            \ protocol"
+          items:
+            type: string
+            enum:
+            - PRACTICE_REVIEW
+            - MENTOR
+            - PRACTICE_DECISION
+            - PRACTICE_EMBEDDING
+            - PRACTICE_RERANKING
         slug:
           type: string
           description: Unique slug within the workspace
@@ -21401,6 +21912,7 @@ components:
       - enabled
       - hasApiKey
       - id
+      - purposes
       - slug
     WorkspaceLlmModel:
       type: object
@@ -21545,6 +22057,10 @@ components:
         reachable:
           type: boolean
           description: Whether the provider answered
+        statusCode:
+          type: integer
+          format: int32
+          description: "HTTP status returned by the provider, if any"
       required:
       - modelCount
       - reachable
@@ -21570,6 +22086,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LlmUsageByJobType"
+        byPractice:
+          type: array
+          description: "The decision, embedding and reranking calls of precompute\
+            \ scripts, one entry per practice, most spend first. Their spend is already\
+            \ part of byJobType. Chat calls of precompute scripts are in each review's\
+            \ own cost and not here."
+          items:
+            $ref: "#/components/schemas/LlmUsageByPractice"
         fx:
           $ref: "#/components/schemas/FxRateInfo"
           description: Display-only conversion when the instance has a display currency.
@@ -21613,6 +22137,14 @@ components:
           - WITHIN
           - EXHAUSTED
           - UNVERIFIABLE
+        ownProviderInUse:
+          type: boolean
+          description: "Whether this month has an own-provider purse to show. True\
+            \ when the month has at least one own-provider call, priced or not, so\
+            \ a month of confirmed $0.00 calls counts. For the current month, also\
+            \ true when the workspace has an enabled own-provider model on an enabled\
+            \ connection, so its admins can set a provider cap before the first call.\
+            \ The spend and cap fields cannot answer this."
         ownProviderMonthlyBudgetUsd:
           type: number
           format: decimal
@@ -21630,22 +22162,30 @@ components:
             \ provider(s), in USD — the figure ownProviderMonthlyBudgetUsd compares\
             \ against. Different money from instanceTotalCostUsd: the two are never\
             \ added together."
+        precomputeTotal:
+          $ref: "#/components/schemas/LlmUsagePrecomputeTotal"
+          description: "The byPractice entries in total, read from the ledger."
         unpricedEventCount:
           type: integer
           format: int64
-          description: "Calls this month (either purse) whose price is not yet known.\
-            \ They are excluded from both totals above, so a non-zero value means\
-            \ the real spend may be higher than shown."
+          description: "Runs this month (job attempts and mentor turns, either purse)\
+            \ with at least one ledger row whose price is not yet known, each counted\
+            \ once. A precompute row counts toward the run of its review. Those rows\
+            \ are excluded from both totals above, so a non-zero value means the real\
+            \ spend may be higher than shown."
       required:
       - byDay
       - byJobType
+      - byPractice
       - instanceBudgetVerdict
       - instancePaused
       - instanceTotalCostUsd
       - month
       - ownProviderBudgetVerdict
+      - ownProviderInUse
       - ownProviderPaused
       - ownProviderTotalCostUsd
+      - precomputeTotal
       - unpricedEventCount
     WorkspaceMembership:
       type: object

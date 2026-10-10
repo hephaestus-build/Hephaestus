@@ -1,4 +1,10 @@
-import type { FxRateInfo, LlmUsageByJobType, WorkspaceLlmUsageReport } from "@/api/types.gen";
+import type {
+	FxRateInfo,
+	LlmUsageByJobType,
+	LlmUsageByPractice,
+	LlmUsagePrecomputeTotal,
+	WorkspaceLlmUsageReport,
+} from "@/api/types.gen";
 
 import { daysBefore, STORY_NOW } from "@/stories/story-clock";
 
@@ -10,6 +16,22 @@ export function dayOfMonth(month: string, day: number): Date {
 	const [yearStr, monthStr] = month.split("-");
 	return new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, day, 12));
 }
+
+type PrecomputeUsage = Pick<WorkspaceLlmUsageReport, "byPractice" | "precomputeTotal">;
+
+/** A month in which no precompute script called a decision, embedding or reranking model. */
+export const NO_PRECOMPUTE_USAGE: PrecomputeUsage = {
+	byPractice: [],
+	precomputeTotal: {
+		reviews: 0,
+		calls: 0,
+		inputTokens: 0,
+		outputTokens: 0,
+		instanceTotalCostUsd: 0,
+		ownProviderTotalCostUsd: 0,
+		unpricedEventCount: 0,
+	},
+};
 
 /**
  * A workspace that has only run on shared models. The rows divide cleanly by their run counts —
@@ -24,9 +46,11 @@ export function usageReport(month: string = STORY_MONTH): WorkspaceLlmUsageRepor
 		ownProviderTotalCostUsd: 0,
 		instanceBudgetVerdict: "WITHIN",
 		ownProviderBudgetVerdict: "WITHIN",
+		ownProviderInUse: false,
 		instancePaused: false,
 		ownProviderPaused: false,
 		unpricedEventCount: 0,
+		...NO_PRECOMPUTE_USAGE,
 		byJobType: [
 			{
 				jobType: "PULL_REQUEST_REVIEW",
@@ -108,6 +132,7 @@ const OWN_PROVIDER_COST_BY_DAY_INDEX: Partial<Record<number, number>> = { 1: 0.4
 export function withOwnProvider(report: WorkspaceLlmUsageReport): WorkspaceLlmUsageReport {
 	return {
 		...report,
+		ownProviderInUse: true,
 		ownProviderMonthlyBudgetUsd: 10,
 		ownProviderTotalCostUsd: 2.4,
 		byJobType: report.byJobType.map((row) => {
@@ -121,9 +146,161 @@ export function withOwnProvider(report: WorkspaceLlmUsageReport): WorkspaceLlmUs
 	};
 }
 
+/** The month figures that every run type and every day add up to. */
+type MonthTotals = Pick<
+	WorkspaceLlmUsageReport,
+	"instanceTotalCostUsd" | "ownProviderTotalCostUsd" | "unpricedEventCount"
+>;
+
+/**
+ * Splits `total` in the proportions of `values`, rounded to `digits` decimals. The largest share
+ * takes the rounding remainder, so the shares add up to `total`, and so do their rounded figures.
+ * With nothing to split by, the first share takes all of it.
+ */
+function splitLike(values: readonly number[], total: number, digits: number): number[] {
+	const sum = values.reduce((acc, value) => acc + value, 0);
+	if (sum === 0) {
+		return values.map((_, index) => (index === 0 ? total : 0));
+	}
+	const scale = 10 ** digits;
+	const shares = values.map((value) => Math.round(((value * total) / sum) * scale) / scale);
+	const largest = shares.indexOf(Math.max(...shares));
+	const remainder = total - shares.reduce((acc, share) => acc + share, 0);
+	return shares.map((share, index) => (index === largest ? share + remainder : share));
+}
+
+function withColumnTotal<Row extends MonthTotals>(
+	rows: readonly Row[],
+	key: keyof MonthTotals,
+	total: number,
+): Row[] {
+	const shares = splitLike(
+		rows.map((row) => row[key]),
+		total,
+		key === "unpricedEventCount" ? 0 : 2,
+	);
+	return rows.map((row, index) => ({ ...row, [key]: shares[index] ?? row[key] }));
+}
+
+/**
+ * The report with other month totals, and its run types and days split in the same proportions, so
+ * every table's rows still add up to the month it reports.
+ */
+export function withMonthTotals(
+	report: WorkspaceLlmUsageReport,
+	totals: Partial<MonthTotals>,
+): WorkspaceLlmUsageReport {
+	let { byJobType, byDay } = report;
+	for (const key of [
+		"instanceTotalCostUsd",
+		"ownProviderTotalCostUsd",
+		"unpricedEventCount",
+	] as const) {
+		const total = totals[key];
+		if (total !== undefined) {
+			byJobType = withColumnTotal(byJobType, key, total);
+			byDay = withColumnTotal(byDay, key, total);
+		}
+	}
+	return { ...report, ...totals, byJobType, byDay };
+}
+
 export const eurRate: FxRateInfo = {
 	currencyCode: "EUR",
 	ratePerUsd: 0.878966,
 	rateDate: daysBefore(1),
 	source: "ECB",
 };
+
+/** A practice whose script asked a decision model about each place it found, on shared models. */
+export const commentQualityUsage: LlmUsageByPractice = {
+	practiceSlug: "comment-quality",
+	practiceName: "Comments explain why",
+	purposes: ["PRACTICE_DECISION"],
+	reviews: 18,
+	calls: 412,
+	inputTokens: 96_400,
+	outputTokens: 1240,
+	instanceTotalCostUsd: 0.36,
+	ownProviderTotalCostUsd: 0,
+	unpricedEventCount: 0,
+};
+
+/** Two models on two purses: the embedding model is shared, the reranker is the workspace's own. */
+export const expectedBehaviourUsage: LlmUsageByPractice = {
+	practiceSlug: "issues-state-expected-behaviour",
+	practiceName: "Issues state the expected behaviour",
+	purposes: ["PRACTICE_EMBEDDING", "PRACTICE_RERANKING"],
+	reviews: 12,
+	calls: 96,
+	inputTokens: 210_000,
+	outputTokens: 0,
+	instanceTotalCostUsd: 0.12,
+	ownProviderTotalCostUsd: 0.24,
+	unpricedEventCount: 0,
+};
+
+/** A self-hosted embedding model set to *No metered API cost*: a confirmed $0, not a missing price. */
+export const noChargeUsage: LlmUsageByPractice = {
+	practiceSlug: "names-say-what-they-hold",
+	practiceName: "Names say what they hold",
+	purposes: ["PRACTICE_EMBEDDING"],
+	reviews: 9,
+	calls: 140,
+	inputTokens: 52_000,
+	outputTokens: 0,
+	instanceTotalCostUsd: 0,
+	ownProviderTotalCostUsd: 0,
+	unpricedEventCount: 0,
+};
+
+/** Calls from reviews whose split by practice is gone, such as a deleted review's. */
+export const notAttributedUsage: LlmUsageByPractice = {
+	purposes: ["PRACTICE_DECISION"],
+	reviews: 2,
+	calls: 14,
+	inputTokens: 3100,
+	outputTokens: 40,
+	instanceTotalCostUsd: 0.01,
+	ownProviderTotalCostUsd: 0,
+	unpricedEventCount: 0,
+};
+
+/** A practice deleted since its reviews ran, on a reranker that reports no tokens and has no price. */
+export const deletedPracticeUsage: LlmUsageByPractice = {
+	practiceSlug: "small-pull-requests",
+	purposes: ["PRACTICE_RERANKING"],
+	reviews: 3,
+	calls: 21,
+	inputTokens: 0,
+	outputTokens: 0,
+	instanceTotalCostUsd: 0,
+	ownProviderTotalCostUsd: 0,
+	unpricedEventCount: 2,
+};
+
+/**
+ * The server's own total, not a sum of the rows: one review runs several practices, so it counts
+ * 31 reviews where the rows add up to 41.
+ */
+const pricedPrecomputeTotal: LlmUsagePrecomputeTotal = {
+	reviews: 31,
+	calls: 662,
+	inputTokens: 361_500,
+	outputTokens: 1280,
+	instanceTotalCostUsd: 0.49,
+	ownProviderTotalCostUsd: 0.24,
+	unpricedEventCount: 0,
+};
+
+/**
+ * Precompute calls that every model priced, inside the run types of {@link withOwnProvider}: the
+ * pull request practices on shared models, the issue practice partly on the workspace's own provider.
+ */
+export function withPrecomputeUsage(report: WorkspaceLlmUsageReport): WorkspaceLlmUsageReport {
+	return {
+		...report,
+		byPractice: [commentQualityUsage, expectedBehaviourUsage, notAttributedUsage, noChargeUsage],
+		precomputeTotal: pricedPrecomputeTotal,
+	};
+}

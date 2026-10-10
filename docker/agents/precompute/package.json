@@ -4,10 +4,15 @@
 	"type": "module",
 	"version": "0.0.0",
 	"dependencies": {
+		"@ai-sdk/openai": "4.0.85",
+		"@ai-sdk/openai-compatible": "3.0.63",
+		"@ai-sdk/provider": "4.0.22",
+		"ai": "7.0.128",
 		"mdast-util-from-markdown": "2.0.3",
 		"mdast-util-gfm-strikethrough": "2.0.0",
 		"micromark-extension-gfm-strikethrough": "2.1.0",
-		"minimatch": "10.2.5"
+		"minimatch": "10.2.5",
+		"zod": "4.5.4"
 	},
 	"engines": {
 		"pnpm": "12.3.4"

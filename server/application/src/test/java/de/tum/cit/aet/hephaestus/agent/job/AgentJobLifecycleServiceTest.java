@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
@@ -128,9 +129,17 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
                         600,
                         false,
                         null,
+                        null,
                         null)
                 .withPriceSnapshot(new LlmPriceSnapshot(
-                        FundingSource.INSTANCE, PricingState.NO_CHARGE, null, null, null, null, null, null));
+                        FundingSource.INSTANCE,
+                        PricingState.PRICED,
+                        1L,
+                        null,
+                        BigDecimal.ONE,
+                        BigDecimal.ONE,
+                        BigDecimal.ONE,
+                        BigDecimal.ONE));
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         return job;
     }

@@ -61,7 +61,7 @@ const PRACTICE_FIELDS = {
 	criteria: "What to look for",
 	whyItMatters: "Why it matters",
 	whatGoodLooksLike: "What good looks like",
-	precomputeScript: "Static analysis",
+	precomputeScript: "Precompute script",
 	// The occasions and their evidence render under a heading of their own, which this must not repeat.
 	automatedReviewPolicy: "How it is reviewed",
 	deliveryBehavior: "Feedback delivery",

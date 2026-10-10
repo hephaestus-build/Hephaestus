@@ -1,3 +1,5 @@
+import { optionalNumber } from "./json.ts";
+
 export interface IssueMetadata {
 	title?: string | null;
 	body?: string | null;
@@ -56,17 +58,13 @@ export function bodyFact({ emptyBody, titleEcho }: ReturnType<typeof classifyIss
 		: [];
 }
 
-function knownCount(value: unknown): number | undefined {
-	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
 /**
  * The provider's sub-issue rollup. A provider that does not report one leaves it null or omits it,
  * which says nothing about whether sub-issues exist: unknown stays unknown, never zero.
  */
 export function subIssueRollup(metadata: IssueMetadata) {
-	const total = knownCount(metadata.sub_issues_total);
-	const completed = knownCount(metadata.sub_issues_completed);
+	const total = optionalNumber(metadata.sub_issues_total);
+	const completed = optionalNumber(metadata.sub_issues_completed);
 	let text = "sub-issue rollup not reported by the provider (unknown, not zero)";
 	if (total !== undefined) {
 		text =

@@ -112,6 +112,32 @@ erDiagram
         VARCHAR(32) trace_id "NOT NULL"
     }
 
+    AgentJobPrecomputeRun {
+        INTEGER attempt PK
+        VARCHAR(64) practice_slug PK
+        VARCHAR(500) error
+        INTEGER duration_ms
+        TIMESTAMPTZ finished_at "NOT NULL"
+        INTEGER leads "NOT NULL"
+        JSONB models
+        BIGINT practice_revision_id FK
+        VARCHAR(16) status "NOT NULL"
+        UUID job_id PK,FK
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
+    AgentJobPrecomputeUsage {
+        UUID job_id PK,FK
+        INTEGER attempt PK
+        VARCHAR(16) model_kind PK
+        VARCHAR(64) practice_slug PK
+        VARCHAR(24) data_handling_tier
+        BIGINT workspace_id FK "NOT NULL"
+        INTEGER calls "NOT NULL"
+        BIGINT input_tokens "NOT NULL"
+        BIGINT output_tokens "NOT NULL"
+    }
+
     ArtifactSignal {
         UUID id PK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -1817,6 +1843,11 @@ erDiagram
     Repository ||--o{ ActivityEvent : has
     Workspace ||--o{ ActivityEvent : has
     Workspace ||--o{ AgentJob : has
+    AgentJob ||--o{ AgentJobPrecomputeRun : has
+    Workspace ||--o{ AgentJobPrecomputeRun : has
+    PracticeRevision ||--o{ AgentJobPrecomputeRun : has
+    AgentJob ||--o{ AgentJobPrecomputeUsage : has
+    Workspace ||--o{ AgentJobPrecomputeUsage : has
     Workspace ||--o{ ArtifactSignal : has
     User ||--o{ ArtifactSignal : actor_user_id
     User ||--o{ ArtifactSignal : requested_by_user_id

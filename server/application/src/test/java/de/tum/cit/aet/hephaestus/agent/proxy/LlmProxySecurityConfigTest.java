@@ -20,6 +20,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,6 +30,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
@@ -53,7 +56,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final int GATEWAY_PORT = 9081;
     private static final int APPLICATION_PORT = 9080;
-    private static final SandboxGatewayProperties GATEWAY = new SandboxGatewayProperties(GATEWAY_PORT, 16, 120);
+    /** One call per principal and minute, so a call that spends from the wrong bucket shows as a 429. */
+    private static final SandboxGatewayProperties GATEWAY = new SandboxGatewayProperties(GATEWAY_PORT, 16, 1);
 
     @Mock
     private AgentJobRepository jobRepository;
@@ -70,6 +74,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @Mock
     private MentorTurnUsageAccumulator mentorTurnUsageAccumulator;
 
+    private final MentorProxyCredentialRegistry mentorRegistry = new MentorProxyCredentialRegistry();
+    private final Map<String, Bucket> buckets = new HashMap<>();
     private FilterChainProxy chains;
     private final AtomicReference<@Nullable Authentication> servedAs = new AtomicReference<>();
 
@@ -81,15 +87,18 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         var config = new LlmProxySecurityConfig();
         var accounting = new ProxyAccounting(
                 budgetGate, usageAccumulator, mentorTurnUsageAccumulator, new SimpleMeterRegistry(), OBJECT_MAPPER);
-        BucketResolver resolver = (key, configuration) ->
-                Bucket.builder().addLimit(configuration.getBandwidths()[0]).build();
+        BucketResolver resolver = (key, configuration) -> buckets.computeIfAbsent(
+                key,
+                ignored -> Bucket.builder()
+                        .addLimit(configuration.getBandwidths()[0])
+                        .build());
         chains = new FilterChainProxy(List.of(
                 config.llmProxyFilterChain(
                         httpSecurity(context),
                         GATEWAY,
                         jobRepository,
                         jwtVerifier,
-                        new MentorProxyCredentialRegistry(),
+                        mentorRegistry,
                         resolver,
                         accounting,
                         OBJECT_MAPPER,
@@ -228,6 +237,83 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .isEqualTo(413);
     }
 
+    /**
+     * The precompute route exists only on the gateway, under the model-call bound, for its own scope. A
+     * review token refused there spends nothing from the precompute token's bucket.
+     */
+    @Test
+    void servesThePrecomputeRouteOnlyOnTheGatewayForAPrecomputeToken() throws Exception {
+        String path = "/internal/llm/precompute/chat/chat/completions";
+        AgentJob job = runningJobOnAttempt(1);
+        when(jobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+        when(jwtVerifier.verify("precompute")).thenReturn(jobJwt(job, 1, "llm_precompute"));
+        when(jwtVerifier.verify("review")).thenReturn(jobJwt(job, 1, "llm_proxy"));
+
+        MockHttpServletRequest review = request("POST", path, GATEWAY_PORT);
+        review.addHeader("Authorization", "Bearer review");
+        assertThat(answerTo(review)).isEqualTo(403);
+        assertThat(servedAs.get()).isNull();
+        MockHttpServletRequest precompute = request("POST", path, GATEWAY_PORT);
+        precompute.addHeader("Authorization", "Bearer precompute");
+        assertThat(answerTo(precompute)).isEqualTo(200);
+        assertThat(servedAs.get())
+                .isNotNull()
+                .extracting(Authentication::getPrincipal)
+                .asInstanceOf(type(ProxyRouting.class))
+                .extracting(ProxyRouting::principalDescription)
+                .isEqualTo("job:" + job.getId() + ":precompute");
+        assertThat(answerTo("POST", path, APPLICATION_PORT)).isEqualTo(404);
+        assertThat(answerTo("POST", path, GATEWAY_PORT, new byte[GATEWAY.maxRequestBytes() + 1]))
+                .isEqualTo(413);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "POST,/internal/llm/chat/completions",
+        "POST,/internal/llm/responses",
+        "POST,/internal/llm/admit-observations",
+        "POST,/internal/llm/public-feedback-history",
+        "GET,/internal/llm/runtime/{job}",
+        "GET,/internal/llm/runtime/{job}/workspace",
+        "GET,/internal/llm/runtime/{job}/frames",
+        "POST,/internal/llm/runtime/{job}/result"
+    })
+    void refusesAPrecomputeTokenOnEveryOtherCapability(String method, String path) throws Exception {
+        AgentJob job = runningJobOnAttempt(1);
+        when(jobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+        when(jwtVerifier.verify("precompute")).thenReturn(jobJwt(job, 1, "llm_precompute"));
+        MockHttpServletRequest request =
+                request(method, path.replace("{job}", job.getId().toString()), GATEWAY_PORT);
+        request.addHeader("Authorization", "Bearer precompute");
+
+        assertThat(answerTo(request)).isEqualTo(403);
+        assertThat(servedAs.get()).isNull();
+    }
+
+    @Test
+    void refusesAJobTokenWithoutTheProxyScope() throws Exception {
+        AgentJob job = runningJobOnAttempt(1);
+        when(jobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+        when(jwtVerifier.verify("unscoped")).thenReturn(jobJwt(job, 1, "other"));
+
+        assertThat(answerToTokenCall("unscoped")).isEqualTo(403);
+        assertThat(servedAs.get()).isNull();
+    }
+
+    @Test
+    void refusesAMentorCredentialOnThePrecomputeRoute() throws Exception {
+        String mentorToken = mentorRegistry.mint(
+                UUID.randomUUID(),
+                new MentorProxyCredentialRegistry.Route(
+                        "openai-completions", "https://api.example.com/v1", null, null, null, null));
+        MockHttpServletRequest request =
+                request("POST", "/internal/llm/precompute/chat/chat/completions", GATEWAY_PORT);
+        request.addHeader("Authorization", "Bearer " + mentorToken);
+
+        assertThat(answerTo(request)).isEqualTo(403);
+        assertThat(servedAs.get()).isNull();
+    }
+
     private int answerTo(String method, String path, int localPort) throws Exception {
         return answerTo(request(method, path, localPort));
     }
@@ -296,18 +382,23 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         600,
                         false,
                         null,
+                        null,
                         null)
                 .toJson(OBJECT_MAPPER));
         return job;
     }
 
     private static JobJwt jobJwt(AgentJob job, int attempt) {
+        return jobJwt(job, attempt, "llm_proxy");
+    }
+
+    private static JobJwt jobJwt(AgentJob job, int attempt, String scope) {
         Instant now = Instant.now();
         return new JobJwt(
                 job.getId(),
                 job.getWorkspace().getId(),
                 attempt,
-                Set.of("llm_proxy"),
+                Set.of(scope),
                 UUID.randomUUID().toString(),
                 now,
                 now.plusSeconds(60));

@@ -1,12 +1,14 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import java.io.Serial;
-import java.util.List;
+import java.util.Set;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 /**
  * A validated proxy-scoped bearer token — either an {@code AgentJob}'s job token or a mentor session's
- * registry-minted token. The resolved {@link ProxyRouting} is the principal.
+ * registry-minted token. The resolved {@link ProxyRouting} is the principal. Each scope becomes a
+ * {@code SCOPE_} authority, the form that {@code OAuth2AuthorizationManagers.hasScope} checks.
  */
 class JobTokenAuthentication extends AbstractAuthenticationToken {
 
@@ -17,8 +19,10 @@ class JobTokenAuthentication extends AbstractAuthenticationToken {
     @SuppressWarnings("serial")
     private final ProxyRouting routing;
 
-    JobTokenAuthentication(ProxyRouting routing) {
-        super(List.of());
+    JobTokenAuthentication(ProxyRouting routing, Set<String> scopes) {
+        super(scopes.stream()
+                .map(scope -> new SimpleGrantedAuthority("SCOPE_" + scope))
+                .toList());
         this.routing = routing;
         setAuthenticated(true);
     }

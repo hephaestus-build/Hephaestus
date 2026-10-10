@@ -88,7 +88,7 @@ RUN mkdir -p /tmp/abi-check && ln -sf /opt/pi-sdk/node_modules /tmp/abi-check/no
     rm -rf /tmp/abi-check
 
 COPY --from=dependencies /opt/precompute/node_modules /opt/precompute/node_modules
-COPY precompute/package.json precompute/runner.ts /opt/precompute/
+COPY precompute/package.json precompute/runner.ts precompute/child.ts /opt/precompute/
 COPY precompute/lib/ /opt/precompute/lib/
 
 RUN git config --system core.hooksPath /nonexistent && \

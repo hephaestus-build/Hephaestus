@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -44,6 +45,7 @@ public class AgentJobController {
     private final AgentJobService agentJobService;
     private final AgentJobLifecycleService agentJobLifecycleService;
     private final ReviewRunTargets reviewRunTargets;
+    private final ReviewPrecomputeService reviewPrecompute;
 
     @GetMapping
     @Operation(summary = "List agent jobs for a workspace")
@@ -78,6 +80,21 @@ public class AgentJobController {
     public ResponseEntity<AgentJobDTO> getAgentJob(WorkspaceContext workspaceContext, @PathVariable UUID jobId) {
         AgentJob job = agentJobService.getJob(workspaceContext.id(), jobId);
         return ResponseEntity.ok(dto(workspaceContext, job));
+    }
+
+    @GetMapping("/{jobId}/precompute")
+    @Operation(summary = "List what each practice's precompute script did in the current attempt of a review")
+    @ApiResponse(
+            responseCode = "200",
+            description = "One entry per staged script; empty when no script ran or the attempt has not ended")
+    @ApiResponse(
+            responseCode = "404",
+            description = "Job not found in this workspace",
+            content = @Content(schema = @Schema(hidden = true)))
+    @RequireAtLeastWorkspaceAdmin
+    public ResponseEntity<List<ReviewPrecomputeDTO>> getAgentJobPrecompute(
+            WorkspaceContext workspaceContext, @PathVariable UUID jobId) {
+        return ResponseEntity.ok(reviewPrecompute.currentAttempt(workspaceContext.id(), jobId));
     }
 
     @PostMapping("/{jobId}/cancel")

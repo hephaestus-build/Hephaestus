@@ -19,6 +19,7 @@ import {
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import {
 	type ReviewRunPracticeFilters,
 	ReviewRunPracticeTable,
@@ -46,6 +47,7 @@ import {
 } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
 
+import { reviewLevel } from "./review-levels";
 import type { ReviewSectionState } from "./review-states";
 import { ReviewLevelHeader } from "./ReviewLevelHeader";
 import { ReviewOutputSections } from "./ReviewOutputSections";
@@ -223,6 +225,7 @@ export function ReviewedWorkLevel({
 					<TabsContent value="practices" className="min-w-0">
 						{trace.status === "ready" && (
 							<ReviewRunPracticeTable
+								workspaceSlug={workspaceSlug}
 								entries={trace.trace.practices}
 								signals={trace.trace.signals}
 								groups={groups}
@@ -232,6 +235,7 @@ export function ReviewedWorkLevel({
 								onShowOccurrence={showOccurrence}
 								canAdminister
 								emptyMessage={`No practice in this workspace reviews ${artifactKindNoun(artifactKind, 2, work?.provider)}.`}
+								reviewLink={stackedReviewLink}
 							/>
 						)}
 						{trace.status === "none" && (
@@ -296,6 +300,18 @@ function TimelineSkeleton() {
 				</div>
 			))}
 		</div>
+	);
+}
+
+/** A review opens over this work's level, so closing it comes back here. */
+function stackedReviewLink(reviewId: string, label: ReactNode) {
+	return (
+		<InlineLink
+			className="inline-flex items-center gap-1 font-medium"
+			render={<DetailStackLink entry={reviewLevel(reviewId)} />}
+		>
+			{label}
+		</InlineLink>
 	);
 }
 

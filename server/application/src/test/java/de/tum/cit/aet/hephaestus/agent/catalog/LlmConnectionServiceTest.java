@@ -42,7 +42,7 @@ class LlmConnectionServiceTest extends BaseUnitTest {
                 "openai-prod",
                 "OpenAI",
                 "https://api.openai.com",
-                "openai-completions",
+                LlmApiProtocol.OPENAI_COMPLETIONS,
                 LlmAuthMode.BEARER,
                 "sk-abc",
                 null,
@@ -99,7 +99,7 @@ class LlmConnectionServiceTest extends BaseUnitTest {
                     null,
                     "OpenAI",
                     "https://api.openai.com",
-                    "openai-completions",
+                    LlmApiProtocol.OPENAI_COMPLETIONS,
                     LlmAuthMode.BEARER,
                     null,
                     null,
@@ -166,6 +166,7 @@ class LlmConnectionServiceTest extends BaseUnitTest {
             connection.setId(5L);
             connection.setSlug("openai-prod");
             connection.setDisplayName("Old name");
+            connection.setApiProtocol(LlmApiProtocol.OPENAI_RESPONSES);
             connection.setApiKey("sk-stored");
             connection.setEnabled(true);
             when(connectionRepository.findById(5L)).thenReturn(Optional.of(connection));

@@ -1,22 +1,17 @@
-import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
+import { CircleAlertIcon } from "lucide-react";
 
 import type { AgentBinding } from "@/api/types.gen";
 
 import type { StatusDefs } from "@/components/common/status-def";
 
-export type BindingReadiness = "READY" | "NOT_READY";
+/** Only the exception has a status: a bound model that can run is the normal case and draws nothing. */
+export type BindingReadiness = "NOT_READY";
 
 /**
  * Whether a bound model can run for its row right now, as the server judged it: the model and its
  * connection are on, the workspace may use it, and its declared tier still fits the row.
  */
 export const BINDING_READINESS_DEFS: StatusDefs<BindingReadiness> = {
-	READY: {
-		label: "Ready",
-		icon: CircleCheckIcon,
-		badgeVariant: "secondary",
-		description: "This model can run for the members this assignment serves.",
-	},
 	NOT_READY: {
 		label: "Not ready",
 		icon: CircleAlertIcon,
@@ -26,6 +21,6 @@ export const BINDING_READINESS_DEFS: StatusDefs<BindingReadiness> = {
 	},
 };
 
-export function bindingReadiness(binding: Pick<AgentBinding, "ready">): BindingReadiness {
-	return binding.ready ? "READY" : "NOT_READY";
+export function bindingReadiness(binding: Pick<AgentBinding, "ready">): BindingReadiness | null {
+	return binding.ready ? null : "NOT_READY";
 }

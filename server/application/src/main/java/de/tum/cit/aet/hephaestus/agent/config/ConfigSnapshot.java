@@ -3,11 +3,15 @@ package de.tum.cit.aet.hephaestus.agent.config;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelBindingSource;
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelKind;
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
+import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -47,7 +51,9 @@ public record ConfigSnapshot(
         boolean allowInternet,
         @Nullable LlmPriceSnapshot priceSnapshot,
         // The slot the job was routed to; null in older rows reads as UNDECLARED.
-        @Nullable DataHandlingTier dataHandlingTier) {
+        @Nullable DataHandlingTier dataHandlingTier,
+        // The precompute models bound besides the review's own; null when none is.
+        @Nullable Map<ModelKind, FrozenModel> precompute) {
     /**
      * Bump only for a reshape (field removal, type change, semantic reinterpretation). Adding a
      * nullable field is compatible both ways and needs no bump.
@@ -73,6 +79,9 @@ public record ConfigSnapshot(
         if (timeoutSeconds <= 0) {
             throw new IllegalArgumentException("timeoutSeconds must be positive, got: " + timeoutSeconds);
         }
+        // Every consumer reads the timeout from here: the container, the token expiry, the runner's budget
+        // and the stale-job sweep. Bindings saved below the floor still get a runnable review.
+        timeoutSeconds = Math.max(timeoutSeconds, PracticePiAdapter.MIN_TIMEOUT_SECONDS);
     }
 
     public static ConfigSnapshot from(ModelBindingSource source, LlmModelResolver resolver) {
@@ -96,7 +105,8 @@ public record ConfigSnapshot(
                 source.getTimeoutSeconds(),
                 source.isAllowInternet(),
                 null,
-                source.getDataHandlingTier());
+                source.getDataHandlingTier(),
+                null);
     }
 
     public ConfigSnapshot withPriceSnapshot(@Nullable LlmPriceSnapshot price) {
@@ -116,7 +126,60 @@ public record ConfigSnapshot(
                 timeoutSeconds,
                 allowInternet,
                 price,
-                dataHandlingTier);
+                dataHandlingTier,
+                precompute);
+    }
+
+    /** The chat kind is never a key: the precompute chat model is {@link #model()}. */
+    public ConfigSnapshot withPrecompute(@Nullable Map<ModelKind, FrozenModel> slots) {
+        return new ConfigSnapshot(
+                schemaVersion,
+                apiProtocol,
+                baseUrl,
+                upstreamModelId,
+                modelVersion,
+                contextWindow,
+                maxOutputTokens,
+                reasoningEffort,
+                connectionScope,
+                connectionId,
+                modelId,
+                workspaceId,
+                timeoutSeconds,
+                allowInternet,
+                priceSnapshot,
+                dataHandlingTier,
+                slots);
+    }
+
+    /** The review's own model, which is also the chat model of its precompute scripts. */
+    public FrozenModel model() {
+        return new FrozenModel(
+                apiProtocol,
+                baseUrl,
+                upstreamModelId,
+                connectionScope,
+                connectionId,
+                modelId,
+                workspaceId,
+                dataHandlingTier,
+                reasoningEffort,
+                priceSnapshot);
+    }
+
+    /** Every model that the precompute scripts may call, by kind; the chat model is {@link #model()}. */
+    public Map<ModelKind, FrozenModel> precomputeModels() {
+        Map<ModelKind, FrozenModel> models = new EnumMap<>(ModelKind.class);
+        models.put(ModelKind.CHAT, model());
+        if (precompute != null) {
+            models.putAll(precompute);
+        }
+        return models;
+    }
+
+    /** The separately bound precompute model of one kind other than chat, or {@code null} when none is frozen. */
+    public @Nullable FrozenModel precomputeSlot(ModelKind kind) {
+        return precompute == null ? null : precompute.get(kind);
     }
 
     public JsonNode toJson(ObjectMapper objectMapper) {
@@ -163,7 +226,8 @@ public record ConfigSnapshot(
                 timeoutSeconds,
                 allowInternet,
                 priceSnapshot,
-                dataHandlingTier);
+                dataHandlingTier,
+                precompute);
     }
 
     /**
@@ -210,6 +274,7 @@ public record ConfigSnapshot(
                 timeoutSeconds,
                 allowInternet,
                 null,
-                DataHandlingTier.UNDECLARED);
+                DataHandlingTier.UNDECLARED,
+                null);
     }
 }

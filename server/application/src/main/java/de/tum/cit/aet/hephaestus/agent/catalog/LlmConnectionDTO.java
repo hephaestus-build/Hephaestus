@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -27,7 +29,10 @@ public record LlmConnectionDTO(
         @NonNull @Schema(description = "Provider base URL") String baseUrl,
 
         @NonNull @Schema(description = "Wire protocol", example = "openai-responses")
-        String apiProtocol,
+        LlmApiProtocol apiProtocol,
+
+        @NonNull @Schema(description = "The purposes a model on this connection can serve, from its protocol")
+        List<AgentPurpose> purposes,
 
         @NonNull @Schema(description = "Credential shape") LlmAuthMode authMode,
 
@@ -55,6 +60,7 @@ public record LlmConnectionDTO(
                 connection.getConnectionPlatform(),
                 connection.getBaseUrl(),
                 connection.getApiProtocol(),
+                AgentPurpose.servedBy(connection.getApiProtocol()),
                 connection.getAuthMode(),
                 hasKey,
                 last4,

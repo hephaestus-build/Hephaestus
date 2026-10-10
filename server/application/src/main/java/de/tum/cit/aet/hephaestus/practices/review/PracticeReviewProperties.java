@@ -22,6 +22,10 @@ import org.springframework.validation.annotation.Validated;
  *                            practice it carries, and never less than three practices' worth.
  * @param practiceOutputTokens
  *                            the output tokens one practice is owed in a review turn, counted the same way.
+ * @param precomputeMaxTokensPerAttempt
+ *                            the input and output tokens that the precompute scripts of one review attempt
+ *                            may spend on all their models together. The precompute runner holds its scripts to it,
+ *                            and the proxy refuses further calls.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.practice-review")
@@ -31,4 +35,5 @@ public record PracticeReviewProperties(
         @Min(0) @DefaultValue("5") int maxRequestsPerRequesterPerHour,
         @Nullable @DecimalMin("0.0") @DecimalMax("2.0") Double samplingTemperature,
         @Min(1) @DefaultValue("12") int practiceModelCalls,
-        @Min(1000) @DefaultValue("16000") int practiceOutputTokens) {}
+        @Min(1000) @DefaultValue("16000") int practiceOutputTokens,
+        @Min(1) @DefaultValue("200000") long precomputeMaxTokensPerAttempt) {}

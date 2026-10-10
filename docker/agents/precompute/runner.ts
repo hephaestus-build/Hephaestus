@@ -1,18 +1,29 @@
 #!/usr/bin/env node
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { setTimeout as delay } from "node:timers/promises";
-import { pathToFileURL } from "node:url";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { parseArgs } from "node:util";
 
+import { boundModelsSchema, isFailed, PRACTICE_SLUG, type BoundModels } from "./lib/contract.ts";
 import { globFilesSync } from "./lib/files.ts";
 
 import { parseDiff } from "./lib/diff-parser.ts";
-import { isJsonObject, isPracticeModule, parseFindings } from "./lib/practice-contract.ts";
-import type { ArtifactMetadata, DiffFile, Hint, PracticeResult } from "./lib/types.ts";
+import { isJsonObject } from "./lib/json.ts";
+import { hostModels, ModelBudget } from "./lib/models-host.ts";
+import {
+	POSITIONAL_MS,
+	practiceFiles,
+	readableRoots,
+	runScript,
+	type ScriptOutcome,
+} from "./lib/script-run.ts";
+import type { ArtifactMetadata, DiffFile } from "./lib/types.ts";
 
 const DEFAULT_OUTPUT_DIR = ".precompute";
-const DEFAULT_TIMEOUT_MS = 15_000;
+/** Scripts that run at once: each is its own Node process, and the sandbox has two CPUs. */
+const CONCURRENCY = 4;
+/** Model calls in flight across all scripts. */
+const MODEL_CONCURRENCY = 4;
 
 const { values } = parseArgs({
 	args: process.argv.slice(2),
@@ -25,13 +36,20 @@ const { values } = parseArgs({
 		change: { type: "string" },
 		practices: { type: "string" },
 		output: { type: "string", default: DEFAULT_OUTPUT_DIR },
-		timeout: { type: "string", default: String(DEFAULT_TIMEOUT_MS) },
+		timeout: { type: "string", default: String(POSITIONAL_MS) },
+		// The stage's own deadline: a script that starts late gets only what is left of it.
+		"stage-ms": { type: "string" },
+		// The models the server bound for this job (precompute-models.json). Calls go to
+		// LLM_PROXY_URL with PRECOMPUTE_PROXY_TOKEN, which no script's process holds.
+		models: { type: "string" },
+		// The tokens all scripts may spend on models together: the proxy's cap for the attempt.
+		tokens: { type: "string" },
 	},
 });
 
 if (values.repo === undefined || values.repo === "") {
 	console.error(
-		"Usage: node runner.ts --repo <path> --diff <path> [--metadata <path>] [--context <dir>] [--change <dir>] [--output <dir>]",
+		"Usage: node runner.ts --repo <path> --diff <path> [--metadata <path>] [--context <dir>] [--change <dir>] [--practices <dir>] [--output <dir>]",
 	);
 	process.exit(1);
 }
@@ -45,15 +63,24 @@ const outputDir = values.output;
 const requestedTimeoutMs = Number.parseInt(values.timeout, 10);
 const timeoutIsUsable = Number.isFinite(requestedTimeoutMs) && requestedTimeoutMs > 0;
 if (!timeoutIsUsable) {
-	console.error(`Ignoring unusable --timeout ${values.timeout}; using ${DEFAULT_TIMEOUT_MS}ms`);
+	console.error(`Ignoring unusable --timeout ${values.timeout}; using ${POSITIONAL_MS}ms`);
 }
-const timeoutMs = timeoutIsUsable ? requestedTimeoutMs : DEFAULT_TIMEOUT_MS;
+const timeoutMs = timeoutIsUsable ? requestedTimeoutMs : POSITIONAL_MS;
 const contextDir = values.context ?? "";
 const contextReference = values["context-reference"] ?? "";
 if (contextDir !== "" && contextReference === "") {
 	throw new Error("--context-reference is required with --context");
 }
 const changeDir = values.change ?? "";
+const stageMs = Number.parseInt(values["stage-ms"] ?? "", 10);
+const stageEnd =
+	Number.isFinite(stageMs) && stageMs > 0 ? globalStart + stageMs : Number.POSITIVE_INFINITY;
+// Without a ceiling here, the proxy still refuses a call past its cap with 402, unrated as "budget".
+const requestedTokens = Number.parseInt(values.tokens ?? "", 10);
+const stageTokens =
+	Number.isFinite(requestedTokens) && requestedTokens > 0
+		? requestedTokens
+		: Number.POSITIVE_INFINITY;
 
 let diffFiles = new Map<string, DiffFile>();
 if (values.diff !== undefined && values.diff !== "") {
@@ -86,7 +113,11 @@ const practiceModules: [string, string][] = [];
 if (existsSync(practicesDir)) {
 	for (const file of globFilesSync("*.ts", practicesDir)) {
 		const slug = file.replace(/\.ts$/u, "");
-		practiceModules.push([slug, `${practicesDir}/${file}`]);
+		if (PRACTICE_SLUG.test(slug)) {
+			practiceModules.push([slug, `${practicesDir}/${file}`]);
+		} else {
+			console.error(`Not running ${file}: its name is not a practice slug`);
+		}
 	}
 }
 
@@ -98,230 +129,97 @@ if (practiceModules.length === 0) {
 
 console.error(`Running ${practiceModules.length} practice analyzer(s)...`);
 
-const tmpDir = `${outputDir}.tmp.${process.pid}`;
-await rm(tmpDir, { recursive: true, force: true });
-await mkdir(tmpDir, { recursive: true });
-
-/** A practice script is foreign code (DB-stored data), so it can reject with a non-Error value. */
-function messageOf(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
+// Each practice's files are written as soon as it finishes, so a stage that is stopped at its
+// deadline keeps every practice that finished before it.
+await mkdir(outputDir, { recursive: true });
+// Only an earlier run's files go; a folder inside the output (scripts staged there) stays.
+for (const entry of await readdir(outputDir, { withFileTypes: true })) {
+	if (entry.isFile()) {
+		await rm(path.join(outputDir, entry.name), { force: true });
+	}
 }
 
-/**
- * Reject an asynchronous practice that exceeds its budget. This cannot preempt synchronous work.
- */
-async function withTimeout<T>(work: T | Promise<T>): Promise<T> {
-	const timer = new AbortController();
+/** Write a file whole or not at all: a reader never sees half a section. */
+async function writeWhole(file: string, content: string): Promise<void> {
+	const partial = `${file}.partial`;
+	await writeFile(partial, content);
+	await rename(partial, file);
+}
+
+// A child may read the workspace inputs and the precompute install. Node's permission model guards
+// against mistakes and is no isolation boundary: it follows a symbolic link out of a granted folder
+// and does not restrict the network. The container is the boundary.
+// The stage holds the copied scripts and the `lib` link they import through (`../lib/…`).
+const readable = readableRoots([path.dirname(practicesDir), repoPath, contextDir, changeDir]);
+
+/** The models the server bound, or none when the file is missing or does not parse. */
+async function boundModels(file: string | undefined): Promise<BoundModels> {
+	if (file === undefined || file === "") {
+		return {};
+	}
 	try {
-		return await Promise.race([work, timeoutAfter(timeoutMs, timer.signal)]);
-	} finally {
-		timer.abort();
+		return boundModelsSchema.parse(JSON.parse(await readFile(file, "utf8")));
+	} catch (error) {
+		console.error(`Ignoring ${file}: ${String(error)}`);
+		return {};
 	}
 }
 
-async function timeoutAfter(ms: number, signal: AbortSignal): Promise<never> {
-	await delay(ms, undefined, { signal });
-	throw new Error(`Timeout after ${ms}ms`);
-}
+const proxyUrl = process.env.LLM_PROXY_URL ?? "";
+const proxyToken = process.env.PRECOMPUTE_PROXY_TOKEN ?? "";
+const callable = proxyUrl !== "" && proxyToken !== "";
+const bound = callable ? await boundModels(values.models) : {};
+const environment = {
+	readable,
+	sources: { change: diffFiles, repo: repoPath, contextDir, contextReference },
+	metadata,
+	changeDir,
+	now: new Date(globalStart).toISOString(),
+	stageEnd,
+	positionalMs: timeoutMs,
+	models: (practice: string) => hostModels(bound, proxyUrl, proxyToken, practice),
+	budget: new ModelBudget(stageTokens, MODEL_CONCURRENCY),
+	log: (line: string) => console.error(line),
+};
 
-function validateResult(result: unknown, slug: string): PracticeResult {
-	const findings = parseFindings(result, `Script ${slug}`);
-	return {
-		practice: slug,
-		status: "ok",
-		hints: findings.hints,
-		metrics: findings.metrics,
-		directions: findings.directions.slice(0, 10),
-	};
-}
-
-const results = await Promise.allSettled(
-	practiceModules.map(async ([slug, modulePath]) => {
-		const start = Date.now();
-		try {
-			const mod: unknown = await import(pathToFileURL(modulePath).href);
-			if (!isPracticeModule(mod)) {
-				throw new Error(`Script ${slug} must export a default function`);
-			}
-			const rawResult: unknown = await withTimeout(
-				mod.default(repoPath, diffFiles, metadata, contextDir, changeDir, contextReference),
+const queue = [...practiceModules];
+const outcomes: ScriptOutcome[] = [];
+await Promise.all(
+	Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+		for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+			const [slug, modulePath] = next;
+			const start = Date.now();
+			const outcome = await runScript(slug, modulePath, environment);
+			const durationMs = Date.now() - start;
+			const { result } = outcome;
+			const files = practiceFiles(
+				outcome,
+				durationMs,
+				`${outputDir}/${slug}.json`,
+				contextReference,
 			);
-			const result = validateResult(rawResult, slug);
-			const elapsed = Date.now() - start;
-			console.error(`  ok ${slug}: ${result.hints.length} hints (${elapsed}ms)`);
-			return result;
-		} catch (error) {
-			const elapsed = Date.now() - start;
-			const message = messageOf(error);
-			console.error(`  FAIL ${slug}: ${message} (${elapsed}ms)`);
-			return {
-				practice: slug,
-				status: "error" as const,
-				hints: [],
-				metrics: { error: 1 },
-				directions: [`Script failed: ${message}`],
-			} satisfies PracticeResult;
+			await writeWhole(`${outputDir}/${slug}.json`, files.json);
+			await writeWhole(`${outputDir}/${slug}.md`, files.section);
+			console.error(
+				isFailed(result.status)
+					? `  FAIL ${slug}: ${result.directions[0] ?? ""} (${durationMs}ms)`
+					: `  ${result.status} ${slug} (${outcome.contract}): ${outcome.contract === "definition" ? outcome.result.leads.length : outcome.result.hints.length} leads (${durationMs}ms)`,
+			);
+			outcomes.push(outcome);
 		}
 	}),
 );
 
-const practiceResults: PracticeResult[] = results.map((r) =>
-	r.status === "fulfilled"
-		? r.value
-		: {
-				practice: "unknown",
-				status: "error" as const,
-				hints: [],
-				metrics: { error: 1 },
-				directions: ["Promise rejected"],
-			},
-);
-
-for (const result of practiceResults) {
-	await writeFile(`${tmpDir}/${result.practice}.json`, JSON.stringify(result, null, 2));
-}
-
-/** Record rows shown per practice before the rest is left to the practice's JSON file. */
-const RECORD_ROWS = 20;
-/** Changed-line rows shown in full per practice; above this, a sample and the JSON pointer. */
-const IN_DIFF_ROWS = 10;
-const IN_DIFF_SAMPLE = 5;
-/**
- * A practice's section is inlined beside its criteria in the turn that evaluates it, so each section is
- * bounded on its own: one busy script cannot crowd another practice's leads out of the prompt.
- */
-const SECTION_CHARS = 3000;
-
-/** A changed-line row, cited the way the diff view prints the line: `path` [L<n>]. */
-function inDiffRow(h: Hint, contextChars: number, withFlags: boolean): string {
-	const flagStr = withFlags
-		? Object.entries(h.flags)
-				.filter(([, v]) => v !== false && v !== 0 && v !== "")
-				.map(([k, v]) => (v === true ? k : `${k}=${v}`))
-				.join(", ")
-		: "";
-	return `- \`${h.file}\` [L${h.line}] — ${h.pattern}${flagStr ? ` [${flagStr}]` : ""}: \`${h.context.slice(0, contextChars)}\``;
-}
-
-// A hint about the record rather than a changed line — an ask, a linked issue, a commit — is a row
-// of facts the practice decides on, and a flag that is false is one of them (no reply, no change
-// near the line), so every flag is shown.
-function recordRow(h: Hint): string {
-	const flagStr = Object.entries(h.flags)
-		.map(([k, v]) => `${k}=${String(v)}`)
-		.join(", ");
-	return `- \`${h.file}${h.line > 0 ? `:${h.line}` : ""}\` — ${h.pattern}: \`${h.context.slice(0, 160)}\`${flagStr ? ` [${flagStr}]` : ""}`;
-}
-
-function renderPractice(result: PracticeResult, recordRows: number, inDiffRows: number): string[] {
-	const json = `\`${outputDir}/${result.practice}.json\``;
-	const lines: string[] = [];
-	if (result.status === "error") {
-		lines.push(`> **Script failed.** Agent must analyze this practice manually.`, "");
-	}
-	if (result.directions.length > 0) {
-		lines.push(...result.directions.map((d) => `- ${d}`), "");
-	}
-
-	// A scan of the diff that matched nothing says so with its extent, so the model does not grep
-	// again — and says what a scan is, because "nothing matched" alone read as a clean bill: on one
-	// holdout the error-handling recall fell by half while the model recorded from this line without
-	// enumerating the early returns and discarded results a line pattern cannot see. A script that
-	// scanned nothing — a record script, a census — has its directions and no such line.
-	const { linesAdded, filesScanned } = result.metrics;
-	if (result.hints.length === 0 && result.status === "ok" && linesAdded !== undefined) {
-		lines.push(
-			`Scanned ${linesAdded} added lines${filesScanned === undefined ? "" : ` in ${filesScanned} files`} for this practice's line patterns; none matched. A pattern sees one line: what spans lines or has no keyword — an early return, a discarded result, a missing else — is yours to enumerate from the diff.`,
-			"",
-		);
-	}
-
-	const inDiffHints = result.hints.filter((h) => h.inDiff);
-	if (inDiffHints.length > 0 && inDiffHints.length <= inDiffRows) {
-		lines.push("**Key locations (on changed lines):**");
-		for (const h of inDiffHints) {
-			lines.push(inDiffRow(h, 100, true));
-		}
-		lines.push("");
-	} else if (inDiffHints.length > inDiffRows) {
-		const shown = Math.min(IN_DIFF_SAMPLE, inDiffRows);
-		lines.push(`**${inDiffHints.length} hints on changed lines** — see ${json} for full list.`);
-		for (const h of inDiffHints.slice(0, shown)) {
-			lines.push(inDiffRow(h, 80, false));
-		}
-		lines.push(`- ... and ${inDiffHints.length - shown} more`, "");
-	}
-
-	const recordHints = result.hints.filter((h) => !h.inDiff);
-	if (recordHints.length > 0) {
-		lines.push("**Record facts:**");
-		for (const h of recordHints.slice(0, recordRows)) {
-			lines.push(recordRow(h));
-		}
-		if (recordHints.length > recordRows) {
-			lines.push(`- ... and ${recordHints.length - recordRows} more in ${json}`);
-		}
-		lines.push("");
-	}
-	return lines;
-}
-
-/** Changed-line rows drop to a sample first, then record rows: a section keeps some of both, and its pointer. */
-const MIN_RECORD_ROWS = 3;
-const SECTION_LADDER: [recordRows: number, inDiffRows: number][] = [
-	[RECORD_ROWS, IN_DIFF_ROWS],
-	[RECORD_ROWS, IN_DIFF_SAMPLE],
-	[10, IN_DIFF_SAMPLE],
-	[5, IN_DIFF_SAMPLE],
-	[MIN_RECORD_ROWS, IN_DIFF_SAMPLE],
-];
-
-function renderSection(result: PracticeResult): string {
-	let section = "";
-	for (const [recordRows, inDiffRows] of SECTION_LADDER) {
-		section = renderPractice(result, recordRows, inDiffRows).join("\n").trim();
-		if (section.length <= SECTION_CHARS) {
-			return `${section}\n`;
-		}
-	}
-	// Directions and rows are not bounded per line, so the smallest step can still overrun: cut at a
-	// line break, or mid-line when one line alone overruns, and point at the full result.
-	const pointer = `- ... the rest is in \`${outputDir}/${result.practice}.json\``;
-	const kept = section.slice(0, SECTION_CHARS - pointer.length - 2);
-	const lineEnd = kept.lastIndexOf("\n");
-	return `${lineEnd > 0 ? kept.slice(0, lineEnd) : kept}\n${pointer}\n`;
-}
-
-for (const result of practiceResults) {
-	await writeFile(`${tmpDir}/${result.practice}.md`, renderSection(result));
-}
-
-const totalHints = practiceResults.reduce((s, r) => s + r.hints.length, 0);
-const inDiffHints = practiceResults.reduce((s, r) => s + r.hints.filter((h) => h.inDiff).length, 0);
-const errorCount = practiceResults.filter((r) => r.status === "error").length;
-await writeFile(
-	`${tmpDir}/.timing.json`,
-	JSON.stringify({
-		durationMs: Date.now() - globalStart,
-		practices: practiceResults.length,
-		totalHints,
-		inDiffHints,
-		errors: errorCount,
-	}),
-);
-
-await writeFile(`${tmpDir}/.complete`, new Date().toISOString());
-
-await rm(outputDir, { recursive: true, force: true });
-await rename(tmpDir, outputDir);
-
-console.error(
-	JSON.stringify({
-		event: "precompute_complete",
-		practices: practiceResults.length,
-		totalHints,
-		inDiffHints,
-		errors: errorCount,
-		durationMs: Date.now() - globalStart,
-	}),
-);
+const positionalResults = outcomes.flatMap((o) => (o.contract === "definition" ? [] : [o.result]));
+const definitionResults = outcomes.flatMap((o) => (o.contract === "definition" ? [o.result] : []));
+const summary = {
+	durationMs: Date.now() - globalStart,
+	practices: outcomes.length,
+	positionalHints: positionalResults.reduce((s, r) => s + r.hints.length, 0),
+	inDiffHints: positionalResults.reduce((s, r) => s + r.hints.filter((h) => h.inDiff).length, 0),
+	leads: definitionResults.reduce((s, r) => s + r.leads.length, 0),
+	errors: outcomes.filter((o) => isFailed(o.result.status)).length,
+};
+await writeFile(`${outputDir}/.timing.json`, JSON.stringify(summary));
+await writeFile(`${outputDir}/.complete`, new Date().toISOString());
+console.error(JSON.stringify({ event: "precompute_complete", ...summary }));

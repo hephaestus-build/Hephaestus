@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotNull;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -15,13 +15,8 @@ public record ProbeLlmConnectionRequestDTO(
         @NonNull @NotBlank @Schema(description = "Provider base URL")
         String baseUrl,
 
-        @NonNull
-        @NotBlank
-        @Pattern(
-                regexp = "openai-completions|openai-responses",
-                message = "apiProtocol must be one of openai-completions, openai-responses")
-        @Schema(description = "Wire protocol")
-        String apiProtocol,
+        @NonNull @NotNull @Schema(description = "Wire protocol")
+        LlmApiProtocol apiProtocol,
 
         @Nullable @Schema(description = "Credential shape (default BEARER)")
         LlmAuthMode authMode,

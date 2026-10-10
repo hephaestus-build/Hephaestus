@@ -117,14 +117,15 @@ It is not a successful review.
 │   └── composition/                 #   observations.json — the admitted observations feedback is composed from.
 ├── out/                             # THE ONLY collected directory — result.json, review-state.json,
 │                                    #   usage.json, runner-debug.json, practice-coverage.json,
-│                                    #   feedback.json, watchdog-killed.json; traces/ is added after
-│                                    #   the runner exits (§ Session transcripts)
+│                                    #   feedback.json, watchdog-killed.json, precompute.json;
+│                                    #   traces/ is added after the runner exits (§ Session transcripts)
 ├── task.json                        # TaskEnvelope<…> — runtime contract between handler and runner.
 ├── .pi/                             # Pi SDK agent dir — $PI_CODING_AGENT_DIR resolves here.
 │   ├── AGENTS.md                    #   Orchestrator instructions
 │   └── settings.json                #   Pi SDK config (provider, model, compaction, retry)
 ├── .sessions/                       # Pi SDK session JSONL, one file per session; copied to out/traces/.
 ├── pi-provider.json                 # Provider/model routing for the runner.
+├── precompute-models.json           # The models that precompute scripts may call, by slot. Absent with no slot.
 ├── pi-provider.ts                   # Provider/model helper imported by both runners.
 ├── pi-error-text.ts                 # Shared error-message helper.
 ├── pi-model-failure.ts              # Reads the provider adapter's closed failure diagnostic.
@@ -195,6 +196,7 @@ See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/dec
   This covers calls, tool calls by name, stored and refused observations with refusal reasons, compactions, and provider retries.
   The server keeps this trace in the job output.
   Thus, production friction is read from the job record, not a transcript.
+  `precompute.json` reports each staged precompute script, as [Precompute report](#precompute-report) describes.
 - **`node_modules`** — a symlink to `/opt/pi-sdk/node_modules`, so the runner's bare-specifier
   import of `@earendil-works/pi-coding-agent` resolves. The runner, precompute scripts, and SDK native
   bindings execute on Node.
@@ -540,35 +542,115 @@ See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/dec
 ## Precompute validation and limits
 
 Precompute is advisory.
-In production, the image runner validates every script's default export and returned hints, directions and finite numeric metrics.
-An invalid result or a thrown exception becomes a recorded script error with no hints.
+In production, the image runner validates every script's default export and its result.
+A positional script returns hints, directions and finite numeric metrics.
+A definition script returns leads, facts, unrated items and directions.
+An invalid result or a thrown exception becomes a recorded script error with no hints or leads.
 It does not become an observation about the reviewed work.
 
-The server-staged bootstrap bounds the **entire stage** to one tenth of the job timeout, capped at 30 seconds.
-The stage includes script copies, module imports, and synchronous execution.
-This fits inside the existing 60-second non-model allowance.
-The image runner's per-script asynchronous timeout is not a substitute for this outer deadline.
+Failed precompute remains best-effort: the practice review continues without its hints or leads.
+
+The server-staged bootstrap bounds the **entire stage** to one tenth of the job timeout, at most 90 seconds.
+The stage includes script copies, module imports, script execution, and the model calls of the scripts.
+The review runner starts after the stage.
+Its budget is the job timeout less this stage and 60 seconds for shutdown.
 Ordinary child processes are killed when the stage ends, including after success.
 
-Failed precompute remains best-effort: the practice review continues without its hints.
+The image runner runs only a staged file whose name, less `.ts`, is a practice slug: `^[a-z0-9][a-z0-9-]{0,63}$`.
+It starts one Node process for each script, at most four at a time.
+Each process has a heap of at most 256 MiB.
+A script's process ends at the script's deadline, or earlier when the stage has less time left.
+The deadline is 15 seconds for a positional script and 60 seconds for a definition script.
 
+A definition script's model calls and its `ctx.signal` end 5 seconds before its deadline, so that the script can still return what it found.
+The runner itself stops one second before the stage deadline.
+Thus, a script that never returns loses only its own practice's hints or leads.
+
+The runner writes each practice's section and result when that practice finishes.
+If the stage is stopped, the sections of the finished practices stay, and every other file is removed.
 Each practice's result reaches the model as a section under that practice's criteria in its evaluation turn, not in the opening brief.
-A busy script bounds its own section, never another practice's.
 The [practice catalogue](../practice-catalogue.md) owns what a section holds and its bound.
+The review runner removes `work/precompute-out` after measurement, before composition starts.
 
 The bootstrap clears the inherited environment.
-It runs Node under filesystem permission grants scoped to the workspace, precompute library, and its own stage and output directories.
-It applies a **10 MiB per-file limit** in its subshell, including the diagnostic log.
+It runs `pi-precompute.ts` under filesystem permission grants scoped to the workspace, the precompute library, and its own stage and output directories, with the child-process grant.
+`pi-precompute.ts` stages the scripts and starts the runner with fewer grants: it may read the workspace and the precompute library, and write only the output directory.
+The runner keeps the child-process grant, to start the script processes and `grep`.
+The bootstrap applies a **10 MiB per-file limit** in its subshell, including the diagnostic log.
+
+A script's own process has an empty environment.
+It may read only the precompute install and its dependencies, the staged scripts, the repository, the captured context and the change view.
+It has no write grant and no child-process grant.
+A search through the library's `grep` runs in the runner, inside the same read grants.
 
 On failure, at most 8 KiB of diagnostics is passed onward.
 The subsequent review does not inherit that file limit.
-These safeguards protect against broken scripts, not hostile code.
 A per-file limit is not a cumulative disk quota.
 
+These safeguards protect against broken scripts, not hostile code.
+[What a script can reach](../practice-precompute.mdx#what-a-script-can-reach) states what the Node permission model does not stop, and which process holds which token.
 Node child-process permission is not a security boundary.
 A deliberately detached process can escape process-group cleanup.
+The container's network policy, its resource limits and teardown, and the credentials that a process does not hold remain the outer boundary.
 
-Container resource limits and teardown remain the outer boundary.
+### Precompute models
+
+The server writes `precompute-models.json` for a practice review.
+It holds one entry for each model slot that has a model: `chat` is the review's own model, and `decision`, `embedding` and `reranking` come from their bindings.
+Each entry has `protocol` and `modelId`.
+An entry for a model with a reasoning effort also has `reasoningEffort`, as the enum name, such as `HIGH`.
+`docker/agents/precompute/test/precompute-models.json` pins the shape for the server and the runner tests.
+The file holds no credential.
+
+The container receives a second credential, `PRECOMPUTE_PROXY_TOKEN`.
+It reaches only the proxy paths `/internal/llm/precompute/<slot>/…`.
+
+Each call on these paths names its practice in the header `x-hephaestus-practice: <slug>`.
+The runner sets the header from the script's file name, and the request allowlist drops a header that a script sets.
+The proxy refuses a call without the header, or with a value that is not a practice slug, with HTTP 400.
+It counts each refusal in `llm.proxy.precompute.unattributed`.
+The proxy records the usage of each attempt by model kind and practice, so the usage report can split each usage row between practices.
+`PRECOMPUTE_PRACTICE_HEADER` in `lib/contract.ts` and in `JobTokenAuthenticationFilter` hold the name, and `PrecomputeContractSyncTest` keeps them equal.
+
+[Write a precompute script](/admin/precompute-scripts) owns the script contract, the model slots, and the limits of model calls.
+[Precompute runner internals](../practice-precompute.mdx#token-accounting) owns how the runner accounts for tokens.
+[ADR 0054](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0054-precompute-calls-models-through-the-runner.md) records the decision.
+
+### Precompute report
+
+The review runner reads the precompute results when it starts, because composition removes `work/precompute-out`.
+It writes `precompute.json` into `out/` with one entry for each staged script, from the task's `precomputeScripts` directory, sorted by slug.
+`server/application/src/test/resources/agent/precompute-report.json` pins the shape.
+`pi-precompute-report.spec.ts` checks that the runner writes it, and `PiResultParserPrecomputeReportTest` checks that the server reads it.
+
+| Field | Meaning |
+| --- | --- |
+| `practices[].slug` | The slug of the staged script. |
+| `practices[].status` | `ok`, `skipped`, `error` or `timeout` from the script's `<slug>.json`. `not-finished` when the script has no result that the review runner can read. |
+| `practices[].leads` | The leads of a definition script, or the hints of a positional script. 0 for `skipped` and `not-finished`. |
+| `practices[].models` | One entry for each slot that the script declares: `slot`, `need`, `bound` and `notRated`. `notRated` counts the model calls that the runner could not rate, by reason. Empty for a script that uses no model. Absent when the models are not known: the script ended before it declared them, or did not finish. |
+| `practices[].error` | For `error`, one line of the script's error: the text up to the first line break after leading blanks, cut to 500 code points. A control character becomes a space, and trailing blanks are removed. A line that UTF-8 cannot encode is left out. Absent for every other status. |
+| `practices[].durationMs` | How long the script ran, in milliseconds, from its `<slug>.json`. Absent when the script has no readable result. |
+| `truncated` | `true` when the runner left out entries to stay within the bounds. |
+
+The file holds no tokens and no calls, because the proxy counts those.
+It has at most 64 KiB and 256 entries.
+Past either bound, the runner leaves out the entries that sort last and sets `truncated`.
+
+An error only explains a failure, so the runs come first.
+The errors get the bytes that the runs leave, in slug order, and an entry whose error does not fit has no `error`.
+`SandboxLayoutSyncTest` keeps the bounds and the 500 code points equal on both sides.
+`PiResultParser` applies the error-line rule again.
+`precompute-error-lines.json` holds the cases on which both sides must agree.
+
+The server reads the file in the attempt's terminal transaction and writes one `agent_job_precompute_run` row for each script that it names.
+The row keeps the `error` of the script and the tier of the model that the attempt froze for each declared slot.
+It keeps `durationMs` unless the script was skipped or did not finish.
+
+When `truncated` is `false`, a staged script that the file does not name is `NOT_FINISHED`.
+When `truncated` is `true`, a staged script that the file does not name gets no row.
+The server drops an entry that is not valid, that repeats a slug, or that names a script that the job did not stage.
+A missing or unreadable file records no rows, because it says nothing about the scripts.
 
 ## Practice review tools
 

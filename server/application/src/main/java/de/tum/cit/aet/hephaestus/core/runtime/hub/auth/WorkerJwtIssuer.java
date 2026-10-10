@@ -13,6 +13,12 @@ public class WorkerJwtIssuer {
     static final String WORKER_TOKEN_TYPE = "worker-session+jwt";
     static final String JOB_TOKEN_TYPE = "job+jwt";
 
+    /** Lets a sandbox call the review model and the other gateway capabilities of its job. */
+    public static final String LLM_PROXY_SCOPE = "llm_proxy";
+
+    /** Lets a sandbox call only the precompute models of its job, under {@code /internal/llm/precompute/}. */
+    public static final String LLM_PRECOMPUTE_SCOPE = "llm_precompute";
+
     private final WorkerKeyRing keyRing;
     private final WorkerTokenProperties properties;
 
@@ -45,10 +51,11 @@ public class WorkerJwtIssuer {
 
     public String issueForJob(UUID jobId, Long workspaceId, int attempt, Duration ttl) {
         if (ttl.isNegative() || ttl.isZero()) throw new IllegalArgumentException("ttl must be positive");
-        return issueForJobUntil(jobId, workspaceId, attempt, Instant.now().plus(ttl));
+        return issueForJobUntil(jobId, workspaceId, attempt, Instant.now().plus(ttl), LLM_PROXY_SCOPE);
     }
 
-    public String issueForJobUntil(UUID jobId, Long workspaceId, int attempt, Instant expiresAt) {
+    /** @param scope {@link #LLM_PROXY_SCOPE} or {@link #LLM_PRECOMPUTE_SCOPE}. One token never holds both. */
+    public String issueForJobUntil(UUID jobId, Long workspaceId, int attempt, Instant expiresAt, String scope) {
         WorkerSigningKey active = keyRing.active();
         Instant now = Instant.now();
         if (!expiresAt.isAfter(now)) throw new IllegalArgumentException("expiresAt must be in the future");
@@ -59,7 +66,7 @@ public class WorkerJwtIssuer {
                 .withClaim("job_id", jobId.toString())
                 .withClaim("workspace_id", workspaceId)
                 .withClaim("attempt", attempt)
-                .withClaim("scope", List.of("llm_proxy"))
+                .withClaim("scope", List.of(scope))
                 .withJWTId(UUID.randomUUID().toString())
                 .withIssuedAt(now)
                 .withNotBefore(now)

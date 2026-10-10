@@ -14,7 +14,7 @@ The prose checks read the first column, so keep each term in bold.
 
 This page owns the vocabulary for **observations and the feedback built from them**.
 The [practice review glossary](./practice-review-glossary.mdx) owns the vocabulary for **the review operation, the evidence contract, and the exact API, Java, and persistence names**.
-This includes *practice review*, *binding*, *signal*, *evidence stance*, and *practice autonomy*.
+This includes *practice review*, *model assignment*, *signal*, *evidence stance*, and *practice autonomy*.
 A term is defined in one of the two and cited from the other.
 When the two disagree, that is a bug in one of them, not a choice for the writer.
 
@@ -70,6 +70,7 @@ Within **Practice setup** or **Practice catalog**, shorten **practice group** to
 | **Instance catalog**                | The set of practices a workspace may adopt from                                                                                                                              | curated catalog                                                      |
 | **Workspace practices**             | Independent definitions used for reviews in one workspace                                                                                                  | workspace catalog                                                    |
 | **Review rules**                    | Inputs and criteria that determine review behavior                                                                                                         | detector configuration                                               |
+| **Precompute script**               | Optional code in a practice that points its review at places to check. The [glossary](./practice-review-glossary.mdx#product-terms) defines it | static analysis, analyzer, detector, linter                          |
 | **Developer guidance**              | Explanatory text that does not change review behavior                                                                                                      | learner guidance                                                     |
 | **Customize**                       | Change a default or catalog-based definition                                                                                                               | override                                                             |
 | **Include / exclude**               | Whether an instance entry is available for workspaces to adopt                                                                                                    | offer, retire                                                        |
@@ -79,6 +80,8 @@ Use provider-specific names such as **pull request** or **merge request** when t
 
 *Habit* is retired for what a practice describes or what recurs across someone's work: say *practice*, *way of working* or *repeated pattern*.
 A card that still shows retired words is wrong wording, and is [withdrawn](./practice-review-glossary.mdx#withdrawn-feedback).
+
+*Static analysis* is retired for a practice's optional script: say **precompute script** in the editor, the previews, the docs and the release notes.
 
 *Leaderboard*, *league*, *league points*, *XP*, *level*, *score*, *rank* and *streak* are retired for activity and do not describe anything in the product ([ADR 0045](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0045-activity-counts-work-and-never-ranks-people.md)).
 A sorted Workspace activity shows a **position**, never a *rank* ([ADR 0052](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0052-activity-sorts-by-contributions-and-can-be-public.md)).
@@ -300,6 +303,7 @@ Its link above remains their source.
 | **Changeset** | A file that supplies a release note and version change. |
 | **Writing standard** | The policy for prose in this project. |
 | **Loading state** | The UI state while data is not yet available. |
+| **Shared models**, **Own provider** | The two purses of AI spend. The [LLM cost vocabulary](./llm-cost-vocabulary.md) defines them and the words for their limits. |
 
 ## Technical verbs
 
@@ -308,6 +312,7 @@ Use its normal grammatical forms when necessary.
 
 | Term | Meaning |
 | --- | --- |
+| **Assign** | Make a [model assignment](./practice-review-glossary.mdx#product-terms), which the glossary defines. An issue or pull request that is assigned to a person keeps the provider's meaning. |
 | **Authenticate** | Verify an identity before access. |
 | **Authorize** | Give an identity permission for an action. |
 | **Configure** | Set the parameters of a software system. |

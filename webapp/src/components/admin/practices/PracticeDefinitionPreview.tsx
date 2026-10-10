@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { cn } from "cn";
 import type { CuratedPracticeDefinition, PracticeDefinitionOptions } from "@/api/types.gen";
 import { deliveryBehaviorSentences } from "@/components/admin/practice-editor/delivery-behavior-text";
@@ -17,16 +19,26 @@ import { hasText } from "@/lib/text";
 export interface PracticeDefinitionPreviewProps {
 	definition: CuratedPracticeDefinition;
 	options: PracticeDefinitionOptions;
+	/**
+	 * What the precompute script needs in this workspace, above its source. Only a workspace has
+	 * models to assign, so the catalog passes none.
+	 */
+	precompute?: ReactNode;
 }
 
 /**
- * The practice first, the rule last. `criteria` addresses the *model* in the second person and runs to
- * thousands of characters once the server composes its kind-of-work preamble in, so leading with it
- * buries `whyItMatters` — the field that answers "do we want this practice". It stays reachable behind
- * a disclosure, next to the precompute script, because adopting an automated critic without being
- * able to read its rule is worse.
+ * The practice first, its criteria last. `criteria` addresses the *model* in the second person and
+ * runs to thousands of characters once the server composes its kind-of-work preamble in, so leading
+ * with it buries `whyItMatters` — the field that answers "do we want this practice". It stays
+ * reachable behind the first disclosure, because adopting an automated critic without being able to
+ * read its criteria is worse. The disclosures follow a review's order: how it decides, what it
+ * reads, what runs before it, then how its feedback goes out.
  */
-export function PracticeDefinitionPreview({ definition, options }: PracticeDefinitionPreviewProps) {
+export function PracticeDefinitionPreview({
+	definition,
+	options,
+	precompute,
+}: PracticeDefinitionPreviewProps) {
 	const workType = options.workTypes.find(
 		(candidate) => candidate.artifactKind === definition.artifactKind,
 	);
@@ -49,6 +61,16 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 			<Separator />
 
 			<Accordion aria-label="Practice review details">
+				<AccordionItem value="review-rule">
+					<AccordionTrigger>How it decides</AccordionTrigger>
+					<AccordionContent>
+						{/* The editor promises "Markdown is supported", and this is the one definition field
+						    that uses it. `max-w-2xl` because the drawer reaches 62rem. */}
+						<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "max-w-2xl")}>
+							<UntrustedMarkdown>{definition.criteria}</UntrustedMarkdown>
+						</div>
+					</AccordionContent>
+				</AccordionItem>
 				<AccordionItem value="review-mechanics">
 					<AccordionTrigger>Review scope and evidence</AccordionTrigger>
 					<AccordionContent className="pt-2">
@@ -64,16 +86,18 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 						/>
 					</AccordionContent>
 				</AccordionItem>
-				<AccordionItem value="review-rule">
-					<AccordionTrigger>How it decides</AccordionTrigger>
-					<AccordionContent>
-						{/* The editor promises "Markdown is supported", and this is the one definition field
-						    that uses it. `max-w-2xl` because the drawer reaches 62rem. */}
-						<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "max-w-2xl")}>
-							<UntrustedMarkdown>{definition.criteria}</UntrustedMarkdown>
-						</div>
-					</AccordionContent>
-				</AccordionItem>
+				{hasText(definition.precomputeScript) && (
+					<AccordionItem value="precompute-script">
+						<AccordionTrigger>Precompute script</AccordionTrigger>
+						{/* Gaps rather than margins: the panel's own paragraph margin would double them. */}
+						<AccordionContent className="flex flex-col gap-4 [&_p:not(:last-child)]:mb-0">
+							{precompute}
+							<pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">
+								<code>{definition.precomputeScript}</code>
+							</pre>
+						</AccordionContent>
+					</AccordionItem>
+				)}
 				{deliverySentences.length > 0 && (
 					<AccordionItem value="delivery-behavior">
 						<AccordionTrigger>How feedback is delivered</AccordionTrigger>
@@ -83,16 +107,6 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 									<li key={sentence}>{sentence}</li>
 								))}
 							</ul>
-						</AccordionContent>
-					</AccordionItem>
-				)}
-				{hasText(definition.precomputeScript) && (
-					<AccordionItem value="static-analysis">
-						<AccordionTrigger>Static analysis</AccordionTrigger>
-						<AccordionContent>
-							<pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">
-								<code>{definition.precomputeScript}</code>
-							</pre>
 						</AccordionContent>
 					</AccordionItem>
 				)}

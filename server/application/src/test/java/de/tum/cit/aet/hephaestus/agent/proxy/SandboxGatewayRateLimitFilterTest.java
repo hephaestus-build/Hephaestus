@@ -141,7 +141,16 @@ class SandboxGatewayRateLimitFilterTest extends BaseUnitTest {
 
     private void authenticate(String principalDescription) {
         var routing = new ProxyRouting(
-                principalDescription, "openai-responses", "https://api.example.com/v1", null, null, null, null, null);
+                principalDescription,
+                "openai-responses",
+                "https://api.example.com/v1",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
         SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(routing, null));
     }
 

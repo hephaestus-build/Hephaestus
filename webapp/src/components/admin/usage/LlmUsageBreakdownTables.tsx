@@ -1,5 +1,8 @@
-import type { LlmUsageByJobType, WorkspaceLlmUsageReport } from "@/api/types.gen";
-import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkeleton";
+import { cn } from "cn";
+import { Fragment } from "react";
+
+import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
+import type { Purse } from "@/components/practice-vocabulary/purse-defs";
 import {
 	Table,
 	TableBody,
@@ -10,164 +13,282 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { formatCostUsd, formatRateUsd } from "@/lib/money";
+import {
+	type AverageDigits,
+	averageFractionDigits,
+	formatAverageUsd,
+	formatCostUsd,
+} from "@/lib/money";
+
+import {
+	type TableSkeletonColumn,
+	TableRowsSkeleton,
+} from "@/components/admin/integrations/TableRowsSkeleton";
 import { MoneyCell } from "./MoneyCell";
+import { PurseHeading } from "./PurseHeading";
+import {
+	averageSpend,
+	FIRST_COLUMN,
+	formatTokens,
+	formatUsageDay,
+	JOB_TYPE_LABELS,
+	type PurseSpend,
+	spendOf,
+	TOTAL_CELL,
+	UNPRICED_RUNS,
+	WIDE_ONLY,
+} from "./usage-utils";
 
-import { type Fx, FxSpendLine } from "./fx";
-import { formatTokens, formatUsageDay, JOB_TYPE_LABELS } from "./usage-utils";
-
-function sumBy<T>(rows: T[], pick: (row: T) => number): number {
+function sumBy<T>(rows: readonly T[], pick: (row: T) => number): number {
 	return rows.reduce((total, row) => total + pick(row), 0);
 }
 
-const JOB_TYPE_SKELETON_COLUMNS = [
-	"w-32",
-	"w-16",
-	"w-16",
-	"w-20",
-	"w-16",
-	"w-20",
-	"w-20",
-	"w-20",
-	"w-20",
-	"w-12",
-	"w-12",
-];
-const DAY_SKELETON_COLUMNS = ["w-16", "w-16", "w-16", "w-16", "w-12"];
-
-export interface LlmUsageByJobTypeTableProps {
-	report?: WorkspaceLlmUsageReport;
-	fx?: Fx;
+/** A row of figures, the run count its averages divide by, and its runs with no price. */
+interface PurseFigures extends PurseSpend {
+	runs: number;
+	unpriced: number;
 }
 
-export function LlmUsageByJobTypeTable({ report, fx }: LlmUsageByJobTypeTableProps) {
+/** A header that spans both header rows, after the purse groups. */
+interface TrailingHead {
+	label: string;
+	className?: string;
+}
+
+interface PurseHeaderRowsProps {
+	purses: readonly Purse[];
+	/** The first column's header, which spans both header rows. */
+	leading: string;
+	trailing: readonly TrailingHead[];
+}
+
+/**
+ * Two header rows: each purse's name over its own Spend and Avg per run, so one cell holds one
+ * figure and the two purses are never read as one sum. A purse's name is a `col` header across both
+ * of its columns, as `DataTableHeader` explains.
+ */
+function PurseHeaderRows({ purses, leading, trailing }: PurseHeaderRowsProps) {
+	return (
+		<TableHeader>
+			<TableRow variant="static">
+				<TableHead scope="col" rowSpan={2} className={cn(FIRST_COLUMN, "w-full")}>
+					{leading}
+				</TableHead>
+				{purses.map((purse) => (
+					<TableHead key={purse} scope="col" colSpan={2} className="text-center">
+						<PurseHeading purse={purse} />
+					</TableHead>
+				))}
+				{trailing.map(({ label, className }) => (
+					<TableHead
+						key={label}
+						scope="col"
+						rowSpan={2}
+						numeric
+						className={cn("text-right", className)}
+					>
+						{label}
+					</TableHead>
+				))}
+			</TableRow>
+			<TableRow variant="static">
+				{purses.map((purse) => (
+					<PurseLeafHeads key={purse} />
+				))}
+			</TableRow>
+		</TableHeader>
+	);
+}
+
+function PurseLeafHeads() {
+	return (
+		<>
+			<TableHead scope="col" numeric className="text-right">
+				Spend
+			</TableHead>
+			<TableHead scope="col" numeric className="text-right">
+				Avg per run
+			</TableHead>
+		</>
+	);
+}
+
+function averageOf(figures: PurseFigures, purse: Purse): number | null {
+	return averageSpend(spendOf(figures, purse), figures.runs, figures.unpriced);
+}
+
+/** One precision per average column, its total included, so the decimal points line up. */
+type AverageColumnDigits = Record<Purse, AverageDigits>;
+
+function averageColumnDigits(column: readonly PurseFigures[]): AverageColumnDigits {
+	const digitsOf = (purse: Purse) =>
+		averageFractionDigits(column.map((figures) => averageOf(figures, purse)));
+	return { SHARED: digitsOf("SHARED"), OWN_PROVIDER: digitsOf("OWN_PROVIDER") };
+}
+
+interface PurseCellsProps {
+	purses: readonly Purse[];
+	figures: PurseFigures;
+	digits: AverageColumnDigits;
+	className?: string;
+}
+
+function PurseCells({ purses, figures, digits, className }: PurseCellsProps) {
+	return purses.map((purse) => {
+		const average = averageOf(figures, purse);
+		return (
+			<Fragment key={purse}>
+				<TableCell numeric className={cn("text-right", className)}>
+					<MoneyCell>{formatCostUsd(spendOf(figures, purse))}</MoneyCell>
+				</TableCell>
+				<TableCell numeric className={cn("text-right", className)}>
+					<MoneyCell>
+						{average === null ? null : formatAverageUsd(average, digits[purse])}
+					</MoneyCell>
+				</TableCell>
+			</Fragment>
+		);
+	});
+}
+
+function EmptyRow({ columns }: { columns: number }) {
+	return (
+		<TableRow variant="static">
+			<TableCell colSpan={columns} className="h-24 text-center text-muted-foreground">
+				No runs
+			</TableCell>
+		</TableRow>
+	);
+}
+
+const TOKEN_COLUMNS: TrailingHead[] = [
+	{ label: "Input tokens", className: WIDE_ONLY },
+	{ label: "Cache reads", className: WIDE_ONLY },
+	{ label: "Cache writes", className: WIDE_ONLY },
+	{ label: "Output tokens", className: WIDE_ONLY },
+	{ label: "Calls", className: WIDE_ONLY },
+];
+
+function skeletonColumns(
+	purses: readonly Purse[],
+	perPurse: number,
+	trailing: readonly TrailingHead[],
+) {
+	return [
+		{ width: "w-32", className: FIRST_COLUMN },
+		...purses.flatMap(() =>
+			Array.from({ length: perPurse }, () => ({ width: "w-16", numeric: true })),
+		),
+		...trailing.map(({ className }) => ({ width: "w-12", numeric: true, className })),
+	] satisfies TableSkeletonColumn[];
+}
+
+export interface LlmUsageByJobTypeTableProps {
+	/** Absent while the report loads. */
+	report?: WorkspaceLlmUsageReport;
+	/** The purses this page shows, the same on every table of it. */
+	purses: readonly Purse[];
+}
+
+/** Five run types at most, so no sorting: the order is the server's. */
+export function LlmUsageByJobTypeTable({ report, purses }: LlmUsageByJobTypeTableProps) {
 	const rows = report?.byJobType;
-	const totals =
+	const hasUnpriced = rows?.some((row) => row.unpricedEventCount > 0) === true;
+	const trailing: TrailingHead[] = [
+		{ label: "Runs" },
+		...(hasUnpriced ? [UNPRICED_RUNS] : []),
+		...TOKEN_COLUMNS,
+	];
+	const rowFigures = (rows ?? []).map((row) => ({
+		...row,
+		runs: row.events,
+		unpriced: row.unpricedEventCount,
+	}));
+	const total =
 		report == null || rows == null || rows.length < 2
 			? null
 			: {
-					priced: report.instanceTotalCostUsd,
-					ownProvider: report.ownProviderTotalCostUsd,
-					unpriced: sumBy(rows, (row) => row.unpricedEventCount),
+					instanceTotalCostUsd: report.instanceTotalCostUsd,
+					ownProviderTotalCostUsd: report.ownProviderTotalCostUsd,
+					runs: sumBy(rows, (row) => row.events),
+					unpriced: report.unpricedEventCount,
 					inputTokens: sumBy(rows, (row) => row.inputTokens),
 					cacheReadTokens: sumBy(rows, (row) => row.cacheReadTokens),
 					cacheWriteTokens: sumBy(rows, (row) => row.cacheWriteTokens),
 					outputTokens: sumBy(rows, (row) => row.outputTokens),
 					calls: sumBy(rows, (row) => row.totalCalls),
-					events: sumBy(rows, (row) => row.events),
 				};
+	const digits = averageColumnDigits(total == null ? rowFigures : [...rowFigures, total]);
+
 	return (
 		<Table bordered>
 			<TableCaption className="sr-only">AI spend by run type</TableCaption>
-			<TableHeader>
-				<TableRow>
-					<TableHead scope="col">Run type</TableHead>
-					<TableHead scope="col" className="text-right">
-						Shared models
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						Your provider
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						Avg per run
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						No price set
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						Input tokens
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						Cache reads
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						Cache writes
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						Output tokens
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						Calls
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						Runs
-					</TableHead>
-				</TableRow>
-			</TableHeader>
+			<PurseHeaderRows purses={purses} leading="Run type" trailing={trailing} />
 			{rows == null ? (
-				<TableRowsSkeleton columns={JOB_TYPE_SKELETON_COLUMNS} rows={3} />
+				<TableRowsSkeleton rows={3} columns={skeletonColumns(purses, 2, trailing)} />
 			) : (
 				<TableBody>
-					{rows.map((row) => (
-						<TableRow key={row.jobType}>
-							<TableCell className="font-medium">{JOB_TYPE_LABELS[row.jobType]}</TableCell>
-							<TableCell numeric className="text-right">
-								<MoneyCell>{formatCostUsd(row.instanceTotalCostUsd)}</MoneyCell>
+					{rows.length === 0 && <EmptyRow columns={1 + purses.length * 2 + trailing.length} />}
+					{rowFigures.map((row) => (
+						<TableRow key={row.jobType} variant="static">
+							<TableCell className={cn(FIRST_COLUMN, "font-medium")}>
+								{JOB_TYPE_LABELS[row.jobType]}
 							</TableCell>
-							<TableCell numeric className="text-right">
-								<MoneyCell>{formatCostUsd(row.ownProviderTotalCostUsd)}</MoneyCell>
-							</TableCell>
-							<TableCell numeric className="text-right">
-								<AvgPerRun row={row} />
-							</TableCell>
-							<TableCell numeric className="text-right">
-								{row.unpricedEventCount.toLocaleString()}
-							</TableCell>
-							<TableCell numeric className="text-right">
-								{formatTokens(row.inputTokens)}
-							</TableCell>
-							<TableCell numeric className="text-right">
-								{formatTokens(row.cacheReadTokens)}
-							</TableCell>
-							<TableCell numeric className="text-right">
-								{formatTokens(row.cacheWriteTokens)}
-							</TableCell>
-							<TableCell numeric className="text-right">
-								{formatTokens(row.outputTokens)}
-							</TableCell>
-							<TableCell numeric className="text-right">
-								{row.totalCalls.toLocaleString()}
-							</TableCell>
+							<PurseCells purses={purses} figures={row} digits={digits} />
 							<TableCell numeric className="text-right">
 								{row.events.toLocaleString()}
+							</TableCell>
+							{hasUnpriced && (
+								<TableCell numeric className="text-right">
+									{row.unpricedEventCount.toLocaleString()}
+								</TableCell>
+							)}
+							<TableCell numeric className={cn("text-right", WIDE_ONLY)}>
+								{formatTokens(row.inputTokens)}
+							</TableCell>
+							<TableCell numeric className={cn("text-right", WIDE_ONLY)}>
+								{formatTokens(row.cacheReadTokens)}
+							</TableCell>
+							<TableCell numeric className={cn("text-right", WIDE_ONLY)}>
+								{formatTokens(row.cacheWriteTokens)}
+							</TableCell>
+							<TableCell numeric className={cn("text-right", WIDE_ONLY)}>
+								{formatTokens(row.outputTokens)}
+							</TableCell>
+							<TableCell numeric className={cn("text-right", WIDE_ONLY)}>
+								{row.totalCalls.toLocaleString()}
 							</TableCell>
 						</TableRow>
 					))}
 				</TableBody>
 			)}
-			{totals != null && (
+			{total != null && (
 				<TableFooter>
-					<TableRow>
-						<TableCell>Total</TableCell>
-						<TableCell numeric className="text-right">
-							<MoneyCell>{formatCostUsd(totals.priced)}</MoneyCell>
-							<FxSpendLine usd={totals.priced} fx={fx} />
+					<TableRow variant="static">
+						<TotalHead />
+						<PurseCells purses={purses} figures={total} digits={digits} className={TOTAL_CELL} />
+						<TableCell numeric className={cn("text-right", TOTAL_CELL)}>
+							{total.runs.toLocaleString()}
 						</TableCell>
-						<TableCell numeric className="text-right">
-							<MoneyCell>{formatCostUsd(totals.ownProvider)}</MoneyCell>
-							<FxSpendLine usd={totals.ownProvider} fx={fx} />
+						{hasUnpriced && (
+							<TableCell numeric className={cn("text-right", TOTAL_CELL)}>
+								{total.unpriced.toLocaleString()}
+							</TableCell>
+						)}
+						<TableCell numeric className={cn("text-right", WIDE_ONLY, TOTAL_CELL)}>
+							{formatTokens(total.inputTokens)}
 						</TableCell>
-						<TableCell className="text-right text-muted-foreground">—</TableCell>
-						<TableCell numeric className="text-right">
-							{totals.unpriced.toLocaleString()}
+						<TableCell numeric className={cn("text-right", WIDE_ONLY, TOTAL_CELL)}>
+							{formatTokens(total.cacheReadTokens)}
 						</TableCell>
-						<TableCell numeric className="text-right">
-							{formatTokens(totals.inputTokens)}
+						<TableCell numeric className={cn("text-right", WIDE_ONLY, TOTAL_CELL)}>
+							{formatTokens(total.cacheWriteTokens)}
 						</TableCell>
-						<TableCell numeric className="text-right">
-							{formatTokens(totals.cacheReadTokens)}
+						<TableCell numeric className={cn("text-right", WIDE_ONLY, TOTAL_CELL)}>
+							{formatTokens(total.outputTokens)}
 						</TableCell>
-						<TableCell numeric className="text-right">
-							{formatTokens(totals.cacheWriteTokens)}
-						</TableCell>
-						<TableCell numeric className="text-right">
-							{formatTokens(totals.outputTokens)}
-						</TableCell>
-						<TableCell numeric className="text-right">
-							{totals.calls.toLocaleString()}
-						</TableCell>
-						<TableCell numeric className="text-right">
-							{totals.events.toLocaleString()}
+						<TableCell numeric className={cn("text-right", WIDE_ONLY, TOTAL_CELL)}>
+							{total.calls.toLocaleString()}
 						</TableCell>
 					</TableRow>
 				</TableFooter>
@@ -176,112 +297,118 @@ export function LlmUsageByJobTypeTable({ report, fx }: LlmUsageByJobTypeTablePro
 	);
 }
 
-function AvgPerRun({ row }: { row: LlmUsageByJobType }) {
-	const parts = [
-		{ key: "shared", label: "shared models", total: row.instanceTotalCostUsd },
-		{ key: "provider", label: "your provider", total: row.ownProviderTotalCostUsd },
-	].filter((part) => part.total > 0);
-
-	if (row.events <= 0 || parts.length === 0) {
-		return <span className="text-muted-foreground">—</span>;
-	}
+/**
+ * The money and the runs with no price are the report's own month totals, never a re-addition of the
+ * rows: one run can have usage on two days. The other counts are integers and add up exactly.
+ */
+function TotalHead() {
 	return (
-		<div className="flex flex-col items-end">
-			{parts.map((part) => (
-				<span key={part.key}>
-					{formatRateUsd(part.total / row.events)}
-					{parts.length > 1 && (
-						<>
-							{" "}
-							<span className="text-xs text-muted-foreground">{part.label}</span>
-						</>
-					)}
-				</span>
-			))}
-		</div>
+		<TableHead scope="row" className={cn(FIRST_COLUMN, TOTAL_CELL)}>
+			Total
+		</TableHead>
 	);
 }
 
 export interface LlmUsageByDayTableProps {
+	/** Absent while the report loads. */
 	report?: WorkspaceLlmUsageReport;
-	fx?: Fx;
+	/** The purses this page shows, the same on every table of it. */
+	purses: readonly Purse[];
 }
 
-export function LlmUsageByDayTable({ report, fx }: LlmUsageByDayTableProps) {
+/**
+ * 31 days at most, so no sorting or paging: the order is the calendar's. Spend only: a daily
+ * average per purse answers no question that the run types do not.
+ */
+export function LlmUsageByDayTable({ report, purses }: LlmUsageByDayTableProps) {
 	const rows = report?.byDay;
-	const totals =
+	const hasUnpriced = rows?.some((row) => row.unpricedEventCount > 0) === true;
+	const trailing: TrailingHead[] = [{ label: "Runs" }, ...(hasUnpriced ? [UNPRICED_RUNS] : [])];
+	const total =
 		report == null || rows == null || rows.length < 2
 			? null
 			: {
-					priced: report.instanceTotalCostUsd,
-					ownProvider: report.ownProviderTotalCostUsd,
-					unpriced: sumBy(rows, (row) => row.unpricedEventCount),
-					events: sumBy(rows, (row) => row.events),
+					instanceTotalCostUsd: report.instanceTotalCostUsd,
+					ownProviderTotalCostUsd: report.ownProviderTotalCostUsd,
+					runs: sumBy(rows, (row) => row.events),
+					unpriced: report.unpricedEventCount,
 				};
+
 	return (
 		<Table bordered>
 			<TableCaption className="sr-only">AI spend by day</TableCaption>
 			<TableHeader>
-				<TableRow>
-					<TableHead scope="col">Day</TableHead>
-					<TableHead scope="col" className="text-right">
-						Shared models
+				<TableRow variant="static">
+					<TableHead scope="col" className={cn(FIRST_COLUMN, "w-full")}>
+						Day
 					</TableHead>
-					<TableHead scope="col" className="text-right">
-						Your provider
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						No price set
-					</TableHead>
-					<TableHead scope="col" className="text-right">
-						Runs
-					</TableHead>
+					{purses.map((purse) => (
+						<TableHead key={purse} scope="col" numeric className="text-right">
+							<PurseHeading purse={purse} />
+						</TableHead>
+					))}
+					{trailing.map(({ label, className }) => (
+						<TableHead key={label} scope="col" numeric className={cn("text-right", className)}>
+							{label}
+						</TableHead>
+					))}
 				</TableRow>
 			</TableHeader>
 			{rows == null ? (
-				<TableRowsSkeleton columns={DAY_SKELETON_COLUMNS} rows={3} />
+				<TableRowsSkeleton rows={3} columns={skeletonColumns(purses, 1, trailing)} />
 			) : (
 				<TableBody>
+					{rows.length === 0 && <EmptyRow columns={1 + purses.length + trailing.length} />}
 					{rows.map((row) => (
-						<TableRow key={String(row.day)}>
-							<TableCell className="font-medium">{formatUsageDay(row.day)}</TableCell>
-							<TableCell numeric className="text-right">
-								<MoneyCell>{formatCostUsd(row.instanceTotalCostUsd)}</MoneyCell>
+						<TableRow key={String(row.day)} variant="static">
+							<TableCell className={cn(FIRST_COLUMN, "font-medium")}>
+								{formatUsageDay(row.day)}
 							</TableCell>
-							<TableCell numeric className="text-right">
-								<MoneyCell>{formatCostUsd(row.ownProviderTotalCostUsd)}</MoneyCell>
-							</TableCell>
-							<TableCell numeric className="text-right">
-								{row.unpricedEventCount.toLocaleString()}
-							</TableCell>
+							<DaySpendCells purses={purses} figures={row} />
 							<TableCell numeric className="text-right">
 								{row.events.toLocaleString()}
 							</TableCell>
+							{hasUnpriced && (
+								<TableCell numeric className="text-right">
+									{row.unpricedEventCount.toLocaleString()}
+								</TableCell>
+							)}
 						</TableRow>
 					))}
 				</TableBody>
 			)}
-			{totals != null && (
+			{total != null && (
 				<TableFooter>
-					<TableRow>
-						<TableCell>Total</TableCell>
-						<TableCell numeric className="text-right">
-							<MoneyCell>{formatCostUsd(totals.priced)}</MoneyCell>
-							<FxSpendLine usd={totals.priced} fx={fx} />
+					<TableRow variant="static">
+						<TotalHead />
+						<DaySpendCells purses={purses} figures={total} className={TOTAL_CELL} />
+						<TableCell numeric className={cn("text-right", TOTAL_CELL)}>
+							{total.runs.toLocaleString()}
 						</TableCell>
-						<TableCell numeric className="text-right">
-							<MoneyCell>{formatCostUsd(totals.ownProvider)}</MoneyCell>
-							<FxSpendLine usd={totals.ownProvider} fx={fx} />
-						</TableCell>
-						<TableCell numeric className="text-right">
-							{totals.unpriced.toLocaleString()}
-						</TableCell>
-						<TableCell numeric className="text-right">
-							{totals.events.toLocaleString()}
-						</TableCell>
+						{hasUnpriced && (
+							<TableCell numeric className={cn("text-right", TOTAL_CELL)}>
+								{total.unpriced.toLocaleString()}
+							</TableCell>
+						)}
 					</TableRow>
 				</TableFooter>
 			)}
 		</Table>
 	);
+}
+
+function DaySpendCells({
+	purses,
+	figures,
+	className,
+}: {
+	purses: readonly Purse[];
+	figures: PurseSpend;
+	className?: string;
+}) {
+	return purses.map((purse) => (
+		<TableCell key={purse} numeric className={cn("text-right", className)}>
+			<MoneyCell>{formatCostUsd(spendOf(figures, purse))}</MoneyCell>
+		</TableCell>
+	));
 }

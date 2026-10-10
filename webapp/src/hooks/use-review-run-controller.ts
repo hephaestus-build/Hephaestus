@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
 	cancelAgentJobMutation,
 	getAgentJobOptions,
+	getAgentJobPrecomputeOptions,
 	getAgentJobQueryKey,
 	listPracticeReviewFeedbackOptions,
 	listPracticeReviewFeedbackQueryKey,
@@ -12,7 +13,12 @@ import {
 	listPracticeReviewObservationsQueryKey,
 	retryAgentJobDeliveryMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { AgentJob, ReviewFeedback, ReviewObservation } from "@/api/types.gen";
+import type {
+	AgentJob,
+	ReviewFeedback,
+	ReviewObservation,
+	ReviewPrecompute,
+} from "@/api/types.gen";
 import {
 	ACTIVE_REVIEW_POLL_MS,
 	PRACTICE_REVIEW_READS,
@@ -29,7 +35,7 @@ import {
 
 /**
  * Everything the review level needs, already resolved: the run, the two previews of what it
- * produced, and the two actions an operator can take on it.
+ * produced, what its precompute scripts did, and the two actions an operator can take on it.
  *
  * The screen is handed states, not queries. "Still running" reaches it as a section's `pending`
  * status — that a running review is re-asked for on a timer, and that the timer stops by itself at a
@@ -39,6 +45,7 @@ export interface ReviewRunController {
 	job: PanelState<{ job: AgentJob }>;
 	observations: ReviewSectionState<ReviewObservation>;
 	feedback: ReviewSectionState<ReviewFeedback>;
+	precompute: PanelState<{ scripts: ReviewPrecompute[] }>;
 	onCancel: () => void;
 	cancelPending: boolean;
 	onRetryResultProcessing: () => void;
@@ -73,6 +80,15 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 			query: { agentJobId: jobId, size: REVIEW_PREVIEW_SIZE },
 		}),
 		refetchInterval: runIsActive ? ACTIVE_REVIEW_POLL_MS : false,
+	});
+
+	// The endpoint shows only the current attempt, and nothing until that attempt ends. Thus, its answer
+	// is final once the job is terminal, and it is asked for only then. A retry starts a new attempt.
+	// When that attempt ends, the query is enabled again, and it asks again only if its last answer is
+	// older than the client's stale time (`QUERY_STALE_TIME_MS`).
+	const precomputeQuery = useQuery({
+		...getAgentJobPrecomputeOptions({ path: { workspaceSlug, jobId } }),
+		enabled: jobQuery.data !== undefined && !runIsActive,
 	});
 
 	// Processing finishes after execution. Reload the outputs when either stage settles, including
@@ -133,6 +149,7 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 			feedbackQuery,
 			runIsActive || jobQuery.data?.deliveryStatus === "PENDING",
 		),
+		precompute: panelState(precomputeQuery, (scripts) => ({ status: "ready" as const, scripts })),
 		onCancel: () => cancelJob.mutate({ path: { workspaceSlug, jobId } }),
 		cancelPending: cancelJob.isPending,
 		onRetryResultProcessing: () => retryResultProcessing.mutate({ path: { workspaceSlug, jobId } }),

@@ -167,6 +167,22 @@ Each practice needs evidence and consequences that match its expectation and the
 1. To see the template, open **State how to verify the change** in the practice editor.
 2. Adapt its structure, not its applicability criteria.
 
+## Precompute script
+
+A practice can have a precompute script: TypeScript that runs before each review of the practice.
+The script points the review at places to check, and it never writes feedback.
+The criteria stay the only standard of the review.
+
+The editor's **Precompute script** section follows **When this practice is reviewed**.
+It is optional, and it opens when the practice has a script.
+The section shows only when Hephaestus reviews the practice, with **AI-supported mentoring**, because only a review runs the script.
+
+If you choose another option under **How this practice is mentored**, the section hides, but the editor keeps the script.
+A note under the options tells you that the script stays in the draft.
+If you choose **AI-supported mentoring** again before you save, the script comes back.
+If you save with another option, Hephaestus removes the script from the practice.
+[Write a precompute script](./precompute-scripts.mdx) tells how to write and try one.
+
 ## Feedback delivery
 
 The editor's **Feedback delivery** section separates delivery from what the practice measures.

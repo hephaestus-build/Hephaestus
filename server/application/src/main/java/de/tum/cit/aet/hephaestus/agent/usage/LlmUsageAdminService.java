@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.YearMonth;
-import java.time.ZoneOffset;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -56,11 +55,11 @@ public class LlmUsageAdminService {
     @WorkspaceAgnostic("Instance-admin spend rollup aggregates across all tenants (spend metadata only)")
     public AdminLlmUsageReportDTO getReport(YearMonth month) {
         LlmBudgetService.MonthWindow window = LlmBudgetService.MonthWindow.of(month);
-        boolean isCurrentMonth = month.equals(YearMonth.now(ZoneOffset.UTC));
+        boolean isCurrentMonth = LlmUsageService.isCurrentMonth(month);
         FxRateInfoDTO fx = fxRateLookup.forMonth(month).orElse(null);
         List<AdminWorkspaceLlmUsageDTO> workspaces =
                 usageRepository.aggregateByWorkspace(window.from(), window.to()).stream()
-                        .map(row -> toRollup(row, isCurrentMonth))
+                        .map(row -> toRollup(row, month, isCurrentMonth))
                         .toList();
         return new AdminLlmUsageReportDTO(month.toString(), fx, workspaces);
     }
@@ -89,7 +88,7 @@ public class LlmUsageAdminService {
     }
 
     private static AdminWorkspaceLlmUsageDTO toRollup(
-            LlmUsageEventRepository.WorkspaceAggregate row, boolean isCurrentMonth) {
+            LlmUsageEventRepository.WorkspaceAggregate row, YearMonth month, boolean isCurrentMonth) {
         LlmBudgetVerdict instanceVerdict = LlmBudgetService.verdictFor(
                 row.getPricedTotalCostUsd(), row.isHasUnpricedInstanceUsage(), row.getMonthlyBudgetUsd());
         LlmBudgetVerdict ownProviderVerdict = LlmBudgetService.verdictFor(
@@ -101,6 +100,7 @@ public class LlmUsageAdminService {
                 row.getByoMonthlyBudgetUsd(),
                 row.getPricedTotalCostUsd(),
                 row.getByoTotalCostUsd(),
+                LlmUsageService.ownProviderInUse(month, row.isOwnProviderConnected(), row.isHasByoUsage()),
                 row.getEvents(),
                 instanceVerdict,
                 ownProviderVerdict,

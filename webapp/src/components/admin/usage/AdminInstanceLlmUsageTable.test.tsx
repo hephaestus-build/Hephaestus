@@ -9,9 +9,11 @@ import type {
 } from "@/api/types.gen";
 
 import {
+	type AdminInstanceUsageView,
 	AdminInstanceLlmUsageTable,
 	type AdminInstanceLlmUsageTableProps,
 } from "./AdminInstanceLlmUsageTable";
+import { NO_PRECOMPUTE_USAGE } from "./fixtures";
 
 const workspace: AdminWorkspaceLlmUsage = {
 	workspaceSlug: "example-workspace",
@@ -23,6 +25,7 @@ const workspace: AdminWorkspaceLlmUsage = {
 	ownProviderTotalCostUsd: 1.75,
 	ownProviderBudgetVerdict: "WITHIN",
 	ownProviderPaused: false,
+	ownProviderInUse: true,
 	events: 3,
 };
 
@@ -44,7 +47,9 @@ const detailReport: WorkspaceLlmUsageReport = {
 	ownProviderTotalCostUsd: 1.75,
 	ownProviderBudgetVerdict: "WITHIN",
 	ownProviderPaused: false,
+	ownProviderInUse: true,
 	unpricedEventCount: 0,
+	...NO_PRECOMPUTE_USAGE,
 	byJobType: [
 		{
 			jobType: "MENTOR_TURN",
@@ -62,31 +67,53 @@ const detailReport: WorkspaceLlmUsageReport = {
 	byDay: [julyFifth],
 };
 
+const DEFAULT_VIEW: AdminInstanceUsageView = { q: "", sort: "sharedSpend", desc: true, page: 0 };
+
 function renderTable(
 	rows: AdminWorkspaceLlmUsage[],
-	overrides: { isCurrentMonth?: boolean; fx?: FxRateInfo } = {},
+	overrides: Partial<AdminInstanceLlmUsageTableProps> = {},
 ) {
 	return render(
 		<AdminInstanceLlmUsageTable
 			rows={rows}
 			month="2026-07"
 			now={new Date("2026-07-10T12:00:00.000Z")}
-			fx={overrides.fx}
-			isCurrentMonth={overrides.isCurrentMonth ?? true}
+			isCurrentMonth
 			isLoading={false}
 			error={null}
+			view={DEFAULT_VIEW}
+			onViewChange={vi.fn()}
 			expandedWorkspaceSlug={null}
 			isDetailLoading={false}
 			detailError={null}
 			onToggleDetails={vi.fn()}
 			onEditSharedModelBudget={vi.fn()}
+			{...overrides}
 		/>,
 	);
 }
 
+/** The cell that holds a limit's meter: its badges and caption sit beside the bar. */
+function capCellOf(meterName: string): HTMLElement {
+	const cell = screen.getByRole("progressbar", { name: meterName }).closest("td");
+	assert(cell, `No cell holds the meter "${meterName}".`);
+	return cell;
+}
+
+function workspaceNames(): (string | null)[] {
+	return screen
+		.getAllByRole("row")
+		.slice(2)
+		.map(
+			(row) =>
+				within(row).getAllByRole("cell")[0]?.querySelector(".font-medium")?.textContent ?? null,
+		);
+}
+
 function firstDataRow(): HTMLElement {
-	const [, dataRow] = screen.getAllByRole("row");
-	assert(dataRow, "The table rendered its header but no workspace row.");
+	// Two header rows: the purse names, then the columns under them.
+	const dataRow = screen.getAllByRole("row")[2];
+	assert(dataRow, "The table rendered its two header rows but no workspace row.");
 	return dataRow;
 }
 
@@ -100,24 +127,10 @@ function rowControlNames() {
 describe("AdminInstanceLlmUsageTable", () => {
 	it("offers an accessible per-workspace detail toggle", () => {
 		const onToggleDetails = vi.fn<AdminInstanceLlmUsageTableProps["onToggleDetails"]>();
-		render(
-			<AdminInstanceLlmUsageTable
-				rows={[workspace]}
-				month="2026-07"
-				now={new Date("2026-07-10T12:00:00.000Z")}
-				isCurrentMonth
-				isLoading={false}
-				error={null}
-				expandedWorkspaceSlug={null}
-				isDetailLoading={false}
-				detailError={null}
-				onToggleDetails={onToggleDetails}
-				onEditSharedModelBudget={vi.fn()}
-			/>,
-		);
+		renderTable([workspace], { onToggleDetails });
 
-		screen.getByRole("columnheader", { name: "Shared-model spend" });
-		screen.getByRole("columnheader", { name: "Provider spend" });
+		screen.getByRole("columnheader", { name: "Shared models" });
+		screen.getByRole("columnheader", { name: "Own provider" });
 		const toggle = screen.getByRole("button", {
 			name: "Details for Example Workspace",
 		});
@@ -134,32 +147,34 @@ describe("AdminInstanceLlmUsageTable", () => {
 			{ ...workspace, ownProviderMonthlyBudgetUsd: 10, ownProviderBudgetVerdict: "WITHIN" },
 		]);
 
-		screen.getByRole("columnheader", { name: "Shared-model budget" });
-		screen.getByRole("columnheader", { name: "Provider cap" });
+		// The host's limit is a budget and the workspace's own is a cap, each named for whose it is.
+		screen.getByRole("columnheader", { name: "Budget (Shared models)" });
+		screen.getByRole("columnheader", { name: "Cap (Own provider)" });
 		const row = within(firstDataRow());
 		row.getByText("$25");
 		row.getByText("$10");
 	});
 
-	it("shows how much of each cap is used, not just whether it is reached", () => {
+	it("shows how much of each limit is used, not just whether it is reached", () => {
 		renderTable([{ ...workspace, instanceMonthlyBudgetUsd: 50, instanceTotalCostUsd: 38.2 }]);
 
 		const row = within(firstDataRow());
-		row.getByText("$38.20 · 76%");
-		row.getByRole("progressbar", { name: "Shared-model budget used by Example Workspace" });
+		row.getByText("$38.20");
+		within(capCellOf("Shared-model budget used by Example Workspace")).getByText("76% used");
 		expect(screen.queryByText("Within budget")).toBeNull();
 	});
 
-	it("warns before the cap is reached", () => {
+	it("warns before the budget is reached", () => {
 		renderTable([{ ...workspace, instanceMonthlyBudgetUsd: 50, instanceTotalCostUsd: 41 }]);
 
-		const row = within(firstDataRow());
-		row.getByText("Near cap · shared models");
 		// The amber tone alone must never carry the state (WCAG SC 1.4.1).
-		row.getByText("$41.00 · 82% · Near cap");
+		const shared = within(capCellOf("Shared-model budget used by Example Workspace"));
+		shared.getByText("82% used");
+		shared.getByText("Near the budget");
+		expect(screen.getAllByText(/^Near the /u)).toHaveLength(1);
 	});
 
-	it("names the cap that paused the workspace", () => {
+	it("names the limit that paused the workspace", () => {
 		renderTable([
 			{
 				...workspace,
@@ -172,9 +187,33 @@ describe("AdminInstanceLlmUsageTable", () => {
 			},
 		]);
 
-		const row = within(firstDataRow());
-		row.getByText("Paused · shared models");
-		row.getByText("Paused · own provider");
+		within(capCellOf("Shared-model budget used by Example Workspace")).getByText("Paused");
+		within(capCellOf("Provider cap used by Example Workspace")).getByText("Paused");
+	});
+
+	it("says which limit cannot be checked because some calls have no price", () => {
+		renderTable([{ ...workspace, instanceBudgetVerdict: "UNVERIFIABLE", instancePaused: true }]);
+
+		const shared = within(capCellOf("Shared-model budget used by Example Workspace"));
+		shared.getByText("Paused");
+		shared.getByText("No price set");
+	});
+
+	it("marks runs with no price on a purse with no budget, rather than reading as $0.00", () => {
+		renderTable([
+			{
+				...workspace,
+				instanceMonthlyBudgetUsd: undefined,
+				instanceTotalCostUsd: 0,
+				instanceBudgetVerdict: "UNVERIFIABLE",
+			},
+		]);
+
+		// Spend, then the budget column: no budget, and the state of the spend beside it.
+		const cells = within(firstDataRow()).getAllByRole("cell");
+		expect(cells[1]?.textContent).toBe("$0.00");
+		expect(cells[2]?.textContent).toBe("—No price set");
+		expect(screen.queryByRole("progressbar", { name: /^Shared-model budget/u })).toBeNull();
 	});
 
 	it("reports a provider-cap pause even when the shared-model budget is untouched", () => {
@@ -189,9 +228,8 @@ describe("AdminInstanceLlmUsageTable", () => {
 			},
 		]);
 
-		const row = within(firstDataRow());
-		row.getByText("Paused · own provider");
-		expect(row.queryByText("Paused · shared models")).toBeNull();
+		within(capCellOf("Provider cap used by Example Workspace")).getByText("Paused");
+		expect(screen.getAllByText("Paused")).toHaveLength(1);
 	});
 
 	it("keeps the provider cap read-only — it is the workspace's own money", () => {
@@ -201,8 +239,17 @@ describe("AdminInstanceLlmUsageTable", () => {
 
 		expect(rowControlNames()).toStrictEqual([
 			"Details for Example Workspace",
-			"Set budget for Example Workspace (shared models)",
+			"Change budget for Example Workspace (shared models)",
 		]);
+	});
+
+	it("names the budget it edits, and whether there is one yet", () => {
+		renderTable([{ ...workspace, instanceMonthlyBudgetUsd: undefined }]);
+
+		const button = within(firstDataRow()).getByRole("button", {
+			name: "Set budget for Example Workspace (shared models)",
+		});
+		expect(button.textContent).toBe("Set budget");
 	});
 
 	it("withdraws the budget editor on a closed month and says why, once, above the table", () => {
@@ -219,23 +266,12 @@ describe("AdminInstanceLlmUsageTable", () => {
 	});
 
 	it("shows daily and run-type breakdowns for the expanded workspace", () => {
-		render(
-			<AdminInstanceLlmUsageTable
-				rows={[workspace]}
-				month="2026-07"
-				now={new Date("2026-07-10T12:00:00.000Z")}
-				isCurrentMonth
-				isLoading={false}
-				error={null}
-				expandedWorkspaceSlug={workspace.workspaceSlug}
-				detailReport={detailReport}
-				isDetailLoading={false}
-				detailError={null}
-				onToggleDetails={vi.fn()}
-				onEditSharedModelBudget={vi.fn()}
-			/>,
-		);
+		renderTable([workspace], {
+			expandedWorkspaceSlug: workspace.workspaceSlug,
+			detailReport,
+		});
 
+		screen.getByRole("heading", { level: 2, name: "Example Workspace" });
 		expect(
 			screen
 				.getByRole("button", { name: "Details for Example Workspace" })
@@ -245,31 +281,19 @@ describe("AdminInstanceLlmUsageTable", () => {
 		within(byJobType).getByText("Heph turn");
 		within(byJobType).getByText("$1.75");
 		const byDay = screen.getByRole("table", { name: "AI spend by day" });
-		within(byDay).getByText("Jul 5");
-		within(byDay).getByText("$4.25");
+		const julyFifthRow = within(byDay).getByRole("row", { name: /^Jul 5/u });
+		expect(
+			within(julyFifthRow)
+				.getAllByRole("cell")
+				.map((cell) => cell.textContent),
+		).toStrictEqual(["Jul 5", "$4.25", "$1.75", "1"]);
 	});
 
 	it("projects a near-cap month in the panel, in the third person the host is reading in", () => {
-		render(
-			<AdminInstanceLlmUsageTable
-				rows={[workspace]}
-				month="2026-07"
-				now={new Date("2026-07-10T12:00:00.000Z")}
-				isCurrentMonth
-				isLoading={false}
-				error={null}
-				expandedWorkspaceSlug={workspace.workspaceSlug}
-				detailReport={{
-					...detailReport,
-					instanceMonthlyBudgetUsd: 50,
-					instanceTotalCostUsd: 42,
-				}}
-				isDetailLoading={false}
-				detailError={null}
-				onToggleDetails={vi.fn()}
-				onEditSharedModelBudget={vi.fn()}
-			/>,
-		);
+		renderTable([workspace], {
+			expandedWorkspaceSlug: workspace.workspaceSlug,
+			detailReport: { ...detailReport, instanceMonthlyBudgetUsd: 50, instanceTotalCostUsd: 42 },
+		});
 
 		screen.getByText("Example Workspace has used 84% of its shared-model budget");
 		screen.getByText(/At this pace, the budget is reached around July 12\./u);
@@ -307,44 +331,113 @@ describe("AdminInstanceLlmUsageTable", () => {
 			expect(screen.queryByText(/reference rate published on/u)).toBeNull();
 		});
 
-		it("hands the table's own rate and the server's own total to the expanded breakdown", () => {
-			render(
-				<AdminInstanceLlmUsageTable
-					rows={[workspace]}
-					month="2026-07"
-					now={new Date("2026-07-10T12:00:00.000Z")}
-					fx={eur}
-					isCurrentMonth
-					isLoading={false}
-					error={null}
-					expandedWorkspaceSlug={workspace.workspaceSlug}
-					detailReport={{
-						...detailReport,
-						fx: { ...eur, currencyCode: "GBP", ratePerUsd: 0.5 },
-						byDay: [
-							julyFifth,
-							{
-								day: new Date("2026-07-06T00:00:00.000Z"),
-								instanceTotalCostUsd: 4.25,
-								ownProviderTotalCostUsd: 1.75,
-								unpricedEventCount: 0,
-								events: 1,
-							},
-						],
-					}}
-					isDetailLoading={false}
-					detailError={null}
-					onToggleDetails={vi.fn()}
-					onEditSharedModelBudget={vi.fn()}
-				/>,
-			);
+		it("keeps the expanded breakdown's total on the server's own figure, in USD", () => {
+			renderTable([workspace], {
+				fx: eur,
+				expandedWorkspaceSlug: workspace.workspaceSlug,
+				detailReport: {
+					...detailReport,
+					fx: { ...eur, currencyCode: "GBP", ratePerUsd: 0.5 },
+					byDay: [
+						julyFifth,
+						{
+							day: new Date("2026-07-06T00:00:00.000Z"),
+							instanceTotalCostUsd: 4.25,
+							ownProviderTotalCostUsd: 1.75,
+							unpricedEventCount: 0,
+							events: 1,
+						},
+					],
+				},
+			});
 
 			const byDay = screen.getByRole("table", { name: "AI spend by day" });
 			const footer = within(byDay).getByRole("row", { name: /^Total/u });
-			expect(footer.textContent).toContain("€");
+			expect(footer.textContent).not.toContain("€");
 			expect(footer.textContent).not.toContain("£");
 			expect(footer.textContent).toContain("$4.25");
 			expect(footer.textContent).not.toContain("$8.50");
+		});
+	});
+
+	describe("the workspaces table", () => {
+		const many: AdminWorkspaceLlmUsage[] = Array.from({ length: 30 }, (_, index) => ({
+			...workspace,
+			workspaceSlug: `ws-${String(index + 1).padStart(2, "0")}`,
+			displayName: `Workspace ${String(index + 1).padStart(2, "0")}`,
+			instanceTotalCostUsd: index + 1,
+			ownProviderTotalCostUsd: 0,
+			ownProviderInUse: false,
+		}));
+
+		it("lists the most shared-model spend first, 25 to a page", () => {
+			renderTable(many);
+
+			const names = workspaceNames();
+			expect(names).toHaveLength(25);
+			expect(names.slice(0, 2)).toStrictEqual(["Workspace 30", "Workspace 29"]);
+			expect(
+				screen
+					.getByRole("columnheader", { name: "Spend (Shared models)" })
+					.getAttribute("aria-sort"),
+			).toBe("descending");
+			screen.getByRole("button", { name: "Go to page 2" });
+		});
+
+		it("shows the page the view names", () => {
+			renderTable(many, { view: { ...DEFAULT_VIEW, page: 1 } });
+
+			expect(workspaceNames()).toStrictEqual([
+				"Workspace 05",
+				"Workspace 04",
+				"Workspace 03",
+				"Workspace 02",
+				"Workspace 01",
+			]);
+		});
+
+		it("reads a page past the last one as the last page", () => {
+			renderTable(many, { view: { ...DEFAULT_VIEW, page: 98 } });
+
+			expect(workspaceNames()).toHaveLength(5);
+			expect(workspaceNames()[0]).toBe("Workspace 05");
+			screen.getByRole("button", { name: "Go to page 1" });
+		});
+
+		it("sorts by shared spend when the address names an own-provider column that is not shown", () => {
+			renderTable(many, { view: { ...DEFAULT_VIEW, sort: "ownProviderSpend", desc: false } });
+
+			expect(workspaceNames().slice(0, 2)).toStrictEqual(["Workspace 30", "Workspace 29"]);
+			expect(
+				screen
+					.getByRole("columnheader", { name: "Spend (Shared models)" })
+					.getAttribute("aria-sort"),
+			).toBe("descending");
+		});
+
+		it("filters by name", () => {
+			renderTable(many, { view: { ...DEFAULT_VIEW, q: "Workspace 17" } });
+
+			expect(workspaceNames()).toStrictEqual(["Workspace 17"]);
+		});
+
+		it("matches names only, not figures", () => {
+			renderTable(many, { view: { ...DEFAULT_VIEW, q: "30.00" } });
+
+			screen.getByText("No workspaces match your search");
+		});
+
+		it("leaves out the own-provider group when no workspace uses its own provider", () => {
+			renderTable(many);
+
+			expect(screen.queryByRole("columnheader", { name: "Own provider" })).toBeNull();
+			expect(screen.queryByRole("columnheader", { name: "Cap (Own provider)" })).toBeNull();
+		});
+
+		it("shows the own-provider group for a provider connected before its first call", () => {
+			renderTable([...many, { ...workspace, ownProviderTotalCostUsd: 0 }]);
+
+			screen.getByRole("columnheader", { name: "Own provider" });
 		});
 	});
 });

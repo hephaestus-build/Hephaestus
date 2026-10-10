@@ -22,9 +22,9 @@ import tools.jackson.databind.ObjectMapper;
  * {@link JobTokenAuthenticationFilter} resolved — one agent job or one mentor session — so no
  * sandbox can drain another's budget, and no workspace's mentor traffic can throttle another's.
  *
- * <p>Runs after authentication and decides nothing about it: a request that carries no
- * {@link ProxyRouting} principal is passed on for the chain's authorization rules to answer, which is
- * what keeps every response on this connector consistent.
+ * <p>Runs after the chain's authorization rules, so a call that its scope refuses spends nothing
+ * from the bucket of the principal that its path routes to. A request that carries no
+ * {@link ProxyRouting} principal is passed on unchanged.
  *
  * <p>A bucket store it cannot reach fails open. The caller is already job-token-authenticated and its
  * spend still has to pass the budget gate, so an unreachable store must not close the sandbox's only

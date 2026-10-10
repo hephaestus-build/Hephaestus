@@ -128,7 +128,7 @@ class ManualReviewRateLimitsTest extends BaseUnitTest {
 
     private ManualReviewRateLimits limits(int cooldownMinutes, int allowance) {
         return new ManualReviewRateLimits(
-                signals, new PracticeReviewProperties(false, cooldownMinutes, allowance, null, 12, 16000));
+                signals, new PracticeReviewProperties(false, cooldownMinutes, allowance, null, 12, 16000, 200_000));
     }
 
     private Optional<SignalStateReason> refusalFrom(ManualReviewRateLimits limits) {

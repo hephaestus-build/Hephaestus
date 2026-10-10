@@ -14,6 +14,7 @@ import type {
 	ReviewObservation,
 	ReviewObservationCounts,
 	ReviewObservationDetail,
+	ReviewPrecompute,
 	ReviewRunSummary,
 	ReviewRunTarget,
 	ReviewSubject,
@@ -1613,3 +1614,109 @@ export const awaitingApprovalFeedback: ReviewFeedback[] = reviewFeedback
 		deliveredAt: undefined,
 		suppressionReason: undefined,
 	}));
+
+// ---------------------------------------------------------------------------------------------
+// What the precompute scripts did before one review: one entry per status the section words.
+
+const decision = { purpose: "PRACTICE_DECISION", need: "REQUIRED", bound: true } as const;
+
+export const reviewPrecompute = {
+	found: {
+		practiceSlug: "thin-controllers",
+		practiceName: "Thin controllers",
+		run: { status: "OK", leads: 3, models: [{ ...decision, notRated: [] }] },
+		durationMs: 4200,
+		models: [
+			{
+				purpose: "PRACTICE_DECISION",
+				tier: "CLOUD",
+				calls: 12,
+				inputTokens: 8400,
+				outputTokens: 96,
+			},
+		],
+	},
+	callsNotRated: {
+		practiceSlug: "errors-carry-context",
+		practiceName: "Errors carry their context",
+		durationMs: 12_840,
+		run: {
+			status: "OK",
+			leads: 0,
+			models: [
+				{
+					...decision,
+					notRated: [
+						{ reason: "DEADLINE", count: 5 },
+						{ reason: "OFF_FORMAT", count: 1 },
+					],
+				},
+				{ purpose: "PRACTICE_EMBEDDING", need: "OPTIONAL", bound: true, notRated: [] },
+			],
+		},
+		models: [
+			{
+				purpose: "PRACTICE_DECISION",
+				tier: "IN_HOUSE",
+				calls: 9,
+				inputTokens: 5100,
+				outputTokens: 40,
+			},
+			{
+				purpose: "PRACTICE_EMBEDDING",
+				tier: "IN_HOUSE",
+				calls: 2,
+				inputTokens: 1800,
+				outputTokens: 0,
+			},
+		],
+	},
+	limitReached: {
+		practiceSlug: "small-pull-requests",
+		practiceName: "Small pull requests",
+		durationMs: 2100,
+		run: {
+			status: "OK",
+			leads: 1,
+			models: [{ ...decision, notRated: [{ reason: "BUDGET", count: 3 }] }],
+		},
+		models: [
+			{
+				purpose: "PRACTICE_DECISION",
+				tier: "CLOUD",
+				calls: 4,
+				inputTokens: 2600,
+				outputTokens: 12,
+			},
+		],
+	},
+	skipped: {
+		practiceSlug: "product-language",
+		practiceName: "Product language",
+		run: { status: "SKIPPED", leads: 0, models: [{ ...decision, bound: false, notRated: [] }] },
+		models: [{ purpose: "PRACTICE_DECISION", calls: 0, inputTokens: 0, outputTokens: 0 }],
+	},
+	failed: {
+		practiceSlug: "tests-name-the-behaviour",
+		practiceName: "Tests name the behaviour",
+		run: { status: "FAILED", leads: 0, models: [] },
+		durationMs: 40,
+		models: [],
+		error:
+			"TypeError: change.files is not iterable at precompute (tests-name-the-behaviour.ts:14:23)",
+	},
+	// The stage stopped before the script reported, so the run names no models and their tiers are
+	// unknown, while the proxy still counted the calls it forwarded.
+	notFinished: {
+		practiceSlug: "decisions-are-written-down",
+		practiceName: "Decisions are written down",
+		run: { status: "NOT_FINISHED", leads: 0, models: [] },
+		models: [{ purpose: "PRACTICE_DECISION", calls: 9, inputTokens: 6300, outputTokens: 54 }],
+	},
+	removedPractice: {
+		practiceSlug: "retired-practice",
+		run: { status: "TIMED_OUT", leads: 2, models: [] },
+		durationMs: 15_000,
+		models: [],
+	},
+} satisfies Record<string, ReviewPrecompute>;

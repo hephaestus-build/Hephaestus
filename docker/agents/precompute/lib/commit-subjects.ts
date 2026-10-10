@@ -4,7 +4,7 @@ import type { ChangeCommit, ChangedFile } from "./change.ts";
 import { contextFile } from "./context.ts";
 import type { Hint } from "./types.ts";
 
-export interface SubjectFacts {
+interface SubjectFacts {
 	sha: string;
 	subject: string;
 	merge: boolean;

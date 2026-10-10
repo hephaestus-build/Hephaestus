@@ -53,6 +53,7 @@ const mockModels: LlmModel[] = [
 		slug: "gpt-5-eu",
 		displayName: "GPT-5",
 		upstreamModelId: "gpt-5",
+		brand: "OPENAI",
 		dataHandlingTier: "CLOUD",
 		operatedBy: "PROVIDER",
 		dataHandlingNote: "EU region, zero-retention agreement renews 2027-01",
@@ -81,8 +82,12 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		connectionDisplayName: "OpenAI production",
-		connectionEnabled: true,
+		connection: {
+			displayName: "OpenAI production",
+			apiProtocol: "openai-responses",
+			purposes: ["PRACTICE_REVIEW", "MENTOR"],
+			enabled: true,
+		},
 		workspaceOptions: [
 			{ id: 10, displayName: "Teaching team", workspaceSlug: "teaching" },
 			{ id: 11, displayName: "Research team", workspaceSlug: "research" },
@@ -109,11 +114,52 @@ export const Default: Story = {
 		);
 		await expect(cells.map((row) => row[1])).toStrictEqual(["In-house", "Cloud", "Not declared"]);
 		await expect(cells.map((row) => row[4])).toStrictEqual(["Ready", "Ready", "Price missing"]);
+		// Only the exception is a badge, and it comes from the readiness registry with its icon.
+		const missing = canvas.getByText("Price missing").closest("[data-slot=badge]");
+		await expect(missing?.querySelector("svg")).not.toBeNull();
+		await expect(canvas.getAllByText("Ready")[0]?.closest("[data-slot=badge]")).toBeNull();
+		// Each name leads with its maker's mark, as everywhere else a model is named.
+		await expect(canvas.getByRole("cell", { name: "GPT-5" }).querySelector("img")).not.toBeNull();
 	},
 };
 
+/**
+ * No model yet: the table keeps its header and says so in one row, the same shape as a workspace's
+ * provider. The one way to add a model is the button above it.
+ */
 export const Empty: Story = {
 	args: { models: [] },
+	play: async ({ canvas }) => {
+		const table = canvas.getByRole("table", { name: "Models on OpenAI production" });
+		await expect(
+			within(table).getByRole("cell", {
+				name: "No models yet. Add a model so workspaces can pick it.",
+			}),
+		).toBeVisible();
+		await expect(canvas.getAllByRole("button", { name: /add model/iu })).toHaveLength(1);
+	},
+};
+
+/**
+ * The API sits on a muted line under the heading, with the mark of each kind of model it serves,
+ * because it decides which purposes the connection's models serve.
+ */
+export const PrecomputeConnection: Story = {
+	args: {
+		connection: {
+			displayName: "Embeddings",
+			apiProtocol: "openai-embeddings",
+			purposes: ["PRACTICE_EMBEDDING"],
+			enabled: true,
+		},
+		models: [],
+	},
+	play: async ({ canvas }) => {
+		const heading = canvas.getByRole("heading", { name: "Models on Embeddings" });
+		await expect(heading).toBeVisible();
+		await expect(heading.nextElementSibling).toHaveTextContent("Embeddings API");
+		await expect(canvas.getByText(", for Embedding model")).toHaveClass("sr-only");
+	},
 };
 
 export const DeleteConfirm: Story = {

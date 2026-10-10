@@ -16,6 +16,7 @@ const connection: LlmConnection = {
 	slug: "custom",
 	displayName: "Custom endpoint",
 	apiProtocol: "openai-completions",
+	purposes: ["PRACTICE_REVIEW", "MENTOR", "PRACTICE_DECISION"],
 	authMode: "BEARER",
 	baseUrl: "https://llm.example.test/v1",
 	enabled: true,
@@ -54,6 +55,67 @@ describe("AdminLlmConnectionFormDialog", () => {
 		screen.getByRole("option", { name: "Azure OpenAI v1" });
 	});
 
+	it("creates a connection for the API the admin chooses", async () => {
+		const onCreate = vi.fn<AdminLlmConnectionFormDialogProps["onCreate"]>();
+		renderDialog({ onCreate });
+		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Embeddings" } });
+		await userEvent.click(screen.getByRole("combobox", { name: "API" }));
+		await userEvent.click(await screen.findByRole("option", { name: "Embeddings API" }));
+		await userEvent.click(screen.getByRole("button", { name: "Add connection" }));
+		expect(onCreate).toHaveBeenCalledWith(
+			expect.objectContaining({ displayName: "Embeddings", apiProtocol: "openai-embeddings" }),
+		);
+	});
+
+	it("creates a Responses API connection unless the admin chooses another API", () => {
+		const onCreate = vi.fn<AdminLlmConnectionFormDialogProps["onCreate"]>();
+		renderDialog({ onCreate });
+		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Chat" } });
+		fireEvent.click(screen.getByRole("button", { name: "Add connection" }));
+		expect(onCreate).toHaveBeenCalledWith(
+			expect.objectContaining({ apiProtocol: "openai-responses" }),
+		);
+	});
+
+	// A precompute endpoint may serve no `/models`, so only that failure is neutral, not an alert.
+	it.each([
+		[
+			"openai-embeddings",
+			404,
+			"No model list at this address. Add the model by its ID. If its calls fail too, check the base URL.",
+			0,
+		],
+		[
+			"openai-embeddings",
+			401,
+			"We could not fetch the model list. The provider answered with HTTP 401.",
+			1,
+		],
+		[
+			"openai-completions",
+			404,
+			"We could not fetch the model list. The provider answered with HTTP 404.",
+			1,
+		],
+	] as const)(
+		"reports a failed probe of a %s connection with HTTP %i as: %s",
+		(apiProtocol, statusCode, text, alerts) => {
+			const onProbeSaved = vi.fn<NonNullable<AdminLlmConnectionFormDialogProps["onProbeSaved"]>>();
+			renderDialog({ editing: { ...connection, apiProtocol }, onProbeSaved });
+			fireEvent.click(screen.getByRole("button", { name: "Test saved connection" }));
+			act(() => {
+				onProbeSaved.mock.calls[0]?.[1].onSuccess({
+					reachable: false,
+					models: [],
+					statusCode,
+					message: `The provider answered with HTTP ${statusCode}.`,
+				});
+			});
+			screen.getByText((content) => content.startsWith(text));
+			expect(screen.queryAllByRole("alert")).toHaveLength(alerts);
+		},
+	);
+
 	it("keeps routing immutable and tests the saved connection with its stored credential", () => {
 		const onUpdate = vi.fn<AdminLlmConnectionFormDialogProps["onUpdate"]>();
 		const onProbe = vi.fn<AdminLlmConnectionFormDialogProps["onProbe"]>();
@@ -61,6 +123,8 @@ describe("AdminLlmConnectionFormDialog", () => {
 		renderDialog({ editing: connection, onUpdate, onProbe, onProbeSaved });
 		expect(screen.getByLabelText<HTMLInputElement>("Base URL").disabled).toBe(true);
 		expect(screen.queryByRole("combobox", { name: "Endpoint preset" })).toBeNull();
+		expect(screen.queryByRole("combobox", { name: "API" })).toBeNull();
+		expect(screen.getByLabelText<HTMLInputElement>("API").value).toBe("Chat Completions API");
 		fireEvent.click(screen.getByRole("button", { name: "Test saved connection" }));
 		expect(onProbeSaved).toHaveBeenCalledWith(connection.id, expect.any(Object));
 		expect(onProbe).not.toHaveBeenCalled();

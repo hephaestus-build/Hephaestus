@@ -32,6 +32,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "integration.scm.gitlab.credentials.GitLabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
             assignment("testconfig.BaseIntegrationTest", "base"),
             assignment("agent.mentor.chat.MentorWorkerSplitIntegrationTest", "mentor-worker-split"),
+            assignment("agent.practice.live.PrecomputeLiveLlmTest", "precompute-live"),
             assignment("notification.AccountDeletionEmailIntegrationTest", "email-capture"),
             assignment("notification.AccountSecurityEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
@@ -72,6 +73,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry(
                     "mentor-worker-split",
                     "server-only role with authenticated worker transport and controlled runner, routing and admission boundaries"),
+            Map.entry(
+                    "precompute-live",
+                    "worker role with the real LLM proxy on a free sandbox gateway port, calling live models"),
             Map.entry(
                     "gitlab-token-lifecycle",
                     "real credential storage, lifecycle locks and attention with only irreversible upstream token rotation mocked"),
@@ -118,6 +122,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
             "StartupBudgetIntegrationTest",
+            "agent.practice.live.PrecomputeLiveLlmTest",
             "core.auth.clientsession.ClientSessionMigratedSchemaTest",
             "integration.schema.ProductionSchemaContractIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
@@ -202,7 +207,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
         Set<String> mergedKeys =
                 fullContextTests.stream().map(this::mergedContextKey).collect(Collectors.toCollection(TreeSet::new));
-        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(19);
+        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(20);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.keySet()).isEqualTo(mergedKeys);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.values())
                 .allSatisfy(reason -> assertThat(reason).isNotBlank());

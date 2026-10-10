@@ -9,10 +9,11 @@ import {
 	LockIcon,
 } from "lucide-react";
 
-import type { AgentBinding, LlmModel, WorkspaceOnboarding } from "@/api/types.gen";
+import type { LlmModel, WorkspaceOnboarding } from "@/api/types.gen";
 import type { Fact } from "@/components/auth/FactList";
 
 import { type StatusDef, type StatusDefs, statusValues } from "@/components/common/status-def";
+import { andList } from "@/lib/text";
 
 export type DataHandlingTier = LlmModel["dataHandlingTier"];
 export type OperatedBy = NonNullable<LlmModel["operatedBy"]>;
@@ -66,20 +67,33 @@ export const DATA_HANDLING_DEFS: Record<DataHandlingTier, DataHandlingDef> = {
 
 export const DATA_HANDLING_TIERS = statusValues(DATA_HANDLING_DEFS);
 
+/** The members an `UNDECLARED` model serves. The tier's own label names the model, not them. */
+export const UNCHOSEN_MEMBERS = "members who have not chosen";
+
+/** "In-house and Cloud members and members who have not chosen", in tier order. */
+export function tierMembersPhrase(tiers: readonly DataHandlingTier[]): string {
+	const ordered = DATA_HANDLING_TIERS.filter((tier) => tiers.includes(tier));
+	const named = ordered
+		.filter((tier) => tier !== "UNDECLARED")
+		.map((tier) => DATA_HANDLING_DEFS[tier].label);
+	const groups = named.length > 0 ? [`${andList.format(named)} members`] : [];
+	if (ordered.includes("UNDECLARED")) {
+		groups.push(UNCHOSEN_MEMBERS);
+	}
+	return andList.format(groups);
+}
+
+/** The members a model misses, as one phrase: "Not set for In-house members". */
+export function notSetForPhrase(tiers: readonly DataHandlingTier[]): string {
+	return `Not set for ${tierMembersPhrase(tiers)}`;
+}
+
 /** Client twin of the server's `DataHandlingFacts.tier()`, for the live form preview. */
 export function deriveDataHandlingTier(operatedBy: OperatedBy | undefined): DataHandlingTier {
 	if (operatedBy === undefined) {
 		return "UNDECLARED";
 	}
 	return operatedBy === "OWN_ORGANISATION" ? "IN_HOUSE" : "CLOUD";
-}
-
-/** `UNDECLARED` sits outside every ceiling: it serves only members who have not chosen. */
-export function tierIsWithin(tier: DataHandlingTier, ceiling: DataHandlingTier): boolean {
-	return (
-		tier !== "UNDECLARED" &&
-		DATA_HANDLING_TIERS.indexOf(tier) <= DATA_HANDLING_TIERS.indexOf(ceiling)
-	);
 }
 
 export const OPERATED_BY_DEFS: StatusDefs<OperatedBy> = {
@@ -165,28 +179,4 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 
 export function memberAiChoiceTitle(choice: MemberAiChoice): string {
 	return MEMBER_AI_CHOICE_DEFS[choice].label;
-}
-
-type RoutableBinding = Pick<AgentBinding, "dataHandlingTier" | "enabled" | "ready">;
-
-/** A null choice can preview only the undeclared slot; the caller checks if answering is required. */
-export function bindingFor<TBinding extends RoutableBinding>(
-	choice: MemberAiChoice | null,
-	bindings: readonly TBinding[],
-): TBinding | undefined {
-	const live = bindings.filter((binding) => binding.enabled && binding.ready);
-	if (choice === null) {
-		return live.find((binding) => binding.dataHandlingTier === "UNDECLARED");
-	}
-	const { ceiling } = MEMBER_AI_CHOICE_DEFS[choice];
-	if (ceiling === null) {
-		return undefined;
-	}
-	return live
-		.filter((binding) => tierIsWithin(binding.dataHandlingTier, ceiling))
-		.sort(
-			(a, b) =>
-				DATA_HANDLING_TIERS.indexOf(b.dataHandlingTier) -
-				DATA_HANDLING_TIERS.indexOf(a.dataHandlingTier),
-		)[0];
 }

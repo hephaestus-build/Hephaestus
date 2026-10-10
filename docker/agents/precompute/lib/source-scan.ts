@@ -20,7 +20,7 @@ export interface Placement {
 	inScope: boolean | null;
 }
 
-export interface SourceScan {
+interface SourceScan {
 	/** The first `maxHints` matching lines; `matched` and `countLabel` count every one. */
 	hints: Hint[];
 	/** Every matching line, shown or not. */
@@ -37,7 +37,7 @@ export interface SourceScan {
 	filesWithoutCheckout: number;
 }
 
-export interface SourceScanOptions {
+interface SourceScanOptions {
 	languages: readonly string[];
 	patterns: readonly SourcePattern[];
 	/** Declarations whose supertypes match are "in scope" — `/\bView\b/` for SwiftUI views. */

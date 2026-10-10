@@ -5,6 +5,7 @@ import {
 	createPaginatedRowModel,
 	createSortedRowModel,
 	globalFilteringFeature,
+	metaHelper,
 	rowPaginationFeature,
 	rowSortingFeature,
 	sortFn_alphanumeric,
@@ -12,6 +13,17 @@ import {
 	sortFn_text,
 	tableFeatures,
 } from "@tanstack/react-table";
+
+/** What a column says about its own header and cells; `DataTableHeader` and the table's body read it. */
+export interface DataTableColumnMeta {
+	/**
+	 * Right-aligned tabular figures, as `TableCell numeric`. The header's sort icon goes before the
+	 * label, so the label ends where the figures do.
+	 */
+	numeric?: boolean;
+	/** Classes for the column's head and cells, such as `w-px` or `hidden lg:table-cell`. */
+	className?: string;
+}
 
 /**
  * The feature set the admin tables are built from. Beyond the always-present core row, column and
@@ -23,18 +35,7 @@ import {
  * want. Leave one out and that column degrades to a case-sensitive `>` comparison, saying so only in
  * a development warning.
  */
-/** How a column lays out: a number column is right-aligned in tabular figures, as `TableCell numeric`. */
-export interface DataTableColumnMeta {
-	numeric?: boolean;
-	/** Width and padding for the column's head and cells, such as `w-px` for a column that fits its content. */
-	className?: string;
-}
-
-/** The type `columnDef.meta` takes; TanStack reads only the slot's type, never its value. */
-const COLUMN_META: DataTableColumnMeta = {};
-
 export const dataTableFeatures = tableFeatures({
-	columnMeta: COLUMN_META,
 	columnFilteringFeature,
 	globalFilteringFeature,
 	rowSortingFeature,
@@ -48,6 +49,7 @@ export const dataTableFeatures = tableFeatures({
 		datetime: sortFn_datetime,
 		text: sortFn_text,
 	},
+	columnMeta: metaHelper<DataTableColumnMeta>(),
 });
 
 export type DataTableFeatures = typeof dataTableFeatures;

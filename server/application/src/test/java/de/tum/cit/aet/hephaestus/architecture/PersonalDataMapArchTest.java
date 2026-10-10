@@ -58,6 +58,10 @@ class PersonalDataMapArchTest {
      * {@code pull_request_requested_reviewers} carry a {@code user_id} and are mapped.
      */
     private static final Set<String> NOT_PERSONAL_DATA = Set.of(
+            // What each precompute script of a job did: a status, counts and model slots, no content or person.
+            "agent_job_precompute_run",
+            // A job's token counters, like the token columns agent_job keeps after a person's erasure.
+            "agent_job_precompute_usage",
             "commit_pull_request",
             "connection",
             "connection_activity",

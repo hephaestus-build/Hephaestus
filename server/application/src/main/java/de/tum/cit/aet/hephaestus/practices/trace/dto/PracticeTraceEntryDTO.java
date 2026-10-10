@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.trace.dto;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeSignalDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.spi.PrecomputeRunDTO;
 import de.tum.cit.aet.hephaestus.practices.trace.PracticeTraceOutcome;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -74,4 +75,32 @@ public record PracticeTraceEntryDTO(
         @Schema(
                 description = "Why prepared feedback was withheld. Non-empty with observations present means we "
                         + "measured and deliberately said nothing.")
-        List<FeedbackSuppressionReason> withheldReasons) {}
+        List<FeedbackSuppressionReason> withheldReasons,
+
+        @Schema(
+                description = "What this practice's precompute script did in the named review; null when the "
+                        + "practice has no script there or the review reported nothing about it")
+        @Nullable
+        PrecomputeRunDTO precompute) {
+
+    /** This entry with the precompute run of the review it names. */
+    public PracticeTraceEntryDTO withPrecompute(@Nullable PrecomputeRunDTO run) {
+        return new PracticeTraceEntryDTO(
+                practiceSlug,
+                practiceName,
+                groupSlug,
+                groupName,
+                autonomy,
+                outcome,
+                explanation,
+                watches,
+                occasionedBy,
+                occasionedById,
+                decidedAt,
+                reviewId,
+                observationCount,
+                deliveredCount,
+                withheldReasons,
+                run);
+    }
+}

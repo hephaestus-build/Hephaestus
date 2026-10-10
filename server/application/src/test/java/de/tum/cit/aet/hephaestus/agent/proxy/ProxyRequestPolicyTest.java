@@ -20,6 +20,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 
 class ProxyRequestPolicyTest extends BaseUnitTest {
@@ -57,7 +59,9 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 7L,
                 8L,
                 1L,
-                new ProxyRouting.BilledAttempt(source, id, 0, BigDecimal.ZERO, "worker-1"));
+                new ProxyRouting.BilledAttempt(source, id, 0, BigDecimal.ZERO, "worker-1"),
+                null,
+                null);
     }
 
     @Test
@@ -76,6 +80,18 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
         assertThat(policy.allows(request(LlmUsageSourceType.AGENT_JOB))).isFalse();
     }
 
+    @ParameterizedTest
+    @EnumSource(
+            value = LlmUsageSourceType.class,
+            names = {"PRECOMPUTE_DECISION", "PRECOMPUTE_EMBEDDING", "PRECOMPUTE_RERANKING"})
+    void shouldCheckAPrecomputeModelAgainstTheReviewedDeveloperWhenItsSlotIsCalled(LlmUsageSourceType source) {
+        var job = new AgentJob();
+        when(jobs.findByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(job));
+        when(reviews.allows(job, model)).thenReturn(true);
+
+        assertThat(policy.allows(request(source))).isTrue();
+    }
+
     @Test
     void shouldUseTheDurableMentorTurnDeveloperNotASuppliedUserId() {
         when(messages.findDeveloperIdByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(20L));
@@ -88,7 +104,16 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
     @Test
     void shouldRequireABillableExecution() {
         var request = new ProxyRouting(
-                "test", "openai-completions", "https://example.invalid", FundingSource.INSTANCE, 7L, 8L, 1L, null);
+                "test",
+                "openai-completions",
+                "https://example.invalid",
+                FundingSource.INSTANCE,
+                7L,
+                8L,
+                1L,
+                null,
+                null,
+                null);
         assertThat(policy.allows(request)).isFalse();
         verifyNoInteractions(jobs, messages, routing, reviews);
     }
