@@ -240,7 +240,9 @@ Generation has read-only permissions.
 
 A separate `workflow_run` publisher submits the
 snapshot without checking out or executing the originating code. Dependency review waits for these
-asynchronous snapshots. The publisher must exist on the default branch before GitHub runs it.
+asynchronous snapshots. Documentation-only Markdown and MDX changes skip this comparison. The full
+dependency vulnerability-policy scan still runs. The publisher must exist on the default branch
+before GitHub runs it.
 
 The first Trivy pass supplies the code-scanning feed.
 SARIF reports every severity regardless of `severity`.

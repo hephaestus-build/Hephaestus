@@ -2763,6 +2763,75 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("dependency reporting excludes only documentation prose and defaults to running", async () => {
+		const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const filter = step(orchestrator, ["jobs", "detect-changes"], "dorny/paths-filter");
+		assert.equal(filter.get("predicate-quantifier"), "some-with-excludes");
+		const filters = parseDocument(String(filter.get("filters")));
+		const patterns = filters.get("dependency-review");
+		assert.ok(isSeq(patterns));
+		assert.deepEqual(patterns.toJSON(), ["**", "!docs/**/*.md", "!docs/**/*.mdx"]);
+
+		const caller = asString(
+			orchestrator.getIn(["jobs", "Security", "with", "dependency_review_changed"]),
+			"dependency review applicability",
+		);
+		const expression = /^\$\{\{(?<body>[\s\S]+)\}\}$/u.exec(caller)?.groups?.body;
+		assert.ok(isSet(expression));
+		const parsed = new Parser(new Lexer(expression).lex().tokens, ["needs"], []).parse();
+		for (const [value, expected] of [
+			["false", false],
+			["true", true],
+			["", true],
+		] as const) {
+			const context: unknown = JSON.parse(
+				JSON.stringify({
+					needs: { "detect-changes": { outputs: { "dependency-review": value } } },
+				}),
+				data.reviver,
+			);
+			assert.ok(context instanceof data.Dictionary);
+			assert.equal(new Evaluator(parsed, context).evaluate().coerceString(), String(expected));
+		}
+
+		const workflow = parseDocument(
+			await readFile(".github/workflows/ci-security-scan.yml", "utf8"),
+		);
+		assert.equal(
+			workflow.getIn(["on", "workflow_call", "inputs", "dependency_review_changed", "default"]),
+			true,
+		);
+		const condition = asString(
+			workflow.getIn(["jobs", "dependency-review", "if"]),
+			"dependency review condition",
+		);
+		const jobCondition = new Parser(
+			new Lexer(condition).lex().tokens,
+			["inputs", "github"],
+			[],
+		).parse();
+		for (const [event, changed, skipped, expected] of [
+			["pull_request", false, "false", false],
+			["pull_request", true, "false", true],
+			["pull_request", true, "true", false],
+			["merge_group", true, "false", false],
+		] as const) {
+			const context: unknown = JSON.parse(
+				JSON.stringify({
+					inputs: { should_skip: skipped, dependency_review_changed: changed },
+					github: { event_name: event },
+				}),
+				data.reviver,
+			);
+			assert.ok(context instanceof data.Dictionary);
+			assert.equal(
+				new Evaluator(jobCondition, context).evaluate().coerceString(),
+				String(expected),
+			);
+		}
+		assert.equal(workflow.getIn(["jobs", "security-scan", "if"]), "inputs.should_skip != 'true'");
+	});
+
 	void test("blocks dependency regressions across the release trust boundary", async () => {
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		const securityConfig = pathFilter(orchestrator, "security-config");
