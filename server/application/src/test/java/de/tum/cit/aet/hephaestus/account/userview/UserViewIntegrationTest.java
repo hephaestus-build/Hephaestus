@@ -9,12 +9,16 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
@@ -53,6 +57,12 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private ActivityEventRepository activityEvents;
+
+    @Autowired
+    private RepositoryRepository repositories;
+
+    @Autowired
+    private RepositoryToMonitorRepository monitoredRepositories;
 
     @Autowired
     @Qualifier("requestMappingHandlerMapping")
@@ -584,9 +594,21 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         };
     }
 
-    /** One review by {@code actor} in the viewed workspace, on a pull request that is not theirs. */
+    /** One review event by {@code actor} in a connected repository of the viewed workspace. */
     private void recordReview(User actor) {
         UUID id = UUID.randomUUID();
+        Repository repository = new Repository();
+        repository.setProvider(actor.getProvider());
+        repository.setNativeId(id.getMostSignificantBits());
+        repository.setName("reviews-" + id);
+        repository.setNameWithOwner("acme/" + repository.getName());
+        repository.setHtmlUrl("https://example.com/" + repository.getNameWithOwner());
+        repository.setDefaultBranch("main");
+        repository = repositories.save(repository);
+        RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(workspace);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitoredRepositories.save(monitor);
         activityEvents.insertIfAbsent(
                 id,
                 "review-" + id,
@@ -594,7 +616,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 Instant.now().minusSeconds(60),
                 actor.getId(),
                 workspace.getId(),
-                null,
+                repository.getId(),
                 ActivityTargetType.REVIEW.getValue(),
                 id.getMostSignificantBits());
     }

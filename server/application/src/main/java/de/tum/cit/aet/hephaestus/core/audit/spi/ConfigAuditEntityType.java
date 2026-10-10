@@ -19,11 +19,12 @@ public enum ConfigAuditEntityType {
     /** Historical only — an earlier spelling of {@link #AGENT_BINDING}. */
     AI_CONFIG_BINDING,
     /**
-     * A member's role or roster visibility: admin-initiated changes, plus role changes org sync applies
+     * A contributor's role or roster visibility: admin-initiated changes, plus role changes org sync applies
      * (actor {@code SYSTEM}). Memberships org sync itself creates or removes are excluded as roster churn
      * that would bury the admin-initiated rows.
      */
     WORKSPACE_ROLE,
+    ACTIVITY_AUTOMATION,
     WORKSPACE_FEATURES,
     WORKSPACE_STATUS,
     /** The workspace's stored SCM access token (rotation only — the value is never recorded). */

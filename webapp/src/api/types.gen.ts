@@ -45,82 +45,106 @@ export type ActivityAction = {
     kind: 'PULL_REQUEST_OPENED' | 'PULL_REQUEST_MERGED' | 'PULL_REQUEST_CLOSED' | 'REVIEW_APPROVED' | 'REVIEW_CHANGES_REQUESTED' | 'REVIEW_COMMENTED' | 'COMMENTED' | 'CODE_COMMENTED' | 'ISSUE_OPENED' | 'ISSUE_CLOSED';
 };
 
-/**
- * Activity in one time bucket of a range
- */
-export type ActivityBucket = {
-    /**
-     * When the bucket starts: midnight of its day, of its week's Monday or of its month's first day, in the requested time zone. The first bucket may start before the range.
-     */
-    start: Date;
-    /**
-     * The activity in the bucket that falls within the range
-     */
-    summary: ActivitySummary;
-};
-
-/**
- * Activity in a time range, in total and over time
- */
-export type ActivityOverview = {
-    /**
-     * How long each bucket is
-     */
-    bucket: TimeBucketSize;
-    /**
-     * Every bucket the range touches, oldest first, including those without activity
-     */
-    buckets: Array<ActivityBucket>;
-    /**
-     * The activity in the range; the buckets' summaries add up to it
-     */
-    summary: ActivitySummary;
-};
-
-/**
- * Counts of activity in a time range. Each count is the sum of that kind's counts in the work list for the same scope and range.
- */
-export type ActivitySummary = {
-    /**
-     * Reviews that approved
-     */
+export type ActivityBreakdown = {
     approvals: number;
-    /**
-     * Reviews that requested changes
-     */
     changeRequests: number;
-    /**
-     * Comments on lines of code
-     */
     codeComments: number;
-    /**
-     * Reviews that only commented
-     */
     commentReviews: number;
-    /**
-     * Comments in pull request and issue conversations
-     */
-    comments: number;
-    /**
-     * Issues closed; a closed issue counts for its author
-     */
+    discussionComments: number;
     issuesClosed: number;
-    /**
-     * Issues opened
-     */
-    issuesOpened: number;
-    /**
-     * Pull requests closed without merging
-     */
     pullRequestsClosed: number;
-    /**
-     * Pull requests merged; a merge counts for the pull request's author
-     */
+};
+
+export type ActivityCounts = {
+    activeWeeks: number;
+    comments: number;
+    contributions: number;
+    issuesOpened: number;
+    peopleHelped: number;
     pullRequestsMerged: number;
-    /**
-     * Pull requests opened
-     */
     pullRequestsOpened: number;
+    pullRequestsReviewed: number;
+};
+
+/**
+ * Completion comes from backfill checkpoints, not the presence of ledger events.
+ */
+export type ActivityCoverage = {
+    completeRepositories: number;
+    since?: Date;
+    totalRepositories: number;
+};
+
+/**
+ * Identifiers refer only to the people in the same response.
+ */
+export type ActivityHighlights = {
+    firstContributors: Array<number>;
+    mostPeopleHelped: Array<number>;
+};
+
+export type ActivityPeople = {
+    automation: Array<ActivityPerson>;
+    coverage: ActivityCoverage;
+    from: Date;
+    highlights: ActivityHighlights;
+    people: Array<ActivityPerson>;
+    repositories: Array<ActivityRepository>;
+    teams: Array<ActivityTeam>;
+    to: Date;
+};
+
+export type ActivityPerson = {
+    automation: boolean;
+    counts: ActivityCounts;
+    firstContributionAt?: Date;
+    person: UserInfo;
+    weeks: Array<ActivitySparklineWeek>;
+};
+
+export type ActivityPersonDetail = {
+    automation: boolean;
+    breakdown: ActivityBreakdown;
+    counts: ActivityCounts;
+    firstContributionAt?: Date;
+    from: Date;
+    person: UserInfo;
+    repositories: Array<ActivityRepositoryCounts>;
+    to: Date;
+    weeks: Array<ActivityWeek>;
+};
+
+/**
+ * The full provider path avoids collisions between repositories with the same name.
+ */
+export type ActivityRepository = {
+    id: number;
+    key: string;
+    name: string;
+};
+
+export type ActivityRepositoryCounts = {
+    breakdown: ActivityBreakdown;
+    counts: ActivityCounts;
+    repository: ActivityRepository;
+};
+
+export type ActivitySparklineWeek = {
+    contributions: number;
+    start: Date;
+};
+
+export type ActivityTeam = {
+    id: number;
+    key: string;
+    name: string;
+    parentId?: number;
+};
+
+export type ActivityWeek = {
+    breakdown: ActivityBreakdown;
+    counts: ActivityCounts;
+    start: Date;
 };
 
 /**
@@ -824,7 +848,7 @@ export type ConfigAuditEntryView = {
      */
     elevatedViaInstanceAdmin: boolean;
     entityId?: string;
-    entityType?: 'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL';
+    entityType?: 'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'ACTIVITY_AUTOMATION' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL';
     id?: number;
     newValue?: string;
     occurredAt?: Date;
@@ -2715,20 +2739,6 @@ export type LoginProviderView = {
     seededFromEnv?: boolean;
     type: string;
     updatedAt: Date;
-};
-
-/**
- * One member and their activity in a time range
- */
-export type MemberActivity = {
-    /**
-     * The member's activity
-     */
-    summary: ActivitySummary;
-    /**
-     * The member
-     */
-    user: UserInfo;
 };
 
 export type MemberAiChoiceRequest = {
@@ -5815,6 +5825,10 @@ export type TeamInfo = {
      * Repositories the team has access to
      */
     repositories: Array<RepositoryInfo>;
+    /**
+     * Stable team key for URL filters
+     */
+    slug: string;
 };
 
 /**
@@ -7411,7 +7425,7 @@ export type AdminListConfigAuditEventsData = {
         workspaceId?: number;
         page?: number;
         size?: number;
-        entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+        entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'ACTIVITY_AUTOMATION' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
         entityId?: string;
         changedKey?: string;
         action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;
@@ -9781,57 +9795,6 @@ export type GetWorkspaceResponses = {
 
 export type GetWorkspaceResponse = GetWorkspaceResponses[keyof GetWorkspaceResponses];
 
-export type ListMemberActivityData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-    };
-    query?: {
-        /**
-         * A team, with its visible sub-teams; omit for everyone
-         */
-        teamId?: number;
-        /**
-         * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
-         */
-        from?: Date;
-        /**
-         * Exclusive upper bound; defaults to now
-         */
-        to?: Date;
-    };
-    url: '/workspaces/{workspaceSlug}/activity/members';
-};
-
-export type ListMemberActivityErrors = {
-    /**
-     * Invalid range
-     */
-    400: ProblemDetail;
-    /**
-     * The caller is not a member of the workspace
-     */
-    403: ProblemDetail;
-    /**
-     * Team not found
-     */
-    404: ProblemDetail;
-};
-
-export type ListMemberActivityError = ListMemberActivityErrors[keyof ListMemberActivityErrors];
-
-export type ListMemberActivityResponses = {
-    /**
-     * Members listed
-     */
-    200: Array<MemberActivity>;
-};
-
-export type ListMemberActivityResponse = ListMemberActivityResponses[keyof ListMemberActivityResponses];
-
 export type GetOpenWorkData = {
     body?: never;
     path: {
@@ -9850,11 +9813,15 @@ export type GetOpenWorkData = {
 
 export type GetOpenWorkErrors = {
     /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
      * The caller is not a member of the workspace
      */
     403: ProblemDetail;
     /**
-     * Member not found
+     * Workspace, contributor, team or repository not found
      */
     404: ProblemDetail;
 };
@@ -9870,7 +9837,7 @@ export type GetOpenWorkResponses = {
 
 export type GetOpenWorkResponse = GetOpenWorkResponses[keyof GetOpenWorkResponses];
 
-export type GetActivitySummaryData = {
+export type GetActivityPeopleData = {
     body?: never;
     path: {
         /**
@@ -9880,32 +9847,20 @@ export type GetActivitySummaryData = {
     };
     query?: {
         /**
-         * The member; omit for everyone
+         * Activity range
          */
-        login?: string;
-        /**
-         * A team, with its visible sub-teams; omit for the workspace
-         */
-        teamId?: number;
-        /**
-         * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
-         */
+        range?: '30d' | '90d' | '1y' | 'all' | 'custom';
         from?: Date;
-        /**
-         * Exclusive upper bound; defaults to now
-         */
         to?: Date;
-        /**
-         * The IANA time zone whose midnights start the buckets, such as Europe/Berlin
-         */
-        zone?: string;
+        team?: string;
+        repo?: Array<string>;
     };
-    url: '/workspaces/{workspaceSlug}/activity/summary';
+    url: '/workspaces/{workspaceSlug}/activity/people';
 };
 
-export type GetActivitySummaryErrors = {
+export type GetActivityPeopleErrors = {
     /**
-     * Invalid range or time zone
+     * A request parameter is not valid
      */
     400: ProblemDetail;
     /**
@@ -9913,21 +9868,170 @@ export type GetActivitySummaryErrors = {
      */
     403: ProblemDetail;
     /**
-     * Member or team not found
+     * Workspace, contributor, team or repository not found
      */
     404: ProblemDetail;
 };
 
-export type GetActivitySummaryError = GetActivitySummaryErrors[keyof GetActivitySummaryErrors];
+export type GetActivityPeopleError = GetActivityPeopleErrors[keyof GetActivityPeopleErrors];
 
-export type GetActivitySummaryResponses = {
+export type GetActivityPeopleResponses = {
     /**
-     * Activity counted
+     * Contributors counted
      */
-    200: ActivityOverview;
+    200: ActivityPeople;
 };
 
-export type GetActivitySummaryResponse = GetActivitySummaryResponses[keyof GetActivitySummaryResponses];
+export type GetActivityPeopleResponse = GetActivityPeopleResponses[keyof GetActivityPeopleResponses];
+
+export type GetActivityPersonData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        userId: number;
+    };
+    query?: {
+        /**
+         * Activity range
+         */
+        range?: '30d' | '90d' | '1y' | 'all' | 'custom';
+        from?: Date;
+        to?: Date;
+        team?: string;
+        repo?: Array<string>;
+    };
+    url: '/workspaces/{workspaceSlug}/activity/people/{userId}';
+};
+
+export type GetActivityPersonErrors = {
+    /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
+     * The caller is not a member of the workspace
+     */
+    403: ProblemDetail;
+    /**
+     * Workspace, contributor, team or repository not found
+     */
+    404: ProblemDetail;
+};
+
+export type GetActivityPersonError = GetActivityPersonErrors[keyof GetActivityPersonErrors];
+
+export type GetActivityPersonResponses = {
+    /**
+     * Contributor activity counted
+     */
+    200: ActivityPersonDetail;
+};
+
+export type GetActivityPersonResponse = GetActivityPersonResponses[keyof GetActivityPersonResponses];
+
+export type UpdateActivityAutomationData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        userId: number;
+    };
+    query: {
+        treatAsAutomation: boolean;
+    };
+    url: '/workspaces/{workspaceSlug}/activity/people/{userId}/automation';
+};
+
+export type UpdateActivityAutomationErrors = {
+    /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
+     * The caller is not a member of the workspace
+     */
+    403: ProblemDetail;
+    /**
+     * Workspace, contributor, team or repository not found
+     */
+    404: ProblemDetail;
+};
+
+export type UpdateActivityAutomationError = UpdateActivityAutomationErrors[keyof UpdateActivityAutomationErrors];
+
+export type UpdateActivityAutomationResponses = {
+    /**
+     * Automation classification updated
+     */
+    204: void;
+};
+
+export type UpdateActivityAutomationResponse = UpdateActivityAutomationResponses[keyof UpdateActivityAutomationResponses];
+
+export type GetActivityPersonWorkData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        userId: number;
+    };
+    query?: {
+        /**
+         * Activity range
+         */
+        range?: '30d' | '90d' | '1y' | 'all' | 'custom';
+        from?: Date;
+        to?: Date;
+        team?: string;
+        repo?: Array<string>;
+        /**
+         * Kinds of activity to list (repeatable); omit for every kind
+         */
+        kinds?: Array<'PULL_REQUEST_OPENED' | 'PULL_REQUEST_MERGED' | 'PULL_REQUEST_CLOSED' | 'REVIEW_APPROVED' | 'REVIEW_CHANGES_REQUESTED' | 'REVIEW_COMMENTED' | 'COMMENTED' | 'CODE_COMMENTED' | 'ISSUE_OPENED' | 'ISSUE_CLOSED'>;
+        /**
+         * The previous page's nextCursor; omit for the first page
+         */
+        cursor?: string;
+        /**
+         * Page size from 1 to 100; defaults to 30
+         */
+        size?: number;
+    };
+    url: '/workspaces/{workspaceSlug}/activity/people/{userId}/work';
+};
+
+export type GetActivityPersonWorkErrors = {
+    /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
+     * The caller is not a member of the workspace
+     */
+    403: ProblemDetail;
+    /**
+     * Workspace, contributor, team or repository not found
+     */
+    404: ProblemDetail;
+};
+
+export type GetActivityPersonWorkError = GetActivityPersonWorkErrors[keyof GetActivityPersonWorkErrors];
+
+export type GetActivityPersonWorkResponses = {
+    /**
+     * One page of contributor work
+     */
+    200: ActivityWorkPage;
+};
+
+export type GetActivityPersonWorkResponse = GetActivityPersonWorkResponses[keyof GetActivityPersonWorkResponses];
 
 export type GetActivityWorkData = {
     body?: never;
@@ -9938,21 +10042,14 @@ export type GetActivityWorkData = {
         workspaceSlug: string;
     };
     query?: {
-        /**
-         * The member; omit for everyone
-         */
         login?: string;
+        team?: string;
+        repo?: Array<string>;
         /**
-         * A team, with its visible sub-teams; omit for the workspace
+         * Activity range
          */
-        teamId?: number;
-        /**
-         * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
-         */
+        range?: '30d' | '90d' | '1y' | 'all' | 'custom';
         from?: Date;
-        /**
-         * Exclusive upper bound; defaults to now
-         */
         to?: Date;
         /**
          * Kinds of activity to list (repeatable); omit for every kind
@@ -9972,7 +10069,7 @@ export type GetActivityWorkData = {
 
 export type GetActivityWorkErrors = {
     /**
-     * Invalid range, kind, cursor or size
+     * A request parameter is not valid
      */
     400: ProblemDetail;
     /**
@@ -9980,7 +10077,7 @@ export type GetActivityWorkErrors = {
      */
     403: ProblemDetail;
     /**
-     * Member or team not found
+     * Workspace, contributor, team or repository not found
      */
     404: ProblemDetail;
 };
@@ -10210,7 +10307,7 @@ export type ListWorkspaceConfigAuditEventsData = {
     query?: {
         page?: number;
         size?: number;
-        entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+        entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'ACTIVITY_AUTOMATION' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
         entityId?: string;
         changedKey?: string;
         action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-
-import type { ActivityBucket, ActivitySummary } from "@/api/types.gen";
+import type { ActivitySummary, ActivityBucket } from "@/components/activity/activity-view";
 
 import {
 	averagePerBucket,

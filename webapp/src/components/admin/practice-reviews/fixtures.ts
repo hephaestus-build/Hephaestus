@@ -21,7 +21,10 @@ import type {
 } from "@/api/types.gen";
 import { EMPTY_REVIEW_SETTINGS } from "@/components/admin/practice-editor/review-settings";
 
-import { ACTIVITY_RANGE_DEFS, rangeStart } from "@/components/activity/activity-range";
+import {
+	REVIEW_RANGE_DEFS,
+	reviewRangeStart,
+} from "@/components/admin/practice-reviews/review-range";
 import { ARTIFACT_KIND, type KnownArtifactKind } from "@/lib/artifact-kinds";
 import { toDayParam } from "@/lib/date-range-search";
 import { hasText } from "@/lib/text";
@@ -1511,8 +1514,8 @@ export const practiceCounts: PracticeReviewCounts[] = [
 	countsOf("product-language", observationCounts(0, 1, 1, 0), {}),
 ];
 
-const OVERVIEW_DAYS = ACTIVITY_RANGE_DEFS["30d"].days;
-const OVERVIEW_FROM = rangeStart(STORY_NOW, "30d");
+const OVERVIEW_DAYS = REVIEW_RANGE_DEFS["30d"].days;
+const OVERVIEW_FROM = reviewRangeStart(STORY_NOW, "30d");
 
 /**
  * Day by day, oldest first, with quiet weekends and a busy stretch so the bars look like a team's.

@@ -11,7 +11,8 @@ import {
 	IssueOpenedIcon,
 } from "@primer/octicons-react";
 
-import type { ActivityAction, ActivitySummary } from "@/api/types.gen";
+import type { ActivityAction } from "@/api/types.gen";
+import type { ActivitySummary } from "@/components/activity/activity-view";
 import {
 	GitLabCheckCircleIcon,
 	GitLabCodeIcon,
@@ -63,7 +64,7 @@ export interface ActivityKindDef {
 	chip: "label" | "count";
 	/** What one or many of it are, for accessible names and Markdown: "3 comments on code". */
 	noun: (provider: ProviderType) => Noun;
-	summaryField: keyof ActivitySummary;
+	summaryField: Exclude<keyof ActivitySummary, "pullRequestsReviewed" | "totalComments">;
 	/**
 	 * Whom it counts for. A review, a comment or an opening is the actor's own doing; a merge or a
 	 * close is counted for the work's author, who is not necessarily the person who merged or closed it.
@@ -247,7 +248,21 @@ export function summaryActions(
 
 /** How often `kinds` happened in a summary, together. */
 export function kindsTotal(summary: ActivitySummary, kinds: readonly ActivityKind[]): number {
-	return kinds.reduce((sum, kind) => sum + summary[ACTIVITY_KIND_DEFS[kind].summaryField], 0);
+	let count = kinds.reduce((sum, kind) => sum + summary[ACTIVITY_KIND_DEFS[kind].summaryField], 0);
+	if (
+		summary.pullRequestsReviewed !== undefined &&
+		REVIEW_KINDS.every((kind) => kinds.includes(kind))
+	) {
+		count +=
+			summary.pullRequestsReviewed -
+			REVIEW_KINDS.reduce((sum, kind) => sum + summary[ACTIVITY_KIND_DEFS[kind].summaryField], 0);
+	}
+	if (summary.totalComments !== undefined && COMMENT_KINDS.every((kind) => kinds.includes(kind))) {
+		count +=
+			summary.totalComments -
+			COMMENT_KINDS.reduce((sum, kind) => sum + summary[ACTIVITY_KIND_DEFS[kind].summaryField], 0);
+	}
+	return count;
 }
 
 /**

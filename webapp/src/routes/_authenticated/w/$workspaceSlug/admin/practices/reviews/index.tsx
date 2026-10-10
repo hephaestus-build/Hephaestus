@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { listPracticesOptions } from "@/api/@tanstack/react-query.gen";
-import { rangeStart } from "@/components/activity/activity-range";
 import { PracticeReviewOverviewPage } from "@/components/admin/practice-reviews/PracticeReviewOverviewPage";
 import { rangeScope } from "@/components/admin/practice-reviews/review-outcomes";
+import { reviewRangeStart } from "@/components/admin/practice-reviews/review-range";
 import { reviewRunningTone } from "@/components/admin/practices/review/review-readiness";
 import { ReviewRunningBanner } from "@/components/admin/practices/review/ReviewRunningBanner";
 import { InlineLink } from "@/components/common/InlineLink";
@@ -26,7 +26,7 @@ function PracticeReviewOverviewRoute() {
 	const { range } = Route.useSearch();
 	const setSearch = useSearchState();
 	const nowMs = useNow();
-	const from = rangeStart(nowMs, range);
+	const from = reviewRangeStart(nowMs, range);
 	const scope = rangeScope(from, nowMs);
 	const overview = usePracticeReviewOverview(workspaceSlug, from);
 	const previousPeriod = usePreviousReviewPeriod(workspaceSlug, from, range);

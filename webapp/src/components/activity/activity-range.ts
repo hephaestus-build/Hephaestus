@@ -3,32 +3,25 @@ import { startOfDay, subDays } from "date-fns";
 import type { FilterOption } from "@/components/common/FilterToggle";
 
 /** How far back a summary looks, always ending now. */
-export const ACTIVITY_RANGES = ["7d", "30d", "90d", "1y"] as const;
+export const ACTIVITY_RANGES = ["30d", "90d", "1y"] as const;
 
 export type ActivityRange = (typeof ACTIVITY_RANGES)[number];
 
-export const DEFAULT_ACTIVITY_RANGE: ActivityRange = "7d";
+export const DEFAULT_ACTIVITY_RANGE: ActivityRange = "90d";
 
 interface ActivityRangeDef {
 	days: number;
-	/** "Last 7 days": the range as a control or a caption names it. */
+	/** "Last 30 days": the range as a control or a caption names it. */
 	label: string;
-	/** "7 days": the toggle row's chip, where width is the constraint. */
+	/** "30 days": the toggle row's chip, where width is the constraint. */
 	shortLabel: string;
-	/** "the last 7 days": the range inside a sentence, after "in". */
+	/** "the last 30 days": the range inside a sentence, after "in". */
 	inSentence: string;
-	/** "the previous 7 days": the period of the same length before, which a figure is set against. */
+	/** "the previous 30 days": the period of the same length before, which a figure is set against. */
 	previous: string;
 }
 
 export const ACTIVITY_RANGE_DEFS = {
-	"7d": {
-		days: 7,
-		label: "Last 7 days",
-		shortLabel: "7 days",
-		inSentence: "the last 7 days",
-		previous: "the previous 7 days",
-	},
 	"30d": {
 		days: 30,
 		label: "Last 30 days",

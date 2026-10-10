@@ -8,12 +8,12 @@ import {
 	listPracticeProfileReviewRunsInfiniteQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { CreateReviewRequest, ProfileReviewRun, ReviewedWorkRef } from "@/api/types.gen";
-import { rangeStart } from "@/components/activity/activity-range";
 import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
 import { panelState } from "@/components/common/panel-state";
 import { useNow } from "@/components/common/use-now";
 import {
 	PROFILE_REVIEWS_PAGE_SIZE,
+	reviewRangeStart,
 	type ReviewTimeframe,
 } from "@/components/practice-profile/practice-profile-search";
 import type { ProfileReviewDetailState } from "@/components/practice-profile/ProfileReviewLevel";
@@ -61,7 +61,7 @@ export function usePracticeProfileReviewRuns({
 			query: {
 				size: PROFILE_REVIEWS_PAGE_SIZE,
 				kind,
-				since: since === undefined ? undefined : rangeStart(now, since),
+				since: since === undefined ? undefined : reviewRangeStart(now, since),
 			},
 		}),
 		...slicePageParams,

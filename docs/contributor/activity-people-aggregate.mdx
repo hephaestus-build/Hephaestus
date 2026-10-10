@@ -1,0 +1,108 @@
+---
+title: Activity people aggregate
+description: Contributor scope and query contracts for activity reads.
+---
+
+# Activity people aggregate
+
+[ADR 0052](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0052-activity-sorts-by-contributions-and-can-be-public.md) defines the contribution counts and visibility policy.
+The activity ledger owns the counts.
+The people response has one row per contributor with activity in the selected range.
+The browser sorts these rows.
+The server does not rank or page them.
+
+## Scope and access
+
+The table includes all contributors, not only workspace members.
+Provider bots and accounts classified as automation appear in a separate list.
+Hidden members and hidden former members are absent from both lists.
+A signed-in member can still read their own detail and work list.
+Every activity endpoint requires sign-in and workspace membership.
+The legacy public-workspace flag grants no anonymous activity access.
+
+Team keys use the provider's team slug.
+Repository keys use the full provider path, such as `ls1intum/Artemis`.
+The full path distinguishes repositories with the same name.
+The response supplies keys and display names.
+The teams endpoint also supplies each team's slug.
+One visible team hierarchy resolves the selected team and its sub-teams.
+Unknown keys are rejected.
+
+Aggregate, detail and work reads use one repeatable-read snapshot per request.
+Counts, metadata and coverage cannot mix states from concurrent repository changes or backfill commits.
+The selected repository identifiers constrain range counts, first-contribution dates, earliest history and coverage.
+An empty repository scope returns no repository activity.
+A future public reader can supply only public repository identifiers without changing these queries.
+First-contribution highlights require complete selected-repository coverage and a range start after its known start.
+Their lifetime lookup uses the same team and repository filters as the range counts.
+
+An automation classification grants no membership or permission.
+An admin can set or reset it.
+A provider bot remains automation after a reset.
+Classification has its own configuration-audit subject.
+The classification and its audit subject participate in person erasure and workspace purge.
+Writes take capture admission and the native-identity write fence before the workspace lock.
+Erasure admission and failed erasure requests block new associations.
+
+## Ranges and response shape
+
+Ranges are half-open: `[from, to)`.
+The default is 90 days.
+The other presets are 30 days, 365 days and all available history.
+Custom ranges have explicit start and end bounds.
+All time serves full history; there is no range-width cap.
+The OpenAPI contract enumerates the accepted preset values.
+
+The list carries headline counts and a sparse UTC weekly contribution series.
+It does not carry per-type or per-repository breakdowns.
+`/activity/people/{userId}` supplies weekly counts and breakdowns by type and repository.
+Headline fields and type-breakdown fields have separate homes.
+A visible contributor with no activity in the range has zero counts and empty lists.
+Other hidden and unrelated people return not found.
+
+`/activity/people/{userId}/work` accepts the same range and readable filters.
+It uses the opaque cursor and page-size bounds.
+Each later page keeps the first page's range end.
+It checks contributor visibility without computing their aggregate.
+The bundled webapp reads personal counts from the per-person endpoint.
+Workspace views share one current aggregate and at most one previous-period aggregate.
+Team-key resolution reads the teams data, not another activity aggregate.
+The old summary and member-list endpoints and DTOs are removed.
+
+## Query structure
+
+The people query deduplicates ledger targets once with `DISTINCT ON`.
+Window markers identify distinct reviewed pull requests and helped authors, in the range and per week.
+Filtered row counts replace repeated distinct aggregates.
+The list groups by person and by person-week.
+Only a one-person detail request also groups by repository.
+
+The timeline selects page identifiers and timestamps before counting types and actors.
+Only the selected groups enter that aggregation.
+The latest-work selection still reads the range; there is no rollup table.
+A materialized HQL common table expression shares the normalized event read.
+The review join excludes self-reviews and retains reviews whose author is unknown.
+Performance measurements belong in the pull request body, not this contract.
+
+The covering index has the keys `(workspace_id, occurred_at)`.
+It includes actor, event type, target type, target identifier and repository identifier.
+The workspace-and-actor index serves first-contribution reads.
+The workspace-and-target index serves ledger repair.
+The global actor and target indexes serve other ledger operations.
+Only the baseline index with the same workspace-and-time keys is redundant.
+Liquibase's Hibernate comparison does not retain `INCLUDE` columns.
+The covering index is excluded from that comparison by its exact name.
+The production schema contract verifies its keys, included columns and removal of the baseline index.
+
+## Sources
+
+- [PostgreSQL: SELECT and grouping sets](https://www.postgresql.org/docs/18/sql-select.html).
+- [PostgreSQL: window functions](https://www.postgresql.org/docs/18/functions-window.html).
+- [PostgreSQL: execution plans](https://www.postgresql.org/docs/current/using-explain.html).
+- [PostgreSQL: covering indexes](https://www.postgresql.org/docs/current/indexes-index-only-scans.html).
+- [PostgreSQL: CTE materialization](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION).
+- [PostgreSQL: transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html).
+- [Hibernate: HQL common table expressions](https://docs.hibernate.org/orm/7.4/querylanguage/html_single/).
+- [Spring Data: native projections](https://docs.spring.io/spring-data/jpa/reference/repositories/projections.html).
+- [Spring Security: anonymous authentication](https://docs.spring.io/spring-security/reference/servlet/authentication/anonymous.html).
+- [Liquibase: object filters](https://docs.liquibase.com/community/user-guide-5-0/how-do-i-include-and-exclude-database-objects).

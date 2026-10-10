@@ -28,6 +28,7 @@ const team: TeamInfo = {
 	hidden: false,
 	membershipCount: 5,
 	repoPermissionCount: 3,
+	slug: "team-1",
 	repositories: [repo],
 	members: [],
 	labels: [

@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 
 import type { Practice } from "@/api/types.gen";
 import {
-	ACTIVITY_RANGE_DEFS,
-	type ActivityRange,
-	ACTIVITY_RANGE_OPTIONS,
-} from "@/components/activity/activity-range";
+	REVIEW_RANGE_DEFS,
+	type ReviewRange,
+	REVIEW_RANGE_OPTIONS,
+} from "@/components/admin/practice-reviews/review-range";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RangeControls } from "@/components/common/RangeControls";
 import { Section } from "@/components/layout/Section";
@@ -18,8 +18,8 @@ import { ReviewPipeline } from "./ReviewPipeline";
 
 export interface PracticeReviewOverviewPageProps {
 	workspaceSlug: string;
-	range: ActivityRange;
-	onRangeChange: (range: ActivityRange) => void;
+	range: ReviewRange;
+	onRangeChange: (range: ReviewRange) => void;
 	/** The range as the lists' day filters, so every count opens the rows it counts. */
 	scope: OutcomeScope;
 	overview: PracticeReviewOverviewState;
@@ -48,13 +48,13 @@ export function PracticeReviewOverviewPage({
 	practices,
 	banner,
 }: PracticeReviewOverviewPageProps) {
-	const rangeDef = ACTIVITY_RANGE_DEFS[range];
+	const rangeDef = REVIEW_RANGE_DEFS[range];
 	return (
 		<div className="space-y-10">
 			<div className="space-y-4">
 				<div className="flex justify-end">
 					<RangeControls
-						options={ACTIVITY_RANGE_OPTIONS}
+						options={REVIEW_RANGE_OPTIONS}
 						range={range}
 						onRangeChange={onRangeChange}
 						updating={overview.status === "ready" && overview.stale}
