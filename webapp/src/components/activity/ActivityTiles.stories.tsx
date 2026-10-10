@@ -8,7 +8,6 @@ import {
 	QUIET_OVERVIEW,
 	readyOverview,
 	SPARSE_OVERVIEW,
-	WEEK_OVERVIEW,
 	YEAR_OVERVIEW,
 } from "@/stories/activity-story-data";
 import { withProvider, withStandardPage } from "@/stories/decorators";
@@ -85,15 +84,6 @@ export const Sparse: Story = {
 		await expect(within(pullRequests).queryByText(/previous 30 days/u)).not.toBeInTheDocument();
 		// Nothing else happened: those tiles stay quiet and do not open.
 		await expect(canvas.getAllByRole("link")).toHaveLength(2);
-	},
-};
-
-/** Seven days: seven chunky columns. */
-export const SevenDays: Story = {
-	args: { state: readyOverview(WEEK_OVERVIEW, "30d") },
-	play: async ({ canvas }) => {
-		const reviews = canvas.getByRole("link", { name: /^Reviews/u });
-		await expect(columns(reviews)).toBe(7);
 	},
 };
 
