@@ -29,6 +29,8 @@ export interface PersonActivityLevelProps {
 	workLog: ActivityWorkLogState;
 	/** An admin's way to count the account as automation or as a person, where they may. */
 	automationAction?: ReactElement;
+	/** An admin's way to leave the person out of the activity pages, where they may. */
+	hideAction?: ReactElement;
 }
 
 /**
@@ -46,6 +48,7 @@ export function PersonActivityLevel({
 	overview,
 	workLog,
 	automationAction,
+	hideAction,
 }: PersonActivityLevelProps) {
 	return (
 		<>
@@ -83,7 +86,12 @@ export function PersonActivityLevel({
 					/>
 				)}
 			</DrawerBody>
-			{automationAction && <DrawerFooter>{automationAction}</DrawerFooter>}
+			{(automationAction ?? hideAction) && (
+				<DrawerFooter>
+					{automationAction}
+					{hideAction}
+				</DrawerFooter>
+			)}
 		</>
 	);
 }

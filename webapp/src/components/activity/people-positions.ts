@@ -1,5 +1,4 @@
-import type { ActivityPerson } from "@/api/types.gen";
-
+import type { PeopleRow } from "./activity-people-rows";
 import type { PeopleSort } from "./activity-search";
 
 /** The count each number column shows and sorts by. */
@@ -9,16 +8,16 @@ export const PEOPLE_COUNTS = {
 	reviews: (row) => row.counts.pullRequestsReviewed,
 	issues: (row) => row.counts.issuesOpened,
 	"active-weeks": (row) => row.counts.activeWeeks,
-} as const satisfies Record<Exclude<PeopleSort, "name">, (row: ActivityPerson) => number>;
+} as const satisfies Record<Exclude<PeopleSort, "name">, (row: PeopleRow) => number>;
 
 /**
  * Each person's position by the column's count, most first: one more than the number of people with
  * a higher count. Sorted the other way, the positions run backwards with the rows.
  */
 export function competitionPositions(
-	people: readonly ActivityPerson[],
+	people: readonly PeopleRow[],
 	sort: PeopleSort,
-): Map<number, number> {
+): Map<PeopleRow["person"]["id"], number> {
 	if (sort === "name") {
 		return new Map();
 	}

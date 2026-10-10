@@ -10,7 +10,9 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
+import { useWorkspacePublicActivity } from "@/hooks/use-workspace-public-activity";
 import { workspaceAdminHead } from "@/lib/page-title";
+import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/settings")({
@@ -19,8 +21,13 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/set
 });
 
 function AdminSettings() {
-	const { workspaceSlug, isLoading: isWorkspaceLoading } = useActiveWorkspaceSlug();
+	const { workspaceSlug, isLoading: isWorkspaceLoading, workspaces } = useActiveWorkspaceSlug();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
+	const workspace = workspaces.find((candidate) => candidate.workspaceSlug === workspaceSlug);
+	const publicActivity = useWorkspacePublicActivity({
+		workspaceSlug,
+		live: workspace?.publishesPublicActivity === true,
+	});
 
 	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
 		return <NoWorkspace />;
@@ -37,13 +44,23 @@ function AdminSettings() {
 				/>
 			</div>
 		);
-	} else if (!hasText(workspaceSlug) || featureState.practicesEnabled === undefined) {
+	} else if (
+		!hasText(workspaceSlug) ||
+		workspace === undefined ||
+		featureState.practicesEnabled === undefined
+	) {
 		settings = <Skeleton className="h-64 max-w-4xl rounded-xl" />;
 	} else {
 		settings = (
 			<WorkspaceSettingsPage
 				workspaceSlug={workspaceSlug}
 				practicesEnabled={featureState.practicesEnabled}
+				publicActivity={{
+					workspaceName: workspace.displayName,
+					providerType: toScmProviderType(workspace.providerType),
+					address: workspace.workspaceAddress,
+					...publicActivity,
+				}}
 			/>
 		);
 	}

@@ -527,6 +527,7 @@ function unknownRepository(request: Request) {
 describe("Workspace activity", () => {
 	let reads: URL[] = [];
 	let automation: URL[] = [];
+	let visibility: URL[] = [];
 	let role = "MEMBER";
 	const record = (request: Request) => {
 		reads.push(new URL(request.url));
@@ -535,6 +536,7 @@ describe("Workspace activity", () => {
 	beforeEach(() => {
 		reads = [];
 		automation = [];
+		visibility = [];
 		role = "MEMBER";
 		server.use(
 			http.get("*/user", () => HttpResponse.json({ ...currentUser, username: "ada" })),
@@ -542,6 +544,10 @@ describe("Workspace activity", () => {
 			http.get("*/workspaces/:workspaceSlug", () => HttpResponse.json(workspaceListItem("acme"))),
 			http.get("*/workspaces/:workspaceSlug/members/me", () =>
 				HttpResponse.json({ role, userId: 7, userLogin: "ada-lrz", userName: "Ada" }),
+			),
+			// Ada is the only member; Bob contributes without a membership.
+			http.get("*/workspaces/:workspaceSlug/users", () =>
+				HttpResponse.json([{ id: 7, login: "ada-lrz", name: "Ada", teams: [], url: "" }]),
 			),
 			http.get("*/workspaces/:workspaceSlug/activity/people", ({ request }) => {
 				record(request);
@@ -555,6 +561,13 @@ describe("Workspace activity", () => {
 				record(request);
 				return HttpResponse.json(workPage);
 			}),
+			http.patch(
+				"*/workspaces/:workspaceSlug/activity/people/:userId/public-visibility",
+				({ request }) => {
+					visibility.push(new URL(request.url));
+					return new HttpResponse(null, { status: 204 });
+				},
+			),
 			http.patch(
 				"*/workspaces/:workspaceSlug/activity/people/:userId/automation",
 				({ request }) => {
@@ -876,6 +889,53 @@ describe("Workspace activity", () => {
 		);
 		// The people are read again, so the account moves between the lists at once.
 		await waitFor(() => expect(readsOf("/activity/people").length).toBeGreaterThan(readsBefore));
+	});
+
+	it("lets an admin hide a person from the activity pages, and take it back", async () => {
+		role = "ADMIN";
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		await user.click(
+			await screen.findByRole("button", { name: "Hide from activity" }, ROUTE_RENDER_WAIT),
+		);
+		const confirm = await screen.findByRole("alertdialog");
+		expect(visibility).toStrictEqual([]);
+		await user.click(within(confirm).getByRole("button", { name: "Hide" }));
+
+		await waitFor(() =>
+			expect(visibility.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+				"/workspaces/acme/activity/people/8/public-visibility?hidden=true",
+			]),
+		);
+		// The person has left the list, so the level over it closes.
+		await waitFor(() => expect(router.state.location.search.detail).toBeUndefined());
+		await user.click(await screen.findByRole("button", { name: "Undo" }));
+		await waitFor(() =>
+			expect(visibility.map((url) => url.search)).toStrictEqual(["?hidden=true", "?hidden=false"]),
+		);
+	});
+
+	it("leaves a member to be hidden under Members, not from their activity page", async () => {
+		role = "ADMIN";
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/users", () =>
+				HttpResponse.json([{ id: 8, login: "bob", name: "Bob", teams: [], url: "" }]),
+			),
+		);
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await within(level).findByRole("button", { name: "Treat as automation" });
+		expect(within(level).queryByRole("button", { name: "Hide from activity" })).toBeNull();
+	});
+
+	it("offers a member no way to hide a person", async () => {
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await within(level).findByRole("heading", { name: "Bob" });
+		expect(within(level).queryByRole("button", { name: "Hide from activity" })).toBeNull();
 	});
 
 	it("lets an admin count an account treated as automation as a person again", async () => {

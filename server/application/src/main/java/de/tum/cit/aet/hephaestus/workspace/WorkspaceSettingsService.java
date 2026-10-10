@@ -68,16 +68,18 @@ public class WorkspaceSettingsService {
     @Transactional
     public Workspace updatePublicActivity(Long workspaceId, Boolean publicActivityEnabled, boolean allowSearchEngines) {
         Workspace workspace = requireWorkspace(workspaceId);
+        // A page that is off has no search engine choice, so publishing again starts from "not listed".
+        boolean searchEngines = Boolean.TRUE.equals(publicActivityEnabled) && allowSearchEngines;
         var beforeVis = new WorkspaceAuditSnapshots.VisibilitySnapshot(
                 workspace.getPublicActivityEnabled(), workspace.isPublicActivitySearchEngines());
         workspace.setPublicActivityEnabled(publicActivityEnabled);
-        workspace.setPublicActivitySearchEngines(allowSearchEngines);
+        workspace.setPublicActivitySearchEngines(searchEngines);
         configAudit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_VISIBILITY,
                 workspaceId,
                 workspaceId,
                 beforeVis,
-                new WorkspaceAuditSnapshots.VisibilitySnapshot(publicActivityEnabled, allowSearchEngines)));
+                new WorkspaceAuditSnapshots.VisibilitySnapshot(publicActivityEnabled, searchEngines)));
         log.info("Updated public activity: workspaceId={}, enabled={}", workspaceId, publicActivityEnabled);
         return workspaceRepository.save(workspace);
     }

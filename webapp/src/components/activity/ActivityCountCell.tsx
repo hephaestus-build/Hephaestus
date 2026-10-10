@@ -1,5 +1,4 @@
 import { PeopleIcon } from "@primer/octicons-react";
-import type { ActivityCounts } from "@/api/types.gen";
 import { GitLabUsersIcon } from "@/components/icons/gitlab-icons";
 import type { IconComponent } from "@/components/icons/provider-icons";
 import type { ProviderType } from "@/lib/provider/provider-terms";
@@ -12,6 +11,7 @@ import {
 	type ActivityKind,
 	countPhrase,
 } from "./activity-kind-defs";
+import type { PersonCounts } from "./activity-people-rows";
 import { type ActivityTone, providerIcon } from "./activity-tones";
 
 /** The table columns that count one category, each with the parts its cell shows. */
@@ -19,7 +19,7 @@ export type CountedCategory = "pull-requests" | "reviews" | "issues";
 
 export interface ActivityCountCellProps {
 	category: CountedCategory;
-	counts: ActivityCounts;
+	counts: PersonCounts;
 	providerType: ProviderType;
 }
 
@@ -100,7 +100,7 @@ function kindPart(kind: ActivityKind, count: number, provider: ProviderType): Pa
 	};
 }
 
-const PARTS: Record<CountedCategory, (counts: ActivityCounts, provider: ProviderType) => Part[]> = {
+const PARTS: Record<CountedCategory, (counts: PersonCounts, provider: ProviderType) => Part[]> = {
 	"pull-requests": (counts, provider) => [
 		kindPart("PULL_REQUEST_OPENED", counts.pullRequestsOpened, provider),
 		kindPart("PULL_REQUEST_MERGED", counts.pullRequestsMerged, provider),

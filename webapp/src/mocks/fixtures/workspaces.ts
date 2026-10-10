@@ -19,6 +19,7 @@ export function workspaceListItem(
 		createdAt: new Date("2026-01-01T00:00:00Z"),
 		status: "ACTIVE",
 		practicesEnabled: false,
+		publishesPublicActivity: false,
 		...overrides,
 	};
 }

@@ -36,9 +36,18 @@ public record WorkspaceListItemDTO(
         Instant createdAt,
 
         @NonNull @Schema(description = "Whether practice reviews are on")
-        Boolean practicesEnabled) {
+        Boolean practicesEnabled,
+
+        @NonNull
+        @Schema(
+                description = "Whether the public activity page is live: the instance allows it and the workspace"
+                        + " turned it on")
+        Boolean publishesPublicActivity) {
     public static WorkspaceListItemDTO from(
-            Workspace workspace, ConnectionService connectionService, String workspaceAddress) {
+            Workspace workspace,
+            ConnectionService connectionService,
+            String workspaceAddress,
+            boolean instanceAllowsPublicActivity) {
         IdentityProviderType providerType = connectionService
                 .findActiveProviderKind(workspace.getId())
                 .map(IdentityProviderType::from)
@@ -52,6 +61,9 @@ public record WorkspaceListItemDTO(
                 workspace.getAccountLogin(),
                 providerType,
                 workspace.getCreatedAt(),
-                workspace.getFeatures().getPracticesEnabled());
+                workspace.getFeatures().getPracticesEnabled(),
+                instanceAllowsPublicActivity
+                        && workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE
+                        && Boolean.TRUE.equals(workspace.getPublicActivityEnabled()));
     }
 }

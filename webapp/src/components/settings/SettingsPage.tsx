@@ -19,6 +19,7 @@ import {
 	PracticeFeedbackSection,
 	type PracticeFeedbackSectionProps,
 } from "./PracticeFeedbackSection";
+import { PublicActivitySection, type PublicActivitySectionProps } from "./PublicActivitySection";
 import {
 	ResearchParticipationSection,
 	type ResearchParticipationSectionProps,
@@ -35,6 +36,7 @@ export interface SettingsPageProps {
 	researchProps: ResearchParticipationSectionProps;
 	showResearchSection: boolean;
 	aiChoiceProps: AiChoiceSectionProps;
+	publicActivityProps: PublicActivitySectionProps;
 	linkedAccountsProps: LinkedAccountsSectionProps;
 	slackPreferencesProps: SlackPreferencesSectionProps;
 	showSlackPreferencesSection?: boolean;
@@ -51,6 +53,7 @@ export function SettingsPage({
 	researchProps,
 	showResearchSection,
 	aiChoiceProps,
+	publicActivityProps,
 	linkedAccountsProps,
 	slackPreferencesProps,
 	showSlackPreferencesSection = true,
@@ -117,6 +120,9 @@ export function SettingsPage({
 				{/* Its own read, so a failed preferences load does not hide it. */}
 				<Separator />
 				<AiChoiceSection {...aiChoiceRest} isLoading={isLoading || aiChoiceLoading} />
+
+				<Separator />
+				<PublicActivitySection {...publicActivityProps} />
 
 				{hasEmailPreferences(emailPreferencesProps.state) && (
 					<>

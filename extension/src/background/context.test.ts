@@ -34,6 +34,7 @@ function listItem(
 		id: slug.length,
 		practicesEnabled: true,
 		providerType,
+		publishesPublicActivity: false,
 		status: "ACTIVE",
 		workspaceSlug: slug,
 		workspaceAddress: `https://heph.example.test/w/${slug}`,

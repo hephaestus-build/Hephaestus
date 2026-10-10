@@ -168,4 +168,54 @@ describe("instance settings route", () => {
 		await screen.findByText("Handed to mail server");
 		expect(screen.queryByRole("button", { name: "Turn off silent mode…" })).toBeNull();
 	});
+
+	it("allows public activity pages for the instance, and asks for a fresh sign-in when refused", async () => {
+		const user = userEvent.setup();
+		const puts: unknown[] = [];
+		server.use(
+			http.get("*/admin/settings", () => HttpResponse.json(settings(1))),
+			http.get("*/admin/settings/public-activity", () => HttpResponse.json({ allowed: false })),
+			http.put("*/admin/settings/public-activity", async ({ request }) => {
+				puts.push(await request.json());
+				return HttpResponse.json(
+					{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+					{ status: 403 },
+				);
+			}),
+		);
+		renderRouteAt("/admin/settings");
+
+		await user.click(
+			await screen.findByRole("switch", { name: "Allow public activity pages" }, ROUTE_RENDER_WAIT),
+		);
+
+		await waitFor(() => expect(puts).toStrictEqual([{ allowed: true }]));
+		await screen.findByRole("dialog", { name: "Confirm access" });
+	});
+
+	it("shows the instance's choice after it is allowed", async () => {
+		const user = userEvent.setup();
+		let allowed = false;
+		server.use(
+			http.get("*/admin/settings", () => HttpResponse.json(settings(1))),
+			http.get("*/admin/settings/public-activity", () => HttpResponse.json({ allowed })),
+			http.put("*/admin/settings/public-activity", () => {
+				allowed = true;
+				return HttpResponse.json({ allowed });
+			}),
+		);
+		renderRouteAt("/admin/settings");
+
+		await user.click(
+			await screen.findByRole("switch", { name: "Allow public activity pages" }, ROUTE_RENDER_WAIT),
+		);
+
+		await waitFor(() =>
+			expect(
+				screen
+					.getByRole("switch", { name: "Allow public activity pages" })
+					.getAttribute("aria-checked"),
+			).toBe("true"),
+		);
+	});
 });

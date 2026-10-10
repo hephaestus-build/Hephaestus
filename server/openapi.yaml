@@ -2592,13 +2592,21 @@ paths:
         schema:
           type: string
           format: date-time
+      - in: query
+        name: repo
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
       responses:
         "200":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PublicActivity"
-          description: OK
+          description: Public contributions counted
       security: []
       summary: Read human contributions to public repositories
       tags:
@@ -3184,6 +3192,49 @@ paths:
       summary: Fetch a workspace by slug
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/activity/hidden-contributors:
+    get:
+      operationId: listHiddenContributors
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserInfo"
+          description: Hidden contributors listed
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A request parameter is not valid
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Workspace, contributor, team or repository not found"
+      summary: List the contributors without a membership whom an admin hid from activity
+      tags:
+      - Activity
   /workspaces/{workspaceSlug}/activity/members/{login}/open-work:
     get:
       description: "Review requests, open pull requests and assigned issues, most\
@@ -3468,6 +3519,8 @@ paths:
         schema:
           type: boolean
       responses:
+        "204":
+          description: Contributor visibility updated
         "400":
           content:
             application/problem+json:
@@ -3622,6 +3675,12 @@ paths:
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicActivityHiddenCount"
+          description: Hidden contributors counted
         "400":
           content:
             application/problem+json:
@@ -17346,6 +17405,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PublicActivityPerson"
+        providerType:
+          type: string
+          description: The source-control provider the repositories and people belong
+            to
+          enum:
+          - GITHUB
+          - GITLAB
+          - SLACK
+          - OUTLINE
         repositories:
           type: array
           items:
@@ -17403,6 +17471,14 @@ components:
       - pullRequestsMerged
       - pullRequestsOpened
       - pullRequestsReviewed
+    PublicActivityHiddenCount:
+      type: object
+      properties:
+        hiddenPeople:
+          type: integer
+          format: int64
+      required:
+      - hiddenPeople
     PublicActivityHighlights:
       type: object
       properties:
@@ -21305,6 +21381,10 @@ components:
           - GITLAB
           - SLACK
           - OUTLINE
+        publishesPublicActivity:
+          type: boolean
+          description: "Whether the public activity page is live: the instance allows\
+            \ it and the workspace turned it on"
         status:
           type: string
           description: "Current lifecycle status of the workspace (PENDING, ACTIVE,\
@@ -21323,6 +21403,7 @@ components:
       - displayName
       - id
       - practicesEnabled
+      - publishesPublicActivity
       - status
       - workspaceAddress
       - workspaceSlug

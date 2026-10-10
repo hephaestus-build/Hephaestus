@@ -8,6 +8,7 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
 import { ActivityPeopleTable } from "./ActivityPeopleTable";
+import { personLevelLink } from "./people-links";
 
 const meta = {
 	component: ActivityPeopleTable,
@@ -19,6 +20,7 @@ const meta = {
 		order: { sort: "contributions", desc: true },
 		onOrderChange: fn(),
 		repo: [],
+		personLink: personLevelLink,
 	},
 	render: (args) => (
 		<Stateful initial={args.order}>

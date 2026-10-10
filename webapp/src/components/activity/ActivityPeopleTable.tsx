@@ -8,17 +8,16 @@ import {
 } from "@tanstack/react-table";
 import { SearchIcon } from "lucide-react";
 // oxlint-disable-next-line no-restricted-imports -- TanStack Table keys its column and row models on the identity of `columns`, `data` and controlled state, which the compiler memoises as an optimisation rather than a promise.
-import { useMemo, useState } from "react";
+import { type ReactElement, useMemo, useState } from "react";
 
 import { cn } from "cn";
-import type { ActivityPeople, ActivityPerson } from "@/api/types.gen";
+import type { ActivityPeople } from "@/api/types.gen";
 import { type DataTableFeatures, dataTableFeatures } from "@/components/common/data-table";
 import { DataTableHeader } from "@/components/common/DataTableHeader";
 import { InfiniteListEnd } from "@/components/common/InfiniteListEnd";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Badge } from "@/components/ui/badge";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -29,7 +28,8 @@ import type { ProviderType } from "@/lib/provider/provider-terms";
 import { nameOrder } from "@/lib/text";
 
 import { NoneMark } from "./ActionChip";
-import { type PeopleSort, PEOPLE_SORTS, personLevel } from "./activity-search";
+import type { PeopleRow, PeopleRows } from "./activity-people-rows";
+import { type PeopleSort, PEOPLE_SORTS } from "./activity-search";
 import { STALE } from "./activity-tones";
 import { ActivityCountCell, ActivityCountHeader, type CountedCategory } from "./ActivityCountCell";
 import { ActivityEmpty, PEOPLE_EMPTY_ICON } from "./ActivityEmpty";
@@ -38,6 +38,9 @@ import { MemberAvatar } from "./MemberAvatar";
 import { competitionPositions, PEOPLE_COUNTS } from "./people-positions";
 
 /** The people once they are in, and whether they are the previous period's while another loads. */
+export type PeopleTableState = PanelState<{ people: PeopleRows; stale: boolean }>;
+
+/** Workspace activity's people, with the automation and coverage the table leaves to its page. */
 export type ActivityPeopleState = PanelState<{ people: ActivityPeople; stale: boolean }>;
 
 export interface PeopleOrder {
@@ -46,12 +49,17 @@ export interface PeopleOrder {
 }
 
 export interface ActivityPeopleTableProps {
-	state: ActivityPeopleState;
+	state: PeopleTableState;
 	providerType: ProviderType;
 	order: PeopleOrder;
 	onOrderChange: (order: PeopleOrder) => void;
 	/** The repositories the table counts, by full path; none is every repository. */
 	repo: readonly string[];
+	/**
+	 * Where a person's name leads, as the element the name renders through: a level over the page, or
+	 * the person's page at the provider.
+	 */
+	personLink: (person: PeopleRow["person"]) => ReactElement;
 }
 
 /** A step of rows to render at a time: enough to scroll through, few enough to render at once. */
@@ -66,7 +74,7 @@ const fold = (text: string): string =>
 		.replaceAll(/\p{Mn}/gu, "")
 		.toLowerCase();
 
-const columnHelper = createColumnHelper<DataTableFeatures, ActivityPerson>();
+const columnHelper = createColumnHelper<DataTableFeatures, PeopleRow>();
 
 /**
  * Below `sm` the position and the person stay in place while the figures scroll under them, so a
@@ -89,6 +97,7 @@ export function ActivityPeopleTable({
 	order,
 	onOrderChange,
 	repo,
+	personLink,
 }: ActivityPeopleTableProps) {
 	const [search, setSearch] = useState("");
 	const [shown, setShown] = useState(ROWS_STEP);
@@ -153,7 +162,11 @@ export function ActivityPeopleTable({
 					),
 				},
 				cell: ({ row }) => (
-					<PersonCell person={row.original} first={firstContributors.has(row.original.person.id)} />
+					<PersonCell
+						person={row.original.person}
+						link={personLink}
+						first={firstContributors.has(row.original.person.id)}
+					/>
 				),
 			}),
 			columnHelper.accessor(PEOPLE_COUNTS.contributions, {
@@ -185,7 +198,7 @@ export function ActivityPeopleTable({
 					from && to && <ActivitySparkline weeks={row.original.weeks} span={{ from, to }} />,
 			}),
 		]);
-	}, [positions, providerType, from, to, firstContributorIds, order.sort]);
+	}, [positions, providerType, from, to, firstContributorIds, order.sort, personLink]);
 
 	const table = useTable({
 		features: dataTableFeatures,
@@ -203,7 +216,7 @@ export function ActivityPeopleTable({
 			const next: unknown = functionalUpdate(updater, search);
 			setSearch(typeof next === "string" ? next : "");
 		},
-		globalFilterFn: (row: Row<DataTableFeatures, ActivityPerson>, _columnId, filterValue) => {
+		globalFilterFn: (row: Row<DataTableFeatures, PeopleRow>, _columnId, filterValue) => {
 			const needle: unknown = filterValue;
 			const { name, login } = row.original.person;
 			return (
@@ -337,21 +350,29 @@ export function ActivityPeopleTable({
  * The name is the row's link and its keyboard stop, stretched over the row so the whole row is the
  * pointer target. A person whose first contribution to the workspace is in the range is new here.
  */
-function PersonCell({ person, first }: { person: ActivityPerson; first: boolean }) {
+function PersonCell({
+	person,
+	link,
+	first,
+}: {
+	person: PeopleRow["person"];
+	link: ActivityPeopleTableProps["personLink"];
+	first: boolean;
+}) {
 	return (
 		<div className="flex min-w-0 items-center gap-3">
-			<MemberAvatar user={person.person} />
+			<MemberAvatar user={person} />
 			<div className="min-w-0">
 				<div className="flex min-w-0 items-center gap-2">
 					<InlineLink
-						render={<DetailStackLink entry={personLevel(person.person.login)} />}
+						render={link(person)}
 						className="truncate font-medium after:absolute after:inset-0"
 					>
-						{person.person.name}
+						{person.name}
 					</InlineLink>
 					{first && <NewBadge />}
 				</div>
-				<p className="truncate text-xs text-muted-foreground">{person.person.login}</p>
+				<p className="truncate text-xs text-muted-foreground">{person.login}</p>
 			</div>
 		</div>
 	);

@@ -78,6 +78,10 @@ const defaultLinkedAccountsProps = {
 	onUnlink: fn(),
 };
 
+const defaultPublicActivityProps = {
+	state: { status: "ready", visible: true, pending: false, onVisibleChange: fn() },
+} as const;
+
 const defaultAiChoiceProps = {
 	choice: "CLOUD",
 	onSave: fn(),
@@ -115,6 +119,7 @@ export const Default: Story = {
 			onToggleResearch: fn(),
 		},
 		aiChoiceProps: defaultAiChoiceProps,
+		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
 		onAccountDeleted: fn(),
@@ -154,6 +159,7 @@ export const AllTogglesDisabled: Story = {
 			onToggleResearch: fn(),
 		},
 		aiChoiceProps: defaultAiChoiceProps,
+		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
 		onAccountDeleted: fn(),
@@ -174,6 +180,7 @@ export const Loading: Story = {
 			onToggleResearch: fn(),
 		},
 		aiChoiceProps: defaultAiChoiceProps,
+		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
 		onAccountDeleted: fn(),
@@ -195,6 +202,7 @@ export const ResearchHidden: Story = {
 			onToggleResearch: fn(),
 		},
 		aiChoiceProps: defaultAiChoiceProps,
+		publicActivityProps: defaultPublicActivityProps,
 		linkedAccountsProps: defaultLinkedAccountsProps,
 		slackPreferencesProps: defaultSlackPreferencesProps,
 		onAccountDeleted: fn(),

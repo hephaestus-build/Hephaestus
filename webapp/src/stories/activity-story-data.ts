@@ -9,6 +9,7 @@ import type {
 	ActivityTeam,
 	ActivityWork,
 	OpenWork,
+	PublicActivity,
 	RepositoryInfo,
 	Reviewer,
 	UserInfo,
@@ -17,6 +18,7 @@ import type {
 } from "@/api/types.gen";
 import type { ActivityOverviewState, DateSpan } from "@/components/activity/activity-buckets";
 import { ACTIVITY_KINDS, type ActivityKind } from "@/components/activity/activity-kind-defs";
+import { publicPeopleRows } from "@/components/activity/activity-people-rows";
 import {
 	type ActivityPreset,
 	DEFAULT_ACTIVITY_PRESET,
@@ -27,7 +29,10 @@ import {
 	type ActivityTally,
 	weekStarts,
 } from "@/components/activity/activity-tally";
-import type { ActivityPeopleState } from "@/components/activity/ActivityPeopleTable";
+import type {
+	ActivityPeopleState,
+	PeopleTableState,
+} from "@/components/activity/ActivityPeopleTable";
 
 import { daysBefore, hoursBefore, minutesBefore, STORY_NOW } from "./story-clock";
 
@@ -688,6 +693,46 @@ export function peopleOf(
 
 export function readyPeople(people: ActivityPeople): ActivityPeopleState {
 	return { status: "ready", people, stale: false };
+}
+
+/**
+ * What the public page reads for `people`: the same figures, named by login, since no id leaves
+ * the server, and only the public repositories.
+ */
+export function publicActivityOf(
+	people: ActivityPerson[],
+	overrides: Partial<PublicActivity> = {},
+): PublicActivity {
+	const everyone = peopleOf(people);
+	return {
+		workspaceName: "Hephaestus",
+		providerType: "GITHUB",
+		allowSearchEngines: false,
+		from: everyone.from,
+		to: everyone.to,
+		coverage: everyone.coverage,
+		repositories: REPOSITORIES.map(({ key, name }) => ({ key, name })),
+		highlights: {
+			firstContributors: everyone.highlights.firstContributors.flatMap((id) =>
+				people.filter(({ person }) => person.id === id).map(({ person }) => person.login),
+			),
+			mostPeopleHelped: [],
+		},
+		people: people.map(({ person, counts, firstContributionAt, weeks }) => ({
+			login: person.login,
+			name: person.name,
+			avatarUrl: person.avatarUrl,
+			profileUrl: person.htmlUrl,
+			counts,
+			firstContributionAt,
+			weeks,
+		})),
+		...overrides,
+	};
+}
+
+export function readyPublicPeople(activity: PublicActivity): PeopleTableState {
+	return { status: "ready", people: publicPeopleRows(activity), stale: false };
 }
 
 const FIRST_NAMES = [

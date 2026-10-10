@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.activity.overview.dto;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import java.time.Instant;
@@ -13,6 +14,10 @@ import org.jspecify.annotations.Nullable;
 /** The public contract excludes account details, teams, automation and private activity. */
 public record PublicActivityDTO(
         @NonNull String workspaceName,
+
+        @Schema(description = "The source-control provider the repositories and people belong to") @Nullable
+        IdentityProviderType providerType,
+
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean allowSearchEngines,
         @NonNull Instant from,
         @NonNull Instant to,
@@ -20,12 +25,17 @@ public record PublicActivityDTO(
         @NonNull ActivityCoverageDTO coverage,
         @NonNull PublicActivityHighlightsDTO highlights,
         @NonNull List<PublicActivityRepositoryDTO> repositories) {
-    public static PublicActivityDTO from(String workspaceName, boolean allowSearchEngines, ActivityPeopleDTO activity) {
+    public static PublicActivityDTO from(
+            String workspaceName,
+            @Nullable IdentityProviderType providerType,
+            boolean allowSearchEngines,
+            ActivityPeopleDTO activity) {
         var loginsById = activity.people().stream()
                 .collect(Collectors.toMap(
                         row -> row.person().id(), row -> row.person().login()));
         return new PublicActivityDTO(
                 workspaceName,
+                providerType,
                 allowSearchEngines,
                 activity.from(),
                 activity.to(),

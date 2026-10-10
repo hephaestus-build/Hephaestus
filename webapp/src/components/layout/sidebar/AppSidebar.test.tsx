@@ -25,6 +25,7 @@ const workspace = {
 	providerType: "GITHUB",
 	status: "ACTIVE",
 	practicesEnabled: false,
+	publishesPublicActivity: false,
 } as const;
 
 function renderMobileSidebar() {

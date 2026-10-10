@@ -82,9 +82,9 @@ describe("useActiveWorkspaceSlug", () => {
 		await screen.findByText("undefined|alpha|alpha|GITHUB");
 	});
 
-	it("does not substitute another workspace for an unknown route slug", async () => {
+	it("reads a route slug the account has no part in as no workspace, and substitutes none", async () => {
 		renderAt("/w/missing");
 
-		await screen.findByText("missing|missing|undefined|GITHUB");
+		await screen.findByText("undefined|undefined|undefined|GITHUB");
 	});
 });

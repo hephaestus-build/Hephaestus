@@ -1,0 +1,149 @@
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn, screen, within } from "storybook/test";
+
+import { withProvider, withStandardPage } from "@/stories/decorators";
+import { expectSettledVisible } from "@/stories/overlay";
+
+import { PublicActivityOnboardingDialog } from "./PublicActivityOnboardingDialog";
+
+const meta = {
+	component: PublicActivityOnboardingDialog,
+	parameters: { layout: "fullscreen" },
+	decorators: [withStandardPage],
+	tags: ["autodocs"],
+	args: {
+		open: true,
+		workspaceName: "Hephaestus",
+		providerType: "GITHUB",
+		currentlyVisible: true,
+		answer: { status: "idle" },
+		onAnswer: fn(),
+		onDefer: fn(),
+	},
+} satisfies Meta<typeof PublicActivityOnboardingDialog>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+/** The step, once it has arrived: a dialog fades in, and what is inside it reads as transparent until then. */
+async function dialog() {
+	const step = await screen.findByRole("alertdialog");
+	await expectSettledVisible(step);
+	return within(step);
+}
+
+/** Both answers are the same size and neither is focused, so neither is the default. */
+export const Default: Story = {
+	play: async ({ args, userEvent }) => {
+		const step = await dialog();
+		await expect(
+			step.getByRole("heading", { name: "Hephaestus has a public activity page" }),
+		).toBeVisible();
+		const show = step.getByRole("button", { name: "Show me" });
+		const hide = step.getByRole("button", { name: "Hide me" });
+		await expect(show).not.toHaveFocus();
+		await expect(hide).not.toHaveFocus();
+		// Focus is on the dialog, announced with its title and text, so no ring marks the title.
+		await expect(screen.getByRole("alertdialog")).toHaveFocus();
+		await expect(show.getBoundingClientRect().width).toBeCloseTo(
+			hide.getBoundingClientRect().width,
+			0,
+		);
+		await expect(show.className).toBe(hide.className);
+		await userEvent.click(hide);
+		await expect(args.onAnswer).toHaveBeenCalledWith(false);
+	},
+};
+
+export const ShowMe: Story = {
+	play: async ({ args, userEvent }) => {
+		const step = await dialog();
+		await userEvent.click(step.getByRole("button", { name: "Show me" }));
+		await expect(args.onAnswer).toHaveBeenCalledWith(true);
+	},
+};
+
+/** Escape and Decide later leave the step for this visit, without an answer. */
+export const Deferred: Story = {
+	play: async ({ args, userEvent }) => {
+		const step = await dialog();
+		await userEvent.keyboard("{Escape}");
+		await expect(args.onDefer).toHaveBeenCalledOnce();
+		await userEvent.click(step.getByRole("button", { name: "Decide later" }));
+		await expect(args.onDefer).toHaveBeenCalledTimes(2);
+		await expect(args.onAnswer).not.toHaveBeenCalled();
+	},
+};
+
+export const Saving: Story = {
+	args: { answer: { status: "saving", visible: false } },
+	play: async () => {
+		const step = await dialog();
+		await expect(step.getByRole("button", { name: "Show me" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+		await expect(step.getByRole("button", { name: "Hide me" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+		// A save that never answers cannot hold the person in the step.
+		await expect(step.getByRole("button", { name: "Decide later" })).toBeEnabled();
+	},
+};
+
+/** A failing save says so, and the person can still answer again or decide later. */
+export const Failed: Story = {
+	args: { answer: { status: "error", message: "We could not save your choice. Try again." } },
+	play: async ({ args, userEvent }) => {
+		const step = await dialog();
+		await expect(step.getByRole("alert")).toHaveTextContent(
+			"We could not save your choice. Try again.",
+		);
+		await userEvent.click(step.getByRole("button", { name: "Hide me" }));
+		await expect(args.onAnswer).toHaveBeenCalledWith(false);
+	},
+};
+
+/** Someone who already answered elsewhere is told what they now are. */
+export const AlreadyHidden: Story = {
+	args: { currentlyVisible: false },
+	play: async () => {
+		const step = await dialog();
+		await expect(step.getByText(/Right now, public pages hide you\./u)).toBeVisible();
+	},
+};
+
+/** GitLab's words: merge requests, projects. */
+export const GitLab: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { providerType: "GITLAB" },
+	play: async () => {
+		const step = await dialog();
+		await expect(step.getByText(/For public projects only/u)).toBeVisible();
+		await expect(step.getByText(/the merge requests you opened and reviewed/u)).toBeVisible();
+	},
+};
+
+/** At 320 px the text and its list stay on the left edge, where a person reads them. */
+export const Narrow: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		const step = await dialog();
+		const title = step.getByRole("heading").getBoundingClientRect();
+		const list = step.getAllByRole("list")[0];
+		await expect(list?.getBoundingClientRect().left).toBeLessThan(title.left + 40);
+		await expect(getComputedStyle(step.getByText(/^Anyone can see it/u)).textAlign).not.toBe(
+			"center",
+		);
+	},
+};
+
+export const Dark: Story = { globals: { theme: "dark" } };
+
+export const Closed: Story = {
+	args: { open: false },
+	play: async () => {
+		await expect(screen.queryByRole("alertdialog")).toBeNull();
+	},
+};

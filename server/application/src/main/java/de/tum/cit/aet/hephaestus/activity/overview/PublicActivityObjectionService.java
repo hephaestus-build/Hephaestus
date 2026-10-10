@@ -7,11 +7,13 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserInfoDTO;
 import de.tum.cit.aet.hephaestus.workspace.HiddenFormerMember;
 import de.tum.cit.aet.hephaestus.workspace.HiddenFormerMemberRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,14 @@ class PublicActivityObjectionService {
     @Transactional(readOnly = true)
     public long hiddenPeople(long workspaceId) {
         return people.countPublicHiddenPeople(workspaceId, visibility.confirmedAfter());
+    }
+
+    /** The people an admin hid who have no membership: the only ones no other screen can show again. */
+    @Transactional(readOnly = true)
+    public List<UserInfoDTO> hiddenContributors(long workspaceId) {
+        return people.findHiddenContributors(workspaceId).stream()
+                .map(ActivityPeopleQueryRepository.ContributorRow::person)
+                .toList();
     }
 
     @Transactional

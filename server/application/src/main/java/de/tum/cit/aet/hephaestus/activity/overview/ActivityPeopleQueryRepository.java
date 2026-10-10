@@ -283,6 +283,14 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
     }
 
     @Query(value = """
+            SELECT u.id, u.login, u.name, u.avatar_url, u.html_url, false AS bot, false AS classified
+            FROM "user" u JOIN workspace_hidden_former_member h ON h.user_id = u.id
+            WHERE h.workspace_id = :workspace AND u.type = 'USER'
+            ORDER BY lower(coalesce(u.name, u.login)), u.id
+            """, nativeQuery = true)
+    List<ContributorRow> findHiddenContributors(@Param("workspace") long workspace);
+
+    @Query(value = """
                 SELECT r.id, r.name_with_owner AS key, r.name FROM repository_to_monitor m
                 JOIN repository r ON r.name_with_owner = m.name_with_owner
                 WHERE m.workspace_id = :workspace AND (:publicOnly = false OR (

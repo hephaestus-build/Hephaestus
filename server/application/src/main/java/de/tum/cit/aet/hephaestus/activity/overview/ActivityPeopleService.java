@@ -47,14 +47,11 @@ public class ActivityPeopleService {
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
-    public ActivityPeopleDTO publicPeople(long workspace, ActivityPeopleRangeParams params) {
+    public ActivityPeopleDTO publicPeople(
+            long workspace, ActivityPeopleRangeParams params, Set<String> repositoryKeys) {
         var repositories = queries.publicRepositories(workspace, visibility.confirmedAfter());
-        var scope = new ActivityScope(
-                workspace,
-                Set.of(),
-                Set.of(),
-                repositories.stream().map(ActivityRepositoryDTO::id).collect(Collectors.toSet()),
-                true);
+        var selected = select(workspace, null, repositoryKeys, List.of(), repositories);
+        var scope = new ActivityScope(workspace, Set.of(), Set.of(), selected.repositoryIds(), true);
         return aggregate(scope, params, List.of(), repositories);
     }
 

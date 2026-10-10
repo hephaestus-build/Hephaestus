@@ -10,6 +10,8 @@ import {
 	getConsentStatusQueryKey,
 	getCurrentUserQueryKey,
 	getNotificationPreferencesOptions,
+	getPublicActivityChoiceOptions,
+	getPublicActivityChoiceQueryKey,
 	getNotificationPreferencesQueryKey,
 	getSlackUserPreferencesOptions,
 	getSlackUserPreferencesQueryKey,
@@ -24,6 +26,7 @@ import {
 	revokeSessionMutation,
 	unlinkIdentityMutation,
 	updateAccountAiChoiceMutation,
+	updatePublicActivityChoiceMutation,
 	updateResearchConsentMutation,
 	updateNotificationPreferencesMutation,
 	updateSlackUserPreferencesMutation,
@@ -39,6 +42,7 @@ import type {
 import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import type { EmailPreferencesSectionProps } from "@/components/settings/EmailPreferencesSection";
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
+import type { PublicActivitySectionProps } from "@/components/settings/PublicActivitySection";
 import type { SessionsSectionProps } from "@/components/settings/SessionsSection";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
@@ -46,8 +50,10 @@ import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
 import { pageHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { announcePublicActivityChoice } from "@/lib/public-activity-choice";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
+import { refreshPublicActivity } from "@/runtime/tanstack-query/refresh-public-activity";
 
 export const Route = createFileRoute("/_authenticated/settings")({
 	head: pageHead("User settings"),
@@ -229,6 +235,40 @@ function RouteComponent() {
 			toast.error("We could not save your AI choice. Try again.");
 		},
 	});
+
+	const publicActivityQuery = useQuery(getPublicActivityChoiceOptions({}));
+	const publicActivityMutation = useMutation({
+		...updatePublicActivityChoiceMutation(),
+		onSuccess: (data) => {
+			queryClient.setQueryData(getPublicActivityChoiceQueryKey({}), data);
+			void refreshPublicActivity(queryClient);
+			announcePublicActivityChoice(data.visible);
+		},
+		onError: () => {
+			toast.error("We could not save your choice. Try again.");
+		},
+		onSettled: () => {
+			void queryClient.invalidateQueries({ queryKey: getPublicActivityChoiceQueryKey({}) });
+		},
+	});
+
+	let publicActivityState: PublicActivitySectionProps["state"] = { status: "loading" };
+	if (publicActivityQuery.isError) {
+		publicActivityState = {
+			status: "error",
+			error: publicActivityQuery.error,
+			onRetry: () => {
+				void publicActivityQuery.refetch();
+			},
+		};
+	} else if (publicActivityQuery.data !== undefined) {
+		publicActivityState = {
+			status: "ready",
+			visible: publicActivityQuery.data.visible,
+			pending: publicActivityMutation.isPending,
+			onVisibleChange: (visible) => publicActivityMutation.mutate({ body: { visible } }),
+		};
+	}
 
 	// After deletion: end the session. `logout()` performs a full reload to "/",
 	// so no further navigation is needed here.
@@ -434,6 +474,7 @@ function RouteComponent() {
 					void aiChoiceQuery.refetch();
 				},
 			}}
+			publicActivityProps={{ state: publicActivityState }}
 			linkedAccountsProps={linkedAccountsProps}
 			showSlackPreferencesSection={slackAvailable}
 			slackPreferencesProps={slackPreferencesProps}
