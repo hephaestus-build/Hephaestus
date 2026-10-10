@@ -127,6 +127,7 @@ It is not a successful review.
 ├── pi-provider.json                 # Provider/model routing for the runner.
 ├── pi-provider.ts                   # Provider/model helper imported by both runners.
 ├── pi-error-text.ts                 # Shared error-message helper.
+├── pi-model-failure.ts              # Reads the provider adapter's closed failure diagnostic.
 ├── pi-task-paths.ts                 # Task path validation and resolution.
 ├── pi-change.ts                     # Derives work/change/ from the checkout; runs first, and its failure is the review's.
 ├── pi-precompute.sh                 # Bounded, best-effort precompute bootstrap.
@@ -406,6 +407,7 @@ A parent SIGKILL or a failed upload leaves no transcript.
   The summary contains only enums and numbers.
   It records phase, practice revision, entry count, assistant calls, token usage, tool calls, tool errors and compactions.
   Stop reasons and tool names use the owned vocabulary.
+  It also records model call failures, as described in [Model call failures](#model-call-failures).
   It contains no arguments, results, model text, paths or error text.
 - If the collector fails, it removes `out/traces/` and the result is uploaded without transcripts.
 
@@ -428,6 +430,35 @@ It keeps owned enums, flags and bounded integers only, and drops any other key o
 A receipt that is not `READY` gets nothing.
 
 [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-09-debug-transcripts) has the retention decision.
+
+### Model call failures
+
+The patched OpenAI chat-completions adapter attaches one diagnostic to a failed or aborted assistant message.
+Its `type` is `openai_completions_failure`, and its `timestamp` records when the adapter caught the failure.
+Its `details` hold only these values:
+
+- `kind`: `HTTP_ERROR`, `CONNECTION_TIMEOUT`, `CONNECTION_ERROR`, `STREAM_INCOMPLETE`, `FINISH_REASON_ERROR`,
+  `ABORTED` or `UNKNOWN`.
+  The kind comes from the SDK's own error classes and from the adapter's own end-of-stream checks.
+- `phase`: `request` before the SDK response is obtained, or `response_body` afterward.
+  This is the adapter stage, not proof that response body bytes arrived.
+- `status`: the native HTTP status, 400 to 599, for `HTTP_ERROR` only.
+
+The diagnostic never holds the error message, the response body, headers, the request or a URL.
+Diagnostics from other provider protocols are not interpreted by this contract. Their failures read as `UNKNOWN`.
+
+Each runner turn in `runner-debug.json`, and each session summary in the transcript manifest, record:
+
+- `modelFailures`: the failed or aborted calls, counted by kind.
+- `lastModelFailureAt`: the most recent available adapter failure timestamp.
+  A newer failure without that timestamp leaves its own `finalModelFailure.at` null.
+- `finalModelFailure`: the failure the last call ended on, or `null` once a later call succeeded.
+
+In a runner turn, `finalModelFailure` also records `retryEndedUnsuccessfully` when the native retry-end event reported failure.
+A missing diagnostic, invalid type, invalid details or unowned kind reads as `UNKNOWN`, with no phase, status or time.
+For an owned kind, an invalid phase, status or time is omitted individually.
+A metadata-only record keeps these fields as the worker validates them again.
+These facts describe a failure. They do not change retries, deadlines, budgets or how a failed composition is classified.
 
 ## Exit codes
 

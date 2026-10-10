@@ -28,6 +28,7 @@ import { assessmentCacheExtension } from "./pi-assessment-cache.ts";
 import { CHANGE_ROOT, checkedOutCommit, pinnedDiff, readPinnedBlob } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
 import { folderCitationIndex } from "./pi-folder-index.ts";
+import { type ModelFailure, type ModelFailureKind, modelFailure } from "./pi-model-failure.ts";
 import {
 	CONVERSATION_THREAD,
 	OUTCOME_VALUES,
@@ -553,6 +554,15 @@ const usageTotals: UsageTotals = {
 };
 interface TurnTrace {
 	modelError: boolean;
+	/** Failed or aborted model calls of this turn, by the adapter's own closed kind; no provider text is kept. */
+	modelFailures: Partial<Record<ModelFailureKind, number>>;
+	/** The most recent available adapter failure timestamp; an unknown later failure keeps its own time null. */
+	lastModelFailureAt: number | null;
+	/**
+	 * The failure the turn's last model call ended on, marked when the SDK then ended the retry unsuccessfully; null once a later
+	 * call succeeds.
+	 */
+	finalModelFailure: (ModelFailure & { retryEndedUnsuccessfully: boolean }) | null;
 	runtimeError: boolean;
 	label: string;
 	durationMs: number;
@@ -3550,6 +3560,9 @@ function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTra
 	lastEventAt = Date.now();
 	currentTurn = {
 		modelError: false,
+		modelFailures: {},
+		lastModelFailureAt: null,
+		finalModelFailure: null,
 		runtimeError: false,
 		label,
 		durationMs: Date.now(),
@@ -3572,6 +3585,24 @@ function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTra
 	};
 	turnDemand = demand;
 	return currentTurn;
+}
+
+function recordModelResponse(trace: TurnTrace, stopReason: string, message: unknown): void {
+	if (stopReason === "error" || stopReason === "aborted") {
+		const failure = modelFailure(message);
+		trace.modelFailures[failure.kind] = (trace.modelFailures[failure.kind] ?? 0) + 1;
+		trace.lastModelFailureAt = failure.at ?? trace.lastModelFailureAt;
+		trace.finalModelFailure = { ...failure, retryEndedUnsuccessfully: false };
+	} else {
+		trace.finalModelFailure = null;
+	}
+}
+
+function recordUnsuccessfulRetryEnd(trace: TurnTrace): void {
+	const final = trace.finalModelFailure;
+	if (final !== null) {
+		trace.finalModelFailure = { ...final, retryEndedUnsuccessfully: true };
+	}
 }
 
 function closeTurnTrace(trace: TurnTrace): void {
@@ -4086,6 +4117,7 @@ async function main() {
 			if (event.type === "auto_retry_end" && !event.success) {
 				if (currentTurn) {
 					currentTurn.modelError = true;
+					recordUnsuccessfulRetryEnd(currentTurn);
 				}
 				const finalError = event.finalError ?? "no error given";
 				// Only measurement failures can make a review eligible for provider retry.
@@ -4113,6 +4145,7 @@ async function main() {
 				}
 				if (currentTurn) {
 					currentTurn.modelError = stopReason === "error";
+					recordModelResponse(currentTurn, stopReason, event.message);
 				}
 				const types = listOrEmpty(event.message.content).map((c) => c.type);
 				const toolCalls = types.filter((t) => t === "toolCall").length;

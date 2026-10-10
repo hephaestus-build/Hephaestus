@@ -695,8 +695,15 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                  "usage":{"input":100,"output":"Jane Roe","cacheRead":9007199254740993,"cacheWrite":5,"note":"Jane Roe"},
                  "stopReasons":{"toolUse":1,"Jane Roe":2},
                  "toolCalls":{"read":2,"jane_roe_tool":1,"other":1},
+                 "modelFailures":{"HTTP_ERROR":1,"Jane Roe":3,"UNKNOWN":-1},
+                 "lastModelFailureAt":1760000000000,
+                 "finalModelFailure":{"kind":"HTTP_ERROR","phase":"Jane Roe","status":503,"at":1.5,
+                   "error":"Jane Roe <jane@example.com>"},
                  "arguments":{"path":"/workspace/inputs/people/7/person.json"}}},
-              {"summary":{"phase":"Jane Roe"}}
+              {"summary":{"phase":"Jane Roe","finalModelFailure":{"kind":"ABORTED","phase":"request","status":503}}},
+              {"summary":{"finalModelFailure":{"kind":"Jane Roe","status":503}}},
+              {"summary":{"finalModelFailure":{"kind":"FINISH_REASON_ERROR","phase":"response_body","at":1760000000000,
+                "status":503,"error":"Jane Roe"}}}
             ]}
             """;
 
@@ -781,8 +788,16 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                                   "summary":{"phase":"practice","practiceRevisionId":12,"entries":6,
                                     "usage":{"input":100,"cacheWrite":5},
                                     "stopReasons":{"toolUse":1},
-                                    "toolCalls":{"read":2,"other":1}}},
-                                 {"copied":false,"summary":{"usage":{},"stopReasons":{},"toolCalls":{}}}]
+                                    "toolCalls":{"read":2,"other":1},
+                                    "modelFailures":{"HTTP_ERROR":1},
+                                    "lastModelFailureAt":1760000000000,
+                                    "finalModelFailure":{"kind":"HTTP_ERROR","status":503}}},
+                                 {"copied":false,"summary":{"usage":{},"stopReasons":{},"toolCalls":{},
+                                    "modelFailures":{},"finalModelFailure":{"kind":"ABORTED","phase":"request"}}},
+                                 {"copied":false,"summary":{"usage":{},"stopReasons":{},"toolCalls":{},
+                                    "modelFailures":{}}},
+                                 {"copied":false,"summary":{"usage":{},"stopReasons":{},"toolCalls":{},"modelFailures":{},
+                                   "finalModelFailure":{"kind":"FINISH_REASON_ERROR","phase":"response_body","at":1760000000000}}}]
                                 """));
             }
             case NOT_HELD ->
