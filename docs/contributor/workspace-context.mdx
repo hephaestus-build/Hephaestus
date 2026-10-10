@@ -51,9 +51,10 @@ Elevation does not make them a member either.
 Declare member-only features, such as Heph, with `@PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")`.
 A user view still satisfies this check as the viewed member.
 
-`@PreAuthorize("@workspaceSecure.isMember()")` admits any effective role, including elevation, but never a public read.
+`@PreAuthorize("@workspaceSecure.isMember()")` admits any effective role, including elevation, but never anonymous access.
 The Activity endpoints use this check.
-Thus, a publicly viewable workspace does not open them to non-members.
+The dedicated public activity controller does not use this context; it resolves publication eligibility and public scope separately.
+No publication setting opens member endpoints to non-members.
 The privilege and audit policy lives in [Instance administration](./instance-admin.md#who-is-an-instance-admin).
 
 Check roles through the context:
@@ -64,7 +65,7 @@ if (ctx.hasRole(WorkspaceRole.OWNER)) {
 }
 
 if (!ctx.hasMembership()) {
-    // no effective workspace role (for example, a public read by a non-member)
+    // no effective workspace role
 }
 ```
 
@@ -169,7 +170,7 @@ Membership rows use SCM users as keys, not accounts. The account-keyed schema in
 `CurrentAccountUsers` resolves an account's non-disabled identity links to existing SCM actors by
 provider id and immutable provider subject. It does not provision actors or fall back to usernames,
 display names, or cached actor references. No resolvable links means no SCM actors, not a restriction
-on public reads or instance-admin elevation.
+on the dedicated public activity endpoint or instance-admin elevation.
 
 `AccountWorkspaceMembershipQuery` uses that resolver for cross-module membership reads.
 The effective role is the strongest role across the account's linked workspace members.
