@@ -9,7 +9,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URI;
-import java.time.Duration;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -17,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -146,6 +146,10 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         }
         String method = request.getMethod();
         if (("GET".equals(method) || "HEAD".equals(method)) && path.matches("/public/workspaces/[^/]+/activity")) {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null
+                    && authentication.isAuthenticated()
+                    && !(authentication instanceof AnonymousAuthenticationToken)) return null;
             return Endpoint.PUBLIC_ACTIVITY;
         }
         if ("GET".equals(method) && path.startsWith("/oauth2/authorization/")) {
@@ -197,7 +201,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             case MENTOR_CHAT -> properties.mentorChat();
             case REVIEW_REQUEST -> properties.reviewRequest();
             case SYNC_TRIGGER -> properties.syncTrigger();
-            case PUBLIC_ACTIVITY -> new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1));
+            case PUBLIC_ACTIVITY -> properties.publicActivity();
         };
     }
 

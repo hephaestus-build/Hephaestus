@@ -41,7 +41,8 @@ public record AuthRateLimitProperties(
         @DefaultValue Limit export,
         @DefaultValue Limit mentorChat,
         @DefaultValue Limit reviewRequest,
-        @DefaultValue Limit syncTrigger) {
+        @DefaultValue Limit syncTrigger,
+        @DefaultValue Limit publicActivity) {
     public AuthRateLimitProperties {
         // Bind nulls (a partially-specified YAML block) to the spec defaults so a misconfigured
         // sub-key never silently disables a limit.
@@ -56,6 +57,7 @@ public record AuthRateLimitProperties(
         mentorChat = mentorChat != null ? mentorChat : Limit.of(20, Duration.ofMinutes(10));
         reviewRequest = reviewRequest != null ? reviewRequest : Limit.of(10, Duration.ofHours(1));
         syncTrigger = syncTrigger != null ? syncTrigger : Limit.of(10, Duration.ofHours(1));
+        publicActivity = publicActivity != null ? publicActivity : Limit.of(60, Duration.ofMinutes(1));
     }
 
     /**

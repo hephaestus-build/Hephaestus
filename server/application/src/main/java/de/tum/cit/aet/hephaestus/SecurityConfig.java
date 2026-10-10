@@ -356,6 +356,8 @@ public class SecurityConfig {
             requests.requestMatchers(HttpMethod.GET, "/workspaces/providers").permitAll();
             requests.requestMatchers(HttpMethod.GET, "/public/workspaces/*/activity")
                     .permitAll();
+            requests.requestMatchers(HttpMethod.HEAD, "/public/workspaces/*/activity")
+                    .permitAll();
             // Registry/listing stays authenticated to avoid leaking tenant directory.
             requests.requestMatchers(HttpMethod.GET, "/workspaces", "/workspaces/")
                     .authenticated();

@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -39,7 +41,11 @@ class SecurityFilterChainRuntimeIntegrationTest extends BaseIntegrationTest {
             var name = handler.getBeanType().getSimpleName() + "."
                     + handler.getMethod().getName();
             var methods = mapping.getMethodsCondition().getMethods();
-            if (methods.isEmpty()) methods = Set.of(RequestMethod.GET, RequestMethod.POST);
+            if (methods.isEmpty()) methods = Set.of(RequestMethod.GET, RequestMethod.HEAD, RequestMethod.POST);
+            else if (methods.contains(RequestMethod.GET)) {
+                methods = new HashSet<>(methods);
+                methods.add(RequestMethod.HEAD);
+            }
             for (String pattern : mapping.getPatternValues()) {
                 for (RequestMethod method : methods) {
                     if (method == RequestMethod.OPTIONS) continue;
@@ -92,6 +98,21 @@ class SecurityFilterChainRuntimeIntegrationTest extends BaseIntegrationTest {
         assertThat(filterChains)
                 .as("at least one security chain must install AuthRateLimitFilter")
                 .anyMatch(chain -> chain.getFilters().stream().anyMatch(AuthRateLimitFilter.class::isInstance));
+        for (var chain : filterChains) {
+            var filters = chain.getFilters();
+            int authentication = IntStream.range(0, filters.size())
+                    .filter(index -> filters.get(index) instanceof BearerTokenAuthenticationFilter)
+                    .findFirst()
+                    .orElse(-1);
+            if (authentication < 0) continue;
+            int limiter = IntStream.range(0, filters.size())
+                    .filter(index -> filters.get(index) instanceof AuthRateLimitFilter)
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(limiter)
+                    .as("authentication precedes the anonymous-only budget")
+                    .isGreaterThan(authentication);
+        }
     }
 
     // The proxy beans are gated on the job-execution capability (worker role + hephaestus.agent.enabled),

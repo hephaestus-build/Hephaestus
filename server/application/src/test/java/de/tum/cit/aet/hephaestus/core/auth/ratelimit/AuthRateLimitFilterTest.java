@@ -80,6 +80,46 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         assertThat(independent.getStatus()).isEqualTo(200);
     }
 
+    @Test
+    void shouldUseTheConfiguredAnonymousPublicBudgetForGetAndHead() throws Exception {
+        var defaults = props();
+        var configured = new AuthRateLimitProperties(
+                true,
+                defaults.oauthAuthorization(),
+                defaults.refresh(),
+                defaults.clientSession(),
+                defaults.userView(),
+                defaults.deleteUser(),
+                defaults.export(),
+                defaults.mentorChat(),
+                defaults.reviewRequest(),
+                defaults.syncTrigger(),
+                new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)));
+        var limited = filter(configured);
+        limited.doFilter(
+                new MockHttpServletRequest("GET", "/public/workspaces/alpha/activity"),
+                new MockHttpServletResponse(),
+                mock(FilterChain.class));
+        var blocked = new MockHttpServletResponse();
+        limited.doFilter(
+                new MockHttpServletRequest("HEAD", "/public/workspaces/alpha/activity"),
+                blocked,
+                mock(FilterChain.class));
+        assertThat(blocked.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    void shouldNotChargeSignedInPublicReadsToTheAnonymousIpBudget() throws Exception {
+        var limited = filter(props());
+        authenticateAs("campus-member");
+        var request = new MockHttpServletRequest("HEAD", "/public/workspaces/alpha/activity");
+        limited.doFilter(request, new MockHttpServletResponse(), mock(FilterChain.class));
+        assertThat(store).isEmpty();
+        SecurityContextHolder.clearContext();
+        limited.doFilter(request, new MockHttpServletResponse(), mock(FilterChain.class));
+        assertThat(store).containsOnlyKeys("public-activity:ip:127.0.0.1");
+    }
+
     private double blockedCount(String bucket) {
         var counter = meterRegistry
                 .find("auth.ratelimit.blocked")
@@ -107,7 +147,8 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(10)),
                 new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
-                new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)));
+                new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
+                new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)));
     }
 
     @AfterEach
@@ -150,7 +191,8 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
-                new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)));
+                new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
+                new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)));
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/auth/refresh");
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -425,7 +467,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     @ParameterizedTest
     @CsvSource({"POST,/workspaces/demo/mentor/chat", "GET,/public/workspaces/demo/activity"})
     void costlyRequestFailsClosedWhenBucketBackendThrows(String method, String path) throws Exception {
-        authenticateAs("42");
+        if (!path.startsWith("/public/")) authenticateAs("42");
         BucketResolver throwing = (key, config) -> {
             throw new RuntimeException("bucket store down");
         };
