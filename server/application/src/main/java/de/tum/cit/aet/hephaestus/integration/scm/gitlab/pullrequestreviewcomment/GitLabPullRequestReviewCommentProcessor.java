@@ -114,7 +114,8 @@ public class GitLabPullRequestReviewCommentProcessor {
             IdentityProvider provider,
             @Nullable PullRequestReviewComment inReplyTo,
             @Nullable PullRequestReview review,
-            Long scopeId) {}
+            Long scopeId,
+            boolean authoritative) {}
 
     /**
      * Finds or creates a review comment from a GitLab diff note.
@@ -166,6 +167,10 @@ public class GitLabPullRequestReviewCommentProcessor {
         if (existing.getThread() == null || !existing.getThread().getId().equals(thread.getId())) {
             existing.setThread(thread);
             changedFields.add("thread");
+        }
+        if (context.authoritative() && !Objects.equals(existing.getInReplyTo(), context.inReplyTo())) {
+            existing.setInReplyTo(context.inReplyTo());
+            changedFields.add("inReplyTo");
         }
         // Backfill the review link when a synthetic COMMENTED review is now available
         if (existing.getReview() == null && context.review() != null) {

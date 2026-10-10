@@ -16,12 +16,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 @Entity
+// Recent-sync timestamp writes must not restore historical checkpoints from an earlier snapshot.
+@DynamicUpdate
 @Table(
         name = "repository_to_monitor",
         uniqueConstraints =
@@ -154,6 +157,10 @@ public class RepositoryToMonitor {
     @JoinColumn(name = "workspace_id", nullable = false)
     @ToString.Exclude
     private @Nullable Workspace workspace;
+
+    /** Provider count at the last repair restart; the same coverage gap is not scanned again. */
+    @Nullable
+    private Integer backfillRepairProviderCount;
 
     /**
      * Checks if issue backfill has been initialized (high water mark set).

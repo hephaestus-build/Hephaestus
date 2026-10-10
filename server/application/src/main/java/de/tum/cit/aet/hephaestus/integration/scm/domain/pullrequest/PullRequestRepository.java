@@ -28,6 +28,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 @WorkspaceAgnostic("Pull requests scoped through repository_id -> repository.workspace_id")
 public interface PullRequestRepository extends JpaRepository<PullRequest, Long> {
+    /** Provider coverage includes tombstones and erased attribution: those source rows are not missing. */
+    @Query(
+            value = "SELECT count(*) FROM issue WHERE repository_id=:repositoryId AND issue_type='PULL_REQUEST'",
+            nativeQuery = true)
+    long countStoredByRepositoryId(@Param("repositoryId") long repositoryId);
+
     boolean existsByIdAndDeletedAtIsNull(Long id);
 
     @Query("""

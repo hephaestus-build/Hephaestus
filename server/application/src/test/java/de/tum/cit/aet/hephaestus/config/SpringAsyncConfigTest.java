@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.tenancy.WorkspaceAgnosticAspect;
 import java.util.concurrent.CompletableFuture;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -83,8 +85,15 @@ class SpringAsyncConfigTest {
         }
     }
 
-    static class AsyncProbe {
+    @Test
+    void shouldRejectActivityAfterShutdownInsteadOfDiscardingIt() {
+        var executor = new SpringAsyncConfig().activityExecutor();
+        executor.initialize();
+        executor.shutdown();
+        assertThatThrownBy(() -> executor.execute(() -> {})).isInstanceOf(TaskRejectedException.class);
+    }
 
+    static class AsyncProbe {
         @Async
         public CompletableFuture<String> currentThread() {
             return CompletableFuture.completedFuture(Thread.currentThread().getName());

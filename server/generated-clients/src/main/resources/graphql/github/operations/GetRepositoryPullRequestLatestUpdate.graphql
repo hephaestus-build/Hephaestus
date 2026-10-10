@@ -19,6 +19,7 @@ query GetRepositoryPullRequestLatestUpdate($owner: String!, $name: String!) {
     }
     repository(owner: $owner, name: $name) {
         pullRequests(first: 1, orderBy: { field: UPDATED_AT, direction: DESC }) {
+            totalCount
             nodes {
                 updatedAt
             }

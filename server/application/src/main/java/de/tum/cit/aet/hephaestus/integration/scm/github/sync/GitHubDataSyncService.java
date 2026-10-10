@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -95,6 +96,7 @@ public class GitHubDataSyncService {
 
     private static final String GITHUB_SERVER_URL = "https://github.com";
 
+    private final ActivityLedgerRepair activityLedgerRepair;
     private final SyncSchedulerProperties syncSchedulerProperties;
 
     private final IdentityProviderRepository gitProviderRepository;
@@ -150,7 +152,8 @@ public class GitHubDataSyncService {
             GitHubExceptionClassifier exceptionClassifier,
             InstallationTokenProvider tokenProvider,
             GitHubAppTokenService gitHubAppTokenService,
-            RateLimitTracker rateLimitTracker) {
+            RateLimitTracker rateLimitTracker,
+            ActivityLedgerRepair activityLedgerRepair) {
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.gitProviderRepository = gitProviderRepository;
         this.syncTargetProvider = syncTargetProvider;
@@ -177,6 +180,7 @@ public class GitHubDataSyncService {
         this.tokenProvider = tokenProvider;
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.rateLimitTracker = rateLimitTracker;
+        this.activityLedgerRepair = activityLedgerRepair;
     }
 
     private Optional<Repository> fetchRepositoryMetadata(SyncTarget target, IdentityProvider provider) {
@@ -445,6 +449,12 @@ public class GitHubDataSyncService {
             }
             if (error == null) {
                 error = commitBackfillError;
+            }
+            try {
+                activityLedgerRepair.reconcileRepository(scopeId, repositoryId);
+            } catch (RuntimeException e) {
+                log.warn("Activity ledger repair failed: workspaceId={}, repositoryId={}", scopeId, repositoryId, e);
+                if (error == null) error = "Activity ledger repair failed";
             }
             syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, error);
             return error == null;

@@ -86,6 +86,7 @@ public class GitHubIntegrationSyncRunner implements IntegrationSyncRunner {
     @Override
     public void backfill(IntegrationRef ref, SyncExecutionHandle handle) {
         long workspaceId = ref.workspaceId();
+        backfillService.repairCompletedRepositories(workspaceId, handle);
         int batchSize = syncSchedulerProperties.backfill().batchSize();
 
         while (!handle.isCancellationRequested()) {

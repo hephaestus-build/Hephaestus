@@ -118,6 +118,12 @@ public class ActivityEventService implements ActivityRecorder {
             return false;
         }
 
+        if (eventType == ActivityEventType.REVIEW_COMMENTED && eventRepository.isReplyOnlyReview(targetId)) {
+            return false;
+        }
+        if (eventType == ActivityEventType.REVIEW_COMMENT_CREATED) {
+            eventRepository.deleteReplyOnlyReviewEvents(workspaceId, targetId);
+        }
         String eventKey = ActivityEvent.buildKey(eventType, targetId, occurredAt);
 
         // ON CONFLICT handles concurrent deliveries without a check-then-insert race.

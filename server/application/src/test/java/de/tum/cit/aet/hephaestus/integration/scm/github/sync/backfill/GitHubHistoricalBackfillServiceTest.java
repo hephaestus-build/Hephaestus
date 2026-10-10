@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.BackfillProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.FilterProperties;
@@ -17,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
@@ -84,6 +87,9 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
     private RepositoryRepository repositoryRepository;
 
     @Mock
+    private GitHubBackfillRepair backfillRepair;
+
+    @Mock
     private TransactionTemplate transactionTemplate;
 
     private GitHubHistoricalBackfillService service;
@@ -97,6 +103,26 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
     private GitHubSyncProperties syncProperties;
     private SyncSchedulerProperties enabledSchedulerProperties;
     private SyncSchedulerProperties disabledSchedulerProperties;
+
+    @Test
+    void shouldWarnAndContinueAdminRepairAfterOneRepositoryFails() {
+        var first = SyncTargetTestBuilder.syncTarget()
+                .id(1L)
+                .scopeId(SCOPE_ID)
+                .repositoryNameWithOwner("org/bad")
+                .build();
+        var second = SyncTargetTestBuilder.syncTarget()
+                .id(2L)
+                .scopeId(SCOPE_ID)
+                .repositoryNameWithOwner("org/good")
+                .build();
+        var handle = mock(SyncExecutionHandle.class);
+        when(syncTargetProvider.getSyncTargetsForScope(SCOPE_ID)).thenReturn(List.of(first, second));
+        when(backfillRepair.inspect(first, true)).thenThrow(new IllegalStateException("Repository unavailable"));
+        service.repairCompletedRepositories(SCOPE_ID, handle);
+        verify(handle).reportWarnings();
+        verify(backfillRepair).inspect(second, true);
+    }
 
     @BeforeEach
     void setUp() {
@@ -135,6 +161,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
             return callback.doInTransaction(mock(TransactionStatus.class));
         });
 
+        lenient().when(backfillRepair.inspect(any(), anyBoolean())).thenAnswer(invocation -> invocation.getArgument(0));
         service = createService(enabledSchedulerProperties);
     }
 
@@ -146,7 +173,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
         assertThat(service.backfillRepository(target, 50, BackfillPageObserver.NOOP))
                 .isFalse();
         verify(graphQlClientProvider, never()).forScope(any());
-        verify(repositoryRepository, never()).findByNameWithOwner(any());
+        verify(backfillRepair, never()).findRepository(any());
     }
 
     private GitHubHistoricalBackfillService createService(SyncSchedulerProperties schedulerProps) {
@@ -165,7 +192,9 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
                 repositoryRepository,
                 transactionTemplate,
                 Runnable::run // synchronous executor for tests
-                );
+                ,
+                mock(ActivityLedgerRepair.class),
+                backfillRepair);
     }
 
     private SyncTarget createTargetWithIncrementalComplete(Long id, String repoName) {
@@ -367,7 +396,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
             // Rate limit is always checked; stub above threshold to reach per-repo iteration
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(5000);
             // repoA passes incremental check, enters backfillRepository but not found in DB
-            when(repositoryRepository.findByNameWithOwner("org/repo-a")).thenReturn(Optional.empty());
+            when(backfillRepair.findRepository(any())).thenReturn(Optional.empty());
 
             BackfillCycleResult result = service.runBackfillCycle();
 
@@ -393,7 +422,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
                     .thenReturn(50);
             // Note: forScope is NOT called because backfillRepository returns false
             // (repo not in DB) before reaching the GraphQL client
-            when(repositoryRepository.findByNameWithOwner("org/repo-a")).thenReturn(Optional.empty());
+            when(backfillRepair.findRepository(any())).thenReturn(Optional.empty());
 
             BackfillCycleResult result = service.runBackfillCycle();
 
@@ -424,7 +453,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
         @Test
         void shouldReturnFalseWhenRepositoryNotInDatabase() {
             SyncTarget target = createTargetWithIncrementalComplete(SYNC_TARGET_ID_A, "org/repo-a");
-            when(repositoryRepository.findByNameWithOwner("org/repo-a")).thenReturn(Optional.empty());
+            when(backfillRepair.findRepository(any())).thenReturn(Optional.empty());
 
             boolean result = service.backfillRepository(target, 50, BackfillPageObserver.NOOP);
 
@@ -693,7 +722,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
         void shouldRecordBackfillFailureOnTheMonitoredRepository() {
             SyncTarget target = createTargetWithBackfillInProgress(SYNC_TARGET_ID_A, "org/repo-a");
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(1000);
-            when(repositoryRepository.findByNameWithOwner("org/repo-a"))
+            when(backfillRepair.findRepository(any()))
                     .thenThrow(new IllegalStateException("sensitive database detail"));
 
             assertThat(service.runBackfillBatch(target, 50, BackfillPageObserver.NOOP))
@@ -797,7 +826,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
             // Rate limit is always checked; stub above threshold to reach per-repo iteration
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(5000);
             // eligibleRepo passes incremental check, enters backfillRepository but not in DB
-            when(repositoryRepository.findByNameWithOwner("org/repo-eligible")).thenReturn(Optional.empty());
+            when(backfillRepair.findRepository(any())).thenReturn(Optional.empty());
 
             BackfillCycleResult result = service.runBackfillCycle();
 
@@ -817,7 +846,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
             when(syncTargetProvider.getSyncSessions(IntegrationKind.GITHUB)).thenReturn(List.of(session));
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(5000);
             // eligibleRepo enters the per-repo loop and calls backfillRepository
-            when(repositoryRepository.findByNameWithOwner("org/repo-eligible")).thenReturn(Optional.empty());
+            when(backfillRepair.findRepository(any())).thenReturn(Optional.empty());
 
             BackfillCycleResult result = service.runBackfillCycle();
 
@@ -829,7 +858,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
         }
     }
 
-    /**
+    /*
      * The per-page progress seam. The page loops that call this need a live GraphQL conversation to
      * reach, but the two rules it enforces stand on their own.
      */

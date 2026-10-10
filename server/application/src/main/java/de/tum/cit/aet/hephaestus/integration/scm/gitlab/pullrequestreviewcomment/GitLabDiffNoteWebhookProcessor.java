@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
@@ -203,19 +202,15 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
         PullRequestReviewComment inReplyTo = thread.getId() != null
                 ? reviewCommentRepository
                         .findFirstByThreadIdOrderByCreatedAtAsc(thread.getId())
+                        .filter(parent -> !Objects.equals(parent.getNativeId(), attrs.id()))
                         .orElse(null)
                 : null;
 
-        // Reconcile a synthetic COMMENTED review per (author, discussion) so the note links
-        // to a review row, as on GitHub, and activity counts the review.
-        PullRequestReview review = null;
-        if (author != null && discussionGid != null) {
-            review = reviewReconciler.findOrCreateCommentedReview(
-                    pr, author, discussionGid, createdAt, provider, context);
-        }
-
+        var review = inReplyTo == null && discussionGid != null && author != null
+                ? reviewReconciler.findOrCreateCommentedReview(pr, author, discussionGid, createdAt, provider, context)
+                : null;
         var commentContext = new GitLabPullRequestReviewCommentProcessor.CommentContext(
-                thread, pr, author, provider, inReplyTo, review, Objects.requireNonNull(context.scopeId()));
+                thread, pr, author, provider, inReplyTo, review, Objects.requireNonNull(context.scopeId()), false);
         PullRequestReviewComment comment = reviewCommentProcessor.findOrCreateComment(noteData, commentContext);
 
         if (comment != null) {
