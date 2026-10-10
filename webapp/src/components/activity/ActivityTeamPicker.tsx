@@ -17,10 +17,8 @@ import { hasText } from "@/lib/text";
 import { type TeamOption, teamPaths } from "./team-paths";
 
 export interface ActivityTeamPickerProps {
-	/** The teams workspace activity shows; undefined while they load or when they failed. */
+	/** The teams workspace activity shows; undefined until the first people arrive. */
 	teams: readonly ActivityTeam[] | undefined;
-	/** The teams could not load. */
-	failed?: boolean;
 	/** The team's slug; undefined is everyone. */
 	value: string | undefined;
 	onChange: (team: string | undefined) => void;
@@ -33,12 +31,7 @@ const EVERYONE: TeamOption = { key: "", label: "Everyone" };
  * reads by its path, so two "Backend" teams under different parents stay apart. A workspace with no
  * teams has nothing to pick.
  */
-export function ActivityTeamPicker({
-	teams,
-	failed = false,
-	value,
-	onChange,
-}: ActivityTeamPickerProps) {
+export function ActivityTeamPicker({ teams, value, onChange }: ActivityTeamPickerProps) {
 	if (teams?.length === 0 && value === undefined) {
 		return null;
 	}
@@ -71,7 +64,7 @@ export function ActivityTeamPicker({
 			</ComboboxTrigger>
 			<ComboboxContent align="start" className="min-w-64" aria-label="Team">
 				<ComboboxSearchInput placeholder="Search teams…" aria-label="Search teams" />
-				<ComboboxEmpty>{emptyText(teams, failed)}</ComboboxEmpty>
+				<ComboboxEmpty>No team matches</ComboboxEmpty>
 				<ComboboxList aria-label="Teams">
 					{(option: TeamOption) => (
 						<ComboboxItem key={option.key} value={option}>
@@ -83,11 +76,4 @@ export function ActivityTeamPicker({
 			</ComboboxContent>
 		</Combobox>
 	);
-}
-
-function emptyText(teams: readonly ActivityTeam[] | undefined, failed: boolean): string {
-	if (failed) {
-		return "We could not load teams";
-	}
-	return teams === undefined ? "Loading teams…" : "No team matches";
 }

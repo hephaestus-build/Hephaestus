@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { setDate, startOfMonth, subMonths } from "date-fns";
 import { expect, fn, screen, waitFor, within } from "storybook/test";
 
 import { settledPopup } from "@/stories/overlay";
@@ -45,9 +46,12 @@ export const PickCustomRange: Story = {
 		await userEvent.click(popup.getByRole("button", { name: / 12th, /u }));
 		await expect(args.onPeriodChange).not.toHaveBeenCalled();
 		await userEvent.click(apply);
-		await expect(args.onPeriodChange).toHaveBeenCalledWith(
-			expect.objectContaining({ kind: "custom" }),
-		);
+		const lastMonth = subMonths(startOfMonth(new Date()), 1);
+		await expect(args.onPeriodChange).toHaveBeenCalledWith({
+			kind: "custom",
+			from: setDate(lastMonth, 10),
+			to: setDate(lastMonth, 12),
+		});
 		// Applying closes the calendar.
 		await waitFor(async () =>
 			expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument(),
@@ -59,7 +63,9 @@ export const PickCustomRange: Story = {
 export const Custom: Story = {
 	args: { period: { kind: "custom", from: daysBefore(40), to: daysBefore(10) } },
 	play: async ({ args, canvas }) => {
-		await expect(canvas.getByRole("button", { name: periodLabel(args.period) })).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: `${periodLabel(args.period)}, custom range` }),
+		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "90 days" })).toHaveAttribute(
 			"aria-pressed",
 			"false",

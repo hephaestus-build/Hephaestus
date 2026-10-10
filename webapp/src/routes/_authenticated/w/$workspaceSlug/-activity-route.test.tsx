@@ -765,7 +765,9 @@ describe("Workspace activity", () => {
 	});
 
 	it("says a category of a person who did nothing has nothing, rather than loading", async () => {
-		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:carol&detail=activity:reviews");
+		renderRouteAtWithRouter(
+			"/w/acme/workspace-activity?detail=person:carol&detail=activity:reviews",
+		);
 
 		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
 		await within(level).findByRole("heading", { name: "Reviews" });

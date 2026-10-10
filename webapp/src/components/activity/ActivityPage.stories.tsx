@@ -121,7 +121,9 @@ export const CustomRange: Story = {
 		period: { kind: "custom", from: daysBefore(60), to: daysBefore(31) },
 	},
 	play: async ({ args, canvas }) => {
-		await expect(canvas.getByRole("button", { name: periodLabel(args.period) })).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: `${periodLabel(args.period)}, custom range` }),
+		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "30 days" })).toHaveAttribute(
 			"aria-pressed",
 			"false",

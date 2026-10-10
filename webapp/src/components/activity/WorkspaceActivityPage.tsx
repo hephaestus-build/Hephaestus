@@ -74,12 +74,7 @@ export function WorkspaceActivityPage({
 				description={ready && coverageNote(ready)}
 			/>
 			<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-				<ActivityTeamPicker
-					teams={facets?.teams}
-					failed={people.status === "error"}
-					value={team}
-					onChange={onTeamChange}
-				/>
+				<ActivityTeamPicker teams={facets?.teams} value={team} onChange={onTeamChange} />
 				<ActivityPeriodPicker
 					period={period}
 					onPeriodChange={onPeriodChange}

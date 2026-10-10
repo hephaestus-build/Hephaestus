@@ -47,10 +47,10 @@ export const Loading: Story = {
 	},
 };
 
+/** A workspace with no teams has nothing to pick, so there is no picker. */
 export const NoTeams: Story = {
 	args: { teams: [] },
-	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("combobox", { name: "Team: Everyone" }));
-		await expect(within(await settledPopup()).getAllByRole("option")).toHaveLength(1);
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("combobox")).not.toBeInTheDocument();
 	},
 };
