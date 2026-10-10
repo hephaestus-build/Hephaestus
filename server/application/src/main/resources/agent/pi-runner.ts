@@ -28,7 +28,14 @@ import { assessmentCacheExtension } from "./pi-assessment-cache.ts";
 import { CHANGE_ROOT, checkedOutCommit, pinnedDiff, readPinnedBlob } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
 import { folderCitationIndex } from "./pi-folder-index.ts";
-import { type ModelFailure, type ModelFailureKind, modelFailure } from "./pi-model-failure.ts";
+import {
+	addModelCall,
+	type ModelCallTiming,
+	type ModelFailure,
+	type ModelFailureKind,
+	modelFailure,
+	newModelCallTiming,
+} from "./pi-model-failure.ts";
 import {
 	CONVERSATION_THREAD,
 	OUTCOME_VALUES,
@@ -563,6 +570,10 @@ interface TurnTrace {
 	 * call succeeds.
 	 */
 	finalModelFailure: (ModelFailure & { retryEndedUnsuccessfully: boolean }) | null;
+	/** Failed or aborted calls whose failure diagnostic was missing or unreadable; their kind reads UNKNOWN. */
+	unattributedModelFailures: number;
+	/** The adapter's own call spans, failed calls included; calls without one are not counted. */
+	modelCallTiming: ModelCallTiming;
 	runtimeError: boolean;
 	label: string;
 	durationMs: number;
@@ -3563,6 +3574,8 @@ function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTra
 		modelFailures: {},
 		lastModelFailureAt: null,
 		finalModelFailure: null,
+		unattributedModelFailures: 0,
+		modelCallTiming: newModelCallTiming(),
 		runtimeError: false,
 		label,
 		durationMs: Date.now(),
@@ -3588,9 +3601,14 @@ function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTra
 }
 
 function recordModelResponse(trace: TurnTrace, stopReason: string, message: unknown): void {
-	if (stopReason === "error" || stopReason === "aborted") {
+	const failed = stopReason === "error" || stopReason === "aborted";
+	addModelCall(trace.modelCallTiming, message, failed);
+	if (failed) {
 		const failure = modelFailure(message);
 		trace.modelFailures[failure.kind] = (trace.modelFailures[failure.kind] ?? 0) + 1;
+		if (failure.source !== "ADAPTER") {
+			trace.unattributedModelFailures += 1;
+		}
 		trace.lastModelFailureAt = failure.at ?? trace.lastModelFailureAt;
 		trace.finalModelFailure = { ...failure, retryEndedUnsuccessfully: false };
 	} else {

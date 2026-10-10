@@ -811,10 +811,20 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 "CONNECTION_ERROR",
                 "STREAM_INCOMPLETE",
                 "FINISH_REASON_ERROR",
+                "STREAM_ERROR_EVENT",
+                "RESPONSE_FAILED",
+                "RESPONSE_STATUS_ERROR",
+                "TOOL_CALL_INCOMPLETE",
                 "ABORTED",
                 "UNKNOWN");
 
         private static final Set<String> MODEL_FAILURE_PHASES = Set.of("request", "response_body");
+        private static final Set<String> MODEL_FAILURE_SOURCES = Set.of("ADAPTER", "MISSING", "INVALID");
+        /** The adapter's call span totals in milliseconds (gateway-run.ts), each a bounded integer. */
+        private static final List<String> MODEL_CALL_TIMING =
+                List.of("elapsedMs", "failedElapsedMs", "maxElapsedMs", "responseMs");
+
+        private static final long MAX_DURATION_MS = (1L << 53) - 1;
         /** The largest time a JavaScript Date can hold, in epoch milliseconds. */
         private static final long MAX_EPOCH_MS = 8_640_000_000_000_000L;
 
@@ -847,7 +857,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 ObjectNode facts = kept.putObject("summary");
                 putOwned(facts, "phase", summary.path("phase"), PHASES);
                 putBounded(facts, "practiceRevisionId", summary.path("practiceRevisionId"), MAX_REVISION);
-                for (String count : List.of("entries", "assistantCalls", "toolErrors", "compactions")) {
+                for (String count : List.of(
+                        "entries", "assistantCalls", "toolErrors", "compactions", "unattributedModelFailures")) {
                     putBounded(facts, count, summary.path(count), MAX_COUNT);
                 }
                 ObjectNode usage = facts.putObject("usage");
@@ -859,6 +870,16 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 putCounts(facts.putObject("modelFailures"), summary.path("modelFailures"), MODEL_FAILURE_KINDS);
                 putBounded(facts, "lastModelFailureAt", summary.path("lastModelFailureAt"), MAX_EPOCH_MS);
                 putModelFailure(facts, summary.path("finalModelFailure"));
+                JsonNode callTiming = summary.path("modelCallTiming");
+                if (callTiming.isObject()) {
+                    ObjectNode timing = facts.putObject("modelCallTiming");
+                    for (String field : List.of("timedCalls", "respondedCalls")) {
+                        putBounded(timing, field, callTiming.path(field), MAX_COUNT);
+                    }
+                    for (String field : MODEL_CALL_TIMING) {
+                        putBounded(timing, field, callTiming.path(field), MAX_DURATION_MS);
+                    }
+                }
             }
             return sessions;
         }
@@ -869,6 +890,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
             if (!kind.isString() || !MODEL_FAILURE_KINDS.contains(kind.asString())) return;
             ObjectNode kept = facts.putObject("finalModelFailure");
             kept.put("kind", kind.asString());
+            putOwned(kept, "source", failure.path("source"), MODEL_FAILURE_SOURCES);
             putOwned(kept, "phase", failure.path("phase"), MODEL_FAILURE_PHASES);
             if ("HTTP_ERROR".equals(kind.asString())) putBetween(kept, "status", failure.path("status"), 400, 599);
             putBounded(kept, "at", failure.path("at"), MAX_EPOCH_MS);

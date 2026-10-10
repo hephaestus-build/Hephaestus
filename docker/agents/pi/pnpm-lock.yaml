@@ -8,7 +8,7 @@ overrides:
   undici@>=8.0.0 <8.11.2: 8.11.2
 
 patchedDependencies:
-  '@earendil-works/pi-ai@1.0.0': 6b7cb4afe71070d8332415f07730875bfde82da9b8e54e925f6f129da596be2c
+  '@earendil-works/pi-ai@1.0.0': 7f20240a7a66b663e86c5b87724e775856909cddc18844451d0328a15b3f8872
 
 importers:
 
@@ -949,7 +949,7 @@ snapshots:
 
   '@earendil-works/pi-agent-core@1.0.0(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(undici@8.11.2)(ws@8.21.3)':
     dependencies:
-      '@earendil-works/pi-ai': 1.0.0(patch_hash=6b7cb4afe71070d8332415f07730875bfde82da9b8e54e925f6f129da596be2c)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(undici@8.11.2)(ws@8.21.3)
+      '@earendil-works/pi-ai': 1.0.0(patch_hash=7f20240a7a66b663e86c5b87724e775856909cddc18844451d0328a15b3f8872)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(undici@8.11.2)(ws@8.21.3)
       typebox: 1.3.27
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
@@ -964,7 +964,7 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@1.0.0(patch_hash=6b7cb4afe71070d8332415f07730875bfde82da9b8e54e925f6f129da596be2c)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(undici@8.11.2)(ws@8.21.3)':
+  '@earendil-works/pi-ai@1.0.0(patch_hash=7f20240a7a66b663e86c5b87724e775856909cddc18844451d0328a15b3f8872)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(undici@8.11.2)(ws@8.21.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.124.0
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
@@ -997,7 +997,7 @@ snapshots:
     dependencies:
       '@earendil-works/chord': 1.0.0
       '@earendil-works/pi-agent-core': 1.0.0(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(undici@8.11.2)(ws@8.21.3)
-      '@earendil-works/pi-ai': 1.0.0(patch_hash=6b7cb4afe71070d8332415f07730875bfde82da9b8e54e925f6f129da596be2c)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(undici@8.11.2)(ws@8.21.3)
+      '@earendil-works/pi-ai': 1.0.0(patch_hash=7f20240a7a66b663e86c5b87724e775856909cddc18844451d0328a15b3f8872)(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(undici@8.11.2)(ws@8.21.3)
       '@earendil-works/pi-codemode': 1.0.0
       '@earendil-works/pi-mcp': 1.0.0
       '@earendil-works/pi-tui': 1.0.0
