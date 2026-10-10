@@ -1,7 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { Globe } from "lucide-react";
 
-import type { ActivityCoverage } from "@/api/types.gen";
+import type { ActivityCoverage, ActivityRepository } from "@/api/types.gen";
+import { FacetMultiSelect } from "@/components/common/FacetMultiSelect";
+import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { InlineLink } from "@/components/common/InlineLink";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -10,10 +12,10 @@ import { ARTIFACT_KIND, artifactKindNoun } from "@/lib/artifact-kinds";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 
 import { coverageNote } from "./activity-coverage";
+import { contributionsNote } from "./activity-people-rows";
 import type { ActivityPeriod } from "./activity-period";
 import {
 	ActivityPeopleTable,
-	type ActivityPeopleTableProps,
 	type PeopleOrder,
 	type PeopleTableState,
 } from "./ActivityPeopleTable";
@@ -32,7 +34,8 @@ export interface PublicActivityPageProps {
 	onOrderChange: (order: PeopleOrder) => void;
 	repo: readonly string[];
 	onRepoChange: (repo: string[]) => void;
-	repositories: ActivityPeopleTableProps["repositories"];
+	/** The public repositories to pick from. */
+	repositories: readonly Pick<ActivityRepository, "key">[];
 	coverage: ActivityCoverage | undefined;
 	people: PeopleTableState;
 	/** Another period is loading, and the page still shows the previous one. */
@@ -61,6 +64,8 @@ export function PublicActivityPage({
 	const terms = getProviderTerms(providerType);
 	const pullRequests = artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType);
 	const note = coverage && coverageNote(coverage);
+	// A repository the URL names but the workspace does not list stays in the picker, so it can be cleared.
+	const repositoryKeys = [...new Set([...repositories.map(({ key }) => key), ...repo])];
 	return (
 		<PageLayout className="max-w-4xl space-y-8">
 			<PageHeader
@@ -90,15 +95,25 @@ export function PublicActivityPage({
 					</>
 				}
 			/>
-			<div className="flex justify-end">
+			<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+				<FilterToolbar hasFilter={repo.length > 0} onReset={() => onRepoChange([])}>
+					{repositoryKeys.length > 1 && (
+						<FacetMultiSelect
+							title="Repository"
+							options={repositoryKeys.map((key) => ({ value: key, label: key }))}
+							selected={repo}
+							onChange={onRepoChange}
+						/>
+					)}
+				</FilterToolbar>
 				<ActivityPeriodPicker period={period} onPeriodChange={onPeriodChange} updating={updating} />
 			</div>
 			<Section
 				size="lg"
-				title="People"
+				title="Activity by person"
 				description={
 					<>
-						Contributions are {pullRequests} opened and reviewed, plus issues opened.
+						{contributionsNote(providerType)}
 						{note !== undefined && ` ${note}`}
 					</>
 				}
@@ -108,9 +123,7 @@ export function PublicActivityPage({
 					providerType={providerType}
 					order={order}
 					onOrderChange={onOrderChange}
-					repositories={repositories}
 					repo={repo}
-					onRepoChange={onRepoChange}
 					personLink={providerProfileLink}
 				/>
 			</Section>

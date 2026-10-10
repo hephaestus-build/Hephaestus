@@ -163,17 +163,20 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                         ELSE count(*) FILTER (WHERE week_first = 1) END AS active_weeks
             """;
     String RESULT_HEAD = """
-            )
-            SELECT c.*, u.login, u.name, u.avatar_url, u.html_url,
-                CASE WHEN c.total = 1 AND c.all_repositories = 1 THEN (SELECT e.occurred_at
+            ), first_contributions AS (
+                SELECT e.actor_id, min(e.occurred_at) AS first_contribution
             """;
     String RESULT_TAIL = """
-                    AND e.actor_id = c.actor_id
+                    AND e.actor_id IN (SELECT actor_id FROM counts WHERE total = 1 AND all_repositories = 1)
                     AND (e.event_type IN ('PULL_REQUEST_OPENED', 'ISSUE_CREATED')
                         OR (prr.pull_request_id IS NOT NULL AND e.event_type IN ('REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED')))
-                    ORDER BY e.occurred_at LIMIT 1) END AS first_contribution,
+                GROUP BY e.actor_id
+            )
+            SELECT c.*, u.login, u.name, u.avatar_url, u.html_url,
+                CASE WHEN c.total = 1 AND c.all_repositories = 1 THEN first.first_contribution END AS first_contribution,
                 u.type = 'BOT' AS bot, actor_machine.user_id IS NOT NULL AS classified
             FROM counts c JOIN "user" u ON u.id = c.actor_id
+            LEFT JOIN first_contributions first ON first.actor_id = c.actor_id
             LEFT JOIN activity_automation actor_machine ON actor_machine.workspace_id = :#{#scope.workspaceId()} AND actor_machine.user_id = u.id
             ORDER BY c.actor_id, c.all_repositories DESC, c.total DESC, c.week, c.repository_id
             """;

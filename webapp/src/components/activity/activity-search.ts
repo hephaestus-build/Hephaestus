@@ -145,6 +145,7 @@ export type PeopleSearch = z.infer<typeof peopleSearchSchema>;
 
 /** Workspace activity adds a team, by its slug: `?team=core&repo=acme/api&sort=reviews`. */
 const workspaceActivityFilterSchema = peopleSearchSchema.extend({
+	view: z.enum(["people", "timeline"]).default("people").catch("people"),
 	// The default parser reads `team=2024` as a number; a slug is text either way.
 	team: z.coerce.string().min(1).optional().catch(undefined),
 });
@@ -156,6 +157,7 @@ export const workspaceActivitySearchSchema = workspaceActivityFilterSchema.exten
 );
 
 export type WorkspaceActivitySearch = z.infer<typeof workspaceActivitySearchSchema>;
+export type WorkspaceActivityView = WorkspaceActivitySearch["view"];
 
 /** Whether a column first lists most first: every count does, and a name runs A to Z. */
 function sortsDescFirst(sort: PeopleSort): boolean {

@@ -585,7 +585,32 @@ describe("Workspace activity", () => {
 		await waitFor(() => expect(readsOf("/activity/people").length).toBeGreaterThan(0));
 		const [first] = readsOf("/activity/people");
 		expect(first?.search).toBe("?range=90d");
+		expect(readsOf("/activity/work")).toHaveLength(0);
 		expect(router.state.location.href).toBe("/w/acme/workspace-activity");
+	});
+
+	it("opens the timeline independently and retains the scope and sort when switching views", async () => {
+		const user = userEvent.setup();
+		const { router } = renderRouteAtWithRouter(
+			"/w/acme/workspace-activity?range=30d&team=core&repo=acme/api&sort=reviews&dir=asc",
+		);
+		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
+		await user.click(screen.getByRole("tab", { name: "Timeline" }));
+		await screen.findByRole("heading", { name: "Timeline" });
+		await waitFor(() => expect(readsOf("/activity/work")).toHaveLength(1));
+		expect(readsOf("/activity/work")[0]?.searchParams.get("range")).toBe("30d");
+		expect(readsOf("/activity/work")[0]?.searchParams.get("team")).toBe("core");
+		expect(readsOf("/activity/work")[0]?.searchParams.getAll("repo")).toStrictEqual(["acme/api"]);
+		expect(router.state.location.search.view).toBe("timeline");
+		await user.click(screen.getByRole("tab", { name: "People" }));
+		await waitFor(() =>
+			expect(router.state.location.href).toBe(
+				"/w/acme/workspace-activity?range=30d&team=core&repo=acme/api&sort=reviews&dir=asc",
+			),
+		);
+		expect(screen.getByRole("columnheader", { name: /^Reviews/u }).getAttribute("aria-sort")).toBe(
+			"ascending",
+		);
 	});
 
 	it("reads the scope a readable address names, by slug and path", async () => {
@@ -749,7 +774,7 @@ describe("Workspace activity", () => {
 				HttpResponse.json({ content: [workItem(1)] }),
 			),
 		);
-		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+		renderRouteAtWithRouter("/w/acme/workspace-activity?view=timeline&detail=person:bob");
 
 		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
 		// The page's own timeline has the work; the level, whose person is not known yet, does not.
@@ -847,7 +872,7 @@ describe("Workspace activity", () => {
 	it("lets an admin treat a person as automation, and nobody else", async () => {
 		role = "ADMIN";
 		const user = userEvent.setup();
-		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+		renderRouteAtWithRouter("/w/acme/workspace-activity?view=timeline&detail=person:bob");
 
 		const action = await screen.findByRole(
 			"button",
@@ -926,7 +951,7 @@ describe("Workspace activity", () => {
 			),
 		);
 		const user = userEvent.setup();
-		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+		renderRouteAtWithRouter("/w/acme/workspace-activity?view=timeline&detail=person:bob");
 
 		await user.click(
 			await screen.findByRole("button", { name: "Count as a person" }, ROUTE_RENDER_WAIT),
@@ -947,7 +972,7 @@ describe("Workspace activity", () => {
 				HttpResponse.json({ ...people, people: [ada], automation: [{ ...bob, kind: "BOT" }] }),
 			),
 		);
-		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+		renderRouteAtWithRouter("/w/acme/workspace-activity?view=timeline&detail=person:bob");
 
 		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
 		await within(level).findByRole("heading", { name: "Bob" });
@@ -955,7 +980,7 @@ describe("Workspace activity", () => {
 	});
 
 	it("offers a member no automation action", async () => {
-		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+		renderRouteAtWithRouter("/w/acme/workspace-activity?view=timeline&detail=person:bob");
 
 		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
 		await within(level).findByRole("heading", { name: "Bob" });

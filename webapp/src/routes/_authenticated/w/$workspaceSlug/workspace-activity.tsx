@@ -85,12 +85,14 @@ function WorkspaceActivity() {
 
 	const period = periodFromSearch(search);
 	const scope = { workspaceSlug, period, team: search.team, repo: search.repo };
-	const people = useActivityPeople(scope);
-	const facets = useActivityFacets(scope);
+	const detailStack = parseActivityStack(search.detail, WORKSPACE_ACTIVITY_LEVEL_KINDS);
+	const peopleEnabled =
+		search.view === "people" || detailStack.some(({ target }) => target.kind === "person");
+	const people = useActivityPeople({ ...scope, enabled: peopleEnabled });
+	const facets = useActivityFacets({ ...scope, enabled: peopleEnabled });
 	const ready = people.status === "ready" ? people.people : undefined;
 	const teamName = teamPaths(facets?.teams ?? []).find(({ key }) => key === search.team)?.label;
 
-	const detailStack = parseActivityStack(search.detail, WORKSPACE_ACTIVITY_LEVEL_KINDS);
 	const stackControls = useDetailStack(detailStack);
 	const targets = detailStack.map(({ target }) => target);
 	const login = targets.find((target) => target.kind === "person")?.login;
@@ -102,6 +104,7 @@ function WorkspaceActivity() {
 	// A copy is headed by whose work it lists: the team, the workspace, or the person opened.
 	const timeline = useActivityWork({
 		...scope,
+		enabled: search.view === "timeline",
 		copy: {
 			title: workLogTitle(teamName ?? workspace?.displayName ?? "Activity"),
 			providerType,
@@ -219,6 +222,8 @@ function WorkspaceActivity() {
 	return (
 		<>
 			<WorkspaceActivityPage
+				view={search.view}
+				onViewChange={(view) => setView({ view })}
 				providerType={providerType}
 				period={period}
 				onPeriodChange={(next: ActivityPeriod) => setView(periodSearch(next))}

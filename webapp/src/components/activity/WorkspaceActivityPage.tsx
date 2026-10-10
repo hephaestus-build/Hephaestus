@@ -2,14 +2,18 @@ import { Building2 } from "lucide-react";
 
 import { cn } from "cn";
 import type { ActivityPeople } from "@/api/types.gen";
+import { FacetMultiSelect } from "@/components/common/FacetMultiSelect";
+import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
-import { ARTIFACT_KIND, artifactKindNoun } from "@/lib/artifact-kinds";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import { coverageNote } from "./activity-coverage";
+import { contributionsNote } from "./activity-people-rows";
 import type { ActivityPeriod } from "./activity-period";
+import type { WorkspaceActivityView } from "./activity-search";
 import { STALE } from "./activity-tones";
 import { ActivityAutomationList } from "./ActivityAutomationList";
 import {
@@ -27,6 +31,8 @@ import { personLevelLink } from "./people-links";
 export type ActivityFacets = Pick<ActivityPeople, "teams" | "repositories">;
 
 export interface WorkspaceActivityPageProps {
+	view: WorkspaceActivityView;
+	onViewChange: (view: WorkspaceActivityView) => void;
 	providerType: ProviderType;
 	period: ActivityPeriod;
 	onPeriodChange: (period: ActivityPeriod) => void;
@@ -50,6 +56,8 @@ export interface WorkspaceActivityPageProps {
  * of the work.
  */
 export function WorkspaceActivityPage({
+	view,
+	onViewChange,
 	providerType,
 	period,
 	onPeriodChange,
@@ -65,7 +73,10 @@ export function WorkspaceActivityPage({
 }: WorkspaceActivityPageProps) {
 	const ready = people.status === "ready" ? people.people : undefined;
 	const stale = people.status === "ready" && people.stale;
-	const pullRequests = artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType);
+	// Unknown URL keys stay available so a repository filter can always be cleared.
+	const repositoryKeys = [
+		...new Set([...(facets?.repositories ?? []).map(({ key }) => key), ...repo]),
+	];
 	return (
 		<PageLayout className="max-w-4xl space-y-8">
 			<PageHeader
@@ -75,54 +86,81 @@ export function WorkspaceActivityPage({
 			/>
 			<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
 				<ActivityTeamPicker teams={facets?.teams} value={team} onChange={onTeamChange} />
+				<FilterToolbar hasFilter={repo.length > 0} onReset={() => onRepoChange([])}>
+					{repositoryKeys.length > 1 && (
+						<FacetMultiSelect
+							title="Repository"
+							options={repositoryKeys.map((key) => ({ value: key, label: key }))}
+							selected={repo}
+							onChange={onRepoChange}
+						/>
+					)}
+				</FilterToolbar>
 				<ActivityPeriodPicker
 					period={period}
 					onPeriodChange={onPeriodChange}
-					updating={stale || (timeline.status === "ready" && timeline.stale)}
+					updating={view === "people" ? stale : timeline.status === "ready" && timeline.stale}
 				/>
 			</div>
-			<Section
-				size="lg"
-				title="People"
-				description={`Contributions are ${pullRequests} opened and reviewed, plus issues opened.`}
+			<Tabs
+				value={view}
+				onValueChange={(next: unknown) => {
+					if (next === "people" || next === "timeline") {
+						onViewChange(next);
+					}
+				}}
 			>
-				<ActivityPeopleTable
-					state={people}
-					providerType={providerType}
-					order={order}
-					onOrderChange={onOrderChange}
-					repositories={facets?.repositories ?? []}
-					repo={repo}
-					onRepoChange={onRepoChange}
-					personLink={personLevelLink}
-				/>
-			</Section>
-			{ready && ready.automation.length > 0 && (
-				<Section
-					size="lg"
-					title="Automation"
-					description="Bots and accounts treated as automation, counted apart from people."
-				>
-					<div aria-busy={stale || undefined} className={cn(stale && STALE)}>
-						<ActivityAutomationList automation={ready.automation} />
+				<TabsList aria-label="Workspace activity view">
+					<TabsTrigger value="people">People</TabsTrigger>
+					<TabsTrigger value="timeline">Timeline</TabsTrigger>
+				</TabsList>
+				<TabsContent value="people" keepMounted>
+					<div className="space-y-8">
+						<Section
+							size="lg"
+							title="Activity by person"
+							description={contributionsNote(providerType)}
+						>
+							<ActivityPeopleTable
+								state={people}
+								providerType={providerType}
+								order={order}
+								onOrderChange={onOrderChange}
+								repo={repo}
+								personLink={personLevelLink}
+							/>
+						</Section>
+						{ready && ready.automation.length > 0 && (
+							<Section
+								size="lg"
+								title="Automation"
+								description="Bots and accounts treated as automation, counted apart from people."
+							>
+								<div aria-busy={stale || undefined} className={cn(stale && STALE)}>
+									<ActivityAutomationList automation={ready.automation} />
+								</div>
+							</Section>
+						)}
 					</div>
-				</Section>
-			)}
-			<Section
-				size="lg"
-				title="Timeline"
-				actions={
-					timeline.status === "ready" && timeline.items.length > 0 ? (
-						<CopyMarkdownButton onCopy={timeline.onCopy} />
-					) : undefined
-				}
-			>
-				<ActivityWorkLog
-					state={timeline}
-					providerType={providerType}
-					subject={{ people: "several" }}
-				/>
-			</Section>
+				</TabsContent>
+				<TabsContent value="timeline">
+					<Section
+						size="lg"
+						title="Timeline"
+						actions={
+							timeline.status === "ready" && timeline.items.length > 0 ? (
+								<CopyMarkdownButton onCopy={timeline.onCopy} />
+							) : undefined
+						}
+					>
+						<ActivityWorkLog
+							state={timeline}
+							providerType={providerType}
+							subject={{ people: "several" }}
+						/>
+					</Section>
+				</TabsContent>
+			</Tabs>
 		</PageLayout>
 	);
 }

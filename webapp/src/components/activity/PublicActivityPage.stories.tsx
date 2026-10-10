@@ -113,7 +113,7 @@ export const Failed: Story = {
 export const Empty: Story = {
 	args: { people: readyPublicPeople(publicActivityOf([])) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No contributions in this range")).toBeVisible();
+		await expect(canvas.getByText("No activity in this range")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Custom range" })).toBeVisible();
 	},
 };

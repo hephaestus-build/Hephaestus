@@ -60,11 +60,15 @@ function scopeQuery({ period, team, repo }: ActivityScope) {
  * Everyone who contributed in the scope, in one response the table sorts in the browser. While
  * another period loads, the previous period's people stand in, marked stale.
  */
-export function useActivityPeople(scope: ActivityScope): ActivityPeopleState {
+export function useActivityPeople({
+	enabled = true,
+	...scope
+}: ActivityRequest): ActivityPeopleState {
 	const { workspaceSlug, team, repo } = scope;
 	const query = useQuery({
 		...getActivityPeopleOptions({ path: { workspaceSlug }, query: scopeQuery(scope) }),
 		placeholderData: keepSameSubject({ workspaceSlug, team, repo }),
+		enabled,
 	});
 	return panelState(query, (people) => ({
 		status: "ready" as const,
@@ -75,16 +79,20 @@ export function useActivityPeople(scope: ActivityScope): ActivityPeopleState {
 
 /**
  * The teams and repositories the scope picks from, which no scope changes. While another scope
- * loads, the previous one's stand in, so a picker keeps its options. It observes the people read's
- * own query, so it sends no request of its own.
+ * loads, the previous one's stand in, so a picker keeps its options. It shares the people query's
+ * cache entry; a cold timeline also reads it to obtain the filter options.
  */
-export function useActivityFacets(scope: ActivityScope): ActivityFacets | undefined {
+export function useActivityFacets({
+	enabled = true,
+	...scope
+}: ActivityRequest): ActivityFacets | undefined {
 	const { workspaceSlug } = scope;
 	const query = useQuery({
 		...getActivityPeopleOptions({ path: { workspaceSlug }, query: scopeQuery(scope) }),
 		placeholderData: (previous, previousQuery) =>
 			previousQuery?.queryKey[0].path.workspaceSlug === workspaceSlug ? previous : undefined,
 		select: ({ teams, repositories }: ActivityPeople) => ({ teams, repositories }),
+		enabled: (cached) => enabled || cached.state.data === undefined,
 	});
 	return query.data;
 }
