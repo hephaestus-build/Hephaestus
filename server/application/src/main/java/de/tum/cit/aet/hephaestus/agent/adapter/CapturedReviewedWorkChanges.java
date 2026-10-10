@@ -149,9 +149,13 @@ public class CapturedReviewedWorkChanges implements ReviewedWorkChanges {
                 .flatMap(row -> deliverableCapture(row, pullRequestId));
     }
 
+    /**
+     * Reads the retained manifest: admission retires the staged files and their inventories, while the capture's
+     * contract, kind and each source's state and facts — the pinned change identity among them — stay on the job.
+     */
     private Optional<CapturedIdentity> deliverableCapture(
             AgentJobRepository.CapturedReviewedWorkRow row, long pullRequestId) {
-        JobFolderIndex manifest = manifest(row);
+        JobFolderIndex.Retained manifest = retained(row);
         String stored = row.getReviewedWork();
         if (manifest == null || stored == null) return Optional.empty();
         try {
@@ -181,10 +185,20 @@ public class CapturedReviewedWorkChanges implements ReviewedWorkChanges {
         }
     }
 
+    /** The whole manifest with its file inventory; once admission retires the files it no longer reads. */
     private @Nullable JobFolderIndex manifest(AgentJobRepository.CapturedReviewedWorkRow row) {
         if (row.getManifest() == null) return null;
         try {
             return mapper.readValue(row.getManifest(), JobFolderIndex.class);
+        } catch (JacksonException | IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private JobFolderIndex.@Nullable Retained retained(AgentJobRepository.CapturedReviewedWorkRow row) {
+        if (row.getManifest() == null) return null;
+        try {
+            return mapper.readValue(row.getManifest(), JobFolderIndex.Retained.class);
         } catch (JacksonException | IllegalArgumentException ignored) {
             return null;
         }
