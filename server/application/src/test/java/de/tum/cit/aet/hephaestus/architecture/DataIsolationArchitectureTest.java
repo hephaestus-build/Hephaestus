@@ -124,6 +124,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // Account ↔ Workspace association lives on WorkspaceMembership, not on these rows.
             "PersonDataRequest", // Instance-wide rights request, never a workspace endpoint
             "PersonSuppression", // Exact provider identity processing fence spans workspaces
+            "PublicActivityObjection", // Provider identity publication preference survives account deletion
             "Account", // Hephaestus-native principal; spans workspaces
             "IdentityLink", // Federated-login association; user-scoped
             "AccountFeature", // Per-account feature opt-ins

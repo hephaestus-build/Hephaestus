@@ -95,7 +95,7 @@ public class GitLabProjectEventMessageHandler extends AbstractIntegrationMessage
         } else if (event.isRename()
                 || event.isTransfer()
                 || GitLabProjectEventDTO.EVENT_PROJECT_UPDATE.equals(event.eventName())) {
-            handleProjectRenameOrTransfer(event, provider);
+            handleProjectUpdate(event, provider);
         } else {
             log.debug("Unhandled project event action: eventName={}", event.eventName());
         }
@@ -167,7 +167,7 @@ public class GitLabProjectEventMessageHandler extends AbstractIntegrationMessage
                                 sanitizeForLog(Objects.requireNonNull(event.pathWithNamespace()))));
     }
 
-    private void handleProjectRenameOrTransfer(GitLabProjectEventDTO event, IdentityProvider provider) {
+    private void handleProjectUpdate(GitLabProjectEventDTO event, IdentityProvider provider) {
         Long providerId = Objects.requireNonNull(provider.getId());
         long nativeId = event.projectId();
 
@@ -193,7 +193,6 @@ public class GitLabProjectEventMessageHandler extends AbstractIntegrationMessage
                                 repo.setHtmlUrl(baseUrl + newPath);
                             }
 
-                            // Update visibility if provided
                             if (event.projectVisibility() != null) {
                                 repo.setVisibility(GitLabProjectProcessor.mapVisibility(event.projectVisibility()));
                                 repo.setPrivate(repo.getVisibility() == Repository.Visibility.PRIVATE);

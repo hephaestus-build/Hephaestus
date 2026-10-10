@@ -30,10 +30,14 @@ Both fields are required.
 Changes are audited.
 The page is available only when the instance allows it and the active workspace enables it.
 The old whole-workspace public flag no longer grants anonymous access.
+Preview cloning clears both publication choices. A clone does not publish a stored snapshot after synchronization stops.
 
 **Allow search engines** defaults to off.
-The public response then carries `X-Robots-Tag: noindex`.
-This asks compliant search engines not to index the response; it is not access control.
+The JSON response then carries `X-Robots-Tag: noindex`.
+The DTO also returns `allowSearchEngines: false` for a page client to set `<meta name="robots" content="noindex">` on its HTML page.
+The header protects the JSON response only; it does not protect the webapp HTML.
+The API does not set a robots instruction on HTML pages; the page client must supply it.
+Neither instruction is access control.
 See [Google's robots header contract](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag).
 
 ## Personal choice and objections
@@ -42,6 +46,9 @@ Each account defaults to visible on public activity pages.
 A signed-in person can read and change `GET` and `PUT /user/public-activity` with `{"visible": false}`
 or `{"visible": true}`.
 The choice applies to all linked provider identities in every workspace.
+A minimal provider-id and subject marker retains an objection after unlinking or account deletion.
+Showing activity again clears markers for identities currently linked to the account, not identities it no longer owns.
+This marker affects publication only; it does not suppress internal processing.
 Hidden people do not contribute to public totals.
 An administrator can read only the count through `GET /workspaces/{slug}/activity/public-hidden-count`.
 This endpoint does not identify the hidden people.
@@ -52,7 +59,8 @@ Use `hidden=false` to restore visibility.
 The action reuses workspace activity hiding and therefore also hides that contributor from member activity.
 It does not erase source work, block provider synchronization, or grant workspace access.
 Restoring workspace visibility never overrides an account-wide opt-out.
-The audit entry records the workspace and change, not the contributor's identity.
+For an outside contributor, the audit entry records the workspace and change, not the contributor's identity.
+For a member, this action uses the existing membership visibility operation and its workspace-role audit entry.
 An objection with broader scope belongs in the existing person-data request process.
 
 Workspace administrators handle this action because their workspace publishes the activity.
@@ -67,20 +75,32 @@ The response gives `seen` and the account-wide `visible` choice.
 in one transaction.
 The public-workspace visitor needs no workspace membership.
 The account always comes from the authenticated session.
-The public webapp owns the notice and the Show me / Hide me step.
+A page client can use this state for a one-time Show me / Hide me step.
 
 ## Anonymous responses
 
-Only `GET /public/workspaces/{slug}/activity` publishes workspace data without sign-in.
+Only `GET` and `HEAD /public/workspaces/{slug}/activity` publish workspace data without sign-in.
 It accepts the activity range presets and custom dates.
-Repository visibility is checked during the query, not remembered when the page is enabled.
+Each query checks the stored repository visibility, not the state when publication was enabled.
+GitLab project create, rename, transfer and update events refresh both visibility fields.
+A system hook supplies `project_update`; normal project and group webhooks do not supply visibility-change events.
+Push events and the existing metadata sync paths also refresh visibility.
+Without a delivered system-hook event, a change is reflected after the next successful metadata sync:
+by default, the daily `hephaestus.sync.cron` run at 03:00 server time, plus that run's processing time.
+There is no finite bound while sync is disabled, credentials fail, or the provider is unavailable.
+Before making a public GitLab project private, turn the workspace page off, then sync and verify it before enabling it again.
+See [GitLab system hooks](https://docs.gitlab.com/administration/system_hooks/) and
+[GitLab webhook events](https://docs.gitlab.com/user/project/integrations/webhook_events/#project-events).
 Unknown, inactive, and disabled pages return the same not-found problem.
 Other workspace endpoints require sign-in and workspace access.
 
 Successful anonymous responses carry `Cache-Control: public, max-age=60`.
 Signed-in responses carry `no-store`.
 The response varies by Cookie and Authorization.
-The existing shared rate limiter allows 60 requests per minute per client IP across workspace slugs.
+The existing shared rate limiter defaults to 60 anonymous requests per minute per client IP across workspace slugs.
+Set `HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_CAPACITY` and `HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_PERIOD` to adjust this bucket.
+They supply `hephaestus.auth.rate-limit.public-activity.capacity` and `.period`.
+Signed-in requests do not consume this anonymous IP budget.
 It refuses requests if its rate-limit backend is unavailable.
 Proxy trust comes from the servlet container, not a second parser for forwarded headers.
 

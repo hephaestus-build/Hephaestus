@@ -31,7 +31,10 @@ class PublicActivityService {
         }
         var selected = workspace.get();
         return new Publication(
-                PublicActivityDTO.from(selected.getDisplayName(), people.publicPeople(selected.getId(), range)),
+                PublicActivityDTO.from(
+                        selected.getDisplayName(),
+                        selected.isPublicActivitySearchEngines(),
+                        people.publicPeople(selected.getId(), range)),
                 selected.isPublicActivitySearchEngines());
     }
 

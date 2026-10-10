@@ -67,6 +67,19 @@ class PublicActivityMigrationTest {
                 assertThat(rows.getLong(5)).isEqualTo(5);
                 assertThat(rows.getBoolean(6)).isFalse();
             }
+            try (var statement = connection.createStatement()) {
+                statement.execute("""
+                    INSERT INTO account(id,display_name,app_role,status,created_at,updated_at,version)
+                    VALUES (993003,'New visitor','USER','ACTIVE',now(),now(),0);
+                    INSERT INTO workspace_member_onboarding(workspace_id,account_id,public_activity_seen,updated_at)
+                    VALUES (993001,993003,true,now());
+                    """);
+                try (var rows = statement.executeQuery(
+                        "SELECT seen_revision IS NULL FROM workspace_member_onboarding WHERE account_id=993003")) {
+                    assertThat(rows.next()).isTrue();
+                    assertThat(rows.getBoolean(1)).isTrue();
+                }
+            }
         }
     }
 }

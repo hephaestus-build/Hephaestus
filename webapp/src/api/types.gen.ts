@@ -4423,11 +4423,12 @@ export type ProfileReviewRunsPage = {
  * The public contract excludes account details, teams, automation and private activity.
  */
 export type PublicActivity = {
+    allowSearchEngines: boolean;
     coverage: ActivityCoverage;
     from: Date;
-    highlights: ActivityHighlights;
+    highlights: PublicActivityHighlights;
     people: Array<PublicActivityPerson>;
-    repositories: Array<ActivityRepository>;
+    repositories: Array<PublicActivityRepository>;
     to: Date;
     workspaceName: string;
 };
@@ -4446,6 +4447,11 @@ export type PublicActivityCounts = {
     pullRequestsReviewed: number;
 };
 
+export type PublicActivityHighlights = {
+    firstContributors: Array<string>;
+    mostPeopleHelped: Array<string>;
+};
+
 export type PublicActivityOnboarding = {
     seen: boolean;
     visible: boolean;
@@ -4459,7 +4465,6 @@ export type PublicActivityPerson = {
     avatarUrl: string;
     counts: PublicActivityCounts;
     firstContributionAt?: Date;
-    id: number;
     login: string;
     name: string;
     profileUrl: string;
@@ -4468,6 +4473,11 @@ export type PublicActivityPerson = {
 
 export type PublicActivityPolicy = {
     allowed: boolean;
+};
+
+export type PublicActivityRepository = {
+    key: string;
+    name: string;
 };
 
 export type PublicActivityWorkspaceSettings = {

@@ -27,8 +27,15 @@ class AccountPublicActivityService implements AccountPublicActivity {
     @Override
     @Transactional
     public boolean setVisible(long accountId, boolean visible) {
-        var account = accounts.findById(accountId).orElseThrow(() -> new EntityNotFoundException("Account", accountId));
+        var account = accounts.findByIdForUpdate(accountId)
+                .orElseThrow(() -> new EntityNotFoundException("Account", accountId));
         account.setPublicActivityVisible(visible);
+        accounts.flush();
+        if (visible) {
+            accounts.clearLinkedPublicActivityObjections(accountId);
+        } else {
+            accounts.retainPublicActivityObjections(accountId);
+        }
         return visible;
     }
 }

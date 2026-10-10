@@ -21,8 +21,12 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO.ReviewerState;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.TeamRefDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO;
+import de.tum.cit.aet.hephaestus.core.auth.AccountPurger;
+import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPublicActivity;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
@@ -107,6 +111,15 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private IdentityLinkRepository publicIdentities;
+
+    @Autowired
+    private AccountPublicActivity publicationChoice;
+
+    @Autowired
+    private AccountService accountService;
+
+    @Autowired
+    private AccountPurger accountPurger;
 
     @Autowired
     private WebTestClient webTestClient;
@@ -287,6 +300,93 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
+        void shouldKeepAnObjectionAfterUnlinkAndAccountPurge() {
+            TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
+            var identity = publicIdentities
+                    .findActiveByProviderSubject(
+                            Objects.requireNonNull(ada.getProvider().getId()),
+                            ada.getNativeId().toString(),
+                            null)
+                    .orElseThrow();
+            var account = identity.getAccount();
+            long accountId = Objects.requireNonNull(account.getId());
+            var otherProvider = gitProviderRepository.save(
+                    new IdentityProvider(IdentityProviderType.GITLAB, "https://unlink.example"));
+            var second = new IdentityLink();
+            second.setAccount(account);
+            second.setProviderId(Objects.requireNonNull(otherProvider.getId()));
+            second.setSubject("purge-subject");
+            publicIdentities.saveAndFlush(second);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().people()).extracting(person -> person.login()).containsExactly(ada.getLogin());
+            publicationChoice.setVisible(accountId, false);
+            accountService.unlinkIdentity(accountId, identity.getId());
+            assertThat(publicIdentities.findById(identity.getId())).isEmpty();
+            assertThat(page().people()).isEmpty();
+            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
+            accountService.softDelete(accountId);
+            accountPurger.purge(accountId);
+            assertThat(publicIdentities.findActiveByAccountId(accountId)).isEmpty();
+            assertThat(page().people()).isEmpty();
+            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
+        }
+
+        @Test
+        void shouldKeepLinkedWorkHiddenAfterAccountPurge() {
+            TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
+            var identity = publicIdentities
+                    .findActiveByProviderSubject(
+                            Objects.requireNonNull(ada.getProvider().getId()),
+                            ada.getNativeId().toString(),
+                            null)
+                    .orElseThrow();
+            long accountId = Objects.requireNonNull(identity.getAccount().getId());
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            publicationChoice.setVisible(accountId, false);
+            accountService.softDelete(accountId);
+            accountPurger.purge(accountId);
+            assertThat(publicIdentities.findById(identity.getId())).isEmpty();
+            assertThat(page().people()).isEmpty();
+            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
+        }
+
+        @Test
+        void shouldExposeRobotsChoiceWithoutInternalIdentifiersAndSupportHead() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().allowSearchEngines()).isFalse();
+            webTestClient
+                    .get()
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.people[0].id")
+                    .doesNotExist()
+                    .jsonPath("$.repositories[0].id")
+                    .doesNotExist()
+                    .jsonPath("$.repositories[0].key")
+                    .isEqualTo(monitored.getNameWithOwner());
+            webTestClient
+                    .head()
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectHeader()
+                    .valueEquals("Cache-Control", "max-age=60, public")
+                    .expectHeader()
+                    .valueEquals("X-Robots-Tag", "noindex")
+                    .expectHeader()
+                    .doesNotExist("Set-Cookie")
+                    .expectBody()
+                    .isEmpty();
+            workspace.setPublicActivitySearchEngines(true);
+            workspaceRepository.save(workspace);
+            assertThat(page().allowSearchEngines()).isTrue();
+        }
+
+        @Test
         void shouldApplyAccountOptOutAndWorkspaceHideToRowsAndTotals() {
             TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
@@ -324,7 +424,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             record(zoe, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, review.getId(), DAY);
             var before = page();
             assertThat(before.people())
-                    .filteredOn(p -> p.id().equals(ada.getId()))
+                    .filteredOn(p -> p.login().equals(ada.getLogin()))
                     .extracting(p -> p.firstContributionAt())
                     .containsExactly(DAY);
             assertThat(before.coverage().totalRepositories()).isEqualTo(1);
@@ -458,6 +558,34 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .satisfies(
                             row -> assertThat(row.path("public_activity_seen").asBoolean())
                                     .isTrue());
+        }
+
+        @Test
+        void shouldNotDismissRequiredAiOnboardingWhenAnsweringThePublicStep() {
+            jdbc.update(
+                    "INSERT INTO workspace_onboarding_settings(workspace_id,enabled,ai_choice_required,revision,required_connection_ids) VALUES (?,true,true,0,'[]'::jsonb)",
+                    workspace.getId());
+            webTestClient
+                    .put()
+                    .uri("/user/public-activity/workspaces/{slug}/onboarding", workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .bodyValue(Map.of("visible", false))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+            webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/onboarding/me", workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.needsSetup")
+                    .isEqualTo(true)
+                    .jsonPath("$.aiChoiceRequired")
+                    .isEqualTo(true);
         }
 
         @Test

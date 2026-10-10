@@ -116,6 +116,7 @@ public class AccountService {
     public void unlinkIdentity(Long accountId, Long identityLinkId) {
         // Write-lock the account's active links so two concurrent unlinks of different identities
         // serialize — otherwise both pass the last-identity guard below and drain the account to zero.
+        accountRepository.lockStatusForUpdate(accountId);
         List<IdentityLink> active = identityLinkRepository.findActiveByAccountIdForUpdate(accountId);
         IdentityLink target = active.stream()
                 .filter(il -> il.getId().equals(identityLinkId))
@@ -129,6 +130,7 @@ public class AccountService {
                     HttpStatus.CONFLICT,
                     "You cannot disconnect your only sign-in method. Connect another provider first, or delete your account.");
         }
+        accountRepository.retainPublicActivityObjections(accountId);
         Long gitProviderId = target.getProviderId();
         if (identityLinkRepository.deleteByIdAndAccountId(identityLinkId, accountId) == 0) {
             // Lost a race (concurrently removed) — nothing to do; surface as not-found.

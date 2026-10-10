@@ -20,6 +20,7 @@ class AccountPublicActivityServiceTest extends BaseUnitTest {
     void shouldDefaultToVisibleAndAllowEitherChoice() {
         var account = new Account("Person");
         when(accounts.findById(1L)).thenReturn(Optional.of(account));
+        when(accounts.findByIdForUpdate(1L)).thenReturn(Optional.of(account));
         var service = new AccountPublicActivityService(accounts);
         assertThat(service.visible(1L)).isTrue();
         assertThat(service.setVisible(1L, false)).isFalse();

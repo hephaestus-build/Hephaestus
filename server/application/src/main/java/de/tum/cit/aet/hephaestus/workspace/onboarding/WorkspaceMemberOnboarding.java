@@ -16,6 +16,7 @@ import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
+import org.jspecify.annotations.Nullable;
 
 /**
  * One account's independent first-visit steps in one workspace. The revision records AI setup;
@@ -45,8 +46,8 @@ class WorkspaceMemberOnboarding {
     @Column(name = "account_id", nullable = false)
     private Long accountId;
 
-    @Column(name = "seen_revision", nullable = false)
-    private long seenRevision;
+    @Column(name = "seen_revision")
+    private @Nullable Long seenRevision;
 
     @Column(name = "public_activity_seen", nullable = false)
     @ColumnDefault("false")

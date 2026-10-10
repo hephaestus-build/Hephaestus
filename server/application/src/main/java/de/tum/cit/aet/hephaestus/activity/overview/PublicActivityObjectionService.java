@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.workspace.HiddenFormerMember;
 import de.tum.cit.aet.hephaestus.workspace.HiddenFormerMemberRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ class PublicActivityObjectionService {
     private final HiddenFormerMemberRepository hidden;
     private final WorkspaceMembershipRepository memberships;
     private final WorkspaceRepository workspaces;
+    private final WorkspaceMembershipService memberVisibility;
     private final ActivityPeopleQueryRepository people;
     private final ConfigAuditPort audit;
     private final PersonDataCopyFence copyFence;
@@ -43,7 +45,8 @@ class PublicActivityObjectionService {
                 .orElseGet(() -> hidden.existsById(new HiddenFormerMember.Key(workspaceId, userId)));
         if (before == hide) return;
         if (member.isPresent()) {
-            member.get().setHidden(hide);
+            memberVisibility.updateMemberVisibility(workspaceId, userId, hide);
+            return;
         } else if (hide) {
             hidden.save(new HiddenFormerMember(workspaceId, userId));
         } else {

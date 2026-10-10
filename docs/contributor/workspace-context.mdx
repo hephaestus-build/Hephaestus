@@ -53,7 +53,7 @@ A user view still satisfies this check as the viewed member.
 
 `@PreAuthorize("@workspaceSecure.isMember()")` admits any effective role, including elevation, but never anonymous access.
 The Activity endpoints use this check.
-The dedicated public activity controller does not use this context; it resolves publication eligibility and public scope separately.
+The dedicated public activity controller does not use this context. It resolves publication eligibility and public scope separately.
 No publication setting opens member endpoints to non-members.
 The privilege and audit policy lives in [Instance administration](./instance-admin.md#who-is-an-instance-admin).
 

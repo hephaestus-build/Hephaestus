@@ -17325,13 +17325,15 @@ components:
       description: "The public contract excludes account details, teams, automation\
         \ and private activity."
       properties:
+        allowSearchEngines:
+          type: boolean
         coverage:
           $ref: "#/components/schemas/ActivityCoverage"
         from:
           type: string
           format: date-time
         highlights:
-          $ref: "#/components/schemas/ActivityHighlights"
+          $ref: "#/components/schemas/PublicActivityHighlights"
         people:
           type: array
           items:
@@ -17339,13 +17341,14 @@ components:
         repositories:
           type: array
           items:
-            $ref: "#/components/schemas/ActivityRepository"
+            $ref: "#/components/schemas/PublicActivityRepository"
         to:
           type: string
           format: date-time
         workspaceName:
           type: string
       required:
+      - allowSearchEngines
       - coverage
       - from
       - highlights
@@ -17392,6 +17395,20 @@ components:
       - pullRequestsMerged
       - pullRequestsOpened
       - pullRequestsReviewed
+    PublicActivityHighlights:
+      type: object
+      properties:
+        firstContributors:
+          type: array
+          items:
+            type: string
+        mostPeopleHelped:
+          type: array
+          items:
+            type: string
+      required:
+      - firstContributors
+      - mostPeopleHelped
     PublicActivityOnboarding:
       type: object
       properties:
@@ -17419,9 +17436,6 @@ components:
         firstContributionAt:
           type: string
           format: date-time
-        id:
-          type: integer
-          format: int64
         login:
           type: string
         name:
@@ -17435,7 +17449,6 @@ components:
       required:
       - avatarUrl
       - counts
-      - id
       - login
       - name
       - profileUrl
@@ -17447,6 +17460,16 @@ components:
           type: boolean
       required:
       - allowed
+    PublicActivityRepository:
+      type: object
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+      required:
+      - key
+      - name
     PublicActivityWorkspaceSettings:
       type: object
       properties:

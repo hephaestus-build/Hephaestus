@@ -1288,6 +1288,12 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
     }
 
+    PublicActivityObjection {
+        UUID id PK
+        BIGINT provider_id UK "NOT NULL"
+        VARCHAR(255) subject UK "NOT NULL"
+    }
+
     PullRequestClosingIssue {
         BIGINT pull_request_id PK,FK
         BIGINT issue_id PK,FK
@@ -1736,7 +1742,7 @@ erDiagram
     WorkspaceMemberOnboarding {
         BIGINT id PK
         BIGINT account_id FK,UK "NOT NULL"
-        BIGINT seen_revision "NOT NULL"
+        BIGINT seen_revision
         TIMESTAMPTZ updated_at "NOT NULL"
         BIGINT workspace_id FK,UK "NOT NULL"
         BOOLEAN public_activity_seen "NOT NULL"

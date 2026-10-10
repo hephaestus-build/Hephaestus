@@ -112,6 +112,23 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         return policy;
     }
 
+    @Test
+    void shouldStillAskForAiSetupAfterThePublicStepAtRevisionZero() {
+        member();
+        var policy = enabledPolicy();
+        policy.setRevision(0);
+        var publicStep = new WorkspaceMemberOnboarding();
+        publicStep.setAccountId(10L);
+        publicStep.setPublicActivitySeen(true);
+        when(members.findByWorkspace_IdAndAccountId(1L, 10L)).thenReturn(Optional.of(publicStep));
+        when(links.options(1L, 10L, List.of())).thenReturn(List.of(OPEN_SLACK));
+        assertThat(service.state(context, 10L).needsSetup()).isTrue();
+        chose(MemberAiChoice.NO_AI);
+        assertThat(service.state(context, 10L).needsSetup()).isTrue();
+        publicStep.setSeenRevision(0L);
+        assertThat(service.state(context, 10L).needsSetup()).isFalse();
+    }
+
     private AccountAiChoice chose(MemberAiChoice choice) {
         var row = new AccountAiChoice();
         row.setAccountId(10L);
@@ -245,7 +262,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         when(links.options(1L, 10L, List.of(9L))).thenReturn(List.of(OPEN_SLACK));
         var row = seen(workspace, 3);
         assertThat(service.state(context, 10L).needsSetup()).isFalse();
-        row.setSeenRevision(2);
+        row.setSeenRevision(2L);
         assertThat(service.state(context, 10L).needsSetup()).isTrue();
     }
 
@@ -255,7 +272,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
         enabledPolicy();
         var row = seen(workspace, 3);
         assertThat(service.state(context, 10L).needsSetup()).isFalse();
-        row.setSeenRevision(1);
+        row.setSeenRevision(1L);
         assertThat(service.state(context, 10L).needsSetup()).isTrue();
     }
 

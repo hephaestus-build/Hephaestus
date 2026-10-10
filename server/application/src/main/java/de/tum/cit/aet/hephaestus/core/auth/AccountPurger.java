@@ -55,6 +55,7 @@ public class AccountPurger {
         // cascade is not triggered — delete the personal/auth child rows explicitly.
         erasureRepository.deleteFeatures(accountId);
         anonymizeAuditRows(accountId); // reads identity_link, so before it is deleted
+        accountRepository.retainPublicActivityObjections(accountId);
         erasureRepository.deleteIdentityLinks(accountId);
         erasureRepository.deleteSignInHandoffs(accountId);
         // Sessions before tokens, the order every session operation locks them in.

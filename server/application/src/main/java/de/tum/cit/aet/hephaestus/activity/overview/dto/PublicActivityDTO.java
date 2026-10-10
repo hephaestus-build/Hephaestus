@@ -4,31 +4,55 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /** The public contract excludes account details, teams, automation and private activity. */
 public record PublicActivityDTO(
         @NonNull String workspaceName,
+        @Schema(requiredMode = RequiredMode.REQUIRED) boolean allowSearchEngines,
         @NonNull Instant from,
         @NonNull Instant to,
         @NonNull List<PublicActivityPersonDTO> people,
         @NonNull ActivityCoverageDTO coverage,
-        @NonNull ActivityHighlightsDTO highlights,
-        @NonNull List<ActivityRepositoryDTO> repositories) {
-    public static PublicActivityDTO from(String workspaceName, ActivityPeopleDTO activity) {
+        @NonNull PublicActivityHighlightsDTO highlights,
+        @NonNull List<PublicActivityRepositoryDTO> repositories) {
+    public static PublicActivityDTO from(String workspaceName, boolean allowSearchEngines, ActivityPeopleDTO activity) {
+        var loginsById = activity.people().stream()
+                .collect(Collectors.toMap(
+                        row -> row.person().id(), row -> row.person().login()));
         return new PublicActivityDTO(
                 workspaceName,
+                allowSearchEngines,
                 activity.from(),
                 activity.to(),
                 activity.people().stream().map(PublicActivityPersonDTO::from).toList(),
                 activity.coverage(),
-                activity.highlights(),
-                activity.repositories());
+                new PublicActivityHighlightsDTO(
+                        logins(loginsById, activity.highlights().firstContributors()),
+                        logins(loginsById, activity.highlights().mostPeopleHelped())),
+                activity.repositories().stream()
+                        .map(repository -> new PublicActivityRepositoryDTO(repository.key(), repository.name()))
+                        .toList());
     }
 
+    private static List<String> logins(Map<Long, String> loginsById, List<Long> ids) {
+        return ids.stream()
+                .map(id -> Objects.requireNonNull(loginsById.get(id)))
+                .toList();
+    }
+
+    public record PublicActivityHighlightsDTO(
+            @NonNull List<String> firstContributors,
+            @NonNull List<String> mostPeopleHelped) {}
+
+    public record PublicActivityRepositoryDTO(
+            @NonNull String key, @NonNull String name) {}
+
     public record PublicActivityPersonDTO(
-            @NonNull Long id,
             @NonNull String login,
             @NonNull String name,
             @NonNull String avatarUrl,
@@ -40,7 +64,6 @@ public record PublicActivityDTO(
             var person = row.person();
             var counts = row.counts();
             return new PublicActivityPersonDTO(
-                    person.id(),
                     person.login(),
                     person.name(),
                     person.avatarUrl(),
