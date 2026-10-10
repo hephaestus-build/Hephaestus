@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ACTIVITY_RANGES } from "@/components/activity/activity-range";
+import { REVIEW_RANGES } from "@/components/admin/practice-reviews/review-range";
 import {
 	type DetailStackEntry,
 	detailStackSchema,
@@ -30,11 +30,10 @@ export const PRACTICE_REVIEW_LEVEL_LABELS = {
 } as const satisfies Record<PracticeReviewLevelKind, string>;
 
 /**
- * How far back the overview and a practice level count. Longer than Activity's week: reviews run
- * per piece of work, so a week of them is often too few to read a mix from.
+ * How far back the overview and a practice level count. The default covers 30 days.
  */
 const rangeFilterSchema = z.object({
-	range: z.enum(ACTIVITY_RANGES).default("30d").catch("30d"),
+	range: z.enum(REVIEW_RANGES).default("30d").catch("30d"),
 });
 
 export const PRACTICE_REVIEWS_SEARCH_DEFAULTS = rangeFilterSchema.parse({});

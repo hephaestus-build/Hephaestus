@@ -21,11 +21,6 @@ import {
 	listPracticesOptions,
 } from "@/api/@tanstack/react-query.gen";
 import type { AgentJob, ArtifactTrace, Practice, TracedSignal } from "@/api/types.gen";
-import {
-	ACTIVITY_RANGE_DEFS,
-	type ActivityRange,
-	rangeStart,
-} from "@/components/activity/activity-range";
 import { FeedbackLevel } from "@/components/admin/practice-reviews/FeedbackLevel";
 import { ObservationLevel } from "@/components/admin/practice-reviews/ObservationLevel";
 import { PracticeLevel } from "@/components/admin/practice-reviews/PracticeLevel";
@@ -37,6 +32,11 @@ import {
 	practiceLevel,
 } from "@/components/admin/practice-reviews/review-levels";
 import { rangeScope } from "@/components/admin/practice-reviews/review-outcomes";
+import {
+	REVIEW_RANGE_DEFS,
+	type ReviewRange,
+	reviewRangeStart,
+} from "@/components/admin/practice-reviews/review-range";
 import {
 	ACTIVE_REVIEW_POLL_MS,
 	REVIEW_PREVIEW_SIZE,
@@ -78,7 +78,7 @@ export interface PracticeReviewDrawerProps {
 	onOpen: (entry: DetailStackEntry) => void;
 	onClose: (depth: number) => void;
 	/** The range a practice level counts. */
-	range: ActivityRange;
+	range: ReviewRange;
 	/** The feedback level in front is the approval queue, opened as one from Needs you. */
 	approvalQueue: boolean;
 }
@@ -411,9 +411,9 @@ function PracticeLevelRead({
 	range,
 	practices,
 	...props
-}: LevelReadProps & { practiceSlug: string; range: ActivityRange }) {
+}: LevelReadProps & { practiceSlug: string; range: ReviewRange }) {
 	const nowMs = useNow();
-	const from = rangeStart(nowMs, range);
+	const from = reviewRangeStart(nowMs, range);
 	const overview = usePracticeReviewOverview(props.workspaceSlug, from);
 	// The most recent, in the list's own order: what the practice is doing now.
 	const observations = useQuery({
@@ -427,7 +427,7 @@ function PracticeLevelRead({
 			{...props}
 			practiceSlug={practiceSlug}
 			practice={practices?.find((practice) => practice.slug === practiceSlug)}
-			rangeLabel={ACTIVITY_RANGE_DEFS[range].label}
+			rangeLabel={REVIEW_RANGE_DEFS[range].label}
 			scope={rangeScope(from, nowMs)}
 			counts={
 				overview.status === "ready"
