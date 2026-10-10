@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import de.tum.cit.aet.hephaestus.activity.ActivityAutomation;
+import de.tum.cit.aet.hephaestus.activity.ActivityAutomationRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
 import de.tum.cit.aet.hephaestus.activity.ActivityTargetType;
@@ -20,6 +22,9 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO.ReviewerState
 import de.tum.cit.aet.hephaestus.activity.overview.dto.TeamRefDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -76,6 +81,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.StatusAssertions;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.util.UriBuilder;
@@ -97,6 +103,15 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private ActivityEventRepository activityEventRepository;
+
+    @Autowired
+    private ActivityAutomationRepository automationRepository;
+
+    @Autowired
+    private PersonDataService personData;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Autowired
     private RepositoryRepository repositoryRepository;
@@ -238,6 +253,38 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                             .people())
                     .extracting(p -> p.person().id())
                     .doesNotContain(machine.getId());
+        }
+
+        @ParameterizedTest
+        @EnumSource(
+                value = PersonDataRequest.State.class,
+                names = {"ERASING", "FAILED"})
+        void shouldRejectNewAutomationAssociationsAfterErasureAdmissionAndDuringRetry(PersonDataRequest.State state) {
+            User machine = persistUser("erasure-machine");
+            ensureWorkspaceMembership(workspace, machine, WorkspaceRole.MEMBER);
+            long administrator = Objects.requireNonNull(
+                    persistInstanceAdmin("Erasure administrator").getId());
+            var preview = personData.preview(
+                    administrator,
+                    null,
+                    List.of(new PersonIdentity(
+                            Objects.requireNonNull(machine.getProvider().getId()),
+                            machine.getNativeId().toString(),
+                            null)));
+            UUID requestId = preview.request().getId();
+            personData.requestErasure(requestId, administrator, true);
+            jdbc.update("UPDATE person_data_request SET state=? WHERE id=?", state.name(), requestId);
+
+            assertThatThrownBy(() -> automationService.classify(workspace.getId(), machine.getId(), true))
+                    .isInstanceOf(EntityNotFoundException.class);
+            var classification = new ActivityAutomation.Id(workspace.getId(), machine.getId());
+            assertThat(automationRepository.existsById(classification)).isFalse();
+            if (state == PersonDataRequest.State.FAILED) {
+                personData.requestErasure(requestId, administrator, true);
+            }
+            personData.run(requestId);
+            assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+            assertThat(automationRepository.existsById(classification)).isFalse();
         }
 
         @Test

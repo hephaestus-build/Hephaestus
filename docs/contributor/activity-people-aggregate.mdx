@@ -47,8 +47,9 @@ A workspace's automation classification grants no membership or permission.
 An admin can set or reset it.
 A provider bot remains automation after a reset.
 The classification is workspace-scoped and participates in person erasure and workspace purge.
-Classification writes take the shared person-data capture fence before the workspace lock.
-Thus, they cannot recreate a classification during person erasure.
+Classification writes take capture admission and the native-identity write fence before the workspace lock.
+Permanent processing controls block new associations after erasure admission and during a failed request.
+The frozen erasure selection therefore cannot miss a later classification.
 
 ## Range and query cost
 

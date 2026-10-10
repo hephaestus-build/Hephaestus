@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,11 +24,17 @@ class ActivityAutomationService {
     private final ActivityPeopleQueryRepository people;
     private final ConfigAuditPort audit;
     private final PersonDataCopyFence fence;
+    private final PersonDataWriteFence writeFence;
 
     @Transactional
     public void classify(long workspaceId, long userId, boolean treatAsAutomation) {
         fence.holdForCapture();
-        var workspace = workspaces.findByIdForUpdate(workspaceId).orElseThrow();
+        if (!writeFence.holdForUserWrite(userId)) {
+            throw new EntityNotFoundException("Contributor", userId);
+        }
+        var workspace = workspaces
+                .findByIdForUpdate(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
         boolean visible = people.canClassify(workspaceId, userId);
         if (!visible) {
             throw new EntityNotFoundException("Contributor", userId);
