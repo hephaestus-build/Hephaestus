@@ -450,7 +450,7 @@ class DeliveredWorkFeedbackControllerIntegrationTest extends AbstractWorkspaceIn
                 .uri(ENDPOINT, workspace.getWorkspaceSlug(), workUrl(work))
                 .exchange()
                 .expectStatus()
-                .isForbidden()
+                .isUnauthorized()
                 .expectBody(Void.class);
         get(linked(gitlabUser("outsider", 81000L)), workspace, workUrl(work))
                 .expectStatus()
