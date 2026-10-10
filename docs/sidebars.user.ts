@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
 			items: [
 				"practice-profile",
 				"activity",
+				"public-activity",
 				"ai-code-review",
 				"ai-mentor",
 				"workspace",

@@ -12,6 +12,66 @@ It excludes private repositories, automation, practices, feedback, Slack, Outlin
 Keep course workspaces private.
 Before publication, verify the activity repair described in the [activity history runbook](./activity-history-repair.mdx).
 
+## Settings in the UI
+
+Three screens control public activity pages.
+Each change takes effect at once.
+A browser or shared cache can keep a page it already loaded for up to a minute.
+
+| Who | Where | Control |
+| --- | --- | --- |
+| Instance administrator | **Instance settings**, **Public activity pages** | **Allow public activity pages** |
+| Workspace administrator | **Workspace settings**, **Public activity page** | **Publish the page**, **Allow search engines** |
+| Workspace administrator | **Workspace activity**, a person's level | **Hide from activity** |
+
+### Instance administrators
+
+**Allow public activity pages** is the instance switch.
+While it is off, no workspace can publish a page, and every public page stops.
+A change asks for a recent sign-in.
+The switch shows the stored choice, not the configured default.
+
+### Workspace administrators
+
+**Publish the page** asks first.
+The confirmation states what becomes public:
+
+- everyone who contributed to the public repositories, members and outside contributors, by name, picture and profile link
+- the pull requests (merge requests on GitLab) each person opened and reviewed, the issues they opened, and a weekly line of their activity
+
+It also states that the page shows nothing from private repositories, practices, feedback, AI content, Slack, Outline or automation accounts.
+Turning the page off needs no confirmation.
+
+When the page is on, the section shows the address of the workspace.
+Signed-in members open their workspace home at that address.
+To preview the page, open the address in a private window.
+If the workspace turned the page on but the instance does not allow public pages, the section says that nothing is public yet.
+
+**Allow search engines** is off by default.
+Off, the page sets `<meta name="robots" content="noindex">`, and the API response carries `X-Robots-Tag: noindex`.
+This is a request to search engines, not access control.
+
+**Hidden people** shows how many people the page leaves out and does not count.
+It includes people who hid themselves and people an administrator hid.
+It never shows who.
+
+To leave out a person who has no account to hide themselves, open the person on **Workspace activity** and select **Hide from activity**.
+The person then leaves the public page and Workspace activity.
+Right after the action, the message **Undo** restores the person.
+To show a member again later, use **Members**.
+
+### Members
+
+The first time a signed-in person opens a workspace that publishes a page, a step says that the page is public and what it shows of them.
+**Show me** and **Hide me** have the same weight.
+Either answer records that the person saw the step for this workspace.
+Closing the step is not possible without an answer, so a person who has not answered sees it again.
+The AI setup of the workspace comes first, and the step waits until it ends.
+A person who is not a member sees the same step on the public page after signing in.
+
+**User settings** has the same choice as **Show me on public activity pages**.
+It applies to every public page, in every workspace, at once.
+
 ## Instance setting
 
 **Allow public activity pages** defaults to off.
@@ -80,7 +140,9 @@ A page client can use this state for a one-time Show me / Hide me step.
 ## Anonymous responses
 
 Only `GET` and `HEAD /public/workspaces/{slug}/activity` publish workspace data without sign-in.
-It accepts the activity range presets and custom dates.
+It accepts the activity range presets, custom dates, and `repo`, which names public repositories to count and repeats for more than one.
+An unknown repository is a not-found error.
+The response names the provider (`providerType`) so a client can use its words and icons.
 Each query requires stored public visibility and a recent successful repository metadata read for this workspace.
 A missing confirmation, an expired confirmation, or a known unavailable repository excludes the repository,
 its contributions, and its coverage from the public response.

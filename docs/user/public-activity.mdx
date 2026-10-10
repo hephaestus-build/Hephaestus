@@ -1,0 +1,62 @@
+---
+id: public-activity
+title: Public activity page
+description: See what a public activity page shows, and hide yourself from it.
+---
+
+A workspace can publish a public activity page.
+Anyone can open it, without signing in.
+It lists who contributed to the workspace’s public repositories, and it never scores anyone.
+
+Open the page at the workspace’s address, `/w/<workspace>`.
+Members who are signed in open their own workspace home at that address instead.
+
+## What the page shows
+
+The page shows the same people table as [Workspace activity](./activity.mdx#people), with only public work:
+
+- **Public repositories only.** Work in a private repository never appears.
+- **Pull requests, reviews and issues.** On GitLab, merge requests, reviews and issues.
+- **People, not bots.** Automation accounts never appear.
+
+It has no team list, no timeline, and no person pages.
+A name leads to the person’s page on GitHub or GitLab.
+
+To change the view:
+
+1. Choose **30 days**, **90 days**, **12 months** or **All time**, or select **Custom range**.
+2. To count only some repositories, select them under **Repository**.
+3. To sort the table, select a column heading.
+
+The address of the page keeps the range, the repositories and the sort.
+Share it, and others see the same view.
+
+The page never shows practices, feedback, Slack, Outline, or the content of an AI review.
+
+## Who is on it
+
+Everyone who contributed to the public repositories, whether or not they are members.
+People who hid themselves are not on the page, and their work does not count in its totals.
+
+## Hide yourself
+
+You can hide yourself in three ways.
+Each takes effect at once and covers every public activity page, in every workspace.
+
+- **The first time you open a workspace with a public page,** a step asks **Show me** or **Hide me**.
+  Both answers have the same weight.
+- **On the page,** select **Sign in**, and sign in with the GitHub or GitLab account that did the work.
+  The same step then asks **Show me** or **Hide me**.
+- **In User settings,** turn off **Show me on public activity pages**.
+  Turn it on again to return.
+
+A copy of the page that a browser already loaded can stay visible for up to a minute.
+
+If you have no account and prefer not to sign in, ask the workspace’s privacy contact.
+A workspace admin can hide you from the page.
+
+## Search engines
+
+A public page asks search engines not to list it, unless the workspace allows them.
+That is a request.
+Anyone with the address can open the page.
