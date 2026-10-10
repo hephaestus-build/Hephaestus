@@ -87,7 +87,8 @@ A system hook supplies `project_update`; normal project and group webhooks do no
 Push events and the existing metadata sync paths also refresh visibility.
 Without a delivered system-hook event, a change is reflected after the next successful metadata sync:
 by default, the daily `hephaestus.sync.cron` run at 03:00 server time, plus that run's processing time.
-There is no finite bound while sync is disabled, credentials fail, or the provider is unavailable.
+There is no finite bound while sync is disabled or project metadata cannot be fetched.
+This includes access loss, invalid credentials, and provider errors.
 Before making a public GitLab project private, turn the workspace page off, then sync and verify it before enabling it again.
 See [GitLab system hooks](https://docs.gitlab.com/administration/system_hooks/) and
 [GitLab webhook events](https://docs.gitlab.com/user/project/integrations/webhook_events/#project-events).
