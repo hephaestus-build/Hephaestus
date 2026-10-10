@@ -48,13 +48,14 @@ class WorkspaceSubdomainAuthIntegrationTest extends RealAuthIntegrationTest {
         var workspace = persistWorkspace("prefix-tenant");
         var account = accounts.save(new Account("Path alias member"));
         jdbc.update(
-                "INSERT INTO identity_provider(id,type,server_url) VALUES(993101,'GITHUB','https://prefix.example')");
+                "INSERT INTO identity_provider(id,type,server_url,created_at) VALUES(993101,'GITHUB','https://prefix.example',now())");
         jdbc.update("""
                 INSERT INTO "user"(id,provider_id,native_id,login,type,avatar_url,html_url)
                 VALUES(993102,993101,993102,'prefix-member','USER','','https://prefix.example/prefix-member')
                 """);
         jdbc.update(
-                "INSERT INTO identity_link(account_id,provider_id,subject) VALUES(?,993101,'993102')", account.getId());
+                "INSERT INTO identity_link(account_id,provider_id,subject,linked_at) VALUES(?,993101,'993102',now())",
+                account.getId());
         jdbc.update(
                 "INSERT INTO workspace_membership(workspace_id,user_id,role,created_at) VALUES(?,993102,'MEMBER',now())",
                 workspace.getId());
