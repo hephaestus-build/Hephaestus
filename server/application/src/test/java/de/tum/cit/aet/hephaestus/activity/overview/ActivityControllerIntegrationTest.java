@@ -21,11 +21,14 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO.ReviewerState;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.TeamRefDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
@@ -194,6 +197,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private PublicActivityObjectionService publicObjections;
+
+    @Autowired
+    private PersonDataRegistry personDataRegistry;
 
     @Nested
     class PublicActivity {
@@ -422,6 +428,36 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectStatus()
                     .isForbidden()
                     .expectBody(Void.class);
+        }
+
+        @Test
+        void shouldExportPublicActivityChoiceAndOnboardingSeenState() {
+            var account = new Account("Public export person");
+            account.setPublicActivityVisible(false);
+            var saved = accountRepository.saveAndFlush(account);
+            jdbc.update("""
+                    INSERT INTO workspace_member_onboarding(workspace_id,account_id,seen_revision,public_activity_seen,updated_at)
+                    VALUES(?,?,0,true,now())
+                    """, workspace.getId(), saved.getId());
+            var scope = new PersonScope(saved.getId(), List.of(), List.of());
+            var accountStore = personDataRegistry.stores().stream()
+                    .filter(store -> store.store().equals("account"))
+                    .findFirst()
+                    .orElseThrow();
+            var onboardingStore = personDataRegistry.stores().stream()
+                    .filter(store -> store.store().equals("workspace_member_onboarding"))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(accountStore.export(accountStore.select(scope)))
+                    .singleElement()
+                    .satisfies(row -> assertThat(
+                                    row.path("public_activity_visible").asBoolean(true))
+                            .isFalse());
+            assertThat(onboardingStore.export(onboardingStore.select(scope)))
+                    .singleElement()
+                    .satisfies(
+                            row -> assertThat(row.path("public_activity_seen").asBoolean())
+                                    .isTrue());
         }
 
         @Test
