@@ -116,7 +116,8 @@ function WorkspaceActivity() {
 	const memberScope = {
 		...scope,
 		login: memberLogin,
-		enabled: scopeKnown && memberLogin !== undefined,
+		userId: memberUser?.id,
+		enabled: scopeKnown && memberUser !== undefined,
 	};
 	const memberOpenWork = useOpenWork({ workspaceSlug, login: memberLogin });
 	const memberOverview = useActivityOverview({ ...memberScope, range: search.range });

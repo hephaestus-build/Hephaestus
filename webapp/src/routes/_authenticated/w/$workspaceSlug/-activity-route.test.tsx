@@ -5,7 +5,6 @@ import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type {
 	ActivityPeople,
-	ActivitySummary,
 	ActivityWork,
 	ActivityWorkPage,
 	OpenWork,
@@ -23,19 +22,6 @@ import { storeUserView } from "@/test/user-view";
 
 // A case mounts the whole app chrome, whose route modules are imported lazily.
 vi.setConfig({ testTimeout: 40_000 });
-
-const summary = {
-	pullRequestsOpened: 2,
-	pullRequestsMerged: 1,
-	pullRequestsClosed: 0,
-	approvals: 2,
-	changeRequests: 1,
-	commentReviews: 0,
-	comments: 4,
-	codeComments: 0,
-	issuesOpened: 0,
-	issuesClosed: 0,
-} satisfies ActivitySummary;
 
 const counts = {
 	contributions: 5,
@@ -61,16 +47,47 @@ const people = {
 		},
 		automation: false,
 		counts,
-		breakdown: summary,
-		weeks: [{ start: "2026-09-21T00:00:00Z", counts, breakdown: summary }],
+		weeks: [{ start: "2026-09-21T00:00:00Z", contributions: counts.contributions }],
 	})),
 	automation: [],
-	maxRangeDays: 731,
 	coverage: { completeRepositories: 1, totalRepositories: 1 },
 	highlights: { firstContributors: [], mostPeopleHelped: [] },
 	repositories: [],
 	teams: [{ id: 5, key: "core", name: "Core" }],
 } satisfies Wire<ActivityPeople>;
+
+const personDetail = {
+	from: people.from,
+	to: people.to,
+	person: people.people[0]?.person,
+	automation: false,
+	counts,
+	breakdown: {
+		pullRequestsClosed: 0,
+		approvals: 2,
+		changeRequests: 1,
+		commentReviews: 0,
+		discussionComments: 4,
+		codeComments: 0,
+		issuesClosed: 0,
+	},
+	weeks: [
+		{
+			start: "2026-09-21T00:00:00Z",
+			counts,
+			breakdown: {
+				pullRequestsClosed: 0,
+				approvals: 2,
+				changeRequests: 1,
+				commentReviews: 0,
+				discussionComments: 4,
+				codeComments: 0,
+				issuesClosed: 0,
+			},
+		},
+	],
+	repositories: [],
+};
 
 const nothing = { content: [], hasMore: false };
 const openWork = {
@@ -106,7 +123,7 @@ function pagedWork(record: (request: Request) => void) {
 		"page-2": { content: [workItem(2), workItem(3)], nextCursor: "page-3" },
 		"page-3": { content: [workItem(4)] },
 	};
-	return http.get("*/workspaces/:workspaceSlug/activity/work", ({ request }) => {
+	return http.get(/\/workspaces\/[^/]+\/activity\/(?:people\/\d+\/)?work/u, ({ request }) => {
 		record(request);
 		const cursor = new URL(request.url).searchParams.get("cursor") ?? "first";
 		return HttpResponse.json(pages[cursor]);
@@ -128,6 +145,7 @@ function team(
 		membershipCount: 0,
 		repositories: [],
 		repoPermissionCount: 0,
+		slug: id === 5 ? "core" : `team-${id}`,
 	};
 }
 
@@ -188,7 +206,15 @@ describe("Activity", () => {
 				record(request);
 				return HttpResponse.json(people);
 			}),
+			http.get("*/workspaces/:workspaceSlug/activity/people/:userId", ({ request }) => {
+				record(request);
+				return HttpResponse.json(personDetail);
+			}),
 			http.get("*/workspaces/:workspaceSlug/activity/work", ({ request }) => {
+				record(request);
+				return HttpResponse.json(workPage);
+			}),
+			http.get("*/workspaces/:workspaceSlug/activity/people/:userId/work", ({ request }) => {
 				record(request);
 				return HttpResponse.json(workPage);
 			}),
@@ -213,11 +239,12 @@ describe("Activity", () => {
 		renderRouteAtWithRouter("/w/acme/activity");
 
 		await screen.findByRole("heading", { name: "Needs you" }, ROUTE_RENDER_WAIT);
-		await waitFor(() => expect(readsOf("/activity/people").length).toBeGreaterThan(0));
-		expect(readsOf("/activity/people").every((url) => !url.searchParams.has("login"))).toBe(true);
-		expect(
-			readsOf("/activity/people").every((url) => url.searchParams.get("membersOnly") === "true"),
-		).toBe(true);
+		await waitFor(() => expect(readsOf("/activity/people/7").length).toBeGreaterThan(0));
+		expect(readsOf("/activity/people/7").every((url) => !url.searchParams.has("login"))).toBe(true);
+		expect(readsOf("/activity/people")).toStrictEqual([]);
+		expect(readsOf("/activity/people/7").every((url) => !url.searchParams.has("membersOnly"))).toBe(
+			true,
+		);
 		expect(readsOf("/open-work").map((url) => url.pathname)).toContain(
 			"/workspaces/acme/activity/members/ada-lrz/open-work",
 		);
@@ -344,10 +371,10 @@ describe("Activity", () => {
 		renderRouteAtWithRouter("/w/acme/activity");
 
 		await waitFor(
-			() => expect(readsOf("/activity/people").length).toBeGreaterThan(0),
+			() => expect(readsOf("/activity/people/7").length).toBeGreaterThan(0),
 			ROUTE_RENDER_WAIT,
 		);
-		expect(readsOf("/activity/people")[0]?.searchParams.get("zone")).toBeNull();
+		expect(readsOf("/activity/people/7")[0]?.searchParams.get("zone")).toBeNull();
 	});
 
 	it("pages the timeline by the server's cursor and sends no end of its own", async () => {
@@ -358,17 +385,19 @@ describe("Activity", () => {
 		await user.click(await screen.findByRole("button", { name: "Show more" }, ROUTE_RENDER_WAIT));
 
 		await waitFor(() =>
-			expect(readsOf("/activity/work").map((url) => url.searchParams.get("cursor"))).toContain(
-				"page-2",
-			),
+			expect(
+				readsOf("/activity/people/7/work").map((url) => url.searchParams.get("cursor")),
+			).toContain("page-2"),
 		);
 		// The range runs to whenever the server reads it; the cursor carries that end between pages.
-		expect(readsOf("/activity/work").map((url) => url.searchParams.has("to"))).not.toContain(true);
-		const [first, next] = readsOf("/activity/work");
+		expect(
+			readsOf("/activity/people/7/work").map((url) => url.searchParams.has("to")),
+		).not.toContain(true);
+		const [first, next] = readsOf("/activity/people/7/work");
 		const from = first?.searchParams.get("from");
 		expect(next?.searchParams.get("from")).toBe(from);
 		// The one summary read with an end is the period before, which ends where the range begins.
-		const ended = readsOf("/activity/people").filter((url) => url.searchParams.has("to"));
+		const ended = readsOf("/activity/people/7").filter((url) => url.searchParams.has("to"));
 		expect(ended.map((url) => url.searchParams.get("to"))).toContain(from);
 		expect(ended.map((url) => url.searchParams.get("from"))).not.toContain(from);
 	});
@@ -377,10 +406,10 @@ describe("Activity", () => {
 		renderRouteAtWithRouter("/w/acme/activity?range=30d");
 
 		await waitFor(
-			() => expect(readsOf("/activity/people").length).toBeGreaterThan(0),
+			() => expect(readsOf("/activity/people/7").length).toBeGreaterThan(0),
 			ROUTE_RENDER_WAIT,
 		);
-		const [first] = readsOf("/activity/people");
+		const [first] = readsOf("/activity/people/7");
 		assert(first);
 		const from = new Date(String(first.searchParams.get("from")));
 		expect(from.getHours()).toBe(0);
@@ -397,11 +426,13 @@ describe("Activity", () => {
 		await waitFor(
 			() =>
 				expect(
-					readsOf("/activity/work").some((url) => url.searchParams.getAll("kinds").length > 0),
+					readsOf("/activity/people/7/work").some(
+						(url) => url.searchParams.getAll("kinds").length > 0,
+					),
 				).toBe(true),
 			ROUTE_RENDER_WAIT,
 		);
-		const filtered = readsOf("/activity/work").find(
+		const filtered = readsOf("/activity/people/7/work").find(
 			(url) => url.searchParams.getAll("kinds").length > 0,
 		);
 		expect(filtered?.searchParams.getAll("kinds")).toStrictEqual([
@@ -422,7 +453,7 @@ describe("Activity", () => {
 
 		await screen.findByText("Copied 4 items as Markdown", undefined, ROUTE_RENDER_WAIT);
 		expect(
-			readsOf("/activity/work")
+			readsOf("/activity/people/7/work")
 				.filter((url) => url.searchParams.get("size") === "100")
 				.map((url) => url.searchParams.get("cursor")),
 		).toStrictEqual(["page-2", "page-3"]);
@@ -436,18 +467,18 @@ describe("Activity", () => {
 
 	it("shows a failed team lookup and retries it instead of staying in loading", async () => {
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/activity/people", ({ request }) => {
+			http.get("*/workspaces/:workspaceSlug/team", ({ request }) => {
 				record(request);
 				return new HttpResponse(null, { status: 503 });
 			}),
 		);
 		const user = userEvent.setup();
 		renderRouteAtWithRouter("/w/acme/workspace-activity?team=5");
-		await screen.findByText("We could not load members", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("We could not load teams", undefined, ROUTE_RENDER_WAIT);
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/activity/people", ({ request }) => {
+			http.get("*/workspaces/:workspaceSlug/team", ({ request }) => {
 				record(request);
-				return HttpResponse.json(people);
+				return HttpResponse.json([team(5, "Platform")]);
 			}),
 		);
 		const [retry] = await screen.findAllByRole("button", { name: "Retry" });
@@ -533,13 +564,15 @@ describe("Activity", () => {
 		await waitFor(
 			() =>
 				expect(
-					readsOf("/activity/work").some((url) => url.searchParams.getAll("kinds").length > 0),
+					readsOf("/activity/people/7/work").some(
+						(url) => url.searchParams.getAll("kinds").length > 0,
+					),
 				).toBe(true),
 			ROUTE_RENDER_WAIT,
 		);
 		await expect(screen.findAllByRole("dialog")).resolves.toHaveLength(1);
 		expect(
-			readsOf("/activity/work").flatMap((url) => url.searchParams.getAll("kinds")),
+			readsOf("/activity/people/7/work").flatMap((url) => url.searchParams.getAll("kinds")),
 		).not.toContain("ISSUE_OPENED");
 	});
 
@@ -549,15 +582,20 @@ describe("Activity", () => {
 		await waitFor(
 			() =>
 				expect(
-					readsOf("/activity/work").map((url) => [
-						url.searchParams.get("login"),
+					readsOf("/activity/people/8/work").map((url) => [
+						url.pathname,
 						url.searchParams.getAll("kinds").join(","),
 					]),
-				).toContainEqual(["bob", "REVIEW_APPROVED,REVIEW_CHANGES_REQUESTED,REVIEW_COMMENTED"]),
+				).toContainEqual([
+					"/workspaces/acme/activity/people/8/work",
+					"REVIEW_APPROVED,REVIEW_CHANGES_REQUESTED,REVIEW_COMMENTED",
+				]),
 			ROUTE_RENDER_WAIT,
 		);
-		const categoryReads = readsOf("/activity/work").filter((url) => url.searchParams.has("kinds"));
-		expect(categoryReads.map((url) => url.searchParams.get("login"))).not.toContain(null);
+		const categoryReads = readsOf("/activity/people/8/work").filter((url) =>
+			url.searchParams.has("kinds"),
+		);
+		expect(categoryReads.every((url) => !url.searchParams.has("login"))).toBe(true);
 	});
 
 	it("reads a category under a member as the page's, with the member opened over it", async () => {

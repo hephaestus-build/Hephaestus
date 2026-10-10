@@ -3,12 +3,11 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
 import de.tum.cit.aet.hephaestus.activity.overview.ActivityQueryRepository.WorkGroup;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.core.time.TimeRange;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import java.time.Clock;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -35,13 +34,13 @@ public class ActivityService {
             @Nullable String team,
             Set<String> repositoryKeys,
             ActivityWorkFilterParams page) {
-        var range = page.range(params, clock, peopleQueries.earliest(workspace, clock.instant()));
-        peopleQueries.contributor(workspace, userId);
+        peopleQueries.contributor(
+                workspace, userId, CurrentScmIdentityHolder.getAccountActorIds().contains(userId));
         var selected = people.select(
                 workspace, team, repositoryKeys, peopleQueries.teams(workspace), peopleQueries.repositories(workspace));
         return work(
                 new ActivityScope(workspace, Set.of(userId), selected.teamIds(), selected.repositoryIds()),
-                range,
+                page.range(params, clock, peopleQueries.earliest(selected, clock.instant())),
                 page);
     }
 
@@ -65,10 +64,10 @@ public class ActivityService {
                 peopleQueries.repositories(workspaceId));
         Set<Long> actors = login != null
                 ? Set.of(scopes.member(workspaceId, login).getId())
-                : ids(scopes.roster(workspaceId, selected.teamIds()));
+                : Set.copyOf(peopleQueries.findActorIds(selected));
         return work(
                 new ActivityScope(workspaceId, actors, selected.teamIds(), selected.repositoryIds()),
-                page.range(params, clock, peopleQueries.earliest(workspaceId, clock.instant())),
+                page.range(params, clock, peopleQueries.earliest(selected, clock.instant())),
                 page);
     }
 
@@ -86,9 +85,5 @@ public class ActivityService {
         return new ActivityWorkPageDTO(
                 workAssembler.assemble(content),
                 hasNext ? ActivityWorkCursor.after(range, content.getLast()).encode() : null);
-    }
-
-    private static Set<Long> ids(List<User> users) {
-        return users.stream().map(User::getId).collect(Collectors.toUnmodifiableSet());
     }
 }

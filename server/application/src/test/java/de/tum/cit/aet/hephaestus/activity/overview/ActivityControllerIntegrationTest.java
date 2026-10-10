@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityActionDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDetailDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivitySummaryDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
@@ -191,14 +190,14 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         void shouldKeepTheStatementBudgetWhenTheContributorListGrows() {
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
             var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
-            var before = reads.measure(() -> peopleService.people(workspace.getId(), range, null, Set.of(), false));
+            var before = reads.measure(() -> peopleService.people(workspace.getId(), range, null, Set.of()));
             List<Long> added = new ArrayList<>();
             for (int i = 0; i < 20; i++) {
                 User outside = persistUser("scale-contributor-" + i);
                 added.add(outside.getId());
                 record(outside, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1000L - i, DAY, monitored);
             }
-            var after = reads.measure(() -> peopleService.people(workspace.getId(), range, null, Set.of(), false));
+            var after = reads.measure(() -> peopleService.people(workspace.getId(), range, null, Set.of()));
             assertThat(after.value().people()).extracting(p -> p.person().id()).containsAll(added);
             assertThat(after.cost()).isEqualTo(before.cost());
             assertThat(after.cost().statements()).isEqualTo(5);
@@ -221,8 +220,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     workspace.getId(),
                     new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
                     null,
-                    Set.of(),
-                    false);
+                    Set.of());
             assertThat(result.people()).extracting(p -> p.person().id()).doesNotContain(ada.getId());
             assertThat(result.people().stream()
                             .filter(p -> p.person().id().equals(zoe.getId()))
@@ -239,20 +237,26 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             record(machine, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
             var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
             automationService.classify(workspace.getId(), machine.getId(), true);
-            var classified = peopleService.people(workspace.getId(), range, null, Set.of(), false);
+            var classified = peopleService.people(workspace.getId(), range, null, Set.of());
             assertThat(classified.people()).extracting(p -> p.person().id()).doesNotContain(machine.getId());
             assertThat(classified.automation()).extracting(p -> p.person().id()).contains(machine.getId());
+            assertThat(jdbc.queryForList(
+                            "SELECT entity_type FROM config_audit_event WHERE workspace_id=? AND entity_id=?",
+                            String.class,
+                            workspace.getId(),
+                            machine.getId().toString()))
+                    .contains("ACTIVITY_AUTOMATION");
             automationService.classify(workspace.getId(), machine.getId(), false);
             assertThat(peopleService
-                            .people(workspace.getId(), range, null, Set.of(), false)
+                            .people(workspace.getId(), range, null, Set.of())
                             .people())
                     .extracting(p -> p.person().id())
                     .contains(machine.getId());
             assertThat(peopleService
-                            .people(workspace.getId(), range, null, Set.of(), true)
+                            .people(workspace.getId(), range, null, Set.of())
                             .people())
                     .extracting(p -> p.person().id())
-                    .doesNotContain(machine.getId());
+                    .contains(machine.getId());
         }
 
         @ParameterizedTest
@@ -308,11 +312,11 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
             var other = createWorkspace("other-activity", "Other activity", "other-org", AccountType.ORG, zoe);
             assertThat(peopleService
-                            .people(other.getId(), range, null, Set.of(), false)
+                            .people(other.getId(), range, null, Set.of())
                             .people())
                     .isEmpty();
-            assertThatThrownBy(() -> peopleService.people(
-                            other.getId(), range, null, Set.of(monitored.getNameWithOwner()), false))
+            assertThatThrownBy(() ->
+                            peopleService.people(other.getId(), range, null, Set.of(monitored.getNameWithOwner())))
                     .isInstanceOf(EntityNotFoundException.class);
         }
 
@@ -341,8 +345,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     workspace.getId(),
                     new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
                     null,
-                    Set.of(),
-                    false));
+                    Set.of()));
             var person = measured.value().people().stream()
                     .filter(p -> p.person().id().equals(ada.getId()))
                     .findFirst()
@@ -365,17 +368,17 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             record(outside, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
             record(bot, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2L, DAY, monitored);
             var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
-            var people = peopleService.people(workspace.getId(), range, null, Set.of(), false);
+            var people = peopleService.people(workspace.getId(), range, null, Set.of());
             assertThat(people.people())
                     .extracting(p -> p.person().id())
                     .contains(outside.getId())
                     .doesNotContain(bot.getId());
             assertThat(people.automation()).extracting(p -> p.person().id()).contains(bot.getId());
             assertThat(peopleService
-                            .people(workspace.getId(), range, null, Set.of(), true)
+                            .people(workspace.getId(), range, null, Set.of())
                             .people())
                     .extracting(p -> p.person().id())
-                    .doesNotContain(outside.getId());
+                    .contains(outside.getId());
         }
 
         @Test
@@ -388,24 +391,147 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     workspace.getId(),
                     new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
                     null,
-                    Set.of(),
-                    false);
+                    Set.of());
             assertThat(people.people()).extracting(p -> p.person().id()).doesNotContain(ada.getId());
         }
     }
 
     @Test
-    void shouldSupplyTheMeasuredRangeLimitAndRejectLongHistoryWithoutTruncatingIt() {
-        Instant old = DAY.minus(Duration.ofDays(1000));
+    void shouldReadFullHistoryWhenAllTimeIsSelected() {
+        Instant old = DAY.minus(Duration.ofDays(3650));
         record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -908L, old, monitored);
-        var response = Objects.requireNonNull(get("/people", uri -> uri)
+        var response = Objects.requireNonNull(status("/people", uri -> uri.queryParam("range", "all"))
                 .isOk()
                 .expectBody(ActivityPeopleDTO.class)
                 .returnResult()
                 .getResponseBody());
-        assertThat(response.maxRangeDays()).isEqualTo(731);
-        assertThat(response.historyStart()).isEqualTo(old);
-        status("/people", uri -> uri.queryParam("range", "all")).isBadRequest().expectBody(Void.class);
+        assertThat(response.from()).isEqualTo(old);
+        assertThat(response.people())
+                .filteredOn(person -> person.person().id().equals(ada.getId()))
+                .singleElement()
+                .satisfies(person -> assertThat(person.counts().contributions()).isEqualTo(1));
+    }
+
+    @Test
+    void shouldCountReviewsWithoutAnAuthorInBothPeopleAndWork() {
+        var pull = pullRequest(zoe, monitored, work -> work);
+        var review = review(pull, ada, PullRequestReview.State.APPROVED);
+        jdbc.update("UPDATE issue SET author_id = NULL WHERE id = ?", pull.getId());
+        record(ada, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, review.getId(), DAY);
+        var person = members(uri -> uri).stream()
+                .filter(row -> row.person().id().equals(ada.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(person.counts().pullRequestsReviewed()).isEqualTo(1);
+        assertThat(person.counts().peopleHelped()).isZero();
+        assertThat(person.firstContributionAt()).isEqualTo(DAY);
+        assertThat(work(uri -> uri).content())
+                .singleElement()
+                .satisfies(row ->
+                        assertThat(row.actions()).contains(new ActivityActionDTO(ActivityKind.REVIEW_APPROVED, 1)));
+    }
+
+    @Test
+    void shouldReadOwnActivityWhenTheMemberIsHidden() {
+        var caller = userRepository
+                .findByLoginAndProviderId(
+                        "mentor", Objects.requireNonNull(ensureGitHubProvider().getId()))
+                .orElseThrow();
+        var issue = issue(monitored, Issue.State.OPEN, caller);
+        record(caller, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, issue.getId(), DAY);
+        workspaceMembershipService.updateMemberVisibility(workspace.getId(), caller.getId(), true);
+        assertThat(members(uri -> uri)).extracting(row -> row.person().id()).doesNotContain(caller.getId());
+        var detail = Objects.requireNonNull(get("/people/" + caller.getId(), uri -> uri)
+                .isOk()
+                .expectBody(ActivityPersonDetailDTO.class)
+                .returnResult()
+                .getResponseBody());
+        assertThat(detail.counts().contributions()).isEqualTo(1);
+        get("/people/" + caller.getId() + "/work", uri -> uri)
+                .isOk()
+                .expectBody(ActivityWorkPageDTO.class)
+                .value(page -> assertThat(page.content()).hasSize(1));
+    }
+
+    @Test
+    void shouldReturnZeroCountsForOwnActivityBeforeTheFirstContribution() {
+        var caller = userRepository
+                .findByLoginAndProviderId(
+                        "mentor", Objects.requireNonNull(ensureGitHubProvider().getId()))
+                .orElseThrow();
+        workspaceMembershipService.updateMemberVisibility(workspace.getId(), caller.getId(), true);
+        get("/people/" + caller.getId(), uri -> uri)
+                .isOk()
+                .expectBody(ActivityPersonDetailDTO.class)
+                .value(detail -> {
+                    assertThat(detail.counts().contributions()).isZero();
+                    assertThat(detail.weeks()).isEmpty();
+                });
+    }
+
+    @Test
+    void shouldDenyEveryAnonymousActivityReadEvenWhenTheWorkspaceIsPubliclyViewable() {
+        workspace.setIsPubliclyViewable(true);
+        workspaceRepository.save(workspace);
+        for (String path : List.of(
+                "/people",
+                "/people/" + ada.getId(),
+                "/people/" + ada.getId() + "/work",
+                "/work",
+                "/members/" + ada.getLogin() + "/open-work")) {
+            webTestClient
+                    .get()
+                    .uri("/workspaces/" + workspace.getWorkspaceSlug() + "/activity" + path)
+                    .exchange()
+                    .expectStatus()
+                    .value(status -> assertThat(status).isIn(401, 403))
+                    .expectBody(Void.class);
+        }
+    }
+
+    @Test
+    void shouldScopeFirstContributionsCoverageAndAllTimeToSelectedRepositories() {
+        var other = repository("activity-org/private-history", true);
+        Instant old = Instant.parse(FROM).minus(Duration.ofDays(1500));
+        record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -991L, old, other);
+        record(
+                zoe,
+                ActivityEventType.ISSUE_CREATED,
+                ActivityTargetType.ISSUE,
+                -992L,
+                old.plus(Duration.ofDays(1000)),
+                monitored);
+        record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -993L, DAY, monitored);
+        jdbc.update(
+                "UPDATE repository_to_monitor SET issue_backfill_high_water_mark=0, pull_request_backfill_high_water_mark=0 WHERE workspace_id=?",
+                workspace.getId());
+        var selected = peopleService.people(
+                workspace.getId(),
+                new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                null,
+                Set.of(monitored.getNameWithOwner()));
+        assertThat(selected.highlights().firstContributors())
+                .contains(ada.getId())
+                .doesNotContain(zoe.getId());
+        assertThat(selected.coverage().since()).isEqualTo(old.plus(Duration.ofDays(1000)));
+        assertThat(selected.coverage().completeRepositories()).isEqualTo(1);
+        assertThat(selected.coverage().totalRepositories()).isEqualTo(1);
+        var all = peopleService.people(
+                workspace.getId(),
+                new ActivityPeopleRangeParams("all", null, null),
+                null,
+                Set.of(monitored.getNameWithOwner()));
+        assertThat(all.from()).isEqualTo(selected.coverage().since());
+        assertThat(all.highlights().firstContributors()).isEmpty();
+        jdbc.update(
+                "UPDATE repository_to_monitor SET issue_backfill_high_water_mark=NULL WHERE workspace_id=?",
+                workspace.getId());
+        var incomplete = peopleService.people(
+                workspace.getId(),
+                new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                null,
+                Set.of(monitored.getNameWithOwner()));
+        assertThat(incomplete.highlights().firstContributors()).isEmpty();
     }
 
     @Nested
@@ -430,13 +556,13 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(ActivityPersonDetailDTO.class)
                     .returnResult()
                     .getResponseBody());
-            assertThat(detail.activity().person().id()).isEqualTo(ada.getId());
-            assertThat(detail.activity().counts().contributions()).isEqualTo(2);
-            assertThat(detail.activity().counts().pullRequestsReviewed()).isEqualTo(1);
-            assertThat(detail.activity().counts().peopleHelped()).isEqualTo(1);
-            assertThat(detail.activity().weeks()).hasSize(2);
-            assertThat(detail.activity().breakdown().approvals()).isEqualTo(1);
-            assertThat(detail.activity().breakdown().changeRequests()).isEqualTo(1);
+            assertThat(detail.person().id()).isEqualTo(ada.getId());
+            assertThat(detail.counts().contributions()).isEqualTo(2);
+            assertThat(detail.counts().pullRequestsReviewed()).isEqualTo(1);
+            assertThat(detail.counts().peopleHelped()).isEqualTo(1);
+            assertThat(detail.weeks()).hasSize(2);
+            assertThat(detail.breakdown().approvals()).isEqualTo(1);
+            assertThat(detail.breakdown().changeRequests()).isEqualTo(1);
             assertThat(detail.repositories())
                     .extracting(row -> row.repository().id())
                     .containsExactlyInAnyOrder(monitored.getId(), other.getId());
@@ -446,7 +572,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                             .expectBody(ActivityPersonDetailDTO.class)
                             .returnResult()
                             .getResponseBody());
-            assertThat(filtered.activity().counts().contributions()).isEqualTo(1);
+            assertThat(filtered.counts().contributions()).isEqualTo(1);
             assertThat(filtered.repositories())
                     .singleElement()
                     .satisfies(row -> assertThat(row.counts().issuesOpened()).isEqualTo(1));
@@ -466,8 +592,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(ActivityPersonDetailDTO.class)
                     .returnResult()
                     .getResponseBody());
-            assertThat(detail.activity().counts().contributions()).isZero();
-            assertThat(detail.activity().weeks()).isEmpty();
+            assertThat(detail.counts().contributions()).isZero();
+            assertThat(detail.weeks()).isEmpty();
             assertThat(detail.repositories()).isEmpty();
         }
 
@@ -500,9 +626,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         .expectBody(ActivityPersonDetailDTO.class)
                         .returnResult()
                         .getResponseBody());
-                assertThat(detail.activity().person().id()).isEqualTo(contributor.getId());
-                assertThat(detail.activity().counts().contributions()).isEqualTo(1);
-                assertThat(detail.activity().automation()).isEqualTo(contributor.getType() == User.Type.BOT);
+                assertThat(detail.person().id()).isEqualTo(contributor.getId());
+                assertThat(detail.counts().contributions()).isEqualTo(1);
+                assertThat(detail.automation()).isEqualTo(contributor.getType() == User.Type.BOT);
                 var page = Objects.requireNonNull(get(path + "/work", uri -> uri)
                         .isOk()
                         .expectBody(ActivityWorkPageDTO.class)
@@ -860,6 +986,33 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
+        void shouldFindTheFirstContributionInsideTheTeamScope() {
+            Instant old = Instant.parse(FROM).minus(Duration.ofDays(1000));
+            record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -980L, old, unmonitored);
+            record(
+                    ada,
+                    ActivityEventType.ISSUE_CREATED,
+                    ActivityTargetType.ISSUE,
+                    -981L,
+                    old.plusSeconds(1),
+                    monitored);
+            record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -982L, DAY, monitored);
+            jdbc.update(
+                    "UPDATE repository_to_monitor SET issue_backfill_high_water_mark=0, pull_request_backfill_high_water_mark=0 WHERE workspace_id=?",
+                    workspace.getId());
+            var result = peopleService.people(
+                    workspace.getId(),
+                    new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                    platform.getSlug(),
+                    Set.of());
+            assertThat(result.highlights().firstContributors()).contains(zoe.getId());
+            assertThat(result.people()).singleElement().satisfies(person -> {
+                assertThat(person.person().id()).isEqualTo(zoe.getId());
+                assertThat(person.firstContributionAt()).isEqualTo(DAY);
+            });
+        }
+
+        @Test
         void shouldCoverOnlyTheTeamAndItsSubTeamsWhenATeamIsGiven() {
             PullRequest zoesWork = pullRequest(zoe, monitored, work -> work);
             record(
@@ -886,7 +1039,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .singleElement()
                     .satisfies(entry -> assertThat(entry.actions())
                             .containsExactly(new ActivityActionDTO(ActivityKind.PULL_REQUEST_OPENED, 1)));
-            ActivitySummaryDTO summary = summary(uri -> uri.queryParam("team", platform.getSlug()));
+            TypeCounts summary = summary(uri -> uri.queryParam("team", platform.getSlug()));
             assertThat(summary.pullRequestsOpened()).isEqualTo(1);
             assertThat(summary.issuesOpened()).isZero();
         }
@@ -909,7 +1062,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     DAY.plusSeconds(60),
                     unmonitored);
 
-            ActivitySummaryDTO summary =
+            TypeCounts summary =
                     summary(uri -> uri.queryParam("login", zoe.getLogin()).queryParam("team", platform.getSlug()));
 
             assertThat(summary.pullRequestsOpened()).isEqualTo(1);
@@ -1023,7 +1176,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
             assertThat(members(uri -> uri.queryParam("team", empty.getSlug()))).isEmpty();
             assertThat(summary(uri -> uri.queryParam("team", empty.getSlug())))
-                    .isEqualTo(new ActivitySummaryDTO(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+                    .isEqualTo(new TypeCounts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
             ActivityWorkPageDTO work = work(uri -> uri.queryParam("team", empty.getSlug()));
             assertThat(work.content()).isEmpty();
             assertThat(work.nextCursor()).isNull();
@@ -1581,14 +1734,34 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         };
     }
 
-    private ActivitySummaryDTO summary(Function<UriBuilder, UriBuilder> query) {
+    private TypeCounts summary(Function<UriBuilder, UriBuilder> query) {
         var raw = UriComponentsBuilder.fromPath("");
         var parameters =
                 UriComponentsBuilder.fromUri(query.apply(raw).build()).build().getQueryParams();
         String login = parameters.getFirst("login");
         return sum(members(query).stream()
                 .filter(p -> login == null || p.person().login().equals(login))
-                .map(ActivityPersonDTO::breakdown)
+                .map(person -> {
+                    var detail = Objects.requireNonNull(
+                            get("/people/" + person.person().id(), query)
+                                    .isOk()
+                                    .expectBody(ActivityPersonDetailDTO.class)
+                                    .returnResult()
+                                    .getResponseBody());
+                    var counts = detail.counts();
+                    var types = detail.breakdown();
+                    return new TypeCounts(
+                            Math.toIntExact(counts.pullRequestsOpened()),
+                            Math.toIntExact(counts.pullRequestsMerged()),
+                            types.pullRequestsClosed(),
+                            types.approvals(),
+                            types.changeRequests(),
+                            types.commentReviews(),
+                            types.discussionComments(),
+                            types.codeComments(),
+                            Math.toIntExact(counts.issuesOpened()),
+                            types.issuesClosed());
+                })
                 .toList());
     }
 
@@ -1618,7 +1791,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
      * add up to the summary of the same scope.
      */
     private Set<ActivityKind> assertWorkAddsUpToTheSummary(Function<UriBuilder, UriBuilder> scope) {
-        ActivitySummaryDTO summary = summary(scope);
+        TypeCounts summary = summary(scope);
         Map<ActivityKind, Integer> listed = listedActions(scope, List.of());
         Map<ActivityKind, Integer> reviewsAndComments =
                 listedActions(scope, List.of(ActivityKind.REVIEW_APPROVED, ActivityKind.COMMENTED));
@@ -1626,7 +1799,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(summary).as("the scope has activity to add up").isNotEqualTo(sum(List.of()));
         assertThat(summaryOf(listed)).isEqualTo(summary);
         assertThat(summaryOf(reviewsAndComments))
-                .isEqualTo(new ActivitySummaryDTO(0, 0, 0, summary.approvals(), 0, 0, summary.comments(), 0, 0, 0));
+                .isEqualTo(new TypeCounts(0, 0, 0, summary.approvals(), 0, 0, summary.comments(), 0, 0, 0));
         return listed.keySet();
     }
 
@@ -1766,8 +1939,20 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -163L, Instant.parse(TO), repository);
     }
 
-    private static ActivitySummaryDTO summaryOf(Map<ActivityKind, Integer> counts) {
-        return new ActivitySummaryDTO(
+    private record TypeCounts(
+            int pullRequestsOpened,
+            int pullRequestsMerged,
+            int pullRequestsClosed,
+            int approvals,
+            int changeRequests,
+            int commentReviews,
+            int comments,
+            int codeComments,
+            int issuesOpened,
+            int issuesClosed) {}
+
+    private static TypeCounts summaryOf(Map<ActivityKind, Integer> counts) {
+        return new TypeCounts(
                 counts.getOrDefault(ActivityKind.PULL_REQUEST_OPENED, 0),
                 counts.getOrDefault(ActivityKind.PULL_REQUEST_MERGED, 0),
                 counts.getOrDefault(ActivityKind.PULL_REQUEST_CLOSED, 0),
@@ -1780,11 +1965,11 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 counts.getOrDefault(ActivityKind.ISSUE_CLOSED, 0));
     }
 
-    private static ActivitySummaryDTO sum(List<ActivitySummaryDTO> summaries) {
+    private static TypeCounts sum(List<TypeCounts> summaries) {
         return summaries.stream()
                 .reduce(
-                        new ActivitySummaryDTO(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-                        (a, b) -> new ActivitySummaryDTO(
+                        new TypeCounts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+                        (a, b) -> new TypeCounts(
                                 a.pullRequestsOpened() + b.pullRequestsOpened(),
                                 a.pullRequestsMerged() + b.pullRequestsMerged(),
                                 a.pullRequestsClosed() + b.pullRequestsClosed(),

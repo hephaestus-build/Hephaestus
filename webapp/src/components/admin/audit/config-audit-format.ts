@@ -21,6 +21,7 @@ export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
 	PRACTICE_REVIEW_SETTINGS: "Review settings",
 	AGENT_BINDING: "Model assignment",
 	WORKSPACE_ROLE: "Workspace role",
+	ACTIVITY_AUTOMATION: "Activity automation",
 	WORKSPACE_FEATURES: "Feature flags",
 	WORKSPACE_STATUS: "Workspace status",
 	WORKSPACE_TOKEN: "Access token",

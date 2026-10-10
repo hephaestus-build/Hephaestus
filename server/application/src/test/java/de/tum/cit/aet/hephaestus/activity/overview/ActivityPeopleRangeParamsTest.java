@@ -44,20 +44,11 @@ class ActivityPeopleRangeParamsTest {
     }
 
     @Test
-    void shouldRejectRangesBeyondTheMeasuredCap() {
-        assertThatThrownBy(() -> new ActivityPeopleRangeParams("all", null, null)
-                        .resolve(CLOCK, NOW.minus(Duration.ofDays(ActivityPeopleRangeParams.MAX_DAYS + 1L))))
-                .isInstanceOf(ResponseStatusException.class);
-    }
-
-    @Test
-    void shouldAcceptTheMeasuredBoundaryWithoutChangingTheRequestedDates() {
-        Instant from = NOW.minus(Duration.ofDays(ActivityPeopleRangeParams.MAX_DAYS));
-        var range = new ActivityPeopleRangeParams("custom", from, NOW).resolve(CLOCK, from);
-        assertThat(range.from()).isEqualTo(from);
+    void shouldReadFullHistoryWhenItSpansTenYears() {
+        Instant start = NOW.minus(Duration.ofDays(3650));
+        var range = new ActivityPeopleRangeParams("all", null, null).resolve(CLOCK, start);
+        assertThat(range.from()).isEqualTo(start);
         assertThat(range.to()).isEqualTo(NOW);
-        assertThatThrownBy(() -> new ActivityPeopleRangeParams("custom", from.minusNanos(1), NOW).resolve(CLOCK, from))
-                .isInstanceOf(ResponseStatusException.class);
     }
 
     @Test

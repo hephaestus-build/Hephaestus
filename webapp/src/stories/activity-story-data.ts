@@ -8,10 +8,8 @@ import {
 	startOfWeek,
 	subDays,
 } from "date-fns";
-
 import type {
 	ActivityAction,
-	ActivitySummary,
 	ActivityWork,
 	OpenWork,
 	RepositoryInfo,
@@ -23,10 +21,12 @@ import type {
 import type { ActivityOverviewState, DateSpan } from "@/components/activity/activity-buckets";
 import { ACTIVITY_RANGE_DEFS, rangeStart } from "@/components/activity/activity-range";
 import type {
+	ActivitySummary,
 	ActivityBucket,
 	ActivityOverview,
 	MemberActivity,
 } from "@/components/activity/activity-view";
+
 import type { MemberActivityState } from "@/components/activity/MemberActivityTable";
 
 import { daysBefore, hoursBefore, minutesBefore, STORY_NOW } from "./story-clock";
@@ -364,8 +364,9 @@ const ZERO: ActivitySummary = {
 	issuesClosed: 0,
 };
 
-const FIELDS = Object.keys(ZERO).filter((key): key is keyof ActivitySummary =>
-	Object.hasOwn(ZERO, key),
+const FIELDS = Object.keys(ZERO).filter(
+	(key): key is Exclude<keyof ActivitySummary, "pullRequestsReviewed" | "totalComments"> =>
+		Object.hasOwn(ZERO, key),
 );
 
 export function summaryOf(counts: Partial<ActivitySummary>): ActivitySummary {
@@ -400,14 +401,14 @@ export const SUMMARY = summaryOf({
 
 export const QUIET_SUMMARY = ZERO;
 
-type StoryRange = "7d" | "30d" | "90d" | "1y";
+type StoryRange = "30d" | "90d" | "1y";
 
 /** Where the server starts each bucket of a range that ends now, in the browser's time zone. */
 function bucketStarts(range: StoryRange): { bucket: ActivityOverview["bucket"]; starts: Date[] } {
 	const from = rangeStart(STORY_NOW, range);
 	const now = new Date(STORY_NOW);
 	const starts: Date[] = [];
-	if (range === "7d" || range === "30d") {
+	if (range === "30d") {
 		for (let day = startOfDay(from); day <= now; day = addDays(day, 1)) {
 			starts.push(day);
 		}
@@ -550,7 +551,7 @@ export const OVERVIEW = overviewOf(SUMMARY, "30d");
 
 export const WEEK_OVERVIEW = overviewOf(
 	summaryOf({ pullRequestsMerged: 1, approvals: 3, comments: 9, codeComments: 14 }),
-	"7d",
+	"30d",
 );
 
 export const QUIET_OVERVIEW = overviewOf(QUIET_SUMMARY, "30d");

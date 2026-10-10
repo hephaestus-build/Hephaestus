@@ -53,7 +53,7 @@ class ActivityAutomationService {
             automation.deleteById(id);
         }
         audit.record(ConfigAuditEntry.updated(
-                ConfigAuditEntityType.WORKSPACE_ROLE,
+                ConfigAuditEntityType.ACTIVITY_AUTOMATION,
                 userId,
                 workspaceId,
                 new AutomationSnapshot(before),

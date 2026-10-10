@@ -6,4 +6,4 @@ import org.jspecify.annotations.NonNull;
 public record ActivityWeekDTO(
         @NonNull Instant start,
         @NonNull ActivityCountsDTO counts,
-        @NonNull ActivitySummaryDTO breakdown) {}
+        @NonNull ActivityBreakdownDTO breakdown) {}

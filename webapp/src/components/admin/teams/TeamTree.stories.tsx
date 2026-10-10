@@ -41,6 +41,7 @@ const child: TeamInfo = {
 	hidden: false,
 	membershipCount: 0,
 	repoPermissionCount: 0,
+	slug: "team-2",
 	repositories: [repoB],
 	labels: [],
 	members: [],
@@ -52,6 +53,7 @@ const parent: TeamInfo = {
 	hidden: false,
 	membershipCount: 1,
 	repoPermissionCount: 1,
+	slug: "team-1",
 	members: [
 		{
 			id: 10,

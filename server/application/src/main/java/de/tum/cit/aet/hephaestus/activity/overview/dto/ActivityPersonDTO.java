@@ -12,6 +12,5 @@ public record ActivityPersonDTO(
         @NonNull UserInfoDTO person,
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean automation,
         @NonNull ActivityCountsDTO counts,
-        @NonNull ActivitySummaryDTO breakdown,
         @Nullable Instant firstContributionAt,
-        @NonNull List<ActivityWeekDTO> weeks) {}
+        @NonNull List<ActivitySparklineWeekDTO> weeks) {}

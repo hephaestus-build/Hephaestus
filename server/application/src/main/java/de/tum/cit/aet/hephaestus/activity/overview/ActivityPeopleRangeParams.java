@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.core.time.TimeRange;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -11,7 +12,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 public record ActivityPeopleRangeParams(
-        @Parameter(description = "30d, 90d (default), 1y, all, or custom") @Nullable
+        @Parameter(
+                description = "Activity range",
+                schema = @Schema(allowableValues = {"30d", "90d", "1y", "all", "custom"}))
+        @Nullable
         String range,
 
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) @Nullable
@@ -19,8 +23,6 @@ public record ActivityPeopleRangeParams(
 
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) @Nullable
         Instant to) {
-
-    static final int MAX_DAYS = 731;
 
     public TimeRange resolve(Clock clock, Instant earliest) {
         Instant end = to == null ? clock.instant() : to;
@@ -44,9 +46,6 @@ public record ActivityPeopleRangeParams(
         }
         if (start.isAfter(end)) {
             throw invalid("The start date must not be after the end date.");
-        }
-        if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_DAYS)) > 0) {
-            throw invalid("A range spans at most " + MAX_DAYS + " days.");
         }
         return new TimeRange(start, end);
     }

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityBreakdownDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityCountsDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityHighlightsDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
@@ -7,12 +8,15 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDetailDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityRepositoryCountsDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityRepositoryDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivitySummaryDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivitySparklineWeekDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityTeamDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWeekDTO;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import java.time.Clock;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,50 +33,51 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ActivityPeopleService {
     private final ActivityPeopleQueryRepository queries;
-    private final ActivityScopeResolver scopes;
     private final Clock clock;
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ActivityPeopleDTO people(
-            long workspace,
-            ActivityPeopleRangeParams params,
-            @Nullable String team,
-            Set<String> repositoryKeys,
-            boolean membersOnly) {
+            long workspace, ActivityPeopleRangeParams params, @Nullable String team, Set<String> repositoryKeys) {
         var teams = queries.teams(workspace);
         var repositories = queries.repositories(workspace);
         var scope = select(workspace, team, repositoryKeys, teams, repositories);
-        var historyStart = queries.findEarliest(workspace);
+        var historyStart = queries.findEarliest(scope);
         var range = params.resolve(clock, Objects.requireNonNullElse(historyStart, clock.instant()));
-        var rows = queries.people(workspace, range, scope.teamIds(), scope.repositoryIds(), membersOnly, 0);
-        Map<Long, ActivityPeopleQueryRepository.PersonCount> totals = new LinkedHashMap<>();
-        Map<Long, List<ActivityWeekDTO>> weeks = new LinkedHashMap<>();
+        var rows = queries.findPeople(scope, range, 0, false);
+        Map<Long, ActivityPeopleQueryRepository.CountRow> totals = new LinkedHashMap<>();
+        Map<Long, List<ActivitySparklineWeekDTO>> weeks = new LinkedHashMap<>();
         for (var row : rows) {
-            long person = row.person().id();
-            if (row.total()) {
+            long person = row.getActorId();
+            var week = row.getWeek();
+            if (row.getTotal() == 1) {
                 totals.put(person, row);
-            } else if (row.week() != null) {
+            } else if (week != null) {
                 weeks.computeIfAbsent(person, key -> new ArrayList<>())
-                        .add(new ActivityWeekDTO(row.week(), row.counts(), row.breakdown()));
+                        .add(new ActivitySparklineWeekDTO(week, row.getOpened() + row.getReviewed() + row.getIssues()));
             }
         }
         List<ActivityPersonDTO> all = totals.values().stream()
                 .map(row -> new ActivityPersonDTO(
                         row.person(),
-                        row.automation(),
+                        row.getAutomation(),
                         row.counts(),
-                        row.breakdown(),
-                        row.firstContribution(),
-                        List.copyOf(weeks.getOrDefault(row.person().id(), List.of()))))
+                        row.getFirstContribution(),
+                        List.copyOf(weeks.getOrDefault(row.getActorId(), List.of()))))
                 .toList();
         var people = all.stream().filter(row -> !row.automation()).toList();
         long mostHelped = people.stream()
                 .mapToLong(row -> row.counts().peopleHelped())
                 .max()
                 .orElse(0);
+        var coverage = queries.coverage(scope);
+        boolean firstKnown = coverage.totalRepositories() > 0
+                && coverage.completeRepositories() == coverage.totalRepositories()
+                && coverage.since() != null
+                && range.from().isAfter(coverage.since());
         var highlights = new ActivityHighlightsDTO(
                 people.stream()
-                        .filter(row -> row.firstContributionAt() != null
+                        .filter(row -> firstKnown
+                                && row.firstContributionAt() != null
                                 && !row.firstContributionAt().isBefore(range.from())
                                 && row.firstContributionAt().isBefore(range.to()))
                         .map(row -> row.person().id())
@@ -86,12 +91,10 @@ public class ActivityPeopleService {
                 range.to(),
                 all.stream().filter(row -> !row.automation()).toList(),
                 all.stream().filter(ActivityPersonDTO::automation).toList(),
-                queries.coverage(workspace),
+                coverage,
                 highlights,
                 repositories,
-                teams,
-                ActivityPeopleRangeParams.MAX_DAYS,
-                historyStart);
+                teams);
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -101,11 +104,12 @@ public class ActivityPeopleService {
             ActivityPeopleRangeParams params,
             @Nullable String team,
             Set<String> repositoryKeys) {
-        var contributor = queries.contributor(workspace, userId);
+        boolean own = CurrentScmIdentityHolder.getAccountActorIds().contains(userId);
+        var contributor = queries.contributor(workspace, userId, own);
         var repositories = queries.repositories(workspace);
         var scope = select(workspace, team, repositoryKeys, queries.teams(workspace), repositories);
-        var range = params.resolve(clock, queries.earliest(workspace, clock.instant()));
-        var rows = queries.people(workspace, range, scope.teamIds(), scope.repositoryIds(), false, userId);
+        var range = params.resolve(clock, queries.earliest(scope, clock.instant()));
+        var rows = queries.people(scope, range, userId, own);
         var total = rows.stream()
                 .filter(ActivityPeopleQueryRepository.PersonCount::total)
                 .findFirst()
@@ -117,7 +121,7 @@ public class ActivityPeopleService {
                         null,
                         null,
                         new ActivityCountsDTO(0, 0, 0, 0, 0, 0, 0, 0),
-                        new ActivitySummaryDTO(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)));
+                        new ActivityBreakdownDTO(0, 0, 0, 0, 0, 0, 0)));
         var weeks = rows.stream()
                 .filter(row -> row.week() != null)
                 .map(row -> new ActivityWeekDTO(Objects.requireNonNull(row.week()), row.counts(), row.breakdown()))
@@ -135,13 +139,12 @@ public class ActivityPeopleService {
         return new ActivityPersonDetailDTO(
                 range.from(),
                 range.to(),
-                new ActivityPersonDTO(
-                        total.person(),
-                        total.automation(),
-                        total.counts(),
-                        total.breakdown(),
-                        total.firstContribution(),
-                        weeks),
+                total.person(),
+                total.automation(),
+                total.counts(),
+                total.firstContribution(),
+                total.breakdown(),
+                weeks,
                 byRepository);
     }
 
@@ -166,6 +169,19 @@ public class ActivityPeopleService {
             throw new EntityNotFoundException("Repository", String.join(",", repositoryKeys));
         }
 
-        return new ActivityScope(workspace, Set.of(), scopes.teamIds(workspace, teamId), selected);
+        Set<Long> teamIds = new HashSet<>();
+        if (teamId != null) {
+            var pending = new ArrayDeque<Long>(List.of(teamId));
+            while (!pending.isEmpty()) {
+                Long next = pending.pop();
+                if (teamIds.add(next)) {
+                    teams.stream()
+                            .filter(candidate -> next.equals(candidate.parentId()))
+                            .map(ActivityTeamDTO::id)
+                            .forEach(pending::add);
+                }
+            }
+        }
+        return new ActivityScope(workspace, Set.of(), Set.copyOf(teamIds), selected);
     }
 }

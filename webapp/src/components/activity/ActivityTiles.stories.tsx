@@ -90,7 +90,7 @@ export const Sparse: Story = {
 
 /** Seven days: seven chunky columns. */
 export const SevenDays: Story = {
-	args: { state: readyOverview(WEEK_OVERVIEW, "7d") },
+	args: { state: readyOverview(WEEK_OVERVIEW, "30d") },
 	play: async ({ canvas }) => {
 		const reviews = canvas.getByRole("link", { name: /^Reviews/u });
 		await expect(columns(reviews)).toBe(7);

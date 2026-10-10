@@ -17,12 +17,15 @@
         <addForeignKeyConstraint baseColumnNames="user_id" baseTableName="activity_automation" constraintName="fk_activity_automation_user" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="user" validate="true"/>
     </changeSet>
     <changeSet id="1791582577201-4" author="hephaestus">
-        <preConditions onFail="HALT"><tableExists tableName="activity_event"/></preConditions>
         <sql>CREATE INDEX idx_activity_event_workspace_covering ON activity_event (workspace_id, occurred_at) INCLUDE (actor_id, event_type, target_type, target_id, repository_id)</sql>
         <dropIndex tableName="activity_event" indexName="idx_activity_event_workspace_occurred"/>
         <rollback>
             <sql>CREATE INDEX idx_activity_event_workspace_occurred ON activity_event (workspace_id, occurred_at DESC)</sql>
             <dropIndex tableName="activity_event" indexName="idx_activity_event_workspace_covering"/>
         </rollback>
+    </changeSet>
+    <changeSet id="1791582577201-5" author="hephaestus">
+        <sql>ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_entity_type;
+ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_entity_type CHECK (((entity_type)::text = ANY (ARRAY[('PRACTICE_REVIEW_SETTINGS'::character varying)::text, ('AGENT_BINDING'::character varying)::text, ('AGENT_CONFIG'::character varying)::text, ('AI_CONFIG_BINDING'::character varying)::text, ('WORKSPACE_ROLE'::character varying)::text, ('ACTIVITY_AUTOMATION'::character varying)::text, ('WORKSPACE_FEATURES'::character varying)::text, ('WORKSPACE_STATUS'::character varying)::text, ('WORKSPACE_TOKEN'::character varying)::text, ('WORKSPACE_VISIBILITY'::character varying)::text, ('PRACTICE_ACTIVE'::character varying)::text, ('PRACTICE_USAGE'::character varying)::text, ('PRACTICE_DEFINITION'::character varying)::text, ('PRACTICE_GROUP'::character varying)::text, ('PRACTICE_AREA'::character varying)::text, ('CURATED_PRACTICE'::character varying)::text, ('CURATED_PRACTICE_GROUP'::character varying)::text, ('CURATED_PRACTICE_AREA'::character varying)::text, ('WORKSPACE_INSTANCE_LLM_BUDGET'::character varying)::text, ('WORKSPACE_OWN_PROVIDER_LLM_BUDGET'::character varying)::text, ('WORKSPACE_LLM_BUDGET'::character varying)::text, ('WORKSPACE_BYO_LLM_BUDGET'::character varying)::text, ('REVIEW_BACKFILL_RUN'::character varying)::text, ('REVIEW_SWEEP_SCHEDULE'::character varying)::text, ('WORKSPACE_LLM_CONNECTION'::character varying)::text, ('WORKSPACE_LLM_MODEL'::character varying)::text])));</sql>
     </changeSet>
 </databaseChangeLog>

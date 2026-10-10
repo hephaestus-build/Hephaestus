@@ -5,6 +5,7 @@ import {
 	ACTIVITY_KINDS,
 	actionPhrase,
 	countPhrase,
+	kindsTotal,
 } from "./activity-kind-defs";
 
 describe("ACTIVITY_KINDS", () => {
@@ -19,5 +20,29 @@ describe("countPhrase and actionPhrase", () => {
 		expect(countPhrase("PULL_REQUEST_MERGED", 3, "GITLAB")).toBe("3 merge requests merged");
 		expect(actionPhrase({ kind: "REVIEW_COMMENTED", count: 1 }, "GITHUB")).toBe("commented");
 		expect(actionPhrase({ kind: "REVIEW_APPROVED", count: 2 }, "GITHUB")).toBe("approved 2 times");
+	});
+});
+
+describe("aggregate presentation", () => {
+	it("adds distinct reviews and combined comments without losing other activity", () => {
+		expect(
+			kindsTotal(
+				{
+					pullRequestsOpened: 2,
+					pullRequestsMerged: 1,
+					pullRequestsClosed: 0,
+					approvals: 0,
+					changeRequests: 0,
+					commentReviews: 0,
+					comments: 0,
+					codeComments: 0,
+					issuesOpened: 3,
+					issuesClosed: 0,
+					pullRequestsReviewed: 4,
+					totalComments: 5,
+				},
+				ACTIVITY_KINDS,
+			),
+		).toBe(15);
 	});
 });

@@ -102,7 +102,7 @@ public interface ActivityQueryRepository extends Repository<ActivityEvent, UUID>
 
     /**
      * The groups after the cursor {@code after}, latest activity first, each with how often every kind happened in
-     * it and whom it counts for. A column per kind, named as in {@code ActivitySummaryDTO}, of that kind's event
+     * it and whom it counts for. A column per kind, of that kind's event
      * type in {@link ActivityKind}.
      */
     String WORK_PAGE = "SELECT grouped.id AS id, MAX(grouped.occurredAt) AS lastOccurredAt,"

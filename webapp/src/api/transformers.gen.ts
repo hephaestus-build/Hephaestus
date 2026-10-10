@@ -471,7 +471,7 @@ export const getOpenWorkResponseTransformer = async (data: any): Promise<GetOpen
     return data;
 };
 
-const activityWeekSchemaResponseTransformer = (data: any) => {
+const activitySparklineWeekSchemaResponseTransformer = (data: any) => {
     data.start = new Date(data.start);
     return data;
 };
@@ -480,7 +480,7 @@ const activityPersonSchemaResponseTransformer = (data: any) => {
     if (data.firstContributionAt) {
         data.firstContributionAt = new Date(data.firstContributionAt);
     }
-    data.weeks = data.weeks.map((item: any) => activityWeekSchemaResponseTransformer(item));
+    data.weeks = data.weeks.map((item: any) => activitySparklineWeekSchemaResponseTransformer(item));
     return data;
 };
 
@@ -495,9 +495,6 @@ const activityPeopleSchemaResponseTransformer = (data: any) => {
     data.automation = data.automation.map((item: any) => activityPersonSchemaResponseTransformer(item));
     data.coverage = activityCoverageSchemaResponseTransformer(data.coverage);
     data.from = new Date(data.from);
-    if (data.historyStart) {
-        data.historyStart = new Date(data.historyStart);
-    }
     data.people = data.people.map((item: any) => activityPersonSchemaResponseTransformer(item));
     data.to = new Date(data.to);
     return data;
@@ -508,10 +505,18 @@ export const getActivityPeopleResponseTransformer = async (data: any): Promise<G
     return data;
 };
 
+const activityWeekSchemaResponseTransformer = (data: any) => {
+    data.start = new Date(data.start);
+    return data;
+};
+
 const activityPersonDetailSchemaResponseTransformer = (data: any) => {
-    data.activity = activityPersonSchemaResponseTransformer(data.activity);
+    if (data.firstContributionAt) {
+        data.firstContributionAt = new Date(data.firstContributionAt);
+    }
     data.from = new Date(data.from);
     data.to = new Date(data.to);
+    data.weeks = data.weeks.map((item: any) => activityWeekSchemaResponseTransformer(item));
     return data;
 };
 

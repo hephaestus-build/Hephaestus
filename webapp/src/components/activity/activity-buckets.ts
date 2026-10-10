@@ -1,7 +1,10 @@
 import { addDays, addMonths, format, isSameYear, max, min } from "date-fns";
+import type {
+	ActivitySummary,
+	ActivityBucket,
+	ActivityOverview,
+} from "@/components/activity/activity-view";
 
-import type { ActivitySummary } from "@/api/types.gen";
-import type { ActivityBucket, ActivityOverview } from "@/components/activity/activity-view";
 import type { PanelState } from "@/components/common/panel-state";
 import { formatDayRange } from "@/lib/dates";
 

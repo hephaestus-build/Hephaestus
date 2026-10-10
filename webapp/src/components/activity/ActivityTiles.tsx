@@ -122,10 +122,14 @@ function ActivityTile({
 			}
 			title={def.label(providerType)}
 			value={headline}
-			qualifier={def.headline.qualifier}
+			qualifier={
+				category === "reviews" && overview.summary.pullRequestsReviewed !== undefined
+					? "pull requests reviewed"
+					: def.headline.qualifier
+			}
 			detail={delta !== undefined && <p className="text-xs text-muted-foreground">{delta}</p>}
 		>
-			{opens && (
+			{opens && overview.buckets.length > 0 && (
 				<TileChart
 					category={category}
 					overview={overview}

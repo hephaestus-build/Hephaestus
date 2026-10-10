@@ -45,6 +45,16 @@ export type ActivityAction = {
     kind: 'PULL_REQUEST_OPENED' | 'PULL_REQUEST_MERGED' | 'PULL_REQUEST_CLOSED' | 'REVIEW_APPROVED' | 'REVIEW_CHANGES_REQUESTED' | 'REVIEW_COMMENTED' | 'COMMENTED' | 'CODE_COMMENTED' | 'ISSUE_OPENED' | 'ISSUE_CLOSED';
 };
 
+export type ActivityBreakdown = {
+    approvals: number;
+    changeRequests: number;
+    codeComments: number;
+    commentReviews: number;
+    discussionComments: number;
+    issuesClosed: number;
+    pullRequestsClosed: number;
+};
+
 export type ActivityCounts = {
     activeWeeks: number;
     comments: number;
@@ -78,11 +88,6 @@ export type ActivityPeople = {
     coverage: ActivityCoverage;
     from: string;
     highlights: ActivityHighlights;
-    historyStart?: string;
-    /**
-     * Maximum range width in days
-     */
-    maxRangeDays: number;
     people: Array<ActivityPerson>;
     repositories: Array<ActivityRepository>;
     teams: Array<ActivityTeam>;
@@ -91,18 +96,22 @@ export type ActivityPeople = {
 
 export type ActivityPerson = {
     automation: boolean;
-    breakdown: ActivitySummary;
     counts: ActivityCounts;
     firstContributionAt?: string;
     person: UserInfo;
-    weeks: Array<ActivityWeek>;
+    weeks: Array<ActivitySparklineWeek>;
 };
 
 export type ActivityPersonDetail = {
-    activity: ActivityPerson;
+    automation: boolean;
+    breakdown: ActivityBreakdown;
+    counts: ActivityCounts;
+    firstContributionAt?: string;
     from: string;
+    person: UserInfo;
     repositories: Array<ActivityRepositoryCounts>;
     to: string;
+    weeks: Array<ActivityWeek>;
 };
 
 /**
@@ -115,65 +124,25 @@ export type ActivityRepository = {
 };
 
 export type ActivityRepositoryCounts = {
-    breakdown: ActivitySummary;
+    breakdown: ActivityBreakdown;
     counts: ActivityCounts;
     repository: ActivityRepository;
 };
 
-/**
- * Activity counts by type. Review counts describe submissions by state, not distinct pull requests reviewed.
- */
-export type ActivitySummary = {
-    /**
-     * Reviews that approved
-     */
-    approvals: number;
-    /**
-     * Reviews that requested changes
-     */
-    changeRequests: number;
-    /**
-     * Comments on lines of code
-     */
-    codeComments: number;
-    /**
-     * Reviews that only commented
-     */
-    commentReviews: number;
-    /**
-     * Comments in pull request and issue conversations
-     */
-    comments: number;
-    /**
-     * Issues closed; a closed issue counts for its author
-     */
-    issuesClosed: number;
-    /**
-     * Issues opened
-     */
-    issuesOpened: number;
-    /**
-     * Pull requests closed without merging
-     */
-    pullRequestsClosed: number;
-    /**
-     * Pull requests merged; a merge counts for the pull request's author
-     */
-    pullRequestsMerged: number;
-    /**
-     * Pull requests opened
-     */
-    pullRequestsOpened: number;
+export type ActivitySparklineWeek = {
+    contributions: number;
+    start: string;
 };
 
 export type ActivityTeam = {
     id: number;
     key: string;
     name: string;
+    parentId?: number;
 };
 
 export type ActivityWeek = {
-    breakdown: ActivitySummary;
+    breakdown: ActivityBreakdown;
     counts: ActivityCounts;
     start: string;
 };
@@ -879,7 +848,7 @@ export type ConfigAuditEntryView = {
      */
     elevatedViaInstanceAdmin: boolean;
     entityId?: string;
-    entityType?: 'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL';
+    entityType?: 'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'ACTIVITY_AUTOMATION' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL';
     id?: number;
     newValue?: string;
     occurredAt?: string;
@@ -5851,6 +5820,10 @@ export type TeamInfo = {
      * Repositories the team has access to
      */
     repositories: Array<RepositoryInfo>;
+    /**
+     * Stable team key for URL filters
+     */
+    slug: string;
 };
 
 /**
@@ -7439,7 +7412,7 @@ export type AdminListConfigAuditEventsData = {
         workspaceId?: number;
         page?: number;
         size?: number;
-        entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+        entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'ACTIVITY_AUTOMATION' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
         entityId?: string;
         changedKey?: string;
         action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;
@@ -9845,14 +9818,13 @@ export type GetActivityPeopleData = {
     };
     query?: {
         /**
-         * 30d, 90d (default), 1y, all, or custom
+         * Activity range
          */
-        range?: string;
+        range?: '30d' | '90d' | '1y' | 'all' | 'custom';
         from?: string;
         to?: string;
         team?: string;
         repo?: Array<string>;
-        membersOnly?: boolean;
     };
     url: '/workspaces/{workspaceSlug}/activity/people';
 };
@@ -9894,9 +9866,9 @@ export type GetActivityPersonData = {
     };
     query?: {
         /**
-         * 30d, 90d (default), 1y, all, or custom
+         * Activity range
          */
-        range?: string;
+        range?: '30d' | '90d' | '1y' | 'all' | 'custom';
         from?: string;
         to?: string;
         team?: string;
@@ -9983,9 +9955,9 @@ export type GetActivityPersonWorkData = {
     };
     query?: {
         /**
-         * 30d, 90d (default), 1y, all, or custom
+         * Activity range
          */
-        range?: string;
+        range?: '30d' | '90d' | '1y' | 'all' | 'custom';
         from?: string;
         to?: string;
         team?: string;
@@ -10045,9 +10017,9 @@ export type GetActivityWorkData = {
         team?: string;
         repo?: Array<string>;
         /**
-         * 30d, 90d (default), 1y, all, or custom
+         * Activity range
          */
-        range?: string;
+        range?: '30d' | '90d' | '1y' | 'all' | 'custom';
         from?: string;
         to?: string;
         /**
@@ -10306,7 +10278,7 @@ export type ListWorkspaceConfigAuditEventsData = {
     query?: {
         page?: number;
         size?: number;
-        entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+        entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'ACTIVITY_AUTOMATION' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CURATED_PRACTICE' | 'CURATED_PRACTICE_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BACKFILL_RUN' | 'REVIEW_SWEEP_SCHEDULE' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
         entityId?: string;
         changedKey?: string;
         action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;

@@ -3,6 +3,10 @@ import { subDays } from "date-fns";
 
 import {
 	getActivityPeopleOptions,
+	getActivityPersonOptions,
+	getActivityPersonWorkInfiniteOptions,
+	getActivityPersonWorkOptions,
+	getAllTeamsOptions,
 	getActivityWorkInfiniteOptions,
 	getActivityWorkOptions,
 	getOpenWorkOptions,
@@ -11,7 +15,11 @@ import type { ActivityWork } from "@/api/types.gen";
 import type { ActivityOverviewState } from "@/components/activity/activity-buckets";
 import type { ActivityKind } from "@/components/activity/activity-kind-defs";
 import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
-import { overviewFromPeople } from "@/components/activity/activity-view";
+import {
+	overviewFromPeople,
+	overviewFromPerson,
+	summaryFromCounts,
+} from "@/components/activity/activity-view";
 import type { ActivityWorkLogState } from "@/components/activity/ActivityWorkLog";
 import type { MemberActivityState } from "@/components/activity/MemberActivityTable";
 import type { OpenWorkState } from "@/components/activity/OpenWorkSections";
@@ -28,6 +36,7 @@ import { loadedPages } from "@/runtime/tanstack-query/spring-page";
 interface ActivityScopeRequest {
 	workspaceSlug: string;
 	login?: string;
+	userId?: number;
 	teamId?: number;
 	/**
 	 * Local midnight of the range's first day; the range runs to whenever the server reads it. Part
@@ -52,56 +61,70 @@ const COPY_PAGE_SIZE = 100;
  */
 export function useActivityOverview({
 	workspaceSlug,
-	login,
+	userId,
 	teamId,
 	from,
 	range,
 	enabled = true,
 }: ActivityScopeRequest & { range: ActivityRange }): ActivityOverviewState {
 	const metadata = useQuery({
-		...getActivityPeopleOptions({ path: { workspaceSlug }, query: { from, membersOnly: true } }),
+		...getAllTeamsOptions({ path: { workspaceSlug } }),
 		enabled: enabled && teamId !== undefined,
 	});
-	const resolvedTeam = metadata.data?.teams.find((team) => team.id === teamId)?.key;
-	const scopedEnabled = enabled && (teamId === undefined || resolvedTeam !== undefined);
-	const query = useQuery({
-		...getActivityPeopleOptions({
-			path: { workspaceSlug },
-			query: { from, team: resolvedTeam, membersOnly: true },
+	const team = metadata.data?.find((candidate) => candidate.id === teamId)?.slug;
+	const scopedEnabled = enabled && (teamId === undefined || team !== undefined);
+	const person = useQuery({
+		...getActivityPersonOptions({
+			path: { workspaceSlug, userId: userId ?? 0 },
+			query: { from, team },
 		}),
-		placeholderData: keepSameSubject({ workspaceSlug, team: resolvedTeam }),
-		enabled: scopedEnabled,
+		enabled: scopedEnabled && userId !== undefined,
+	});
+	const people = useQuery({
+		...getActivityPeopleOptions({ path: { workspaceSlug }, query: { from, team } }),
+		enabled: scopedEnabled && userId === undefined,
 	});
 	const { days, previous: periodName } = ACTIVITY_RANGE_DEFS[range];
-	const earlier = useQuery({
+	const earlierPerson = useQuery({
+		...getActivityPersonOptions({
+			path: { workspaceSlug, userId: userId ?? 0 },
+			query: { team, from: subDays(from, days), to: from },
+		}),
+		enabled: scopedEnabled && userId !== undefined,
+	});
+	const earlierPeople = useQuery({
 		...getActivityPeopleOptions({
 			path: { workspaceSlug },
-			query: { team: resolvedTeam, from: subDays(from, days), to: from, membersOnly: true },
+			query: { team, from: subDays(from, days), to: from },
 		}),
-		enabled: scopedEnabled,
+		enabled: scopedEnabled && userId === undefined,
 	});
+	const previousData =
+		userId === undefined
+			? earlierPeople.data && overviewFromPeople(earlierPeople.data)
+			: earlierPerson.data && overviewFromPerson(earlierPerson.data);
 	const previous =
-		earlier.data === undefined
-			? undefined
-			: { summary: overviewFromPeople(earlier.data, login).summary, name: periodName };
-	// Placeholder data is another range's, read for a span this hook no longer knows, so it goes
-	// unlabelled rather than labelled with the new range's days.
+		previousData === undefined ? undefined : { summary: previousData.summary, name: periodName };
 	const metadataState = queryLoadState(metadata);
-	if (teamId !== undefined && resolvedTeam === undefined && metadataState.status === "error") {
+	if (teamId !== undefined && team === undefined && metadataState.status === "error") {
 		return metadataState;
 	}
-	return panelState(query, (data) => {
-		const overview = overviewFromPeople(data, login);
-		return query.isPlaceholderData
-			? { status: "ready" as const, overview, stale: true as const }
-			: {
-					status: "ready" as const,
-					overview,
-					stale: false as const,
-					span: { from: data.from, to: data.to },
-					previous,
-				};
-	});
+	if (userId !== undefined) {
+		return panelState(person, (data) => ({
+			status: "ready" as const,
+			overview: overviewFromPerson(data),
+			stale: false as const,
+			span: { from: data.from, to: data.to },
+			previous,
+		}));
+	}
+	return panelState(people, (data) => ({
+		status: "ready" as const,
+		overview: overviewFromPeople(data),
+		stale: false as const,
+		span: { from: data.from, to: data.to },
+		previous,
+	}));
 }
 
 export function useMemberActivity({
@@ -111,14 +134,14 @@ export function useMemberActivity({
 	enabled = true,
 }: Omit<ActivityScopeRequest, "login">): MemberActivityState {
 	const metadata = useQuery({
-		...getActivityPeopleOptions({ path: { workspaceSlug }, query: { from, membersOnly: true } }),
+		...getAllTeamsOptions({ path: { workspaceSlug } }),
 		enabled: enabled && teamId !== undefined,
 	});
-	const resolvedTeam = metadata.data?.teams.find((team) => team.id === teamId)?.key;
+	const resolvedTeam = metadata.data?.find((team) => team.id === teamId)?.slug;
 	const query = useQuery({
 		...getActivityPeopleOptions({
 			path: { workspaceSlug },
-			query: { team: resolvedTeam, from, membersOnly: true },
+			query: { team: resolvedTeam, from },
 		}),
 		placeholderData: keepSameSubject({ workspaceSlug, team: resolvedTeam }),
 		enabled: enabled && (teamId === undefined || resolvedTeam !== undefined),
@@ -129,7 +152,10 @@ export function useMemberActivity({
 	}
 	return panelState(query, (data) => ({
 		status: "ready" as const,
-		members: data.people.map((person) => ({ user: person.person, summary: person.breakdown })),
+		members: data.people.map((person) => ({
+			user: person.person,
+			summary: summaryFromCounts(person.counts),
+		})),
 		stale: query.isPlaceholderData,
 	}));
 }
@@ -173,6 +199,7 @@ interface ActivityWorkRequest extends ActivityScopeRequest {
 export function useActivityWork({
 	workspaceSlug,
 	login,
+	userId,
 	teamId,
 	from,
 	kinds,
@@ -181,23 +208,35 @@ export function useActivityWork({
 }: ActivityWorkRequest): ActivityWorkLogState {
 	const queryClient = useQueryClient();
 	const metadata = useQuery({
-		...getActivityPeopleOptions({ path: { workspaceSlug }, query: { from, membersOnly: true } }),
+		...getAllTeamsOptions({ path: { workspaceSlug } }),
 		enabled: enabled && teamId !== undefined,
 	});
-	const resolvedTeam = metadata.data?.teams.find((team) => team.id === teamId)?.key;
-	const scope = { login, team: resolvedTeam, from, kinds: kinds ? [...kinds] : undefined };
-	const query = useInfiniteQuery({
+	const resolvedTeam = metadata.data?.find((team) => team.id === teamId)?.slug;
+	const scope = { team: resolvedTeam, from, kinds: kinds ? [...kinds] : undefined };
+	const scopedEnabled = enabled && (teamId === undefined || resolvedTeam !== undefined);
+	const workspaceQuery = useInfiniteQuery({
 		...getActivityWorkInfiniteOptions({
 			path: { workspaceSlug },
-			query: { ...scope, size: WORK_PAGE_SIZE },
+			query: { login, ...scope, size: WORK_PAGE_SIZE },
 		}),
-		// A string page parameter is sent as the cursor; the first page sends none, which the
-		// generated options take only as an object of request parts.
 		initialPageParam: { path: { workspaceSlug }, query: { cursor: undefined } },
 		getNextPageParam: (last) => last.nextCursor ?? undefined,
 		placeholderData: keepSameSubject({ workspaceSlug, login, team: resolvedTeam, kinds }),
-		enabled: enabled && (teamId === undefined || resolvedTeam !== undefined),
+		enabled: scopedEnabled && userId === undefined,
 	});
+	const personQuery = useInfiniteQuery({
+		...getActivityPersonWorkInfiniteOptions({
+			path: { workspaceSlug, userId: userId ?? 0 },
+			query: { ...scope, size: WORK_PAGE_SIZE },
+		}),
+		initialPageParam: {
+			path: { workspaceSlug, userId: userId ?? 0 },
+			query: { cursor: undefined },
+		},
+		getNextPageParam: (last) => last.nextCursor ?? undefined,
+		enabled: scopedEnabled && userId !== undefined,
+	});
+	const query = userId === undefined ? workspaceQuery : personQuery;
 
 	const everything = async (): Promise<ActivityWork[]> => {
 		// A placeholder is the previous range's timeline, so a copy of this range starts over.
@@ -206,12 +245,15 @@ export function useActivityWork({
 		// `null` asks for the first page; `undefined` is past the last one.
 		let cursor: string | null | undefined = pages.length === 0 ? null : pages.at(-1)?.nextCursor;
 		while (cursor !== undefined) {
-			const page = await queryClient.query(
-				getActivityWorkOptions({
-					path: { workspaceSlug },
-					query: { ...scope, cursor: cursor ?? undefined, size: COPY_PAGE_SIZE },
-				}),
-			);
+			const request = { ...scope, cursor: cursor ?? undefined, size: COPY_PAGE_SIZE };
+			const page =
+				userId === undefined
+					? await queryClient.query(
+							getActivityWorkOptions({ path: { workspaceSlug }, query: { login, ...request } }),
+						)
+					: await queryClient.query(
+							getActivityPersonWorkOptions({ path: { workspaceSlug, userId }, query: request }),
+						);
 			items.push(...page.content);
 			cursor = page.nextCursor;
 		}

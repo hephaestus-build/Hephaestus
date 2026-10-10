@@ -36,7 +36,7 @@ import org.springframework.web.bind.annotation.RequestParam;
  * not checked (ADR 0045).
  */
 @WorkspaceScopedController
-@PreAuthorize("@workspaceSecure.isMember()")
+@PreAuthorize("isAuthenticated() && @workspaceSecure.isMember()")
 @RequestMapping("/activity")
 @RequiredArgsConstructor
 @Validated
@@ -71,7 +71,7 @@ public class ActivityController {
 
     @PatchMapping("/people/{userId}/automation")
     @RequireAtLeastWorkspaceAdmin
-    @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_ROLE")
+    @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "ACTIVITY_AUTOMATION")
     @Operation(
             operationId = "updateActivityAutomation",
             summary = "Treat a contributor as automation, or reset the classification")
@@ -91,10 +91,9 @@ public class ActivityController {
             WorkspaceContext workspaceContext,
             @ParameterObject ActivityPeopleRangeParams range,
             @RequestParam(required = false) @Nullable String team,
-            @RequestParam(required = false) @Nullable Set<String> repo,
-            @RequestParam(defaultValue = "false") boolean membersOnly) {
+            @RequestParam(required = false) @Nullable Set<String> repo) {
         return ResponseEntity.ok(
-                peopleService.people(workspaceContext.id(), range, team, repo == null ? Set.of() : repo, membersOnly));
+                peopleService.people(workspaceContext.id(), range, team, repo == null ? Set.of() : repo));
     }
 
     @GetMapping("/people/{userId}")

@@ -209,6 +209,20 @@ function MemberRow({
 			</TableCell>
 			{ACTIVITY_CATEGORIES.map((category) => {
 				const actions = summaryActions(summary, ACTIVITY_CATEGORY_DEFS[category].kinds);
+				const aggregate = {
+					reviews: summary.pullRequestsReviewed,
+					comments: summary.totalComments,
+					"pull-requests": undefined,
+					issues: undefined,
+				}[category];
+				if (aggregate !== undefined) {
+					return (
+						<TableCell key={category} className="px-3">
+							{aggregate}
+							{category === "reviews" && " pull requests reviewed"}
+						</TableCell>
+					);
+				}
 				return (
 					<TableCell key={category} className="px-3">
 						{actions.length > 0 ? (

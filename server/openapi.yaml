@@ -397,6 +397,7 @@ paths:
             - AGENT_CONFIG
             - AI_CONFIG_BINDING
             - WORKSPACE_ROLE
+            - ACTIVITY_AUTOMATION
             - WORKSPACE_FEATURES
             - WORKSPACE_STATUS
             - WORKSPACE_TOKEN
@@ -3070,12 +3071,18 @@ paths:
         schema:
           type: string
           pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
-      - description: "30d, 90d (default), 1y, all, or custom"
+      - description: Activity range
         in: query
         name: range
         required: false
         schema:
           type: string
+          enum:
+          - 30d
+          - 90d
+          - 1y
+          - all
+          - custom
       - in: query
         name: from
         required: false
@@ -3101,12 +3108,6 @@ paths:
           items:
             type: string
           uniqueItems: true
-      - in: query
-        name: membersOnly
-        required: false
-        schema:
-          type: boolean
-          default: false
       responses:
         "200":
           content:
@@ -3152,12 +3153,18 @@ paths:
         schema:
           type: integer
           format: int64
-      - description: "30d, 90d (default), 1y, all, or custom"
+      - description: Activity range
         in: query
         name: range
         required: false
         schema:
           type: string
+          enum:
+          - 30d
+          - 90d
+          - 1y
+          - all
+          - custom
       - in: query
         name: from
         required: false
@@ -3274,12 +3281,18 @@ paths:
         schema:
           type: integer
           format: int64
-      - description: "30d, 90d (default), 1y, all, or custom"
+      - description: Activity range
         in: query
         name: range
         required: false
         schema:
           type: string
+          enum:
+          - 30d
+          - 90d
+          - 1y
+          - all
+          - custom
       - in: query
         name: from
         required: false
@@ -3401,12 +3414,18 @@ paths:
           items:
             type: string
           uniqueItems: true
-      - description: "30d, 90d (default), 1y, all, or custom"
+      - description: Activity range
         in: query
         name: range
         required: false
         schema:
           type: string
+          enum:
+          - 30d
+          - 90d
+          - 1y
+          - all
+          - custom
       - in: query
         name: from
         required: false
@@ -3767,6 +3786,7 @@ paths:
             - AGENT_CONFIG
             - AI_CONFIG_BINDING
             - WORKSPACE_ROLE
+            - ACTIVITY_AUTOMATION
             - WORKSPACE_FEATURES
             - WORKSPACE_STATUS
             - WORKSPACE_TOKEN
@@ -9523,6 +9543,38 @@ components:
       required:
       - count
       - kind
+    ActivityBreakdown:
+      type: object
+      properties:
+        approvals:
+          type: integer
+          format: int32
+        changeRequests:
+          type: integer
+          format: int32
+        codeComments:
+          type: integer
+          format: int32
+        commentReviews:
+          type: integer
+          format: int32
+        discussionComments:
+          type: integer
+          format: int32
+        issuesClosed:
+          type: integer
+          format: int32
+        pullRequestsClosed:
+          type: integer
+          format: int32
+      required:
+      - approvals
+      - changeRequests
+      - codeComments
+      - commentReviews
+      - discussionComments
+      - issuesClosed
+      - pullRequestsClosed
     ActivityCounts:
       type: object
       properties:
@@ -9607,13 +9659,6 @@ components:
           format: date-time
         highlights:
           $ref: "#/components/schemas/ActivityHighlights"
-        historyStart:
-          type: string
-          format: date-time
-        maxRangeDays:
-          type: integer
-          format: int32
-          description: Maximum range width in days
         people:
           type: array
           items:
@@ -9634,7 +9679,6 @@ components:
       - coverage
       - from
       - highlights
-      - maxRangeDays
       - people
       - repositories
       - teams
@@ -9644,8 +9688,6 @@ components:
       properties:
         automation:
           type: boolean
-        breakdown:
-          $ref: "#/components/schemas/ActivitySummary"
         counts:
           $ref: "#/components/schemas/ActivityCounts"
         firstContributionAt:
@@ -9656,21 +9698,29 @@ components:
         weeks:
           type: array
           items:
-            $ref: "#/components/schemas/ActivityWeek"
+            $ref: "#/components/schemas/ActivitySparklineWeek"
       required:
       - automation
-      - breakdown
       - counts
       - person
       - weeks
     ActivityPersonDetail:
       type: object
       properties:
-        activity:
-          $ref: "#/components/schemas/ActivityPerson"
+        automation:
+          type: boolean
+        breakdown:
+          $ref: "#/components/schemas/ActivityBreakdown"
+        counts:
+          $ref: "#/components/schemas/ActivityCounts"
+        firstContributionAt:
+          type: string
+          format: date-time
         from:
           type: string
           format: date-time
+        person:
+          $ref: "#/components/schemas/UserInfo"
         repositories:
           type: array
           items:
@@ -9678,11 +9728,19 @@ components:
         to:
           type: string
           format: date-time
+        weeks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityWeek"
       required:
-      - activity
+      - automation
+      - breakdown
+      - counts
       - from
+      - person
       - repositories
       - to
+      - weeks
     ActivityRepository:
       type: object
       description: The full provider path avoids collisions between repositories with
@@ -9703,7 +9761,7 @@ components:
       type: object
       properties:
         breakdown:
-          $ref: "#/components/schemas/ActivitySummary"
+          $ref: "#/components/schemas/ActivityBreakdown"
         counts:
           $ref: "#/components/schemas/ActivityCounts"
         repository:
@@ -9712,73 +9770,18 @@ components:
       - breakdown
       - counts
       - repository
-    ActivitySummary:
+    ActivitySparklineWeek:
       type: object
-      description: "Activity counts by type. Review counts describe submissions by\
-        \ state, not distinct pull requests reviewed."
       properties:
-        approvals:
+        contributions:
           type: integer
-          format: int32
-          description: Reviews that approved
-          example: 4
-        changeRequests:
-          type: integer
-          format: int32
-          description: Reviews that requested changes
-          example: 1
-        codeComments:
-          type: integer
-          format: int32
-          description: Comments on lines of code
-          example: 12
-        commentReviews:
-          type: integer
-          format: int32
-          description: Reviews that only commented
-          example: 2
-        comments:
-          type: integer
-          format: int32
-          description: Comments in pull request and issue conversations
-          example: 9
-        issuesClosed:
-          type: integer
-          format: int32
-          description: Issues closed; a closed issue counts for its author
-          example: 1
-        issuesOpened:
-          type: integer
-          format: int32
-          description: Issues opened
-          example: 2
-        pullRequestsClosed:
-          type: integer
-          format: int32
-          description: Pull requests closed without merging
-          example: 1
-        pullRequestsMerged:
-          type: integer
-          format: int32
-          description: Pull requests merged; a merge counts for the pull request's
-            author
-          example: 3
-        pullRequestsOpened:
-          type: integer
-          format: int32
-          description: Pull requests opened
-          example: 4
+          format: int64
+        start:
+          type: string
+          format: date-time
       required:
-      - approvals
-      - changeRequests
-      - codeComments
-      - commentReviews
-      - comments
-      - issuesClosed
-      - issuesOpened
-      - pullRequestsClosed
-      - pullRequestsMerged
-      - pullRequestsOpened
+      - contributions
+      - start
     ActivityTeam:
       type: object
       properties:
@@ -9789,6 +9792,9 @@ components:
           type: string
         name:
           type: string
+        parentId:
+          type: integer
+          format: int64
       required:
       - id
       - key
@@ -9797,7 +9803,7 @@ components:
       type: object
       properties:
         breakdown:
-          $ref: "#/components/schemas/ActivitySummary"
+          $ref: "#/components/schemas/ActivityBreakdown"
         counts:
           $ref: "#/components/schemas/ActivityCounts"
         start:
@@ -10955,6 +10961,7 @@ components:
           - AGENT_CONFIG
           - AI_CONFIG_BINDING
           - WORKSPACE_ROLE
+          - ACTIVITY_AUTOMATION
           - WORKSPACE_FEATURES
           - WORKSPACE_STATUS
           - WORKSPACE_TOKEN
@@ -18968,6 +18975,9 @@ components:
           description: Repositories the team has access to
           items:
             $ref: "#/components/schemas/RepositoryInfo"
+        slug:
+          type: string
+          description: Stable team key for URL filters
       required:
       - hidden
       - id
@@ -18977,6 +18987,7 @@ components:
       - name
       - repoPermissionCount
       - repositories
+      - slug
     TeamRef:
       type: object
       description: "A team, by name"

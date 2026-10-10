@@ -1,141 +1,108 @@
 ---
 title: Activity people aggregate
-description: Counts, contributor scope, and limits for the activity people response.
+description: Contributor scope and query contracts for activity reads.
 ---
 
 # Activity people aggregate
 
+[ADR 0052](../decisions/0052-activity-sorts-by-contributions-and-can-be-public.md) defines the contribution counts and visibility policy.
 The activity ledger owns the counts.
 The people response has one row per contributor with activity in the selected range.
 The browser sorts these rows.
 The server does not rank or page them.
 
-## Counts
+## Scope and access
 
-Contributions are pull requests opened, distinct pull requests reviewed, and issues opened.
-A review of your own pull request does not count.
-Multiple reviews of the same pull request count once in the range.
-Weekly counts deduplicate within each week.
-Thus, the sum of weekly review counts can exceed the range's distinct review count.
-
-People helped counts distinct human authors of reviewed pull requests.
-Provider bots and accounts classified as automation do not count as people helped.
-Comments remain separate from contributions.
-Active weeks count UTC calendar weeks with activity that passes the scope filters.
-
-The first contribution date is independent of the selected range and team.
-It comes from the workspace's currently connected repositories.
-Highlights refer to person identifiers in the same response.
-Automation accounts do not enter the highlights.
-
-## Scope
-
-The default includes repository contributors who are not workspace members.
-The `membersOnly` filter limits the response to the workspace roster.
-Hidden members and hidden former members remain absent from the people and automation lists.
+The table includes all contributors, not only workspace members.
+Provider bots and accounts classified as automation appear in a separate list.
+Hidden members and hidden former members are absent from both lists.
+A signed-in member can still read their own detail and work list.
+Every activity endpoint requires sign-in and workspace membership.
+The legacy public-workspace flag grants no anonymous activity access.
 
 Team keys use the provider's team slug.
 Repository keys use the full provider path, such as `ls1intum/Artemis`.
 The full path distinguishes repositories with the same name.
-The response supplies both sets of keys and display names.
-Unknown filter keys are rejected.
-Aggregate, detail and work reads use one repeatable-read snapshot per request.
-Counts, filter metadata and coverage cannot mix states from concurrent repository changes or backfill commits.
-Work lists use the same currently connected repository set, including when no repository filter is supplied.
+The response supplies keys and display names.
+The teams endpoint also supplies each team's slug.
+One visible team hierarchy resolves the selected team and its sub-teams.
+Unknown keys are rejected.
 
-A workspace's automation classification grants no membership or permission.
+Aggregate, detail and work reads use one repeatable-read snapshot per request.
+Counts, metadata and coverage cannot mix states from concurrent repository changes or backfill commits.
+The selected repository identifiers constrain range counts, first-contribution dates, earliest history and coverage.
+An empty repository scope returns no repository activity.
+A future public reader can supply only public repository identifiers without changing these queries.
+First-contribution highlights require complete selected-repository coverage and a range start after its known start.
+Their lifetime lookup uses the same team and repository filters as the range counts.
+
+An automation classification grants no membership or permission.
 An admin can set or reset it.
 A provider bot remains automation after a reset.
-The classification is workspace-scoped and participates in person erasure and workspace purge.
-Classification writes take capture admission and the native-identity write fence before the workspace lock.
-Permanent processing controls block new associations after erasure admission and during a failed request.
-The frozen erasure selection therefore cannot miss a later classification.
+Classification has its own configuration-audit subject.
+The classification and its audit subject participate in person erasure and workspace purge.
+Writes take capture admission and the native-identity write fence before the workspace lock.
+Erasure admission and failed erasure requests block new associations.
 
-## Range and query cost
+## Ranges and response shape
 
 Ranges are half-open: `[from, to)`.
 The default is 90 days.
-The other presets are 30 days, 365 days, and all available history.
-Custom ranges and all-time ranges span at most 731 days.
-The people response supplies `maxRangeDays` and `historyStart`.
-All time is available only when the history fits the cap.
-A longer range is rejected, not silently shortened.
-Custom windows can read earlier history within the same width limit.
+The other presets are 30 days, 365 days and all available history.
+Custom ranges have explicit start and end bounds.
+All time serves full history; there is no range-width cap.
+The OpenAPI contract enumerates the accepted preset values.
 
-## Measured history and paging
-
-The measurement used an isolated PostgreSQL 18 container on a shared development host.
-Each fixture was vacuumed and analyzed before `EXPLAIN (ANALYZE, BUFFERS)`.
-The large-workspace estimate was 30 repositories, 300 contributors, 75,000 events over four years,
-45,000 review rows, and 15,000 pull request rows.
-It is an estimate, not a copy of the production ls1intum workspace.
-
-The full four-year query first took 629 milliseconds.
-Three later runs took 1,108, 1,190, and 1,366 milliseconds.
-A version without repository grouping did not improve the earlier runs.
-The final query keeps repository grouping shared with the person detail.
-One-year windows took 185, 175, and 158 milliseconds.
-Two-year windows took 375, 500, and 400 milliseconds.
-Final two-year runs with the connected-repository bindings and explicit first-review target type
-took 1,299, 891, and 752 milliseconds.
-The earlier samples preceded those final bindings.
-Shared-host load varied; these samples are not a latency guarantee.
-Thus, the range cap is 731 days, the measured two-year window.
-A million-event, ten-year stress fixture took 3.58 seconds before the type-breakdown extension.
-Its 90-day plan took 254 milliseconds.
-The cap bounds history width, not event volume.
-Large event volumes can still exceed interactive latency.
-These numbers exclude serialization, HTTP transfer, and browser work.
-
-The old timeline query counted every group's types and actors before its page limit.
-On the four-year fixture, the first page took 2,145 milliseconds and a later page took 1,726 milliseconds.
-The new query selects page identifiers and timestamps first.
-Only those groups enter the type and actor aggregation.
-The range's latest-work selection still reads the range; there is no rollup table.
-A materialized HQL common table expression keeps the normalized event read shared.
-The existing review join excludes self-reviews without a separate correlated lookup.
-The first page took 299 milliseconds and the later page took 283 milliseconds.
-The first-page buffers changed from 76,445 shared hits, 300 reads, and 1,051/1,053 temporary reads/writes
-to 1,633 shared hits and 575/575 temporary reads/writes.
-On the million-event fixture, first/later pages changed from 18,974/13,189 milliseconds
-to 1,433/1,367 milliseconds.
-
-## Contributor details
-
-`/activity/people/{userId}` returns range totals, sparse UTC weeks, type counts, and repository counts.
+The list carries headline counts and a sparse UTC weekly contribution series.
+It does not carry per-type or per-repository breakdowns.
+`/activity/people/{userId}` supplies weekly counts and breakdowns by type and repository.
+Headline fields and type-breakdown fields have separate homes.
 A visible contributor with no activity in the range has zero counts and empty lists.
-Hidden and unrelated people return not found.
-`/activity/people/{userId}/work` accepts the same range and readable filters.
-It uses the existing opaque cursor and page-size bounds.
-Each later page keeps the first page's range end.
-It checks contributor visibility without recomputing their range aggregate.
+Other hidden and unrelated people return not found.
 
-Type counts describe review submissions by state.
-They are not the distinct pull requests reviewed count.
-The bundled webapp keeps its presentational view types and derives them from the people response.
-Its member pages request `membersOnly=true`; the new activity UI owns the all-contributor presentation.
-The old summary and member-list endpoints and their wire DTOs are removed.
+`/activity/people/{userId}/work` accepts the same range and readable filters.
+It uses the opaque cursor and page-size bounds.
+Each later page keeps the first page's range end.
+It checks contributor visibility without computing their aggregate.
+The bundled webapp reads personal counts from the per-person endpoint.
+Workspace views share one current aggregate and at most one previous-period aggregate.
+Team-key resolution reads the teams data, not another activity aggregate.
+The old summary and member-list endpoints and DTOs are removed.
+
+## Query structure
+
+The people query deduplicates ledger targets once with `DISTINCT ON`.
+Window markers identify distinct reviewed pull requests and helped authors, in the range and per week.
+Filtered row counts replace repeated distinct aggregates.
+The list groups by person and by person-week.
+Only a one-person detail request also groups by repository.
+
+The timeline selects page identifiers and timestamps before counting types and actors.
+Only the selected groups enter that aggregation.
+The latest-work selection still reads the range; there is no rollup table.
+A materialized HQL common table expression shares the normalized event read.
+The review join excludes self-reviews and retains reviews whose author is unknown.
+Performance measurements belong in the pull request body, not this contract.
 
 The covering index has the keys `(workspace_id, occurred_at)`.
-It includes actor, event type, target type, target identifier, and repository identifier.
-The workspace-and-actor index remains useful for first-contribution reads.
+It includes actor, event type, target type, target identifier and repository identifier.
+The workspace-and-actor index serves first-contribution reads.
+The workspace-and-target index serves ledger repair.
 The global actor and target indexes serve other ledger operations.
-Only the old index with the same workspace-and-time keys is redundant.
+Only the baseline index with the same workspace-and-time keys is redundant.
 Liquibase's Hibernate comparison does not retain `INCLUDE` columns.
 The covering index is excluded from that comparison by its exact name.
-The production schema contract verifies its key columns, included columns, and removal of the baseline index.
+The production schema contract verifies its keys, included columns and removal of the baseline index.
 
 ## Sources
 
+- [PostgreSQL: SELECT and grouping sets](https://www.postgresql.org/docs/18/sql-select.html).
+- [PostgreSQL: window functions](https://www.postgresql.org/docs/18/functions-window.html).
+- [PostgreSQL: execution plans](https://www.postgresql.org/docs/current/using-explain.html).
 - [PostgreSQL: covering indexes](https://www.postgresql.org/docs/current/indexes-index-only-scans.html).
-- [PostgreSQL: execution plans and buffers](https://www.postgresql.org/docs/current/using-explain.html).
-- [PostgreSQL: aggregate grouping sets and filters](https://www.postgresql.org/docs/18/sql-select.html).
-- [Liquibase: object filters](https://docs.liquibase.com/community/user-guide-5-0/how-do-i-include-and-exclude-database-objects).
-- [Spring Data: native query projections](https://docs.spring.io/spring-data/jpa/reference/repositories/projections.html).
-- [OWASP: authorization checks](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html).
-
 - [PostgreSQL: CTE materialization](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION).
-- [Hibernate: HQL common table expressions](https://docs.hibernate.org/orm/7.4/querylanguage/html_single/).
-- [Spring Data: keyset scrolling limits](https://docs.spring.io/spring-data/jpa/reference/jpa/query-methods.html#jpa.query-methods.scroll).
-
 - [PostgreSQL: transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html).
+- [Hibernate: HQL common table expressions](https://docs.hibernate.org/orm/7.4/querylanguage/html_single/).
+- [Spring Data: native projections](https://docs.spring.io/spring-data/jpa/reference/repositories/projections.html).
+- [Spring Security: anonymous authentication](https://docs.spring.io/spring-security/reference/servlet/authentication/anonymous.html).
+- [Liquibase: object filters](https://docs.liquibase.com/community/user-guide-5-0/how-do-i-include-and-exclude-database-objects).

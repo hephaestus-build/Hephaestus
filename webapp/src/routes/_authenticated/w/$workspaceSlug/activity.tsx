@@ -57,7 +57,13 @@ function Activity() {
 	const openCategory = detailStack.at(-1)?.target;
 
 	const from = rangeStart(useNow(), search.range);
-	const scope = { workspaceSlug, login, from, enabled: login !== undefined };
+	const scope = {
+		workspaceSlug,
+		login,
+		userId: membership.data?.userId,
+		from,
+		enabled: login !== undefined,
+	};
 	const category = openCategory?.kind === "activity" ? openCategory.category : undefined;
 	const openWork = useOpenWork({ workspaceSlug, login });
 	const overview = useActivityOverview({ ...scope, range: search.range });

@@ -20,6 +20,7 @@ const meta = {
 			hidden: false,
 			membershipCount: 1,
 			repoPermissionCount: 0,
+			slug: "team-1",
 			members: [
 				{
 					id: 10,
@@ -63,6 +64,7 @@ export const Hidden: Story = {
 			hidden: true,
 			membershipCount: 5,
 			repoPermissionCount: 0,
+			slug: "team-1",
 			members: [],
 			repositories: [],
 			labels: [],
