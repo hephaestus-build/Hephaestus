@@ -92,9 +92,6 @@ class SecurityFilterChainRuntimeIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void authRateLimitFilterIsInstalledOnASecurityChain() {
-        // All rate-limit coverage is the isolated filter unit test driving doFilter() directly, so a
-        // regression removing addFilterBefore(authRateLimitFilter, AuthorizationFilter.class) — disabling
-        // auth rate limiting entirely in prod — would otherwise be invisible. Assert it is actually wired.
         assertThat(filterChains)
                 .as("at least one security chain must install AuthRateLimitFilter")
                 .anyMatch(chain -> chain.getFilters().stream().anyMatch(AuthRateLimitFilter.class::isInstance));

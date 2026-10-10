@@ -15,8 +15,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
- * Cross-module read-only handle on {@link Account}. Concrete mutations live behind
- * {@code AccountService} in the auth module.
+ * Cross-module handle on {@link Account}. The auth module owns account mutations.
  */
 @Repository
 @WorkspaceAgnostic(
