@@ -1,23 +1,31 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.agent.context.providers.IssueContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.RevisionScheme;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -34,11 +42,36 @@ public record ReviewedWork(
         long artifactId,
         String titleAndDescriptionRevision,
         @Nullable String head,
-        Instant capturedAt) {
+        Instant capturedAt,
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        @JsonFormat(with = JsonFormat.Feature.READ_UNKNOWN_ENUM_VALUES_AS_NULL)
+        @Nullable
+        RetainedBasis retainedBasis) {
 
     public static final String SNAPSHOT_KEY = "reviewedWork";
 
     private static final String METADATA = SandboxLayout.CONTEXT_PREFIX + "metadata.json";
+
+    private static final List<String> RETAINED_FIELDS = List.of("title", "body", "commit_sha");
+
+    /**
+     * Which occasion the captured title, description and head belong to, when the capture proved it. Absent on every
+     * capture that did not, older ones included: those are not ordered by their occasion.
+     */
+    public enum RetainedBasis {
+        /** Staged from the job as it was admitted, at the job's own admission instant. */
+        ADMISSION
+    }
+
+    public ReviewedWork(
+            String artifactKind,
+            long artifactId,
+            String titleAndDescriptionRevision,
+            @Nullable String head,
+            Instant capturedAt) {
+        this(artifactKind, artifactId, titleAndDescriptionRevision, head, capturedAt, null);
+    }
 
     /** Read back from a stored snapshot, so a malformed one fails here rather than reading as an identity. */
     public ReviewedWork {
@@ -64,6 +97,23 @@ public record ReviewedWork(
      */
     public static Optional<ReviewedWork> captured(
             byte[] manifestBytes, Map<String, byte[]> staged, long artifactId, ObjectMapper mapper) {
+        return captured(manifestBytes, staged, artifactId, mapper, null, null, null);
+    }
+
+    /**
+     * As {@link #captured(byte[], Map, long, ObjectMapper)}, marking a pull request capture
+     * {@link RetainedBasis#ADMISSION} only when its staged title, description and head are exactly the admitted job's,
+     * its basis names the job's own admission instant, and its source contract lets an automated practice review use
+     * both the core and the change it captured.
+     */
+    public static Optional<ReviewedWork> captured(
+            byte[] manifestBytes,
+            Map<String, byte[]> staged,
+            long artifactId,
+            ObjectMapper mapper,
+            @Nullable Instant admittedAt,
+            @Nullable JsonNode admittedMetadata,
+            @Nullable ArtifactSourceCatalogRegistry sourceCatalogs) {
         JobFolderIndex manifest;
         try {
             manifest = mapper.readValue(manifestBytes, JobFolderIndex.class);
@@ -99,12 +149,69 @@ public record ReviewedWork(
                         "Staged pull request metadata names another commit than the pinned change");
             }
         }
+        boolean retained = head != null
+                && reviewable(manifest, sourceCatalogs)
+                && retainedAtAdmission(staging, admittedAt, admittedMetadata);
         return Optional.of(new ReviewedWork(
                 kind.value(),
                 artifactId,
                 revision(kind, title.isNull() ? null : title.asString(), body.isNull() ? null : body.asString()),
                 head,
-                manifest.capturedAt()));
+                manifest.capturedAt(),
+                retained ? RetainedBasis.ADMISSION : null));
+    }
+
+    private static boolean reviewable(JobFolderIndex manifest, @Nullable ArtifactSourceCatalogRegistry sourceCatalogs) {
+        return sourceCatalogs != null
+                && sourceCatalogs.isSourceUsePermitted(
+                        manifest.contractVersion(),
+                        PullRequestContentSource.CORE,
+                        SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW)
+                && sourceCatalogs.isSourceUsePermitted(
+                        manifest.contractVersion(),
+                        PullRequestContentSource.DIFF,
+                        SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
+    }
+
+    private static boolean retainedAtAdmission(
+            JsonNode staging, @Nullable Instant admittedAt, @Nullable JsonNode admitted) {
+        if (admittedAt == null
+                || admitted == null
+                || !admitted.path("title").isString()
+                || !admitted.path("commit_sha").isString()
+                || !(admitted.path("body").isString() || admitted.path("body").isNull())) {
+            return false;
+        }
+        JsonNode basis = staging.path("basis");
+        JsonNode admissionFields = basis.path("admission_fields");
+        if (!admissionFields.isArray()) {
+            return false;
+        }
+        Set<String> fields = new HashSet<>();
+        for (JsonNode field : admissionFields) {
+            if (!field.isString()) return false;
+            fields.add(field.asString());
+        }
+        JsonNode stagedAt = basis.path("admitted_at");
+        if (!fields.containsAll(RETAINED_FIELDS) || !stagedAt.isString()) {
+            return false;
+        }
+        try {
+            if (!admittedAt.equals(Instant.parse(stagedAt.asString()))) {
+                return false;
+            }
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+        // Exact nodes: a null description is not an empty one.
+        for (String field : RETAINED_FIELDS) {
+            if (!staging.has(field)
+                    || !admitted.has(field)
+                    || !staging.get(field).equals(admitted.get(field))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -129,6 +236,11 @@ public record ReviewedWork(
                         && parts[1].matches(CitationVerification.GIT_OBJECT_ID)
                 ? parts[1]
                 : null;
+    }
+
+    /** The pinned head a manifest captured with its core: null unless both the core and the change were available. */
+    public static @Nullable String capturedHead(JobFolderIndex manifest) {
+        return available(manifest, PullRequestContentSource.CORE) == null ? null : pinnedHead(manifest);
     }
 
     private static @Nullable String pinnedHead(JobFolderIndex manifest) {

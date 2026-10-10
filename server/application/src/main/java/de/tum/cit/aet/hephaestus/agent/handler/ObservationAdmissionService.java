@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppSupportContext;
@@ -11,6 +12,9 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
@@ -25,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -88,6 +93,7 @@ public class ObservationAdmissionService {
     private final PublicReviewEligibility publicReviewEligibility;
     private final ReviewHistoryContentSource reviewHistory;
     private final ObjectProvider<InAppSupportReader> inAppSupportReader;
+    private final PullRequestRepository pullRequests;
 
     /** Retries join in-flight verification rather than launching duplicate Git operations. */
     private final ConcurrentHashMap<AdmissionIdentity, Flight> flights = new ConcurrentHashMap<>();
@@ -103,7 +109,9 @@ public class ObservationAdmissionService {
             JobEvidenceFiles evidenceFiles,
             PublicReviewEligibility publicReviewEligibility,
             ReviewHistoryContentSource reviewHistory,
-            ObjectProvider<InAppSupportReader> inAppSupportReader) {
+            ObjectProvider<InAppSupportReader> inAppSupportReader,
+            PullRequestRepository pullRequests) {
+        this.pullRequests = pullRequests;
         this.jobs = jobs;
         this.observations = observations;
         this.handlers = handlers;
@@ -185,6 +193,42 @@ public class ObservationAdmissionService {
         }
     }
 
+    /**
+     * The work a pull request review was admitted for, exactly as its job recorded it: the pull request row it locks
+     * and the repository and number that row was for. Only the key of a job that names a positive id; it locks a row,
+     * it authorizes nothing.
+     */
+    record ReviewedTarget(
+            long workspaceId,
+            AgentJobType jobType,
+            @Nullable ArtifactKind artifactKind,
+            @Nullable IntegrationKind integrationKind,
+            long pullRequestId,
+            @Nullable JsonNode repositoryId,
+            @Nullable JsonNode repositoryFullName,
+            @Nullable JsonNode pullRequestNumber) {
+
+        static @Nullable ReviewedTarget of(AgentJob job) {
+            JsonNode metadata = job.getMetadata();
+            if (metadata == null || job.getJobType() != AgentJobType.PULL_REQUEST_REVIEW) {
+                return null;
+            }
+            JsonNode id = metadata.get("pull_request_id");
+            if (id == null || !id.isIntegralNumber() || !id.canConvertToLong() || id.asLong() <= 0) {
+                return null;
+            }
+            return new ReviewedTarget(
+                    job.getWorkspace().getId(),
+                    job.getJobType(),
+                    job.getArtifactKind(),
+                    job.getIntegrationKind(),
+                    id.asLong(),
+                    metadata.get("repository_id"),
+                    metadata.get("repository_full_name"),
+                    metadata.get("pr_number"));
+        }
+    }
+
     private ObjectNode admitOnce(AdmissionIdentity identity, JsonNode submitted, String digest) {
         AgentJob candidate = Objects.requireNonNull(transactions.execute(status -> ownedJob(identity)));
         String existing = admissionDigest(candidate);
@@ -195,6 +239,7 @@ public class ObservationAdmissionService {
                 return response(job, digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
             }));
         }
+        ReviewedTarget target = ReviewedTarget.of(candidate);
         PreparedObservations prepared;
         try {
             prepared = handlers.getHandler(candidate.getJobType()).prepareObservations(candidate, submitted);
@@ -211,7 +256,12 @@ public class ObservationAdmissionService {
         }
         try {
             return Objects.requireNonNull(transactions.execute(status -> {
+                // The work before the job, as every writer that orders against this admission takes them: a
+                // reservation of public feedback, a mirror write, and the coalescer reading the latest running review.
+                // The job is not held while waiting, so the key is the prepared candidate's, checked once it is.
+                if (target != null) pullRequests.lockById(target.pullRequestId());
                 AgentJob job = ownedJob(identity);
+                if (!Objects.equals(target, ReviewedTarget.of(job))) throw new StaleAttemptException();
                 String admitted = admissionDigest(job);
                 if (!admitted.isBlank()) {
                     if (!digest.equals(admitted)) throw new AdmissionConflictException();

@@ -198,26 +198,29 @@ The new summary is then created.
 The check uses only the delivered ledger, after delivery policy permits the write.
 Two reviews with summaries still in dispatch can each post one on the same work.
 
-**Reviewed commit.** Before each new write, a pull request or merge request package checks its reviewed commit.
-It compares that commit with the head Hephaestus last synchronized for the work.
-An automatic package uses the job's pinned commit.
-An approved package uses its proposal's recorded commit, else the job's pin.
+**Reviewed work.** Before each new summary or line note, a pull request or merge request package checks its authorized capture.
+The captured head, title and description must match the work Hephaestus last synchronized.
+An approved package must also match the proposal's recorded commit, when present.
+An unchanged commit alone does not establish unchanged words.
 
-The comparison runs before the summary and again before each new inline comment.
-The check reads the synchronized head, not the provider.
-A push that Hephaestus has not synchronized yet does not stop the write.
-Neither does a push between that read and the create request.
+The comparison and delivery policy run together while the work is locked.
+The write receipt commits before the provider call.
+A change that Hephaestus has not synchronized yet does not stop the write.
+The reservation also does not order when the provider receives the request.
 
-- **Same commit** — the create proceeds.
-- **Different commit** — nothing more is created.
+- **Same captured work** — the create proceeds when delivery policy still permits it.
+- **Changed captured work** — nothing more is created.
   An automatic package is withheld as `REVIEWED_REVISION_CHANGED`, an approved one as `APPROVAL_STALE`.
   Comments already posted stay and remain recorded.
-- **Either commit unknown** — nothing is created.
-  An automatic package retries, without a withholding reason.
-  An approved package needs a known matching commit: before its first write it is withheld as `APPROVAL_STALE`, as before.
-  Once an approved package may have written an inline comment, it retries instead, so that comment is still looked up.
+- **Comparison unknown** — nothing is created.
+  Automatic and approved packages retry without a withholding reason.
+  Missing capture or source authorization can prevent comparison even when both commits are known.
+- **Delivery policy now refuses** — nothing more is created, with the existing exact policy reason.
 
-Copies an earlier attempt may have posted are still looked up first, against the reviewed commit, so an unconfirmed write is never settled unseen.
+Copies an earlier attempt may have posted are still looked up first, against the reviewed commit.
+An unconfirmed write is never settled unseen.
+The [review pipeline](../contributor/practice-review-pipeline.mdx#copies-on-the-reviewed-work-are-immutable) describes the reservation boundary.
+Its [observation section](../contributor/practice-review-pipeline.mdx#observation) describes how new reviews retain their occasion and prior reviews keep their ordering.
 
 **Where inline comments land.** GitHub inline comments are review comments on the lines.
 GitLab inline comments are ordinary merge request comments.

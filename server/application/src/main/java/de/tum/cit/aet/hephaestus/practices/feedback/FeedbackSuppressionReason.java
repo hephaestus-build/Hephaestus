@@ -40,9 +40,9 @@ public enum FeedbackSuppressionReason {
     /** A workspace admin invalidated an observation this feedback cites. */
     OBSERVATION_INVALIDATED,
     /**
-     * The change's current head is known to differ from the commit an automatic package was reviewed at, so what it
-     * had not posted yet was withheld. Copies already posted stay. A commit that is not known withholds nothing here;
-     * the delivery is retried instead.
+     * The current head, title or description is known to differ from the authorized capture an automatic package
+     * was reviewed against, so its remaining placements were withheld. Copies already posted stay. An unknown
+     * comparison leaves delivery waiting for a retry.
      */
     REVIEWED_REVISION_CHANGED,
 }

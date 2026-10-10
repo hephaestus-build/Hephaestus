@@ -63,6 +63,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
@@ -171,6 +172,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
     private static final @Nullable LlmAdmissionService NO_LIVE_ADMISSION = null;
 
+    private static final ArtifactSourceCatalogRegistry SOURCE_CATALOGS = mock(ArtifactSourceCatalogRegistry.class);
+
     private static final AgentProperties AGENT_PROPS = new AgentProperties(
             true, Duration.ofSeconds(1), 5, 5, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90));
 
@@ -200,6 +203,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 usageRecorder,
                 llmBudgetService,
                 NO_LIVE_ADMISSION,
+                SOURCE_CATALOGS,
                 Optional.empty(),
                 Optional.empty());
 
@@ -368,6 +372,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("test-worker")));
 
@@ -1528,6 +1533,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("infra-retry-worker")));
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
@@ -1609,6 +1615,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("unreachable-worker")));
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
@@ -1670,6 +1677,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("unreachable-worker")));
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
@@ -1724,6 +1732,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("unreachable-worker")));
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
@@ -1785,6 +1794,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("unreachable-worker")));
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
@@ -1843,6 +1853,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("infra-retry-worker")));
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
@@ -1899,6 +1910,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("infra-retry-worker-2")));
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
@@ -1943,6 +1955,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("infra-retry-worker-3")));
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
@@ -2410,6 +2423,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("test-worker")));
 
@@ -2488,6 +2502,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.of(capacityState),
                     Optional.empty());
             // Mirror the two claimReview() calls above by populating localRunningJobs directly —
@@ -2535,6 +2550,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.of(capacityState),
                     Optional.empty());
 
@@ -2595,6 +2611,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                         usageRecorder,
                         llmBudgetService,
                         NO_LIVE_ADMISSION,
+                        SOURCE_CATALOGS,
                         Optional.of(capacityState),
                         Optional.empty());
 
@@ -2640,6 +2657,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                         usageRecorder,
                         llmBudgetService,
                         NO_LIVE_ADMISSION,
+                        SOURCE_CATALOGS,
                         Optional.of(capacityState),
                         Optional.empty());
 
@@ -2682,6 +2700,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("rejecting-worker")));
 
@@ -2725,6 +2744,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("rejecting-worker")));
 
@@ -2785,6 +2805,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("draining-worker")));
             addToLocalRunningJobs(executor, jobId);
@@ -2822,6 +2843,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("draining-worker")));
             job.setStatus(AgentJobStatus.RUNNING);
@@ -2904,6 +2926,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("draining-worker")));
             addToLocalRunningJobs(executor, jobId);
@@ -3124,6 +3147,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
+                    SOURCE_CATALOGS,
                     Optional.empty(),
                     Optional.of(workerProps("draining-worker")));
         }

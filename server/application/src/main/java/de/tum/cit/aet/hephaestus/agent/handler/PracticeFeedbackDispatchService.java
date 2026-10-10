@@ -44,7 +44,7 @@ class PracticeFeedbackDispatchService {
 
     static final Duration UNCONFIRMED_RECHECK = Duration.ofHours(6);
 
-    private static final String REVISION_UNKNOWN = "The reviewed commit or the current head is not known";
+    private static final String REVISION_UNKNOWN = "The reviewed work could not be compared with the current work";
 
     private final FeedbackDispatchRepository repository;
     private final PracticeFeedbackDeliveryPolicy policy;
@@ -251,9 +251,32 @@ class PracticeFeedbackDispatchService {
                     if (inlineNotes(dispatch).isEmpty() && repeatedSummaries.repeatsLastPosted(dispatch, job)) {
                         return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE);
                     }
-                    Integer began = transactionTemplate.execute(
-                            status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
-                    if (began == null || began != 1) return Result.inProgress();
+                    var reservation = stateMachine.reserve(
+                            () -> lockedDecision(dispatch, job, null),
+                            () -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
+                    switch (reservation.status()) {
+                        case REFUSED -> {
+                            return refuseAfterReconciling(
+                                    dispatch,
+                                    job,
+                                    owner,
+                                    reservation.refusal(),
+                                    dispatch.getDeliveredExternalRef(),
+                                    dispatch.getDeliveredExternalUrl(),
+                                    deliveredSignals(dispatch));
+                        }
+                        case STALE -> {
+                            return stateMachine.refuse(
+                                    dispatch, owner, FeedbackSuppressionReason.REVIEWED_REVISION_CHANGED);
+                        }
+                        case UNKNOWN -> {
+                            return stateMachine.retry(dispatch, owner, REVISION_UNKNOWN);
+                        }
+                        case LEASE_LOST -> {
+                            return Result.inProgress();
+                        }
+                        case RESERVED -> {}
+                    }
                     writeBegan = true;
                     SummaryHandle handle = commentPoster.post(write);
                     summaryRef = handle.externalId();
@@ -296,9 +319,14 @@ class PracticeFeedbackDispatchService {
                             sealed.diffNotes(),
                             inlineSignals,
                             () -> policy.currentReviewedRevision(job, null),
-                            receipt -> stateMachine.recordInlineAttempt(dispatch, owner, receipt));
+                            receipt -> stateMachine.recordInlineAttempt(
+                                    dispatch, owner, receipt, () -> lockedDecision(dispatch, job, null)));
                     inlineSignals = inline.signals();
                     if (inline.leaseLost()) return Result.inProgress();
+                    if (inline.refusalReason() != null && !inline.unconfirmed()) {
+                        return stateMachine.refuse(
+                                dispatch, owner, inline.refusalReason(), summaryRef, summaryUrl, inlineSignals);
+                    }
                     if (inline.revisionChanged() && !inline.unconfirmed()) {
                         return stateMachine.refuse(
                                 dispatch,
@@ -380,12 +408,40 @@ class PracticeFeedbackDispatchService {
                                 dispatch.getDeliveredExternalRef(),
                                 dispatch.getDeliveredExternalUrl(),
                                 deliveredSignals(dispatch));
-                    if (!PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(feedback, job, decision)) {
-                        return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.APPROVAL_STALE);
+                    switch (PracticeFeedbackDeliveryPolicy.approvedRevision(feedback, job, decision)) {
+                        case CHANGED -> {
+                            return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.APPROVAL_STALE);
+                        }
+                        case UNKNOWN -> {
+                            return stateMachine.retry(dispatch, owner, REVISION_UNKNOWN);
+                        }
+                        case CURRENT -> {}
                     }
-                    Integer began = transactionTemplate.execute(
-                            status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
-                    if (began == null || began != 1) return Result.inProgress();
+                    var reservation = stateMachine.reserve(
+                            () -> lockedDecision(dispatch, job, feedback.getReviewedRevision()),
+                            () -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
+                    switch (reservation.status()) {
+                        case REFUSED -> {
+                            return refuseAfterReconciling(
+                                    dispatch,
+                                    job,
+                                    owner,
+                                    reservation.refusal(),
+                                    dispatch.getDeliveredExternalRef(),
+                                    dispatch.getDeliveredExternalUrl(),
+                                    deliveredSignals(dispatch));
+                        }
+                        case STALE -> {
+                            return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.APPROVAL_STALE);
+                        }
+                        case UNKNOWN -> {
+                            return stateMachine.retry(dispatch, owner, REVISION_UNKNOWN);
+                        }
+                        case LEASE_LOST -> {
+                            return Result.inProgress();
+                        }
+                        case RESERVED -> {}
+                    }
                     writeBegan = true;
                     SummaryHandle handle = commentPoster.post(write);
                     summaryRef = handle.externalId();
@@ -402,15 +458,23 @@ class PracticeFeedbackDispatchService {
                 // With no inline write begun there is nothing to read back, so a stale approval is refused here.
                 // Otherwise it is refused at each create, after the copies an earlier attempt may have made are read
                 // back, so a write whose outcome is unknown is never settled unseen.
-                if (!dispatch.inlineWriteMayHaveStarted()
-                        && !PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(feedback, job, decision)) {
-                    return stateMachine.refuse(
-                            dispatch,
-                            owner,
-                            FeedbackSuppressionReason.APPROVAL_STALE,
-                            summaryRef,
-                            summaryUrl,
-                            inlineSignals);
+                if (!dispatch.inlineWriteMayHaveStarted()) {
+                    switch (PracticeFeedbackDeliveryPolicy.approvedRevision(feedback, job, decision)) {
+                        case CHANGED -> {
+                            return stateMachine.refuse(
+                                    dispatch,
+                                    owner,
+                                    FeedbackSuppressionReason.APPROVAL_STALE,
+                                    summaryRef,
+                                    summaryUrl,
+                                    inlineSignals);
+                        }
+                        case UNKNOWN -> {
+                            return stateMachine.retryPackage(
+                                    dispatch, owner, REVISION_UNKNOWN, summaryRef, summaryUrl, inlineSignals);
+                        }
+                        case CURRENT -> {}
+                    }
                 }
                 DiffNotePoster.DiffNoteResult inline = diffNotePoster.deliverPackage(
                         job,
@@ -419,9 +483,17 @@ class PracticeFeedbackDispatchService {
                         inlineNotes,
                         inlineSignals,
                         () -> policy.currentReviewedRevision(job, feedback.getReviewedRevision()),
-                        receipt -> stateMachine.recordInlineAttempt(dispatch, owner, receipt));
+                        receipt -> stateMachine.recordInlineAttempt(
+                                dispatch,
+                                owner,
+                                receipt,
+                                () -> lockedDecision(dispatch, job, feedback.getReviewedRevision())));
                 inlineSignals = inline.signals();
                 if (inline.leaseLost()) return Result.inProgress();
+                if (inline.refusalReason() != null && !inline.unconfirmed()) {
+                    return stateMachine.refuse(
+                            dispatch, owner, inline.refusalReason(), summaryRef, summaryUrl, inlineSignals);
+                }
                 if (inline.revisionChanged() && !inline.unconfirmed()) {
                     return stateMachine.refuse(
                             dispatch,
@@ -587,6 +659,16 @@ class PracticeFeedbackDispatchService {
         }
         return stateMachine.retryPackage(
                 dispatch, owner, "Dispatch retry limit exhausted", summaryRef, summaryUrl, signals);
+    }
+
+    private PracticeFeedbackDeliveryPolicy.Decision<PracticeFeedbackDeliveryPolicy.ReviewedRevision> lockedDecision(
+            FeedbackDispatch dispatch, AgentJob job, @Nullable String proposalRevision) {
+        var revision = policy.lockedReviewedRevision(job, proposalRevision);
+        if (isIssue(job)) return PracticeFeedbackDeliveryPolicy.Decision.allowed(revision);
+        var decision = evaluateAtEgress(dispatch, job);
+        return decision.allowed()
+                ? PracticeFeedbackDeliveryPolicy.Decision.allowed(revision)
+                : PracticeFeedbackDeliveryPolicy.Decision.suppressed(decision.refusal());
     }
 
     private PracticeFeedbackDeliveryPolicy.Decision<?> evaluateAtEgress(FeedbackDispatch dispatch, AgentJob job) {

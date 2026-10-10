@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -138,6 +139,44 @@ public class CapturedReviewedWorkChanges implements ReviewedWorkChanges {
                         manifest.contractVersion(), LINKED, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .flatMap(manifest -> LinkedWorkItemContentSource.capturedClosingMaterialMatches(manifest, closing))
                 .orElse(false);
+    }
+
+    @Override
+    public Optional<CapturedIdentity> deliverableCapture(long workspaceId, UUID jobId, long pullRequestId) {
+        return jobs.findCapturedReviewedWork(workspaceId, Set.of(jobId)).stream()
+                .filter(row -> jobId.equals(row.getId()))
+                .findFirst()
+                .flatMap(row -> deliverableCapture(row, pullRequestId));
+    }
+
+    private Optional<CapturedIdentity> deliverableCapture(
+            AgentJobRepository.CapturedReviewedWorkRow row, long pullRequestId) {
+        JobFolderIndex manifest = manifest(row);
+        String stored = row.getReviewedWork();
+        if (manifest == null || stored == null) return Optional.empty();
+        try {
+            ReviewedWork captured = mapper.readValue(stored, ReviewedWork.class);
+            String head = captured == null ? null : captured.head();
+            if (captured == null
+                    || head == null
+                    || !ArtifactKinds.PULL_REQUEST.value().equals(manifest.artifactKind())
+                    || !ArtifactKinds.PULL_REQUEST.value().equals(captured.artifactKind())
+                    || captured.artifactId() != pullRequestId
+                    || !head.equals(ReviewedWork.capturedHead(manifest))
+                    || !sourceCatalogs.isSourceUsePermitted(
+                            manifest.contractVersion(),
+                            PullRequestContentSource.CORE,
+                            SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)
+                    || !sourceCatalogs.isSourceUsePermitted(
+                            manifest.contractVersion(),
+                            PullRequestContentSource.DIFF,
+                            SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)) {
+                return Optional.empty();
+            }
+            return Optional.of(new CapturedIdentity(head, captured.titleAndDescriptionRevision()));
+        } catch (JacksonException | IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     private @Nullable JobFolderIndex manifest(AgentJobRepository.CapturedReviewedWorkRow row) {

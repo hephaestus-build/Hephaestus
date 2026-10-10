@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disp
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.InlineFeedback;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
@@ -19,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Predicate;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -72,7 +73,7 @@ class DiffNotePoster {
             List<DiffNote> diffNotes,
             List<DeliveredSignal> recorded,
             Supplier<PracticeFeedbackDeliveryPolicy.ReviewedRevision> reviewedRevision,
-            Predicate<List<DeliveredSignal>> recordAttempt) {
+            Function<List<DeliveredSignal>, FeedbackDispatchStateMachine.Reservation> recordAttempt) {
         IntegrationKind kind =
                 Objects.requireNonNull(job.getIntegrationKind(), "AgentJob.integrationKind must not be null");
         InlineFeedbackChannel channel = channels.get(kind);
@@ -123,7 +124,8 @@ class DiffNotePoster {
                 fence.leaseLost,
                 fence.revisionChanged,
                 suppressed,
-                suppressedKeys);
+                suppressedKeys,
+                fence.refusalReason);
     }
 
     /**
@@ -330,23 +332,23 @@ class DiffNotePoster {
     }
 
     /**
-     * Before each create request, reads the work still at its reviewed commit and stores the receipt; anything else
-     * refuses the request, so it never leaves. Only a head proven different marks the package changed: one that cannot
-     * be compared just leaves the note owed. The read and the request are two steps, so a push between them is not
-     * excluded.
+     * Before each create request, reserves the receipt under the work's lock after comparing its authorized capture
+     * and current delivery policy. A proven change or policy refusal stops the create; an unknown comparison leaves
+     * the note owed. The reservation commits before the provider call, so provider arrival is not ordered by the lock.
      */
     private static final class PackageFence implements InlineFeedbackChannel.WriteFence {
 
         private final Receipt receipt;
         private final Supplier<PracticeFeedbackDeliveryPolicy.ReviewedRevision> reviewedRevision;
-        private final Predicate<List<DeliveredSignal>> recordAttempt;
+        private final Function<List<DeliveredSignal>, FeedbackDispatchStateMachine.Reservation> recordAttempt;
         private boolean leaseLost;
         private boolean revisionChanged;
+        private @Nullable FeedbackSuppressionReason refusalReason;
 
         PackageFence(
                 Receipt receipt,
                 Supplier<PracticeFeedbackDeliveryPolicy.ReviewedRevision> reviewedRevision,
-                Predicate<List<DeliveredSignal>> recordAttempt) {
+                Function<List<DeliveredSignal>, FeedbackDispatchStateMachine.Reservation> recordAttempt) {
             this.receipt = receipt;
             this.reviewedRevision = reviewedRevision;
             this.recordAttempt = recordAttempt;
@@ -360,12 +362,19 @@ class DiffNotePoster {
                 return false;
             }
             List<DeliveredSignal> stored = receipt.beforeRequest(attempting, completed);
-            if (!recordAttempt.test(stored)) {
-                leaseLost = true;
-                return false;
+            // The read above is a cheap early answer; the reservation repeats it under the work's lock.
+            var reservation = recordAttempt.apply(stored);
+            switch (reservation.status()) {
+                case RESERVED -> {
+                    receipt.accept(stored);
+                    return true;
+                }
+                case STALE -> revisionChanged = true;
+                case UNKNOWN -> {}
+                case REFUSED -> refusalReason = reservation.refusal();
+                case LEASE_LOST -> leaseLost = true;
             }
-            receipt.accept(stored);
-            return true;
+            return false;
         }
     }
 
@@ -382,10 +391,11 @@ class DiffNotePoster {
      * @param complete whether every note is acknowledged
      * @param unconfirmed whether a note whose request may have left has no known copy
      * @param leaseLost whether a request was refused because this attempt no longer holds the dispatch
-     * @param revisionChanged whether a request was refused because the work's head is known to differ from its
-     *     reviewed commit; a head that could not be compared leaves the package incomplete instead
+     * @param revisionChanged whether a request was refused because its captured work is known to differ from the
+     *     current work; an unknown comparison leaves the package incomplete instead
      * @param suppressed whether egress refused a request before it left
      * @param suppressedDeliveryKeys the notes egress refused
+     * @param refusalReason the existing delivery policy reason that refused a new create, if any
      */
     record DiffNoteResult(
             List<DeliveredSignal> signals,
@@ -394,5 +404,6 @@ class DiffNotePoster {
             boolean leaseLost,
             boolean revisionChanged,
             boolean suppressed,
-            List<String> suppressedDeliveryKeys) {}
+            List<String> suppressedDeliveryKeys,
+            @Nullable FeedbackSuppressionReason refusalReason) {}
 }

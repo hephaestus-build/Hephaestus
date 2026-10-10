@@ -496,6 +496,24 @@ Earlier behavior-level observations remain authorized history, but their fingerp
 They are `UNVERIFIABLE`, not current evidence.
 A new review appends a current-standard practice revision without rewriting the revision cited by historical observations.
 
+A claim is one workspace's observation about one developer, practice and piece of work.
+Live and manually requested reviews share its current quote.
+Backfilled observations form a separate claim.
+Trends choose only live reviews, so a manual request does not remove the last live measurement.
+
+New author reviews retain whether the pull request or merge request was open and unmerged when admitted.
+A capture may prove it retained the original admitted title, description and head.
+This requires the authorized core source and pinned change.
+Reviews of that open work then use the job's admission time to choose the latest claim.
+
+An older review completing later does not replace a newer occasion's result for that claim.
+A newer result for one practice or developer does not replace results for another.
+Reviews without this retained proof, historical occasions and backfills keep completion ordering.
+
+Mixed prior and new reviews compare those retained dates.
+Prior rows are never repaired or redated.
+The observation's recorded date remains its completion date in history and time windows.
+
 Current summaries first select each claim's latest valid run, then check its review basis.
 An outdated or unknown basis does not restore an older current claim.
 Standing snapshots apply the same order before visibility filtering at each time boundary.
@@ -923,6 +941,23 @@ Each note has a receipt in `delivered_placements`.
 The create was unrequested or positively refused before saving a note.
 `true` means that a request may have left.
 A missing value is unknown.
+
+Before reserving a new public summary or line note, the delivery transaction locks the pull request or merge request.
+It refreshes the mirror and checks the existing delivery policy again.
+Its authorized captured head, title and description must match the current work, including an approved package's reviewed revision.
+An unchanged commit does not establish unchanged words.
+
+A proven change withholds the remaining placements.
+An unknown comparison leaves them waiting for a bounded retry.
+The same comparison applies to configured historical public delivery.
+Issue delivery keeps its current snapshot check, and this public comparison does not withhold private channels.
+
+Observation publication takes the same work lock before the review job lock.
+The comparison and lease-guarded reservation commit together in a short transaction.
+Provider calls happen after commit.
+This orders reservations with mirror changes and publication, but it does not order provider arrival.
+Copies already delivered remain recorded.
+An earlier unconfirmed create is reconciled before the remaining package is withheld.
 
 Before each create, a lease-guarded update stores the whole receipt and marks the attempted notes as unknown.
 GitLab fences each create individually and stores the whole receipt.

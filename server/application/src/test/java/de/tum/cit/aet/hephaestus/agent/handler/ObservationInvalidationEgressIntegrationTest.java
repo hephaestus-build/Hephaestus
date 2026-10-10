@@ -181,6 +181,8 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         when(policy.evaluateAtEgress(any(), any(), any(), any()))
                 .thenAnswer(
                         invocation -> PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(REVIEWED_HEAD)));
+        when(policy.lockedReviewedRevision(any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT);
         when(policy.currentReviewedRevision(any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT);
     }
