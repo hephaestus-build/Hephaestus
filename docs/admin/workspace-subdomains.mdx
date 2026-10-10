@@ -38,7 +38,7 @@ hephaestus:
 
 Keep the switch off until the edge and SPA support tenant hosts.
 The server switch alone does not configure DNS, TLS, redirects, or SPA routes.
-Use DNS-only records and a DNS-01 wildcard certificate, as [ADR 0053](../decisions/0053-workspace-addresses-are-a-presentation-origin.md) requires.
+Use DNS-only records and a DNS-01 wildcard certificate, as [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md) requires.
 Cloudflare must not proxy these hosts.
 
 Before you turn it on, configure the edge and deploy the tenant-host SPA.
@@ -133,7 +133,7 @@ A slug is a lowercase ASCII DNS label with 1 to 63 characters.
 It cannot start or end with a hyphen.
 Consecutive hyphens are prohibited.
 This also excludes `xn--` names.
-This follows [ADR 0053](../decisions/0053-workspace-addresses-are-a-presentation-origin.md).
+This follows [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md).
 
 Infrastructure and application names are reserved.
 These include `www`, `api`, `docs`, `admin`, `auth`, `login`, `mail`, `status`, `staging`, `preview`, and `pr<digits>`.
