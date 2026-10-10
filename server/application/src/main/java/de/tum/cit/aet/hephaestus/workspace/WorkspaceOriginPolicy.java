@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
 import java.net.URI;

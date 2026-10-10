@@ -343,10 +343,12 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectHeader()
-                .contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+                .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
                 .expectBody()
                 .jsonPath("$.status")
-                .isEqualTo(403);
+                .isEqualTo(403)
+                .jsonPath("$.type")
+                .isEqualTo("urn:hephaestus:csrf");
 
         String csrf = csrfToken();
         webTestClient

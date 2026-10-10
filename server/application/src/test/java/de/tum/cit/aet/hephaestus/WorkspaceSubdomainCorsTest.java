@@ -3,11 +3,11 @@ package de.tum.cit.aet.hephaestus;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceOriginPolicy;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceSubdomainProperties;
 import java.net.URI;
 import java.util.List;
 import org.junit.jupiter.api.Test;

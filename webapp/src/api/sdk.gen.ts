@@ -925,7 +925,7 @@ export const exchangeClientSignIn = <ThrowOnError extends boolean = false>(optio
 /**
  * Get the raw CSRF token for the current browser
  *
- * Fetch with credentials before any other credentialed request at startup and after sign-in or sign-out. Wait for this response before starting other requests. Send the token in the returned header on unsafe requests. On a CSRF 403, refetch once and retry the rejected request once.
+ * Fetch with credentials before any other credentialed request at startup and after sign-in or sign-out. Wait for this response before starting other requests. Send the token in the returned header on unsafe requests. With workspace subdomains enabled, a CSRF 403 has problem type urn:hephaestus:csrf. On that response, refetch once and retry the rejected request once.
  */
 export const getCsrfToken = <ThrowOnError extends boolean = false>(options?: Options<GetCsrfTokenData, ThrowOnError>): RequestResult<GetCsrfTokenResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetCsrfTokenResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

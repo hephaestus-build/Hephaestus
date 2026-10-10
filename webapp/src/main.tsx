@@ -6,7 +6,13 @@ import ReactDOM from "react-dom/client";
 import { client } from "@/api/client.gen";
 import environment from "@/environment";
 import { ROUTER_SEARCH } from "@/lib/router-search";
+import { csrfFetch } from "@/runtime/auth/csrf";
 import { RouteError } from "@/runtime/sentry/RouteError";
+import {
+	installWorkspaceNavigation,
+	workspaceAddressConfig,
+	workspaceRewrite,
+} from "@/runtime/workspace-address";
 
 import "./styles.css";
 
@@ -28,6 +34,7 @@ client.setConfig({
 	baseUrl: environment.serverUrl,
 	// Development serves the SPA and API on different origins.
 	credentials: "include",
+	fetch: csrfFetch,
 });
 
 // CSP blocks inline scripts; select the manifest from the allowed application bundle.
@@ -50,6 +57,7 @@ client.interceptors.response.use((response) => {
 
 const router = createRouter({
 	...ROUTER_SEARCH,
+	rewrite: workspaceRewrite(workspaceAddressConfig, window.location.origin),
 	routeTree,
 	context: {
 		...TanstackQuery.getContext(),
@@ -64,6 +72,8 @@ const router = createRouter({
 	defaultPreloadStaleTime: 0,
 	defaultErrorComponent: RouteError,
 });
+
+installWorkspaceNavigation(router, workspaceAddressConfig);
 
 declare module "@tanstack/react-router" {
 	interface Register {

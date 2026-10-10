@@ -14,7 +14,10 @@ vi.mock("@/hooks/use-active-workspace", () => ({
 
 vi.mock("@/runtime/auth/auth-client", () => ({ csrfHeaders: () => ({}) }));
 
-vi.mock("@/environment", () => ({ default: { serverUrl: "http://localhost:8080" } }));
+vi.mock(import("@/environment"), async (importOriginal) => {
+	const actual = await importOriginal();
+	return { default: { ...actual.default, serverUrl: "http://localhost:8080" } };
+});
 
 const FIRST_REPLY = "5b0f4f64-0c6f-4d2f-9f1a-3a0a0d4b9a11";
 const SECOND_REPLY = "0d6c2b1e-7f3a-4f7e-9a53-8e2b4c1f6d20";

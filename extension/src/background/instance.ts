@@ -57,3 +57,44 @@ export async function discoverInstance(
 		"No Hephaestus instance answered at that address. Check the address and that you allowed access in Chrome.",
 	);
 }
+
+const addressConfigSchema = z.object({
+	apexOrigin: z.url({ protocol: /^https$/u }),
+	baseDomain: z.string().min(1),
+	workspaceSubdomainsEnabled: z.literal(true),
+});
+
+/** Read the served configuration, not a guessed registrable domain. No credentials cross this boundary. */
+export async function resolveInstanceOrigin(
+	input: string,
+	developmentBuild: boolean,
+): Promise<string> {
+	const parsed = parseInstanceOrigin(input, { allowLoopbackHttp: developmentBuild });
+	if (!parsed.ok) {
+		throw new WorkerError("invalid", INSTANCE_ORIGIN_MESSAGES[parsed.reason]);
+	}
+	const { origin } = parsed;
+	try {
+		const body: unknown = await publicApi.runtimeConfig(origin);
+		const config = addressConfigSchema.safeParse(body);
+		if (!config.success) {
+			return origin;
+		}
+		const apex = new URL(config.data.apexOrigin);
+		const supplied = new URL(origin);
+		const suffix = `.${config.data.baseDomain}`;
+		const label = supplied.hostname.slice(0, -suffix.length);
+		if (
+			apex.origin !== config.data.apexOrigin ||
+			apex.hostname !== config.data.baseDomain ||
+			apex.port !== "" ||
+			!supplied.hostname.endsWith(suffix) ||
+			!/^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$/u.test(label)
+		) {
+			return origin;
+		}
+		return apex.origin;
+	} catch {
+		return origin;
+	}
+}

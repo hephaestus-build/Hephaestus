@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DiffNote;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
@@ -48,7 +49,8 @@ class DiffNotePosterTest extends BaseUnitTest {
     private final PullRequestCommentPoster commentPoster = mock(PullRequestCommentPoster.class);
     private final PracticeFeedbackCommentFormatter commentFormatter = new PracticeFeedbackCommentFormatter(
             new ApplicationProperties(null, new ApplicationProperties.Webapp("https://hephaestus.example")),
-            teamWorkspace());
+            teamWorkspace(),
+            new WorkspaceSubdomainProperties(false, ""));
 
     /** Every receipt the attempt stored before a request, in order. */
     private final List<List<DeliveredSignal>> stored = new ArrayList<>();

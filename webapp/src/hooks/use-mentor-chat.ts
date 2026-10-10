@@ -17,6 +17,7 @@ import { type MentorTurnState, mentorStatus, mentorTurn } from "@/lib/chat-valid
 import { hasText } from "@/lib/text";
 import type { ChatMessage, ChatTurn } from "@/lib/types";
 import { csrfHeaders } from "@/runtime/auth/auth-client";
+import { csrfFetch } from "@/runtime/auth/csrf";
 import { userViewHeaders } from "@/runtime/user-view/session";
 
 interface UseMentorChatOptions {
@@ -106,6 +107,7 @@ export function useMentorChat({
 	// when its id changes.
 	const transport = new DefaultChatTransport<ChatMessage>({
 		api: `${environment.serverUrl}/workspaces/${slug}/mentor/chat`,
+		fetch: csrfFetch,
 		prepareSendMessagesRequest: ({ id, messages, trigger, messageId, requestMetadata }) => {
 			const effectiveId = id || stableThreadId;
 			// Only the latest message travels: the server rebuilds context and parent linkage from the

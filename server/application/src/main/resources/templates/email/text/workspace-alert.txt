@@ -2,7 +2,7 @@
 
 [(${integration})] in workspace [(${workspaceName})]: [(${description})]
 
-Review workspace integrations: [(${webappUrl})]/w/[(${workspaceSlug})]/admin/settings
+Review workspace integrations: [(${workspaceAddress})]/admin/settings
 
 Unsubscribe from workspace integration alerts: [(${unsubscribeUrl})]
 

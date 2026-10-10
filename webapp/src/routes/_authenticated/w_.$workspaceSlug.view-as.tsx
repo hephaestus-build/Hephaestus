@@ -1,15 +1,15 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { instanceAdminHead } from "@/lib/page-title";
-import { workspaceAddressConfig } from "@/runtime/workspace-address";
+import { isAppAdmin, resolveCurrentUser } from "@/runtime/auth/guard";
 import { userViewSearchSchema, WorkspaceUsersRoute } from "./-WorkspaceUsersRoute";
 
-export const Route = createFileRoute("/_authenticated/admin/workspaces_/$workspaceSlug/users")({
+export const Route = createFileRoute("/_authenticated/w_/$workspaceSlug/view-as")({
 	head: instanceAdminHead("View as user"),
 	validateSearch: userViewSearchSchema,
-	beforeLoad: ({ params, search }) => {
-		if (workspaceAddressConfig.enabled) {
-			throw redirect({ to: "/w/$workspaceSlug/view-as", params, search });
+	beforeLoad: async ({ context }) => {
+		if (!isAppAdmin(await resolveCurrentUser(context.queryClient))) {
+			throw redirect({ to: "/" });
 		}
 	},
 	component: WorkspaceUsers,

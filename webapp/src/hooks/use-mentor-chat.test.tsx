@@ -26,11 +26,10 @@ vi.mock("@/runtime/auth/auth-client", () => ({
 	csrfHeaders: vi.fn(() => ({ "X-XSRF-TOKEN": "mock-csrf" })),
 }));
 
-vi.mock("@/environment", () => ({
-	default: {
-		serverUrl: "http://localhost:8080",
-	},
-}));
+vi.mock(import("@/environment"), async (importOriginal) => {
+	const actual = await importOriginal();
+	return { default: { ...actual.default, serverUrl: "http://localhost:8080" } };
+});
 
 vi.mock("uuid", () => ({
 	v4: vi.fn(() => "mock-uuid-123"),

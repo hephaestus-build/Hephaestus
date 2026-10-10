@@ -13,7 +13,8 @@ export type ConnectTarget = "hosted" | "custom";
 export type ConnectState =
 	| { status: "idle" }
 	| { status: "pending"; target: ConnectTarget }
-	| { status: "error"; target: ConnectTarget; message: string };
+	| { status: "error"; target: ConnectTarget; message: string }
+	| { status: "confirm-apex"; origin: string };
 
 export interface WelcomeCardProps {
 	/** The hosted service offered first, as its host: `hephaestus.build`. */
@@ -23,6 +24,7 @@ export interface WelcomeCardProps {
 	state: ConnectState;
 	/** Called from the click itself, so the handler can still ask Chrome for access. */
 	onConnectHosted: () => void;
+	onConnectApex: (origin: string) => void;
 	onConnectCustom: (input: { origin: string; webAppOrigin?: string }) => void;
 	/** The extension's data handling notice; `docsOrigin` is the one origin it may point to. */
 	privacyUrl: string;
@@ -39,6 +41,7 @@ export function WelcomeCard({
 	developmentBuild,
 	state,
 	onConnectHosted,
+	onConnectApex,
 	onConnectCustom,
 	privacyUrl,
 	docsOrigin,
@@ -88,6 +91,14 @@ export function WelcomeCard({
 					</p>
 				)}
 			</div>
+			{state.status === "confirm-apex" && (
+				<div className="flex flex-col gap-2" role="status">
+					<p>This workspace uses {new URL(state.origin).host} for sign-in and the API.</p>
+					<Button onClick={() => onConnectApex(state.origin)}>
+						Connect to {new URL(state.origin).host}
+					</Button>
+				</div>
+			)}
 			<div className="flex gap-2.5 rounded-lg bg-muted/60 p-3.5 text-sm text-muted-foreground">
 				<ShieldCheckIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-mentor" />
 				<p>

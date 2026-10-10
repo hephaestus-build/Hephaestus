@@ -51,9 +51,8 @@ describe("integration connection outcome", () => {
 
 	it("tells a Slack admin in their workspace why the Slack workspace could not be connected", async () => {
 		mockSlackPage();
-		window.sessionStorage.setItem("slack-connect-return-slug", "intro-course");
 
-		const { router } = renderRouteAtWithRouter(failureRedirect());
+		const { router } = renderRouteAtWithRouter(`${failureRedirect()}&workspaceSlug=intro-course`);
 
 		await screen.findByText(CONFLICT, undefined, ROUTE_RENDER_WAIT);
 		screen.getByText("We could not connect Slack");

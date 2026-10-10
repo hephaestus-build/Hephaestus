@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus;
 
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
@@ -17,6 +18,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.URI;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -36,6 +38,7 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.ProblemDetail;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -232,7 +235,8 @@ public class SecurityConfig {
             ObjectProvider<StaleAuthCookieFilter> staleAuthCookieFilterProvider,
             Converter<Jwt, AbstractAuthenticationToken> authenticationConverter,
             ObjectProvider<AuthRateLimitFilter> authRateLimitFilterProvider,
-            ObjectMapper objectMapper)
+            ObjectMapper objectMapper,
+            WorkspaceSubdomainProperties subdomains)
             throws Exception {
         http.sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()));
@@ -290,6 +294,16 @@ public class SecurityConfig {
                         // Resource-server initialization exempts all resolved tokens, including cookies.
                         // Set the matcher after initialization to retain CSRF checks for cookie auth.
                         filter.setRequireCsrfProtectionMatcher(SecurityConfig.this::requiresCsrf);
+                        if (subdomains.enabled()) {
+                            filter.setAccessDeniedHandler((request, response, exception) -> {
+                                response.setStatus(403);
+                                response.setContentType("application/problem+json");
+                                var problem = ProblemDetail.forStatus(403);
+                                problem.setType(URI.create("urn:hephaestus:csrf"));
+                                problem.setTitle("Invalid CSRF token");
+                                objectMapper.writeValue(response.getOutputStream(), problem);
+                            });
+                        }
                         return filter;
                     }
                 }));

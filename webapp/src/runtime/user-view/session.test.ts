@@ -4,7 +4,10 @@ import { storeUserView } from "@/test/user-view";
 
 import { applyUserViewHeaders, clearUserView, getUserViewSession } from "./session";
 
-vi.mock("@/environment", () => ({ default: { serverUrl: "https://example.test/api" } }));
+vi.mock(import("@/environment"), async (importOriginal) => {
+	const actual = await importOriginal();
+	return { default: { ...actual.default, serverUrl: "https://example.test/api" } };
+});
 
 describe("user view request context", () => {
 	afterEach(clearUserView);

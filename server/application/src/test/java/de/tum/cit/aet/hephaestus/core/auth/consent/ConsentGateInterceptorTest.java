@@ -9,6 +9,10 @@ class ConsentGateInterceptorTest extends BaseUnitTest {
 
     @Test
     void shouldAllowOnlyExactBootstrapEndpoints() {
+        assertThat(ConsentGateInterceptor.isAllowedBeforeConsent("GET", "/auth/csrf"))
+                .isTrue();
+        assertThat(ConsentGateInterceptor.isAllowedBeforeConsent("POST", "/auth/csrf"))
+                .isFalse();
         assertThat(ConsentGateInterceptor.isAllowedBeforeConsent("GET", "/user/consent"))
                 .isTrue();
         assertThat(ConsentGateInterceptor.isAllowedBeforeConsent("PUT", "/user/consent"))

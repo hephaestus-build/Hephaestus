@@ -54,6 +54,15 @@ describe("instance-admin route gate", () => {
 		await expect(land(url)).resolves.toBe("/");
 	});
 
+	it("rejects a non-admin at the tenant-local view-as route", async () => {
+		mockAppRole("APP_USER");
+		await expect(land("/w/hephaestus/view-as")).resolves.toBe("/");
+	});
+	it("admits an instance admin at the tenant-local view-as route", async () => {
+		mockAppRole("APP_ADMIN");
+		await expect(land("/w/hephaestus/view-as")).resolves.toBe("/w/hephaestus/view-as");
+	});
+
 	it("admits an APP_ADMIN", async () => {
 		mockAppRole("APP_ADMIN");
 		await expect(land("/admin/users")).resolves.toBe("/admin/users");

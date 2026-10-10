@@ -36,25 +36,24 @@ export const Route = createFileRoute("/_authenticated/integrations")({
 		status: z.enum(["success", "error"]).optional().catch(undefined),
 		reason: z.string().optional().catch(undefined),
 		description: z.string().optional().catch(undefined),
+		workspaceSlug: z
+			.string()
+			.regex(/^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$/u)
+			.optional()
+			.catch(undefined),
 	}),
 	beforeLoad: ({ search }) => {
 		if (typeof window === "undefined") {
 			return;
 		}
-		const slug = window.sessionStorage.getItem("slack-connect-return-slug");
-		if (!hasText(slug)) {
+		const slug = search.workspaceSlug;
+		if (slug === undefined) {
 			return;
-		}
-		window.sessionStorage.removeItem("slack-connect-return-slug");
-		// Sonner hands a toast raised before its Toaster mounts to the Toaster once it does.
-		if (search.status === "success") {
-			toast.success("Slack workspace connected");
-		} else if (search.status === "error") {
-			toast.error("We could not connect Slack", { description: failureDetail(search) });
 		}
 		throw redirect({
 			to: "/w/$workspaceSlug/admin/integrations/slack",
 			params: { workspaceSlug: slug },
+			search: { status: search.status, reason: search.reason, description: search.description },
 		});
 	},
 });

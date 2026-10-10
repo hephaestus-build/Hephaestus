@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
@@ -25,10 +26,15 @@ class PracticeFeedbackCommentFormatter {
     private final String webappUrl;
     private final String preferencesUrl;
     private final WorkspaceSummaryQuery workspaces;
+    private final WorkspaceSubdomainProperties subdomains;
 
-    PracticeFeedbackCommentFormatter(ApplicationProperties applicationProperties, WorkspaceSummaryQuery workspaces) {
+    PracticeFeedbackCommentFormatter(
+            ApplicationProperties applicationProperties,
+            WorkspaceSummaryQuery workspaces,
+            WorkspaceSubdomainProperties subdomains) {
         this.webappUrl = applicationProperties.webapp().url();
         this.workspaces = workspaces;
+        this.subdomains = subdomains;
         this.preferencesUrl = UriComponentsBuilder.fromUriString(webappUrl)
                 .pathSegment("settings")
                 .fragment("practice-feedback")
@@ -91,8 +97,8 @@ class PracticeFeedbackCommentFormatter {
                 .findById(job.getWorkspace().getId())
                 .orElseThrow(() -> new IllegalStateException("A review job's workspace exists"))
                 .slug();
-        String url = UriComponentsBuilder.fromUriString(webappUrl)
-                .pathSegment("w", slug, "feedback", kind.value(), Long.toString(artifactId))
+        String url = UriComponentsBuilder.fromUriString(subdomains.address(slug, webappUrl))
+                .pathSegment("feedback", kind.value(), Long.toString(artifactId))
                 .build()
                 .encode()
                 .toUriString();

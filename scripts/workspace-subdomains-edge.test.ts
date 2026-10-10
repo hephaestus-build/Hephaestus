@@ -50,7 +50,7 @@ await test("DNS credential values stay outside Compose and only the proxy mounts
 
 await test("proxy startup and routing use the server's DNS base-domain constraints", () => {
 	const server = read(
-		"server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/WorkspaceSubdomainProperties.java",
+		"server/application/src/main/java/de/tum/cit/aet/hephaestus/core/WorkspaceSubdomainProperties.java",
 	);
 	const encoded = /Pattern.compile\(\s*(?<pattern>"[^"]*")/u.exec(server)?.groups?.pattern;
 	assert.ok(encoded !== undefined);

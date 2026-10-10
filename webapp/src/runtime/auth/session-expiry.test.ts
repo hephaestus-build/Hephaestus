@@ -1,7 +1,14 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { __resetSessionRecoveryForTests, handlePossibleSessionExpiry } from "./session-expiry";
+import environment from "@/environment";
+import { workspaceAddressConfig } from "@/runtime/workspace-address";
+
+import {
+	redirectToLogin,
+	__resetSessionRecoveryForTests,
+	handlePossibleSessionExpiry,
+} from "./session-expiry";
 import { refreshAccessToken } from "./session-refresh";
 
 import { hasText } from "@/lib/text";
@@ -9,14 +16,21 @@ import { sleep } from "@/test/async";
 
 vi.mock("./session-refresh", () => ({ refreshAccessToken: vi.fn() }));
 const refreshMock = vi.mocked(refreshAccessToken);
-vi.mock("@/environment", () => ({ default: { serverUrl: "http://localhost/api" } }));
-function stubLocation(pathname: string, search = ""): { assigned: string[] } {
+vi.mock(import("@/environment"), async (importOriginal) => {
+	const actual = await importOriginal();
+	return { default: { ...actual.default, serverUrl: "http://localhost/api" } };
+});
+function stubLocation(
+	pathname: string,
+	search = "",
+	origin = "http://localhost",
+): { assigned: string[] } {
 	const assigned: string[] = [];
 	const stub = {
 		assign: (url: string) => assigned.push(url),
 		pathname,
 		search,
-		origin: "http://localhost",
+		origin,
 	};
 	Object.defineProperty(window, "location", { configurable: true, value: stub });
 	return { assigned };
@@ -200,4 +214,28 @@ describe("handlePossibleSessionExpiry", () => {
 		expect(handled).toBe(false);
 		expect(assigned).toHaveLength(0);
 	});
+});
+
+it("returns tenant sign-in through a relative apex workspace path", () => {
+	const { assigned } = stubLocation("/activity", "?range=1y", "https://acme.hephaestus.build");
+	const previous = { ...workspaceAddressConfig };
+	const wasEnabled = environment.workspaceSubdomains.enabled;
+	const { clientUrl } = environment;
+	try {
+		Object.assign(workspaceAddressConfig, {
+			enabled: true,
+			baseDomain: "hephaestus.build",
+			apexOrigin: "https://hephaestus.build",
+		});
+		environment.workspaceSubdomains.enabled = true;
+		environment.clientUrl = "https://hephaestus.build";
+		redirectToLogin();
+		expect(assigned).toStrictEqual([
+			"https://hephaestus.build/login?returnTo=%2Fw%2Facme%2Factivity%3Frange%3D1y",
+		]);
+	} finally {
+		Object.assign(workspaceAddressConfig, previous);
+		environment.workspaceSubdomains.enabled = wasEnabled;
+		environment.clientUrl = clientUrl;
+	}
 });

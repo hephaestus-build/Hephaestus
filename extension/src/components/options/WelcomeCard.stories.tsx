@@ -12,6 +12,7 @@ const meta = {
 		developmentBuild: false,
 		state: { status: "idle" },
 		onConnectHosted: fn(),
+		onConnectApex: fn(),
 		onConnectCustom: fn(),
 		privacyUrl: "https://docs.hephaestus.build/user/browser-extension-privacy",
 		docsOrigin: "https://docs.hephaestus.build",
@@ -111,5 +112,17 @@ export const Dark: Story = {
 	play: async ({ canvas }) => {
 		await expect(document.documentElement).toHaveClass("dark");
 		await expect(canvas.getByRole("button", { name: "Connect to Hephaestus" })).toBeVisible();
+	},
+};
+
+export const WorkspaceAddress: Story = {
+	args: { state: { status: "confirm-apex", origin: "https://heph.example.test" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("status")).toHaveTextContent(
+			"This workspace uses heph.example.test for sign-in and the API.",
+		);
+		await expect(
+			canvas.getByRole("button", { name: "Connect to heph.example.test" }),
+		).toBeVisible();
 	},
 };

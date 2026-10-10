@@ -175,7 +175,9 @@ class WorkspaceSubdomainAuthIntegrationTest extends RealAuthIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isForbidden()
-                .expectBody(Void.class);
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo("urn:hephaestus:csrf");
 
         var refreshed = fetchCsrf(last.token());
         assertThat(refreshed.token()).isEqualTo(last.token());

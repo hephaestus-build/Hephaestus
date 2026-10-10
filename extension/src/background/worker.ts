@@ -20,7 +20,7 @@ import {
 	WorkspaceDirectory,
 } from "~/background/context";
 import { toRpcError, WorkerError } from "~/background/errors";
-import { discoverInstance } from "~/background/instance";
+import { discoverInstance, resolveInstanceOrigin } from "~/background/instance";
 import { type Credentials, SessionStore } from "~/background/session";
 import { signIn, type SignInMethod } from "~/background/sign-in";
 import {
@@ -394,6 +394,9 @@ type Handler<K extends keyof RpcResponses> = (
 
 const handlers: { [K in keyof RpcResponses]: Handler<K> } = {
 	"get-state": async () => appState(),
+	"resolve-instance-origin": async (request) => ({
+		origin: await resolveInstanceOrigin(request.origin, DEVELOPMENT_BUILD),
+	}),
 
 	async "configure-instance"(request) {
 		configurationRequest += 1;

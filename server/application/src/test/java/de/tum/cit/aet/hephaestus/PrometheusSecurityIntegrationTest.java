@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -27,6 +28,7 @@ import org.springframework.boot.actuate.autoconfigure.web.server.ManagementConte
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.availability.ApplicationAvailabilityAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.autoconfigure.actuate.endpoint.AvailabilityProbesAutoConfiguration;
 import org.springframework.boot.health.autoconfigure.actuate.endpoint.HealthEndpointAutoConfiguration;
 import org.springframework.boot.health.autoconfigure.application.AvailabilityHealthContributorAutoConfiguration;
@@ -205,6 +207,7 @@ class PrometheusSecurityIntegrationTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     @Import(SecurityConfig.class)
+    @EnableConfigurationProperties(WorkspaceSubdomainProperties.class)
     @ImportAutoConfiguration({
         TomcatServletWebServerAutoConfiguration.class,
         DispatcherServletAutoConfiguration.class,

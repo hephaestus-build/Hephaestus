@@ -158,8 +158,6 @@ export function useSlackIntegration(workspaceSlug: string) {
 	// Connecting and reconnecting are one OAuth start: the server refreshes this workspace's active
 	// connection when Slack returns the team it already holds.
 	const startSlackOAuth = () => {
-		// The OAuth landing route reads the slug to route back here.
-		window.sessionStorage.setItem("slack-connect-return-slug", workspaceSlug);
 		connect.mutate({ path: { workspaceSlug }, body: { kind: "SLACK", userInput: {} } });
 	};
 
