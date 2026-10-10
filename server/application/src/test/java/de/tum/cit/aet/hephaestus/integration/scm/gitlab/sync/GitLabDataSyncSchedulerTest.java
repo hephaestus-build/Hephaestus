@@ -14,6 +14,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -145,7 +146,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 mock(GitLabRepositoryMonitors.class),
                 mock(WorkspaceRepository.class),
                 mock(WorkspaceActorSelector.class),
-                projectSyncService);
+                projectSyncService,
+                mock(ActivityLedgerRepair.class));
 
         // syncScope's first real step: no GitLabSyncServiceHolder available -> it logs and returns
         // immediately. This isolates the job-recording wrapper from the sync pipeline itself.

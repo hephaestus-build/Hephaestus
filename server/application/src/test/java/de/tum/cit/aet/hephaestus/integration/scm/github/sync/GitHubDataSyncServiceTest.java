@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -89,6 +90,9 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
 
     /** Frozen so a re-synced repo reports a bit-identical "unchanged" updatedAt. */
     private static final Instant REPO_UPDATED_AT = Instant.parse("2026-07-01T00:00:00Z");
+
+    @Mock
+    private ActivityLedgerRepair activityLedgerRepair;
 
     @Mock
     private IdentityProviderRepository gitProviderRepository;
@@ -206,7 +210,8 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 exceptionClassifier,
                 tokenProvider,
                 gitHubAppTokenService,
-                rateLimitTracker);
+                rateLimitTracker,
+                activityLedgerRepair);
 
         provider = new IdentityProvider();
         ReflectionTestUtils.setField(provider, "id", PROVIDER_ID);
@@ -472,6 +477,16 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
         verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
         assertThat(result).isTrue();
         verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, null);
+    }
+
+    @Test
+    void shouldRecordLedgerFailureWithoutMislabelingProviderSync() {
+        var target = syncTarget(null, null);
+        when(activityLedgerRepair.reconcileRepository(SCOPE_ID, REPOSITORY_ID))
+                .thenThrow(new IllegalStateException("Database unavailable"));
+
+        assertThat(service.syncSyncTarget(target)).isFalse();
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, "Activity ledger repair failed");
     }
 
     @Test

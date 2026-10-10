@@ -2,7 +2,9 @@ package de.tum.cit.aet.hephaestus.config;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -31,6 +33,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @Configuration
 @EnableAsync(order = Ordered.HIGHEST_PRECEDENCE + 1)
 @Profile("!test")
+@Slf4j
 public class SpringAsyncConfig implements AsyncConfigurer {
 
     @Bean(name = TaskExecutionAutoConfiguration.APPLICATION_TASK_EXECUTOR_BEAN_NAME)
@@ -49,14 +52,34 @@ public class SpringAsyncConfig implements AsyncConfigurer {
         return executor;
     }
 
+    /** Activity overload applies backpressure to the producer instead of rejecting committed events. */
+    @Bean(name = "activityExecutor")
+    public ThreadPoolTaskExecutor activityExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("activity-");
+        executor.setRejectedExecutionHandler((task, pool) -> {
+            if (pool.isShutdown()) {
+                log.error("Activity recording rejected during executor shutdown");
+                throw new RejectedExecutionException("Activity executor is shut down");
+            }
+            task.run();
+        });
+        executor.setTaskDecorator(new ContextPropagatingTaskDecorator());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        return executor;
+    }
+
     /**
      * The two feedback-preparation lanes and approved-feedback delivery, off the shared pool.
      *
-     * <p>They shared {@link #applicationTaskExecutor} with every other {@code @Async} listener in the
-     * tree, including the twenty-odd activity listeners a provider sync fans out. A concurrent sync
-     * therefore decided whether a developer's feedback was prepared at all: the default
-     * {@code AbortPolicy} throws once the 500-deep queue is full, and a rejected {@code AFTER_COMMIT}
-     * event is not redelivered.
+     * <p>Provider synchronization must not decide whether feedback is prepared. The shared pool's
+     * {@code AbortPolicy} rejects work when its queue is full, and rejected committed events are not
+     * redelivered. Recovery belongs to {@code FeedbackLanePreparationSweeper} and
+     * {@code ApprovedFeedbackRecovery}.
      *
      * <p>Small and deep: the work is short and bursty — one submission per finished review, one per
      * approval — so depth absorbs a burst better than width, and width here only competes for the same
@@ -85,8 +108,7 @@ public class SpringAsyncConfig implements AsyncConfigurer {
      * <p>One worker and a shallow queue that discards: the record is best effort, a later read of the
      * same credential makes it again, and a stalled database must not turn a burst of failing reads
      * into retained work or into a second pooled connection per caller. Off {@link
-     * #applicationTaskExecutor} so it neither queues behind the activity listeners a provider sync
-     * fans out nor competes with them for the same 500-deep queue.
+     * #applicationTaskExecutor} so it does not queue behind provider synchronization or compete for the shared queue.
      *
      * <p>Waits only briefly on shutdown, so a record already in flight lands before the
      * EntityManagerFactory closes while a stalled one is abandoned like any other.

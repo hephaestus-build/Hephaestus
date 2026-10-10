@@ -163,6 +163,29 @@ class GitHubPullRequestReviewMessageHandlerIntegrationTest extends BaseIntegrati
     }
 
     @Test
+    void shouldStoreActualSubmissionTimeWhenPendingReviewIsSubmitted() throws Exception {
+        var event = loadPayload("pull_request_review.submitted");
+        createTestPullRequest(
+                required(event.pullRequest().getDatabaseId()),
+                event.pullRequest().number());
+        var pending = new PullRequestReview();
+        pending.setNativeId(required(event.review().id()));
+        pending.setProvider(gitProvider);
+        pending.setPullRequest(testPullRequest);
+        pending.setState(PullRequestReview.State.PENDING);
+        pending.setDismissed(false);
+        reviewRepository.saveAndFlush(pending);
+
+        handler.handleEvent(event);
+
+        var stored = reviewRepository
+                .findByNativeIdAndProviderId(required(event.review().id()), gitProviderId())
+                .orElseThrow();
+        assertThat(stored.getSubmittedAt()).isEqualTo(event.review().submittedAt());
+        assertThat(stored.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+    }
+
+    @Test
     void shouldUpdateReviewOnEditedEvent() throws Exception {
         // Given - first create the review
         GitHubPullRequestReviewEventDTO submitEvent = loadPayload("pull_request_review.submitted");

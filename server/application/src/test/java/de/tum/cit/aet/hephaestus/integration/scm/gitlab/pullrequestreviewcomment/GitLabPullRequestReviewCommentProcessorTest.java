@@ -173,7 +173,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
             var data = buildDiffNoteData(
                     "src/Foo.ts", "src/Foo.ts", "src/Foo.ts", 42, null, "head-sha", "base-sha", "start-sha");
             var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(
-                    thread, pr, null, provider, null, null, SCOPE_ID);
+                    thread, pr, null, provider, null, null, SCOPE_ID, true);
 
             PullRequestReviewComment saved = processor.findOrCreateComment(data, context);
 
@@ -199,7 +199,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
             var data =
                     buildDiffNoteData("src/Foo.ts", "src/Foo.ts", "src/Foo.ts", null, 17, "head-sha", "base-sha", null);
             var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(
-                    thread, pr, null, provider, null, null, SCOPE_ID);
+                    thread, pr, null, provider, null, null, SCOPE_ID, true);
 
             PullRequestReviewComment saved = processor.findOrCreateComment(data, context);
 
@@ -218,7 +218,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
             var data = buildDiffNoteData("src/Foo.ts", "src/Foo.ts", null, 42, null, "head-sha", null, "start-sha");
             var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(
-                    thread, pr, null, provider, null, null, SCOPE_ID);
+                    thread, pr, null, provider, null, null, SCOPE_ID, true);
 
             PullRequestReviewComment saved = processor.findOrCreateComment(data, context);
 
@@ -238,7 +238,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
             var data = buildDiffNoteData("src/Foo.ts", null, null, 42, null, "head-sha", "base-sha", null);
             var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(
-                    thread, pr, null, provider, parent, null, SCOPE_ID);
+                    thread, pr, null, provider, parent, null, SCOPE_ID, true);
 
             PullRequestReviewComment saved = processor.findOrCreateComment(data, context);
 
@@ -259,7 +259,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
             var data = buildDiffNoteData("src/Foo.ts", null, null, 42, null, "head-sha", "base-sha", null);
             var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(
-                    thread, pr, null, provider, null, review, SCOPE_ID);
+                    thread, pr, null, provider, null, review, SCOPE_ID, true);
 
             PullRequestReviewComment saved = processor.findOrCreateComment(data, context);
 
@@ -277,7 +277,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
             var data = buildDiffNoteData("src/Foo.ts", null, null, 42, null, "head-sha", "base-sha", null);
             var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(
-                    thread, pr, null, provider, null, null, SCOPE_ID);
+                    thread, pr, null, provider, null, null, SCOPE_ID, true);
             processor.findOrCreateComment(data, context);
 
             ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
@@ -290,7 +290,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
             var data = new GitLabPullRequestReviewCommentProcessor.DiffNoteData(
                     "not-a-gid", "body", "https://example", "p", 1, null, null, null, null, null, null, null, null);
             var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(
-                    thread, pr, null, provider, null, null, SCOPE_ID);
+                    thread, pr, null, provider, null, null, SCOPE_ID, true);
 
             PullRequestReviewComment saved = processor.findOrCreateComment(data, context);
 
@@ -310,12 +310,35 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
             var data = buildDiffNoteData("src/Foo.ts", null, null, 42, null, "head-sha", "base-sha", null);
             var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(
-                    thread, pr, null, provider, null, null, SCOPE_ID);
+                    thread, pr, null, provider, null, null, SCOPE_ID, true);
 
             assertThat(processor.findOrCreateComment(data, context)).isNull();
             assertThat(stored.getPullRequest()).isSameAs(other);
             verify(commentRepository, never()).save(any());
         }
+    }
+
+    @Test
+    void shouldCorrectReplyParentFromAuthoritativeDiscussionRead() {
+        var stored = new PullRequestReviewComment();
+        stored.setPullRequest(pr);
+        stored.setThread(thread);
+        var root = new PullRequestReviewComment();
+        root.setId(77L);
+        when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+                .thenReturn(Optional.of(stored));
+        when(commentRepository.save(any(PullRequestReviewComment.class)))
+                .thenAnswer(inv -> inv.getArgument(0, PullRequestReviewComment.class));
+        var data = buildDiffNoteData("src/Foo.ts", null, null, 42, null, "head-sha", "base-sha", null);
+        var authoritative = new GitLabPullRequestReviewCommentProcessor.CommentContext(
+                thread, pr, null, provider, root, null, SCOPE_ID, true);
+
+        assertThat(processor.findOrCreateComment(data, authoritative)).isSameAs(stored);
+        assertThat(stored.getInReplyTo()).isSameAs(root);
+        var webhook = new GitLabPullRequestReviewCommentProcessor.CommentContext(
+                thread, pr, null, provider, null, null, SCOPE_ID, false);
+        processor.findOrCreateComment(data, webhook);
+        assertThat(stored.getInReplyTo()).isSameAs(root);
     }
 
     // DiffNoteData backward-compat constructor

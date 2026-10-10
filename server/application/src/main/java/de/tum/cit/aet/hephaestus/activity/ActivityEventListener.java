@@ -91,7 +91,7 @@ public class ActivityEventListener {
         return userRepository.findById(authorId).orElse(null);
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPullRequestCreated(ScmDomainEvent.PullRequestCreated event) {
@@ -123,7 +123,7 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPullRequestMerged(ScmDomainEvent.PullRequestMerged event) {
@@ -156,7 +156,7 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPullRequestClosed(ScmDomainEvent.PullRequestClosed event) {
@@ -191,7 +191,7 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPullRequestReopened(ScmDomainEvent.PullRequestReopened event) {
@@ -219,7 +219,7 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPullRequestReady(ScmDomainEvent.PullRequestReady event) {
@@ -250,7 +250,7 @@ public class ActivityEventListener {
     /**
      * Handle pull request converted to draft (ready->draft transition).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPullRequestDrafted(ScmDomainEvent.PullRequestDrafted event) {
@@ -279,7 +279,7 @@ public class ActivityEventListener {
     }
 
     /** Handle pull request synchronized (new commits pushed to the branch). */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPullRequestSynchronized(ScmDomainEvent.PullRequestSynchronized event) {
@@ -307,7 +307,7 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPullRequestLabeled(ScmDomainEvent.PullRequestLabeled event) {
@@ -335,7 +335,7 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPullRequestUnlabeled(ScmDomainEvent.PullRequestUnlabeled event) {
@@ -363,11 +363,12 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewSubmitted(ScmDomainEvent.ReviewSubmitted event) {
         var reviewData = event.review();
+        if (reviewData.state() == PullRequestReview.State.PENDING) return;
         Long scopeId = validScopeId(
                 "Review submitted", reviewData.id(), event.context().scopeId());
         log.debug(
@@ -407,7 +408,7 @@ public class ActivityEventListener {
                         reviewData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewDismissed(ScmDomainEvent.ReviewDismissed event) {
@@ -449,7 +450,7 @@ public class ActivityEventListener {
      * <p>Note: This creates a new event rather than updating the original,
      * maintaining an immutable audit trail of all review activity.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewEdited(ScmDomainEvent.ReviewEdited event) {
@@ -486,7 +487,7 @@ public class ActivityEventListener {
                         reviewData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCommentCreated(ScmDomainEvent.CommentCreated event) {
@@ -525,7 +526,7 @@ public class ActivityEventListener {
      *
      * <p>Records an audit trail event; read models count the original comment, not the edit.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCommentUpdated(ScmDomainEvent.CommentUpdated event) {
@@ -565,7 +566,7 @@ public class ActivityEventListener {
      * <p>Records audit trail event. Note that we may not have full
      * comment data since the entity was deleted - we rely on the event metadata.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCommentDeleted(ScmDomainEvent.CommentDeleted event) {
@@ -594,7 +595,7 @@ public class ActivityEventListener {
      *
      * <p>Recorded for comments linked to a review (GitHub) and for standalone diff notes (GitLab) alike.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewCommentCreated(ScmDomainEvent.ReviewCommentCreated event) {
@@ -628,7 +629,7 @@ public class ActivityEventListener {
                         commentData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewCommentEdited(ScmDomainEvent.ReviewCommentEdited event) {
@@ -668,7 +669,7 @@ public class ActivityEventListener {
      * <p>Records audit trail event. Note that we may not have full
      * comment data since the entity was deleted.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewCommentDeleted(ScmDomainEvent.ReviewCommentDeleted event) {
@@ -697,7 +698,7 @@ public class ActivityEventListener {
      *
      * <p>Resolving a review thread indicates that code review feedback has been addressed.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewThreadResolved(ScmDomainEvent.ReviewThreadResolved event) {
@@ -747,7 +748,7 @@ public class ActivityEventListener {
      *
      * <p>Unresolving a review thread reopens feedback that was marked as addressed.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReviewThreadUnresolved(ScmDomainEvent.ReviewThreadUnresolved event) {
@@ -798,7 +799,7 @@ public class ActivityEventListener {
      * the event is still recorded for audit purposes. This handles
      * cases where the GitHub user was deleted or the issue was created by a bot.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIssueCreated(ScmDomainEvent.IssueCreated event) {
@@ -839,7 +840,7 @@ public class ActivityEventListener {
      *
      * <p>Events are recorded even when author is unknown (null actor).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIssueClosed(ScmDomainEvent.IssueClosed event) {
@@ -877,7 +878,7 @@ public class ActivityEventListener {
      *
      * <p>Events are recorded even when author is unknown (null actor).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIssueReopened(ScmDomainEvent.IssueReopened event) {
@@ -912,7 +913,7 @@ public class ActivityEventListener {
      * <p>Records audit trail event. Note that we only have the issue ID
      * since the entity was deleted.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIssueDeleted(ScmDomainEvent.IssueDeleted event) {
@@ -934,7 +935,7 @@ public class ActivityEventListener {
      *
      * <p>Events are recorded even when author is unknown (null actor).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIssueLabeled(ScmDomainEvent.IssueLabeled event) {
@@ -968,7 +969,7 @@ public class ActivityEventListener {
      *
      * <p>Events are recorded even when author is unknown (null actor).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIssueUnlabeled(ScmDomainEvent.IssueUnlabeled event) {
@@ -1005,7 +1006,7 @@ public class ActivityEventListener {
      *
      * <p>Events are recorded even when author is unknown (null actor).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIssueTyped(ScmDomainEvent.IssueTyped event) {
@@ -1042,7 +1043,7 @@ public class ActivityEventListener {
      *
      * <p>Events are recorded even when author is unknown (null actor).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIssueUntyped(ScmDomainEvent.IssueUntyped event) {
@@ -1078,7 +1079,7 @@ public class ActivityEventListener {
         if (state == PullRequestReview.State.CHANGES_REQUESTED) {
             return ActivityEventType.REVIEW_CHANGES_REQUESTED;
         }
-        if (state == PullRequestReview.State.UNKNOWN) {
+        if (state != PullRequestReview.State.COMMENTED && state != PullRequestReview.State.DISMISSED) {
             return ActivityEventType.REVIEW_UNKNOWN;
         }
         return ActivityEventType.REVIEW_COMMENTED;
@@ -1090,7 +1091,7 @@ public class ActivityEventListener {
      * <p>Records COMMIT_CREATED activity event. If the author is unknown (null),
      * the event is still recorded for audit purposes.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCommitCreated(ScmDomainEvent.CommitCreated event) {
@@ -1131,7 +1132,7 @@ public class ActivityEventListener {
      * The underlying {@code backfillCommitActors} UPDATE is idempotent (guarded by
      * {@code actor_id IS NULL}), so replay safety is preserved.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @EventListener
     public void onCommitAuthorsReconciled(ScmDomainEvent.CommitAuthorsReconciled event) {
@@ -1161,7 +1162,7 @@ public class ActivityEventListener {
      *
      * <p>Events are recorded even when author is unknown (null actor).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDiscussionCreated(ScmDomainEvent.DiscussionCreated event) {
@@ -1194,7 +1195,7 @@ public class ActivityEventListener {
      *
      * <p>Events are recorded even when author is unknown (null actor).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDiscussionClosed(ScmDomainEvent.DiscussionClosed event) {
@@ -1229,7 +1230,7 @@ public class ActivityEventListener {
      *
      * <p>Events are recorded even when author is unknown (null actor).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDiscussionReopened(ScmDomainEvent.DiscussionReopened event) {
@@ -1266,7 +1267,7 @@ public class ActivityEventListener {
      *
      * <p>Events are recorded even when author is unknown (null actor).
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDiscussionAnswered(ScmDomainEvent.DiscussionAnswered event) {
@@ -1300,7 +1301,7 @@ public class ActivityEventListener {
      * <p>Records audit trail event. Note that we only have the
      * discussion ID since the entity was deleted.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDiscussionDeleted(ScmDomainEvent.DiscussionDeleted event) {
@@ -1328,7 +1329,7 @@ public class ActivityEventListener {
      * <p>Records DISCUSSION_COMMENT_CREATED activity event. Discussion comments
      * are a community engagement signal, tracked for activity.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDiscussionCommentCreated(ScmDomainEvent.DiscussionCommentCreated event) {
@@ -1367,7 +1368,7 @@ public class ActivityEventListener {
      *
      * <p>Records an audit trail event; read models count the original comment, not the edit.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDiscussionCommentEdited(ScmDomainEvent.DiscussionCommentEdited event) {
@@ -1407,7 +1408,7 @@ public class ActivityEventListener {
      * <p>Records audit trail event. Note that we may not have full
      * comment data since the entity was deleted - we rely on the event metadata.
      */
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDiscussionCommentDeleted(ScmDomainEvent.DiscussionCommentDeleted event) {

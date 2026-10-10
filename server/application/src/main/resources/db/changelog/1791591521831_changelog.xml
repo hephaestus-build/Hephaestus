@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1791591521831-1" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="backfill_repair_provider_count" type="INTEGER"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791591521831-2" author="hephaestus" runInTransaction="false">
+        <createIndex indexName="idx_issue_comment_issue" tableName="issue_comment">
+            <column name="issue_id"/>
+            <column name="id"/>
+        </createIndex>
+        <modifySql dbms="postgresql">
+            <replace replace="CREATE INDEX" with="CREATE INDEX CONCURRENTLY"/>
+        </modifySql>
+    </changeSet>
+    <changeSet id="1791591521831-3" author="hephaestus" runInTransaction="false">
+        <createIndex indexName="idx_review_comment_pull_request" tableName="pull_request_review_comment">
+            <column name="pull_request_id"/>
+            <column name="id"/>
+        </createIndex>
+        <modifySql dbms="postgresql">
+            <replace replace="CREATE INDEX" with="CREATE INDEX CONCURRENTLY"/>
+        </modifySql>
+    </changeSet>
+    <changeSet id="1791591521831-4" author="hephaestus" runInTransaction="false">
+        <createIndex indexName="idx_review_comment_review_reply" tableName="pull_request_review_comment">
+            <column name="review_id"/>
+            <column name="in_reply_to_id"/>
+        </createIndex>
+        <modifySql dbms="postgresql">
+            <replace replace="CREATE INDEX" with="CREATE INDEX CONCURRENTLY"/>
+        </modifySql>
+    </changeSet>
+</databaseChangeLog>
