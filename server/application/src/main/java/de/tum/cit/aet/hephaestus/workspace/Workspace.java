@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewSettings;
+import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlug;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
@@ -22,7 +23,6 @@ import jakarta.persistence.Table;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashSet;
@@ -120,12 +120,12 @@ public class Workspace {
      * URL-safe unique identifier for the workspace.
      * Used in URLs: {@code /api/workspaces/{slug}/...}
      * <p>
-     * Format: lowercase alphanumeric with hyphens, 3-51 chars, must start with alphanumeric.
-     * Immutable after creation (renames create redirect entries in {@link WorkspaceSlugHistory}).
+     * Format: a non-reserved lowercase DNS label. See WorkspaceSlugValidator.
+     * Renames create permanent redirect entries in {@link WorkspaceSlugHistory}.
      */
     @Column(name = "slug", unique = true, nullable = false, length = 64)
     @NotBlank(message = "Workspace slug is required")
-    @Pattern(regexp = "^[a-z0-9][a-z0-9-]{2,50}$")
+    @WorkspaceSlug
     private String workspaceSlug;
 
     /** Human-readable name shown in UI (e.g., "TUM Applied Software Engineering") */

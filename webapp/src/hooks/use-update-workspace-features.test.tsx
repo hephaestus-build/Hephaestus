@@ -26,6 +26,7 @@ const workspace: WorkspaceListItem = {
 	practicesEnabled: false,
 	status: "ACTIVE",
 	workspaceSlug: "acme",
+	workspaceAddress: "https://hephaestus.build/w/acme",
 };
 
 function wrapper(queryClient: QueryClient) {

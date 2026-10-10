@@ -329,9 +329,8 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
 
             AccountType wsAccountType = accountKind == AccountKind.ORGANIZATION ? AccountType.ORG : AccountType.USER;
 
-            String desiredSlug = Objects.requireNonNull(workspaceSlugService.normalize(accountLogin));
             String availableSlug =
-                    workspaceSlugService.allocate(desiredSlug, "install-" + installationId + "-" + accountLogin);
+                    workspaceSlugService.allocate(accountLogin, "install-" + installationId + "-" + accountLogin);
 
             // Do NOT redirect the desired slug to the allocated slug: the desired slug may
             // belong to another workspace, and redirecting would leak or hijack it. Callers
@@ -342,7 +341,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                     LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()),
                     installationId,
                     ownerUserId,
-                    LoggingUtils.sanitizeForLog(desiredSlug));
+                    LoggingUtils.sanitizeForLog(accountLogin));
         }
 
         if (!isBlank(accountLogin)) {

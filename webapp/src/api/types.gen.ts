@@ -1466,9 +1466,14 @@ export type CreateWorkspaceRequest = {
      */
     serverUrl?: string;
     /**
-     * URL-friendly identifier for the workspace
+     * Non-reserved lowercase ASCII DNS label. Consecutive hyphens are prohibited.
      */
     workspaceSlug: string;
+};
+
+export type CsrfToken = {
+    headerName: string;
+    token: string;
 };
 
 export type CuratedCatalog = {
@@ -4560,7 +4565,7 @@ export type ReleaseStatus = {
  */
 export type RenameWorkspaceSlugRequest = {
     /**
-     * New URL-friendly identifier for the workspace
+     * Non-reserved lowercase ASCII DNS label. Consecutive hyphens are prohibited.
      */
     newSlug: string;
 };
@@ -6792,6 +6797,10 @@ export type Workspace = {
      */
     updatedAt: Date;
     /**
+     * Canonical workspace address. Uses the apex path when subdomains are off.
+     */
+    workspaceAddress: string;
+    /**
      * URL-friendly identifier for the workspace
      */
     workspaceSlug: string;
@@ -6880,6 +6889,10 @@ export type WorkspaceListItem = {
      * Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)
      */
     status: string;
+    /**
+     * Canonical workspace address. Uses the apex path when subdomains are off.
+     */
+    workspaceAddress: string;
     /**
      * URL-friendly identifier for the workspace
      */
@@ -9099,6 +9112,22 @@ export type ExchangeClientSignInResponses = {
 };
 
 export type ExchangeClientSignInResponse = ExchangeClientSignInResponses[keyof ExchangeClientSignInResponses];
+
+export type GetCsrfTokenData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/csrf';
+};
+
+export type GetCsrfTokenResponses = {
+    /**
+     * OK
+     */
+    200: CsrfToken;
+};
+
+export type GetCsrfTokenResponse = GetCsrfTokenResponses[keyof GetCsrfTokenResponses];
 
 export type LogoutData = {
     body?: never;

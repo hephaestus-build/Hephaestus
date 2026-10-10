@@ -2,47 +2,36 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.workspace.exception.InvalidWorkspaceSlugException;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceSlugConflictException;
+import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.List;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Service for workspace slug allocation, validation, and history management.
- *
- * <p>Handles:
- * <ul>
- *   <li>Slug normalization (lowercase, hyphen-delimited)</li>
- *   <li>Slug validation (pattern matching)</li>
- *   <li>Collision-free slug allocation with hash suffixes</li>
- *   <li>Slug history retention for redirects</li>
- * </ul>
- */
+/** Allocates available workspace names and records permanent rename history. */
 @Service
 public class WorkspaceSlugService {
 
-    private static final int SLUG_HISTORY_RETENTION = 5;
-    private static final int SLUG_MIN_LENGTH = 3;
-    private static final int SLUG_MAX_LENGTH = 51;
+    private static final int SLUG_MIN_LENGTH = WorkspaceSlugValidator.MIN_LENGTH;
+    private static final int SLUG_MAX_LENGTH = WorkspaceSlugValidator.MAX_LENGTH;
 
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository;
-    private final int redirectTtlDays;
+    private final WorkspaceSlugReservationRepository reservations;
 
     public WorkspaceSlugService(
             WorkspaceRepository workspaceRepository,
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
-            @Value("${hephaestus.workspace.slug.redirect.ttl-days:30}") int redirectTtlDays) {
+            WorkspaceSlugReservationRepository reservations) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
-        this.redirectTtlDays = redirectTtlDays;
+        this.reservations = reservations;
     }
 
     /**
@@ -74,19 +63,22 @@ public class WorkspaceSlugService {
         if (slug == null) {
             throw new InvalidWorkspaceSlugException("null");
         }
-        if (!slug.matches("^[a-z0-9][a-z0-9-]{2,50}$")) {
+        if (!WorkspaceSlugValidator.isAssignable(slug)) {
             throw new InvalidWorkspaceSlugException(slug);
         }
     }
 
     /**
-     * Check if a slug is available (not in use and no active redirect history).
+     * Check if a slug is available (valid, not in use, and never previously used).
      *
      * @param slug the slug to check
      * @return true if the slug is available
      */
     public boolean isAvailable(String slug) {
-        return !workspaceRepository.existsByWorkspaceSlug(slug) && !hasActiveHistory(slug);
+        return WorkspaceSlugValidator.isAssignable(slug)
+                && !workspaceRepository.existsByWorkspaceSlug(slug)
+                && !reservations.existsById(slug)
+                && !workspaceSlugHistoryRepository.existsByOldSlug(slug);
     }
 
     /**
@@ -98,7 +90,11 @@ public class WorkspaceSlugService {
      * @throws WorkspaceSlugConflictException if no available slug could be found
      */
     public String allocate(String desiredSlug, String suffixSeed) {
-        String normalized = Objects.requireNonNull(normalize(desiredSlug));
+        String normalized = Objects.requireNonNull(normalize(desiredSlug)).replaceAll("[^a-z0-9-]", "-");
+        normalized = Objects.requireNonNull(normalize(normalized));
+        if (normalized.isEmpty()) {
+            normalized = "workspace";
+        }
         if (isAvailable(normalized)) {
             return normalized;
         }
@@ -136,33 +132,7 @@ public class WorkspaceSlugService {
         historyEntry.setOldSlug(oldSlug);
         historyEntry.setNewSlug(newSlug);
         historyEntry.setChangedAt(Instant.now());
-        historyEntry.setRedirectExpiresAt(Instant.now().plusSeconds(redirectTtlDays * 86400L));
         workspaceSlugHistoryRepository.save(historyEntry);
-
-        pruneHistory(workspace);
-    }
-
-    /**
-     * Find the current slug for a workspace that was previously known by an old slug.
-     *
-     * @param oldSlug the previous slug
-     * @return the current slug, or null if not found or redirect expired
-     */
-    public @Nullable String resolveRedirect(String oldSlug) {
-        return workspaceSlugHistoryRepository
-                .findFirstByOldSlugOrderByChangedAtDesc(oldSlug)
-                .filter(h -> h.getRedirectExpiresAt() == null
-                        || h.getRedirectExpiresAt().isAfter(Instant.now()))
-                .map(history -> history.getWorkspace().getWorkspaceSlug())
-                .orElse(null);
-    }
-
-    // PRIVATE HELPERS
-
-    private boolean hasActiveHistory(String slug) {
-        Instant now = Instant.now();
-        return (workspaceSlugHistoryRepository.existsByOldSlugAndRedirectExpiresAtIsNull(slug)
-                || workspaceSlugHistoryRepository.existsByOldSlugAndRedirectExpiresAtAfter(slug, now));
     }
 
     private @Nullable String buildCandidate(String baseSlug, String suffix) {
@@ -179,30 +149,10 @@ public class WorkspaceSlugService {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hashBytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            String hex = bytesToHex(hashBytes);
+            String hex = HexFormat.of().formatHex(hashBytes);
             return hex.substring(0, Math.min(length, hex.length()));
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);
         }
-    }
-
-    private String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder(bytes.length * 2);
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
-    }
-
-    private void pruneHistory(Workspace workspace) {
-        List<WorkspaceSlugHistory> history =
-                workspaceSlugHistoryRepository.findByWorkspaceOrderByChangedAtDesc(workspace);
-
-        if (history.size() <= SLUG_HISTORY_RETENTION) {
-            return;
-        }
-
-        List<WorkspaceSlugHistory> excess = history.subList(SLUG_HISTORY_RETENTION, history.size());
-        workspaceSlugHistoryRepository.deleteAllInBatch(excess);
     }
 }

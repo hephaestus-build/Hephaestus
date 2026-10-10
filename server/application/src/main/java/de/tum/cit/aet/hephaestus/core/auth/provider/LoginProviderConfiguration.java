@@ -22,6 +22,6 @@ public class LoginProviderConfiguration {
             AuthProperties authProperties,
             OutlineOriginPolicy outlineOriginPolicy) {
         return new LoginProviderClientRegistrationRepository(
-                loginProviderRepository, authProperties.apiBasePath(), outlineOriginPolicy);
+                loginProviderRepository, authProperties.oauthCallbackBase(), outlineOriginPolicy);
     }
 }

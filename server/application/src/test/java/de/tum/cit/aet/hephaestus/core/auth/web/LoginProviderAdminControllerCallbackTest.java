@@ -15,11 +15,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-/**
- * Pins the admin-facing callback URL — the value an operator copies into the upstream OAuth app — so it
- * carries the proxy-stripped API prefix exactly like the live {@code redirect_uri} does. Without this the
- * displayed URL silently drifts to the un-prefixed (SPA) path and every self-hosted-GitLab wiring fails.
- */
+/** The admin view and OAuth registration share the configured API origin, independent of request headers. */
 class LoginProviderAdminControllerCallbackTest extends BaseUnitTest {
 
     @AfterEach
@@ -28,15 +24,15 @@ class LoginProviderAdminControllerCallbackTest extends BaseUnitTest {
     }
 
     @Test
-    void displayedCallback_carriesApiBasePath_behindAStrippingProxy() {
+    void shouldShowConfiguredCallbackWithApiPrefixWhenRequestUsesTenantHost() {
         String redirectUri = redirectUriFor("/api");
-        assertThat(redirectUri).isEqualTo("https://hephaestus.example/api/login/oauth2/code/github");
+        assertThat(redirectUri).isEqualTo("http://localhost:8080/api/login/oauth2/code/github");
     }
 
     @Test
-    void displayedCallback_hasNoPrefix_whenServedAtRoot() {
+    void shouldShowConfiguredCallbackWithoutPrefixWhenRequestUsesTenantHost() {
         String redirectUri = redirectUriFor("");
-        assertThat(redirectUri).isEqualTo("https://hephaestus.example/login/oauth2/code/github");
+        assertThat(redirectUri).isEqualTo("http://localhost:8080/login/oauth2/code/github");
     }
 
     private static String redirectUriFor(String apiBasePath) {
@@ -46,7 +42,8 @@ class LoginProviderAdminControllerCallbackTest extends BaseUnitTest {
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setScheme("https");
-        request.setServerName("hephaestus.example");
+        request.setServerName("tenant.hephaestus.example");
+        request.addHeader("X-Forwarded-Host", "evil.example");
         request.setServerPort(443);
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 

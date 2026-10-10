@@ -85,7 +85,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
     @BeforeEach
     void setUp() {
         User owner = persistUser("catalog-owner");
-        workspace = createWorkspace("catalog", "Catalog", "catalog", AccountType.ORG, owner);
+        workspace = createWorkspace("catalog-workspace", "Catalog", "catalog", AccountType.ORG, owner);
     }
 
     @Test

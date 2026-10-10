@@ -404,7 +404,10 @@ Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://gith
 
 #### Configure GitHub login
 
-1. [Create a GitHub OAuth application](https://github.com/settings/developers) with the callback URL `http://localhost:8080/login/oauth2/code/github` (use your `SERVER_PORT` if you overrode it).
+1. [Create a GitHub OAuth application](https://github.com/settings/developers) with the callback URL `http://localhost:8080/login/oauth2/code/github` (replace `8080` with your `SERVER_PORT`).
+   The local auth issuer defaults to `http://localhost:${SERVER_PORT:8080}`.
+   If you set `HEPHAESTUS_AUTH_ISSUER`, register its origin instead.
+   Add `HEPHAESTUS_AUTH_API_BASE_PATH` before `/login` if you set an API prefix.
 2. Copy `server/.env.example` to `server/.env` and set the credentials:
 
    ```bash
@@ -415,7 +418,8 @@ Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://gith
    ```
 
 3. (Optional) To enable local GitLab login, register an OAuth application on your GitLab instance.
-   Use callback `http://localhost:8080/login/oauth2/code/gitlab` and scope `read_user`.
+   Use callback `http://localhost:<SERVER_PORT>/login/oauth2/code/gitlab` and scope `read_user`.
+   Apply the same issuer and API-prefix settings as for GitHub.
    Set `GITLAB_OAUTH_CLIENT_ID` / `GITLAB_OAUTH_CLIENT_SECRET`.
    Point `GITLAB_OAUTH_BASE_URL` at the instance.
    Its default is `https://gitlab.com`, but you can use, for example, `https://gitlab.lrz.de`.
@@ -442,7 +446,7 @@ Manual database edits are a last resort.
 #### Troubleshooting auth
 
 - **401 after login:** check that `GITHUB_OAUTH_CLIENT_ID/SECRET` are set.
-  Check that the GitHub app's callback URL matches your `SERVER_PORT`.
+  Check that the provider callback matches `HEPHAESTUS_AUTH_ISSUER`, or `http://localhost:<SERVER_PORT>` when it is unset, plus the configured API prefix.
 - **Logins do not survive a server restart locally:** set `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` (base64 32-byte. `openssl rand -base64 32`) in `server/.env` — otherwise an ephemeral per-boot key is used.
 - **Reset everything:** `vp run dev:reset` (see Running the stack). On next login the account and identity link are recreated.
 

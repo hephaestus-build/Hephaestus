@@ -66,11 +66,16 @@ class WorkspaceProvisioningServiceTest {
     private ConnectionService connectionService;
 
     private WorkspaceProvisioningService provisioningService;
+    private WorkspaceSlugService workspaceSlugs;
 
     private WorkspaceProperties workspaceProperties;
 
     @BeforeEach
     void setUp() {
+        workspaceSlugs = new WorkspaceSlugService(
+                workspaceRepository,
+                mock(WorkspaceSlugHistoryRepository.class),
+                mock(WorkspaceSlugReservationRepository.class));
         workspaceProperties = new WorkspaceProperties(
                 true,
                 new WorkspaceProperties.DefaultProperties("aet-org", "pat-token", List.of()),
@@ -83,6 +88,7 @@ class WorkspaceProvisioningServiceTest {
                 workspaceRepository,
                 repositoryToMonitorRepository,
                 workspaceService,
+                workspaceSlugs,
                 userRepository,
                 gitProviderRepository,
                 workspaceMembershipRepository,
@@ -228,6 +234,7 @@ class WorkspaceProvisioningServiceTest {
                 workspaceRepository,
                 repositoryToMonitorRepository,
                 workspaceService,
+                workspaceSlugs,
                 userRepository,
                 gitProviderRepository,
                 workspaceMembershipRepository,
@@ -260,6 +267,7 @@ class WorkspaceProvisioningServiceTest {
                     workspaceRepository,
                     repositoryToMonitorRepository,
                     workspaceService,
+                    workspaceSlugs,
                     userRepository,
                     gitProviderRepository,
                     workspaceMembershipRepository,

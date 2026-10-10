@@ -121,12 +121,7 @@ public class WorkspaceService {
     }
 
     private Workspace createWorkspaceInTransaction(
-            String rawSlug,
-            String displayName,
-            String accountLogin,
-            AccountType accountType,
-            @Nullable Long ownerUserId) {
-        String slug = Objects.requireNonNull(workspaceSlugService.normalize(rawSlug));
+            String slug, String displayName, String accountLogin, AccountType accountType, @Nullable Long ownerUserId) {
         workspaceSlugService.validate(slug);
 
         if (!workspaceSlugService.isAvailable(slug)) {
@@ -142,7 +137,7 @@ public class WorkspaceService {
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
 
         try {
-            Workspace saved = workspaceRepository.save(workspace);
+            Workspace saved = workspaceRepository.saveAndFlush(workspace);
             createOwnerRole(saved, ownerUserId);
             return saved;
         } catch (DataIntegrityViolationException e) {
@@ -320,7 +315,7 @@ public class WorkspaceService {
         workspaceSlugService.validate(newSlug);
 
         Workspace workspace = workspaceRepository
-                .findById(workspaceId)
+                .findByIdForUpdate(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
 
         String currentSlug = workspace.getWorkspaceSlug();
@@ -333,10 +328,6 @@ public class WorkspaceService {
             return workspace;
         }
 
-        if (workspaceRepository.existsByWorkspaceSlug(newSlug)) {
-            throw new WorkspaceSlugConflictException(newSlug);
-        }
-
         if (!workspaceSlugService.isAvailable(newSlug)) {
             throw new WorkspaceSlugConflictException(newSlug);
         }
@@ -344,7 +335,12 @@ public class WorkspaceService {
         workspaceSlugService.recordRename(workspace, currentSlug, newSlug);
 
         workspace.setWorkspaceSlug(newSlug);
-        Workspace saved = workspaceRepository.save(workspace);
+        Workspace saved;
+        try {
+            saved = workspaceRepository.saveAndFlush(workspace);
+        } catch (DataIntegrityViolationException exception) {
+            throw new WorkspaceSlugConflictException(newSlug, exception);
+        }
 
         log.info(
                 "Renamed workspace: workspaceId={}, oldSlug={}, newSlug={}",

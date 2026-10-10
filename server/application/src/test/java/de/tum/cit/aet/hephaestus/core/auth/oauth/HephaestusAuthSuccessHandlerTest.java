@@ -50,6 +50,7 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -103,6 +104,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
                 clientSessionService,
                 new InstalledClientRegistry(AuthPropertiesFixture.withBrowserExtensionIds(registeredExtensionIds)),
                 Clock.fixed(NOW, ZoneOffset.UTC),
+                CookieCsrfTokenRepository.withHttpOnlyFalse(),
                 /* webappBaseUrl */ "");
     }
 
@@ -205,8 +207,13 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
                 .thenReturn(new HephaestusJwtIssuer.Token("minted-jwt", UUID.randomUUID(), NOW.plusSeconds(900)));
 
         MockHttpServletResponse response = new MockHttpServletResponse();
-        handler.onAuthenticationSuccess(githubRequest(), response, oauthToken("sub-1"));
+        var request = githubRequest();
+        request.setCookies(new Cookie("XSRF-TOKEN", "before-sign-in"));
+        handler.onAuthenticationSuccess(request, response, oauthToken("sub-1"));
 
+        var clearedCsrf = response.getCookie("XSRF-TOKEN");
+        assertThat(clearedCsrf).isNotNull();
+        assertThat(clearedCsrf.getMaxAge()).isZero();
         Cookie cookie = response.getCookie(COOKIE_NAME);
         assertThat(cookie).isNotNull();
         assertThat(cookie.getValue()).isEqualTo("minted-jwt");

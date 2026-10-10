@@ -11,6 +11,7 @@ const mockWorkspace = {
 	displayName: "AET",
 	accountLogin: "aet-org",
 	workspaceSlug: "aet",
+	workspaceAddress: "https://hephaestus.build/w/aet",
 	id: 1,
 	status: "ACTIVE",
 	providerType: "GITHUB",

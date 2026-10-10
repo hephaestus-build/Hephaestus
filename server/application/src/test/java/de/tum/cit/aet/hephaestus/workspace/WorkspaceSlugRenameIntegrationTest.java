@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -11,6 +12,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.RenameWorkspaceSlugRequestDTO;
+import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceSlugConflictException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -38,6 +40,59 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Autowired
     private OrganizationService organizationService;
+
+    @Test
+    @WithAdminUser
+    void shouldPreserveValidDnsLabelWhenWorkspaceIsCreated() {
+        var owner = persistUser("dns-label-owner");
+        var workspace = createWorkspace("a-b", "DNS label", "dns-label", AccountType.ORG, owner);
+        assertThat(workspaceRepository.findById(workspace.getId()).orElseThrow().getWorkspaceSlug())
+                .isEqualTo("a-b");
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldRedirectToCurrentSlugWithQueryWhenHistoryIncludesMultipleRenames() {
+        User owner = persistUser("chain-owner");
+        Workspace workspace = createWorkspace("chain-first", "Chain", "chain", AccountType.ORG, owner);
+        ensureOwnerMembership(workspace);
+        workspaceService.renameSlug(workspace.getId(), "chain-second");
+        workspaceService.renameSlug(workspace.getId(), "chain-current");
+        webTestClient
+                .get()
+                .uri("/workspaces/chain-first?range=1y")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.PERMANENT_REDIRECT)
+                .expectHeader()
+                .valueEquals("Location", "/workspaces/chain-current?range=1y")
+                .expectBody(Void.class);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldRedirectLegacyInvalidSlugWhenItWasMigrated() {
+        User owner = persistUser("migrated-slug-owner");
+        Workspace workspace = createWorkspace("migrated-current", "Migrated", "migrated", AccountType.ORG, owner);
+        ensureOwnerMembership(workspace);
+        var history = new WorkspaceSlugHistory();
+        history.setWorkspace(workspace);
+        history.setOldSlug("legacy--name");
+        history.setNewSlug(workspace.getWorkspaceSlug());
+        history.setChangedAt(Instant.now().minus(365, ChronoUnit.DAYS));
+        workspaceSlugHistoryRepository.save(history);
+        webTestClient
+                .get()
+                .uri("/workspaces/legacy--name")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.PERMANENT_REDIRECT)
+                .expectHeader()
+                .valueEquals("Location", "/workspaces/migrated-current")
+                .expectBody(Void.class);
+    }
 
     @Test
     @WithAdminUser
@@ -76,7 +131,7 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     @WithAdminUser
-    void slugHistoryIsPrunedToRetentionLimit() {
+    void shouldKeepAllHistoryWhenWorkspaceIsRenamedMoreThanFiveTimes() {
         User owner = persistUser("slug-prune-owner");
         Workspace workspace = createWorkspace("slug-0", "Slug", "slug", AccountType.ORG, owner);
         ensureOwnerMembership(workspace);
@@ -104,9 +159,9 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
         List<WorkspaceSlugHistory> history =
                 workspaceSlugHistoryRepository.findByWorkspaceOrderByChangedAtDesc(persisted);
 
-        assertThat(history).hasSize(5);
+        assertThat(history).hasSize(6);
         assertThat(history.getFirst().getNewSlug()).isEqualTo("slug-6");
-        assertThat(history.getLast().getOldSlug()).isEqualTo("slug-1");
+        assertThat(history.getLast().getOldSlug()).isEqualTo("slug-0");
     }
 
     @Test
@@ -224,7 +279,7 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     @WithAdminUser
-    void renameAllowsReusingExpiredHistorySlug() {
+    void shouldRejectReuseWhenHistoryIsOld() {
         User owner = persistUser("expired-owner");
         Workspace workspace = createWorkspace("ttl-old", "Old", "old", AccountType.ORG, owner);
         ensureOwnerMembership(workspace);
@@ -234,11 +289,10 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
         WorkspaceSlugHistory history = workspaceSlugHistoryRepository
                 .findFirstByOldSlugOrderByChangedAtDesc("ttl-old")
                 .orElseThrow();
-        history.setRedirectExpiresAt(Instant.now().minus(2, ChronoUnit.DAYS));
+        history.setChangedAt(Instant.now().minus(365, ChronoUnit.DAYS));
         workspaceSlugHistoryRepository.save(history);
 
-        Workspace renamed = workspaceService.renameSlug(workspace.getId(), "ttl-old");
-
-        assertThat(renamed.getWorkspaceSlug()).isEqualTo("ttl-old");
+        assertThatThrownBy(() -> workspaceService.renameSlug(workspace.getId(), "ttl-old"))
+                .isInstanceOf(WorkspaceSlugConflictException.class);
     }
 }

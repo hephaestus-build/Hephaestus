@@ -11,6 +11,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.web.csrf.CsrfLogoutHandler;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,9 +25,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuthLifecycleController {
 
     private final AuthSessionService sessionService;
+    private final CsrfLogoutHandler csrfLogout;
 
-    public AuthLifecycleController(AuthSessionService sessionService) {
+    public AuthLifecycleController(AuthSessionService sessionService, CsrfTokenRepository csrfTokens) {
         this.sessionService = sessionService;
+        this.csrfLogout = new CsrfLogoutHandler(csrfTokens);
     }
 
     @PostMapping("/logout")
@@ -34,9 +38,12 @@ public class AuthLifecycleController {
             summary = "Log out — revoke the current token + clear the cookie",
             description = "An installed-client access token ends its whole session.",
             operationId = "logout")
-    public ResponseEntity<Void> logout(HttpServletResponse response) {
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
         sessionService.logout(
                 CurrentAccount.requireId(), CurrentAccount.requireJti(), CurrentAccount.sessionIdOrNull(), response);
+        if (CurrentAccount.sessionIdOrNull() == null) {
+            csrfLogout.logout(request, response, null);
+        }
         return ResponseEntity.noContent().build();
     }
 
