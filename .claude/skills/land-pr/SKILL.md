@@ -40,6 +40,10 @@ Two path groups need attention:
   They do not select the App Server leg.
 - `package.json` or `pnpm-lock.yaml` select every source leg.
 
+Reconcile changed dependency inputs before local gates.
+See [Dependency installation](../../../docs/contributor/local-verification.mdx#dependency-installation)
+for the native install procedure.
+
 ## 3. Format, then check
 
 ```bash
