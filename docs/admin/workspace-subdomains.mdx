@@ -138,8 +138,15 @@ Rename redirects do not expire or discard old entries.
 A used slug cannot name another workspace, even after workspace deletion.
 Database reservations enforce this across concurrent writes.
 
+Schedule a maintenance window for this upgrade.
+Stop application traffic and all application runtime roles before starting the new server.
+Keep PostgreSQL running.
+The slug migration holds an exclusive lock until it commits, to reserve and rename labels atomically.
+Do not run old and new application versions together.
+
 Make and verify a database backup before the upgrade.
-Check workspace addresses after the upgrade.
+Start one new server, wait for migrations to finish, and check workspace addresses.
+Then start the other runtime roles and restore application traffic.
 The database cannot recover history that an earlier version deleted.
 Reservations cover all current slugs and all retained history at upgrade time.
 Restore the verified pre-upgrade backup to reverse the migration.

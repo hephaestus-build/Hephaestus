@@ -1,5 +1,6 @@
 #### 🔴 Register exact apex callbacks and check workspace names
 
+Schedule a maintenance window and follow the [workspace subdomains upgrade procedure](https://docs.hephaestus.build/admin/workspace-subdomains#workspace-names-and-upgrade).
 Before the upgrade, make and verify a database backup.
 Register each login provider's exact apex callback from instance administration.
 The callback uses the configured auth issuer's origin, the public API prefix, and `/login/oauth2/code/<registrationId>`.
