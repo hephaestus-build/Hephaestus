@@ -1115,6 +1115,41 @@ void describe("CI contract", () => {
 		}
 		assert.match(job(build, "server-database"), /:application:databaseTest -PpackagedServer=true/u);
 		assert.match(job(build, "server-api"), /HEPHAESTUS_APPLICATION_JAR/u);
+		// The drills migrate from the JAR this job restored, never from the checkout's resources.
+		const drill = parseDocument(build);
+		const drillSteps = drill.getIn(["jobs", "postgres-drill", "steps"]);
+		assert.ok(isSeq(drillSteps));
+		const restored = drillSteps.items.find(
+			(candidate) =>
+				isMap(candidate) && candidate.get("uses") === "./.github/actions/restore-server-build",
+		);
+		assert.ok(isMap(restored));
+		assert.equal(restored.get("id"), "server");
+		assert.equal(
+			namedStep(
+				drill,
+				["jobs", "postgres-drill"],
+				`Run the PostgreSQL \${{ matrix.drill }} drill`,
+			).getIn(["env", "HEPHAESTUS_APPLICATION_JAR"]),
+			`\${{ steps.server.outputs.executable-jar }}`,
+		);
+		const changedPaths = step(
+			parseDocument(orchestrator),
+			["jobs", "detect-changes"],
+			"dorny/paths-filter",
+		);
+		const filters = asRecord(
+			parseDocument(asString(changedPaths.get("filters"), "filters")).toJS(),
+			"filters",
+		);
+		const drillInputs = asArray(filters["build-config"], "build-config paths");
+		for (const file of [
+			"scripts/postgres-backup-restore-test.ts",
+			"scripts/postgres-pitr-test.ts",
+			"scripts/lib/database-migration.ts",
+		]) {
+			assert.ok(drillInputs.includes(file), `${file} must select the recovery drills`);
+		}
 		// docs/contributor/ci-cd.mdx § Parallelism and concurrency owns action-context setup ordering.
 		for (const [file, names] of [
 			[

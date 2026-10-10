@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
+import { databaseMigration } from "./lib/database-migration.ts";
 import { hephBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
@@ -11,6 +12,7 @@ const targetImage = values["target-image"];
 if (targetImage !== undefined && targetImage.trim() === "") {
 	throw new Error("--target-image must name an existing local PostgreSQL image");
 }
+const migrate = databaseMigration();
 
 const id = `postgres-restore-${randomUUID().slice(0, 8)}`;
 const source = `${id}-source`;
@@ -109,13 +111,7 @@ try {
 		throw new Error("source is not PostgreSQL 18");
 	}
 
-	run("node", [
-		"scripts/run-gradlew.ts",
-		":application:liquibaseUpdate",
-		...(process.env.CI === "true" ? ["-PpackagedServer=true"] : []),
-		`-PpostgresPort=${sourcePort}`,
-		"--quiet",
-	]);
+	migrate(sourcePort);
 	if (sql(source, "SELECT extversion FROM pg_extension WHERE extname='pg_partman'") !== "5.5.0") {
 		throw new Error("source pg_partman is not 5.5.0");
 	}
