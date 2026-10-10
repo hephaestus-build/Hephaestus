@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.88.0
+
+### Minor Changes
+
+- Workspace activity can show all repository contributors in one response. Reviews count each pull request once and exclude your own work. Provider bots appear separately. Workspace admins can classify machine user accounts as automation and reset that choice.
+
+  You can open a contributor's weekly counts, type and repository breakdowns, and paged work list.
+
+  **Operators:** Update custom activity API clients. The people aggregate replaces the activity summary and member-list endpoints. The bundled webapp uses the new response.
+
+- Workspace subdomains can use central sign-in and the apex API. The optional `HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED` switch is off by default. Set `HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN` before you turn it on. Edge and SPA support must be deployed first.
+
+  Workspace names keep their 3–51 character bounds and now follow DNS label rules. Used names remain reserved after a rename or deletion. Old lowercase workspace paths keep their redirects. Tenant-host apps must fetch a CSRF token before other credentialed requests at startup and after sign-in or sign-out.
+
+  If a login provider's registered callback differs from the configured issuer origin and API prefix, update it to the exact callback shown in instance administration. Existing matching apex callbacks need no change. Before enabling workspace subdomains, turn off GitHub callback wildcard matching. Invalid or reserved workspace names change automatically to a safe address during upgrade. See the [workspace subdomains guide](https://docs.hephaestus.build/admin/workspace-subdomains).
+
+### Patch Changes
+
+- Workspace activity restores missing pull requests, merge requests, reviews, issues, and comments from stored history. Activity recording slows synchronization under load instead of dropping events. GitHub and GitLab backfill check suspicious completed scans against the provider and restart incomplete history once per unresolved gap. Dismissed reviews keep review credit. A repository failure reports a warning without stopping repair of other repositories. Workspace administrators can run the repair through the existing backfill action. Erased people stay erased, and replies to review comments do not count as reviews.
+- The "Change dependencies deliberately" standard consistently applies to external dependency declarations and resolutions.
+  Its scope includes manifest additions, version changes, and lockfile refreshes.
+  Importing or using a library alone does not change that scope.
+- Review diagnostics now retain native model-call failure types and HTTP status when available, including in metadata-only archives. Earlier failures remain unexplained when those facts were not recorded.
+
 ## 0.87.0
 
 ### Minor Changes
