@@ -1162,19 +1162,35 @@ if (scenario !== undefined && scenario !== "") {
 											usage: callUsage(17),
 											content: [],
 											errorMessage: "503 upstream body sk-orchestration-secret",
-											diagnostics: [
-												{
-													type: "openai_completions_failure",
-													timestamp: 1_760_000_000_000,
-													details: { kind: "HTTP_ERROR", phase: "request", status: 503 },
-												},
-												// The call never got its response, so it states no response time.
-												{
-													type: "openai_completions_call",
-													timestamp: 1_760_000_000_000,
-													details: { elapsedMs: 1200 },
-												},
-											],
+											// The public error keeps chat-completions names; the recovered call fails as a
+											// Responses call whose failed terminal event arrived after its response.
+											diagnostics:
+												scenario === "compose-public-error"
+													? [
+															{
+																type: "openai_completions_failure",
+																timestamp: 1_760_000_000_000,
+																details: { kind: "HTTP_ERROR", phase: "request", status: 503 },
+															},
+															// The call never got its response, so it states no response time.
+															{
+																type: "openai_completions_call",
+																timestamp: 1_760_000_000_000,
+																details: { elapsedMs: 1200 },
+															},
+														]
+													: [
+															{
+																type: "openai_responses_failure",
+																timestamp: 1_760_000_000_000,
+																details: { kind: "RESPONSE_FAILED", phase: "response_body" },
+															},
+															{
+																type: "openai_responses_call",
+																timestamp: 1_760_000_000_000,
+																details: { elapsedMs: 1200, responseMs: 200 },
+															},
+														],
 										},
 									});
 									if (scenario === "compose-public-error") {
@@ -1190,7 +1206,7 @@ if (scenario !== undefined && scenario !== "") {
 											content: [],
 											diagnostics: [
 												{
-													type: "openai_completions_call",
+													type: "openai_responses_call",
 													timestamp: 1_760_000_001_000,
 													details: { elapsedMs: 900, responseMs: 300 },
 												},
@@ -3321,8 +3337,20 @@ if (scenario !== undefined && scenario !== "") {
 									],
 								],
 								// A later successful call clears the earlier failure; its count and time stay.
+								// Responses diagnostics are read like chat-completions ones.
 								"compose-recovered-error": [
-									["review composition", null, 0, timing([[1200], [900, 300]], 1200)],
+									[
+										"review composition",
+										null,
+										0,
+										timing(
+											[
+												[1200, 200],
+												[900, 300],
+											],
+											1200,
+										),
+									],
 								],
 								// A malformed diagnostic is UNKNOWN and unattributed; the native unsuccessful retry-end
 								// event marks it. A call without a span is not timed, not timed as zero.

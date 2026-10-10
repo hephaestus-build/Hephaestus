@@ -268,6 +268,22 @@ void test("keeps only the adapter's closed failure facts, and clears the final f
 		path.join(sessions, "c.jsonl"),
 		`${[header, failedCall("e1", "error", undefined)].join("\n")}\n`,
 	);
+	// The Responses adapter's own names: a failed terminal event after the response, then an unowned kind.
+	const responses = [
+		{
+			type: "openai_responses_failure",
+			timestamp: 1_760_000_000_000,
+			details: { kind: "RESPONSE_FAILED", phase: "response_body" },
+		},
+		{ ...span({ elapsedMs: 1200, responseMs: 200 }), type: "openai_responses_call" },
+	];
+	const unowned = [
+		{ type: "openai_responses_failure", timestamp: 2, details: { kind: CREDENTIAL } },
+	];
+	await writeFile(
+		path.join(sessions, "d.jsonl"),
+		`${[header, failedCall("e1", "error", responses), failedCall("e2", "error", unowned)].join("\n")}\n`,
+	);
 	await collectTraces(sessions, out, CREDENTIAL);
 	const text = await readFile(path.join(out, "traces", "manifest.json"), "utf8");
 	assert.ok(!text.includes(CREDENTIAL));
@@ -300,6 +316,13 @@ void test("keeps only the adapter's closed failure facts, and clears the final f
 				{ kind: "UNKNOWN", source: "MISSING", ...none },
 				1,
 				timing(0, 0, 0, 0),
+			],
+			[
+				{ RESPONSE_FAILED: 1, UNKNOWN: 1 },
+				1_760_000_000_000,
+				{ kind: "UNKNOWN", source: "INVALID", ...none },
+				1,
+				timing(1, 1, 1200, 200),
 			],
 		],
 	);

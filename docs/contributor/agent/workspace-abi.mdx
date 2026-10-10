@@ -438,21 +438,30 @@ A receipt that is not `READY` gets nothing.
 
 ### Model call failures
 
-The patched OpenAI chat-completions adapter attaches one diagnostic to a failed or aborted assistant message.
-Its `type` is `openai_completions_failure`, and its `timestamp` records when the adapter caught the failure.
+Two patched adapters attach these diagnostics: OpenAI chat completions (`openai-completions`) and OpenAI Responses (`openai-responses`).
+Each attaches one failure diagnostic to a failed or aborted assistant message.
+Its `type` is `openai_completions_failure` or `openai_responses_failure`.
+Its `timestamp` records when the adapter caught the failure.
 Its `details` hold only these values:
 
-- `kind`: `HTTP_ERROR`, `CONNECTION_TIMEOUT`, `CONNECTION_ERROR`, `STREAM_INCOMPLETE`, `FINISH_REASON_ERROR`,
-  `ABORTED` or `UNKNOWN`.
-  The kind comes from the SDK's own error classes and from the adapter's own end-of-stream checks.
+- `kind`: one of these values.
+  - `HTTP_ERROR`, `CONNECTION_TIMEOUT`, `CONNECTION_ERROR` and `ABORTED` come from the SDK's own error classes and the abort signal.
+  - `STREAM_INCOMPLETE`: the stream ended without a finish reason or a terminal response event.
+  - `FINISH_REASON_ERROR`: a chat-completions finish reason that maps to an error.
+  - `STREAM_ERROR_EVENT`, `RESPONSE_FAILED`, `RESPONSE_STATUS_ERROR` and `TOOL_CALL_INCOMPLETE`: these name the Responses stream's own terminal branches.
+    The branches are an `error` event, a `response.failed` event, and a terminal response whose status maps to an error.
+    The last value is a completed response that contains a tool call whose arguments never finished.
+  - `UNKNOWN`: any other exception.
+    The adapter never reads error text to choose a kind.
 - `phase`: `request` before the SDK response is obtained, or `response_body` afterward.
   This is the adapter stage, not proof that response body bytes arrived.
 - `status`: the native HTTP status, 400 to 599, for `HTTP_ERROR` only.
 
 The diagnostic never holds the error message, the response body, headers, the request or a URL.
-Diagnostics from other provider protocols are not interpreted by this contract. Their failures read as `UNKNOWN`.
+Azure OpenAI Responses, OpenAI Codex Responses and the other provider protocols attach none of these failure or call diagnostics.
+Their failures read as `UNKNOWN` with source `MISSING`.
 
-The same adapter attaches an `openai_completions_call` diagnostic to every completed, failed or aborted message whose SDK request began.
+The same adapters attach an `openai_completions_call` or `openai_responses_call` diagnostic to every completed, failed or aborted message whose SDK request began.
 Its `details` hold whole milliseconds of the monotonic clock, measured from just before the SDK request:
 
 - `elapsedMs`: until the adapter ends the message.
@@ -462,7 +471,7 @@ Its `details` hold whole milliseconds of the monotonic clock, measured from just
 The span includes request retries and their waits within the adapter for one call.
 It excludes the session's automatic retries, because each of those is a separate message.
 It is adapter time, not provider generation or queue time.
-Other provider protocols attach no span.
+Other provider protocols attach no span, and a run interrupted before the adapter ends a message leaves no span either.
 
 Each runner turn in `runner-debug.json`, and each session summary in the transcript manifest, record:
 

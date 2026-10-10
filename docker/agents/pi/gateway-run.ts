@@ -167,9 +167,10 @@ export interface SessionSummary {
 }
 
 /**
- * The patched OpenAI-completions adapter's failure diagnostic (patches/@earendil-works__pi-ai@1.0.0.patch). The
- * runner reads the same contract in its own tree (server/application/src/main/resources/agent/pi-model-failure.ts):
- * this image and that staged runner are delivered separately, so neither can import the other.
+ * The patched OpenAI chat-completions and Responses adapters' failure and call diagnostics
+ * (patches/@earendil-works__pi-ai@1.0.0.patch). The runner reads the same contract in its own tree
+ * (server/application/src/main/resources/agent/pi-model-failure.ts): this image and that staged runner are delivered
+ * separately, so neither can import the other.
  */
 interface ModelFailure {
 	kind: string;
@@ -185,15 +186,23 @@ const MODEL_FAILURE_KINDS = new Set([
 	"CONNECTION_ERROR",
 	"STREAM_INCOMPLETE",
 	"FINISH_REASON_ERROR",
+	"STREAM_ERROR_EVENT",
+	"RESPONSE_FAILED",
+	"RESPONSE_STATUS_ERROR",
+	"TOOL_CALL_INCOMPLETE",
 	"ABORTED",
 	"UNKNOWN",
 ]);
+const FAILURE_DIAGNOSTICS = ["openai_completions_failure", "openai_responses_failure"];
+const CALL_DIAGNOSTICS = ["openai_completions_call", "openai_responses_call"];
 const MAX_EPOCH_MS = 8_640_000_000_000_000;
 
 /** A failed message's own diagnostic as closed values; anything malformed is UNKNOWN and claims nothing more. */
-function lastDiagnostic(diagnostics: unknown, type: string): unknown {
+function lastDiagnostic(diagnostics: unknown, types: string[]): unknown {
 	const list: unknown[] = Array.isArray(diagnostics) ? diagnostics : [];
-	return list.findLast((entry) => isRecord(entry) && entry.type === type);
+	return list.findLast(
+		(entry) => isRecord(entry) && typeof entry.type === "string" && types.includes(entry.type),
+	);
 }
 
 function unknownFailure(source: "MISSING" | "INVALID"): ModelFailure {
@@ -207,7 +216,7 @@ function unknownFailure(source: "MISSING" | "INVALID"): ModelFailure {
 }
 
 function modelFailure(diagnostics: unknown): ModelFailure {
-	const diagnostic = lastDiagnostic(diagnostics, "openai_completions_failure");
+	const diagnostic = lastDiagnostic(diagnostics, FAILURE_DIAGNOSTICS);
 
 	if (diagnostic === undefined) {
 		return unknownFailure("MISSING");
@@ -250,7 +259,7 @@ function addModelCall(
 	diagnostics: unknown,
 	failed: boolean,
 ): void {
-	const diagnostic = lastDiagnostic(diagnostics, "openai_completions_call");
+	const diagnostic = lastDiagnostic(diagnostics, CALL_DIAGNOSTICS);
 	const details = isRecord(diagnostic) && isRecord(diagnostic.details) ? diagnostic.details : null;
 	const elapsed = duration(details?.elapsedMs);
 	if (elapsed === null) {

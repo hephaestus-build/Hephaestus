@@ -1,8 +1,8 @@
 /**
- * The diagnostics the patched OpenAI-completions adapter attaches to an assistant message
- * (docker/agents/pi/patches/@earendil-works__pi-ai@1.0.0.patch): `openai_completions_failure` on a failed call, and
- * `openai_completions_call` on every call whose SDK request began. docker/agents/pi/gateway-run.ts reads the same
- * contract from session files.
+ * The diagnostics the patched OpenAI chat-completions and Responses adapters attach to an assistant message
+ * (docker/agents/pi/patches/@earendil-works__pi-ai@1.0.0.patch): `openai_completions_failure` or
+ * `openai_responses_failure` on a failed call, and `openai_completions_call` or `openai_responses_call` on every call
+ * whose SDK request began. docker/agents/pi/gateway-run.ts reads the same contract from session files.
  */
 export const MODEL_FAILURE_KINDS = [
 	"HTTP_ERROR",
@@ -10,9 +10,16 @@ export const MODEL_FAILURE_KINDS = [
 	"CONNECTION_ERROR",
 	"STREAM_INCOMPLETE",
 	"FINISH_REASON_ERROR",
+	"STREAM_ERROR_EVENT",
+	"RESPONSE_FAILED",
+	"RESPONSE_STATUS_ERROR",
+	"TOOL_CALL_INCOMPLETE",
 	"ABORTED",
 	"UNKNOWN",
 ] as const;
+
+const FAILURE_DIAGNOSTICS = ["openai_completions_failure", "openai_responses_failure"];
+const CALL_DIAGNOSTICS = ["openai_completions_call", "openai_responses_call"];
 
 export type ModelFailureKind = (typeof MODEL_FAILURE_KINDS)[number];
 
@@ -44,10 +51,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function lastDiagnostic(message: unknown, type: string): unknown {
+function lastDiagnostic(message: unknown, types: string[]): unknown {
 	const diagnostics: unknown[] =
 		isRecord(message) && Array.isArray(message.diagnostics) ? message.diagnostics : [];
-	return diagnostics.findLast((entry) => isRecord(entry) && entry.type === type);
+	return diagnostics.findLast(
+		(entry) => isRecord(entry) && typeof entry.type === "string" && types.includes(entry.type),
+	);
 }
 
 function canAddMilliseconds(total: number, value: number): boolean {
@@ -73,7 +82,7 @@ function unknownFailure(source: "MISSING" | "INVALID"): ModelFailure {
  * malformed diagnostic is UNKNOWN and claims nothing more.
  */
 export function modelFailure(message: unknown): ModelFailure {
-	const diagnostic = lastDiagnostic(message, "openai_completions_failure");
+	const diagnostic = lastDiagnostic(message, FAILURE_DIAGNOSTICS);
 
 	if (diagnostic === undefined) {
 		return unknownFailure("MISSING");
@@ -107,7 +116,7 @@ export function modelFailure(message: unknown): ModelFailure {
 
 /** A message's call span, or null when it has no readable one: a response time beyond the span is dropped. */
 export function modelCall(message: unknown): ModelCall | null {
-	const diagnostic = lastDiagnostic(message, "openai_completions_call");
+	const diagnostic = lastDiagnostic(message, CALL_DIAGNOSTICS);
 	const details = isRecord(diagnostic) && isRecord(diagnostic.details) ? diagnostic.details : null;
 	const elapsedMs = duration(details?.elapsedMs);
 	if (elapsedMs === null) {

@@ -811,6 +811,10 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 "CONNECTION_ERROR",
                 "STREAM_INCOMPLETE",
                 "FINISH_REASON_ERROR",
+                "STREAM_ERROR_EVENT",
+                "RESPONSE_FAILED",
+                "RESPONSE_STATUS_ERROR",
+                "TOOL_CALL_INCOMPLETE",
                 "ABORTED",
                 "UNKNOWN");
 
