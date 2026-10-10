@@ -45,7 +45,7 @@ const meta = {
 	args: {
 		providerType: "GITHUB",
 		account: { status: "ready", login: ada.login },
-		period: { kind: "preset", preset: "30d" },
+		period: { kind: "preset", preset: "90d" },
 		onPeriodChange: fn(),
 		openWork: { status: "ready", openWork: OPEN_WORK, login: ada.login },
 		overview: readyOverview(OVERVIEW),
@@ -66,7 +66,7 @@ export const Default: Story = {
 		await expect(headings).toStrictEqual([
 			"Needs you",
 			"Assigned issues",
-			"Last 30 days",
+			"Last 90 days",
 			"Repositories",
 			"Timeline",
 		]);

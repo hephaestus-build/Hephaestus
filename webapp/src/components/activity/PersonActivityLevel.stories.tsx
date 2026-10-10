@@ -23,7 +23,7 @@ const meta = {
 		login: ada.login,
 		user: ada,
 		providerType: "GITHUB",
-		period: { kind: "preset", preset: "30d" },
+		period: { kind: "preset", preset: "90d" },
 		overview: readyOverview(OVERVIEW),
 		workLog: {
 			status: "ready",
@@ -78,7 +78,7 @@ export const Default: Story = {
 		const sections = panel
 			.getAllByRole("heading", { level: 3 })
 			.map((heading) => heading.textContent);
-		await expect(sections).toStrictEqual(["Last 30 days", "Repositories", "Timeline"]);
+		await expect(sections).toStrictEqual(["Last 90 days", "Repositories", "Timeline"]);
 		// A tile stacks its category over this person, which makes it this person's.
 		await expect(panel.getByRole("link", { name: /^Reviews/u })).toHaveAttribute(
 			"href",

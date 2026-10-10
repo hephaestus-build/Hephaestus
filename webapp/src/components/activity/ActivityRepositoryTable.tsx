@@ -56,11 +56,7 @@ export function ActivityRepositoryTable({
 					<TableRow key={repository.id} variant="static">
 						<TableCell className="pl-3 font-medium">{repository.key}</TableCell>
 						<TableCell numeric className="text-right font-semibold">
-							{counts.contributions === 0 ? (
-								<NoneMark phrase="0 contributions" />
-							) : (
-								counts.contributions
-							)}
+							{counts.contributions === 0 ? <NoneMark /> : counts.contributions}
 						</TableCell>
 						{CATEGORIES.map((category) => (
 							<TableCell key={category} numeric className="text-right last:pr-3">

@@ -87,14 +87,14 @@ export function CountChip({ icon: Icon, tone, phrase, children }: CountChipProps
 }
 
 /**
- * A count of nothing in a table: a muted dash, which a column of figures reads past, with the
- * phrase it stands for — "0 issues opened" — for a screen reader.
+ * A table cell with nothing in it: one muted dash, which a column of figures reads past, read as
+ * "None" under its column's header.
  */
-export function NoneMark({ phrase }: { phrase: string }) {
+export function NoneMark() {
 	return (
 		<span className="text-muted-foreground">
 			<span aria-hidden>—</span>
-			<span className="sr-only">{phrase}</span>
+			<span className="sr-only">None</span>
 		</span>
 	);
 }

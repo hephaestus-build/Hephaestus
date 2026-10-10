@@ -12,7 +12,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		level: 2,
-		period: { kind: "preset", preset: "30d" },
+		period: { kind: "preset", preset: "90d" },
 		overview: readyOverview(OVERVIEW),
 		workLog: {
 			status: "ready",
@@ -38,7 +38,7 @@ export const Default: Story = {
 		const headings = canvas
 			.getAllByRole("heading", { level: 2 })
 			.map((heading) => heading.textContent);
-		await expect(headings).toStrictEqual(["Last 30 days", "Repositories", "Timeline"]);
+		await expect(headings).toStrictEqual(["Last 90 days", "Repositories", "Timeline"]);
 	},
 };
 

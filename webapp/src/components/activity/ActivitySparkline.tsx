@@ -1,5 +1,6 @@
 import { cn } from "cn";
 import type { ActivitySparklineWeek } from "@/api/types.gen";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { weekStarts } from "./activity-tally";
 import { ACTIVITY_TONES } from "./activity-tones";
@@ -35,27 +36,35 @@ export function ActivitySparkline({ weeks, span }: ActivitySparklineProps) {
 		points.length > 1
 			? points.join(" ")
 			: `${INSET},${y(values[0] ?? 0)} ${WIDTH - INSET},${y(values[0] ?? 0)}`;
+	const label =
+		peak === 0
+			? "No contributions"
+			: `Busiest week: ${peak} ${peak === 1 ? "contribution" : "contributions"}`;
 	return (
-		<svg
-			role="img"
-			aria-label={
-				peak === 0
-					? "No contributions"
-					: `Busiest week: ${peak} ${peak === 1 ? "contribution" : "contributions"}`
-			}
-			viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-			width={WIDTH}
-			height={HEIGHT}
-			className={cn("overflow-visible", ACTIVITY_TONES.accent.text)}
-		>
-			<polyline
-				points={line}
-				fill="none"
-				stroke="currentColor"
-				strokeWidth={1.5}
-				strokeLinejoin="round"
-				strokeLinecap="round"
-			/>
-		</svg>
+		<Tooltip>
+			<TooltipTrigger
+				render={<span role="img" aria-label={label} />}
+				// Above the row's stretched link, so a pointer reaches the tooltip.
+				className="relative z-10 inline-flex align-middle"
+			>
+				<svg
+					aria-hidden
+					viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+					width={WIDTH}
+					height={HEIGHT}
+					className={cn("overflow-visible", ACTIVITY_TONES.accent.text)}
+				>
+					<polyline
+						points={line}
+						fill="none"
+						stroke="currentColor"
+						strokeWidth={1.5}
+						strokeLinejoin="round"
+						strokeLinecap="round"
+					/>
+				</svg>
+			</TooltipTrigger>
+			<TooltipContent>{label}</TooltipContent>
+		</Tooltip>
 	);
 }

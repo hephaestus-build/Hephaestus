@@ -29,7 +29,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		providerType: "GITHUB",
-		period: { kind: "preset", preset: "30d" },
+		period: { kind: "preset", preset: "90d" },
 		onPeriodChange: fn(),
 		team: undefined,
 		onTeamChange: fn(),

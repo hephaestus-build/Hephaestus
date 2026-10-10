@@ -17,7 +17,7 @@ export const ACTIVITY_PRESETS = [...ACTIVITY_RANGES, "all"] as const;
 
 export type ActivityPreset = (typeof ACTIVITY_PRESETS)[number];
 
-export const DEFAULT_ACTIVITY_PRESET: ActivityPreset = "90d";
+export const DEFAULT_ACTIVITY_PRESET = "90d" satisfies ActivityPreset;
 
 /**
  * The first day a custom range may start on: no provider history is older, and a day centuries

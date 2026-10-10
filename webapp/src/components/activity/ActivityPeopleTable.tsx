@@ -166,7 +166,7 @@ export function ActivityPeopleTable({
 				id: "contributions" satisfies PeopleSort,
 				header: "Contributions",
 				meta: NUMBER_COLUMN,
-				cell: ({ getValue }) => <Figure count={getValue()} unit="contribution" strong />,
+				cell: ({ getValue }) => <Figure count={getValue()} strong />,
 			}),
 			countColumn("pull-requests"),
 			countColumn("reviews"),
@@ -180,7 +180,7 @@ export function ActivityPeopleTable({
 					</>
 				),
 				meta: NUMBER_COLUMN,
-				cell: ({ getValue }) => <Figure count={getValue()} unit="active week" />,
+				cell: ({ getValue }) => <Figure count={getValue()} />,
 			}),
 			columnHelper.display({
 				id: "trend",
@@ -393,17 +393,9 @@ function NewBadge() {
 }
 
 /** One figure in a number column, or a dash for none: "17", "—". */
-function Figure({
-	count,
-	unit,
-	strong = false,
-}: {
-	count: number;
-	unit: string;
-	strong?: boolean;
-}) {
+function Figure({ count, strong = false }: { count: number; strong?: boolean }) {
 	if (count === 0) {
-		return <NoneMark phrase={`0 ${unit}s`} />;
+		return <NoneMark />;
 	}
 	return <span className={cn(strong && "font-semibold")}>{count.toLocaleString("en-GB")}</span>;
 }

@@ -11,7 +11,7 @@ const meta = {
 	component: ActivitySparkline,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
-	args: { weeks: PEOPLE[0]?.weeks ?? [], span: spanOf("30d") },
+	args: { weeks: PEOPLE[0]?.weeks ?? [], span: spanOf("90d") },
 } satisfies Meta<typeof ActivitySparkline>;
 
 export default meta;

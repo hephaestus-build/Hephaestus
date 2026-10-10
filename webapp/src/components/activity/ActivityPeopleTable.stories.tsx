@@ -9,6 +9,7 @@ import {
 	REPOSITORIES,
 } from "@/stories/activity-story-data";
 import { withProvider, withStandardPage } from "@/stories/decorators";
+import { settledPopup } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
@@ -69,12 +70,13 @@ export const Default: Story = {
 			["5", "Élodie Brière"],
 		]);
 		await expect(within(table).getByRole("columnheader", { name: "Position" })).toBeVisible();
-		// Figures read right-aligned, a part with nothing in it is a dash that still says what it is,
-		// and a first contribution in the range is marked new.
+		// Figures read right-aligned, a cell with nothing in it is one dash read as "None", and a
+		// first contribution in the range is marked new.
 		const contributions = within(table).getAllByRole("cell")[2];
 		await expect(contributions && getComputedStyle(contributions).textAlign).toBe("right");
 		const chen = within(table).getByRole("row", { name: /Chen Wei/u });
-		within(chen).getByText("0 pull requests opened");
+		const chenPullRequests = within(chen).getAllByRole("cell")[3];
+		await expect(chenPullRequests?.textContent).toBe("—None");
 		await expect(within(chen).queryByText("New")).not.toBeInTheDocument();
 		const elodie = within(table).getByRole("row", { name: /Élodie Brière/u });
 		await expect(
@@ -83,6 +85,24 @@ export const Default: Story = {
 		await expect(
 			within(table).getByRole("columnheader", { name: /^Contributions/u }),
 		).toHaveAttribute("aria-sort", "descending");
+	},
+};
+
+/** In a row, every icon is reachable by the pointer and says what it counts. */
+export const ChipTooltips: Story = {
+	play: async ({ canvas, userEvent }) => {
+		const ada = within(canvas.getByRole("table", { name: "People" })).getByRole("row", {
+			name: /Ada Lovelace/u,
+		});
+		for (const part of within(ada).getAllByRole("img")) {
+			// What a pointer at the part's centre hits: the part, not the row's stretched link over it.
+			const box = part.getBoundingClientRect();
+			const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+			await expect(part.contains(hit)).toBe(true);
+		}
+		const helped = within(ada).getByRole("img", { name: /^Reviewed the work of \d+ people$/u });
+		await userEvent.hover(helped);
+		await expect(await settledPopup()).toHaveTextContent(/^Reviewed the work of \d+ people$/u);
 	},
 };
 

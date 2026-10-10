@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
 import {
-	OVERVIEW,
+	MONTH_OVERVIEW,
 	PREVIOUS_TALLY,
 	QUIET_OVERVIEW,
 	readyOverview,
@@ -26,7 +26,7 @@ const meta = {
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
 	args: {
-		state: readyOverview(OVERVIEW, "30d", PREVIOUS_TALLY),
+		state: readyOverview(MONTH_OVERVIEW, "30d", PREVIOUS_TALLY),
 		category: "reviews",
 		providerType: "GITHUB",
 	},
@@ -62,7 +62,7 @@ export const Default: Story = {
 
 /** The table twin: every week's count per kind. */
 export const AsTable: Story = {
-	args: { state: readyOverview(SPARSE_OVERVIEW), category: "pull-requests" },
+	args: { state: readyOverview(SPARSE_OVERVIEW, "30d"), category: "pull-requests" },
 	play: async ({ canvas, canvasElement, userEvent }) => {
 		await expect(figure(canvasElement, "Busiest week")).toMatch(/^2/u);
 		// A kind that did not happen keeps its row, and says so in it.
@@ -114,7 +114,7 @@ export const TwelveMonths: Story = {
 };
 
 export const Empty: Story = {
-	args: { state: readyOverview(QUIET_OVERVIEW) },
+	args: { state: readyOverview(QUIET_OVERVIEW, "30d") },
 	play: async ({ canvas, canvasElement }) => {
 		await expect(canvas.getByRole("figure")).toHaveAccessibleName("0 pull requests reviewed");
 		await expect(figure(canvasElement, "Busiest week")).toBeUndefined();

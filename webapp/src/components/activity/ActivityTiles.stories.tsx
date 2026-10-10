@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
 import {
-	OVERVIEW,
+	MONTH_OVERVIEW,
 	PREVIOUS_TALLY,
 	QUIET_OVERVIEW,
 	readyOverview,
@@ -28,7 +28,7 @@ const meta = {
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
 	args: {
-		state: readyOverview(OVERVIEW, "30d", PREVIOUS_TALLY),
+		state: readyOverview(MONTH_OVERVIEW, "30d", PREVIOUS_TALLY),
 		providerType: "GITHUB",
 	},
 } satisfies Meta<typeof ActivityTiles>;
@@ -80,7 +80,7 @@ export const Default: Story = {
 
 /** A quiet month: three merges in two weeks, each week a track, the busier week labelled. */
 export const Sparse: Story = {
-	args: { state: readyOverview(SPARSE_OVERVIEW) },
+	args: { state: readyOverview(SPARSE_OVERVIEW, "30d") },
 	play: async ({ canvas }) => {
 		const pullRequests = canvas.getByRole("link", { name: /^Pull requests\s*3\s*merged/u });
 		await expect(peakLabels(pullRequests)).toStrictEqual(["2"]);
@@ -94,7 +94,7 @@ export const Sparse: Story = {
 
 /** A first week: nothing opens, and no tile draws bars for nothing. */
 export const Empty: Story = {
-	args: { state: readyOverview(QUIET_OVERVIEW) },
+	args: { state: readyOverview(QUIET_OVERVIEW, "30d") },
 	play: async ({ canvas, canvasElement }) => {
 		await expect(canvas.queryAllByRole("link")).toHaveLength(0);
 		await expect(canvasElement.querySelectorAll("[data-slot=chart]")).toHaveLength(0);
@@ -139,7 +139,7 @@ export const Reflow: Story = {
 
 /** While another range loads, the previous range's tiles stay, drained of colour and marked busy. */
 export const Stale: Story = {
-	args: { state: { status: "ready", overview: OVERVIEW, stale: true } },
+	args: { state: { status: "ready", overview: MONTH_OVERVIEW, stale: true } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("list")).toHaveAttribute("aria-busy", "true");
 		await expect(canvas.getByRole("link", { name: /^Reviews/u })).toBeVisible();

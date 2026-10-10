@@ -29,24 +29,28 @@ const PEOPLE_ICON = providerIcon(PeopleIcon, GitLabUsersIcon);
  * One category's figures in a table row, in the provider's icons and colours: what the column sorts
  * by first, then what it holds — pull requests opened and merged, pull requests reviewed and whose
  * work, issues opened. Each part has a slot of its own width, right-aligned, so a column of rows
- * lines up part by part, and a part with nothing in it is a dash.
+ * lines up part by part. A part with nothing in it leaves its slot empty, and a cell with nothing
+ * at all is one dash.
  */
 export function ActivityCountCell({ category, counts, providerType }: ActivityCountCellProps) {
 	const parts = PARTS[category](counts, providerType);
+	if (parts.every((part) => part.count === 0)) {
+		return <NoneMark />;
+	}
+	const shown = parts.filter((part) => part.count > 0);
 	return (
-		<span className="inline-flex items-center justify-end gap-2 align-middle">
-			{parts.map((part, index) => (
+		// Above the row's stretched link, so a pointer reaches each part's tooltip.
+		<span className="relative z-10 inline-flex items-center justify-end gap-2 align-middle">
+			{parts.map((part) => (
 				<span key={part.key} className="inline-flex min-w-9 justify-end">
-					{part.count > 0 ? (
+					{part.count > 0 && (
 						<CountChip icon={part.icon} tone={part.tone} phrase={part.phrase}>
 							<span aria-hidden className="font-medium tabular-nums">
 								{part.count.toLocaleString("en-GB")}
 							</span>
 						</CountChip>
-					) : (
-						<NoneMark phrase={part.phrase} />
 					)}
-					{index < parts.length - 1 && <span className="sr-only">, </span>}
+					{part.count > 0 && part !== shown.at(-1) && <span className="sr-only">, </span>}
 				</span>
 			))}
 		</span>

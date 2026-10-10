@@ -17,7 +17,10 @@ import type {
 } from "@/api/types.gen";
 import type { ActivityOverviewState, DateSpan } from "@/components/activity/activity-buckets";
 import { ACTIVITY_KINDS, type ActivityKind } from "@/components/activity/activity-kind-defs";
-import type { ActivityPreset } from "@/components/activity/activity-period";
+import {
+	type ActivityPreset,
+	DEFAULT_ACTIVITY_PRESET,
+} from "@/components/activity/activity-period";
 import { ACTIVITY_RANGE_DEFS } from "@/components/activity/activity-range";
 import {
 	type ActivityOverview,
@@ -517,7 +520,7 @@ export function overviewOf(total: ActivityTally, preset: StoryPreset): ActivityO
  */
 export function readyOverview(
 	overview: ActivityOverview,
-	preset: StoryPreset = "30d",
+	preset: StoryPreset = DEFAULT_ACTIVITY_PRESET,
 	previous?: ActivityTally,
 ): ActivityOverviewState {
 	return {
@@ -554,7 +557,10 @@ export const SPARSE_OVERVIEW: ActivityOverview = (() => {
 	};
 })();
 
-export const OVERVIEW = overviewOf(TALLY, "30d");
+export const OVERVIEW = overviewOf(TALLY, DEFAULT_ACTIVITY_PRESET);
+
+/** The same activity over a month, for a component story that counts weeks one by one. */
+export const MONTH_OVERVIEW = overviewOf(TALLY, "30d");
 
 export const QUIET_OVERVIEW = overviewOf(tallyOf({}), "30d");
 
@@ -585,7 +591,7 @@ function personOf(
 	options: { kind?: ActivityPerson["kind"]; firstContributionAt?: Date } = {},
 ): ActivityPerson {
 	const total = tallyOf(counts);
-	const span = spanOf("30d");
+	const span = spanOf(DEFAULT_ACTIVITY_PRESET);
 	const starts = weekStarts(span.from, span.to);
 	const weeks = spread(total, starts.length);
 	return {
@@ -663,7 +669,7 @@ export function peopleOf(
 	people: ActivityPerson[],
 	options: { automation?: ActivityPerson[]; firstContributors?: readonly number[] } = {},
 ): ActivityPeople {
-	const span = spanOf("30d");
+	const span = spanOf(DEFAULT_ACTIVITY_PRESET);
 	return {
 		...span,
 		people,
