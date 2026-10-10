@@ -146,9 +146,7 @@ jobs:
             'contentsecuritypolicy' \
             'default-src' \
             'stsseconds' \
-            '2592000' \
-            'minversion' \
-            'versiontls12'; do
+            '2592000'; do
             grep -Fiq "$required" <<< "$rendered" || {
               echo "::error::runtime edge envelope is missing '$required'"; exit 1; }
           done

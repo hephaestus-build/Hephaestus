@@ -3,11 +3,17 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { parseDocument } from "yaml";
 import { asString, parseJson } from "./lib/json.ts";
 
 const read = (file: string) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 const edge = read("docker/traefik/dynamic.yml");
 const nginx = read("webapp/docker/workspace-subdomains.conf.template");
+
+await test("the file-provider TLS default requires TLS 1.2", () => {
+	const configuration = parseDocument(edge.slice(0, edge.indexOf("{{")));
+	assert.equal(configuration.getIn(["tls", "options", "default", "minVersion"]), "VersionTLS12");
+});
 
 await test("tenant host and redirect policies reserve every server label", () => {
 	const server = read(
