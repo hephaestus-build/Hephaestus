@@ -1,0 +1,187 @@
+---
+title: Repair activity history
+description: Check stored activity against provider data and repair gaps without restoring erased people.
+---
+
+# Repair activity history
+
+Use this procedure when a workspace has missing activity before a date or fewer pull requests or merge requests than the provider.
+Keep public activity pages disabled until you verify the repair.
+
+## What the repair restores
+
+The server rebuilds activity from stored pull requests, merge requests, reviews, issues, and comments.
+It runs repair after repository synchronization and when historical backfill completes.
+The repair is provider-neutral: GitHub and GitLab use the same ledger repair.
+It inserts missing events in chunks of 1,000 source IDs.
+Each chunk has its own transaction and uses the person-data write fence.
+Permanent processing controls prevent erased people from returning.
+Soft-deleted work is excluded.
+Rows with no author are not recreated: erasure can remove attribution from retained work.
+
+The repair restores creation, submission, and the stored final closed or merged state.
+A dismissed review still represents completed review work.
+If no review event exists, repair records it as commented review activity at its stored submission time.
+It does not infer the former verdict or invent earlier reopen, edit, label, or dismissal times.
+Replies remain comments, not reviews.
+A review with its own summary or an original inline comment still counts as a review.
+
+Activity recording has a dedicated bounded executor.
+When its queue is full, the producer records the event before it continues.
+This protects against queue saturation, not a database failure or a process crash.
+The ledger repair restores reconstructible events after those failures.
+
+## Inspect the gap
+
+Run these read-only queries with `psql`.
+First find the IDs by workspace slug and repository name.
+Check the provider when the same repository name exists on more than one instance.
+
+```sql
+SELECT id, slug FROM workspace
+WHERE slug = 'your-workspace';
+
+SELECT r.id, r.name_with_owner, p.type, p.server_url
+FROM repository r JOIN identity_provider p ON p.id = r.provider_id
+WHERE r.name_with_owner = 'owner/repo';
+```
+
+Use those IDs in the gap queries below.
+
+```sql
+\set workspace_id 123
+\set repository_id 456
+
+BEGIN READ ONLY;
+
+SELECT r.id, r.name_with_owner, p.type, p.server_url
+FROM repository r
+JOIN identity_provider p ON p.id = r.provider_id
+WHERE r.id = :repository_id;
+
+SELECT m.name_with_owner,
+       m.pull_request_backfill_high_water_mark,
+       m.pull_request_backfill_checkpoint,
+       m.backfill_last_run_at,
+       m.backfill_repair_provider_count,
+       m.historical_backfill_sync_error
+FROM repository_to_monitor m
+WHERE m.workspace_id = :workspace_id;
+
+SELECT i.issue_type,
+       count(*) AS stored_rows,
+       count(*) FILTER (WHERE i.deleted_at IS NULL) AS live_rows,
+       min(i.created_at) AS earliest_stored
+FROM issue i
+WHERE i.repository_id = :repository_id
+GROUP BY i.issue_type;
+
+SELECT i.id, i.number, i.issue_type, i.created_at
+FROM issue i
+JOIN "user" u ON u.id = i.author_id
+WHERE i.repository_id = :repository_id
+  AND i.deleted_at IS NULL
+  AND i.created_at IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM person_suppression s
+    WHERE s.provider_id = u.provider_id
+      AND s.subject = u.native_id::text AND s.team_key = ''
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM activity_event e
+    WHERE e.workspace_id = :workspace_id
+      AND e.target_id = i.id
+      AND e.target_type = CASE WHEN i.issue_type = 'PULL_REQUEST'
+        THEN 'pull_request' ELSE 'issue' END
+      AND e.event_type = CASE WHEN i.issue_type = 'PULL_REQUEST'
+        THEN 'PULL_REQUEST_OPENED' ELSE 'ISSUE_CREATED' END
+  )
+ORDER BY i.id
+LIMIT 100;
+
+SELECT event_type, count(*), min(occurred_at)
+FROM activity_event
+WHERE workspace_id = :workspace_id AND repository_id = :repository_id
+GROUP BY event_type
+ORDER BY event_type;
+
+COMMIT;
+```
+
+A checkpoint of zero means that a scan finished.
+It does not prove that all provider rows are stored.
+The high-water mark is the highest issue or pull-request number, not the provider's pull-request count.
+GitHub issues and pull requests share a number sequence.
+Do not compare these values as equal populations.
+
+Automatic GitHub repair selects completed scans with at least 20 potentially missing rows and less than 80 percent coverage.
+It then checks the provider's actual pull-request count before it resets history.
+A scan run in the last day is not automatically restarted.
+Stored tombstones and erased work remain in the comparison count.
+Provider failures leave the checkpoint unchanged.
+Automatic provider probes have a one-hour cooldown per repository and server process.
+
+## Run the repair
+
+1. Sign in as a workspace administrator.
+2. Open the workspace's integration settings.
+3. Select its GitHub or GitLab connection and select **Run backfill**.
+4. Check the job's progress and repository errors.
+5. Repeat the read-only queries after the job finishes.
+
+The existing workspace-admin API provides the same action:
+
+```http
+POST /api/workspaces/{workspaceSlug}/connections/{connectionId}/sync/jobs
+Content-Type: application/json
+
+{"type":"BACKFILL"}
+```
+
+Use your authenticated session and its CSRF token.
+This is not an anonymous endpoint.
+The connection must belong to the workspace.
+An active job is reused instead of starting a duplicate.
+
+For GitHub, the action repairs the stored ledger even for completed repositories.
+For GitHub and GitLab, repair restarts completed history only when at least 20 rows are missing.
+Stored coverage must also be less than 80 percent of the provider total.
+The server records the provider count of each repair restart in the repository monitor.
+It does not restart the same gap again, including after a server restart.
+Before another restart, the stored row count must reach the provider total recorded at the previous attempt.
+A later gap must still meet the same size and coverage thresholds.
+A repository that cannot be read or repaired adds a job warning; the job continues with the other repositories.
+Scheduled GitLab scans do not use the GitHub-specific incomplete-scan heuristic.
+Rate limits, cancellation, and provider error cooldowns still apply.
+Recent-sync timestamps are unchanged.
+A repeat repair does not insert duplicate ledger entries.
+
+## Compare a GitHub sample
+
+Use a token that can read the same repository as the workspace connection.
+Replace `OWNER`, `REPO`, and `NUMBER`.
+Use the same GitHub instance for enterprise repositories.
+Do not put a token in a command, log, or support report.
+
+```bash
+gh api graphql -f query='query {
+  repository(owner: "OWNER", name: "REPO") {
+    pullRequests(first: 1, orderBy: {field: CREATED_AT, direction: ASC}) {
+      totalCount
+      nodes { number createdAt }
+    }
+  }
+}'
+
+gh api --paginate repos/OWNER/REPO/pulls/NUMBER/reviews \
+  --jq '.[] | {id, state, submitted_at, user: .user.login}'
+
+gh api --paginate repos/OWNER/REPO/pulls/NUMBER/comments \
+  --jq '.[] | {id, pull_request_review_id, in_reply_to_id, created_at}'
+```
+
+Compare the provider's total with all stored pull-request rows, including tombstones and erased work.
+For the sample, compare provider review IDs with `pull_request_review.native_id`, not its local `id`.
+A blank COMMENTED review whose inline comments are all replies is not a separate review contribution.
+Review replies use `in_reply_to_id`; the parent review uses `pull_request_review_id`.
+See the [GitHub review-comment contract](https://docs.github.com/en/rest/pulls/comments).

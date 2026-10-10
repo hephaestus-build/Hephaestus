@@ -186,7 +186,9 @@ public class GitHubPullRequestReviewProcessor extends BaseGitHubProcessor {
             PullRequestReview review,
             GitHubPullRequestReviewEventDTO.GitHubReviewDTO dto,
             @NonNull ProcessingContext context) {
+        boolean wasSubmitted = review.getSubmittedAt() != null && review.getState() != PullRequestReview.State.PENDING;
         review.setBody(dto.body());
+        if (dto.submittedAt() != null) review.setSubmittedAt(dto.submittedAt());
         if (dto.state() != null) {
             PullRequestReview.State newState = mapState(Objects.requireNonNullElse(dto.state(), "COMMENTED"));
             if (newState == PullRequestReview.State.DISMISSED) {
@@ -212,9 +214,16 @@ public class GitHubPullRequestReviewProcessor extends BaseGitHubProcessor {
             review.setAuthorCanPushToRepository(dto.authorCanPushToRepository());
         }
         PullRequestReview saved = reviewRepository.save(review);
-        ScmEventPayload.ReviewData.from(saved)
-                .ifPresent(reviewData -> eventPublisher.publishEvent(new ScmDomainEvent.ReviewEdited(
-                        reviewData, Set.of("body", "state"), EventContext.from(context))));
+        ScmEventPayload.ReviewData.from(saved).ifPresent(reviewData -> {
+            if (!wasSubmitted
+                    && saved.getSubmittedAt() != null
+                    && saved.getState() != PullRequestReview.State.PENDING) {
+                eventPublisher.publishEvent(new ScmDomainEvent.ReviewSubmitted(reviewData, EventContext.from(context)));
+            } else {
+                eventPublisher.publishEvent(new ScmDomainEvent.ReviewEdited(
+                        reviewData, Set.of("body", "state"), EventContext.from(context)));
+            }
+        });
         log.debug("Updated review: reviewId={}", dto.id());
         return saved;
     }
@@ -235,11 +244,7 @@ public class GitHubPullRequestReviewProcessor extends BaseGitHubProcessor {
             review.setState(newState);
             review.setDismissed(false);
         }
-        // Use submittedAt from DTO, fallback to PR createdAt (review can't predate PR)
-        review.setSubmittedAt(
-                dto.submittedAt() != null
-                        ? dto.submittedAt()
-                        : Objects.requireNonNullElse(pr.getCreatedAt(), Instant.now()));
+        review.setSubmittedAt(dto.submittedAt());
         review.setHtmlUrl(dto.htmlUrl() != null ? dto.htmlUrl() : "");
         review.setPullRequest(pr);
         review.setCommitId(dto.commitId());

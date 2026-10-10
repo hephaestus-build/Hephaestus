@@ -87,6 +87,7 @@ public class GitLabIntegrationSyncRunner implements IntegrationSyncRunner {
     @Override
     public void backfill(IntegrationRef ref, SyncExecutionHandle handle) {
         long workspaceId = ref.workspaceId();
+        backfillService.repairCompletedRepositories(workspaceId, handle);
         int totalProcessed = 0;
 
         while (!handle.isCancellationRequested()) {

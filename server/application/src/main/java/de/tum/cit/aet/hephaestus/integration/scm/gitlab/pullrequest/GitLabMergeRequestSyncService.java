@@ -44,6 +44,29 @@ public class GitLabMergeRequestSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabMergeRequestSyncService.class);
 
+    /** Reads the provider total without fetching merge request history. */
+    public int countMergeRequests(long workspaceId, String fullPath) {
+        graphQlClientProvider.acquirePermission();
+        try {
+            graphQlClientProvider.waitIfRateLimitLow(workspaceId);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Provider coverage check interrupted", e);
+        }
+        var response = graphQlClientProvider
+                .forScope(workspaceId)
+                .documentName("GetProjectMergeRequestNumbers")
+                .variable("fullPath", fullPath)
+                .variable("first", 1)
+                .execute()
+                .block(gitLabProperties.graphqlTimeout());
+        if (response == null || !response.isValid())
+            throw new IllegalStateException("Provider coverage check returned no valid response");
+        var count = response.field("project.mergeRequests.count").toEntity(Integer.class);
+        if (count == null) throw new IllegalStateException("Provider coverage check returned no merge request count");
+        return count;
+    }
+
     private static final String GET_PROJECT_MRS_DOCUMENT = "GetProjectMergeRequests";
     private static final String GET_PROJECT_MRS_HISTORICAL_DOCUMENT = "GetProjectMergeRequestsHistorical";
     private static final String GET_MR_APPROVALS_DOCUMENT = "GetMergeRequestApprovals";

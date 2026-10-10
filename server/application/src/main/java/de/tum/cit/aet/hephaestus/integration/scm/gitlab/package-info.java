@@ -21,6 +21,7 @@
             "integration.core::consumer",
             "integration.core::webhook",
             "integration.scm",
+            "activity::spi",
             "core",
             // Runtime-role gate (@ConditionalOnServerRole) on the connection-OAuth strategy.
             "core::runtime",

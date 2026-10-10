@@ -12,6 +12,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
@@ -29,6 +30,10 @@ import org.jspecify.annotations.Nullable;
 @Entity
 @Table(
         name = "pull_request_review_comment",
+        indexes = {
+            @Index(name = "idx_review_comment_review_reply", columnList = "review_id,in_reply_to_id"),
+            @Index(name = "idx_review_comment_pull_request", columnList = "pull_request_id,id")
+        },
         uniqueConstraints = {
             @UniqueConstraint(
                     name = "uq_pr_review_comment_provider_native_id",

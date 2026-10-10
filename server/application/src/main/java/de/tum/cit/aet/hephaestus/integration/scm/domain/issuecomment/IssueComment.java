@@ -9,6 +9,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -23,6 +24,7 @@ import org.jspecify.annotations.Nullable;
 @Entity
 @Table(
         name = "issue_comment",
+        indexes = {@Index(name = "idx_issue_comment_issue", columnList = "issue_id,id")},
         uniqueConstraints = {
             @UniqueConstraint(
                     name = "uq_issue_comment_provider_native_id",
