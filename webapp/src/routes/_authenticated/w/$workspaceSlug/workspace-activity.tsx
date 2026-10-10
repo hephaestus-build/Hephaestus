@@ -1,46 +1,60 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { toast } from "sonner";
 
-import { getAllTeamsOptions } from "@/api/@tanstack/react-query.gen";
+import { updateActivityAutomationMutation } from "@/api/@tanstack/react-query.gen";
+import type { ActivityPerson } from "@/api/types.gen";
+import { ACTIVITY_CATEGORY_DEFS } from "@/components/activity/activity-kind-defs";
 import {
-	ACTIVITY_CATEGORY_DEFS,
-	type ActivityCategory,
-} from "@/components/activity/activity-kind-defs";
-import { rangeStart } from "@/components/activity/activity-range";
+	type ActivityPeriod,
+	periodFromSearch,
+	periodSearch,
+} from "@/components/activity/activity-period";
 import {
+	PERIOD_SEARCH_KEYS,
 	parseActivityStack,
+	peopleDir,
+	peopleOrder,
 	WORKSPACE_ACTIVITY_LEVEL_KINDS,
 	WORKSPACE_ACTIVITY_SEARCH_DEFAULTS,
 	type WorkspaceActivitySearch,
 	workspaceActivitySearchSchema,
 } from "@/components/activity/activity-search";
 import { ActivityDetailDrawer } from "@/components/activity/ActivityDetailDrawer";
+import type { PeopleOrder } from "@/components/activity/ActivityPeopleTable";
+import { teamPaths } from "@/components/activity/team-paths";
 import { workLogTitle } from "@/components/activity/work-log-markdown";
 import { WorkspaceActivityPage } from "@/components/activity/WorkspaceActivityPage";
-import { panelState } from "@/components/common/panel-state";
-import { useNow } from "@/components/common/use-now";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
-import { visibleTeamPaths } from "@/components/teams/visible-team-tree";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import {
-	useActivityOverview,
+	useActivityFacets,
+	useActivityPeople,
+	useActivityPerson,
 	useActivityWork,
-	useMemberActivity,
-	useOpenWork,
 } from "@/hooks/use-activity";
 import { pageHead } from "@/lib/page-title";
+import { problemDetailOf } from "@/lib/problem-detail";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
-import { useSearchState, carriedSearchParams } from "@/lib/search-params";
+import { carriedSearchParams, nonEmpty, useSearchState } from "@/lib/search-params";
+import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
+import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
+
+/** The reads that list an account among the people or the automation. */
+const ACTIVITY_READS = new Set(["getActivityPeople", "getActivityPerson"]);
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/workspace-activity")({
 	component: WorkspaceActivity,
 	head: pageHead("Workspace activity"),
 	validateSearch: workspaceActivitySearchSchema,
 	search: {
-		// The team is this workspace's; only the range carries over to another workspace.
+		// The team and the repositories are this workspace's; only the period carries over.
 		middlewares: carriedSearchParams<WorkspaceActivitySearch>(
-			["range"],
+			PERIOD_SEARCH_KEYS,
 			WORKSPACE_ACTIVITY_SEARCH_DEFAULTS,
 		),
 	},
@@ -50,87 +64,92 @@ function WorkspaceActivity() {
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
 	const setSearch = useSearchState();
+	const queryClient = useQueryClient();
 	const { workspaces } = useActiveWorkspaceSlug();
 	const workspace = workspaces.find((candidate) => candidate.workspaceSlug === workspaceSlug);
 	const providerType = toScmProviderType(workspace?.providerType);
-	const teams = panelState(useQuery(getAllTeamsOptions({ path: { workspaceSlug } })), (all) => ({
-		status: "ready" as const,
-		teams: visibleTeamPaths(all).map(({ team, path }) => ({ id: team.id, name: path })),
-	}));
+	// A user view reads the page as the member does and changes nothing on their behalf.
+	const readOnly = useAuth().userView !== undefined;
+	const membership = useQuery(workspaceMembershipQueryOptions(workspaceSlug));
+	const isAdmin = !readOnly && hasMinimumWorkspaceRole(membership.data?.role, "ADMIN");
 
-	// The URL's team is only read once it is one the page offers: a hidden or deleted team, or a
-	// hand-typed id, is never asked about, and leaves the address once the teams say so.
-	const team =
-		teams.status === "ready"
-			? teams.teams.find((candidate) => candidate.id === search.team)
-			: undefined;
-	const unknownTeam = teams.status === "ready" && search.team !== undefined && team === undefined;
-	useEffect(() => {
-		if (unknownTeam) {
-			void setSearch((previous) => ({ ...previous, team: undefined }), { replace: true });
-		}
-	}, [unknownTeam, setSearch]);
-	const scopeKnown = search.team === undefined || team !== undefined;
+	const period = periodFromSearch(search);
+	const scope = { workspaceSlug, period, team: search.team, repo: search.repo };
+	const people = useActivityPeople(scope);
+	const facets = useActivityFacets(scope);
+	const ready = people.status === "ready" ? people.people : undefined;
+	const teamName = teamPaths(facets?.teams ?? []).find(({ key }) => key === search.team)?.label;
 
 	const detailStack = parseActivityStack(search.detail, WORKSPACE_ACTIVITY_LEVEL_KINDS);
 	const stackControls = useDetailStack(detailStack);
-	const categories = detailStack
-		.map(({ target }) => target)
-		.filter((target) => target.kind === "activity");
-	const pageCategory = categories.find((target) => target.member === undefined)?.category;
-	const memberCategory = categories.find((target) => target.member !== undefined)?.category;
-	const memberLogin = detailStack.find(({ target }) => target.kind === "member")?.id;
+	const targets = detailStack.map(({ target }) => target);
+	const login = targets.find((target) => target.kind === "person")?.login;
+	const category = targets.find((target) => target.kind === "activity")?.category;
+	const person: ActivityPerson | undefined = ready
+		? [...ready.people, ...ready.automation].find((candidate) => candidate.person.login === login)
+		: undefined;
 
-	const from = rangeStart(useNow(), search.range);
-	const scope = { workspaceSlug, teamId: team?.id, from, enabled: scopeKnown };
-	const members = useMemberActivity(scope);
-	const memberUser =
-		members.status === "ready"
-			? members.members.find((member) => member.user.login === memberLogin)?.user
-			: undefined;
-	// A copy is headed by whose work it lists: the team, or the workspace, or the member opened.
-	const pageOwner = team?.name ?? workspace?.displayName;
-	const memberOwner = memberUser?.name ?? memberLogin;
-	const copyOf = (
-		category: ActivityCategory | undefined,
-		owner: string | undefined,
-		people: boolean,
-	) => ({
-		title: workLogTitle(
-			category && ACTIVITY_CATEGORY_DEFS[category].label(providerType),
-			owner ?? "Activity",
-		),
-		providerType,
-		people,
+	// A copy is headed by whose work it lists: the team, the workspace, or the person opened.
+	const timeline = useActivityWork({
+		...scope,
+		copy: {
+			title: workLogTitle(teamName ?? workspace?.displayName ?? "Activity"),
+			providerType,
+			people: true,
+		},
 	});
-	const overview = useActivityOverview({ ...scope, range: search.range });
-	const timeline = useActivityWork({ ...scope, copy: copyOf(undefined, pageOwner, true) });
+	// In the page's scope, so a person's level counts what their row counts.
+	const personScope = { ...scope, userId: person?.person.id, enabled: person !== undefined };
+	const personName = person?.person.name ?? login;
+	const overview = useActivityPerson(personScope);
+	const workLog = useActivityWork({
+		...personScope,
+		copy: { title: workLogTitle(personName), providerType, people: false },
+	});
 	const categoryWorkLog = useActivityWork({
-		...scope,
-		kinds: pageCategory ? ACTIVITY_CATEGORY_DEFS[pageCategory].kinds : undefined,
-		copy: copyOf(pageCategory, pageOwner, true),
-		enabled: scopeKnown && pageCategory !== undefined,
+		...personScope,
+		kinds: category ? ACTIVITY_CATEGORY_DEFS[category].kinds : undefined,
+		copy: {
+			title: workLogTitle(
+				category && ACTIVITY_CATEGORY_DEFS[category].label(providerType),
+				personName,
+			),
+			providerType,
+			people: false,
+		},
+		enabled: personScope.enabled && category !== undefined,
 	});
 
-	// In the page's team scope, so a member's level counts what their row counts.
-	const memberScope = {
-		...scope,
-		login: memberLogin,
-		userId: memberUser?.id,
-		enabled: scopeKnown && memberUser !== undefined,
-	};
-	const memberOpenWork = useOpenWork({ workspaceSlug, login: memberLogin });
-	const memberOverview = useActivityOverview({ ...memberScope, range: search.range });
-	const memberWorkLog = useActivityWork({
-		...memberScope,
-		copy: copyOf(undefined, memberOwner, false),
+	const automation = useMutation({
+		...updateActivityAutomationMutation(),
+		onSuccess: async (_data, { query }) => {
+			toast.success(query.treatAsAutomation ? "Treated as automation" : "Counted as a person");
+			await invalidateWorkspaceReads(queryClient, workspaceSlug, ACTIVITY_READS);
+		},
+		onError: (error) =>
+			toast.error("We could not change how this account counts", {
+				description: problemDetailOf(error),
+			}),
 	});
-	const memberCategoryWorkLog = useActivityWork({
-		...memberScope,
-		kinds: memberCategory ? ACTIVITY_CATEGORY_DEFS[memberCategory].kinds : undefined,
-		copy: copyOf(memberCategory, memberOwner, false),
-		enabled: memberScope.enabled && memberCategory !== undefined,
-	});
+	// A provider's bot account is automation whatever an admin says, so it has no action.
+	const automationAction =
+		isAdmin && person && person.kind !== "BOT" ? (
+			<Button
+				variant="outline"
+				size="sm"
+				disabled={automation.isPending}
+				focusableWhenDisabled
+				onClick={() =>
+					automation.mutate({
+						path: { workspaceSlug, userId: person.person.id },
+						query: { treatAsAutomation: person.kind === "PERSON" },
+					})
+				}
+			>
+				{automation.isPending && <Spinner />}
+				{automationLabel(person.kind, automation.isPending)}
+			</Button>
+		) : undefined;
 
 	const setView = (view: Partial<WorkspaceActivitySearch>) => {
 		void setSearch((previous) => ({ ...previous, ...view }), { state: true, replace: true });
@@ -140,13 +159,18 @@ function WorkspaceActivity() {
 		<>
 			<WorkspaceActivityPage
 				providerType={providerType}
-				range={search.range}
-				onRangeChange={(range) => setView({ range })}
-				teams={teams}
-				teamId={team?.id}
-				onTeamChange={(teamId) => setView({ team: teamId })}
-				overview={overview}
-				members={members}
+				period={period}
+				onPeriodChange={(next: ActivityPeriod) => setView(periodSearch(next))}
+				team={search.team}
+				onTeamChange={(team) => setView({ team })}
+				repo={search.repo ?? []}
+				onRepoChange={(repo) => setView({ repo: nonEmpty(repo) })}
+				order={peopleOrder(search.sort, search.dir)}
+				onOrderChange={({ sort, desc }: PeopleOrder) =>
+					setView({ sort, dir: peopleDir(sort, desc) })
+				}
+				people={people}
+				facets={facets}
 				timeline={timeline}
 			/>
 			<ActivityDetailDrawer
@@ -154,18 +178,30 @@ function WorkspaceActivity() {
 				onClose={stackControls.close}
 				pageLabel="Workspace activity"
 				providerType={providerType}
-				range={search.range}
-				scope={team?.name}
-				subject={{ people: "several" }}
-				page={{ overview, categoryWorkLog }}
-				member={{
-					user: memberUser,
-					openWork: memberOpenWork,
-					overview: memberOverview,
-					workLog: memberWorkLog,
-					categoryWorkLog: memberCategoryWorkLog,
+				period={period}
+				owner={{
+					login,
+					user: person?.person,
+					// Only the people of this period say who is not among them.
+					absent:
+						people.status === "ready" &&
+						!people.stale &&
+						login !== undefined &&
+						person === undefined,
+					// Without the people, nothing says whose activity the levels would read.
+					overview: people.status === "error" ? people : overview,
+					workLog: people.status === "error" ? people : workLog,
+					categoryWorkLog: people.status === "error" ? people : categoryWorkLog,
+					automationAction,
 				}}
 			/>
 		</>
 	);
+}
+
+function automationLabel(kind: ActivityPerson["kind"], pending: boolean): string {
+	if (pending) {
+		return "Saving…";
+	}
+	return kind === "AUTOMATION" ? "Count as a person" : "Treat as automation";
 }

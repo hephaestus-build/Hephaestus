@@ -2,31 +2,32 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
 import {
-	OVERVIEW,
-	PREVIOUS_SUMMARY,
+	MONTH_OVERVIEW,
+	PREVIOUS_TALLY,
 	QUIET_OVERVIEW,
 	readyOverview,
+	spanOf,
 	SPARSE_OVERVIEW,
 	YEAR_OVERVIEW,
 } from "@/stories/activity-story-data";
 import { withProvider, withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
+import { weekStarts } from "./activity-tally";
 import { ActivityTrendChart } from "./ActivityTrendChart";
 
 /**
  * A category's figures, then one small chart per kind on one shared scale, then the same numbers as
  * a table. Small multiples rather than one stacked or grouped chart: each kind keeps its own shape,
- * no two state colours touch, and thirty days of three kinds is never ninety slivers.
+ * no two state colours touch, and a year of three kinds is never a hundred and fifty slivers.
  */
 const meta = {
 	component: ActivityTrendChart,
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
 	args: {
-		state: readyOverview(OVERVIEW, "30d", PREVIOUS_SUMMARY),
+		state: readyOverview(MONTH_OVERVIEW, "30d", PREVIOUS_TALLY),
 		category: "reviews",
-		range: "30d",
 		providerType: "GITHUB",
 	},
 } satisfies Meta<typeof ActivityTrendChart>;
@@ -42,11 +43,12 @@ function figure(root: HTMLElement, term: string): string | null | undefined {
 
 export const Default: Story = {
 	play: async ({ canvas, canvasElement }) => {
-		await expect(figure(canvasElement, "Total")).toBe("18");
-		await expect(figure(canvasElement, "Average per day")).toBe("0.6");
+		// Each pull request reviewed counts once, however many verdicts it got.
+		await expect(figure(canvasElement, "Reviewed")).toBe("12");
+		await expect(figure(canvasElement, "Average per week")).toMatch(/^\d+\.\d$/u);
 		await expect(figure(canvasElement, "vs the previous 30 days")).toBe("−3");
 		const chart = canvas.getByRole("figure");
-		await expect(chart).toHaveAccessibleName(/^18 reviews\. Busiest day \w+ \d+ \w+, \d+$/u);
+		await expect(chart).toHaveAccessibleName(/^12 pull requests reviewed\. Busiest week .+, \d+$/u);
 		// One chart per kind, each headed by its name and total.
 		const rows = within(chart).getAllByRole("listitem");
 		await expect(rows.map((row) => row.firstElementChild?.textContent)).toStrictEqual([
@@ -58,26 +60,26 @@ export const Default: Story = {
 	},
 };
 
-/** The table twin: every bucket's count per kind, and — since reviews partition — their total. */
+/** The table twin: every week's count per kind. */
 export const AsTable: Story = {
-	args: { state: readyOverview(SPARSE_OVERVIEW), category: "pull-requests" },
+	args: { state: readyOverview(SPARSE_OVERVIEW, "30d"), category: "pull-requests" },
 	play: async ({ canvas, canvasElement, userEvent }) => {
-		await expect(figure(canvasElement, "Busiest day")).toMatch(/^2/u);
+		await expect(figure(canvasElement, "Busiest week")).toMatch(/^2/u);
 		// A kind that did not happen keeps its row, and says so in it.
-		await expect(canvas.getAllByText("None in the last 30 days")).toHaveLength(2);
+		await expect(canvas.getAllByText("None in this range")).toHaveLength(2);
 		await userEvent.click(canvas.getByRole("button", { name: "Show as table" }));
-		const table = canvas.getByRole("table", { name: "Pull requests by day" });
+		const table = canvas.getByRole("table", { name: "Pull requests by week" });
 		const [header, ...rows] = within(table).getAllByRole("row");
 		// Opened, merged and closed are steps of one lifecycle: they add up to no total.
 		await expect(
 			within(header ?? table)
 				.getAllByRole("columnheader")
 				.map((cell) => cell.textContent),
-		).toStrictEqual(["Day", "Opened", "Merged", "Closed"]);
-		await expect(rows).toHaveLength(30);
+		).toStrictEqual(["Week", "Opened", "Merged", "Closed"]);
+		await expect(rows).toHaveLength(weekStarts(spanOf("30d").from, spanOf("30d").to).length);
 		// A zero stays in its cell, stepped back, so the counts that are there stand out.
-		const [firstDay] = rows;
-		await expect(within(firstDay ?? table).getAllByRole("cell")[2]).toHaveClass(
+		const [firstWeek] = rows;
+		await expect(within(firstWeek ?? table).getAllByRole("cell")[2]).toHaveClass(
 			"text-muted-foreground",
 		);
 		const merged = rows.map((row) => within(row).getAllByRole("cell")[2]?.textContent);
@@ -85,12 +87,12 @@ export const AsTable: Story = {
 	},
 };
 
-/** Reviews partition: their table carries a total column. */
+/** Reviews count pull requests, not verdicts, so their table carries its own column for them. */
 export const ReviewsAsTable: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Show as table" }));
-		const table = canvas.getByRole("table", { name: "Reviews by day" });
-		await expect(within(table).getByRole("columnheader", { name: "Total" })).toBeVisible();
+		const table = canvas.getByRole("table", { name: "Reviews by week" });
+		await expect(within(table).getByRole("columnheader", { name: "Reviewed" })).toBeVisible();
 	},
 };
 
@@ -101,22 +103,21 @@ export const TwelveMonths: Story = {
 	args: {
 		state: readyOverview(YEAR_OVERVIEW, "1y"),
 		category: "pull-requests",
-		range: "1y",
 	},
 	play: async ({ canvas, canvasElement }) => {
-		await expect(figure(canvasElement, "Average per month")).toMatch(/^\d+\.\d$/u);
-		// A year of months starts with its year, so September never reads twice.
+		await expect(figure(canvasElement, "Average per week")).toMatch(/^\d+\.\d$/u);
+		// A year of weeks starts with its year, so September never reads twice.
 		const [firstTick] = canvasElement.querySelectorAll(".recharts-xAxis-tick-labels text");
-		await expect(firstTick?.textContent).toMatch(/^\w{3} \d{4}$/u);
-		await expect(canvas.getByRole("figure")).toHaveAccessibleName(/Busiest month \w+ \d{4}/u);
+		await expect(firstTick?.textContent).toMatch(/^\d+ \w{3} \d{4}$/u);
+		await expect(canvas.getByRole("figure")).toHaveAccessibleName(/Busiest week /u);
 	},
 };
 
 export const Empty: Story = {
-	args: { state: readyOverview(QUIET_OVERVIEW) },
+	args: { state: readyOverview(QUIET_OVERVIEW, "30d") },
 	play: async ({ canvas, canvasElement }) => {
-		await expect(canvas.getByRole("figure")).toHaveAccessibleName("0 reviews");
-		await expect(figure(canvasElement, "Busiest day")).toBeUndefined();
+		await expect(canvas.getByRole("figure")).toHaveAccessibleName("0 pull requests reviewed");
+		await expect(figure(canvasElement, "Busiest week")).toBeUndefined();
 	},
 };
 

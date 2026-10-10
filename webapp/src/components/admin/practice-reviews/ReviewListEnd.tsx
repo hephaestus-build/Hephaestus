@@ -1,4 +1,4 @@
-import { InfiniteListEnd } from "@/components/profile/InfiniteListEnd";
+import { InfiniteListEnd } from "@/components/common/InfiniteListEnd";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
 import { ReviewMoreRowsSkeleton } from "./ReviewResultsSkeleton";

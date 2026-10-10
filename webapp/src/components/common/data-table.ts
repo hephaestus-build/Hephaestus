@@ -23,7 +23,18 @@ import {
  * want. Leave one out and that column degrades to a case-sensitive `>` comparison, saying so only in
  * a development warning.
  */
+/** How a column lays out: a number column is right-aligned in tabular figures, as `TableCell numeric`. */
+export interface DataTableColumnMeta {
+	numeric?: boolean;
+	/** Width and padding for the column's head and cells, such as `w-px` for a column that fits its content. */
+	className?: string;
+}
+
+/** The type `columnDef.meta` takes; TanStack reads only the slot's type, never its value. */
+const COLUMN_META: DataTableColumnMeta = {};
+
 export const dataTableFeatures = tableFeatures({
+	columnMeta: COLUMN_META,
 	columnFilteringFeature,
 	globalFilteringFeature,
 	rowSortingFeature,

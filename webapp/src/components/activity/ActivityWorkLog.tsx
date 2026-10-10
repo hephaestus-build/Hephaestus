@@ -1,16 +1,15 @@
-import { HistoryIcon } from "@primer/octicons-react";
 import { isSameDay, startOfDay, subDays } from "date-fns";
 import { type ReactNode, useId } from "react";
 
 import { cn } from "cn";
 import type { ActivityWork } from "@/api/types.gen";
+import { InfiniteListEnd } from "@/components/common/InfiniteListEnd";
 import { InlineLink } from "@/components/common/InlineLink";
 import { MetaRow } from "@/components/common/MetaRow";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { SectionLabel } from "@/components/common/SectionLabel";
 import { useNow } from "@/components/common/use-now";
-import { Button } from "@/components/ui/button";
 import {
 	Item,
 	ItemActions,
@@ -20,7 +19,6 @@ import {
 	ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { formatTime, formatWeekdayDay } from "@/lib/dates";
 import { type ProviderType, workReference } from "@/lib/provider/provider-terms";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
@@ -28,7 +26,7 @@ import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 import { ActionChips } from "./ActionChip";
 import { goneWork, workOf } from "./activity-kind-defs";
 import { STALE } from "./activity-tones";
-import { ActivityEmpty } from "./ActivityEmpty";
+import { ActivityEmpty, HistoryMark } from "./ActivityEmpty";
 import { PeopleStack } from "./PeopleStack";
 import { goneWorkVisual, workStateVisual } from "./work-state-defs";
 
@@ -55,8 +53,6 @@ export interface ActivityWorkLogProps {
 
 const SKELETON_ROWS = 4;
 
-const LOAD_MORE_FAILED = "We could not load more activity.";
-
 /**
  * What happened, one row per pull request or issue rather than per event — forty comments on one
  * pull request are one row with "40" — newest first and grouped by the local day of the latest
@@ -79,30 +75,20 @@ export function ActivityWorkLog({ state, providerType, subject }: ActivityWorkLo
 				<span className="sr-only">Loading activity…</span>
 				<div aria-hidden className="space-y-2">
 					<Skeleton className="h-4 w-24" />
-					<div className="overflow-hidden rounded-xl border bg-card">
-						{Array.from({ length: SKELETON_ROWS }, (_, index) => (
-							<div
-								key={index}
-								className="flex items-start gap-2.5 border-b px-3 py-2.5 last:border-b-0"
-							>
-								<Skeleton className="size-4 rounded-full" />
-								<div className="flex-1 space-y-2">
-									<Skeleton className="h-4 w-2/3" />
-									<Skeleton className="h-3 w-1/4" />
-								</div>
-								<Skeleton className="h-4 w-20" />
-							</div>
-						))}
-					</div>
+					<RowsSkeleton rows={SKELETON_ROWS} />
 				</div>
 			</div>
 		);
 	}
 	if (state.items.length === 0) {
-		return <ActivityEmpty icon={<HistoryIcon />} title="No activity in this range" />;
+		return (
+			<ActivityEmpty
+				icon={<HistoryMark providerType={providerType} />}
+				title="No activity in this range"
+			/>
+		);
 	}
 	const today = new Date(nowMs);
-	const loadMoreFailed = state.loadMoreError !== undefined;
 	return (
 		<div aria-busy={state.stale || undefined} className={cn("space-y-6", state.stale && STALE)}>
 			{groupByDay(state.items).map(({ day, items }) => (
@@ -112,33 +98,36 @@ export function ActivityWorkLog({ state, providerType, subject }: ActivityWorkLo
 					))}
 				</DayGroup>
 			))}
-			{state.hasMore && (
-				<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-					<Button
-						variant="outline"
-						size="sm"
-						onClick={state.onLoadMore}
-						disabled={state.isLoadingMore}
-					>
-						{state.isLoadingMore && <Spinner />}
-						{loadMoreLabel(state.isLoadingMore, loadMoreFailed)}
-					</Button>
-					{loadMoreFailed && (
-						<p role="alert" className="text-sm text-muted-foreground">
-							{LOAD_MORE_FAILED}
-						</p>
-					)}
-				</div>
-			)}
+			<InfiniteListEnd
+				hasMore={state.hasMore}
+				isLoadingMore={state.isLoadingMore}
+				isRefreshing={state.isRefreshing}
+				loadMoreError={state.loadMoreError}
+				onLoadMore={state.onLoadMore}
+				moreLabel="Show earlier activity"
+				failedLabel="We could not load earlier activity."
+				loadingRow={<RowsSkeleton rows={2} />}
+			/>
 		</div>
 	);
 }
 
-function loadMoreLabel(isLoadingMore: boolean, failed: boolean): string {
-	if (isLoadingMore) {
-		return "Loading…";
-	}
-	return failed ? "Retry" : "Show more";
+/** Rows in the shape of the log's own, for its first page and for each page after. */
+function RowsSkeleton({ rows }: { rows: number }) {
+	return (
+		<div className="overflow-hidden rounded-xl border bg-card">
+			{Array.from({ length: rows }, (_, index) => (
+				<div key={index} className="flex items-start gap-2.5 border-b px-3 py-2.5 last:border-b-0">
+					<Skeleton className="size-4 rounded-full" />
+					<div className="flex-1 space-y-2">
+						<Skeleton className="h-4 w-2/3" />
+						<Skeleton className="h-3 w-1/4" />
+					</div>
+					<Skeleton className="h-4 w-20" />
+				</div>
+			))}
+		</div>
+	);
 }
 
 /** One day's rows, named by the day as a list label rather than a heading, whatever level holds it. */

@@ -10,8 +10,9 @@ import type {
 	PracticeTraceEntry,
 	ProfileReviewRun,
 } from "@/api/types.gen";
-import { rangeStart } from "@/components/activity/activity-range";
 import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
+import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
+import { reviewRangeStart } from "@/components/practice-profile/practice-profile-search";
 import { artifactTrace } from "@/components/practice-trace/fixtures";
 import { formatDayTime, type Wire } from "@/lib/dates";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -293,7 +294,7 @@ async function openPractice(router: Awaited<ReturnType<typeof renderProfile>>) {
 		),
 	);
 	await waitFor(() =>
-		expect(router.state.location.search.detail).toStrictEqual([
+		expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
 			"practice-groups:all",
 			group,
 			practiceEntry,
@@ -332,7 +333,7 @@ describe("practice profile route", () => {
 		const router = await renderProfile();
 		const entries = router.history.length;
 
-		const detail = () => router.state.location.search.detail;
+		const detail = () => stackInSearch(router.state.location.search.detail);
 
 		fireEvent.click(
 			await screen.findByRole("link", { name: "See all practice groups" }, ROUTE_RENDER_WAIT),
@@ -365,7 +366,7 @@ describe("practice profile route", () => {
 
 	it("opens every review of the reader's work from the chip, then one review over it", async () => {
 		const router = await renderProfile();
-		const detail = () => router.state.location.search.detail;
+		const detail = () => stackInSearch(router.state.location.search.detail);
 
 		fireEvent.click(await openReviewsChip());
 		await waitFor(() => expect(detail()).toStrictEqual(["reviews:all"]));
@@ -392,7 +393,7 @@ describe("practice profile route", () => {
 		router.history.back();
 		await waitFor(() => expect(detail()).toStrictEqual(["reviews:all"]));
 		router.history.back();
-		await waitFor(() => expect(detail()).toBeUndefined());
+		await waitFor(() => expect(detail()).toStrictEqual([]));
 	});
 
 	it("turns the chosen timeframe into the since the reviews list asks for", async () => {
@@ -425,7 +426,7 @@ describe("practice profile route", () => {
 
 			await waitFor(() => expect(router.state.location.search.reviewSince).toBe("30d"));
 			await waitFor(() =>
-				expect(asked.at(-1)).toBe(rangeStart(noon.getTime(), "30d").toISOString()),
+				expect(asked.at(-1)).toBe(reviewRangeStart(noon.getTime(), "30d").toISOString()),
 			);
 		} finally {
 			vi.useRealTimers();
@@ -494,7 +495,7 @@ describe("practice profile route", () => {
 		// Back on the review it was asked from, the refusal was answered on the earlier visit.
 		router.history.back();
 		await waitFor(() =>
-			expect(router.state.location.search.detail).toStrictEqual([
+			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
 				"reviews:all",
 				`review:${openProfileReviewRun.reviewId}`,
 			]),
@@ -590,7 +591,7 @@ describe("practice profile route", () => {
 		);
 
 		await waitFor(() =>
-			expect(router.state.location.search.detail).toStrictEqual([
+			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
 				"reviews:all",
 				`review:${earlierOnSameWork.reviewId}`,
 			]),
@@ -664,7 +665,10 @@ describe("practice profile route", () => {
 		// The level was pushed on this visit, so its Back goes back in history — to the group.
 		fireEvent.click(screen.getByRole("button", { name: "Back" }));
 		await waitFor(() =>
-			expect(router.state.location.search.detail).toStrictEqual(["practice-groups:all", group]),
+			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+				"practice-groups:all",
+				group,
+			]),
 		);
 	});
 
@@ -681,7 +685,7 @@ describe("practice profile route", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "Back" }));
 
-		await waitFor(() => expect(search().detail).toStrictEqual([group]));
+		await waitFor(() => expect(stackInSearch(search().detail)).toStrictEqual([group]));
 		expect(router.state.location.searchStr).not.toContain("practiceTab");
 	});
 
@@ -723,7 +727,9 @@ describe("practice profile route", () => {
 		// the level was pushed on this one, so Back still dismisses it in a single step.
 		expect(router.history).toHaveLength(entries);
 		router.history.back();
-		await waitFor(() => expect(router.state.location.search.detail).toBeUndefined());
+		await waitFor(() =>
+			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([]),
+		);
 	});
 });
 

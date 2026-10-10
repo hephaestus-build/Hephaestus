@@ -9,6 +9,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 
 import { NavAdmin } from "./NavAdmin";
 
@@ -40,6 +41,7 @@ function renderNavigation(initialEntry: string, defaultOpen = true) {
 		}),
 	);
 	const router = createRouter({
+		...ROUTER_SEARCH,
 		routeTree: rootRoute.addChildren(routes),
 		history: createMemoryHistory({ initialEntries: [initialEntry] }),
 	});

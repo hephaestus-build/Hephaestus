@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { memberLevel } from "@/components/activity/activity-search";
+import { personLevel } from "@/components/activity/activity-search";
 import { detailSearch, detailStackKey } from "@/components/layout/detail-drawer/detail-stack";
 import { practiceGroupLevel } from "@/components/practice-profile/practice-profile-search";
 import { resolveWorkspaceMembership } from "@/runtime/auth/guard";
@@ -19,7 +19,7 @@ export const Route = createFileRoute(
 			throw redirect({
 				to: "/w/$workspaceSlug/workspace-activity",
 				params: { workspaceSlug: params.workspaceSlug },
-				search: { detail: [detailStackKey(memberLevel(params.username))] },
+				search: { detail: [detailStackKey(personLevel(params.username))] },
 				replace: true,
 			});
 		}

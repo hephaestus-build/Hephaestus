@@ -5,6 +5,7 @@ import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PracticesAcrossWorkspaceTiles } from "@/api/types.gen";
+import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { SLOW_LOAD_NOTE } from "@/components/practices-across-the-workspace/across-workspace-copy";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -20,7 +21,7 @@ vi.setConfig({ testTimeout: ROUTE_RENDER_WAIT.timeout });
 
 const PAGE = "/w/acme/practices-across-the-workspace";
 const PROFILE = "/w/acme/practice-profile";
-const GROUP_OPEN = `${PAGE}?detail=%5B%22practice-group%3Areview-ready-work%22%5D`;
+const GROUP_OPEN = `${PAGE}?detail=practice-group:review-ready-work`;
 
 const tilesOf = (
 	window: PracticesAcrossWorkspaceTiles["window"],
@@ -124,7 +125,7 @@ describe("Practices across the workspace", () => {
 
 		await waitFor(() => {
 			expect(router.state.location.search).toMatchObject({
-				detail: ["practice-group:review-ready-work"],
+				detail: "practice-group:review-ready-work",
 			});
 		});
 		expect(router.state.location.pathname).toBe(PAGE);
@@ -149,7 +150,7 @@ describe("Practices across the workspace", () => {
 
 		router.history.back();
 		await waitFor(() => {
-			expect(router.state.location.search.detail).toBeUndefined();
+			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([]);
 		});
 	});
 
@@ -167,7 +168,7 @@ describe("Practices across the workspace", () => {
 			expect(router.state.location.pathname).toBe(PROFILE);
 		});
 		expect(router.state.location.search).toMatchObject({
-			detail: ["practice-group:review-ready-work"],
+			detail: "practice-group:review-ready-work",
 		});
 	});
 
@@ -191,10 +192,12 @@ describe("Practices across the workspace", () => {
 
 	it("drops a level kind this page does not open", async () => {
 		const { router } = renderRouteAtWithRouter(
-			`${PAGE}?detail=%5B%22practice-group%3Areview-ready-work%22%2C%22own-group%3Areview-ready-work%22%2C%22practice%3Ascope-to-one-concern%22%5D`,
+			`${PAGE}?detail=practice-group:review-ready-work&detail=own-group:review-ready-work&detail=practice:scope-to-one-concern`,
 		);
 		await screen.findByRole("dialog", { name: "Packaging work for review" }, ROUTE_RENDER_WAIT);
-		expect(router.state.location.search.detail).toStrictEqual(["practice-group:review-ready-work"]);
+		expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+			"practice-group:review-ready-work",
+		]);
 		expect(profileReads()).toStrictEqual([]);
 	});
 
@@ -212,7 +215,9 @@ describe("Practices across the workspace", () => {
 		await level.findByText("We could not load the practice groups", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("table", { name: "All practice groups" })).toBeNull();
 		// The address still names the group, so the level stays open over the failure.
-		expect(router.state.location.search.detail).toStrictEqual(["practice-group:review-ready-work"]);
+		expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+			"practice-group:review-ready-work",
+		]);
 	});
 
 	it("starts the overview and the tiles together and reads neither again on a refocus", async () => {

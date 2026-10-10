@@ -12,7 +12,6 @@ import {
 } from "@primer/octicons-react";
 
 import type { ActivityAction } from "@/api/types.gen";
-import type { ActivitySummary } from "@/components/activity/activity-view";
 import {
 	GitLabCheckCircleIcon,
 	GitLabCodeIcon,
@@ -31,6 +30,7 @@ import { ARTIFACT_KIND, artifactKindNoun } from "@/lib/artifact-kinds";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { capitalise } from "@/lib/text";
 
+import type { ActivityTally } from "./activity-tally";
 import { type ActivityTone, providerIcon } from "./activity-tones";
 
 export type ActivityKind = ActivityAction["kind"];
@@ -64,7 +64,6 @@ export interface ActivityKindDef {
 	chip: "label" | "count";
 	/** What one or many of it are, for accessible names and Markdown: "3 comments on code". */
 	noun: (provider: ProviderType) => Noun;
-	summaryField: Exclude<keyof ActivitySummary, "pullRequestsReviewed" | "totalComments">;
 	/**
 	 * Whom it counts for. A review, a comment or an opening is the actor's own doing; a merge or a
 	 * close is counted for the work's author, who is not necessarily the person who merged or closed it.
@@ -95,7 +94,6 @@ export const ACTIVITY_KIND_DEFS = {
 		countLabel: "opened",
 		chip: "label",
 		noun: pullRequestNoun("opened"),
-		summaryField: "pullRequestsOpened",
 		credit: "actor",
 		work: "pull-request",
 	},
@@ -106,7 +104,6 @@ export const ACTIVITY_KIND_DEFS = {
 		countLabel: "merged",
 		chip: "label",
 		noun: pullRequestNoun("merged"),
-		summaryField: "pullRequestsMerged",
 		credit: "author",
 		work: "pull-request",
 	},
@@ -117,7 +114,6 @@ export const ACTIVITY_KIND_DEFS = {
 		countLabel: "closed",
 		chip: "label",
 		noun: pullRequestNoun("closed without merging"),
-		summaryField: "pullRequestsClosed",
 		credit: "author",
 		work: "pull-request",
 	},
@@ -128,7 +124,6 @@ export const ACTIVITY_KIND_DEFS = {
 		countLabel: "approved",
 		chip: "label",
 		noun: fixedNoun("approval", "approvals"),
-		summaryField: "approvals",
 		credit: "actor",
 		work: "pull-request",
 	},
@@ -139,7 +134,6 @@ export const ACTIVITY_KIND_DEFS = {
 		countLabel: "changes requested",
 		chip: "label",
 		noun: fixedNoun("review requesting changes", "reviews requesting changes"),
-		summaryField: "changeRequests",
 		credit: "actor",
 		work: "pull-request",
 	},
@@ -150,7 +144,6 @@ export const ACTIVITY_KIND_DEFS = {
 		countLabel: "commented",
 		chip: "label",
 		noun: fixedNoun("comment-only review", "comment-only reviews"),
-		summaryField: "commentReviews",
 		credit: "actor",
 		work: "pull-request",
 	},
@@ -161,7 +154,6 @@ export const ACTIVITY_KIND_DEFS = {
 		countLabel: "in conversations",
 		chip: "count",
 		noun: fixedNoun("comment in a conversation", "comments in conversations"),
-		summaryField: "comments",
 		credit: "actor",
 		work: "any",
 	},
@@ -172,7 +164,6 @@ export const ACTIVITY_KIND_DEFS = {
 		countLabel: "on code",
 		chip: "count",
 		noun: fixedNoun("comment on code", "comments on code"),
-		summaryField: "codeComments",
 		credit: "actor",
 		work: "pull-request",
 	},
@@ -183,7 +174,6 @@ export const ACTIVITY_KIND_DEFS = {
 		countLabel: "opened",
 		chip: "label",
 		noun: fixedNoun("issue opened", "issues opened"),
-		summaryField: "issuesOpened",
 		credit: "actor",
 		work: "issue",
 	},
@@ -194,7 +184,6 @@ export const ACTIVITY_KIND_DEFS = {
 		countLabel: "closed",
 		chip: "label",
 		noun: fixedNoun("issue closed", "issues closed"),
-		summaryField: "issuesClosed",
 		credit: "author",
 		work: "issue",
 	},
@@ -236,33 +225,14 @@ export function actionPhrase({ kind, count }: ActivityAction, provider: Provider
 	return count === 1 ? label : `${label} ${count} times`;
 }
 
-/** A summary's non-zero counts of `kinds`, in the registry's order. */
-export function summaryActions(
-	summary: ActivitySummary,
+/** A tally's non-zero counts of `kinds`, in the registry's order. */
+export function tallyActions(
+	tally: ActivityTally,
 	kinds: readonly ActivityKind[] = ACTIVITY_KINDS,
 ): ActivityAction[] {
 	return ACTIVITY_KINDS.filter((kind) => kinds.includes(kind))
-		.map((kind) => ({ kind, count: summary[ACTIVITY_KIND_DEFS[kind].summaryField] }))
+		.map((kind) => ({ kind, count: tally[kind] }))
 		.filter((action) => action.count > 0);
-}
-
-/** How often `kinds` happened in a summary, together. */
-export function kindsTotal(summary: ActivitySummary, kinds: readonly ActivityKind[]): number {
-	let count = kinds.reduce((sum, kind) => sum + summary[ACTIVITY_KIND_DEFS[kind].summaryField], 0);
-	if (
-		summary.pullRequestsReviewed !== undefined &&
-		REVIEW_KINDS.every((kind) => kinds.includes(kind))
-	) {
-		count +=
-			summary.pullRequestsReviewed -
-			REVIEW_KINDS.reduce((sum, kind) => sum + summary[ACTIVITY_KIND_DEFS[kind].summaryField], 0);
-	}
-	if (summary.totalComments !== undefined && COMMENT_KINDS.every((kind) => kinds.includes(kind))) {
-		count +=
-			summary.totalComments -
-			COMMENT_KINDS.reduce((sum, kind) => sum + summary[ACTIVITY_KIND_DEFS[kind].summaryField], 0);
-	}
-	return count;
 }
 
 /**
@@ -302,24 +272,19 @@ export interface ActivityCategoryDef {
 	 * true of the sum and grey would read as disabled.
 	 */
 	tone: ActivityTone;
-	/** Every kind it holds, in the registry's order: its table cell, its chart, its level's rows. */
+	/** Every kind it holds, in the registry's order: its chart rows and its level's timeline. */
 	kinds: readonly ActivityKind[];
 	/**
-	 * Whether its kinds partition it, so they add up to a total worth a column: a review is one
-	 * verdict, a comment is in one place. The steps of a lifecycle — opened, then merged or closed —
-	 * add up to nothing.
-	 */
-	partitioned: boolean;
-	/**
-	 * The one number its tile leads with and charts over time: the kinds summed for it, what the
-	 * number counts in a sentence ("3 pull requests merged"), and — only where the tile's title does
-	 * not already say it — the word after the number ("3 merged"). Kinds of different units are never
-	 * summed.
+	 * The one number its tile leads with and charts over time, what the number counts in a sentence
+	 * ("3 pull requests merged"), and — only where the tile's title does not already say it — the
+	 * word after the number ("3 merged"). A headline that is not one of the kinds names its own
+	 * column in the level's table: reviews count each pull request once, however many verdicts it got.
 	 */
 	headline: {
-		kinds: readonly ActivityKind[];
+		count: (tally: ActivityTally) => number;
 		noun: (provider: ProviderType) => Noun;
 		qualifier?: string;
+		column?: string;
 	};
 	/** The chips under the headline: the rest of the category, or the headline's own breakdown. */
 	chips: readonly ActivityKind[];
@@ -334,9 +299,8 @@ export const ACTIVITY_CATEGORY_DEFS = {
 		icon: providerIcon(GitMergeIcon, GitLabMergeIcon),
 		tone: "done",
 		kinds: ["PULL_REQUEST_OPENED", "PULL_REQUEST_MERGED", "PULL_REQUEST_CLOSED"],
-		partitioned: false,
 		headline: {
-			kinds: ["PULL_REQUEST_MERGED"],
+			count: (tally) => tally.PULL_REQUEST_MERGED,
 			noun: pullRequestNoun("merged"),
 			qualifier: "merged",
 		},
@@ -347,8 +311,12 @@ export const ACTIVITY_CATEGORY_DEFS = {
 		icon: providerIcon(EyeIcon, GitLabEyeIcon),
 		tone: "accent",
 		kinds: REVIEW_KINDS,
-		partitioned: true,
-		headline: { kinds: REVIEW_KINDS, noun: fixedNoun("review", "reviews") },
+		headline: {
+			count: (tally) => tally.pullRequestsReviewed,
+			noun: pullRequestNoun("reviewed"),
+			qualifier: "reviewed",
+			column: "Reviewed",
+		},
 		chips: REVIEW_KINDS,
 	},
 	comments: {
@@ -356,8 +324,11 @@ export const ACTIVITY_CATEGORY_DEFS = {
 		icon: providerIcon(CommentDiscussionIcon, GitLabCommentsIcon),
 		tone: "accent",
 		kinds: COMMENT_KINDS,
-		partitioned: true,
-		headline: { kinds: COMMENT_KINDS, noun: fixedNoun("comment", "comments") },
+		headline: {
+			count: (tally) => tally.comments,
+			noun: fixedNoun("comment", "comments"),
+			column: "Total",
+		},
 		chips: COMMENT_KINDS,
 	},
 	issues: {
@@ -365,17 +336,11 @@ export const ACTIVITY_CATEGORY_DEFS = {
 		icon: providerIcon(IssueOpenedIcon, GitLabIssueOpenIcon),
 		tone: "open",
 		kinds: ["ISSUE_OPENED", "ISSUE_CLOSED"],
-		partitioned: false,
 		headline: {
-			kinds: ["ISSUE_OPENED"],
+			count: (tally) => tally.ISSUE_OPENED,
 			noun: fixedNoun("issue opened", "issues opened"),
 			qualifier: "opened",
 		},
 		chips: ["ISSUE_CLOSED"],
 	},
 } as const satisfies Record<ActivityCategory, ActivityCategoryDef>;
-
-/** Whether anything at all happened in a summary. */
-export function hasActivity(summary: ActivitySummary): boolean {
-	return kindsTotal(summary, ACTIVITY_KINDS) > 0;
-}

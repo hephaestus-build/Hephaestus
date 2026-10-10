@@ -17,7 +17,6 @@ import {
 } from "@tanstack/react-router";
 import {
 	lazy,
-	type ReactNode,
 	Suspense,
 	useEffect,
 	useEffectEvent,
@@ -78,11 +77,11 @@ import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
 import { isMentorSetUp } from "@/lib/mentor-preference";
 import { stepUpChallengeOf } from "@/lib/problem-detail";
-import { getProviderSlug } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
 import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/guard";
 import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
+import { useProviderColors } from "@/runtime/theme/provider-colors";
 import { exitUserView } from "@/runtime/user-view/session";
 import { isCopilotExcludedRoute } from "./-copilot-route";
 
@@ -135,43 +134,42 @@ function RootLayout() {
 			<HeadContent />
 			<SkipToContent />
 			{loginOpen !== true && <CookieConsentBanner />}
-			<ProviderColorScope>
-				<SidebarProvider>
-					<AppSidebarContainer />
-					<SidebarInset className="mr-[var(--right-sidebar-width,0)] min-w-0">
-						<HeaderContainer />
-						{userView && (
-							<UserViewBanner
-								name={userView.name}
-								workspace={userView.workspaceName}
-								hasAccount={userView.hasAccount}
-								onExit={exitUserView}
-							/>
+			<ProviderColors />
+			<SidebarProvider>
+				<AppSidebarContainer />
+				<SidebarInset className="mr-[var(--right-sidebar-width,0)] min-w-0">
+					<HeaderContainer />
+					{userView && (
+						<UserViewBanner
+							name={userView.name}
+							workspace={userView.workspaceName}
+							hasAccount={userView.hasAccount}
+							onExit={exitUserView}
+						/>
+					)}
+					<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
+						{surface === "standard" ? (
+							<StandardPageSurface className="flex-1">
+								<Outlet />
+							</StandardPageSurface>
+						) : (
+							<div
+								className={
+									surface === "fullscreen" ? "flex min-h-0 min-w-0 flex-1 flex-col" : "flex-1"
+								}
+							>
+								<Outlet />
+							</div>
 						)}
-						<main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
-							{surface === "standard" ? (
-								<StandardPageSurface className="flex-1">
-									<Outlet />
-								</StandardPageSurface>
-							) : (
-								<div
-									className={
-										surface === "fullscreen" ? "flex min-h-0 min-w-0 flex-1 flex-col" : "flex-1"
-									}
-								>
-									<Outlet />
-								</div>
-							)}
-						</main>
-						{surface !== "fullscreen" && (
-							<Footer
-								buildInfo={environment.buildInfo}
-								isProduction={environment.deployment.isProduction}
-							/>
-						)}
-					</SidebarInset>
-				</SidebarProvider>
-			</ProviderColorScope>
+					</main>
+					{surface !== "fullscreen" && (
+						<Footer
+							buildInfo={environment.buildInfo}
+							isProduction={environment.deployment.isProduction}
+						/>
+					)}
+				</SidebarInset>
+			</SidebarProvider>
 			<Toaster />
 			<PublicLoginOverlay />
 			{userView && <UserViewConfirmAccess />}
@@ -446,9 +444,10 @@ function UserViewConfirmAccess() {
 	);
 }
 
-function ProviderColorScope({ children }: { children: ReactNode }) {
-	const { providerType } = useActiveWorkspaceSlug();
-	return <div data-provider={getProviderSlug(providerType)}>{children}</div>;
+/** The active workspace's provider colours, on app surfaces only: sign-in reads no workspace. */
+function ProviderColors() {
+	useProviderColors(useActiveWorkspaceSlug().providerType);
+	return null;
 }
 
 /** The workspace's own source-control provider, as the integration kind the sidebar lists it under. */

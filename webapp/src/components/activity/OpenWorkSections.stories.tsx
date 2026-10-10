@@ -35,7 +35,6 @@ const meta = {
 	args: {
 		state: { status: "ready", openWork: OPEN_WORK, login: ada.login },
 		providerType: "GITHUB",
-		perspective: "self",
 	},
 } satisfies Meta<typeof OpenWorkSections>;
 
@@ -137,22 +136,6 @@ export const MoreThanListed: Story = {
 		await expect(canvas.getByRole("heading", { name: "Review requested 8" })).toBeVisible();
 		await expect(
 			canvas.getByText("Showing the 8 most recently updated of your review requests."),
-		).toBeVisible();
-	},
-};
-
-/** In a member's level: the same groups, named from the outside. */
-export const Member: Story = {
-	args: {
-		perspective: "member",
-		state: { status: "ready", openWork: OPEN_WORK, login: "bob" },
-	},
-	play: async ({ canvas, userEvent }) => {
-		await expect(canvas.getByRole("heading", { level: 3, name: "Open work" })).toBeVisible();
-		await expect(canvas.getByRole("heading", { level: 4, name: "Returned 2" })).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: /Waiting on others/u }));
-		await expect(
-			canvas.getByRole("heading", { level: 4, name: "Requested from their team 2" }),
 		).toBeVisible();
 	},
 };

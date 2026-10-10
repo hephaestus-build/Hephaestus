@@ -4,8 +4,9 @@ import type { Plugin } from "vite";
 
 // These are monolithic upstream tools, not code shipped to application users. Keep narrow
 // budgets so a dependency update must explain growth; everything else retains Vite's 500kB limit.
+// The runtime's chunk also holds the import map of every story file, about 125 bytes each.
 const TOOL_BUDGETS = [
-	{ module: "/node_modules/storybook/dist/preview/runtime.js", bytes: 1_350_000, gzip: 375_000 },
+	{ module: "/node_modules/storybook/dist/preview/runtime.js", bytes: 1_360_000, gzip: 375_000 },
 	{ module: "/node_modules/axe-core/axe.js", bytes: 600_000, gzip: 165_000 },
 ];
 

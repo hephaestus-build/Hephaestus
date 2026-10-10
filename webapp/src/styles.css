@@ -129,7 +129,8 @@ code {
 	--color-provider-sponsors: #e1d8f9;
 }
 
-/* GitLab dark mode (Pajamas 400-level fg, 800-level bg) */
+/* GitLab dark mode (Pajamas 400-level fg, 800-level bg); the root carries both `.dark` and the provider. */
+.dark[data-provider="gitlab"],
 .dark [data-provider="gitlab"] {
 	--color-provider-foreground: #ececef;
 	--color-provider-muted-foreground: #89888d;
