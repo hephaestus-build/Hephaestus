@@ -5,9 +5,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
+import { databaseMigration } from "./lib/database-migration.ts";
 import { hephBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
+const migrate = databaseMigration(6 * 60 * 1000);
 const id = `pgbackrest-pitr-${randomUUID().slice(0, 8)}`;
 const image = values["target-image"] ?? `${id}:18`;
 const container = `${id}-db`;
@@ -316,13 +318,7 @@ try {
 	}
 	startObjectStore();
 	const sourcePort = start();
-	run("node", [
-		"scripts/run-gradlew.ts",
-		":application:liquibaseUpdate",
-		...(process.env.CI === "true" ? ["-PpackagedServer=true"] : []),
-		`-PpostgresPort=${sourcePort}`,
-		"--quiet",
-	]);
+	migrate(sourcePort);
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "stanza-create");
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "check");
 	sql("UPDATE instance_settings SET silent_mode_engaged = FALSE WHERE id = 1");

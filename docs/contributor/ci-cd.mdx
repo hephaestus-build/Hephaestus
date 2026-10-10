@@ -780,6 +780,12 @@ and database contract tests use the restored classes with `-PpackagedServer=true
 compilation. Unit, architecture and integration suites compile from source in `Test` without
 waiting for packaging. Their outputs do not ship.
 
+The PostgreSQL backup-restore and PITR drills apply the migrations from that same executable JAR.
+Spring Boot's launcher runs the Liquibase bundled in the JAR against the changelog in the JAR, from an empty directory and with a minimal environment.
+Thus, a drill restores the schema that the release ships, not the checkout's resources.
+In CI, a drill without the JAR fails before it starts a container.
+A local drill without `HEPHAESTUS_APPLICATION_JAR` migrates through Gradle from the checkout.
+
 API and ERD drift checks use `scripts/assert-generated-clean.ts` against their own generated paths.
 It includes added, modified, deleted and staged files without staging anything or refreshing the Git
 index. Unrelated changes cannot contaminate either verdict. The API and schema steps still report
