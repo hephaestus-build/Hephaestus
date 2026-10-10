@@ -831,15 +831,15 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     unmonitored);
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -51L, DAY);
 
-            assertThat(members(uri -> uri.queryParam("teamId", platform.getId())))
+            assertThat(members(uri -> uri.queryParam("team", platform.getSlug())))
                     .extracting(member -> member.person().id())
                     .containsExactly(zoe.getId());
-            assertThat(work(uri -> uri.queryParam("teamId", platform.getId())).content())
+            assertThat(work(uri -> uri.queryParam("team", platform.getSlug())).content())
                     .as("the team's activity is in repositories the team can access")
                     .singleElement()
                     .satisfies(entry -> assertThat(entry.actions())
                             .containsExactly(new ActivityActionDTO(ActivityKind.PULL_REQUEST_OPENED, 1)));
-            ActivitySummaryDTO summary = summary(uri -> uri.queryParam("teamId", platform.getId()));
+            ActivitySummaryDTO summary = summary(uri -> uri.queryParam("team", platform.getSlug()));
             assertThat(summary.pullRequestsOpened()).isEqualTo(1);
             assertThat(summary.issuesOpened()).isZero();
         }
@@ -863,7 +863,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     unmonitored);
 
             ActivitySummaryDTO summary =
-                    summary(uri -> uri.queryParam("login", zoe.getLogin()).queryParam("teamId", platform.getId()));
+                    summary(uri -> uri.queryParam("login", zoe.getLogin()).queryParam("team", platform.getSlug()));
 
             assertThat(summary.pullRequestsOpened()).isEqualTo(1);
             assertThat(summary.issuesOpened())
@@ -898,7 +898,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             assertThat(teamSettingsService.addLabelFilter(workspace, platform.getId(), platformLabel.getId()))
                     .isPresent();
 
-            assertThat(summary(uri -> uri.queryParam("teamId", platform.getId()))
+            assertThat(summary(uri -> uri.queryParam("team", platform.getSlug()))
                             .commentReviews())
                     .isEqualTo(1);
         }
@@ -927,7 +927,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             assertThat(teamSettingsService.updateRepositoryVisibility(workspace, web.getId(), monitored.getId(), true))
                     .isPresent();
 
-            assertThat(summary(uri -> uri.queryParam("teamId", platform.getId()))
+            assertThat(summary(uri -> uri.queryParam("team", platform.getSlug()))
                             .pullRequestsOpened())
                     .isEqualTo(1);
         }
@@ -939,9 +939,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             Team elsewhere = team("elsewhere", null);
             elsewhere.setOrganization(other.getAccountLogin());
             elsewhere = teamRepository.save(elsewhere);
-            long elsewhereId = elsewhere.getId();
+            String elsewhereKey = elsewhere.getSlug();
 
-            summaryStatus(uri -> uri.queryParam("teamId", elsewhereId))
+            summaryStatus(uri -> uri.queryParam("team", elsewhereKey))
                     .isNotFound()
                     .expectBody(Void.class);
         }
@@ -960,10 +960,10 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     monitored);
             teamSettingsService.updateTeamVisibility(workspace, web.getId(), true);
 
-            assertThat(members(uri -> uri.queryParam("teamId", platform.getId())))
+            assertThat(members(uri -> uri.queryParam("team", platform.getSlug())))
                     .as("Zoe is only in the hidden sub-team, Ada only in the team below it")
                     .isEmpty();
-            assertThat(summary(uri -> uri.queryParam("login", zoe.getLogin()).queryParam("teamId", platform.getId()))
+            assertThat(summary(uri -> uri.queryParam("login", zoe.getLogin()).queryParam("team", platform.getSlug()))
                             .pullRequestsOpened())
                     .as("only the hidden sub-team can access the repository")
                     .isZero();
@@ -974,10 +974,10 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             Team empty = team("platform-empty", null);
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -70L, DAY);
 
-            assertThat(members(uri -> uri.queryParam("teamId", empty.getId()))).isEmpty();
-            assertThat(summary(uri -> uri.queryParam("teamId", empty.getId())))
+            assertThat(members(uri -> uri.queryParam("team", empty.getSlug()))).isEmpty();
+            assertThat(summary(uri -> uri.queryParam("team", empty.getSlug())))
                     .isEqualTo(new ActivitySummaryDTO(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
-            ActivityWorkPageDTO work = work(uri -> uri.queryParam("teamId", empty.getId()));
+            ActivityWorkPageDTO work = work(uri -> uri.queryParam("team", empty.getSlug()));
             assertThat(work.content()).isEmpty();
             assertThat(work.nextCursor()).isNull();
         }
@@ -990,16 +990,16 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             seedMixedActivity(monitored);
             record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -150L, DAY, unmonitored);
 
-            assertWorkAddsUpToTheSummary(uri -> uri.queryParam("teamId", platform.getId()));
+            assertWorkAddsUpToTheSummary(uri -> uri.queryParam("team", platform.getSlug()));
             assertWorkAddsUpToTheSummary(
-                    uri -> uri.queryParam("teamId", platform.getId()).queryParam("login", zoe.getLogin()));
+                    uri -> uri.queryParam("team", platform.getSlug()).queryParam("login", zoe.getLogin()));
         }
 
         @Test
         void shouldNotFindATeamWhenItIsHiddenFromWorkspaceActivity() {
             teamSettingsService.updateTeamVisibility(workspace, platform.getId(), true);
 
-            summaryStatus(uri -> uri.queryParam("teamId", platform.getId()))
+            summaryStatus(uri -> uri.queryParam("team", platform.getSlug()))
                     .isNotFound()
                     .expectBody(Void.class);
         }
@@ -1546,23 +1546,11 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private StatusAssertions summaryStatus(Function<UriBuilder, UriBuilder> query) {
-        return get("/people", peopleQuery(query));
-    }
-
-    private Function<UriBuilder, UriBuilder> peopleQuery(Function<UriBuilder, UriBuilder> query) {
-        var raw = UriComponentsBuilder.fromPath("");
-        var parameters =
-                UriComponentsBuilder.fromUri(query.apply(raw).build()).build().getQueryParams();
-        String id = parameters.getFirst("teamId");
-        return uri -> id == null
-                ? uri
-                : uri.queryParam(
-                        "team",
-                        teamRepository.findById(Long.valueOf(id)).orElseThrow().getSlug());
+        return get("/people", query);
     }
 
     private List<ActivityPersonDTO> members(Function<UriBuilder, UriBuilder> query) {
-        return Objects.requireNonNull(get("/people", peopleQuery(query))
+        return Objects.requireNonNull(get("/people", query)
                         .isOk()
                         .expectBody(ActivityPeopleDTO.class)
                         .returnResult()
@@ -1571,20 +1559,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private ActivityWorkPageDTO work(Function<UriBuilder, UriBuilder> query) {
-        return Objects.requireNonNull(get("/work", uri -> {
-                    var request = UriComponentsBuilder.fromUri(query.apply(uri).build(workspace.getWorkspaceSlug()));
-                    String teamId = request.build().getQueryParams().getFirst("teamId");
-                    if (teamId != null) {
-                        request.replaceQueryParam("teamId")
-                                .queryParam(
-                                        "team",
-                                        teamRepository
-                                                .findById(Long.valueOf(teamId))
-                                                .orElseThrow()
-                                                .getSlug());
-                    }
-                    return request;
-                })
+        return Objects.requireNonNull(get("/work", query)
                 .isOk()
                 .expectBody(ActivityWorkPageDTO.class)
                 .returnResult()
