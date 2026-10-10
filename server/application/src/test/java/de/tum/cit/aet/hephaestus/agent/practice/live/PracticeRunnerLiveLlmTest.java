@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmCredentials;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmTest;
 import de.tum.cit.aet.hephaestus.testconfig.PiSdkInstallation;
@@ -470,7 +471,7 @@ class PracticeRunnerLiveLlmTest {
      * the live endpoint with its key, and the observation admission the runner posts after measuring admits
      * every observation it carries.
      */
-    private static final class ProxyStandIn implements AutoCloseable {
+    static final class ProxyStandIn implements AutoCloseable {
         private final HttpServer server;
         private final HttpClient client = HttpClient.newHttpClient();
 
@@ -494,7 +495,7 @@ class PracticeRunnerLiveLlmTest {
         }
 
         /** Every observation admitted as sent, with the identity and citation indexes the server assigns. */
-        private static ObjectNode admit(JsonNode request) {
+        static ObjectNode admit(JsonNode request) {
             ObjectNode answer = MAPPER.createObjectNode().put("schemaVersion", 1);
             ArrayNode admitted = answer.putArray("observations");
             for (JsonNode observation : request.path("observations")) {
@@ -511,10 +512,13 @@ class PracticeRunnerLiveLlmTest {
             return answer.put("admissionDigest", "live-test");
         }
 
-        /** As admission records it: a verdict as recorded, no outcome for a non-verdict. */
-        private static @Nullable String outcomeOf(JsonNode observation) {
-            String outcome = observation.path("outcome").asString();
-            return "MET".equals(outcome) || "NOT_MET".equals(outcome) ? outcome : null;
+        /** As admission records it: the outcome as sent, which must name an {@link Outcome}. */
+        private static String outcomeOf(JsonNode observation) {
+            JsonNode outcome = observation.path("outcome");
+            if (!outcome.isString()) {
+                throw new IllegalArgumentException("An admitted observation needs a string outcome");
+            }
+            return Outcome.valueOf(outcome.asString()).name();
         }
 
         private void forward(HttpExchange exchange, LiveLlmCredentials creds) throws IOException {
