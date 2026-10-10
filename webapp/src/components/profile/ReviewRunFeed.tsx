@@ -2,6 +2,7 @@ import { PulseIcon } from "@primer/octicons-react";
 import type { ReactNode } from "react";
 
 import type { PracticeGroupReviewRun } from "@/api/types.gen";
+import { InfiniteListEnd } from "@/components/common/InfiniteListEnd";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
 	Empty,
@@ -15,7 +16,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { rendersContent } from "@/lib/react-node";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
-import { InfiniteListEnd } from "./InfiniteListEnd";
 import type { ReviewRunFeedState } from "./review-runs";
 import { ReviewRunTimeline, type ReviewRunTimelineProps } from "./ReviewRunTimeline";
 
