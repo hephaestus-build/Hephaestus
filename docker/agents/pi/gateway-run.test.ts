@@ -163,6 +163,9 @@ void test("copies whole native sessions without the attempt credential and summa
 				toolCalls: { read: 1, other: 1 },
 				toolErrors: 1,
 				compactions: 1,
+				modelFailures: {},
+				lastModelFailureAt: null,
+				finalModelFailure: null,
 			},
 		},
 	]);
@@ -170,6 +173,84 @@ void test("copies whole native sessions without the attempt credential and summa
 		assert.ok(!text.includes(words), `the manifest carries ${words}`);
 	}
 	assert.equal(await readFile(path.join(out, "result.json"), "utf8"), "{}");
+});
+
+/** A native assistant message that failed, as the adapter wrote it, with text that must never be kept. */
+function failedCall(id: string, stopReason: string, diagnostics: unknown): string {
+	return JSON.stringify({
+		type: "message",
+		id,
+		parentId: null,
+		timestamp: "2026-10-09T12:00:00.000Z",
+		message: {
+			role: "assistant",
+			content: [],
+			api: "openai-completions",
+			provider: "hephaestus",
+			model: "m",
+			usage: { input: 1, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1 },
+			stopReason,
+			errorMessage: `503 ${CREDENTIAL}`,
+			diagnostics,
+			timestamp: 0,
+		},
+	});
+}
+
+void test("keeps only the adapter's closed failure facts, and clears the final failure after a success", async (context) => {
+	const { sessions, out } = await collected(context);
+	const header = JSON.stringify({
+		type: "session",
+		version: 3,
+		id: "s1",
+		timestamp: "2026-10-09T12:00:00.000Z",
+		cwd: "/workspace",
+	});
+	const safe = [
+		{
+			type: "openai_completions_failure",
+			timestamp: 1_760_000_000_000,
+			details: { kind: "HTTP_ERROR", phase: "request", status: 503 },
+		},
+	];
+	const malicious = [
+		{
+			type: "openai_completions_failure",
+			timestamp: "now",
+			error: { message: CREDENTIAL, stack: CREDENTIAL },
+			details: { kind: CREDENTIAL, phase: CREDENTIAL, status: 200, body: CREDENTIAL },
+		},
+	];
+	const success = failedCall("e3", "stop", undefined);
+	await writeFile(
+		path.join(sessions, "a.jsonl"),
+		`${[header, failedCall("e1", "error", safe), failedCall("e2", "aborted", malicious)].join("\n")}\n`,
+	);
+	await writeFile(
+		path.join(sessions, "b.jsonl"),
+		`${[header, failedCall("e1", "error", safe), success].join("\n")}\n`,
+	);
+	await collectTraces(sessions, out, CREDENTIAL);
+	const text = await readFile(path.join(out, "traces", "manifest.json"), "utf8");
+	assert.ok(!text.includes(CREDENTIAL));
+	const summaries = traceManifest(text).sessions.map((session) => omission(session).summary);
+	assert.deepEqual(
+		summaries.map((summary) => {
+			assert.ok(typeof summary === "object" && summary !== null);
+			const failures: unknown = Reflect.get(summary, "modelFailures");
+			const lastAt: unknown = Reflect.get(summary, "lastModelFailureAt");
+			const final: unknown = Reflect.get(summary, "finalModelFailure");
+			return [failures, lastAt, final];
+		}),
+		[
+			[
+				{ HTTP_ERROR: 1, UNKNOWN: 1 },
+				1_760_000_000_000,
+				{ kind: "UNKNOWN", phase: null, status: null, at: null },
+			],
+			[{ HTTP_ERROR: 1 }, 1_760_000_000_000, null],
+		],
+	);
 });
 
 void test("omits a session past the per-file bound and keeps nothing when the result leaves no room", async (context) => {
