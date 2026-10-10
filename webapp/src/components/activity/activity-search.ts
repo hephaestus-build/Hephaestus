@@ -129,16 +129,24 @@ export const PEOPLE_SORTS = [
 export type PeopleSort = (typeof PEOPLE_SORTS)[number];
 
 /**
- * Workspace activity's scope and order, by the names a reader can read: a team by its slug, each
- * repository by its full path, `?team=core&repo=acme/api&sort=reviews`.
+ * The people table's period, order and repositories, by the names a reader can read: each
+ * repository by its full path, `?repo=acme/api&sort=reviews`.
  */
-const workspaceActivityFilterSchema = periodSearchSchema.extend({
-	// The default parser reads `team=2024` as a number; a slug is text either way.
-	team: z.coerce.string().min(1).optional().catch(undefined),
+export const peopleSearchSchema = periodSearchSchema.extend({
 	repo: multiValue,
 	sort: z.enum(PEOPLE_SORTS).default("contributions").catch("contributions"),
 	// Absent is the column's own first direction: most first for a count, A to Z for a name.
 	dir: z.enum(["asc", "desc"]).optional().catch(undefined),
+});
+
+export const PEOPLE_SEARCH_DEFAULTS = peopleSearchSchema.parse({});
+
+export type PeopleSearch = z.infer<typeof peopleSearchSchema>;
+
+/** Workspace activity adds a team, by its slug: `?team=core&repo=acme/api&sort=reviews`. */
+const workspaceActivityFilterSchema = peopleSearchSchema.extend({
+	// The default parser reads `team=2024` as a number; a slug is text either way.
+	team: z.coerce.string().min(1).optional().catch(undefined),
 });
 
 export const WORKSPACE_ACTIVITY_SEARCH_DEFAULTS = workspaceActivityFilterSchema.parse({});

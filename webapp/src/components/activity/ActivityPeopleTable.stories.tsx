@@ -14,6 +14,7 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
 import { ActivityPeopleTable } from "./ActivityPeopleTable";
+import { personLevelLink } from "./people-links";
 
 const meta = {
 	component: ActivityPeopleTable,
@@ -27,6 +28,7 @@ const meta = {
 		repositories: REPOSITORIES,
 		repo: [],
 		onRepoChange: fn(),
+		personLink: personLevelLink,
 	},
 	render: (args) => (
 		<Stateful initial={args.order}>

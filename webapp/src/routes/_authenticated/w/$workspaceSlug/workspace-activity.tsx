@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 
-import { updateActivityAutomationMutation } from "@/api/@tanstack/react-query.gen";
+import {
+	getPublicActivityHiddenCountQueryKey,
+	updateActivityAutomationMutation,
+	updatePublicActivityObjectionMutation,
+} from "@/api/@tanstack/react-query.gen";
 import type { ActivityPerson } from "@/api/types.gen";
 import { ACTIVITY_CATEGORY_DEFS } from "@/components/activity/activity-kind-defs";
 import {
@@ -22,6 +26,7 @@ import {
 } from "@/components/activity/activity-search";
 import { ActivityDetailDrawer } from "@/components/activity/ActivityDetailDrawer";
 import type { PeopleOrder } from "@/components/activity/ActivityPeopleTable";
+import { HidePersonAction } from "@/components/activity/HidePersonAction";
 import { teamPaths } from "@/components/activity/team-paths";
 import { workLogTitle } from "@/components/activity/work-log-markdown";
 import { WorkspaceActivityPage } from "@/components/activity/WorkspaceActivityPage";
@@ -46,6 +51,9 @@ import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-wo
 
 /** The reads that list an account among the people or the automation. */
 const ACTIVITY_READS = new Set(["getActivityPeople", "getActivityPerson"]);
+
+/** Hiding takes a person out of the timeline as well. */
+const HIDING_READS = new Set([...ACTIVITY_READS, "getActivityWork"]);
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/workspace-activity")({
 	component: WorkspaceActivity,
@@ -151,6 +159,47 @@ function WorkspaceActivity() {
 			</Button>
 		) : undefined;
 
+	const hiding = useMutation({
+		...updatePublicActivityObjectionMutation(),
+		onSuccess: async (_data, { path, query }) => {
+			await invalidateWorkspaceReads(queryClient, workspaceSlug, HIDING_READS);
+			void queryClient.invalidateQueries({
+				queryKey: getPublicActivityHiddenCountQueryKey({ path: { workspaceSlug } }),
+			});
+			if (query.hidden) {
+				// The person has left the list this level opened from.
+				stackControls.close(0);
+				toast.success(`${personName ?? "The person"} is hidden from activity`, {
+					action: {
+						label: "Undo",
+						onClick: () => hiding.mutate({ path, query: { hidden: false } }),
+					},
+				});
+			} else {
+				toast.success("Shown in activity again");
+			}
+		},
+		onError: (error) =>
+			toast.error("We could not change who shows in activity", {
+				description: problemDetailOf(error),
+			}),
+	});
+	// A provider's bot and an account counted as automation never show on a page, so there is nothing
+	// to hide.
+	const hideAction =
+		isAdmin && person?.kind === "PERSON" ? (
+			<HidePersonAction
+				name={person.person.name}
+				pending={hiding.isPending}
+				onConfirm={() =>
+					hiding.mutate({
+						path: { workspaceSlug, userId: person.person.id },
+						query: { hidden: true },
+					})
+				}
+			/>
+		) : undefined;
+
 	const setView = (view: Partial<WorkspaceActivitySearch>) => {
 		void setSearch((previous) => ({ ...previous, ...view }), { state: true, replace: true });
 	};
@@ -193,6 +242,7 @@ function WorkspaceActivity() {
 					workLog: people.status === "error" ? people : workLog,
 					categoryWorkLog: people.status === "error" ? people : categoryWorkLog,
 					automationAction,
+					hideAction,
 				}}
 			/>
 		</>

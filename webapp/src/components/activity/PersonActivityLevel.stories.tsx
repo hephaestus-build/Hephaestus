@@ -1,9 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
-import { Button } from "@/components/ui/button";
-
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
+import { Button } from "@/components/ui/button";
 import { ada, OVERVIEW, readyOverview, WORK_LOG } from "@/stories/activity-story-data";
 import { withPageBehind, withProvider } from "@/stories/decorators";
 import { settledDrawerPanel } from "@/stories/overlay";
@@ -11,6 +10,7 @@ import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
 import { personLevel } from "./activity-search";
+import { HidePersonAction } from "./HidePersonAction";
 import { PersonActivityLevel } from "./PersonActivityLevel";
 
 // The level has no page of its own, so every story mounts a real drawer over a real page.
@@ -164,3 +164,20 @@ export const GitLabDark: Story = {
 };
 
 export const Dark: Story = { globals: { theme: "dark" } };
+
+/** An admin who may count the account and leave the person out sees both, in the level's footer. */
+export const WithAdminActions: Story = {
+	args: {
+		automationAction: (
+			<Button variant="outline" size="sm">
+				Treat as automation
+			</Button>
+		),
+		hideAction: <HidePersonAction name="Ada Lovelace" pending={false} onConfirm={fn()} />,
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.getByRole("button", { name: "Treat as automation" })).toBeVisible();
+		await expect(panel.getByRole("button", { name: "Hide from activity" })).toBeVisible();
+	},
+};

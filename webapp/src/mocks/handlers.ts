@@ -31,6 +31,13 @@ interface AdminUserPatch {
 	appRole?: string;
 }
 
+function notFound() {
+	return HttpResponse.json(
+		{ type: "about:blank", title: "Not Found", status: 404 },
+		{ status: 404, headers: { "Content-Type": "application/problem+json" } },
+	);
+}
+
 export const handlers = [
 	// Opening Heph prepares the member's sandbox; the server accepts and answers with no body.
 	http.post(
@@ -78,6 +85,12 @@ export const handlers = [
 			? new HttpResponse(null, { status: 204 })
 			: new HttpResponse(null, { status: 400 }),
 	),
+
+	// Nothing is published unless a test or story says so, and an unknown workspace answers as a
+	// private one does.
+	http.get("*/public/workspaces/:slug/activity", () => notFound()),
+	http.get("*/user/public-activity/workspaces/:slug/onboarding", () => notFound()),
+	http.get("*/user/public-activity", () => HttpResponse.json({ visible: true })),
 
 	http.get("*/workspaces/:workspaceSlug/product-feedback/surveys", () => HttpResponse.json([])),
 	http.get("*/identity-providers", () => HttpResponse.json(identityProviders)),

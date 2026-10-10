@@ -1,7 +1,12 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useMatch } from "@tanstack/react-router";
 import { hasText } from "@/lib/text";
 
 import { getMemberOnboardingOptions, listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
+import { PublicActivityOnboardingDialog } from "@/components/onboarding/PublicActivityOnboardingDialog";
+import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { usePublicActivityOnboarding } from "@/hooks/use-public-activity-onboarding";
+import { toScmProviderType } from "@/lib/provider/provider-terms";
+import { useAuth } from "@/runtime/auth/AuthContext";
 import { getUserViewSession } from "@/runtime/user-view/session";
 
 /** Workspace gate: a directory layout, so every route under `w/$workspaceSlug/` inherits it. */
@@ -58,5 +63,38 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 			replace: true,
 		});
 	},
-	component: () => <Outlet />,
+	component: WorkspaceLayout,
 });
+
+/**
+ * Where a workspace publishes its activity, the first page a member opens asks whether they show on
+ * it. The AI setup comes first: it is a route of its own, which the step waits out. A user view
+ * answers for no one.
+ */
+function WorkspaceLayout() {
+	const { workspaceSlug } = Route.useParams();
+	const { userView } = useAuth();
+	const { workspaces } = useActiveWorkspaceSlug();
+	const workspace = workspaces.find((candidate) => candidate.workspaceSlug === workspaceSlug);
+	const settingUp =
+		useMatch({
+			from: "/_authenticated/w/$workspaceSlug/onboarding",
+			shouldThrow: false,
+		}) !== undefined;
+	const onboarding = usePublicActivityOnboarding({
+		workspaceSlug,
+		enabled: workspace?.publishesPublicActivity === true && userView === undefined && !settingUp,
+	});
+	return (
+		<>
+			<Outlet />
+			{workspace !== undefined && (
+				<PublicActivityOnboardingDialog
+					{...onboarding}
+					workspaceName={workspace.displayName}
+					providerType={toScmProviderType(workspace.providerType)}
+				/>
+			)}
+		</>
+	);
+}

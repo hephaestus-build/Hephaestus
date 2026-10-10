@@ -37,6 +37,7 @@ export interface ActivityDetailDrawerProps {
 		/** The people are in, and the person the URL opens is not among them. */
 		absent?: boolean;
 		automationAction?: ReactElement;
+		hideAction?: ReactElement;
 	};
 }
 
@@ -94,6 +95,7 @@ export function ActivityDetailDrawer({
 								overview={owner.overview}
 								workLog={owner.workLog}
 								automationAction={owner.automationAction}
+								hideAction={owner.hideAction}
 							/>
 						);
 					}

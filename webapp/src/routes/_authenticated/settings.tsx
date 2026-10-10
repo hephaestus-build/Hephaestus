@@ -10,6 +10,8 @@ import {
 	getConsentStatusQueryKey,
 	getCurrentUserQueryKey,
 	getNotificationPreferencesOptions,
+	getPublicActivityChoiceOptions,
+	getPublicActivityChoiceQueryKey,
 	getNotificationPreferencesQueryKey,
 	getSlackUserPreferencesOptions,
 	getSlackUserPreferencesQueryKey,
@@ -24,6 +26,7 @@ import {
 	revokeSessionMutation,
 	unlinkIdentityMutation,
 	updateAccountAiChoiceMutation,
+	updatePublicActivityChoiceMutation,
 	updateResearchConsentMutation,
 	updateNotificationPreferencesMutation,
 	updateSlackUserPreferencesMutation,
@@ -230,6 +233,24 @@ function RouteComponent() {
 		},
 	});
 
+	const publicActivityQuery = useQuery(getPublicActivityChoiceOptions({}));
+	const publicActivityMutation = useMutation({
+		...updatePublicActivityChoiceMutation(),
+		onMutate: async ({ body }) => {
+			await queryClient.cancelQueries({ queryKey: getPublicActivityChoiceQueryKey({}) });
+			queryClient.setQueryData(getPublicActivityChoiceQueryKey({}), body);
+		},
+		onSuccess: (data) => {
+			queryClient.setQueryData(getPublicActivityChoiceQueryKey({}), data);
+		},
+		onError: () => {
+			toast.error("We could not save your choice. Try again.");
+		},
+		onSettled: () => {
+			void queryClient.invalidateQueries({ queryKey: getPublicActivityChoiceQueryKey({}) });
+		},
+	});
+
 	// After deletion: end the session. `logout()` performs a full reload to "/",
 	// so no further navigation is needed here.
 	const handleAccountDeleted = async () => {
@@ -432,6 +453,16 @@ function RouteComponent() {
 				error: aiChoiceQuery.error,
 				onRetry: () => {
 					void aiChoiceQuery.refetch();
+				},
+			}}
+			publicActivityProps={{
+				visible: publicActivityQuery.data?.visible ?? true,
+				onVisibleChange: (visible) => publicActivityMutation.mutate({ body: { visible } }),
+				isLoading: publicActivityQuery.isLoading,
+				isError: publicActivityQuery.isError,
+				error: publicActivityQuery.error,
+				onRetry: () => {
+					void publicActivityQuery.refetch();
 				},
 			}}
 			linkedAccountsProps={linkedAccountsProps}

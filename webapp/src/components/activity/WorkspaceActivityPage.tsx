@@ -6,9 +6,9 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
 import { ARTIFACT_KIND, artifactKindNoun } from "@/lib/artifact-kinds";
-import { formatDate } from "@/lib/dates";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 
+import { coverageNote } from "./activity-coverage";
 import type { ActivityPeriod } from "./activity-period";
 import { STALE } from "./activity-tones";
 import { ActivityAutomationList } from "./ActivityAutomationList";
@@ -21,6 +21,7 @@ import { ActivityPeriodPicker } from "./ActivityPeriodPicker";
 import { ActivityTeamPicker } from "./ActivityTeamPicker";
 import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
+import { personLevelLink } from "./people-links";
 
 /** What the team and repository pickers offer: the same in every scope. */
 export type ActivityFacets = Pick<ActivityPeople, "teams" | "repositories">;
@@ -70,7 +71,7 @@ export function WorkspaceActivityPage({
 			<PageHeader
 				icon={<Building2 />}
 				title="Workspace activity"
-				description={ready && coverageNote(ready)}
+				description={ready && coverageNote(ready.coverage)}
 			/>
 			<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
 				<ActivityTeamPicker teams={facets?.teams} value={team} onChange={onTeamChange} />
@@ -93,6 +94,7 @@ export function WorkspaceActivityPage({
 					repositories={facets?.repositories ?? []}
 					repo={repo}
 					onRepoChange={onRepoChange}
+					personLink={personLevelLink}
 				/>
 			</Section>
 			{ready && ready.automation.length > 0 && (
@@ -123,25 +125,4 @@ export function WorkspaceActivityPage({
 			</Section>
 		</PageLayout>
 	);
-}
-
-/**
- * How far back the counts are complete: "History since 3 March 2024 for 12 of 14 repositories", or,
- * while the complete repositories hold no history yet, how many repositories are still incomplete.
- */
-function coverageNote({ coverage }: ActivityPeople): string | undefined {
-	const { since, completeRepositories, totalRepositories } = coverage;
-	const incomplete = totalRepositories - completeRepositories;
-	if (totalRepositories === 0 || (since === undefined && incomplete === 0)) {
-		return undefined;
-	}
-	const repositories = totalRepositories === 1 ? "repository" : "repositories";
-	if (since === undefined) {
-		const which =
-			completeRepositories === 0
-				? `the ${totalRepositories} ${repositories}`
-				: `${incomplete} of ${totalRepositories} ${repositories}`;
-		return `The history of ${which} is not complete yet, so the counts can be low.`;
-	}
-	return `History since ${formatDate(since)} for ${completeRepositories} of ${totalRepositories} ${repositories}.`;
 }
