@@ -265,6 +265,7 @@ export default defineConfig({
 			// Gradle reads the CI shard from the environment; locally the whole tier runs.
 			"test:server:integration": run(`${gradlew} :application:integrationTest`),
 			"test:server:mutation": run("node scripts/run-security-mutations.ts"),
+			"test:workspace-subdomains": run("node scripts/workspace-subdomains-smoke.ts"),
 			"test:postgres-restore": run("node scripts/postgres-backup-restore-test.ts"),
 			"test:postgres-pitr": run("node scripts/postgres-pitr-test.ts"),
 
