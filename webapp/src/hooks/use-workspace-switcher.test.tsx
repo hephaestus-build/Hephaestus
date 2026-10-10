@@ -11,6 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { Route as workspaceActivityRoute } from "@/routes/_authenticated/w/$workspaceSlug/workspace-activity";
 
 import { useWorkspaceSwitcher } from "./use-workspace-switcher";
@@ -82,6 +83,7 @@ function renderRoute(initialEntry: string, path: string, { mountAtRoot = false }
 		search: workspaceActivityRoute.options.search,
 	});
 	const router = createRouter({
+		...ROUTER_SEARCH,
 		routeTree: rootRoute.addChildren([
 			workspaceRoute.addChildren([indexRoute, activityRoute, currentRoute]),
 		]),
@@ -105,6 +107,7 @@ function renderGlobalRoute() {
 		component: () => null,
 	});
 	const router = createRouter({
+		...ROUTER_SEARCH,
 		routeTree: rootRoute.addChildren([settingsRoute, workspaceRoute]),
 		history: createMemoryHistory({ initialEntries: ["/settings"] }),
 	});

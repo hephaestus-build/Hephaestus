@@ -25,9 +25,6 @@ import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import { type ActivityTone, providerIcon } from "./activity-tones";
 
-/** Whose open work: the reader's own, or a member's opened from Workspace activity. */
-export type OpenWorkPerspective = "self" | "member";
-
 export const OPEN_WORK_GROUPS = [
 	"review-requested",
 	"returned",
@@ -42,7 +39,7 @@ export const OPEN_WORK_GROUPS = [
 export type OpenWorkGroup = (typeof OPEN_WORK_GROUPS)[number];
 
 interface OpenWorkGroupDef {
-	label: (perspective: OpenWorkPerspective) => string;
+	label: string;
 	icon: (provider: ProviderType) => IconComponent;
 	tone: ActivityTone;
 	/**
@@ -58,51 +55,50 @@ interface OpenWorkGroupDef {
  */
 export const OPEN_WORK_GROUP_DEFS = {
 	"review-requested": {
-		label: () => "Review requested",
+		label: "Review requested",
 		icon: providerIcon(EyeIcon, GitLabReviewListIcon),
 		tone: "attention",
 		counted: true,
 	},
 	returned: {
-		label: (perspective) => (perspective === "self" ? "Returned to you" : "Returned"),
+		label: "Returned to you",
 		icon: providerIcon(FileDiffIcon, GitLabReviewWarningIcon),
 		tone: "danger",
 		counted: true,
 	},
 	approved: {
-		label: () => "Approved",
+		label: "Approved",
 		icon: providerIcon(CheckCircleIcon, GitLabReviewCheckmarkIcon),
 		tone: "success",
 		counted: true,
 	},
 	waiting: {
-		label: () => "Waiting for review",
+		label: "Waiting for review",
 		icon: providerIcon(ClockIcon, GitLabHourglassIcon),
 		tone: "muted",
 		counted: false,
 	},
 	drafts: {
-		label: () => "Drafts",
+		label: "Drafts",
 		icon: providerIcon(GitPullRequestDraftIcon, GitLabMergeRequestDraftIcon),
 		tone: "muted",
 		counted: false,
 	},
 	// GitLab has no team reviewers, but every group names an icon for each provider.
 	"team-requested": {
-		label: (perspective) =>
-			perspective === "self" ? "Requested from your team" : "Requested from their team",
+		label: "Requested from your team",
 		icon: providerIcon(OrganizationIcon, GitLabGroupIcon),
 		tone: "muted",
 		counted: false,
 	},
 	covered: {
-		label: () => "Covered by other reviewers",
+		label: "Covered by other reviewers",
 		icon: providerIcon(PeopleIcon, GitLabUsersIcon),
 		tone: "muted",
 		counted: false,
 	},
 	reviewed: {
-		label: (perspective) => (perspective === "self" ? "Reviewed by you" : "Reviewed by them"),
+		label: "Reviewed by you",
 		icon: providerIcon(CheckIcon, GitLabCheckIcon),
 		tone: "muted",
 		counted: false,

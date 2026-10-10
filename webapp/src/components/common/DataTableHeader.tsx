@@ -1,5 +1,6 @@
 import { FlexRender, type Column, type RowData, type Table } from "@tanstack/react-table";
 
+import { cn } from "cn";
 import type { DataTableFeatures } from "@/components/common/data-table";
 import { SortButton } from "@/components/common/SortButton";
 import { TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -27,18 +28,31 @@ export function DataTableHeader<TData extends RowData>({
 						const { column } = header;
 						const sorted = column.getIsSorted();
 						const label = header.isPlaceholder ? null : <FlexRender header={header} />;
+						const { meta } = column.columnDef;
 
 						return (
-							<TableHead key={header.id} aria-sort={ariaSort(column)}>
+							<TableHead
+								key={header.id}
+								aria-sort={ariaSort(column)}
+								numeric={meta?.numeric}
+								className={cn(meta?.numeric === true && "text-right", meta?.className)}
+							>
 								{column.getCanSort() ? (
 									<SortButton
 										sorted={sorted}
-										onToggle={() => column.toggleSorting(sorted === "asc")}
+										// A right-aligned number keeps its arrow on the inside, next to the column.
+										reverse={meta?.numeric}
+										// The first press takes the column's own first direction — most first for
+										// a count — then each press flips it.
+										onToggle={() =>
+											column.toggleSorting(sorted === false ? undefined : sorted === "asc")
+										}
 									>
 										{label}
 									</SortButton>
 								) : (
-									label
+									// Muted like an unsorted column, so only the active sort reads in full colour.
+									<span className="text-muted-foreground">{label}</span>
 								)}
 							</TableHead>
 						);

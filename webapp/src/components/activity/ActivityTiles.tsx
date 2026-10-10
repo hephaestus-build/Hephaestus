@@ -1,7 +1,6 @@
 import { useId } from "react";
 
 import { cn } from "cn";
-import type { ActivityOverview } from "@/components/activity/activity-view";
 import { FOCUS_RING } from "@/components/common/focus";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { STAT_TILE_GRID, StatTile, StatTileSkeleton } from "@/components/common/StatTile";
@@ -13,22 +12,22 @@ import { capitalise } from "@/lib/text";
 import { ActionChips } from "./ActionChip";
 import {
 	type ActivityOverviewState,
-	bucketSummary,
 	type DateSpan,
 	deltaPhrase,
 	type PreviousPeriod,
 	readSpan,
-	totalRows,
+	weekRows,
+	weeksSummary,
 } from "./activity-buckets";
 import {
 	ACTIVITY_CATEGORIES,
 	ACTIVITY_CATEGORY_DEFS,
 	type ActivityCategory,
 	type ActivityCategoryDef,
-	kindsTotal,
-	summaryActions,
+	tallyActions,
 } from "./activity-kind-defs";
 import { categoryLevel } from "./activity-search";
+import type { ActivityOverview } from "./activity-tally";
 import { ACTIVITY_TONES, STALE } from "./activity-tones";
 import { BucketBars } from "./BucketBars";
 
@@ -102,12 +101,11 @@ function ActivityTile({
 	const descriptionId = useId();
 	const def: ActivityCategoryDef = ACTIVITY_CATEGORY_DEFS[category];
 	const Icon = def.icon(providerType);
-	const headline = kindsTotal(overview.summary, def.headline.kinds);
-	const chips = summaryActions(overview.summary, def.chips);
+	const headline = def.headline.count(overview.tally);
+	const chips = tallyActions(overview.tally, def.chips);
 	const opens = headline > 0 || chips.length > 0;
 	const delta =
-		previous &&
-		deltaPhrase(headline, kindsTotal(previous.summary, def.headline.kinds), previous.name);
+		previous && deltaPhrase(headline, def.headline.count(previous.tally), previous.name);
 	const card = (
 		<StatTile
 			variant={opens ? "interactive" : "muted"}
@@ -122,14 +120,10 @@ function ActivityTile({
 			}
 			title={def.label(providerType)}
 			value={headline}
-			qualifier={
-				category === "reviews" && overview.summary.pullRequestsReviewed !== undefined
-					? "pull requests reviewed"
-					: def.headline.qualifier
-			}
+			qualifier={def.headline.qualifier}
 			detail={delta !== undefined && <p className="text-xs text-muted-foreground">{delta}</p>}
 		>
-			{opens && overview.buckets.length > 0 && (
+			{opens && overview.weeks.length > 0 && (
 				<TileChart
 					category={category}
 					overview={overview}
@@ -155,7 +149,7 @@ function ActivityTile({
 				{card}
 			</DetailStackLink>
 			<span id={descriptionId} hidden>
-				{[bucketSummary(overview, span, def.headline.kinds, def.headline.noun(providerType)), delta]
+				{[weeksSummary(overview, span, def.headline.count, def.headline.noun(providerType)), delta]
 					.filter((part) => part !== undefined)
 					.join(". ")}
 			</span>
@@ -180,8 +174,8 @@ function TileChart({
 	const def: ActivityCategoryDef = ACTIVITY_CATEGORY_DEFS[category];
 	return (
 		<BucketBars
-			rows={totalRows(overview.buckets, def.headline.kinds)}
-			bucket={overview.bucket}
+			rows={weekRows(overview.weeks, def.headline.count)}
+			bucket="WEEK"
 			span={span}
 			name={capitalise(def.headline.qualifier ?? def.label(providerType))}
 			fill={ACTIVITY_TONES[def.tone].fill}

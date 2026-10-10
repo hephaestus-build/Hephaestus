@@ -12,7 +12,7 @@ it("keeps the ordinary chunk limit for application and story code", () => {
 });
 
 it.each([
-	["/repo/node_modules/storybook/dist/preview/runtime.js", 1_350_000],
+	["/repo/node_modules/storybook/dist/preview/runtime.js", 1_360_000],
 	[String.raw`C:\repo\node_modules\axe-core\axe.js`, 600_000],
 ])("budgets the exact upstream module %s", (id, limit) => {
 	expect(checkChunkBudget("a".repeat(limit), [id])).toContain(`${limit}/${limit} bytes`);

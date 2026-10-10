@@ -4,6 +4,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { expect, it, vi } from "vitest";
 
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
@@ -23,6 +24,7 @@ it("keeps the main route available when the optional copilot import rejects", as
 	);
 	const queryClient = testQueryClient();
 	const router = createRouter({
+		...ROUTER_SEARCH,
 		routeTree,
 		history: createMemoryHistory({ initialEntries: ["/"] }),
 		context: { queryClient, auth: undefined },

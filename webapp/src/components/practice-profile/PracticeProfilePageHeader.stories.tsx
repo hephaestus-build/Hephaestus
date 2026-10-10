@@ -52,13 +52,13 @@ export const Default: Story = {
 		// The chip is one control, and the level it opens is an address.
 		const chip = canvas.getByRole("link", { name: /^Latest review/u });
 		await expectTargetSize(chip);
-		await expect(chip).toHaveAttribute("href", expect.stringContaining("reviews%3Aall"));
+		await expect(chip).toHaveAttribute("href", expect.stringContaining("reviews:all"));
 
 		// One destination, and the card is all of it: the words are the keyboard path and their
 		// pseudo-element covers the card for the pointer. The level it opens is an address.
 		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toHaveAttribute(
 			"href",
-			expect.stringContaining("practice-groups%3Aall"),
+			expect.stringContaining("practice-groups:all"),
 		);
 	},
 };

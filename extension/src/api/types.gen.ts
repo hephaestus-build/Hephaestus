@@ -95,19 +95,19 @@ export type ActivityPeople = {
 };
 
 export type ActivityPerson = {
-    automation: boolean;
     counts: ActivityCounts;
     firstContributionAt?: string;
+    kind: 'PERSON' | 'BOT' | 'AUTOMATION';
     person: UserInfo;
     weeks: Array<ActivitySparklineWeek>;
 };
 
 export type ActivityPersonDetail = {
-    automation: boolean;
     breakdown: ActivityBreakdown;
     counts: ActivityCounts;
     firstContributionAt?: string;
     from: string;
+    kind: 'PERSON' | 'BOT' | 'AUTOMATION';
     person: UserInfo;
     repositories: Array<ActivityRepositoryCounts>;
     to: string;

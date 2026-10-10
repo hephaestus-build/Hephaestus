@@ -59,7 +59,6 @@ export function InlineLink({
 				interactive &&
 					"underline decoration-border underline-offset-4 hover:decoration-current focus-visible:decoration-current",
 			],
-			outbound && "inline-flex items-center gap-0.5",
 			className,
 		),
 	};
@@ -80,7 +79,7 @@ export function InlineLink({
 			children: outbound ? (
 				<>
 					{children}
-					<ExternalLinkIcon className="size-3 shrink-0" aria-hidden />
+					<ExternalLinkIcon className="ms-0.5 inline size-3 align-baseline" aria-hidden />
 					<span className="sr-only"> (opens in a new tab)</span>
 				</>
 			) : (

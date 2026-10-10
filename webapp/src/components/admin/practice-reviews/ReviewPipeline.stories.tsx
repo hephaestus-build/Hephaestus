@@ -80,7 +80,7 @@ export const Default: Story = {
 		const running = new URL(
 			canvas.getByRole<HTMLAnchorElement>("link", { name: "1 running" }).href,
 		);
-		await expect(running.searchParams.get("status")).toBe('["RUNNING"]');
+		await expect(running.searchParams.getAll("status")).toStrictEqual(["RUNNING"]);
 		canvas.getByRole("link", { name: "2 queued" });
 		await expect(
 			within(canvas.getByRole("list", { name: "Reviews by outcome" }))

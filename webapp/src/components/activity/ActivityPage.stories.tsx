@@ -17,7 +17,9 @@ import {
 } from "@/stories/activity-story-data";
 import { withProvider, withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { daysBefore } from "@/stories/story-clock";
 
+import { periodLabel } from "./activity-period";
 import { ActivityPage } from "./ActivityPage";
 
 const onRetry = fn();
@@ -43,8 +45,8 @@ const meta = {
 	args: {
 		providerType: "GITHUB",
 		account: { status: "ready", login: ada.login },
-		range: "30d",
-		onRangeChange: fn(),
+		period: { kind: "preset", preset: "90d" },
+		onPeriodChange: fn(),
 		openWork: { status: "ready", openWork: OPEN_WORK, login: ada.login },
 		overview: readyOverview(OVERVIEW),
 		timeline: readyTimeline(),
@@ -57,18 +59,19 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		// Action before history: what needs you, what is assigned, then the range, then the timeline.
+		// Action before history: what needs you, what is assigned, then the period, then the timeline.
 		const headings = canvas
 			.getAllByRole("heading", { level: 2 })
 			.map((heading) => heading.textContent);
 		await expect(headings).toStrictEqual([
 			"Needs you",
 			"Assigned issues",
-			"Last 30 days",
+			"Last 90 days",
+			"Repositories",
 			"Timeline",
 		]);
-		await userEvent.click(canvas.getByRole("button", { name: "90 days" }));
-		await expect(args.onRangeChange).toHaveBeenCalledWith("90d");
+		await userEvent.click(canvas.getByRole("button", { name: "All time" }));
+		await expect(args.onPeriodChange).toHaveBeenCalledWith({ kind: "preset", preset: "all" });
 		await userEvent.click(canvas.getByRole("button", { name: "Copy as Markdown" }));
 		await expect(onCopy).toHaveBeenCalledOnce();
 	},
@@ -103,9 +106,28 @@ export const FirstWeek: Story = {
 };
 
 export const TwelveMonths: Story = {
-	args: { range: "1y", overview: readyOverview(YEAR_OVERVIEW, "1y") },
+	args: {
+		period: { kind: "preset", preset: "1y" },
+		overview: readyOverview(YEAR_OVERVIEW, "1y"),
+	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 2, name: "Last 12 months" })).toBeVisible();
+	},
+};
+
+/** A custom range names its days, and no preset is pressed. */
+export const CustomRange: Story = {
+	args: {
+		period: { kind: "custom", from: daysBefore(60), to: daysBefore(31) },
+	},
+	play: async ({ args, canvas }) => {
+		await expect(
+			canvas.getByRole("button", { name: `${periodLabel(args.period)}, custom range` }),
+		).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "30 days" })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
 	},
 };
 

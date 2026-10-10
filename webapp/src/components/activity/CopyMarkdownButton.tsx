@@ -1,4 +1,4 @@
-import { CopyIcon } from "@primer/octicons-react";
+import { CopyIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";

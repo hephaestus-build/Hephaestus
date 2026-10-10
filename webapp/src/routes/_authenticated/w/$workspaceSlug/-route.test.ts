@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -24,6 +25,7 @@ function listWorkspaces(...slugs: string[]) {
 
 async function land(url: string, queryClient = new QueryClient()) {
 	const router = createRouter({
+		...ROUTER_SEARCH,
 		routeTree,
 		history: createMemoryHistory({ initialEntries: [url] }),
 		context: { queryClient, auth: undefined },

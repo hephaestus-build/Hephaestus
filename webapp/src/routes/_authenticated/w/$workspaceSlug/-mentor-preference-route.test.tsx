@@ -46,7 +46,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 	await screen.findByText("Earlier guidance remains readable.", {}, ROUTE_RENDER_WAIT);
 	await screen.findByRole("heading", { name: "Heph is off for you" });
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
-		"/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fmentor%2F65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed",
+		"/w/acme/onboarding?returnTo=/w/acme/mentor/65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed",
 	);
 	expect(screen.queryByRole("textbox")).toBeNull();
 	expect(screen.queryByRole("button", { name: /edit|try again/iu })).toBeNull();
@@ -98,7 +98,7 @@ it("names the saved choice when no Heph model is set up for it", async () => {
 		"No Heph model is set up for Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 	);
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
-		"/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fmentor",
+		"/w/acme/onboarding?returnTo=/w/acme/mentor",
 	);
 });
 

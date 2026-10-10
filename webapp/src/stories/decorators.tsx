@@ -2,19 +2,17 @@ import type { Decorator } from "@storybook/react";
 import { ListChecks } from "lucide-react";
 
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
-import { getProviderSlug, type ProviderType } from "@/lib/provider/provider-terms";
+import type { ProviderType } from "@/lib/provider/provider-terms";
+import { useProviderColors } from "@/runtime/theme/provider-colors";
 
 /**
- * Wraps a story in a provider color scope so that
- * `--color-provider-*` CSS custom properties resolve to provider-specific values.
+ * Paints a story in a provider's colours from the document root, as the app does, so that the
+ * `--color-provider-*` tokens reach the story's drawers and tooltips too.
  */
 export function withProvider(provider: ProviderType): Decorator {
 	return function ProviderDecorator(Story) {
-		return (
-			<div data-provider={getProviderSlug(provider)}>
-				<Story />
-			</div>
-		);
+		useProviderColors(provider);
+		return <Story />;
 	};
 }
 

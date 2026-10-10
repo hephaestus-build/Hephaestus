@@ -83,7 +83,7 @@ export const Default: Story = {
 			canvas.getByRole<HTMLAnchorElement>("link", { name: "See all 12 awaiting approval" }).href,
 		);
 		await expect(all.pathname).toBe("/w/demo/admin/practices/reviews/feedback");
-		await expect(all.searchParams.get("deliveryState")).toBe('["AWAITING_APPROVAL"]');
+		await expect(all.searchParams.getAll("deliveryState")).toStrictEqual(["AWAITING_APPROVAL"]);
 		await expect(all.searchParams.get("order")).toBe("OLDEST");
 		// The primary action opens the oldest, whose level walks the rest.
 		const [oldest] = awaitingApprovalFeedback;
@@ -105,23 +105,27 @@ export const Default: Story = {
 			canvas.getByRole<HTMLAnchorElement>("link", { name: "2 reviews failed or timed out" }).href,
 		);
 		await expect(failedReviews.pathname).toBe("/w/demo/admin/practices/reviews/runs");
-		await expect(failedReviews.searchParams.get("status")).toBe('["FAILED","TIMED_OUT"]');
+		await expect(failedReviews.searchParams.getAll("status")).toStrictEqual([
+			"FAILED",
+			"TIMED_OUT",
+		]);
 		await expect(failedReviews.searchParams.get("from")).toBe(reviewOverviewScope.from);
 		const unprocessed = new URL(
 			canvas.getByRole<HTMLAnchorElement>("link", {
 				name: "1 review’s results could not be processed or delivered",
 			}).href,
 		);
-		await expect(unprocessed.searchParams.get("resultProcessing")).toBe('["FAILED"]');
+		await expect(unprocessed.searchParams.getAll("resultProcessing")).toStrictEqual(["FAILED"]);
 		const failedDeliveries = new URL(
 			canvas.getByRole<HTMLAnchorElement>("link", {
 				name: "1 piece of feedback failed to deliver",
 			}).href,
 		);
 		await expect(failedDeliveries.pathname).toBe("/w/demo/admin/practices/reviews/feedback");
-		await expect(failedDeliveries.searchParams.get("deliveryState")).toBe(
-			'["FAILED","PARTIALLY_FAILED"]',
-		);
+		await expect(failedDeliveries.searchParams.getAll("deliveryState")).toStrictEqual([
+			"FAILED",
+			"PARTIALLY_FAILED",
+		]);
 	},
 };
 

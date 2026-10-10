@@ -259,6 +259,11 @@ Other optional fields are `outdated` (only when `true`), `created_at`, `author`,
 The rows do not establish current GitLab review readiness when `metadata.json` omits `review_decision`.
 A withdrawn or replaced decision may be missing.
 `decisionHistoryComplete` is always `false`.
+
+It describes the history of decision events, not the capture.
+A source that the manifest declares complete holds every row of the supported snapshot.
+It does not establish that every withdrawn or replaced decision event is present.
+Each practice's criteria state how a dated decision or resolution in the snapshot settles its question.
 `truncated` describes only the list's cap.
 
 On GitLab, an approval's `submittedAt` records its native `approved_at`.
