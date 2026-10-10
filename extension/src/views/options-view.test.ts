@@ -13,6 +13,7 @@ const platform = vi.hoisted(() => ({
 	sendMessage: vi.fn<(request: RpcRequest) => Promise<unknown>>(),
 	addListener:
 		vi.fn<(listener: (event: RpcEvent, sender: { id: string; url: string }) => void) => void>(),
+	contains: vi.fn<(permissions: { origins: string[] }) => Promise<boolean>>(),
 	request: vi.fn<(permissions: { origins: string[] }) => Promise<boolean>>(),
 	remove: vi.fn<(permissions: { origins: string[] }) => Promise<boolean>>(),
 }));
@@ -25,7 +26,11 @@ vi.mock("@wxt-dev/browser", () => ({
 			sendMessage: platform.sendMessage,
 			onMessage: { addListener: platform.addListener },
 		},
-		permissions: { request: platform.request, remove: platform.remove },
+		permissions: {
+			contains: platform.contains,
+			request: platform.request,
+			remove: platform.remove,
+		},
 	},
 }));
 
@@ -170,8 +175,9 @@ function requests(kind: RpcRequest["type"]): RpcRequest[] {
 beforeEach(() => {
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 	platform.sendMessage.mockReset();
+	platform.contains.mockReset().mockResolvedValue(false);
 	platform.request.mockReset();
-	platform.remove.mockReset();
+	platform.remove.mockReset().mockResolvedValue(true);
 	container = document.createElement("div");
 	document.body.append(container);
 	root = createRoot(container);
@@ -250,33 +256,64 @@ it("connects to a self-hosted address typed into the disclosure instead", async 
 	);
 });
 
-it("asks for the discovered apex on a fresh click before configuring a pasted workspace address", async () => {
-	answer(() => SIGNED_OUT, "https://heph.example.test");
+it.each([
+	{ alreadyGranted: false, removed: [[{ origins: ["https://acme.heph.example.test/*"] }]] },
+	{ alreadyGranted: true, removed: [] },
+])(
+	"asks for the apex on a fresh click and preserves existing access: $alreadyGranted",
+	async ({ alreadyGranted, removed }) => {
+		platform.contains.mockResolvedValue(alreadyGranted);
+		answer(() => SIGNED_OUT, "https://heph.example.test");
+		platform.request.mockResolvedValue(true);
+		await render();
+		await until(() => expect(container.textContent).toContain("Use a self-hosted instance"));
+		await act(async () => {
+			required(container.querySelector("details"), "the self-hosted disclosure").open = true;
+		});
+		await fill("Hephaestus address", "https://acme.heph.example.test");
+		await click(button("Connect instance"));
+		await until(() =>
+			expect(container.textContent).toContain("This workspace uses heph.example.test"),
+		);
+		expect(requests("configure-instance")).toStrictEqual([]);
+		expect(platform.remove.mock.calls).toStrictEqual(removed);
+		expect(platform.request.mock.calls).toStrictEqual([
+			[{ origins: ["https://acme.heph.example.test/*"] }],
+		]);
+		await click(button("Connect to heph.example.test"));
+		await until(() =>
+			expect(requests("configure-instance")).toStrictEqual([
+				{
+					type: "configure-instance",
+					origin: "https://heph.example.test",
+					webAppOrigin: undefined,
+				},
+			]),
+		);
+		expect(platform.request.mock.calls).toStrictEqual([
+			[{ origins: ["https://acme.heph.example.test/*"] }],
+			[{ origins: ["https://heph.example.test/*"] }],
+		]);
+	},
+);
+
+it("removes newly granted access when connection fails", async () => {
+	answer(
+		routed({
+			"get-state": () => SIGNED_OUT,
+			"configure-instance": () => new Error("This instance is unavailable."),
+		}),
+	);
 	platform.request.mockResolvedValue(true);
 	await render();
-	await until(() => expect(container.textContent).toContain("Use a self-hosted instance"));
-	await act(async () => {
-		required(container.querySelector("details"), "the self-hosted disclosure").open = true;
-	});
-	await fill("Hephaestus address", "https://acme.heph.example.test");
-	await click(button("Connect instance"));
+	await until(() => expect(container.textContent).toContain("Connect to Hephaestus"));
+	await click(button("Connect to Hephaestus"));
 	await until(() =>
-		expect(container.textContent).toContain("This workspace uses heph.example.test"),
+		expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+			"This instance is unavailable.",
+		),
 	);
-	expect(requests("configure-instance")).toStrictEqual([]);
-	expect(platform.request.mock.calls).toStrictEqual([
-		[{ origins: ["https://acme.heph.example.test/*"] }],
-	]);
-	await click(button("Connect to heph.example.test"));
-	await until(() =>
-		expect(requests("configure-instance")).toStrictEqual([
-			{ type: "configure-instance", origin: "https://heph.example.test", webAppOrigin: undefined },
-		]),
-	);
-	expect(platform.request.mock.calls).toStrictEqual([
-		[{ origins: ["https://acme.heph.example.test/*"] }],
-		[{ origins: ["https://heph.example.test/*"] }],
-	]);
+	expect(platform.remove.mock.calls).toStrictEqual([[{ origins: ["https://hephaestus.build/*"] }]]);
 });
 
 it("says a closed sign-in window changed nothing, instead of reporting an error", async () => {

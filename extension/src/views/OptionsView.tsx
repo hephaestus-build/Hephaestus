@@ -53,7 +53,7 @@ function messageOf(error: unknown, fallback: string): string {
 
 /**
  * Choosing an instance. Chrome shows its permission prompt only for a request made inside the click,
- * so asking is the first thing the handler awaits; the worker then checks the address answers as a
+ * so permission checks do not delay the request; the worker then checks the address answers as a
  * Hephaestus instance before anything is stored.
  */
 function Setup({ developmentBuild }: { developmentBuild: boolean }) {
@@ -67,10 +67,13 @@ function Setup({ developmentBuild }: { developmentBuild: boolean }) {
 		setState({ status: "pending", target });
 		const { host } = new URL(parsed.origin);
 		const run = async () => {
+			const permission = { origins: [originPattern(parsed.origin)] };
+			let removePermission = false;
 			try {
-				const granted = await browser.permissions.request({
-					origins: [originPattern(parsed.origin)],
-				});
+				const [alreadyGranted, granted] = await Promise.all([
+					browser.permissions.contains(permission),
+					browser.permissions.request(permission),
+				]);
 				if (!granted) {
 					setState({
 						status: "error",
@@ -79,8 +82,13 @@ function Setup({ developmentBuild }: { developmentBuild: boolean }) {
 					});
 					return;
 				}
+				removePermission = !alreadyGranted;
 				const resolved = await ask({ type: "resolve-instance-origin", origin: parsed.origin });
 				if (resolved.origin !== parsed.origin) {
+					if (removePermission) {
+						removePermission = false;
+						await browser.permissions.remove(permission);
+					}
 					setState({ status: "confirm-apex", origin: resolved.origin });
 					return;
 				}
@@ -89,13 +97,21 @@ function Setup({ developmentBuild }: { developmentBuild: boolean }) {
 					origin: parsed.origin,
 					webAppOrigin: input.webAppOrigin,
 				});
+				removePermission = false;
 				setState({ status: "idle" });
 			} catch (error) {
-				setState({
-					status: "error",
-					target,
-					message: messageOf(error, "We could not connect. Try again."),
-				});
+				let message = messageOf(error, "We could not connect. Try again.");
+				if (removePermission) {
+					try {
+						await browser.permissions.remove(permission);
+					} catch (cleanupError) {
+						message = messageOf(
+							cleanupError,
+							"We could not remove access to this address. Try again.",
+						);
+					}
+				}
+				setState({ status: "error", target, message });
 			}
 		};
 		void run();
