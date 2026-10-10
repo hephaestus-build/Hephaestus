@@ -42,8 +42,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -121,14 +119,8 @@ class PracticeRunnerLiveLlmTest {
         }
     }
 
-    static Stream<JsonNode> criteriaCases() throws IOException {
-        JsonNode cases = MAPPER.readTree(
-                Path.of("src/test/resources/practices/criteria-cases.json").toFile());
-        return StreamSupport.stream(cases.spliterator(), false);
-    }
-
-    @ParameterizedTest(name = "criteria case {index}")
-    @MethodSource("criteriaCases")
+    @ParameterizedTest(name = CriteriaCaseSelection.NAME)
+    @MethodSource(CriteriaCaseSelection.SOURCE)
     @Timeout(value = 300, unit = TimeUnit.SECONDS)
     void shouldApplyCatalogueBoundaryWhenEvidenceMatchesCase(JsonNode scenario) throws Exception {
         LiveLlmCredentials creds = LiveLlmCredentials.fromEnv();
