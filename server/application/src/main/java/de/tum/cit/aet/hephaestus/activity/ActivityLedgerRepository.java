@@ -31,8 +31,8 @@ public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID
                 """;
     String REVIEW_ROWS = """
                 SELECT r.id target_id, r.author_id actor_id, r.submitted_at occurred_at,
-                       CASE WHEN r.state='DISMISSED' THEN 'REVIEW_UNKNOWN' ELSE 'REVIEW_' || r.state END event_type,
-                       CASE WHEN r.state='DISMISSED' THEN 'review.unknown' ELSE 'review.' || lower(r.state) END key_type,
+                       CASE WHEN r.state='DISMISSED' THEN 'REVIEW_COMMENTED' ELSE 'REVIEW_' || r.state END event_type,
+                       CASE WHEN r.state='DISMISSED' THEN 'review.commented' ELSE 'review.' || lower(r.state) END key_type,
                        'review' target_type
                 FROM pull_request_review r JOIN issue i ON i.id=r.pull_request_id
                 WHERE i.repository_id=:repositoryId AND i.deleted_at IS NULL
@@ -136,7 +136,7 @@ public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID
                   WHERE u.id=c.actor_id AND s.team_key='')
               AND NOT EXISTS (SELECT 1 FROM activity_event e
                   WHERE e.workspace_id=:workspaceId AND e.target_type=c.target_type
-                    AND e.target_id=c.target_id AND e.event_type=c.event_type)
+                    AND e.target_id=c.target_id AND (c.target_type='review' OR e.event_type=c.event_type))
             ON CONFLICT (workspace_id, event_key) DO NOTHING
             """, nativeQuery = true)
     int insertChunk(

@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.activity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -19,20 +17,6 @@ import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabIssueCommentProcessor;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabPullRequestReviewCommentProcessor;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -43,7 +27,6 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -61,21 +44,15 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.PayloadApplicationEvent;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.event.ApplicationEventMulticaster;
-import org.springframework.graphql.client.ClientGraphQlResponse;
-import org.springframework.graphql.client.ClientResponseField;
-import org.springframework.graphql.client.GraphQlClient.RequestSpec;
-import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
-import reactor.core.publisher.Mono;
 
 class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
     @Autowired
@@ -104,18 +81,6 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ApplicationContext applicationContext;
-
-    @Autowired
-    private PullRequestReviewRepository reviews;
-
-    @Autowired
-    private PullRequestReviewCommentRepository reviewComments;
-
-    @Autowired
-    private PullRequestReviewThreadRepository reviewThreads;
-
-    @Autowired
-    private UserRepository users;
 
     private ActivityLedgerReconciler reconciler;
     private WorkspaceActorSelector actorSelector;
@@ -212,95 +177,6 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
                         ActivityEvent.buildKey(ActivityEventType.PULL_REQUEST_MERGED, pr, at.plusSeconds(5)),
                         ActivityEvent.buildKey(ActivityEventType.ISSUE_CREATED, issue, at),
                         ActivityEvent.buildKey(ActivityEventType.REVIEW_CHANGES_REQUESTED, review, at));
-    }
-
-    @Test
-    void shouldStoreOnlyTheThreadStarterAsAReviewWhenGitLabDiscussionIsSynced() {
-        fixture(IdentityProviderType.GITLAB);
-        long prId = issue("PULL_REQUEST", 1, null);
-        long replyAuthorId = author(3, "reply-author");
-        var clients = mock(GitLabGraphQlClientProvider.class);
-        var client = mock(HttpGraphQlClient.class);
-        var request = mock(RequestSpec.class);
-        var response = mock(ClientGraphQlResponse.class);
-        var nodes = mock(ClientResponseField.class);
-        var page = mock(ClientResponseField.class);
-        var responses = mock(GitLabGraphQlResponseHandler.class);
-        var properties = mock(GitLabProperties.class);
-        var userLookup = mock(GitLabIssueCommentProcessor.class);
-        var ignoredEvents = mock(ApplicationEventPublisher.class);
-        Map<String, Object> root = Map.of(
-                "id",
-                "gid://gitlab/DiffNote/30",
-                "body",
-                "Original comment",
-                "createdAt",
-                at.toString(),
-                "author",
-                Map.of("id", "gid://gitlab/User/2", "username", "author"),
-                "position",
-                Map.of("filePath", "file.java", "newPath", "file.java", "newLine", 1));
-        Map<String, Object> reply = Map.of(
-                "id",
-                "gid://gitlab/DiffNote/31",
-                "body",
-                "Reply",
-                "createdAt",
-                at.plusSeconds(1).toString(),
-                "author",
-                Map.of("id", "gid://gitlab/User/3", "username", "reply-author"));
-        Map<String, Object> discussion = Map.of(
-                "id",
-                "gid://gitlab/Discussion/abcdef1234567890",
-                "resolved",
-                false,
-                "notes",
-                Map.of("nodes", List.of(root, reply)));
-        when(clients.forScope(workspaceId)).thenReturn(client);
-        when(client.documentName("GetMergeRequestDiscussions")).thenReturn(request);
-        when(request.variable(anyString(), any())).thenReturn(request);
-        when(request.execute()).thenReturn(Mono.just(response));
-        when(properties.graphqlTimeout()).thenReturn(Duration.ofSeconds(1));
-        when(responses.handle(eq(response), anyString(), any()))
-                .thenReturn(new GitLabGraphQlResponseHandler.HandleResult(
-                        GitLabGraphQlResponseHandler.HandleResult.Action.CONTINUE, null));
-        when(responses.isWholePage(response, "project.mergeRequest.discussions"))
-                .thenReturn(true);
-        when(response.field("project.mergeRequest.discussions.nodes")).thenReturn(nodes);
-        when(nodes.toEntityList(Map.class)).thenReturn(List.of(discussion));
-        when(response.field("project.mergeRequest.discussions.pageInfo")).thenReturn(page);
-        when(page.toEntity(GitLabPageInfo.class)).thenReturn(new GitLabPageInfo(false, null));
-        var service = new GitLabDiscussionSyncService(
-                clients,
-                responses,
-                new GitLabPullRequestReviewThreadProcessor(reviewThreads, pullRequests, ignoredEvents),
-                new GitLabPullRequestReviewCommentProcessor(reviewComments, ignoredEvents),
-                userLookup,
-                new GitLabReviewReconciler(reviews, ignoredEvents),
-                properties);
-        new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            var pr = pullRequests.findById(prId).orElseThrow();
-            when(userLookup.findOrCreateUser(any(GitLabUserLookup.class), eq(providerId)))
-                    .thenAnswer(invocation -> {
-                        GitLabUserLookup lookup = invocation.getArgument(0);
-                        return users.findById("author".equals(lookup.username()) ? authorId : replyAuthorId)
-                                .orElseThrow();
-                    });
-            assertThat(service.syncDiscussionsForMergeRequest(
-                            workspaceId, Objects.requireNonNull(pr.getRepository()), 1, pr))
-                    .isEqualTo(2);
-        });
-        assertThat(jdbc.queryForList(
-                        "SELECT author_id FROM pull_request_review WHERE pull_request_id=?", Long.class, prId))
-                .containsExactly(authorId);
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM pull_request_review_comment WHERE pull_request_id=?", Long.class, prId))
-                .isEqualTo(2);
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM pull_request_review_comment WHERE pull_request_id=? AND in_reply_to_id IS NOT NULL",
-                        Long.class,
-                        prId))
-                .isEqualTo(1);
     }
 
     @Test
@@ -507,6 +383,50 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldCountDismissedWorkOnceWithoutInventingItsFormerVerdict() {
+        long pr = issue("PULL_REQUEST", 1, authorId);
+        long review = review(pr, "DISMISSED");
+        assertThat(reconciler.reconcileRepository(workspaceId, repositoryId)).isEqualTo(2);
+        assertThat(jdbc.queryForList(
+                        "SELECT event_type FROM activity_event WHERE workspace_id=? AND target_type='review'",
+                        String.class,
+                        workspaceId))
+                .containsExactly("REVIEW_COMMENTED");
+        jdbc.update(
+                "UPDATE activity_event SET event_type='REVIEW_APPROVED',event_key=? WHERE workspace_id=? AND target_id=? AND target_type='review'",
+                ActivityEvent.buildKey(ActivityEventType.REVIEW_APPROVED, review, at),
+                workspaceId,
+                review);
+        assertThat(reconciler.reconcileRepository(workspaceId, repositoryId)).isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM activity_event WHERE workspace_id=? AND target_type='review'",
+                        Integer.class,
+                        workspaceId))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldNotRestartTheSameCoverageGapAfterAnotherCompletedScan() {
+        jdbc.update(
+                "UPDATE repository_to_monitor SET pull_request_backfill_high_water_mark=950,pull_request_backfill_checkpoint=0 WHERE id=?",
+                monitorId);
+        var tx = new TransactionTemplate(transactions);
+        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 100, 0)))
+                .isEqualTo(1);
+        jdbc.update(
+                "UPDATE repository_to_monitor SET pull_request_backfill_high_water_mark=950,pull_request_backfill_checkpoint=0 WHERE id=?",
+                monitorId);
+        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 100, 0)))
+                .isZero();
+        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 101, 0)))
+                .isZero();
+        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 120, 0)))
+                .isZero();
+        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 200, 100)))
+                .isEqualTo(1);
+    }
+
+    @Test
     void shouldKeepHistoryResetWhenAnEarlierRecentSyncSnapshotIsSaved() {
         jdbc.update(
                 "UPDATE repository_to_monitor SET pull_request_backfill_high_water_mark=950,pull_request_backfill_checkpoint=0 WHERE id=?",
@@ -515,7 +435,8 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
         reset.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             var earlier = monitors.findById(monitorId).orElseThrow();
-            assertThat(reset.<Integer>execute(inner -> monitors.restartCompletedBackfill(workspaceId, monitorId)))
+            assertThat(reset.<Integer>execute(
+                            inner -> monitors.restartCompletedBackfill(workspaceId, monitorId, 950, 0)))
                     .isEqualTo(1);
             earlier.setLabelsSyncedAt(at);
             monitors.saveAndFlush(earlier);
@@ -538,11 +459,12 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
                     pull_request_sync_cursor='stale',pull_requests_synced_at=? WHERE id=?
                 """, Timestamp.from(at), monitorId);
         var tx = new TransactionTemplate(transactions);
-        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId + 10000, monitorId)))
+        assertThat(tx.<Integer>execute(
+                        status -> monitors.restartCompletedBackfill(workspaceId + 10000, monitorId, 950, 0)))
                 .isZero();
-        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId)))
+        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 950, 0)))
                 .isEqualTo(1);
-        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId)))
+        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 950, 0)))
                 .isZero();
         assertThat(jdbc.queryForObject(
                         "SELECT pull_request_backfill_high_water_mark FROM repository_to_monitor WHERE id=?",

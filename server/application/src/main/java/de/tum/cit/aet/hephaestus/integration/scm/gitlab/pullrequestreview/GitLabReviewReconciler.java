@@ -22,11 +22,11 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Reconciles GitLab MR discussion participation into {@link PullRequestReview} rows
+ * Reconciles GitLab MR discussion starters into {@link PullRequestReview} rows
  * with state {@link PullRequestReview.State#COMMENTED}.
  * <p>
  * Unlike GitHub, GitLab has no first-class "review" entity. We derive one COMMENTED
- * review per {@code (author, discussion)} cluster so that inline feedback is attributed
+ * review for the starter of a discussion so that inline feedback is attributed
  * to a review, as on GitHub. Approvals are handled separately (see
  * {@code GitLabMergeRequestProcessor}).
  * <p>

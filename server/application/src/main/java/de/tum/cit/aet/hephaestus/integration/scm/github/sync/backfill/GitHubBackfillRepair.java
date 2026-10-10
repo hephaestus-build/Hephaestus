@@ -40,7 +40,10 @@ public class GitHubBackfillRepair {
         if (!manual && (!target.isPullRequestBackfillComplete() || inspections.getIfPresent(target.id()) != null))
             return target;
         var repository = findRepository(target);
-        if (repository.isEmpty()) return target;
+        if (repository.isEmpty()) {
+            if (manual) throw new IllegalStateException("Stored repository not found");
+            return target;
+        }
         var repo = repository.get();
         if (manual) ledger.reconcileRepository(target.scopeId(), repo.getId());
         if (!target.isPullRequestBackfillComplete()) return target;
@@ -68,8 +71,9 @@ public class GitHubBackfillRepair {
                 if (manual) throw new IllegalStateException("Provider coverage check returned no pull request count");
                 return target;
             }
-            if (manual ? count(repo) >= total : !hasGap(count(repo), total)) return target;
-            var restarted = backfillState.restartCompletedBackfill(target.scopeId(), target.id());
+            long stored = count(repo);
+            if (!BackfillRestartProvider.hasMaterialGap(stored, total)) return target;
+            var restarted = backfillState.restartCompletedBackfill(target.scopeId(), target.id(), total, stored);
             if (restarted.isPresent()) {
                 log.info(
                         "Restarted incomplete historical scan: workspaceId={}, syncTargetId={}, providerCount={}",
@@ -97,14 +101,10 @@ public class GitHubBackfillRepair {
 
     private boolean isSuspicious(SyncTarget target, Repository repo) {
         var highWaterMark = target.pullRequestBackfillHighWaterMark();
-        return highWaterMark != null && hasGap(count(repo), highWaterMark);
+        return highWaterMark != null && BackfillRestartProvider.hasMaterialGap(count(repo), highWaterMark);
     }
 
     private long count(Repository repo) {
         return pullRequests.countStoredByRepositoryId(repo.getId());
-    }
-
-    static boolean hasGap(long stored, long expected) {
-        return expected - stored >= 20 && stored < expected * 0.8;
     }
 }

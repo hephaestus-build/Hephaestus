@@ -10,7 +10,8 @@ Keep public activity pages disabled until you verify the repair.
 
 ## What the repair restores
 
-The server rebuilds activity from stored pull requests, merge requests, reviews, issues, and comments after repository synchronization and historical backfill batches.
+The server rebuilds activity from stored pull requests, merge requests, reviews, issues, and comments.
+It runs repair after repository synchronization and when historical backfill completes.
 The repair is provider-neutral: GitHub and GitLab use the same ledger repair.
 It inserts missing events in chunks of 1,000 source IDs.
 Each chunk has its own transaction and uses the person-data write fence.
@@ -19,7 +20,9 @@ Soft-deleted work is excluded.
 Rows with no author are not recreated: erasure can remove attribution from retained work.
 
 The repair restores creation, submission, and the stored final closed or merged state.
-It does not invent earlier reopen, edit, label, or dismissal times.
+A dismissed review still represents completed review work.
+If no review event exists, repair records it as commented review activity at its stored submission time.
+It does not infer the former verdict or invent earlier reopen, edit, label, or dismissal times.
 Replies remain comments, not reviews.
 A review with its own summary or an original inline comment still counts as a review.
 
@@ -35,8 +38,8 @@ First find the IDs by workspace slug and repository name.
 Check the provider when the same repository name exists on more than one instance.
 
 ```sql
-SELECT id, workspace_slug FROM workspace
-WHERE workspace_slug = 'your-workspace';
+SELECT id, slug FROM workspace
+WHERE slug = 'your-workspace';
 
 SELECT r.id, r.name_with_owner, p.type, p.server_url
 FROM repository r JOIN identity_provider p ON p.id = r.provider_id
@@ -60,6 +63,7 @@ SELECT m.name_with_owner,
        m.pull_request_backfill_high_water_mark,
        m.pull_request_backfill_checkpoint,
        m.backfill_last_run_at,
+       m.backfill_repair_provider_count,
        m.historical_backfill_sync_error
 FROM repository_to_monitor m
 WHERE m.workspace_id = :workspace_id;
@@ -140,8 +144,13 @@ The connection must belong to the workspace.
 An active job is reused instead of starting a duplicate.
 
 For GitHub, the action repairs the stored ledger even for completed repositories.
-It resets history when the provider count exceeds the stored count.
-For GitLab, the explicit action also restarts completed historical scans.
+For GitHub and GitLab, repair restarts completed history only when at least 20 rows are missing.
+Stored coverage must also be less than 80 percent of the provider total.
+The server records the provider count of each repair restart in the repository monitor.
+It does not restart the same gap again, including after a server restart.
+Before another restart, the stored row count must reach the provider total recorded at the previous attempt.
+A later gap must still meet the same size and coverage thresholds.
+A repository that cannot be read or repaired adds a job warning; the job continues with the other repositories.
 Scheduled GitLab scans do not use the GitHub-specific incomplete-scan heuristic.
 Rate limits, cancellation, and provider error cooldowns still apply.
 Recent-sync timestamps are unchanged.
@@ -176,10 +185,3 @@ For the sample, compare provider review IDs with `pull_request_review.native_id`
 A blank COMMENTED review whose inline comments are all replies is not a separate review contribution.
 Review replies use `in_reply_to_id`; the parent review uses `pull_request_review_id`.
 See the [GitHub review-comment contract](https://docs.github.com/en/rest/pulls/comments).
-
-## Design references
-
-- [Spring task execution](https://docs.spring.io/spring-framework/reference/integration/scheduling.html) describes bounded executors and caller-runs backpressure.
-- [Spring transaction-bound events](https://docs.spring.io/spring-framework/reference/data-access/transaction/event.html) defines the AFTER_COMMIT phase.
-- [Spring AFTER_COMMIT write constraints](https://github.com/spring-projects/spring-framework/issues/26974) explain why listener writes need a new transaction.
-- [PostgreSQL INSERT](https://www.postgresql.org/docs/current/sql-insert.html) defines conflict-safe insertion.

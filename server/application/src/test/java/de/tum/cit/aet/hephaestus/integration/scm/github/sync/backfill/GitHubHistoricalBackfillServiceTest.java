@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
@@ -102,6 +103,26 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
     private GitHubSyncProperties syncProperties;
     private SyncSchedulerProperties enabledSchedulerProperties;
     private SyncSchedulerProperties disabledSchedulerProperties;
+
+    @Test
+    void shouldWarnAndContinueAdminRepairAfterOneRepositoryFails() {
+        var first = SyncTargetTestBuilder.syncTarget()
+                .id(1L)
+                .scopeId(SCOPE_ID)
+                .repositoryNameWithOwner("org/bad")
+                .build();
+        var second = SyncTargetTestBuilder.syncTarget()
+                .id(2L)
+                .scopeId(SCOPE_ID)
+                .repositoryNameWithOwner("org/good")
+                .build();
+        var handle = mock(SyncExecutionHandle.class);
+        when(syncTargetProvider.getSyncTargetsForScope(SCOPE_ID)).thenReturn(List.of(first, second));
+        when(backfillRepair.inspect(first, true)).thenThrow(new IllegalStateException("Repository unavailable"));
+        service.repairCompletedRepositories(SCOPE_ID, handle);
+        verify(handle).reportWarnings();
+        verify(backfillRepair).inspect(second, true);
+    }
 
     @BeforeEach
     void setUp() {

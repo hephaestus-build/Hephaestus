@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -104,14 +107,22 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
                 .scopeId(3L)
                 .repositoryNameWithOwner("org/repo")
                 .build();
-        when(state.restartCompletedBackfill(3, 7)).thenReturn(Optional.of(fresh));
+        when(state.restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong()))
+                .thenReturn(Optional.of(fresh));
         assertThat(repair.inspect(target, false)).isEqualTo(fresh);
-        verify(state).restartCompletedBackfill(3, 7);
+        verify(state).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
     }
 
     @ParameterizedTest
-    @CsvSource({"79,100,true", "80,100,false", "0,19,false"})
-    void shouldRestartOnlyForAMaterialProviderGap(long stored, int total, boolean expectedRestart) {
+    @CsvSource({
+        "79,100,true,false",
+        "80,100,false,false",
+        "0,19,false,false",
+        "79,100,true,true",
+        "80,100,false,true",
+        "99,100,false,true"
+    })
+    void shouldRestartOnlyForAMaterialProviderGap(long stored, int total, boolean expectedRestart, boolean manual) {
         when(pullRequests.countStoredByRepositoryId(8L)).thenReturn(stored);
         when(field.toEntity(Integer.class)).thenReturn(total);
         var restarted = SyncTargetTestBuilder.syncTarget()
@@ -119,10 +130,12 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
                 .scopeId(3L)
                 .repositoryNameWithOwner("org/repo")
                 .build();
-        if (expectedRestart) when(state.restartCompletedBackfill(3, 7)).thenReturn(Optional.of(restarted));
+        if (expectedRestart)
+            when(state.restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong()))
+                    .thenReturn(Optional.of(restarted));
 
-        assertThat(repair.inspect(target, false)).isEqualTo(expectedRestart ? restarted : target);
-        if (!expectedRestart) verify(state, never()).restartCompletedBackfill(3, 7);
+        assertThat(repair.inspect(target, manual)).isEqualTo(expectedRestart ? restarted : target);
+        if (!expectedRestart) verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
     }
 
     @Test
@@ -131,23 +144,31 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
         assertThat(repair.inspect(target, false)).isEqualTo(target);
         assertThat(repair.inspect(target, false)).isEqualTo(target);
         verify(request).execute();
-        verify(state, never()).restartCompletedBackfill(3, 7);
+        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
     }
 
     @Test
     void shouldLeaveCompletedStateUnchangedWhenProviderFails() {
         when(request.execute()).thenReturn(Mono.error(new IllegalStateException("Unavailable")));
         assertThat(repair.inspect(target, false)).isEqualTo(target);
-        verify(state, never()).restartCompletedBackfill(3, 7);
+        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
     }
 
     @Test
-    void shouldFailAdminJobWhenProviderVerificationFails() {
+    void shouldReportMissingStoredRepositoryToTheAdminRepositoryLoop() {
+        when(repositories.findByNameWithOwnerAndProviderId("org/repo", 2L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> repair.inspect(target, true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Stored repository not found");
+    }
+
+    @Test
+    void shouldReportProviderFailureToTheAdminRepositoryLoop() {
         when(request.execute()).thenReturn(Mono.error(new IllegalStateException("Unavailable")));
         assertThatThrownBy(() -> repair.inspect(target, true))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Unavailable");
-        verify(state, never()).restartCompletedBackfill(3, 7);
+        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
     }
 
     @Test
@@ -155,6 +176,6 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
         when(field.toEntity(Integer.class)).thenReturn(100);
         repair.inspect(target, true);
         verify(ledger).reconcileRepository(3, 8);
-        verify(state, never()).restartCompletedBackfill(3, 7);
+        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
     }
 }

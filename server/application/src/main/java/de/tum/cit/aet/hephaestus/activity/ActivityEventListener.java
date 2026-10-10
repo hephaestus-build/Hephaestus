@@ -1079,7 +1079,7 @@ public class ActivityEventListener {
         if (state == PullRequestReview.State.CHANGES_REQUESTED) {
             return ActivityEventType.REVIEW_CHANGES_REQUESTED;
         }
-        if (state != PullRequestReview.State.COMMENTED) {
+        if (state != PullRequestReview.State.COMMENTED && state != PullRequestReview.State.DISMISSED) {
             return ActivityEventType.REVIEW_UNKNOWN;
         }
         return ActivityEventType.REVIEW_COMMENTED;

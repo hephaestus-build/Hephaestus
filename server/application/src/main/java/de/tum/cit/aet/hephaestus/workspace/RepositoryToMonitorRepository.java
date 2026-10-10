@@ -100,12 +100,18 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
             UPDATE repository_to_monitor SET
+                backfill_repair_provider_count=:providerCount,
                 issue_backfill_high_water_mark=NULL, issue_backfill_checkpoint=NULL, issue_sync_cursor=NULL,
                 pull_request_backfill_high_water_mark=NULL, pull_request_backfill_checkpoint=NULL,
                 pull_request_sync_cursor=NULL, historical_backfill_sync_error=NULL
             WHERE workspace_id=:workspaceId AND id=:syncTargetId
               AND pull_request_backfill_high_water_mark IS NOT NULL
               AND (pull_request_backfill_high_water_mark=0 OR pull_request_backfill_checkpoint<=0)
+              AND (backfill_repair_provider_count IS NULL OR :storedCount>=backfill_repair_provider_count)
             """, nativeQuery = true)
-    int restartCompletedBackfill(@Param("workspaceId") long workspaceId, @Param("syncTargetId") long syncTargetId);
+    int restartCompletedBackfill(
+            @Param("workspaceId") long workspaceId,
+            @Param("syncTargetId") long syncTargetId,
+            @Param("providerCount") int providerCount,
+            @Param("storedCount") long storedCount);
 }

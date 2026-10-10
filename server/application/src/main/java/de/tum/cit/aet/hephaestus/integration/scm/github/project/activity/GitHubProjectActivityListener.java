@@ -57,7 +57,7 @@ public class GitHubProjectActivityListener {
 
     // Project Lifecycle Events
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectCreated(GitHubProjectEvent.ProjectCreated event) {
@@ -82,7 +82,7 @@ public class GitHubProjectActivityListener {
                         projectData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectUpdated(GitHubProjectEvent.ProjectUpdated event) {
@@ -106,7 +106,7 @@ public class GitHubProjectActivityListener {
                         projectData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectClosed(GitHubProjectEvent.ProjectClosed event) {
@@ -131,7 +131,7 @@ public class GitHubProjectActivityListener {
                         projectData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectReopened(GitHubProjectEvent.ProjectReopened event) {
@@ -155,7 +155,7 @@ public class GitHubProjectActivityListener {
                         projectData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectDeleted(GitHubProjectEvent.ProjectDeleted event) {
@@ -178,7 +178,7 @@ public class GitHubProjectActivityListener {
 
     // Project Item Events
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectItemCreated(GitHubProjectEvent.ProjectItemCreated event) {
@@ -204,7 +204,7 @@ public class GitHubProjectActivityListener {
                         itemData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectItemUpdated(GitHubProjectEvent.ProjectItemUpdated event) {
@@ -227,7 +227,7 @@ public class GitHubProjectActivityListener {
                         itemData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectItemArchived(GitHubProjectEvent.ProjectItemArchived event) {
@@ -250,7 +250,7 @@ public class GitHubProjectActivityListener {
                         itemData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectItemRestored(GitHubProjectEvent.ProjectItemRestored event) {
@@ -273,7 +273,7 @@ public class GitHubProjectActivityListener {
                         itemData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectItemDeleted(GitHubProjectEvent.ProjectItemDeleted event) {
@@ -295,7 +295,7 @@ public class GitHubProjectActivityListener {
                         itemId));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectItemConverted(GitHubProjectEvent.ProjectItemConverted event) {
@@ -318,7 +318,7 @@ public class GitHubProjectActivityListener {
                         itemData.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectItemReordered(GitHubProjectEvent.ProjectItemReordered event) {
@@ -343,7 +343,7 @@ public class GitHubProjectActivityListener {
 
     // Project Status Update Events
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectStatusUpdateCreated(GitHubProjectEvent.ProjectStatusUpdateCreated event) {
@@ -368,7 +368,7 @@ public class GitHubProjectActivityListener {
                         data.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectStatusUpdateUpdated(GitHubProjectEvent.ProjectStatusUpdateUpdated event) {
@@ -391,7 +391,7 @@ public class GitHubProjectActivityListener {
                         data.id()));
     }
 
-    @Async
+    @Async("activityExecutor")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onProjectStatusUpdateDeleted(GitHubProjectEvent.ProjectStatusUpdateDeleted event) {

@@ -158,6 +158,10 @@ public class RepositoryToMonitor {
     @ToString.Exclude
     private @Nullable Workspace workspace;
 
+    /** Provider count at the last repair restart; the same coverage gap is not scanned again. */
+    @Nullable
+    private Integer backfillRepairProviderCount;
+
     /**
      * Checks if issue backfill has been initialized (high water mark set).
      * @return true if issue backfill tracking has been initialized

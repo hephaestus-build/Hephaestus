@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillRestartProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
@@ -15,13 +15,14 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.sync.status.BackfillTally;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -56,9 +57,10 @@ public class GitLabHistoricalBackfillService {
     private static final Duration COOLDOWN_ERROR = Duration.ofMinutes(15);
 
     private final ActivityLedgerRepair activityLedgerRepair;
+    private final PullRequestRepository pullRequests;
     private final SyncTargetProvider syncTargetProvider;
     private final RepositoryRepository repositoryRepository;
-    private final OrganizationRepository organizationRepository;
+    private final WorkspaceActorSelector actorSelector;
     private final ObjectProvider<GitLabSyncServiceHolder> syncServiceHolderProvider;
     private final SyncSchedulerProperties syncSchedulerProperties;
 
@@ -68,16 +70,18 @@ public class GitLabHistoricalBackfillService {
     public GitLabHistoricalBackfillService(
             SyncTargetProvider syncTargetProvider,
             RepositoryRepository repositoryRepository,
-            OrganizationRepository organizationRepository,
+            WorkspaceActorSelector actorSelector,
             ObjectProvider<GitLabSyncServiceHolder> syncServiceHolderProvider,
             SyncSchedulerProperties syncSchedulerProperties,
-            ActivityLedgerRepair activityLedgerRepair) {
+            ActivityLedgerRepair activityLedgerRepair,
+            PullRequestRepository pullRequests) {
         this.syncTargetProvider = syncTargetProvider;
         this.repositoryRepository = repositoryRepository;
-        this.organizationRepository = organizationRepository;
+        this.actorSelector = actorSelector;
         this.syncServiceHolderProvider = syncServiceHolderProvider;
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.activityLedgerRepair = activityLedgerRepair;
+        this.pullRequests = pullRequests;
     }
 
     /**
@@ -94,17 +98,35 @@ public class GitLabHistoricalBackfillService {
     public void repairCompletedRepositories(long workspaceId, SyncExecutionHandle handle) {
         var session = syncTargetProvider.getSyncSession(workspaceId, IntegrationKind.GITLAB);
         if (session.isEmpty()) return;
-        Long providerId = getGitLabProviderId(session.get().accountLogin());
-        if (providerId == null) return;
+        Long providerId = getGitLabProviderId(workspaceId);
+        if (providerId == null) {
+            handle.reportWarnings();
+            return;
+        }
         for (SyncTarget target : session.get().syncTargets()) {
             if (handle.isCancellationRequested()) return;
-            if (syncTargetProvider.isRepositoryUnavailable(workspaceId, target.id())) continue;
-            repositoryRepository
-                    .findByNameWithOwnerAndProviderId(target.repositoryNameWithOwner(), providerId)
-                    .ifPresent(repo -> {
-                        activityLedgerRepair.reconcileRepository(workspaceId, repo.getId());
-                        syncTargetProvider.restartCompletedBackfill(workspaceId, target.id());
-                    });
+            try {
+                if (syncTargetProvider.isRepositoryUnavailable(workspaceId, target.id())) continue;
+                var repo = repositoryRepository
+                        .findByNameWithOwnerAndProviderId(target.repositoryNameWithOwner(), providerId)
+                        .orElseThrow(() -> new IllegalStateException("Stored repository not found"));
+                activityLedgerRepair.reconcileRepository(workspaceId, repo.getId());
+                if (!target.isPullRequestBackfillComplete()) continue;
+                var services = syncServiceHolderProvider.getIfAvailable();
+                var mergeRequests = services != null ? services.getMergeRequestSyncService() : null;
+                if (mergeRequests == null) continue;
+                int total = mergeRequests.countMergeRequests(workspaceId, target.repositoryNameWithOwner());
+                long stored = pullRequests.countStoredByRepositoryId(repo.getId());
+                if (BackfillRestartProvider.hasMaterialGap(stored, total))
+                    syncTargetProvider.restartCompletedBackfill(workspaceId, target.id(), total, stored);
+            } catch (RuntimeException e) {
+                log.warn(
+                        "Repository history repair failed: workspaceId={}, syncTargetId={}",
+                        workspaceId,
+                        target.id(),
+                        e);
+                handle.reportWarnings();
+            }
         }
     }
 
@@ -143,7 +165,12 @@ public class GitLabHistoricalBackfillService {
         int processed = 0;
 
         for (SyncSession session : sessions) {
-            Long providerId = getGitLabProviderId(session.accountLogin());
+            Long providerId = getGitLabProviderId(session.scopeId());
+            if (providerId == null) {
+                log.warn("Historical scan has no connected provider: workspaceId={}", session.scopeId());
+                if (handle != null) handle.reportWarnings();
+                continue;
+            }
 
             // Determinate progress from the already-persisted high-water-mark / checkpoint columns.
             // Built over every target of the scope rather than only the pending ones, so the
@@ -172,10 +199,8 @@ public class GitLabHistoricalBackfillService {
                     continue;
                 }
 
-                Optional<Repository> repoOpt = providerId != null
-                        ? repositoryRepository.findByNameWithOwnerAndProviderId(
-                                target.repositoryNameWithOwner(), providerId)
-                        : repositoryRepository.findByNameWithOwner(target.repositoryNameWithOwner());
+                Optional<Repository> repoOpt = repositoryRepository.findByNameWithOwnerAndProviderId(
+                        target.repositoryNameWithOwner(), providerId);
 
                 if (repoOpt.isEmpty()) continue;
                 Repository repo = repoOpt.get();
@@ -289,10 +314,15 @@ public class GitLabHistoricalBackfillService {
             }
         }
 
-        try {
-            activityLedgerRepair.reconcileRepository(scopeId, repo.getId());
-        } catch (RuntimeException e) {
-            log.warn("Activity ledger repair failed: workspaceId={}, repositoryId={}", scopeId, repo.getId(), e);
+        if (syncTargetProvider
+                .findSyncTargetById(target.id())
+                .filter(SyncTarget::isBackfillComplete)
+                .isPresent()) {
+            try {
+                activityLedgerRepair.reconcileRepository(scopeId, repo.getId());
+            } catch (RuntimeException e) {
+                log.warn("Activity ledger repair failed: workspaceId={}, repositoryId={}", scopeId, repo.getId(), e);
+            }
         }
 
         if (didWork) {
@@ -378,13 +408,8 @@ public class GitLabHistoricalBackfillService {
         }
     }
 
-    /**
-     * Resolves the GitLab provider ID by looking up the organization.
-     */
-    private @Nullable Long getGitLabProviderId(String accountLogin) {
-        return organizationRepository
-                .findByLoginIgnoreCaseAndProvider_Type(accountLogin, IdentityProviderType.GITLAB)
-                .map(org -> org.getProvider() != null ? org.getProvider().getId() : null)
-                .orElse(null);
+    /** The provider of the active connection, including workspaces with no mirrored organization. */
+    private @Nullable Long getGitLabProviderId(long workspaceId) {
+        return actorSelector.connectedProviderId(workspaceId).orElse(null);
     }
 }

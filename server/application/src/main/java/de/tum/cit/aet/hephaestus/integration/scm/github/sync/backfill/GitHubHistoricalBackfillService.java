@@ -551,14 +551,15 @@ public class GitHubHistoricalBackfillService {
             log.info("No pull requests to backfill: repo={}", safeRepoName);
         }
 
-        try {
-            activityLedgerRepair.reconcileRepository(scopeId, repositoryId);
-        } catch (RuntimeException e) {
-            log.warn("Activity ledger repair failed: workspaceId={}, repositoryId={}", scopeId, repositoryId, e);
-        }
-
         boolean issuesComplete = !issueResult.hasMore() || target.isIssueBackfillComplete();
         boolean pullRequestsComplete = !prResult.hasMore();
+        if (issuesComplete && pullRequestsComplete) {
+            try {
+                activityLedgerRepair.reconcileRepository(scopeId, repositoryId);
+            } catch (RuntimeException e) {
+                log.warn("Activity ledger repair failed: workspaceId={}, repositoryId={}", scopeId, repositoryId, e);
+            }
+        }
 
         if (issuesComplete && pullRequestsComplete) {
             log.info(
@@ -1245,8 +1246,17 @@ public class GitHubHistoricalBackfillService {
     public void repairCompletedRepositories(long workspaceId, SyncExecutionHandle handle) {
         for (SyncTarget target : syncTargetProvider.getSyncTargetsForScope(workspaceId)) {
             if (handle.isCancellationRequested()) return;
-            if (!syncTargetProvider.isRepositoryUnavailable(workspaceId, target.id())) {
-                backfillRepair.inspect(target, true);
+            try {
+                if (!syncTargetProvider.isRepositoryUnavailable(workspaceId, target.id())) {
+                    backfillRepair.inspect(target, true);
+                }
+            } catch (RuntimeException e) {
+                log.warn(
+                        "Repository history repair failed: workspaceId={}, syncTargetId={}",
+                        workspaceId,
+                        target.id(),
+                        e);
+                handle.reportWarnings();
             }
         }
     }

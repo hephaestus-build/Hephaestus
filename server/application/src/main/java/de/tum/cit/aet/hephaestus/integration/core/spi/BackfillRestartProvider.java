@@ -5,5 +5,12 @@ import java.util.Optional;
 
 /** Reopens completed history without changing recent-sync timestamps. */
 public interface BackfillRestartProvider {
-    Optional<SyncTarget> restartCompletedBackfill(long workspaceId, long syncTargetId);
+    int MINIMUM_GAP = 20;
+
+    static boolean hasMaterialGap(long stored, long expected) {
+        return expected - stored >= MINIMUM_GAP && stored < expected * 0.8;
+    }
+
+    Optional<SyncTarget> restartCompletedBackfill(
+            long workspaceId, long syncTargetId, int providerCount, long storedCount);
 }

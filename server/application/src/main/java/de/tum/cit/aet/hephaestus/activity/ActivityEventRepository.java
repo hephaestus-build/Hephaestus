@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public interface ActivityEventRepository extends JpaRepository<ActivityEvent, UUID> {
     String REPLY_ONLY_REVIEW = """
-            r.state='COMMENTED' AND coalesce(r.body,'') !~ '[^[:space:]]'
+            r.state IN ('COMMENTED','DISMISSED') AND coalesce(r.body,'') !~ '[^[:space:]]'
             AND EXISTS (SELECT 1 FROM pull_request_review_comment c
                 WHERE c.review_id=r.id AND c.in_reply_to_id IS NOT NULL)
             AND NOT EXISTS (SELECT 1 FROM pull_request_review_comment c

@@ -1437,6 +1437,7 @@ erDiagram
         JSONB generated_paths "NOT NULL"
         TIMESTAMPTZ unavailable_retry_at
         TIMESTAMPTZ unavailable_since
+        INTEGER backfill_repair_provider_count
     }
 
     ReviewBackfillRun {
