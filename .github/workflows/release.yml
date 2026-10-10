@@ -50,12 +50,8 @@ jobs:
         with:
           install: "none"
 
-      # Decides whether this commit cuts a release, and creates nothing. The rule — a version with
-      # no published release is cut, from whichever commit carries it — and the four cases it
-      # decides between are documented in scripts/plan-release.ts. The draft is created in
-      # tag-images, after the evidence gate, so a gate failure leaves nothing behind: release images
-      # are promoted by digest and never rebuilt, so a draft cut at a commit the gate rejected can
-      # never pass. The same version then re-cuts from the commit that carries the fix.
+      # scripts/plan-release.ts owns release eligibility, including pending changesets.
+      # Planning creates nothing. tag-images creates the draft only after the evidence gate.
       - name: Plan the release for this commit
         id: cut
         env:

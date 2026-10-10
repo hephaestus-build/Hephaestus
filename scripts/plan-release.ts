@@ -1,27 +1,13 @@
 /**
  * Decides whether a commit on `main` cuts a release, and which release it follows.
  *
- * The question is *does the version on `main` have a published release yet*, not *did this commit
- * change the version*. A release that fails leaves the version consumed — the Version PR is merged
- * and the changesets it folded in are gone — so a decision keyed on the version commit can only be
- * retried by reverting that commit, which the changeset freeze rules block by construction and which
- * needed an administrator bypass every time it was done. Keyed on
- * the version, the same release re-cuts from the next commit that carries the fix, which is how
- * everything else here recovers.
+ * A published version cuts nothing. An unpublished version waits while its source commit has
+ * pending changesets: the Version PR owns their consumption, version bump and release notes.
+ * Without pending changesets, the version can cut from a later forward fix or resume a draft at
+ * the same commit. A draft at another commit is refused because its images belong to that commit.
  *
- * That leaves four cases, in this order:
- *
- *   1. the version's release is published — the ordinary feature merge, and the only no-op;
- *   2. a draft of it targets another commit — refused, because resuming it would publish that
- *      commit's images under this tag; the operator deletes the draft to re-cut here;
- *   3. a draft of it targets this commit — cut, resuming the draft an attempt left behind;
- *   4. no release of it exists — cut, whether or not this commit changed the version.
- *
- * The precondition that a release must follow a published one compares against the latest published
- * release rather than the parent commit's version: on a re-cut the parent carries the same
- * unpublished version, and a parent comparison would refuse the very retry this exists to allow. It
- * is also what keeps the promotion of `X.Y`, `latest` and the staging deploy moving forward — a
- * version that is not newer than the latest published release is refused rather than cut.
+ * The upgrade seed is the latest published stable release, not the parent commit's version.
+ * The new version must be newer than that release before image aliases can move forward.
  */
 import { appendFile } from "node:fs/promises";
 
@@ -100,6 +86,7 @@ export function planRelease(
 	sha: string,
 	version: string,
 	releases: readonly ReleaseRef[],
+	pendingChangesets: boolean,
 ): ReleasePlan {
 	const parsed = parseVersion(version);
 	if (!parsed) {
@@ -108,8 +95,7 @@ export function planRelease(
 	const tag = `v${version}`;
 	const existing = releases.find((release) => release.tag === tag);
 
-	// The ordinary case and the only no-op: a feature merge carries a version published long ago, as
-	// does a re-run of a workflow that already finished.
+	// Published releases are never cut again, including on feature merges with pending changesets.
 	if (existing && !existing.isDraft) {
 		return { kind: "skip", reason: `${tag} is already published` };
 	}
@@ -119,6 +105,13 @@ export function planRelease(
 		return {
 			kind: "refuse",
 			reason: `draft ${tag} targets ${existing.targetCommitish}, not ${sha}; delete the draft to re-cut ${tag} here`,
+		};
+	}
+
+	if (pendingChangesets) {
+		return {
+			kind: "skip",
+			reason: `pending changesets remain at ${sha}; the Version PR must consume them before releasing ${tag}`,
 		};
 	}
 
@@ -207,6 +200,21 @@ export async function hasSchemaMigrations(
 	return changed.trim() !== "";
 }
 
+/** Pending release notes belong to the validated source commit, not the current checkout. */
+export async function hasPendingChangesets(sha: string, cwd?: string): Promise<boolean> {
+	const files = await output(
+		"git",
+		["ls-tree", "-r", "--name-only", "-z", sha, "--", ".changeset"],
+		{
+			cwd,
+			env: environmentWithoutGitRepository(),
+		},
+	);
+	return files
+		.split("\0")
+		.some((file) => /^\.changeset\/[^/]+\.md$/u.test(file) && file !== ".changeset/README.md");
+}
+
 if (import.meta.main) {
 	const [sha] = process.argv.slice(2);
 	const repository = process.env.GITHUB_REPOSITORY;
@@ -227,6 +235,7 @@ if (import.meta.main) {
 			sha,
 			asString(manifest.version, `${sha}:package.json version`),
 			await listReleases(repository),
+			await hasPendingChangesets(sha),
 		);
 		if (plan.kind === "refuse") {
 			console.log(`::error::${plan.reason}`);
