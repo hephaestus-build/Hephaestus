@@ -126,6 +126,37 @@ export const ByName: Story = {
 	},
 };
 
+/** A first name sort runs A to Z even when a search currently leaves no rows. */
+export const NameAfterNoMatches: Story = {
+	play: async ({ canvas, userEvent }) => {
+		const search = canvas.getByRole("searchbox", { name: "Search people" });
+		await userEvent.type(search, "zz");
+		await expect(canvas.getByText("No one matches your search")).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "Person" }));
+		await expect(canvas.getByRole("columnheader", { name: "Person" })).toHaveAttribute(
+			"aria-sort",
+			"ascending",
+		);
+		await userEvent.clear(search);
+		const table = canvas.getByRole("table", { name: "People" });
+		await expect(
+			within(table)
+				.getAllByRole("link")
+				.map((link) => link.textContent),
+		).toStrictEqual(["Ada Lovelace", "Bob Brenner", "Chen Wei", "Dana Okafor", "Élodie Brière"]);
+		await userEvent.click(canvas.getByRole("button", { name: "Person" }));
+		await expect(canvas.getByRole("columnheader", { name: "Person" })).toHaveAttribute(
+			"aria-sort",
+			"descending",
+		);
+		await expect(
+			within(table)
+				.getAllByRole("link")
+				.map((link) => link.textContent),
+		).toStrictEqual(["Élodie Brière", "Dana Okafor", "Chen Wei", "Bob Brenner", "Ada Lovelace"]);
+	},
+};
+
 /** A search hides rows but keeps their positions, and folds case and accents. */
 export const Search: Story = {
 	play: async ({ canvas, userEvent }) => {

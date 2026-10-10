@@ -150,6 +150,7 @@ export function ActivityPeopleTable({
 			columnHelper.accessor((row) => row.person.name, {
 				id: "name" satisfies PeopleSort,
 				header: "Person",
+				sortDescFirst: false,
 				sortFn: (a, b) => nameOrder.compare(a.original.person.name, b.original.person.name),
 				meta: {
 					className: cn(
