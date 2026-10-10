@@ -6,8 +6,11 @@ import {
 	getPublicActivityHiddenCountQueryKey,
 	getWorkspacePublicActivitySettingsOptions,
 	getWorkspacePublicActivitySettingsQueryKey,
+	listHiddenContributorsOptions,
+	listHiddenContributorsQueryKey,
 	listWorkspacesQueryKey,
 	updatePublicActivityMutation,
+	updatePublicActivityObjectionMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { UpdateWorkspacePublicActivityRequest } from "@/api/types.gen";
 import type { WorkspacePublicActivityState } from "@/components/admin/settings/WorkspacePublicActivitySettings";
@@ -34,6 +37,22 @@ export function useWorkspacePublicActivity({
 	const hidden = useQuery({
 		...getPublicActivityHiddenCountOptions({ path }),
 		enabled: settings.data?.enabled === true,
+	});
+	const hiddenContributors = useQuery({
+		...listHiddenContributorsOptions({ path }),
+		enabled: workspaceSlug !== undefined,
+	});
+	const showAgain = useMutation({
+		...updatePublicActivityObjectionMutation(),
+		onSuccess: () => {
+			void queryClient.invalidateQueries({ queryKey: listHiddenContributorsQueryKey({ path }) });
+			void queryClient.invalidateQueries({
+				queryKey: getPublicActivityHiddenCountQueryKey({ path }),
+			});
+			toast.success("Shown in activity again");
+		},
+		onError: (error) =>
+			toast.error(problemDetailOf(error, "We could not show this person again. Try again.")),
 	});
 	const update = useMutation({
 		...updatePublicActivityMutation(),
@@ -79,6 +98,8 @@ export function useWorkspacePublicActivity({
 			allowSearchEngines: settings.data.allowSearchEngines,
 			live,
 			hiddenPeople: hidden.data?.hiddenPeople,
+			hiddenContributors: hiddenContributors.data ?? [],
+			restoring: showAgain.isPending ? showAgain.variables.path.userId : undefined,
 			pending: pendingBody && pendingChange(pendingBody, settings.data.enabled),
 		};
 	} else if (settings.isError) {
@@ -94,6 +115,8 @@ export function useWorkspacePublicActivity({
 		state,
 		onEnabledChange: (publicActivityEnabled: boolean) => change({ publicActivityEnabled }),
 		onSearchEnginesChange: (allowSearchEngines: boolean) => change({ allowSearchEngines }),
+		onShowAgain: (userId: number) =>
+			showAgain.mutate({ path: { ...path, userId }, query: { hidden: false } }),
 	};
 }
 

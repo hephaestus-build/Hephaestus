@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
 import { expectNoPageOverflow } from "@/stories/reflow";
-import { expectUnavailable } from "@/test/controls";
 
 import { PublicActivitySection } from "./PublicActivitySection";
 
@@ -10,7 +9,9 @@ const meta = {
 	component: PublicActivitySection,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
-	args: { visible: true, onVisibleChange: fn() },
+	args: {
+		state: { status: "ready", visible: true, pending: false, onVisibleChange: fn() },
+	},
 } satisfies Meta<typeof PublicActivitySection>;
 
 export default meta;
@@ -24,33 +25,52 @@ export const Visible: Story = {
 		const control = canvas.getByRole("switch", { name: SWITCH });
 		await expect(control).toBeChecked();
 		await userEvent.click(control);
-		await expect(args.onVisibleChange).toHaveBeenCalledWith(false);
+		await expect(
+			args.state.status === "ready" ? args.state.onVisibleChange : undefined,
+		).toHaveBeenCalledWith(false);
 	},
 };
 
 export const Hidden: Story = {
-	args: { visible: false },
+	args: { state: { status: "ready", visible: false, pending: false, onVisibleChange: fn() } },
 	play: async ({ args, canvas, userEvent }) => {
 		const control = canvas.getByRole("switch", { name: SWITCH });
 		await expect(control).not.toBeChecked();
 		await userEvent.click(control);
-		await expect(args.onVisibleChange).toHaveBeenCalledWith(true);
+		await expect(
+			args.state.status === "ready" ? args.state.onVisibleChange : undefined,
+		).toHaveBeenCalledWith(true);
+	},
+};
+
+/** While a change saves, the switch ignores presses but keeps keyboard focus. */
+export const Saving: Story = {
+	args: { state: { status: "ready", visible: false, pending: true, onVisibleChange: fn() } },
+	play: async ({ canvas, userEvent }) => {
+		const control = canvas.getByRole("switch", { name: SWITCH });
+		await expect(control).toHaveAttribute("aria-readonly", "true");
+		control.focus();
+		await userEvent.click(control);
+		await expect(control).not.toBeChecked();
+		await expect(control).toHaveFocus();
 	},
 };
 
 export const Loading: Story = {
-	args: { isLoading: true },
+	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expectUnavailable(canvas.getByRole("switch", { name: SWITCH }));
+		await expect(canvas.queryByRole("switch")).toBeNull();
 	},
 };
 
 export const Failed: Story = {
-	args: { isError: true, error: new Error("Network down"), onRetry: fn() },
+	args: { state: { status: "error", error: new Error("Network down"), onRetry: fn() } },
 	play: async ({ args, canvas, userEvent }) => {
 		await expect(canvas.queryByRole("switch")).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: /Retry/u }));
-		await expect(args.onRetry).toHaveBeenCalledOnce();
+		await expect(
+			args.state.status === "error" ? args.state.onRetry : undefined,
+		).toHaveBeenCalledOnce();
 	},
 };
 

@@ -9,6 +9,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { ARTIFACT_KIND, artifactKindNoun } from "@/lib/artifact-kinds";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
@@ -24,8 +25,12 @@ export interface PublicActivityOnboardingDialogProps {
 	open: boolean;
 	workspaceName: string;
 	providerType: ProviderType;
+	/** Whether public pages show the account right now, as it answered in another workspace or by default. */
+	currentlyVisible: boolean;
 	answer: PublicActivityAnswer;
 	onAnswer: (visible: boolean) => void;
+	/** Leaves the step for this visit, so a failing save cannot hold the workspace shut. */
+	onDefer: () => void;
 }
 
 /**
@@ -37,8 +42,10 @@ export function PublicActivityOnboardingDialog({
 	open,
 	workspaceName,
 	providerType,
+	currentlyVisible,
 	answer,
 	onAnswer,
+	onDefer,
 }: PublicActivityOnboardingDialogProps) {
 	const titleRef = useRef<HTMLHeadingElement>(null);
 	const pullRequests = artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType);
@@ -51,23 +58,33 @@ export function PublicActivityOnboardingDialog({
 					<AlertDialogTitle ref={titleRef} tabIndex={-1}>
 						{workspaceName} has a public activity page
 					</AlertDialogTitle>
-					<AlertDialogDescription>
-						Anyone can see it, without signing in. For public {repositories} only, it shows:
+					{/* One description, so a screen reader hears all of what is shown, not its first line. */}
+					<AlertDialogDescription render={<div />}>
+						<div className="space-y-3">
+							<p>
+								Anyone can see it, without signing in. For public {repositories} only, it shows:
+							</p>
+							<ul className="list-disc space-y-1 pl-5">
+								<li>your name, your picture and a link to your profile</li>
+								<li>
+									the {pullRequests} you opened and reviewed, and the issues you opened, as numbers
+								</li>
+								<li>a weekly line of your activity</li>
+							</ul>
+							<p>
+								Your choice covers every public activity page, and you can change it at any time in
+								User settings. Right now, public pages {currentlyVisible ? "show" : "hide"} you.
+							</p>
+						</div>
 					</AlertDialogDescription>
 				</AlertDialogHeader>
-				<ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-					<li>your name, your picture and a link to your profile</li>
-					<li>the {pullRequests} you opened and reviewed, and the issues you opened, as numbers</li>
-					<li>a weekly line of your activity</li>
-				</ul>
-				<p className="text-sm text-muted-foreground">
-					Your choice covers every public activity page. You can change it at any time in User
-					settings.
-				</p>
 				{answer.status === "error" && (
-					<p role="alert" className="text-sm text-destructive">
-						{answer.message}
-					</p>
+					<div role="alert" className="space-y-2 text-sm text-destructive">
+						<p>{answer.message}</p>
+						<Button variant="link" size="inline" onClick={onDefer}>
+							Decide later
+						</Button>
+					</div>
 				)}
 				<AlertDialogFooter className="grid grid-cols-2 sm:flex-none">
 					<ChoiceButton visible answer={answer} disabled={saving} onAnswer={onAnswer}>

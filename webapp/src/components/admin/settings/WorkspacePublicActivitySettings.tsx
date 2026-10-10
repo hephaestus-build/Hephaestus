@@ -1,7 +1,10 @@
 import { InfoIcon } from "lucide-react";
 import { useId, useRef, useState } from "react";
 
+import type { UserInfo } from "@/api/types.gen";
+import { MemberAvatar } from "@/components/activity/MemberAvatar";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { Section } from "@/components/layout/Section";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
 	AlertDialog,
@@ -13,6 +16,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -31,6 +35,10 @@ export type WorkspacePublicActivityState =
 			live: boolean;
 			/** How many people the page leaves out, never who; undefined where the count did not load. */
 			hiddenPeople: number | undefined;
+			/** Who an admin hid without a membership: no other screen can show them again. */
+			hiddenContributors: readonly Pick<UserInfo, "id" | "login" | "name" | "avatarUrl">[];
+			/** The person being shown again, if any. */
+			restoring: number | undefined;
 			/** The change in flight, if any. */
 			pending: "enabled" | "search-engines" | undefined;
 	  };
@@ -43,6 +51,7 @@ export interface WorkspacePublicActivitySettingsProps {
 	state: WorkspacePublicActivityState;
 	onEnabledChange: (enabled: boolean) => void;
 	onSearchEnginesChange: (allow: boolean) => void;
+	onShowAgain: (userId: number) => void;
 }
 
 /**
@@ -56,6 +65,7 @@ export function WorkspacePublicActivitySettings({
 	state,
 	onEnabledChange,
 	onSearchEnginesChange,
+	onShowAgain,
 }: WorkspacePublicActivitySettingsProps) {
 	const headingId = useId();
 	const [confirming, setConfirming] = useState(false);
@@ -140,6 +150,38 @@ export function WorkspacePublicActivitySettings({
 							it in a private window.
 						</p>
 					)}
+					{state.hiddenContributors.length > 0 && (
+						<Section
+							level={3}
+							size="sm"
+							title="Hidden by an admin"
+							description="These people have no membership, and an admin hid them from activity. A member is shown again under Members."
+						>
+							<ul className="rounded-xl border bg-card">
+								{state.hiddenContributors.map((person) => (
+									<Item key={person.id} render={<li />} variant="row">
+										<MemberAvatar user={person} />
+										<ItemContent>
+											<ItemTitle>{person.name}</ItemTitle>
+											<ItemDescription>{person.login}</ItemDescription>
+										</ItemContent>
+										<ItemActions>
+											<Button
+												variant="outline"
+												size="sm"
+												disabled={state.restoring !== undefined}
+												focusableWhenDisabled
+												onClick={() => onShowAgain(person.id)}
+											>
+												{state.restoring === person.id && <Spinner />}
+												Show again
+											</Button>
+										</ItemActions>
+									</Item>
+								))}
+							</ul>
+						</Section>
+					)}
 				</div>
 			)}
 			<PublishDialog
@@ -183,7 +225,8 @@ function SettingRow({
 				<Switch
 					checked={checked}
 					onCheckedChange={(next) => onCheckedChange(next)}
-					disabled={pending}
+					// Read-only, not disabled: a disabled switch leaves the tab order and drops keyboard focus.
+					readOnly={pending}
 					aria-labelledby={`${id}-title`}
 					aria-describedby={`${id}-description`}
 				/>
@@ -215,27 +258,32 @@ function PublishDialog({
 					<AlertDialogTitle ref={titleRef} tabIndex={-1}>
 						Make the activity of {workspaceName} public?
 					</AlertDialogTitle>
-					<AlertDialogDescription>
-						Anyone can see the page, without signing in. For the public {repositories} of this
-						workspace, it lists:
+					{/* One description, so a screen reader hears all of what becomes public. */}
+					<AlertDialogDescription render={<div />}>
+						<div className="space-y-3">
+							<p>
+								Anyone can see the page, without signing in. For the public {repositories} of this
+								workspace, it lists:
+							</p>
+							<ul className="list-disc space-y-1 pl-5">
+								<li>
+									everyone who contributed, members and outside contributors, by name, picture and a
+									link to their profile
+								</li>
+								<li>
+									the {pullRequests} each person opened and reviewed, the issues they opened, and a
+									weekly line of their activity
+								</li>
+							</ul>
+							<p>
+								The page shows nothing from private {repositories}, practices, feedback, AI content,
+								Slack, Outline or automation accounts. People on it can hide themselves by signing
+								in. It asks search engines not to list it until you allow that. You can turn it off
+								at any time.
+							</p>
+						</div>
 					</AlertDialogDescription>
 				</AlertDialogHeader>
-				<ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-					<li>
-						everyone who contributed, members and outside contributors, by name, picture and a link
-						to their profile
-					</li>
-					<li>
-						the {pullRequests} each person opened and reviewed, the issues they opened, and a weekly
-						line of their activity
-					</li>
-				</ul>
-				<p className="text-sm text-muted-foreground">
-					The page shows nothing from private {repositories}, practices, feedback, AI content,
-					Slack, Outline or automation accounts. Everyone on it can hide themselves by signing in.
-					It asks search engines not to list it until you allow that. You can turn it off at any
-					time.
-				</p>
 				<AlertDialogFooter>
 					<AlertDialogCancel>Cancel</AlertDialogCancel>
 					<AlertDialogAction onClick={onConfirm}>Make public</AlertDialogAction>

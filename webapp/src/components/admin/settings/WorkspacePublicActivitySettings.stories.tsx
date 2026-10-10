@@ -4,7 +4,6 @@ import { expect, fn, screen, within } from "storybook/test";
 import { withStandardPage } from "@/stories/decorators";
 import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
-import { expectUnavailable } from "@/test/controls";
 
 import { WorkspacePublicActivitySettings } from "./WorkspacePublicActivitySettings";
 
@@ -23,10 +22,13 @@ const meta = {
 			allowSearchEngines: false,
 			live: false,
 			hiddenPeople: undefined,
+			hiddenContributors: [],
+			restoring: undefined,
 			pending: undefined,
 		},
 		onEnabledChange: fn(),
 		onSearchEnginesChange: fn(),
+		onShowAgain: fn(),
 	},
 } satisfies Meta<typeof WorkspacePublicActivitySettings>;
 
@@ -48,6 +50,8 @@ const live = {
 	allowSearchEngines: false,
 	live: true,
 	hiddenPeople: 3,
+	hiddenContributors: [],
+	restoring: undefined,
 	pending: undefined,
 } as const;
 
@@ -112,6 +116,43 @@ export const InstanceDoesNotAllow: Story = {
 	},
 };
 
+/** A person an admin hid with no membership can be shown again here, and nowhere else. */
+export const HiddenByAnAdmin: Story = {
+	args: {
+		state: {
+			...live,
+			hiddenPeople: 2,
+			hiddenContributors: [
+				{ id: 11, login: "ada", name: "Ada Lovelace", avatarUrl: "" },
+				{ id: 12, login: "bob", name: "Bob Brenner", avatarUrl: "" },
+			],
+		},
+	},
+	play: async ({ args, canvas, userEvent }) => {
+		const list = within(canvas.getByRole("region", { name: "Hidden by an admin" }));
+		await expect(list.getAllByRole("listitem")).toHaveLength(2);
+		const [ada] = list.getAllByRole("button", { name: "Show again" });
+		await userEvent.click(ada ?? list.getByRole("list"));
+		await expect(args.onShowAgain).toHaveBeenCalledWith(11);
+	},
+};
+
+export const ShowingAgain: Story = {
+	args: {
+		state: {
+			...live,
+			hiddenContributors: [{ id: 11, login: "ada", name: "Ada Lovelace", avatarUrl: "" }],
+			restoring: 11,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Show again" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+	},
+};
+
 /** Where the count did not load, the row is left out rather than guessed. */
 export const HiddenCountUnavailable: Story = {
 	args: { state: { ...live, hiddenPeople: undefined } },
@@ -131,7 +172,10 @@ export const NobodyHidden: Story = {
 export const Saving: Story = {
 	args: { state: { ...live, pending: "enabled" } },
 	play: async ({ canvas }) => {
-		await expectUnavailable(canvas.getByRole("switch", { name: PAGE }));
+		await expect(canvas.getByRole("switch", { name: PAGE })).toHaveAttribute(
+			"aria-readonly",
+			"true",
+		);
 		await expect(canvas.getByRole("switch", { name: "Allow search engines" })).toBeEnabled();
 	},
 };

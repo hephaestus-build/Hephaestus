@@ -132,4 +132,25 @@ describe("the public activity page setting", () => {
 			ROUTE_RENDER_WAIT,
 		);
 	});
+
+	it("shows a person an admin hid without a membership again, which no other screen can", async () => {
+		const user = userEvent.setup();
+		const shown: string[] = [];
+		server.use(
+			http.get("*/workspaces/acme/activity/hidden-contributors", () =>
+				HttpResponse.json([
+					{ id: 11, login: "ada", name: "Ada Lovelace", avatarUrl: "", htmlUrl: "", email: "" },
+				]),
+			),
+			http.patch("*/workspaces/acme/activity/people/11/public-visibility", ({ request }) => {
+				shown.push(new URL(request.url).search);
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		renderSettingsRoute(false);
+
+		await user.click(await screen.findByRole("button", { name: "Show again" }, ROUTE_RENDER_WAIT));
+
+		await waitFor(() => expect(shown).toStrictEqual(["?hidden=false"]));
+	});
 });

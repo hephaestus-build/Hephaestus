@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -25,6 +26,8 @@ export function usePublicActivityOnboarding({
 	const queryClient = useQueryClient();
 	const path = { slug: workspaceSlug };
 	const onboarding = useQuery({ ...getPublicActivityOnboardingOptions({ path }), enabled });
+	// Only a failing save needs it, but a person who left the step is not asked again on this visit.
+	const [deferred, setDeferred] = useState(false);
 	const answer = useMutation({
 		...answerPublicActivityOnboardingMutation(),
 		onSuccess: (data, { body }) => {
@@ -50,8 +53,10 @@ export function usePublicActivityOnboarding({
 		};
 	}
 	return {
-		open: enabled && onboarding.data?.seen === false,
+		open: enabled && onboarding.data?.seen === false && !deferred,
+		currentlyVisible: onboarding.data?.visible ?? true,
 		answer: state,
 		onAnswer: (visible: boolean) => answer.mutate({ path, body: { visible } }),
+		onDefer: () => setDeferred(true),
 	};
 }

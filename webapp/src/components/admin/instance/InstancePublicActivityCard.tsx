@@ -61,7 +61,8 @@ export function InstancePublicActivityCard({
 							id={id}
 							checked={state.allowed}
 							onCheckedChange={(next) => onAllowedChange(next)}
-							disabled={state.pending}
+							// Read-only, not disabled: a disabled switch leaves the tab order and drops keyboard focus.
+							readOnly={state.pending}
 						/>
 					</Field>
 				)}

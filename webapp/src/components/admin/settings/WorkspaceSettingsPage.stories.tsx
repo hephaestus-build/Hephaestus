@@ -22,10 +22,13 @@ const publicActivity = {
 		allowSearchEngines: false,
 		live: false,
 		hiddenPeople: undefined,
+		hiddenContributors: [],
+		restoring: undefined,
 		pending: undefined,
 	},
 	onEnabledChange: fn(),
 	onSearchEnginesChange: fn(),
+	onShowAgain: fn(),
 } satisfies WorkspaceSettingsPageProps["publicActivity"];
 
 const meta = {

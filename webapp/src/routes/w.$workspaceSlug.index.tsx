@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouter, useRouterState } from "@tanstack/react-router";
 
 import { getPublicActivityOptions, listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
 import type { PublicActivity } from "@/api/types.gen";
@@ -15,6 +15,7 @@ import {
 import type { PeopleOrder } from "@/components/activity/ActivityPeopleTable";
 import { PublicActivityPage } from "@/components/activity/PublicActivityPage";
 import { PublicActivityOnboardingDialog } from "@/components/onboarding/PublicActivityOnboardingDialog";
+import { Spinner } from "@/components/ui/spinner";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
 import { usePublicActivityOnboarding } from "@/hooks/use-public-activity-onboarding";
 import { pageTitle } from "@/lib/page-title";
@@ -39,7 +40,9 @@ export const Route = createFileRoute("/w/$workspaceSlug/")({
 		middlewares: carriedSearchParams<PeopleSearch>(PERIOD_SEARCH_KEYS, PEOPLE_SEARCH_DEFAULTS),
 	},
 	beforeLoad: async ({ context, params, location }) => {
-		if (!(await resolveCurrentUser(context.queryClient))) {
+		// A public page needs no identity, so an identity that cannot be read is a visitor.
+		const user = await resolveCurrentUser(context.queryClient).catch(() => null);
+		if (!user) {
 			return;
 		}
 		if (await consentIsPending(context.queryClient)) {
@@ -72,16 +75,27 @@ export const Route = createFileRoute("/w/$workspaceSlug/")({
 	},
 	loaderDeps: ({ search: { range, from, to, repo } }) => ({ range, from, to, repo }),
 	loader: async ({ context, params, deps, location }): Promise<PublicActivityLoad> => {
-		try {
-			const page = await context.queryClient.query(
+		const read = async (repo: string[] | undefined) =>
+			context.queryClient.query(
 				getPublicActivityOptions({
 					path: { slug: params.workspaceSlug },
-					query: { ...periodQuery(periodFromSearch(deps)), repo: deps.repo },
+					query: { ...periodQuery(periodFromSearch(deps)), repo },
 				}),
 			);
-			return { status: "ready", page };
+		try {
+			return { status: "ready", page: await read(deps.repo) };
 		} catch (error) {
 			if (problemStatusOf(error) === 404) {
+				// A repository the workspace no longer lists is a 404 too. If the page reads without it,
+				// the link was stale, not the workspace private.
+				if (deps.repo !== undefined && (await read(undefined).catch(() => undefined))) {
+					throw redirect({
+						to: "/w/$workspaceSlug",
+						params,
+						search: { ...location.search, repo: undefined },
+						replace: true,
+					});
+				}
 				// The workspace gate sends a signed-out visitor to sign in and a signed-in one to their own
 				// workspace, the same for a workspace that is private as for one that does not exist.
 				throw redirect({
@@ -108,6 +122,11 @@ export const Route = createFileRoute("/w/$workspaceSlug/")({
 			],
 		};
 	},
+	pendingComponent: () => (
+		<div className="flex h-96 items-center justify-center">
+			<Spinner className="size-8" />
+		</div>
+	),
 	component: PublicActivityRoute,
 });
 
@@ -118,6 +137,8 @@ function PublicActivityRoute() {
 	const router = useRouter();
 	const setSearch = useSearchState();
 	const openLogin = useLoginNavigation();
+	// The loader holds the previous period's page until the next one arrives.
+	const updating = useRouterState({ select: (state) => state.isLoading });
 	const { isAuthenticated, userView } = useAuth();
 
 	const page = load.status === "ready" ? load.page : undefined;
@@ -148,6 +169,7 @@ function PublicActivityRoute() {
 				onRepoChange={(repo) => setView({ repo: nonEmpty(repo) })}
 				repositories={page?.repositories ?? []}
 				coverage={page?.coverage}
+				updating={updating}
 				people={
 					load.status === "ready"
 						? { status: "ready", people: publicPeopleRows(load.page), stale: false }

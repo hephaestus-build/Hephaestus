@@ -15,8 +15,10 @@ const meta = {
 		open: true,
 		workspaceName: "Hephaestus",
 		providerType: "GITHUB",
+		currentlyVisible: true,
 		answer: { status: "idle" },
 		onAnswer: fn(),
+		onDefer: fn(),
 	},
 } satisfies Meta<typeof PublicActivityOnboardingDialog>;
 
@@ -83,13 +85,25 @@ export const Saving: Story = {
 	},
 };
 
+/** A failing save does not hold the workspace shut: the person can leave the step for this visit. */
 export const Failed: Story = {
 	args: { answer: { status: "error", message: "We could not save your choice. Try again." } },
-	play: async () => {
+	play: async ({ args, userEvent }) => {
 		const step = await dialog();
 		await expect(step.getByRole("alert")).toHaveTextContent(
 			"We could not save your choice. Try again.",
 		);
+		await userEvent.click(step.getByRole("button", { name: "Decide later" }));
+		await expect(args.onDefer).toHaveBeenCalledOnce();
+	},
+};
+
+/** Someone who already answered elsewhere is told what they now are. */
+export const AlreadyHidden: Story = {
+	args: { currentlyVisible: false },
+	play: async () => {
+		const step = await dialog();
+		await expect(step.getByText(/Right now, public pages hide you\./u)).toBeVisible();
 	},
 };
 

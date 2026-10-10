@@ -79,9 +79,8 @@ const defaultLinkedAccountsProps = {
 };
 
 const defaultPublicActivityProps = {
-	visible: true,
-	onVisibleChange: fn(),
-};
+	state: { status: "ready", visible: true, pending: false, onVisibleChange: fn() },
+} as const;
 
 const defaultAiChoiceProps = {
 	choice: "CLOUD",

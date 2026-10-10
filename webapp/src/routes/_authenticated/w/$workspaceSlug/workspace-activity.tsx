@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import {
 	getPublicActivityHiddenCountQueryKey,
+	listHiddenContributorsQueryKey,
 	updateActivityAutomationMutation,
 	updatePublicActivityObjectionMutation,
 } from "@/api/@tanstack/react-query.gen";
@@ -165,6 +166,9 @@ function WorkspaceActivity() {
 			await invalidateWorkspaceReads(queryClient, workspaceSlug, HIDING_READS);
 			void queryClient.invalidateQueries({
 				queryKey: getPublicActivityHiddenCountQueryKey({ path: { workspaceSlug } }),
+			});
+			void queryClient.invalidateQueries({
+				queryKey: listHiddenContributorsQueryKey({ path: { workspaceSlug } }),
 			});
 			if (query.hidden) {
 				// The person has left the list this level opened from.

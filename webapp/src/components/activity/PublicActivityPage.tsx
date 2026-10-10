@@ -35,6 +35,8 @@ export interface PublicActivityPageProps {
 	repositories: ActivityPeopleTableProps["repositories"];
 	coverage: ActivityCoverage | undefined;
 	people: PeopleTableState;
+	/** Another period is loading, and the page still shows the previous one. */
+	updating: boolean;
 }
 
 /**
@@ -54,6 +56,7 @@ export function PublicActivityPage({
 	repositories,
 	coverage,
 	people,
+	updating,
 }: PublicActivityPageProps) {
 	const terms = getProviderTerms(providerType);
 	const pullRequests = artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType);
@@ -88,7 +91,7 @@ export function PublicActivityPage({
 				}
 			/>
 			<div className="flex justify-end">
-				<ActivityPeriodPicker period={period} onPeriodChange={onPeriodChange} updating={false} />
+				<ActivityPeriodPicker period={period} onPeriodChange={onPeriodChange} updating={updating} />
 			</div>
 			<Section
 				size="lg"

@@ -1,26 +1,26 @@
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 
+export type PublicActivityChoiceState =
+	| { status: "loading" }
+	| { status: "error"; error: unknown; onRetry: () => void }
+	| {
+			status: "ready";
+			/** Whether public activity pages list this account's work. */
+			visible: boolean;
+			/** The change in flight, which the switch waits out. */
+			pending: boolean;
+			onVisibleChange: (visible: boolean) => void;
+	  };
+
 export interface PublicActivitySectionProps {
-	/** Whether public activity pages list this account's work. */
-	visible: boolean;
-	onVisibleChange: (visible: boolean) => void;
-	isLoading?: boolean;
-	isError?: boolean;
-	error?: unknown;
-	onRetry?: () => void;
+	state: PublicActivityChoiceState;
 }
 
 /** The account-wide choice that every public activity page honours. */
-export function PublicActivitySection({
-	visible,
-	onVisibleChange,
-	isLoading = false,
-	isError = false,
-	error,
-	onRetry,
-}: PublicActivitySectionProps) {
+export function PublicActivitySection({ state }: PublicActivitySectionProps) {
 	return (
 		<section
 			id="public-activity"
@@ -30,13 +30,15 @@ export function PublicActivitySection({
 			<h2 id="public-activity-heading" className="text-xl font-semibold">
 				Public activity pages
 			</h2>
-			{isError ? (
+			{state.status === "loading" && <Skeleton className="h-10 rounded-lg" />}
+			{state.status === "error" && (
 				<QueryErrorAlert
 					title="We could not load your public activity choice"
-					error={error}
-					onRetry={onRetry}
+					error={state.error}
+					onRetry={state.onRetry}
 				/>
-			) : (
+			)}
+			{state.status === "ready" && (
 				<Field orientation="horizontal">
 					<FieldContent>
 						<FieldLabel htmlFor="public-activity-visible">
@@ -49,10 +51,10 @@ export function PublicActivitySection({
 					</FieldContent>
 					<Switch
 						id="public-activity-visible"
-						checked={visible}
-						onCheckedChange={(next) => onVisibleChange(next)}
-						disabled={isLoading}
-						aria-busy={isLoading}
+						checked={state.visible}
+						onCheckedChange={(next) => state.onVisibleChange(next)}
+						// Read-only, not disabled: a disabled switch leaves the tab order and drops keyboard focus.
+						readOnly={state.pending}
 					/>
 				</Field>
 			)}

@@ -42,6 +42,7 @@ import type {
 import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import type { EmailPreferencesSectionProps } from "@/components/settings/EmailPreferencesSection";
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
+import type { PublicActivitySectionProps } from "@/components/settings/PublicActivitySection";
 import type { SessionsSectionProps } from "@/components/settings/SessionsSection";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
@@ -251,6 +252,24 @@ function RouteComponent() {
 		},
 	});
 
+	let publicActivityState: PublicActivitySectionProps["state"] = { status: "loading" };
+	if (publicActivityQuery.isError) {
+		publicActivityState = {
+			status: "error",
+			error: publicActivityQuery.error,
+			onRetry: () => {
+				void publicActivityQuery.refetch();
+			},
+		};
+	} else if (publicActivityQuery.data !== undefined) {
+		publicActivityState = {
+			status: "ready",
+			visible: publicActivityQuery.data.visible,
+			pending: publicActivityMutation.isPending,
+			onVisibleChange: (visible) => publicActivityMutation.mutate({ body: { visible } }),
+		};
+	}
+
 	// After deletion: end the session. `logout()` performs a full reload to "/",
 	// so no further navigation is needed here.
 	const handleAccountDeleted = async () => {
@@ -455,16 +474,7 @@ function RouteComponent() {
 					void aiChoiceQuery.refetch();
 				},
 			}}
-			publicActivityProps={{
-				visible: publicActivityQuery.data?.visible ?? true,
-				onVisibleChange: (visible) => publicActivityMutation.mutate({ body: { visible } }),
-				isLoading: publicActivityQuery.isLoading,
-				isError: publicActivityQuery.isError,
-				error: publicActivityQuery.error,
-				onRetry: () => {
-					void publicActivityQuery.refetch();
-				},
-			}}
+			publicActivityProps={{ state: publicActivityState }}
 			linkedAccountsProps={linkedAccountsProps}
 			showSlackPreferencesSection={slackAvailable}
 			slackPreferencesProps={slackPreferencesProps}

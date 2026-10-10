@@ -58,7 +58,9 @@ It never shows who.
 To leave out a person who has no account to hide themselves, open the person on **Workspace activity** and select **Hide from activity**.
 The person then leaves the public page and Workspace activity.
 Right after the action, the message **Undo** restores the person.
-To show a member again later, use **Members**.
+Later, **Workspace settings** lists the people without a membership whom an administrator hid, under **Hidden by an admin**.
+Select **Show again** beside a person to restore them.
+A member is shown again under **Members**.
 
 ### Members
 
@@ -112,6 +114,10 @@ This marker affects publication only; it does not suppress internal processing.
 Hidden people do not contribute to public totals.
 An administrator can read only the count through `GET /workspaces/{slug}/activity/public-hidden-count`.
 This endpoint does not identify the hidden people.
+
+A workspace administrator can list the people without a membership whom an administrator hid with
+`GET /workspaces/{slug}/activity/hidden-contributors`.
+It lists administrator decisions only, not account objections.
 
 For an objection from a person without an account, the workspace administrator can use
 `PATCH /workspaces/{slug}/activity/people/{userId}/public-visibility?hidden=true`.

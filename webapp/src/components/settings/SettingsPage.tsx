@@ -67,7 +67,6 @@ export function SettingsPage({
 		practiceFeedbackProps;
 	const { isLoading: researchLoading = false, ...researchRest } = researchProps;
 	const { isLoading: aiChoiceLoading = false, ...aiChoiceRest } = aiChoiceProps;
-	const { isLoading: publicActivityLoading = false, ...publicActivityRest } = publicActivityProps;
 	const { isLoading: linkedLoading = false, ...linkedRest } = linkedAccountsProps;
 	const { isLoading: slackLoading = false, ...slackRest } = slackPreferencesProps;
 
@@ -123,10 +122,7 @@ export function SettingsPage({
 				<AiChoiceSection {...aiChoiceRest} isLoading={isLoading || aiChoiceLoading} />
 
 				<Separator />
-				<PublicActivitySection
-					{...publicActivityRest}
-					isLoading={isLoading || publicActivityLoading}
-				/>
+				<PublicActivitySection {...publicActivityProps} />
 
 				{hasEmailPreferences(emailPreferencesProps.state) && (
 					<>

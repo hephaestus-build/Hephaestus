@@ -1,8 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
-import { expectUnavailable } from "@/test/controls";
-
 import { InstancePublicActivityCard } from "./InstancePublicActivityCard";
 
 const meta = {
@@ -40,7 +38,10 @@ export const On: Story = {
 export const Saving: Story = {
 	args: { state: { status: "ready", allowed: true, pending: true } },
 	play: async ({ canvas }) => {
-		await expectUnavailable(canvas.getByRole("switch", { name: SWITCH }));
+		await expect(canvas.getByRole("switch", { name: SWITCH })).toHaveAttribute(
+			"aria-readonly",
+			"true",
+		);
 	},
 };
 

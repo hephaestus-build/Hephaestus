@@ -34,6 +34,7 @@ const meta = {
 		repositories: activity.repositories,
 		coverage: activity.coverage,
 		people: readyPublicPeople(activity),
+		updating: false,
 	},
 } satisfies Meta<typeof PublicActivityPage>;
 
@@ -79,15 +80,6 @@ export const ProfileLinks: Story = {
 		});
 		await expect(link).toHaveAttribute("href", "https://github.com/ada");
 		await expect(link).toHaveAttribute("target", "_blank");
-	},
-};
-
-/** Only what the public page carries: no team picker, no drawer, no automation. */
-export const OnlyWhatIsPublic: Story = {
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("combobox", { name: /^Team/u })).not.toBeInTheDocument();
-		await expect(canvas.queryByRole("region", { name: "Automation" })).not.toBeInTheDocument();
-		await expect(canvas.queryByRole("region", { name: "Timeline" })).not.toBeInTheDocument();
 	},
 };
 

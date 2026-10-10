@@ -88,16 +88,40 @@ describe("the address of a workspace", () => {
 		expect(router.state.location.pathname).toBe("/w/acme");
 	});
 
-	it.each(["private", "unknown"])(
-		"sends a signed-out visitor of a %s workspace to the same sign-in",
-		async (slug) => {
-			server.use(unauthenticatedUser);
-			const { router } = renderRouteAtWithRouter(`/w/${slug}?range=1y`);
+	// The server answers an unknown, a private and a switched-off workspace alike, so the page
+	// has one way to learn that nothing is published: a not-found.
+	it("sends a signed-out visitor of a workspace that publishes nothing to sign in, keeping the search", async () => {
+		server.use(unauthenticatedUser);
+		const { router } = renderRouteAtWithRouter("/w/private?range=1y");
 
-			await waitFor(() => expect(router.state.location.pathname).toBe("/login"), ROUTE_RENDER_WAIT);
-			expect(router.state.location.search.returnTo).toBe(`/w/${slug}/activity?range=1y`);
-		},
-	);
+		await waitFor(() => expect(router.state.location.pathname).toBe("/login"), ROUTE_RENDER_WAIT);
+		expect(router.state.location.search.returnTo).toBe("/w/private/activity?range=1y");
+	});
+
+	it("shows the page to a visitor when the identity cannot be read", async () => {
+		server.use(http.get("*/user", () => new HttpResponse(null, { status: 503 })));
+		publish();
+		renderRouteAtWithRouter("/w/acme");
+
+		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
+	});
+
+	it("drops a repository the workspace no longer lists, rather than treating the page as private", async () => {
+		server.use(unauthenticatedUser);
+		publish();
+		// Added last, so it answers first: the read with the repository fails once.
+		server.use(
+			http.get(
+				"*/public/workspaces/:slug/activity",
+				() => HttpResponse.json({ status: 404, title: "Not Found" }, { status: 404 }),
+				{ once: true },
+			),
+		);
+		const { router } = renderRouteAtWithRouter("/w/acme?repo=acme/gone&sort=reviews");
+
+		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
+		expect(router.state.location.href).toBe("/w/acme?sort=reviews");
+	});
 
 	it("reads the period, repositories and order from the address, and writes them back readable", async () => {
 		const user = userEvent.setup();
@@ -136,30 +160,44 @@ describe("the address of a workspace", () => {
 	});
 });
 
-describe("search engines", () => {
-	async function robotsOf(page: Wire<PublicActivity>) {
-		server.use(unauthenticatedUser);
-		publish(page);
-		const router = createRouter({
-			...ROUTER_SEARCH,
-			routeTree,
-			history: createMemoryHistory({ initialEntries: ["/w/acme"] }),
-			context: { queryClient: new QueryClient(), auth: undefined },
-		});
-		await router.load();
-		return router.state.matches
-			.flatMap(({ meta }) => meta ?? [])
-			.filter((tag) => tag?.name === "robots");
-	}
+/** The robots tags the page asks for once its route has loaded. */
+async function robotsAt(url: string) {
+	const router = createRouter({
+		...ROUTER_SEARCH,
+		routeTree,
+		history: createMemoryHistory({ initialEntries: [url] }),
+		context: { queryClient: new QueryClient(), auth: undefined },
+	});
+	await router.load();
+	return router.state.matches
+		.flatMap(({ meta }) => meta ?? [])
+		.filter((tag) => tag?.name === "robots");
+}
 
+describe("search engines", () => {
 	it("are asked to stay away unless the workspace allows them", async () => {
-		await expect(robotsOf(publicActivity())).resolves.toStrictEqual([
+		server.use(unauthenticatedUser);
+		publish();
+
+		await expect(robotsAt("/w/acme")).resolves.toStrictEqual([
+			{ name: "robots", content: "noindex" },
+		]);
+	});
+
+	it("stay away from a page that did not load", async () => {
+		server.use(unauthenticatedUser);
+		server.use(http.get("*/public/workspaces/:slug/activity", () => HttpResponse.error()));
+
+		await expect(robotsAt("/w/acme")).resolves.toStrictEqual([
 			{ name: "robots", content: "noindex" },
 		]);
 	});
 
 	it("may list the page when the workspace allows them", async () => {
-		await expect(robotsOf(publicActivity({ allowSearchEngines: true }))).resolves.toStrictEqual([]);
+		server.use(unauthenticatedUser);
+		publish(publicActivity({ allowSearchEngines: true }));
+
+		await expect(robotsAt("/w/acme")).resolves.toStrictEqual([]);
 	});
 });
 
@@ -194,6 +232,19 @@ describe("a signed-in person who is not a member", () => {
 
 		await waitFor(() => expect(answers).toStrictEqual([{ visible: false }]));
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+	});
+});
+
+describe("a signed-in person whose consent is pending", () => {
+	it("gives it before the page", async () => {
+		server.use(
+			http.get("*/user/consent", () => HttpResponse.json({ completed: false })),
+			http.get("*/workspaces", () => HttpResponse.json([])),
+		);
+		publish();
+		const { router } = renderRouteAtWithRouter("/w/acme");
+
+		await waitFor(() => expect(router.state.location.pathname).toBe("/consent"), ROUTE_RENDER_WAIT);
 	});
 });
 
