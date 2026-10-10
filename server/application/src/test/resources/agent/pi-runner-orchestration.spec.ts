@@ -2982,6 +2982,23 @@ if (scenario !== undefined && scenario !== "") {
 						nodePath.join(cwd, "work/precompute-out/test-practice.md"),
 						"- `src/Auth.java` [L10] — insecure call: `insecure();`\n",
 					);
+					writeFileSync(
+						nodePath.join(cwd, "work/precompute-out/test-practice.json"),
+						JSON.stringify({
+							practice: "test-practice",
+							contract: "positional",
+							status: "ok",
+							hints: [{}],
+							metrics: {},
+							directions: [],
+							dropped: 0,
+							durationMs: 5,
+						}),
+					);
+					// The scripts the server staged: the second one's stage ended before it did.
+					mkdirSync(nodePath.join(cwd, "scripts/practices"), { recursive: true });
+					writeFileSync(nodePath.join(cwd, "scripts/practices/test-practice.ts"), "");
+					writeFileSync(nodePath.join(cwd, "scripts/practices/second-practice.ts"), "");
 					if (stage.startsWith("compose") || stage === "draft-revision") {
 						writeFileSync(
 							nodePath.join(cwd, "evidence/composition.json"),
@@ -4210,6 +4227,18 @@ for (const item of nullableCases) {
 						case "compose":
 						case "compose-foreign-provider": {
 							assert.equal(child.status, 0, child.stderr);
+							// Composition removed the precompute output after the runner read its report.
+							assert.equal(existsSync(nodePath.join(cwd, "work/precompute-out")), false);
+							assert.deepEqual(
+								JSON.parse(readFileSync(nodePath.join(cwd, "out/precompute.json"), "utf8")),
+								{
+									practices: [
+										{ slug: "second-practice", status: "not-finished", leads: 0 },
+										{ slug: "test-practice", status: "ok", leads: 1, models: [], durationMs: 5 },
+									],
+									truncated: false,
+								},
+							);
 							if (
 								fixture === "compose-history-invalid" ||
 								fixture === "compose-history-invalid-link" ||

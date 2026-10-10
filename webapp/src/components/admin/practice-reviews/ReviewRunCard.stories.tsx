@@ -27,6 +27,24 @@ export const Completed: Story = {
 		// Reasoning is billed as output, so it is named as a part of what was written.
 		await expect(canvas.getByText("(120 of it reasoning)")).toBeVisible();
 		await expect(canvas.queryByText("Not yet")).not.toBeInTheDocument();
+		// The calls are the review model's: a precompute script's own models are counted elsewhere.
+		await expect(canvas.getByText("Review model calls")).toBeVisible();
+		await expect(canvas.queryByText("Model calls")).not.toBeInTheDocument();
+		// A job that records no tier names its model alone.
+		await expect(canvas.getByText("Model").nextElementSibling).toHaveTextContent(
+			/^gpt-5\.4-mini$/u,
+		);
+	},
+};
+
+/** The model with the tier of the assignment it ran on, so a reader sees where the work went. */
+export const ModelWithTier: Story = {
+	args: { job: { ...reviewJob(COMPLETED_RUN), model: "gpt-5-nano", dataHandlingTier: "CLOUD" } },
+	play: async ({ canvas }) => {
+		const model = canvas.getByText("Model").nextElementSibling;
+		// The tier is its icon, as on every other surface; its name is for a screen reader.
+		await expect(model).toHaveTextContent(/^gpt-5-nano\s*Cloud$/u);
+		await expect(canvas.getByText("Cloud")).toHaveClass("sr-only");
 	},
 };
 

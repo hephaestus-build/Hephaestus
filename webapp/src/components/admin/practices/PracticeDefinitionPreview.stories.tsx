@@ -46,8 +46,13 @@ export const Complete: Story = {
 		await expect(canvas.queryByText(/hasDescription/u)).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "Review scope and evidence" }));
 		await expect(canvas.getByText("Pull request details")).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "Static analysis" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Precompute script" }));
 		await expect(canvas.getByText(/hasDescription/u)).toBeVisible();
+		// The disclosures follow a review: how it decides, what it reads, what runs before it.
+		const decides = canvas.getByRole("button", { name: "How it decides" });
+		const scope = canvas.getByRole("button", { name: "Review scope and evidence" });
+		const script = canvas.getByRole("button", { name: "Precompute script" });
+		await expect(precedes(decides, scope) && precedes(scope, script)).toBe(true);
 	},
 };
 

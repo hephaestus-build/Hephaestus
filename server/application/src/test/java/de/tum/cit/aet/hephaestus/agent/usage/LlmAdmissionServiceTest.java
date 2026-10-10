@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.usage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -194,5 +197,63 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.admit(binding)).isInstanceOf(IllegalStateException.class);
         verifyNoInteractions(resolver, priceRepository);
+    }
+
+    @Test
+    void shouldFreezeThePriceWhenAnOptionalModelIsAvailable() {
+        WorkspaceAgentBinding binding = binding(AgentPurpose.PRACTICE_EMBEDDING);
+        when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
+                .thenReturn(Optional.of(binding));
+        when(resolver.isAvailable(binding)).thenReturn(true);
+        when(modelRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(instanceModel(binding)));
+        when(resolver.resolve(binding))
+                .thenReturn(new ResolvedLlmModel(
+                        "https://api.example/v1", "openai-embeddings", "text-embedding-3-small", null, null, null));
+        when(resolver.connectionRef(binding))
+                .thenReturn(new LlmModelResolver.ConnectionRef(FundingSource.INSTANCE, 10L, 20L, 30L));
+        LlmModelPrice price = new LlmModelPrice();
+        price.setId(41L);
+        price.setPricingMode(PricingMode.PRICED);
+        price.setPer1mInputUsd(new BigDecimal("0.02"));
+        when(priceRepository.findByModelIdAndEffectiveToIsNull(20L)).thenReturn(Optional.of(price));
+
+        AdmittedLlmModel admitted = service.admitIfAvailable(binding).orElseThrow();
+
+        assertThat(admitted.resolved().upstreamModelId()).isEqualTo("text-embedding-3-small");
+        assertThat(admitted.price().appliedPriceId()).isEqualTo(41L);
+        assertThat(admitted.price().per1mInputUsd()).isEqualByComparingTo("0.02");
+    }
+
+    /** An exception that leaves a transactional proxy would mark the claim's transaction rollback-only. */
+    @Test
+    void shouldAdmitNothingWithoutThrowingWhenAnOptionalModelHasNoPrice() {
+        WorkspaceAgentBinding binding = byoBinding();
+        workspaceModel(binding).setPricingMode(PricingMode.UNPRICED);
+        when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
+                .thenReturn(Optional.of(binding));
+        when(resolver.isAvailable(binding)).thenReturn(true);
+        when(workspaceModelRepository.findByIdAndWorkspaceIdForUpdate(21L, 30L))
+                .thenReturn(Optional.of(workspaceModel(binding)));
+        when(resolver.resolve(binding))
+                .thenReturn(new ResolvedLlmModel(
+                        "https://byo.example/v1", "cohere-rerank", "rerank-v3.5", null, null, null));
+        when(resolver.connectionRef(binding))
+                .thenReturn(new LlmModelResolver.ConnectionRef(FundingSource.WORKSPACE, 11L, 21L, 30L));
+        when(workspaceModelRepository.findByIdAndWorkspaceId(21L, 30L))
+                .thenReturn(Optional.of(workspaceModel(binding)));
+
+        assertThat(service.admitIfAvailable(binding)).isEmpty();
+    }
+
+    @Test
+    void shouldAdmitNothingWithoutResolvingWhenAnOptionalModelIsUnavailable() {
+        WorkspaceAgentBinding binding = binding(AgentPurpose.PRACTICE_DECISION);
+        when(bindingRepository.findByWorkspaceIdAndIdForUpdate(30L, binding.getId()))
+                .thenReturn(Optional.of(binding));
+        when(resolver.isAvailable(binding)).thenReturn(false);
+
+        assertThat(service.admitIfAvailable(binding)).isEmpty();
+        verify(resolver, never()).resolve(any());
+        verifyNoInteractions(priceRepository);
     }
 }

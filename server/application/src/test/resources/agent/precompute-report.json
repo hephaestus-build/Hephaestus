@@ -1,0 +1,45 @@
+{
+	"practices": [
+		{
+			"slug": "broken",
+			"status": "error",
+			"leads": 0,
+			"models": [{ "slot": "chat", "need": "optional", "bound": true, "notRated": {} }],
+			"error": "result: leads must be an array",
+			"durationMs": 40
+		},
+		{
+			"slug": "decides",
+			"status": "ok",
+			"leads": 2,
+			"models": [
+				{ "slot": "chat", "need": "optional", "bound": true, "notRated": {} },
+				{
+					"slot": "decision",
+					"need": "required",
+					"bound": true,
+					"notRated": { "unavailable": 1, "budget": 2, "deadline": 3, "too-large": 4 }
+				},
+				{
+					"slot": "embedding",
+					"need": "optional",
+					"bound": true,
+					"notRated": { "off-format": 5, "refused": 6, "error": 7 }
+				},
+				{ "slot": "reranking", "need": "optional", "bound": false, "notRated": {} }
+			],
+			"durationMs": 40
+		},
+		{
+			"slug": "needs-a-model",
+			"status": "skipped",
+			"leads": 0,
+			"models": [{ "slot": "decision", "need": "required", "bound": false, "notRated": {} }],
+			"durationMs": 40
+		},
+		{ "slug": "never-ran", "status": "not-finished", "leads": 0 },
+		{ "slug": "scans", "status": "ok", "leads": 3, "models": [], "durationMs": 40 },
+		{ "slug": "slow", "status": "timeout", "leads": 0, "durationMs": 40 }
+	],
+	"truncated": false
+}

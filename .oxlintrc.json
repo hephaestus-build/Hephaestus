@@ -496,8 +496,12 @@
 		{
 			// `tsconfig.agents.json` overlays this directory with `docker/agents/precompute` through
 			// `rootDirs`, and the agent image reproduces that layout under `/opt/precompute`. `../lib/x`
-			// is the spelling both resolve; an alias would typecheck and then fail in the sandbox.
-			"files": ["server/application/src/main/resources/practices/precompute/**"],
+			// is the spelling both resolve; an alias would typecheck and then fail in the sandbox. The
+			// runner's fixtures are staged next to the same `lib` link, so they use the same spelling.
+			"files": [
+				"server/application/src/main/resources/practices/precompute/**",
+				"docker/agents/precompute/fixtures/**"
+			],
 			"rules": { "import/no-relative-parent-imports": "off" }
 		},
 		{

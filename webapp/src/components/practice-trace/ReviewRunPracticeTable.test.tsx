@@ -19,6 +19,7 @@ const valid: ObservationDetail = {
 function table(observations: ObservationDetail[]) {
 	return (
 		<ReviewRunPracticeTable
+			workspaceSlug="demo"
 			entries={artifactTrace.practices}
 			signals={artifactTrace.signals}
 			observationsByPractice={{ "thin-controllers": observations }}

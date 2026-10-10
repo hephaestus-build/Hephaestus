@@ -13,6 +13,7 @@ const models: AvailableLlmModel[] = [
 		scope: "SHARED",
 		displayName: "GPT-5",
 		connectionDisplayName: "Organization endpoint",
+		purposes: ["PRACTICE_REVIEW", "MENTOR"],
 		pricingMode: "PRICED",
 		per1mInputUsd: 1,
 		per1mOutputUsd: 2,
@@ -24,35 +25,40 @@ const models: AvailableLlmModel[] = [
 		scope: "WORKSPACE",
 		displayName: "GPT-5",
 		connectionDisplayName: "Workspace endpoint",
+		purposes: ["PRACTICE_REVIEW", "MENTOR"],
 		pricingMode: "NO_CHARGE",
 	},
 ];
 
 /** Wires a real label, because the picker names its popup listbox from it. */
-function renderPicker(props: Omit<ModelPickerProps, "id" | "aria-labelledby">) {
+function renderPicker(
+	props: Omit<ModelPickerProps, "id" | "aria-labelledby" | "ownProviderAllowed">,
+) {
 	return render(
 		<>
 			<Label id="model-label" htmlFor="model">
 				Model
 			</Label>
-			<ModelPicker id="model" aria-labelledby="model-label" {...props} />
+			<ModelPicker id="model" aria-labelledby="model-label" ownProviderAllowed {...props} />
 		</>,
 	);
 }
 
 describe("ModelPicker", () => {
-	it("distinguishes duplicate model names by connection in the selection and options", () => {
+	it("names the chosen model on the trigger, and tells duplicate names apart by connection in the list", () => {
 		renderPicker({
 			availableModels: models,
 			value: { scope: "SHARED", id: 1 },
 			onChange: vi.fn(),
 		});
-		expect(screen.getByRole("combobox").textContent).toContain("GPT-5 · Organization endpoint");
+		// The model's own name only: the connection is the option's second line.
+		expect(screen.getByRole("combobox").textContent).toMatch(/^GPT-5\W?$/u);
 		fireEvent.click(screen.getByRole("combobox"));
-		screen.getByRole("option", { name: /GPT-5 · Organization endpoint/u });
-		screen.getByRole("option", { name: /GPT-5 · Workspace endpoint/u });
+		screen.getByRole("option", { name: /^GPT-5, Organization endpoint,/u });
+		screen.getByRole("option", { name: /^GPT-5, Workspace endpoint,/u });
+		// Grouped by whose money each model spends, in the usage page's words.
 		screen.getByText("Shared models");
-		screen.getByText("Your models");
+		screen.getByText("Own provider");
 	});
 
 	// Names written out rather than composed through `priceLabel` and the registry, the helpers the
@@ -63,10 +69,10 @@ describe("ModelPicker", () => {
 		fireEvent.click(screen.getByRole("combobox"));
 
 		screen.getByRole("option", {
-			name: "GPT-5 · Organization endpoint · Cloud · $1.00 input · $2.00 output / 1M tokens",
+			name: "GPT-5, Organization endpoint, Cloud, $1.00 input · $2.00 output / 1M tokens",
 		});
 		screen.getByRole("option", {
-			name: "GPT-5 · Workspace endpoint · In-house · No metered API cost",
+			name: "GPT-5, Workspace endpoint, In-house, No metered API cost",
 		});
 	});
 
@@ -101,7 +107,7 @@ describe("ModelPicker", () => {
 			onChange: vi.fn(),
 			tier: "IN_HOUSE",
 		});
-		expect(screen.getByRole("combobox").textContent).toContain("GPT-5 · Organization endpoint");
+		expect(screen.getByRole("combobox").textContent).toMatch(/^GPT-5\W?$/u);
 	});
 
 	it("marks the trigger invalid and links its description when asked to", () => {
@@ -116,5 +122,45 @@ describe("ModelPicker", () => {
 		const trigger = screen.getByRole("combobox");
 		expect(trigger.getAttribute("aria-invalid")).toBe("true");
 		expect(trigger.getAttribute("aria-describedby")).toContain("picker-hint");
+	});
+
+	it("warns about a reasoning decision model, and not about one asked for no reasoning", () => {
+		const decision: AvailableLlmModel = {
+			dataHandlingTier: "CLOUD",
+			id: 9,
+			scope: "SHARED",
+			displayName: "Decider",
+			connectionDisplayName: "Decisions endpoint",
+			purposes: ["PRACTICE_DECISION"],
+			pricingMode: "NO_CHARGE",
+			reasoningEffort: "NONE",
+		};
+		const { rerender } = renderPicker({
+			availableModels: [decision],
+			value: { scope: "SHARED", id: 9 },
+			onChange: vi.fn(),
+			purpose: "PRACTICE_DECISION",
+		});
+		expect(screen.getByRole("combobox").getAttribute("aria-describedby")).toBeNull();
+		expect(screen.queryByText(/reasons before it answers/u)).toBeNull();
+
+		rerender(
+			<>
+				<Label id="model-label" htmlFor="model">
+					Model
+				</Label>
+				<ModelPicker
+					id="model"
+					aria-labelledby="model-label"
+					availableModels={[{ ...decision, reasoningEffort: "LOW" }]}
+					value={{ scope: "SHARED", id: 9 }}
+					onChange={vi.fn()}
+					purpose="PRACTICE_DECISION"
+					ownProviderAllowed
+				/>
+			</>,
+		);
+		const hint = screen.getByText(/reasons before it answers/u);
+		expect(screen.getByRole("combobox").getAttribute("aria-describedby")).toBe(hint.id);
 	});
 });

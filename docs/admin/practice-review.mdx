@@ -568,12 +568,12 @@ This is not misconfiguration.
 Reviews remain held until a sync finds the work again.
 They run automatically after its return, or are dropped if it stays absent for a week.
 
-1. **Check the review model binding and enabled state.**
+1. **Check the review model assignment and its enabled state.**
    Open Administration → **AI models**, the **Practice reviews** card.
-2. **Check whether the bound model remains usable.**
+2. **Check whether the assigned model remains usable.**
    The model and connection must be enabled, and the protocol must be supported.
    A shared model for selected workspaces also requires this workspace's grant.
-   Grant revocation or connection disablement stops every bound workspace, although the binding still appears correct.
+   Grant revocation or connection disablement stops every workspace with an assignment to the model, although the assignment still appears correct.
 3. **Check for an exhausted budget.**
    Administration → **AI usage** identifies the budget and who can raise it.
    `agent.queue.held` counts capped jobs.

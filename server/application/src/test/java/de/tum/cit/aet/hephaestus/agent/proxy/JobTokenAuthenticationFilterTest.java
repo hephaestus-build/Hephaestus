@@ -9,12 +9,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelKind;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.agent.job.PrecomputeKindTotal;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
 import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtInvalidException;
@@ -27,6 +31,10 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -39,6 +47,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -249,15 +258,6 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             filter.doFilterInternal(request, response, filterChain);
 
             assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
-        }
-
-        @Test
-        void shouldReturn403WhenScopeIsMissing() throws Exception {
-            AgentJob job = createRunningJob();
-            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of()));
-
-            assertThat(authenticate(JOB_JWT).getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
-            verify(agentJobRepository, never()).findByIdWithWorkspace(any());
         }
 
         @Test
@@ -597,6 +597,169 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         }
     }
 
+    /** Which scope reaches which path is the chain's rule, in {@link LlmProxySecurityConfigTest}. */
+    @Nested
+    class PrecomputeRouting {
+
+        private static final LlmPriceSnapshot DECISION_PRICE = new LlmPriceSnapshot(
+                FundingSource.WORKSPACE,
+                PricingState.PRICED,
+                null,
+                4L,
+                new BigDecimal("2"),
+                new BigDecimal("8"),
+                null,
+                null);
+
+        @Test
+        void shouldRouteTheChatSlotToTheReviewModelWhenThePrecomputeTokenCallsIt() throws Exception {
+            AgentJob job = createPrecomputeJob();
+
+            ProxyRouting routing = routeAs(job, "/internal/llm/precompute/chat/chat/completions");
+
+            assertThat(routing.principalDescription()).isEqualTo("job:" + job.getId() + ":precompute");
+            assertThat(routing.apiProtocol()).isEqualTo("openai-completions");
+            assertThat(routing.baseUrl()).isEqualTo("https://api.openai.com/v1");
+            assertThat(routing.precomputeSlot()).isEqualTo(ModelKind.CHAT);
+            assertThat(Objects.requireNonNull(routing.attempt()).sourceType()).isEqualTo(LlmUsageSourceType.AGENT_JOB);
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+            "decision,decisions,DECISION,openai-decisions,PRECOMPUTE_DECISION,31",
+            "embedding,embeddings,EMBEDDING,openai-embeddings,PRECOMPUTE_EMBEDDING,32",
+            "reranking,rerank,RERANKING,cohere-rerank,PRECOMPUTE_RERANKING,33"
+        })
+        void shouldRouteASlotToItsFrozenModelWhenThePrecomputeTokenCallsIt(
+                String slot,
+                String op,
+                ModelKind kind,
+                String protocol,
+                LlmUsageSourceType sourceType,
+                long connectionId)
+                throws Exception {
+            AgentJob job = createPrecomputeJob();
+
+            ProxyRouting routing = routeAs(job, "/internal/llm/precompute/" + slot + "/" + op);
+
+            assertThat(routing.principalDescription()).isEqualTo("job:" + job.getId() + ":precompute");
+            assertThat(routing.precomputeSlot()).isEqualTo(kind);
+            assertThat(routing.apiProtocol()).isEqualTo(protocol);
+            assertThat(routing.baseUrl()).isEqualTo("https://models.example.com/" + slot);
+            assertThat(routing.connectionScope()).isEqualTo(FundingSource.WORKSPACE);
+            assertThat(routing.connectionId()).isEqualTo(connectionId);
+            ProxyRouting.BilledAttempt attempt = Objects.requireNonNull(routing.attempt());
+            assertThat(attempt.sourceType()).isEqualTo(sourceType);
+            assertThat(attempt.sourceId()).isEqualTo(job.getId());
+        }
+
+        @Test
+        void shouldRefuseASlotWhenNoModelOfItsKindIsBound() throws Exception {
+            AgentJob job = createRunningJob();
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_precompute")));
+            when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+
+            var response = call("POST", "/internal/llm/precompute/decision/decisions");
+
+            assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_NOT_FOUND);
+            assertThat(response.getErrorMessage()).isEqualTo("No decision model is bound for this job");
+            verify(filterChain, never()).doFilter(any(), any());
+        }
+
+        @Test
+        void shouldRefuseThePrecomputeTokenWhenItsJobHasEnded() throws Exception {
+            AgentJob job = createPrecomputeJob();
+            job.setStatus(AgentJobStatus.COMPLETED);
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_precompute")));
+            when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+
+            var response = call("POST", "/internal/llm/precompute/decision/decisions");
+
+            assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+            verify(filterChain, never()).doFilter(any(), any());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"/internal/llm/precompute/speech/speak", "/internal/llm/precompute/decision"})
+        void shouldRefuseAPrecomputePathWhenItNamesNoKnownSlot(String path) throws Exception {
+            AgentJob job = createPrecomputeJob();
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_precompute")));
+            when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+
+            assertThat(call("POST", path).getStatus()).isEqualTo(HttpServletResponse.SC_NOT_FOUND);
+            verify(filterChain, never()).doFilter(any(), any());
+        }
+
+        @Test
+        void shouldPriceTheAttemptsPrecomputeUsageFromTheSamePurseWhenRoutingASlot() throws Exception {
+            AgentJob job = createPrecomputeJob();
+            when(agentJobRepository.sumPrecomputeUsageByKind(7L, job.getId(), 0))
+                    .thenReturn(List.of(new PrecomputeKindTotal(ModelKind.DECISION, 4, 1_000_000, 100_000)));
+
+            ProxyRouting routing = routeAs(job, "/internal/llm/precompute/embedding/embeddings");
+
+            // 1M input at $2 plus 100k output at $8. The review model is paid from the other purse.
+            assertThat(routing.inFlightSpendUsd()).isEqualByComparingTo("2.8");
+            // The per-attempt cap reads the same totals, whichever purse paid for them.
+            assertThat(Objects.requireNonNull(routing.attempt()).precomputeTokens())
+                    .isEqualTo(1_100_000);
+        }
+
+        private ProxyRouting routeAs(AgentJob job, String path) throws Exception {
+            when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_precompute")));
+            when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
+            var authCapture = new AtomicReference<Authentication>();
+            doAnswer(invocation -> {
+                        authCapture.set(Objects.requireNonNull(
+                                SecurityContextHolder.getContext().getAuthentication()));
+                        return null;
+                    })
+                    .when(filterChain)
+                    .doFilter(any(), any());
+
+            assertThat(call("POST", path).getStatus()).isEqualTo(HttpServletResponse.SC_OK);
+            Authentication authentication = authCapture.get();
+            assertInstanceOf(JobTokenAuthentication.class, authentication);
+            return ((JobTokenAuthentication) authentication).getPrincipal();
+        }
+
+        private MockHttpServletResponse call(String method, String path) throws Exception {
+            var request = new MockHttpServletRequest(method, path);
+            request.setRemoteAddr("10.0.0.2");
+            request.addHeader("Authorization", "Bearer " + JOB_JWT);
+            var response = new MockHttpServletResponse();
+            filter.doFilterInternal(request, response, filterChain);
+            return response;
+        }
+
+        private AgentJob createPrecomputeJob() {
+            AgentJob job = createRunningJob();
+            Map<ModelKind, FrozenModel> slots = new EnumMap<>(ModelKind.class);
+            slots.put(ModelKind.DECISION, slot(ModelKind.DECISION, "openai-decisions", 31L, DECISION_PRICE));
+            slots.put(ModelKind.EMBEDDING, slot(ModelKind.EMBEDDING, "openai-embeddings", 32L, null));
+            slots.put(ModelKind.RERANKING, slot(ModelKind.RERANKING, "cohere-rerank", 33L, null));
+            job.setConfigSnapshot(ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
+                    .withPrecompute(slots)
+                    .toJson(objectMapper));
+            return job;
+        }
+
+        private static FrozenModel slot(
+                ModelKind kind, String protocol, long connectionId, @Nullable LlmPriceSnapshot price) {
+            return new FrozenModel(
+                    protocol,
+                    "https://models.example.com/" + kind.name().toLowerCase(Locale.ROOT),
+                    kind.name().toLowerCase(Locale.ROOT) + "-model",
+                    FundingSource.WORKSPACE,
+                    connectionId,
+                    connectionId + 10,
+                    7L,
+                    null,
+                    null,
+                    price);
+        }
+    }
+
     private AgentJob createRunningJob() {
         return createRunningJob(null);
     }
@@ -619,6 +782,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 600,
                 false,
                 price,
+                null,
                 null);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         job.setId(UUID.randomUUID());

@@ -12,6 +12,38 @@ export interface CodeEditorProps {
 	ariaLabel?: string;
 }
 
+interface DiagnosticsOptions {
+	noSemanticValidation?: boolean;
+	noSuggestionDiagnostics?: boolean;
+}
+
+/**
+ * The part of the Monaco API that {@link checkSyntaxOnly} uses. `@monaco-editor/react` types its
+ * `Monaco` from `monaco-editor/esm/vs/editor/editor.api`, a path that monaco-editor 0.56 does not
+ * export, so that type does not resolve.
+ */
+interface MonacoTypeScript {
+	typescript: {
+		typescriptDefaults: {
+			getDiagnosticsOptions: () => DiagnosticsOptions;
+			setDiagnosticsOptions: (options: DiagnosticsOptions) => void;
+		};
+	};
+}
+
+/**
+ * The editor holds one file without the modules it imports, so a type check would mark every import,
+ * such as a precompute script's `../lib/precompute.ts`, as an error. Syntax errors still show.
+ * Monaco keeps these options per language, not per editor, so they apply to every TypeScript model.
+ */
+function checkSyntaxOnly({ typescript: { typescriptDefaults } }: MonacoTypeScript) {
+	typescriptDefaults.setDiagnosticsOptions({
+		...typescriptDefaults.getDiagnosticsOptions(),
+		noSemanticValidation: true,
+		noSuggestionDiagnostics: true,
+	});
+}
+
 export function CodeEditor({
 	value,
 	onChange,
@@ -29,6 +61,7 @@ export function CodeEditor({
 			<MonacoEditor
 				value={value}
 				onChange={handleChange}
+				beforeMount={checkSyntaxOnly}
 				language={language}
 				loading={
 					<div className="flex h-full items-center justify-center">

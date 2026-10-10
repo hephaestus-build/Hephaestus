@@ -237,6 +237,10 @@ export function reviewHandlers({
 		http.get("*/workspaces/:workspaceSlug/agents/jobs/:jobId", ({ params }) =>
 			HttpResponse.json(reviewJob(String(params.jobId))),
 		),
+		// No practice in the fixture has a precompute script.
+		http.get("*/workspaces/:workspaceSlug/agents/jobs/:jobId/precompute", () =>
+			HttpResponse.json([]),
+		),
 		http.get("*/workspaces/:workspaceSlug/practices", () => HttpResponse.json(workspacePractices)),
 		http.get("*/workspaces/:workspaceSlug/practice-groups", () =>
 			HttpResponse.json(practiceGroups),

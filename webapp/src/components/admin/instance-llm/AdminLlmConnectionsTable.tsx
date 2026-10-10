@@ -1,5 +1,5 @@
 import { Pencil, Plug, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import type { LlmConnection } from "@/api/types.gen";
 import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkeleton";
@@ -92,6 +92,10 @@ export function AdminLlmConnectionsTable({
 	const [deleting, setDeleting] = useState<LlmConnection | null>(null);
 	const [turningOff, setTurningOff] = useState<LlmConnection | null>(null);
 	const modelsOn = (connection: LlmConnection) => modelCounts[connection.id] ?? 0;
+	// The server refuses to delete a connection that still has models.
+	const keepsModels = (connection: LlmConnection) =>
+		modelCountsAvailable && modelsOn(connection) > 0;
+	const keepsModelsId = useId();
 
 	if (isError) {
 		return (
@@ -132,7 +136,7 @@ export function AdminLlmConnectionsTable({
 	}
 
 	return (
-		<>
+		<div className="space-y-2">
 			<Table bordered>
 				<TableCaption className="sr-only">Provider connections on this instance</TableCaption>
 				<ConnectionsTableHeader />
@@ -207,7 +211,8 @@ export function AdminLlmConnectionsTable({
 											variant="ghost"
 											size="icon"
 											aria-label={`Delete ${connection.displayName}`}
-											disabled={busy}
+											aria-describedby={keepsModels(connection) ? keepsModelsId : undefined}
+											disabled={busy || keepsModels(connection)}
 											onClick={() => setDeleting(connection)}
 										>
 											<Trash2 className="size-4 text-destructive" aria-hidden />
@@ -219,12 +224,17 @@ export function AdminLlmConnectionsTable({
 					})}
 				</TableBody>
 			</Table>
+			{connections.some(keepsModels) && (
+				<p id={keepsModelsId} className="text-xs text-muted-foreground">
+					To delete a connection, delete its models first.
+				</p>
+			)}
 
 			<ConfirmDialog
 				subject={deleting}
 				onClose={() => setDeleting(null)}
 				title={(connection) => `Delete “${connection.displayName}”?`}
-				description="A connection with models still on it cannot be deleted. Delete its models first. You cannot undo this."
+				description="The stored credential will be permanently removed. You cannot undo this."
 				confirmLabel="Delete connection"
 				onConfirm={onDelete}
 			/>
@@ -245,6 +255,6 @@ export function AdminLlmConnectionsTable({
 				cancelLabel="Keep active"
 				onConfirm={(connection) => onToggleEnabled(connection, false)}
 			/>
-		</>
+		</div>
 	);
 }

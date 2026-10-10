@@ -16,6 +16,8 @@ import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyRollupService;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticePrecomputeSummaries;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticePrecomputeSummaryDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -59,6 +61,7 @@ public class PracticeCatalogController {
     private final AutonomyRollupService rollupService;
     private final PracticeGroupService groupService;
     private final PracticeDefinitionOptionsService definitionOptionsService;
+    private final PracticePrecomputeSummaries precomputeSummaries;
 
     @GetMapping("/definition-options")
     @Operation(
@@ -93,6 +96,26 @@ public class PracticeCatalogController {
         List<PracticeDTO> practices = presenter.presentPractices(
                 workspaceContext.id(), practiceService.listPractices(workspaceContext, autonomy));
         return ResponseEntity.ok(practices);
+    }
+
+    @GetMapping("/precompute")
+    @Operation(
+            summary = "List what each practice's precompute script needs",
+            description = "One entry per practice with a precompute script: the models the script declared in the "
+                    + "newest review that ran it, and for each model the member tiers that no ready binding serves "
+                    + "today. A script declares its models only when it runs, so a practice whose script no review "
+                    + "ran yet, or whose script changed since, has no needs and no asOf review.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Precompute needs returned",
+            content =
+                    @Content(
+                            array =
+                                    @ArraySchema(
+                                            schema = @Schema(implementation = PracticePrecomputeSummaryDTO.class))))
+    @RequireAtLeastWorkspaceAdmin
+    public ResponseEntity<List<PracticePrecomputeSummaryDTO>> listPrecomputeNeeds(WorkspaceContext workspaceContext) {
+        return ResponseEntity.ok(precomputeSummaries.latestCurrent(workspaceContext.id()));
     }
 
     @GetMapping("/reviewed")

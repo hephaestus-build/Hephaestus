@@ -10,6 +10,7 @@ import {
 	listPracticeReleasesOptions,
 	listPracticeReleasesQueryKey,
 	listPracticesQueryKey,
+	listPrecomputeNeedsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import { PracticeReleaseReview } from "@/components/admin/practices/PracticeReleaseReview";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -43,6 +44,10 @@ function PracticeReleaseInbox() {
 		});
 		void queryClient.invalidateQueries({
 			queryKey: listPracticesQueryKey({ path: { workspaceSlug } }),
+		});
+		// An accepted update can change a precompute script, which makes the needs on record stale.
+		void queryClient.invalidateQueries({
+			queryKey: listPrecomputeNeedsQueryKey({ path: { workspaceSlug } }),
 		});
 	};
 	const accept = useMutation({

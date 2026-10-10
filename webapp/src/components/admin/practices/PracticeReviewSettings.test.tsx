@@ -12,6 +12,7 @@ const readyBinding: AgentBinding = {
 	enabled: true,
 	ready: true,
 	instanceModelId: 20,
+	servedTiers: ["IN_HOUSE", "CLOUD"],
 };
 const settings = mockReviewSettings({ deliverToMerged: false, cooldownMinutes: 15 });
 const repositories = {

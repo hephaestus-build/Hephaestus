@@ -57,6 +57,27 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReadThePrecomputeModelsFileTheServerWrites() throws IOException {
+        assertThat(Files.readString(resolveResource("agent/pi-precompute.ts")))
+                .as("pi-precompute.ts pins PRECOMPUTE_MODELS_FILE to SandboxLayout.PRECOMPUTE_MODELS_FILE")
+                .contains("PRECOMPUTE_MODELS_FILE = \"" + SandboxLayout.PRECOMPUTE_MODELS_FILE + "\"");
+    }
+
+    /** The server refuses a report past these bounds whole, so the runner must stay within them. */
+    @Test
+    void shouldWriteThePrecomputeReportTheServerReadsWithinItsBounds() throws IOException {
+        assertThat(Files.readString(resolveResource("agent/pi-runner.ts")))
+                .as("pi-runner.ts writes SandboxLayout.PRECOMPUTE_REPORT_FILE under its output")
+                .contains("outputPath(OUTPUT, \"" + SandboxLayout.PRECOMPUTE_REPORT_FILE + "\")");
+        assertThat(Files.readString(resolveResource("agent/pi-precompute-report.ts")))
+                .contains(
+                        "PRECOMPUTE_REPORT_MAX_BYTES = " + PiResultParser.PRECOMPUTE_REPORT_MAX_BYTES / 1024
+                                + " * 1024;",
+                        "PRECOMPUTE_REPORT_MAX_PRACTICES = " + PiResultParser.PRECOMPUTE_REPORT_MAX_ENTRIES + ";",
+                        "PRECOMPUTE_ERROR_MAX_CHARS = " + PiResultParser.PRECOMPUTE_ERROR_MAX_LENGTH + ";");
+    }
+
+    @Test
     void shouldResolvePromptLocationsFromTheTask() throws IOException {
         for (String prompt : new String[] {"pi-orchestrator.md", "feedback-composer.md"}) {
             String body = Files.readString(resolveResource("agent/" + prompt));

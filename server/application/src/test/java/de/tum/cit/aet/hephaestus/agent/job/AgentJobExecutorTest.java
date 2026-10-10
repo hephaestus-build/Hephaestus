@@ -22,8 +22,12 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelKind;
+import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
@@ -54,6 +58,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
+import de.tum.cit.aet.hephaestus.agent.usage.AdmittedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
@@ -78,6 +83,7 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
 import java.io.IOException;
@@ -137,6 +143,9 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
     @Mock
     private LlmUsageRecorder usageRecorder;
+
+    @Mock
+    private PrecomputeRunRecorder precomputeRuns;
 
     @Mock
     private LlmBudgetService llmBudgetService;
@@ -201,6 +210,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 new PracticeReviewRefusalMetrics(meterRegistry),
                 new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                 usageRecorder,
+                precomputeRuns,
                 llmBudgetService,
                 NO_LIVE_ADMISSION,
                 SOURCE_CATALOGS,
@@ -230,6 +240,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 null,
                 600,
                 false,
+                null,
                 null,
                 null);
 
@@ -264,7 +275,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         lenient().when(transactionTemplate.getTransactionManager()).thenReturn(transactionManager);
         lenient().when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         lenient()
-                .when(workerJwtIssuer.issueForJobUntil(any(), anyLong(), anyInt(), any()))
+                .when(workerJwtIssuer.issueForJobUntil(any(), anyLong(), anyInt(), any(), any()))
                 .thenReturn("job-jwt");
 
         lenient()
@@ -370,6 +381,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -393,6 +405,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
             // The job is no longer ours — its feedback is not delivered twice.
             verify(handler, never()).deliver(any());
+            verify(precomputeRuns, never()).record(any(), any(), any(), any());
         }
     }
 
@@ -449,14 +462,25 @@ class AgentJobExecutorTest extends BaseUnitTest {
             verify(jobRepository).save(captured.capture());
             assertThat(captured.getValue().getStatus()).isEqualTo(AgentJobStatus.RUNNING);
             assertThat(captured.getValue().getStartedAt()).isNotNull();
-            ArgumentCaptor<Instant> tokenExpiry = ArgumentCaptor.forClass(Instant.class);
-            verify(workerJwtIssuer).issueForJobUntil(eq(jobId), eq(99L), anyInt(), tokenExpiry.capture());
+            ArgumentCaptor<Instant> reviewExpiry = ArgumentCaptor.forClass(Instant.class);
+            verify(workerJwtIssuer)
+                    .issueForJobUntil(
+                            eq(jobId), eq(99L), anyInt(), reviewExpiry.capture(), eq(WorkerJwtIssuer.LLM_PROXY_SCOPE));
+            ArgumentCaptor<Instant> precomputeExpiry = ArgumentCaptor.forClass(Instant.class);
+            verify(workerJwtIssuer)
+                    .issueForJobUntil(
+                            eq(jobId),
+                            eq(99L),
+                            anyInt(),
+                            precomputeExpiry.capture(),
+                            eq(WorkerJwtIssuer.LLM_PRECOMPUTE_SCOPE));
             ArgumentCaptor<SandboxSpec> sandboxSpec = ArgumentCaptor.forClass(SandboxSpec.class);
             verify(sandboxManager).execute(sandboxSpec.capture());
             assertThat(sandboxSpec.getValue().attempt()).isEqualTo(2);
             long deadline = Long.parseLong(sandboxSpec.getValue().environment().get("SANDBOX_WORK_DEADLINE_MS"));
-            assertThat(tokenExpiry.getValue())
+            assertThat(reviewExpiry.getValue())
                     .isEqualTo(Instant.ofEpochMilli(deadline).plus(SandboxLayout.RESULT_UPLOAD_GRACE));
+            assertThat(precomputeExpiry.getValue()).isEqualTo(reviewExpiry.getValue());
         }
 
         @Test
@@ -489,6 +513,168 @@ class AgentJobExecutorTest extends BaseUnitTest {
             assertThat(meterRegistry.get("agent.job.model.refused").counter().count())
                     .isOne();
             assertThat(meterRegistry.find("practice.review.refused").counter()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("Claim-time precompute admission")
+    class PrecomputeAdmission {
+
+        private final LlmAdmissionService admission = mock(LlmAdmissionService.class);
+        private final List<JsonNode> claimedSnapshots = new CopyOnWriteArrayList<>();
+        private final LlmPriceSnapshot reviewPrice = new LlmPriceSnapshot(
+                FundingSource.INSTANCE, PricingState.NO_CHARGE, null, null, null, null, null, null);
+
+        @BeforeEach
+        void admitLive() {
+            executor = new AgentJobExecutor(
+                    AGENT_PROPS,
+                    jobRepository,
+                    memberAiPolicy,
+                    handlerRegistry,
+                    practiceAgent,
+                    workerJwtIssuer,
+                    sandboxManager,
+                    sandboxExecutor,
+                    transactionTemplate,
+                    objectMapper,
+                    meterRegistry,
+                    new PracticeReviewRefusalMetrics(meterRegistry),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
+                    usageRecorder,
+                    precomputeRuns,
+                    llmBudgetService,
+                    admission,
+                    SOURCE_CATALOGS,
+                    Optional.empty(),
+                    Optional.empty());
+            when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
+                    .thenReturn(Optional.of(job));
+            when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
+                    .thenReturn(Optional.of(binding));
+            when(admission.admit(binding))
+                    .thenReturn(new AdmittedLlmModel(
+                            resolved("anthropic-messages", "claude-sonnet-4"),
+                            LlmModelResolver.ConnectionRef.NONE,
+                            reviewPrice));
+            when(jobRepository.countRunningByWorkspaceIdAndPurposeAndDataHandlingTier(
+                            eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
+                    .thenReturn(0L);
+            when(jobRepository.save(any())).thenAnswer(inv -> {
+                AgentJob saved = inv.getArgument(0);
+                claimedSnapshots.add(requireNonNull(saved.getConfigSnapshot()));
+                return saved;
+            });
+            when(jobRepository.transitionStatus(any(), eq(AgentJobStatus.CANCELLED), any(), any(), any()))
+                    .thenReturn(1);
+            when(jobRepository.findByIdWithWorkspace(jobId)).thenReturn(Optional.of(job));
+            setupFullExecutionWithException(new SandboxCancelledException("cancelled"));
+        }
+
+        private static ResolvedLlmModel resolved(String apiProtocol, String upstreamModelId) {
+            return new ResolvedLlmModel("https://api.example.com/v1", apiProtocol, upstreamModelId, null, null, null);
+        }
+
+        private static FrozenModel slot(String apiProtocol, String upstreamModelId, long modelId) {
+            return new FrozenModel(
+                    apiProtocol,
+                    "https://api.example.com/v1",
+                    upstreamModelId,
+                    FundingSource.WORKSPACE,
+                    5L,
+                    modelId,
+                    99L,
+                    DataHandlingTier.UNDECLARED,
+                    null,
+                    null);
+        }
+
+        /** Bindings are equal by id, so each one needs its own id for the admission stubs to differ. */
+        private WorkspaceAgentBinding boundFor(AgentPurpose purpose, long id) {
+            WorkspaceAgentBinding precomputeBinding = new WorkspaceAgentBinding();
+            precomputeBinding.setId(id);
+            precomputeBinding.setPurpose(purpose);
+            when(memberAiPolicy.precomputeBinding(eq(99L), eq(purpose), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
+                    .thenReturn(Optional.of(precomputeBinding));
+            return precomputeBinding;
+        }
+
+        private ConfigSnapshot claimedSnapshot() {
+            assertThat(claimedSnapshots).isNotEmpty();
+            return ConfigSnapshot.fromJson(claimedSnapshots.getFirst(), objectMapper);
+        }
+
+        @Test
+        void shouldFreezeEachPrecomputePriceAndDropTheUnavailableModelWhenTheJobIsClaimed() {
+            var decision = slot("openai-decisions", "decider", 6L);
+            var embedding = slot("openai-embeddings", "embedder", 7L);
+            job.setConfigSnapshot(
+                    snapshot.withPrecompute(Map.of(ModelKind.DECISION, decision, ModelKind.EMBEDDING, embedding))
+                            .toJson(objectMapper));
+            var decisionPrice = new LlmPriceSnapshot(
+                    FundingSource.WORKSPACE,
+                    PricingState.PRICED,
+                    null,
+                    6L,
+                    new BigDecimal("0.10"),
+                    new BigDecimal("0.40"),
+                    null,
+                    null);
+            when(admission.admitIfAvailable(boundFor(AgentPurpose.PRACTICE_DECISION, 21L)))
+                    .thenReturn(Optional.of(new AdmittedLlmModel(
+                            resolved("openai-decisions", "decider"), decision.connectionRef(), decisionPrice)));
+            when(admission.admitIfAvailable(boundFor(AgentPurpose.PRACTICE_EMBEDDING, 22L)))
+                    .thenReturn(Optional.empty());
+
+            executor.processJob(jobId);
+
+            ConfigSnapshot claimed = claimedSnapshot();
+            assertThat(claimed.priceSnapshot()).isEqualTo(reviewPrice);
+            assertThat(claimed.precomputeSlot(ModelKind.DECISION)).isEqualTo(decision.withPriceSnapshot(decisionPrice));
+            assertThat(claimed.precomputeSlot(ModelKind.EMBEDDING))
+                    .as("a lost precompute model leaves the job, never fails it")
+                    .isNull();
+            verify(sandboxManager).execute(any());
+            ArgumentCaptor<PracticeAgentRequest> request = ArgumentCaptor.forClass(PracticeAgentRequest.class);
+            verify(practiceAgent).buildSandboxSpec(request.capture());
+            assertThat(request.getValue().precomputeToken()).isNotNull();
+            assertThat(request.getValue().precomputeModels())
+                    .as("the sandbox receives the models admitted at claim, not those frozen at submit")
+                    .containsOnlyKeys(ModelKind.CHAT, ModelKind.DECISION);
+        }
+
+        @Test
+        void shouldDropAPrecomputeModelWhenItsBindingNowServesAnotherModel() {
+            var reranking = slot("cohere-rerank", "reranker", 8L);
+            job.setConfigSnapshot(snapshot.withPrecompute(Map.of(ModelKind.RERANKING, reranking))
+                    .toJson(objectMapper));
+            var replacedModel = new LlmModelResolver.ConnectionRef(FundingSource.WORKSPACE, 5L, 9L, 99L);
+            when(admission.admitIfAvailable(boundFor(AgentPurpose.PRACTICE_RERANKING, 23L)))
+                    .thenReturn(Optional.of(
+                            new AdmittedLlmModel(resolved("cohere-rerank", "reranker"), replacedModel, reviewPrice)));
+
+            executor.processJob(jobId);
+
+            ConfigSnapshot claimed = claimedSnapshot();
+            assertThat(claimed.precompute()).isNull();
+            assertThat(claimed.priceSnapshot()).isEqualTo(reviewPrice);
+            verify(sandboxManager).execute(any());
+        }
+
+        @Test
+        void shouldDropAPrecomputeModelWhenItsBindingIsGone() {
+            job.setConfigSnapshot(
+                    snapshot.withPrecompute(Map.of(ModelKind.DECISION, slot("openai-completions", "logprob-chat", 6L)))
+                            .toJson(objectMapper));
+            when(memberAiPolicy.precomputeBinding(
+                            eq(99L), eq(AgentPurpose.PRACTICE_DECISION), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
+                    .thenReturn(Optional.empty());
+
+            executor.processJob(jobId);
+
+            assertThat(claimedSnapshot().precompute()).isNull();
+            verify(admission, never()).admitIfAvailable(any());
+            verify(sandboxManager).execute(any());
         }
     }
 
@@ -1540,6 +1726,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -1626,6 +1813,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -1688,6 +1876,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -1743,6 +1932,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -1805,6 +1995,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -1864,6 +2055,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -1921,6 +2113,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -1966,6 +2159,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -2434,6 +2628,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -2513,6 +2708,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -2561,6 +2757,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -2622,6 +2819,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                         new PracticeReviewRefusalMetrics(meterRegistry),
                         new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                         usageRecorder,
+                        precomputeRuns,
                         llmBudgetService,
                         NO_LIVE_ADMISSION,
                         SOURCE_CATALOGS,
@@ -2668,6 +2866,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                         new PracticeReviewRefusalMetrics(meterRegistry),
                         new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                         usageRecorder,
+                        precomputeRuns,
                         llmBudgetService,
                         NO_LIVE_ADMISSION,
                         SOURCE_CATALOGS,
@@ -2711,6 +2910,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -2755,6 +2955,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -2816,6 +3017,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -2854,6 +3056,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -2937,6 +3140,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,
@@ -3158,6 +3362,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     new PracticeReviewRefusalMetrics(meterRegistry),
                     new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
+                    precomputeRuns,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
                     SOURCE_CATALOGS,

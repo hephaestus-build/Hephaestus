@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { usageReport, withOwnProvider } from "./fixtures";
+
 import {
 	addMonths,
+	averageSpend,
 	budgetResetDayLabel,
 	budgetUsedPercent,
 	canStepForwardFrom,
@@ -11,6 +14,8 @@ import {
 	formatUsageDay,
 	isCurrentMonthUtc,
 	projectBudget,
+	purseCap,
+	pursesOf,
 } from "./usage-utils";
 
 afterEach(() => {
@@ -143,5 +148,61 @@ describe("projectBudget", () => {
 		["the month is not the one in progress", 8.4, 10, "2026-06", "2026-07-10T12:00:00.000Z"],
 	])("says nothing when %s", (_name, spend, cap, month, now) => {
 		expect(projectBudget(spend, cap, month, new Date(now))).toBeNull();
+	});
+});
+
+describe("pursesOf", () => {
+	it("shows only shared models while the server says the own provider is not in use", () => {
+		expect(pursesOf({ ownProviderInUse: false })).toStrictEqual(["SHARED"]);
+	});
+
+	it("shows the own provider whenever the server says it is in use, spend or not", () => {
+		expect(pursesOf({ ownProviderInUse: true })).toStrictEqual(["SHARED", "OWN_PROVIDER"]);
+	});
+});
+
+describe("averageSpend", () => {
+	it("averages a confirmed $0.00 to $0.00, and nothing over no runs or over unpriced ones", () => {
+		expect(averageSpend(0, 4, 0)).toBe(0);
+		expect(averageSpend(0, 0, 0)).toBeNull();
+		expect(averageSpend(0, 4, 4)).toBeNull();
+		expect(averageSpend(1, 4, 2)).toBe(0.25);
+	});
+});
+
+describe("the cap a purse shows", () => {
+	const zeroCap = {
+		ownProviderMonthlyBudgetUsd: 0,
+		ownProviderBudgetVerdict: "EXHAUSTED",
+		ownProviderPaused: true,
+	} as const;
+
+	it("holds nothing back on an own provider that is not in use, even at $0", () => {
+		expect(purseCap({ ...usageReport(), ...zeroCap }, "OWN_PROVIDER")).toStrictEqual({
+			spendUsd: 0,
+			capUsd: undefined,
+			paused: false,
+			verdict: "WITHIN",
+		});
+	});
+
+	it("pauses an own provider in use at its $0 cap", () => {
+		expect(
+			purseCap({ ...withOwnProvider(usageReport()), ...zeroCap }, "OWN_PROVIDER"),
+		).toStrictEqual({
+			spendUsd: 2.4,
+			capUsd: 0,
+			paused: true,
+			verdict: "EXHAUSTED",
+		});
+	});
+
+	it("reads the shared cap whether or not the own provider is in use", () => {
+		expect(
+			purseCap(
+				{ ...usageReport(), instancePaused: true, instanceBudgetVerdict: "EXHAUSTED" },
+				"SHARED",
+			),
+		).toStrictEqual({ spendUsd: 13.48, capUsd: 25, paused: true, verdict: "EXHAUSTED" });
 	});
 });

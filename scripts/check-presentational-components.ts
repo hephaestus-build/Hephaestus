@@ -45,7 +45,6 @@ const MOCK_MODULES = ["msw", "msw-storybook-addon", "story-mock-server", "@/mock
 const ALLOWLIST = {
 	fetching: [
 		"webapp/src/components/admin/settings/WorkspaceDangerZoneSettings.tsx",
-		"webapp/src/components/admin/workspace-llm/WorkspaceLlmProviderPanel.tsx",
 		"webapp/src/components/admin/audit/AuthAuditPanel.tsx",
 		"webapp/src/components/admin/audit/ConfigAuditPanel.tsx",
 		"webapp/src/components/admin/integrations/outline/AddCollectionDialog.tsx",

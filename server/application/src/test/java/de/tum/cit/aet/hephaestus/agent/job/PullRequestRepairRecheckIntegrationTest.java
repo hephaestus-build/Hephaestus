@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
@@ -1339,6 +1340,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                     new PracticeReviewRefusalMetrics(meters),
                     new AgentJobTelemetry(meters, Tracer.NOOP),
                     mock(LlmUsageRecorder.class),
+                    mock(PrecomputeRunRecorder.class),
                     budgets,
                     null,
                     mock(ArtifactSourceCatalogRegistry.class),
@@ -1822,7 +1824,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         connection.setSlug("repair-connection");
         connection.setDisplayName("Repair connection");
         connection.setBaseUrl("https://api.openai.com");
-        connection.setApiProtocol("openai-completions");
+        connection.setApiProtocol(LlmApiProtocol.OPENAI_COMPLETIONS);
         connection.setEnabled(true);
         connection = connectionRepository.save(connection);
         WorkspaceLlmModel model = new WorkspaceLlmModel();

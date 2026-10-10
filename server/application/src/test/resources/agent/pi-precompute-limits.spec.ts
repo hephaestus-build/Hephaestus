@@ -44,8 +44,13 @@ void test("production precompute limits", { skip: process.platform !== "linux" }
 			failure: true,
 		},
 		{
+			name: "finished practices survive a stopped stage",
+			code: 'writeFileSync(output + "/done.json", "{}"); writeFileSync(output + "/done.md", "- finished"); writeFileSync(output + "/lone.json", "{}"); while (true) {}',
+			failure: true,
+		},
+		{
 			name: "valid output and clean environment",
-			code: 'if (process.env.PRECOMPUTE_TEST_SECRET || process.env.NODE_OPTIONS) throw Error("inherited environment"); writeFileSync(output + "/ok", "ok");',
+			code: 'if (process.env.PRECOMPUTE_TEST_SECRET || process.env.NODE_OPTIONS || process.env.LLM_PROXY_TOKEN) throw Error("inherited environment"); if (process.env.LLM_PROXY_URL !== "http://proxy.test/internal/llm" || process.env.PRECOMPUTE_PROXY_TOKEN !== "precompute-token") throw Error("no model access"); writeFileSync(output + "/ok", "ok");',
 			failure: false,
 		},
 		{
@@ -74,7 +79,7 @@ void test("production precompute limits", { skip: process.platform !== "linux" }
 					"sh",
 					[
 						"-c",
-						'sh "$1" 1 "$2" && "$3" -e \'require("node:fs").writeFileSync(process.argv[1] + "/review-output", Buffer.alloc(10 * 1024 * 1024 + 1))\' "$2" && printf "review-continues"',
+						'sh "$1" 1 1000 "$2" && "$3" -e \'require("node:fs").writeFileSync(process.argv[1] + "/review-output", Buffer.alloc(10 * 1024 * 1024 + 1))\' "$2" && printf "review-continues"',
 						"sh",
 						bootstrap,
 						root,
@@ -85,6 +90,9 @@ void test("production precompute limits", { skip: process.platform !== "linux" }
 							...process.env,
 							PATH: `${root}${path.delimiter}${process.env.PATH ?? ""}`,
 							PRECOMPUTE_TEST_SECRET: "test-only",
+							LLM_PROXY_URL: "http://proxy.test/internal/llm",
+							LLM_PROXY_TOKEN: "review-token",
+							PRECOMPUTE_PROXY_TOKEN: "precompute-token",
 						},
 						encoding: "utf8",
 						timeout: 5000,
@@ -105,6 +113,14 @@ void test("production precompute limits", { skip: process.platform !== "linux" }
 					);
 					assert.equal(existsSync(path.join(root, "work/precompute-out/.complete")), false);
 					assert.equal(existsSync(path.join(root, "work/precompute-out/large.json")), false);
+				}
+				if (scenario.name === "finished practices survive a stopped stage") {
+					assert.equal(
+						readFileSync(path.join(root, "work/precompute-out/done.md"), "utf8"),
+						"- finished",
+					);
+					assert.equal(existsSync(path.join(root, "work/precompute-out/done.json")), true);
+					assert.equal(existsSync(path.join(root, "work/precompute-out/lone.json")), false);
 				}
 				if (scenario.name === "valid output and clean environment") {
 					assert.equal(readFileSync(path.join(root, "work/precompute-out/ok"), "utf8"), "ok");

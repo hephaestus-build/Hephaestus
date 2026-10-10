@@ -57,6 +57,7 @@ import {
 	validateSearchScope,
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
+import { precomputeReport } from "./pi-precompute-report.ts";
 import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
 import {
 	buildBrief,
@@ -403,6 +404,13 @@ const WATCHDOG_PATH = outputPath(OUTPUT, "watchdog-killed.json");
 const USAGE_PATH = outputPath(OUTPUT, "usage.json");
 const RUNNER_DEBUG_PATH = outputPath(OUTPUT, "runner-debug.json");
 const PRACTICE_COVERAGE_PATH = outputPath(OUTPUT, "practice-coverage.json");
+const PRECOMPUTE_REPORT_PATH = outputPath(OUTPUT, "precompute.json");
+// Read at the start: the precompute stage ended before this runner started, and composition removes
+// its output.
+const precomputeReportText = precomputeReport(
+	INPUT_PATHS.precomputeScripts,
+	`${CWD}/work/precompute-out`,
+);
 /** The runner's own record of what this review has recorded so far; read back after a compaction. */
 const NOTES_PATH = `${CWD}/work/notes/review.md`;
 /** The server sets every one of these; a missing one stops the runner before it does any work. */
@@ -870,6 +878,11 @@ function finalizeOutput(): void {
 	}
 	if (compositionAdmitted) {
 		persist(FEEDBACK_PATH, persistComposedFeedback);
+	}
+	if (precomputeReportText !== undefined) {
+		persist(PRECOMPUTE_REPORT_PATH, () => {
+			writeFileSync(PRECOMPUTE_REPORT_PATH, precomputeReportText);
+		});
 	}
 	for (const entry of readdirSync(OUTPUT)) {
 		const path = `${OUTPUT}/${entry}`;
@@ -4549,6 +4562,8 @@ async function main() {
 				recordCompositionFailure("PRIVATE_FEEDBACK", reason);
 			}
 		};
+		// Leads serve measurement only. Composition never receives them, and from here it cannot read them.
+		rmSync(`${CWD}/work/precompute-out`, { recursive: true, force: true });
 		const safetyMs = AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS);
 		if (safetyMs <= 0) {
 			markRemaining("SAFETY");

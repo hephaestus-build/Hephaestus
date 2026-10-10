@@ -1,19 +1,16 @@
-import { Bot, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import type { LlmModel } from "@/api/types.gen";
+import type { LlmConnection, LlmModel } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { AiMark } from "@/components/icons/AiMark";
 import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandlingBadge";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-	Empty,
-	EmptyContent,
-	EmptyDescription,
-	EmptyHeader,
-	EmptyMedia,
-	EmptyTitle,
-} from "@/components/ui/empty";
+	MODEL_READINESS_DEFS,
+	type ModelReadiness,
+} from "@/components/practice-vocabulary/model-readiness-defs";
+import { Button } from "@/components/ui/button";
 import {
 	Table,
 	TableBody,
@@ -26,11 +23,12 @@ import {
 import { priceFieldsOf, priceLabel } from "@/lib/llm-pricing";
 import { hasText } from "@/lib/text";
 
+import { LlmConnectionApi } from "./LlmConnectionApi";
 import type { WorkspaceOption } from "./workspace-options";
 
 export interface AdminLlmModelsSectionProps {
-	connectionDisplayName: string;
-	connectionEnabled: boolean;
+	/** Its API is named under the heading, because it decides which purposes the models can serve. */
+	connection: Pick<LlmConnection, "displayName" | "apiProtocol" | "purposes" | "enabled">;
 	workspaceOptions: WorkspaceOption[];
 	models: LlmModel[];
 	mutatingIds: ReadonlySet<number>;
@@ -40,22 +38,27 @@ export interface AdminLlmModelsSectionProps {
 	onDelete: (model: LlmModel) => void;
 }
 
-/** Readiness only; an undeclared data handling is the registry badge's warning, not a block. */
-function readinessLabel(model: LlmModel, connectionEnabled: boolean): string {
+/**
+ * What keeps a model from workspaces, worst first; null for a model they can use. An undeclared data
+ * handling is the registry badge's warning, not a block.
+ */
+function readiness(model: LlmModel, connectionEnabled: boolean): ModelReadiness | null {
 	if (!model.currentPrice || model.currentPrice.pricingMode === "UNPRICED") {
-		return "Price missing";
+		return "PRICE_MISSING";
 	}
 	if (!connectionEnabled) {
-		return "Connection off";
+		return "CONNECTION_OFF";
 	}
 	if (!model.enabled) {
-		return "Model off";
+		return "OFF";
 	}
 	if (model.visibility === "GRANTED" && model.grantedWorkspaceIds.length === 0) {
-		return "No workspace access";
+		return "NO_WORKSPACE_ACCESS";
 	}
-	return "Ready";
+	return null;
 }
+
+const COLUMNS = 6;
 
 function shareLabel(model: LlmModel, workspaces: WorkspaceOption[]): string {
 	if (model.visibility === "PUBLIC") {
@@ -78,8 +81,7 @@ function shareLabel(model: LlmModel, workspaces: WorkspaceOption[]): string {
 }
 
 export function AdminLlmModelsSection({
-	connectionDisplayName,
-	connectionEnabled,
+	connection,
 	workspaceOptions,
 	models,
 	mutatingIds,
@@ -89,108 +91,115 @@ export function AdminLlmModelsSection({
 	onDelete,
 }: AdminLlmModelsSectionProps) {
 	const [deleting, setDeleting] = useState<LlmModel | null>(null);
+	const heading = `Models on ${connection.displayName}`;
 
 	return (
 		<div className="space-y-3">
-			<div className="flex items-center justify-between">
-				{/* `CardTitle` is a `<div>` and the caption a `<caption>`, so neither contributes to the
-				    outline and an `h3` here would skip a level (WCAG SC 1.3.1) — despite the `text-sm`. */}
-				<h2 className="text-sm font-medium">Models on {connectionDisplayName}</h2>
+			<div className="flex items-start justify-between gap-3">
+				<div className="min-w-0 space-y-0.5">
+					{/* `CardTitle` is a `<div>` and the caption a `<caption>`, so neither contributes to the
+					    outline and an `h3` here would skip a level (WCAG SC 1.3.1) — despite the `text-sm`. */}
+					<h2 className="text-sm font-medium">{heading}</h2>
+					{/* The API decides which purposes these models can serve. */}
+					<p className="text-sm text-muted-foreground">
+						<LlmConnectionApi connection={connection} />
+					</p>
+				</div>
 				<Button size="sm" variant="outline" onClick={onAdd}>
 					<Plus className="size-4" aria-hidden />
 					Add model
 				</Button>
 			</div>
 
-			{models.length === 0 ? (
-				<Empty variant="outlined">
-					<EmptyHeader>
-						<EmptyMedia variant="icon">
-							<Bot aria-hidden />
-						</EmptyMedia>
-						<EmptyTitle>No models yet</EmptyTitle>
-						<EmptyDescription>Add a model so workspaces can pick it.</EmptyDescription>
-					</EmptyHeader>
-					<EmptyContent>
-						<Button size="sm" onClick={onAdd}>
-							<Plus className="size-4" aria-hidden />
-							Add model
-						</Button>
-					</EmptyContent>
-				</Empty>
-			) : (
-				<Table bordered>
-					<TableCaption className="sr-only">Models on {connectionDisplayName}</TableCaption>
-					<TableHeader>
-						<TableRow>
-							<TableHead scope="col">Model</TableHead>
-							<TableHead scope="col">Data handling</TableHead>
-							<TableHead scope="col">Price</TableHead>
-							<TableHead scope="col">Workspace access</TableHead>
-							<TableHead scope="col">Status</TableHead>
-							<TableHead scope="col" className="text-right">
-								Actions
-							</TableHead>
+			<Table bordered>
+				<TableCaption className="sr-only">{heading}</TableCaption>
+				<TableHeader>
+					<TableRow>
+						<TableHead scope="col">Model</TableHead>
+						<TableHead scope="col">Data handling</TableHead>
+						<TableHead scope="col">Price</TableHead>
+						<TableHead scope="col">Workspace access</TableHead>
+						<TableHead scope="col">Status</TableHead>
+						<TableHead scope="col" className="text-right">
+							Actions
+						</TableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					{models.length === 0 && (
+						<TableRow variant="static">
+							<TableCell colSpan={COLUMNS} className="h-16 text-muted-foreground">
+								No models yet. Add a model so workspaces can pick it.
+							</TableCell>
 						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{models.map((model) => {
-							const busy = mutatingIds.has(model.id);
-							const status = readinessLabel(model, connectionEnabled);
-							return (
-								<TableRow key={model.id}>
-									<TableCell className="font-medium">{model.displayName}</TableCell>
-									<TableCell>
-										<DataHandlingBadge tier={model.dataHandlingTier} />
-									</TableCell>
-									{/* Left-aligned: `priceLabel` is a sentence, not a figure; `tabular-nums` only
-									    aligns the digits inside it. */}
-									<TableCell numeric>{priceLabel(priceFieldsOf(model), "instance")}</TableCell>
-									<TableCell>{shareLabel(model, workspaceOptions)}</TableCell>
-									<TableCell>
-										<Badge variant={status === "Ready" ? "default" : "secondary"}>{status}</Badge>
-									</TableCell>
-									<TableCell className="text-right">
-										<div className="flex justify-end gap-1">
-											<Button
-												type="button"
-												variant="outline"
-												size="sm"
-												aria-label={`Manage access for ${model.displayName}`}
-												disabled={busy}
-												onClick={() => onManageAccess(model)}
-											>
-												<ShieldCheck className="size-4" aria-hidden />
-												Access
-											</Button>
-											<Button
-												type="button"
-												variant="ghost"
-												size="icon"
-												aria-label={`Edit ${model.displayName}`}
-												disabled={busy}
-												onClick={() => onEdit(model)}
-											>
-												<Pencil className="size-4" aria-hidden />
-											</Button>
-											<Button
-												type="button"
-												variant="ghost"
-												size="icon"
-												aria-label={`Delete ${model.displayName}`}
-												disabled={busy}
-												onClick={() => setDeleting(model)}
-											>
-												<Trash2 className="size-4 text-destructive" aria-hidden />
-											</Button>
-										</div>
-									</TableCell>
-								</TableRow>
-							);
-						})}
-					</TableBody>
-				</Table>
-			)}
+					)}
+					{models.map((model) => {
+						const busy = mutatingIds.has(model.id);
+						const status = readiness(model, connection.enabled);
+						return (
+							<TableRow key={model.id}>
+								<TableCell>
+									<span className="flex min-w-0 items-center gap-2 font-medium">
+										<AiMark brand={model.brand} size="sm" />
+										<span className="min-w-0 truncate" title={model.displayName}>
+											{model.displayName}
+										</span>
+									</span>
+								</TableCell>
+								<TableCell>
+									<DataHandlingBadge tier={model.dataHandlingTier} />
+								</TableCell>
+								{/* Left-aligned: `priceLabel` is a sentence, not a figure; `tabular-nums` only
+								    aligns the digits inside it. */}
+								<TableCell numeric>{priceLabel(priceFieldsOf(model), "instance")}</TableCell>
+								<TableCell>{shareLabel(model, workspaceOptions)}</TableCell>
+								<TableCell>
+									{status === null ? (
+										<span className="text-muted-foreground">Ready</span>
+									) : (
+										<StatusBadge def={MODEL_READINESS_DEFS[status]} />
+									)}
+								</TableCell>
+								<TableCell className="text-right">
+									<div className="flex justify-end gap-1">
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											aria-label={`Manage access for ${model.displayName}`}
+											disabled={busy}
+											onClick={() => onManageAccess(model)}
+										>
+											<ShieldCheck className="size-4" aria-hidden />
+											Access
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											aria-label={`Edit ${model.displayName}`}
+											disabled={busy}
+											onClick={() => onEdit(model)}
+										>
+											<Pencil className="size-4" aria-hidden />
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											aria-label={`Delete ${model.displayName}`}
+											disabled={busy}
+											onClick={() => setDeleting(model)}
+										>
+											<Trash2 className="size-4 text-destructive" aria-hidden />
+										</Button>
+									</div>
+								</TableCell>
+							</TableRow>
+						);
+					})}
+				</TableBody>
+			</Table>
 
 			<ConfirmDialog
 				subject={deleting}

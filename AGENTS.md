@@ -356,8 +356,8 @@ Every *Done when* bullet is a change that ships, never a measurement or a verdic
   A cast usually indicates that the upstream type is wrong.
   Use `satisfies`.
 - Validate anything crossing a trust boundary: a webhook body, a hand-parsed stream, or a `JSON.parse`.
-  Use a discriminated union, or a `zod` schema in the SPA.
-  The SPA is the only tree that has zod.
+  Use a discriminated union, or a `zod` schema in a tree that has zod.
+  Only the SPA, the extension and the precompute runner (`docker/agents/precompute/`) have zod.
   Never log a token, a secret, or a raw request body.
 - A leading `_` marks what the language or a tool reads that way.
   Examples are an unused binding, a server field name, or a runtime global, never something private.

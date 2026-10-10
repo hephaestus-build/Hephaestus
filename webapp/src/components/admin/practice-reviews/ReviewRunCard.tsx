@@ -5,6 +5,7 @@ import type { AgentJob } from "@/api/types.gen";
 import { formatTokens, JOB_TYPE_LABELS } from "@/components/admin/usage/usage-utils";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { statusToneClass } from "@/components/common/status-def";
+import { DataHandlingMark } from "@/components/practice-vocabulary/DataHandlingMark";
 import { REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -42,11 +43,15 @@ export function ReviewRunCard({ job }: ReviewRunCardProps) {
 			</div>
 			<ReviewFactGrid>
 				<ReviewFact label="Reviewed as">{JOB_TYPE_LABELS[job.jobType]}</ReviewFact>
-				<ReviewFact label="Model">{modelLabel(job)}</ReviewFact>
+				<ReviewFact label="Model">
+					<ReviewModel job={job} />
+				</ReviewFact>
 				<ReviewFact label="Finished">
 					{job.completedAt ? <RelativeTime value={job.completedAt} /> : "Not yet"}
 				</ReviewFact>
-				<ReviewFact label="Model calls">{formatTokens(job.llmTotalCalls)}</ReviewFact>
+				{/* The review's own calls: a precompute script's decision, embedding and reranking calls
+				    are on the Precompute scripts section above. */}
+				<ReviewFact label="Review model calls">{formatTokens(job.llmTotalCalls)}</ReviewFact>
 				<ReviewFact label="Tokens read">{formatTokens(job.llmTotalInputTokens)}</ReviewFact>
 				<ReviewFact label="Tokens written">
 					{/* Reasoning tokens are billed as output, so they are named as a part of it. On a row of
@@ -94,6 +99,19 @@ export function ReviewRunCard({ job }: ReviewRunCardProps) {
 			)}
 			{hasText(job.errorMessage) && <RunFailure job={job} message={job.errorMessage} />}
 		</section>
+	);
+}
+
+/**
+ * The model the review was admitted on, with the tier icon of the assignment that served it. The job
+ * names no brand, so no brand mark.
+ */
+function ReviewModel({ job }: { job: AgentJob }) {
+	return (
+		<span className="flex min-w-0 items-center gap-2">
+			<span className="min-w-0 truncate">{modelLabel(job)}</span>
+			{job.dataHandlingTier !== undefined && <DataHandlingMark tier={job.dataHandlingTier} />}
+		</span>
 	);
 }
 

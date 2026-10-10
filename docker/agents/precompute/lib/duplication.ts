@@ -13,7 +13,7 @@ interface ShapedLine {
 }
 
 /** Two runs of added lines with the same shape, the names that differ, and how long the run is. */
-export interface DuplicatePair {
+interface DuplicatePair {
 	a: { path: string; startLine: number; endLine: number };
 	b: { path: string; startLine: number; endLine: number };
 	lines: number;
@@ -26,7 +26,7 @@ export interface DuplicatePair {
 /** Fewer lines than this is a guard, an assignment or a modifier chain, not a copied block. */
 export const MIN_RUN_LINES = 5;
 /** More differing names than this across a run is parallel code, not a copy with names changed. */
-export const MAX_DIFFERING_NAMES = 6;
+const MAX_DIFFERING_NAMES = 6;
 
 const STRING = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/gu;
 const NUMBER = /\b\d+(?:\.\d+)?\b/gu;

@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, waitFor, within } from "storybook/test";
+
+import type { AgentBinding } from "@/api/types.gen";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 import type { ReviewSectionId } from "./review-sections";
@@ -22,7 +24,8 @@ const readyBinding = {
 	purpose: "PRACTICE_REVIEW",
 	enabled: true,
 	ready: true,
-} as const;
+	servedTiers: ["IN_HOUSE", "CLOUD"],
+} satisfies AgentBinding;
 
 const meta = {
 	component: ReviewPage,

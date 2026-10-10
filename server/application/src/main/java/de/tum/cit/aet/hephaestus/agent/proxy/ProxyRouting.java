@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelKind;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -12,6 +14,10 @@ import org.jspecify.annotations.Nullable;
  *
  * @param principalDescription log/metrics-safe identifier of the caller — never the token
  * @param attempt {@code null} only for a mentor session between turns
+ * @param precomputeSlot the precompute model this credential calls; {@code null} for the review's own
+ *     calls and for every other gateway capability
+ * @param precomputeTier the data handling tier of that model, as the attempt froze it; {@code null} without a
+ *     precompute slot or when the attempt froze no tier for that model
  */
 public record ProxyRouting(
         String principalDescription,
@@ -21,7 +27,9 @@ public record ProxyRouting(
         @Nullable Long connectionId,
         @Nullable Long modelId,
         @Nullable Long workspaceId,
-        @Nullable BilledAttempt attempt) {
+        @Nullable BilledAttempt attempt,
+        @Nullable ModelKind precomputeSlot,
+        @Nullable DataHandlingTier precomputeTier) {
     /**
      * The one execution this credential bills to, with identity and spend read in the same instant so
      * a caller cannot pair one execution's identity with another's spend.
@@ -33,13 +41,27 @@ public record ProxyRouting(
      *     be dropped rather than billed to whoever owns the row now.
      * @param workerId worker owning the authenticated job attempt; null for mentor turns
      * @param spentUsd priced with the rates frozen onto the execution at admission
+     * @param precomputeTokens the tokens that the attempt's precompute calls used on every model, read with
+     *     {@code spentUsd}; 0 for every other call
      */
     public record BilledAttempt(
             LlmUsageSourceType sourceType,
             UUID sourceId,
             int number,
             BigDecimal spentUsd,
-            @Nullable String workerId) {}
+            @Nullable String workerId,
+            long precomputeTokens) {
+
+        /** An attempt that makes no precompute calls. */
+        public BilledAttempt(
+                LlmUsageSourceType sourceType,
+                UUID sourceId,
+                int number,
+                BigDecimal spentUsd,
+                @Nullable String workerId) {
+            this(sourceType, sourceId, number, spentUsd, workerId, 0L);
+        }
+    }
 
     public @Nullable UUID sourceId() {
         return attempt == null ? null : attempt.sourceId();

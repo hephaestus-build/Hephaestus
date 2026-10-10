@@ -62,7 +62,7 @@ public class LlmConnection {
     private String baseUrl;
 
     @Column(name = "api_protocol", nullable = false, length = 40)
-    private String apiProtocol;
+    private LlmApiProtocol apiProtocol;
 
     @ColumnDefault("'BEARER'")
     @Enumerated(EnumType.STRING)

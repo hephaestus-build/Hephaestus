@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn, screen, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { LlmConnection } from "@/api/types.gen";
 
@@ -12,6 +12,7 @@ const mockConnections: LlmConnection[] = [
 		displayName: "OpenAI production",
 		authMode: "BEARER",
 		apiProtocol: "openai-responses",
+		purposes: ["PRACTICE_REVIEW", "MENTOR"],
 		baseUrl: "https://openai-production.example.com/openai",
 		enabled: true,
 		hasApiKey: true,
@@ -24,6 +25,7 @@ const mockConnections: LlmConnection[] = [
 		displayName: "On-prem GPU (vLLM)",
 		authMode: "BEARER",
 		apiProtocol: "openai-completions",
+		purposes: ["PRACTICE_REVIEW", "MENTOR", "PRACTICE_DECISION"],
 		baseUrl: "https://gpu.internal.example.com/v1",
 		enabled: false,
 		hasApiKey: false,
@@ -53,7 +55,29 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+/**
+ * The server keeps a connection that still has models, so its Delete is off, and one line under the
+ * table says why.
+ */
+export const Default: Story = {
+	play: async ({ canvas }) => {
+		const reason = "To delete a connection, delete its models first.";
+		const keeps = canvas.getByRole("button", { name: "Delete OpenAI production" });
+		await expect(keeps).toBeDisabled();
+		await expect(keeps).toHaveAccessibleDescription(reason);
+		await expect(canvas.getByText(reason)).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Delete On-prem GPU (vLLM)" })).toBeEnabled();
+	},
+};
+
+/** No connection has models: every Delete is on, and no line explains a block. */
+export const NothingKeepsModels: Story = {
+	args: { modelCounts: {} },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Delete OpenAI production" })).toBeEnabled();
+		await expect(canvas.queryByText(/delete its models first/u)).toBeNull();
+	},
+};
 
 export const SelectedRow: Story = {
 	args: { selectedId: 1 },
@@ -73,8 +97,9 @@ export const Empty: Story = {
 
 export const DeleteConfirm: Story = {
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /delete openai production/iu }));
+		await userEvent.click(canvas.getByRole("button", { name: "Delete On-prem GPU (vLLM)" }));
 		const dialog = await screen.findByRole("alertdialog");
-		within(dialog).getByText(/still on it/iu);
+		await expect(dialog).toHaveTextContent("You cannot undo this.");
+		await expect(dialog).not.toHaveTextContent(/models/u);
 	},
 };

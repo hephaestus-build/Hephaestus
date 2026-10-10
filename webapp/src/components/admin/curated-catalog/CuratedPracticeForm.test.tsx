@@ -388,7 +388,7 @@ describe("CuratedPracticeForm", () => {
 		});
 		expect(submitted.automatedReviewPolicy.knownLimitations).toStrictEqual([]);
 		await user.click(screen.getByRole("button", { name: /Technical settings/u }));
-		expect(screen.queryByText("Static analysis")).toBeNull();
+		expect(screen.queryByText("Precompute script")).toBeNull();
 	});
 
 	it("gives the occasion its evidence back when review resumes", async () => {
@@ -421,7 +421,7 @@ describe("CuratedPracticeForm", () => {
 			"A mentor must discuss the developer's reasoning.",
 		);
 		await user.click(screen.getByRole("button", { name: /Technical settings/u }));
-		expect(screen.queryByText("Static analysis")).toBeNull();
+		expect(screen.queryByText("Precompute script")).toBeNull();
 
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
 		const submitted = onSubmit.mock.calls[0]?.[0];

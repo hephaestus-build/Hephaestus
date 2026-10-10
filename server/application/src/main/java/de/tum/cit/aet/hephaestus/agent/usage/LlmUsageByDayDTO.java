@@ -16,7 +16,12 @@ public record LlmUsageByDayDTO(
         @NonNull @Schema(description = "Spend on this workspace's own connected provider(s) for this day, in USD.")
         BigDecimal ownProviderTotalCostUsd,
 
-        @NonNull @Schema(description = "Calls this day whose price is not yet known. Excluded from both totals above.")
+        @NonNull
+        @Schema(
+                description = "Runs this day with at least one ledger row whose price is not yet known. A "
+                        + "precompute row counts toward the run of its review. Those rows are excluded from both "
+                        + "totals above.")
         Long unpricedEventCount,
 
-        @NonNull Long events) {}
+        @NonNull @Schema(description = "Runs: job attempts and mentor turns. Precompute model rows are not runs.")
+        Long events) {}

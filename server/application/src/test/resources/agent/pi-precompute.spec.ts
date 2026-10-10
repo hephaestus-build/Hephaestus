@@ -23,6 +23,14 @@ if (scenarioRoot !== undefined && scenarioRoot !== "") {
 		namedExports: {
 			spawnSync(command: string, args: string[]) {
 				assert.equal(command, process.execPath);
+				// The server's models file reaches the runner, which reads it under its own grants.
+				assert.equal(
+					args[args.indexOf("--models") + 1],
+					path.join(scenarioRoot, "precompute-models.json"),
+				);
+				// The runner ends a second before pi-precompute.sh stops the stage.
+				assert.equal(args[args.indexOf("--stage-ms") + 1], "29000");
+				assert.equal(args[args.indexOf("--tokens") + 1], "5000");
 				// Use local dependencies but execute the real runner with its permission restrictions.
 				const toolchain = [
 					path.join(repositoryRoot, "docker/agents/node_modules"),
@@ -41,6 +49,8 @@ if (scenarioRoot !== undefined && scenarioRoot !== "") {
 		},
 	});
 	process.argv[2] = scenarioRoot;
+	process.argv[3] = "30";
+	process.argv[4] = "5000";
 	await import("../../../main/resources/agent/pi-precompute.ts");
 } else {
 	void test("precompute stages only regular scripts and executes the image runner with task-declared locations", () => {
@@ -87,6 +97,10 @@ export default (repo, diff, metadata, context, change, reference) => ({
 			writeFileSync(path.join(root, context, "metadata.json"), JSON.stringify({ marker: 13 }));
 			symlinkSync("example.ts", path.join(root, scripts, "linked.ts"));
 			writeFileSync(
+				path.join(root, "precompute-models.json"),
+				JSON.stringify({ chat: { protocol: "openai-completions", modelId: "chat-model" } }),
+			);
+			writeFileSync(
 				path.join(root, "task.json"),
 				JSON.stringify({
 					schemaVersion: 3,
@@ -127,7 +141,7 @@ export default (repo, diff, metadata, context, change, reference) => ({
 				readFileSync(path.join(root, "work/precompute-out/example.json"), "utf8"),
 			);
 			assert.ok(typeof result === "object" && result !== null);
-			assert.equal(Reflect.get(result, "status"), "ok");
+			assert.equal(Reflect.get(result, "status"), "ok", JSON.stringify(result));
 			assert.deepEqual(Reflect.get(result, "hints"), [
 				{
 					file: `${context}/metadata.json`,

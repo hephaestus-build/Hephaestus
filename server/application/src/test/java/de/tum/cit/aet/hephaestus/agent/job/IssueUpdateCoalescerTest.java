@@ -43,7 +43,7 @@ class IssueUpdateCoalescerTest extends BaseUnitTest {
             recorder,
             submitter,
             workspaceResolver,
-            new PracticeReviewProperties(false, 15, 5, null, 12, 16000),
+            new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000),
             new IssueEvidenceRevision(
                     mock(IssueCommentRepository.class),
                     new IssueCommentProvenance(mock(DeliveredIssueCommentLookup.class))),

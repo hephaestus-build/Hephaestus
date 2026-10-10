@@ -34,7 +34,7 @@ const FIELDS = {
 	SUBJECT: { label: "Person judged", key: "subject" },
 	PRECONDITION: { label: "Only review when", key: "precondition" },
 	CRITERIA: { label: "Review criteria", key: "criteria" },
-	PRECOMPUTE_SCRIPT: { label: "Static analysis", key: "precomputeScript" },
+	PRECOMPUTE_SCRIPT: { label: "Precompute script", key: "precomputeScript" },
 	AUTOMATED_REVIEW_POLICY: { label: "Automated review settings", key: "automatedReviewPolicy" },
 	WHY_IT_MATTERS: { label: "Why it matters", key: "whyItMatters" },
 	WHAT_GOOD_LOOKS_LIKE: { label: "What good looks like", key: "whatGoodLooksLike" },
@@ -135,18 +135,14 @@ export function PracticeReleaseReview({
 				<TableBody>
 					{proposal.fields.map(({ field, offeredChanged, conflict }) => (
 						<TableRow key={field} variant="static">
-							<TableHead scope="row" className="align-top font-medium">
-								{FIELDS[field].label}
-								{conflict && (
-									<Badge variant="warning" className="ml-2">
-										Conflict
-									</Badge>
-								)}
-								{!offeredChanged && (
-									<Badge variant="secondary" className="ml-2">
-										Local edit
-									</Badge>
-								)}
+							{/* A row header, muted like the column headers: the field is the key, and the three
+							    versions beside it are what the reader compares. */}
+							<TableHead scope="row" variant="body">
+								<span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+									{FIELDS[field].label}
+									{conflict && <Badge variant="warning">Conflict</Badge>}
+									{!offeredChanged && <Badge variant="secondary">Local edit</Badge>}
+								</span>
 							</TableHead>
 							{([proposal.base, proposal.current, proposal.offered] as const).map(
 								(definition, index) => (

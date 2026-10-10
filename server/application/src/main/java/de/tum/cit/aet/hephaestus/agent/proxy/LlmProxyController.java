@@ -36,4 +36,14 @@ class LlmProxyController {
             @RequestBody(required = false) byte @Nullable [] body) {
         return proxyService.proxy(request, response, incomingHeaders, body);
     }
+
+    @PostMapping("/precompute/{slot}/**")
+    @WorkspaceAgnostic("Authenticated precompute token carries and constrains the workspace route")
+    public @Nullable ResponseEntity<?> proxyPrecompute(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            @RequestHeader HttpHeaders incomingHeaders,
+            @RequestBody(required = false) byte @Nullable [] body) {
+        return proxyService.proxyPrecompute(request, response, incomingHeaders, body);
+    }
 }

@@ -389,12 +389,7 @@ public class AgentJobZombieSweeper {
         LlmPriceSnapshot price = snapshot != null && snapshot.priceSnapshot() != null
                 ? snapshot.priceSnapshot()
                 : LlmPriceSnapshot.unpricedInstance();
-        TerminalUsage.resolve(null, counts)
-                .appendTo(
-                        usageRecorder,
-                        job.getWorkspace().getId(),
-                        job,
-                        snapshot != null ? snapshot.upstreamModelId() : null,
-                        price);
+        TerminalUsage.fromProxy(counts)
+                .appendTo(usageRecorder, jobRepository, job.getWorkspace().getId(), job, snapshot, price);
     }
 }

@@ -219,7 +219,7 @@ export type AdminLlmUsageReport = {
 export type AdminWorkspaceLlmUsage = {
     displayName: string;
     /**
-     * Ledger events (jobs / mentor turns) this month, either purse
+     * Runs this month, either purse: job attempts and mentor turns. Precompute model rows are not runs.
      */
     events: number;
     /**
@@ -242,6 +242,10 @@ export type AdminWorkspaceLlmUsage = {
      * The same verdict for the workspace's own-provider spend against its own cap.
      */
     ownProviderBudgetVerdict: 'WITHIN' | 'EXHAUSTED' | 'UNVERIFIABLE';
+    /**
+     * Whether this month has an own-provider purse to show for the workspace. Same rule as WorkspaceLlmUsageReport.ownProviderInUse.
+     */
+    ownProviderInUse: boolean;
     /**
      * The workspace's own cap in USD on its own-provider spend; null = uncapped. Read-only here — it governs the workspace's money, so only its own admins may change it.
      */
@@ -284,11 +288,15 @@ export type AgentBinding = {
     enabled: boolean;
     instanceModelId?: number;
     maxConcurrentJobs?: number;
-    purpose: 'PRACTICE_REVIEW' | 'MENTOR';
+    purpose: 'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING';
     /**
      * True when the bound model is available to run right now
      */
     ready: boolean;
+    /**
+     * The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. A decision, embedding or reranking binding serves no member whose review model is stricter. Empty when the binding serves no member.
+     */
+    servedTiers: Array<'IN_HOUSE' | 'CLOUD' | 'UNDECLARED'>;
     timeoutSeconds?: number;
     workspaceModelId?: number;
 };
@@ -351,6 +359,10 @@ export type AgentJob = {
      * Timestamp when the job was created
      */
     createdAt: Date;
+    /**
+     * Data handling tier of the slot whose model this job was admitted on, frozen at submit time. Absent when the snapshot names no tier that this server knows.
+     */
+    dataHandlingTier?: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
     /**
      * Git provider comment/note ID for posted feedback
      */
@@ -618,6 +630,10 @@ export type AvailableLlmModel = {
      * Pricing mode
      */
     pricingMode: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
+    /**
+     * The purposes a binding may assign this model to, from its connection's protocol
+     */
+    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING'>;
     /**
      * Reasoning effort requested of the model; null sends none, the provider's default applies
      */
@@ -1078,7 +1094,7 @@ export type CreateLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: string;
+    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape (default BEARER)
      */
@@ -1229,7 +1245,7 @@ export type CreatePracticeRequest = {
      */
     name: string;
     /**
-     * TypeScript/Node static analysis run before automated review
+     * TypeScript precompute script that runs before the review and points it at places to check
      */
     precomputeScript?: string;
     precondition?: PracticePrecondition;
@@ -1334,7 +1350,7 @@ export type CreateWorkspaceLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: string;
+    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape (default BEARER)
      */
@@ -2478,7 +2494,7 @@ export type LlmConnection = {
     /**
      * Wire protocol
      */
-    apiProtocol: string;
+    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape
      */
@@ -2511,6 +2527,10 @@ export type LlmConnection = {
      * Connection ID
      */
     id: number;
+    /**
+     * The purposes a model on this connection can serve, from its protocol
+     */
+    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING'>;
     /**
      * Unique slug
      */
@@ -2676,6 +2696,9 @@ export type LlmProbeResult = {
  */
 export type LlmUsageByDay = {
     day: Date;
+    /**
+     * Runs: job attempts and mentor turns. Precompute model rows are not runs.
+     */
     events: number;
     /**
      * Confirmed spend on shared (instance) models for this day, in USD.
@@ -2686,7 +2709,7 @@ export type LlmUsageByDay = {
      */
     ownProviderTotalCostUsd: number;
     /**
-     * Calls this day whose price is not yet known. Excluded from both totals above.
+     * Runs this day with at least one ledger row whose price is not yet known. A precompute row counts toward the run of its review. Those rows are excluded from both totals above.
      */
     unpricedEventCount: number;
 };
@@ -2698,7 +2721,7 @@ export type LlmUsageByJobType = {
     cacheReadTokens: number;
     cacheWriteTokens: number;
     /**
-     * Ledger events (jobs / mentor turns)
+     * Runs: job attempts and mentor turns. Precompute model rows are not runs.
      */
     events: number;
     inputTokens: number;
@@ -2717,7 +2740,69 @@ export type LlmUsageByJobType = {
      */
     totalCalls: number;
     /**
-     * Calls for this job type whose price is not yet known. Excluded from both totals above.
+     * Runs of this job type with at least one ledger row whose price is not yet known. A precompute row counts toward the run of its review. Those rows are excluded from both totals above.
+     */
+    unpricedEventCount: number;
+};
+
+/**
+ * The decision, embedding and reranking calls that one practice's precompute script made in finished reviews this month. The cost of each review's calls is split between its practices by the priced tokens that each used.
+ */
+export type LlmUsageByPractice = {
+    calls: number;
+    inputTokens: number;
+    /**
+     * This practice's share of the spend on shared (instance) models, in USD.
+     */
+    instanceTotalCostUsd: number;
+    outputTokens: number;
+    /**
+     * This practice's share of the spend on this workspace's own provider(s), in USD.
+     */
+    ownProviderTotalCostUsd: number;
+    /**
+     * The practice name. Null when the slug names no current practice.
+     */
+    practiceName?: string;
+    /**
+     * The practice slug. Null for calls that cannot be split by practice any more, such as those of a deleted review.
+     */
+    practiceSlug?: string;
+    /**
+     * The precompute models that the script called.
+     */
+    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING'>;
+    /**
+     * Reviews in which the script called a precompute model. A review with several practices counts for each of them.
+     */
+    reviews: number;
+    /**
+     * Reviews with a precompute ledger row whose price is not yet known and that holds this practice's calls, each review counted once. Those rows are excluded from both totals above. A review with several practices counts for each of them.
+     */
+    unpricedEventCount: number;
+};
+
+/**
+ * The decision, embedding and reranking calls of finished reviews this month, in total. calls, inputTokens, outputTokens and both costs equal the sums of the byPractice entries. reviews and unpricedEventCount do not: one review can count for several practices there.
+ */
+export type LlmUsagePrecomputeTotal = {
+    calls: number;
+    inputTokens: number;
+    /**
+     * Confirmed precompute spend on shared (instance) models, in USD.
+     */
+    instanceTotalCostUsd: number;
+    outputTokens: number;
+    /**
+     * Precompute spend on this workspace's own provider(s), in USD.
+     */
+    ownProviderTotalCostUsd: number;
+    /**
+     * Distinct reviews in which a precompute script called a precompute model.
+     */
+    reviews: number;
+    /**
+     * Distinct reviews with a precompute ledger row whose price is not yet known. Those rows are excluded from both totals above.
      */
     unpricedEventCount: number;
 };
@@ -3378,7 +3463,7 @@ export type Practice = {
      */
     name: string;
     /**
-     * TypeScript/Node precompute script for static analysis before AI review
+     * TypeScript precompute script that runs before the review and points it at places to check
      */
     precomputeScript?: string;
     precondition?: PracticePrecondition;
@@ -3739,6 +3824,26 @@ export type PracticeGroupStanding = {
 export type PracticeGroupTrend = {
     group: PracticeTrend;
     practices: Array<PracticeTrend>;
+};
+
+/**
+ * What one practice's precompute script needs, as its newest review reported it
+ */
+export type PracticePrecomputeSummary = {
+    /**
+     * The review that reported the needs; null when no review ran the current script yet
+     */
+    asOf?: PrecomputeAsOf;
+    /**
+     * The models the script declared; empty when it declares none or asOf is null
+     */
+    needs: Array<PrecomputeNeed>;
+    practiceName: string;
+    practiceSlug: string;
+    /**
+     * True when the newest review ran an earlier version of the script, so its needs are not shown
+     */
+    scriptChanged: boolean;
 };
 
 /**
@@ -4174,6 +4279,10 @@ export type PracticeTraceEntry = {
     practiceName: string;
     practiceSlug: string;
     /**
+     * What this practice's precompute script did in the named review; null when the practice has no script there or the review reported nothing about it
+     */
+    precompute?: PrecomputeRun;
+    /**
      * The review this answer came from, when one ran
      */
     reviewId?: string;
@@ -4267,6 +4376,71 @@ export type PracticesAcrossWorkspaceTiles = {
     yourPractices: number;
 };
 
+/**
+ * The review whose precompute run reported a practice's needs
+ */
+export type PrecomputeAsOf = {
+    finishedAt: Date;
+    jobId: string;
+};
+
+/**
+ * One model a precompute script declared, and what became of its calls in one review
+ */
+export type PrecomputeModelUse = {
+    /**
+     * Whether the review had a model bound for this purpose
+     */
+    bound: boolean;
+    need: 'REQUIRED' | 'OPTIONAL';
+    /**
+     * Calls to this model that were not rated, by reason. Empty when every call was rated.
+     */
+    notRated: Array<PrecomputeNotRated>;
+    /**
+     * The purpose whose binding serves this model
+     */
+    purpose: 'PRACTICE_REVIEW' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING';
+};
+
+/**
+ * One model a practice's precompute script needs, and for which members no model is ready
+ */
+export type PrecomputeNeed = {
+    need: 'REQUIRED' | 'OPTIONAL';
+    /**
+     * The purpose whose binding serves this model
+     */
+    purpose: 'PRACTICE_REVIEW' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING';
+    /**
+     * The member tiers that no ready binding of this purpose serves today. UNDECLARED appears only when members may leave their AI choice open.
+     */
+    unmetTiers: Array<'IN_HOUSE' | 'CLOUD' | 'UNDECLARED'>;
+};
+
+/**
+ * Model calls that were not rated, for one reason
+ */
+export type PrecomputeNotRated = {
+    count: number;
+    reason: 'UNAVAILABLE' | 'BUDGET' | 'DEADLINE' | 'TOO_LARGE' | 'OFF_FORMAT' | 'REFUSED' | 'ERROR';
+};
+
+/**
+ * What one practice's precompute script did in one review
+ */
+export type PrecomputeRun = {
+    /**
+     * Places to check that the script gave the review; 0 when it did not run
+     */
+    leads: number;
+    /**
+     * The models the script declared and what became of their calls. Empty for a script that declares none, and for one that ended before it declared them.
+     */
+    models: Array<PrecomputeModelUse>;
+    status: 'OK' | 'SKIPPED' | 'FAILED' | 'TIMED_OUT' | 'NOT_FINISHED';
+};
+
 export type PreviewRequest = {
     accountId?: number;
     identities: Array<Identity>;
@@ -4283,7 +4457,7 @@ export type ProbeLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: string;
+    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape (default BEARER)
      */
@@ -5206,6 +5380,56 @@ export type ReviewPracticeOutcomes = {
      * Practices the run could not settle: no counted met or not-met outcome, and not only not-applicable outcomes
      */
     undetermined: number;
+};
+
+/**
+ * What one practice's precompute script did in the latest attempt of one review that recorded precompute runs
+ */
+export type ReviewPrecompute = {
+    /**
+     * How long the script ran, in milliseconds. Absent when the script did not run or did not finish, or the runner did not say.
+     */
+    durationMs?: number;
+    /**
+     * The first line of the script's error. Set only when the script failed.
+     */
+    error?: string;
+    /**
+     * The decision, embedding and reranking models of the script, with the calls the proxy counted for each. Calls to the review's own model count toward the review.
+     */
+    models: Array<ReviewPrecomputeModel>;
+    /**
+     * The practice's current name. Absent when the practice no longer exists.
+     */
+    practiceName?: string;
+    practiceSlug: string;
+    run: PrecomputeRun;
+};
+
+/**
+ * One precompute model of a practice's script in one review, with the calls the proxy counted
+ */
+export type ReviewPrecomputeModel = {
+    /**
+     * Calls that the proxy forwarded to this model
+     */
+    calls: number;
+    /**
+     * Input tokens of those calls
+     */
+    inputTokens: number;
+    /**
+     * Output tokens of those calls
+     */
+    outputTokens: number;
+    /**
+     * The purpose whose binding serves this model
+     */
+    purpose: 'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING';
+    /**
+     * Data handling tier of the slot that served the model in this review. Absent when the attempt froze no tier for the model of this purpose.
+     */
+    tier?: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
 };
 
 /**
@@ -6353,7 +6577,7 @@ export type UpdatePracticeRequest = {
      */
     name?: string;
     /**
-     * TypeScript/Node static analysis run before automated review
+     * TypeScript precompute script that runs before the review and points it at places to check
      */
     precomputeScript?: string;
     precondition?: PracticePrecondition;
@@ -6971,7 +7195,7 @@ export type WorkspaceLlmConnection = {
     /**
      * Wire protocol
      */
-    apiProtocol: string;
+    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape
      */
@@ -7004,6 +7228,10 @@ export type WorkspaceLlmConnection = {
      * Connection ID
      */
     id: number;
+    /**
+     * The purposes a model on this connection can serve, from its protocol
+     */
+    purposes: Array<'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING'>;
     /**
      * Unique slug within the workspace
      */
@@ -7128,6 +7356,10 @@ export type WorkspaceLlmProbeResult = {
      * Whether the provider answered
      */
     reachable: boolean;
+    /**
+     * HTTP status returned by the provider, if any
+     */
+    statusCode?: number;
 };
 
 /**
@@ -7146,6 +7378,10 @@ export type WorkspaceLlmSettings = {
 export type WorkspaceLlmUsageReport = {
     byDay: Array<LlmUsageByDay>;
     byJobType: Array<LlmUsageByJobType>;
+    /**
+     * The decision, embedding and reranking calls of precompute scripts, one entry per practice, most spend first. Their spend is already part of byJobType. Chat calls of precompute scripts are in each review's own cost and not here.
+     */
+    byPractice: Array<LlmUsageByPractice>;
     /**
      * Display-only conversion when the instance has a display currency. Absent = show USD only.
      */
@@ -7175,6 +7411,10 @@ export type WorkspaceLlmUsageReport = {
      */
     ownProviderBudgetVerdict: 'WITHIN' | 'EXHAUSTED' | 'UNVERIFIABLE';
     /**
+     * Whether this month has an own-provider purse to show. True when the month has at least one own-provider call, priced or not, so a month of confirmed $0.00 calls counts. For the current month, also true when the workspace has an enabled own-provider model on an enabled connection, so its admins can set a provider cap before the first call. The spend and cap fields cannot answer this.
+     */
+    ownProviderInUse: boolean;
+    /**
      * Monthly cap in USD on spend this workspace pays for through its own connected provider; null = uncapped. Set by this workspace's own admins.
      */
     ownProviderMonthlyBudgetUsd?: number;
@@ -7187,7 +7427,11 @@ export type WorkspaceLlmUsageReport = {
      */
     ownProviderTotalCostUsd: number;
     /**
-     * Calls this month (either purse) whose price is not yet known. They are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.
+     * The byPractice entries in total, read from the ledger.
+     */
+    precomputeTotal: LlmUsagePrecomputeTotal;
+    /**
+     * Runs this month (job attempts and mentor turns, either purse) with at least one ledger row whose price is not yet known, each counted once. A precompute row counts toward the run of its review. Those rows are excluded from both totals above, so a non-zero value means the real spend may be higher than shown.
      */
     unpricedEventCount: number;
 };
@@ -10484,6 +10728,35 @@ export type RetryAgentJobDeliveryResponses = {
 
 export type RetryAgentJobDeliveryResponse = RetryAgentJobDeliveryResponses[keyof RetryAgentJobDeliveryResponses];
 
+export type GetAgentJobPrecomputeData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        jobId: string;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/agents/jobs/{jobId}/precompute';
+};
+
+export type GetAgentJobPrecomputeErrors = {
+    /**
+     * Job not found in this workspace
+     */
+    404: unknown;
+};
+
+export type GetAgentJobPrecomputeResponses = {
+    /**
+     * One entry per staged script; empty when no script ran or the attempt has not ended
+     */
+    200: Array<ReviewPrecompute>;
+};
+
+export type GetAgentJobPrecomputeResponse = GetAgentJobPrecomputeResponses[keyof GetAgentJobPrecomputeResponses];
+
 export type DeleteAgentData = {
     body?: never;
     path: {
@@ -10491,7 +10764,7 @@ export type DeleteAgentData = {
          * Workspace slug
          */
         workspaceSlug: string;
-        purpose: 'PRACTICE_REVIEW' | 'MENTOR';
+        purpose: 'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING';
     };
     query?: {
         dataHandlingTier?: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
@@ -10515,7 +10788,7 @@ export type ConfigureAgentData = {
          * Workspace slug
          */
         workspaceSlug: string;
-        purpose: 'PRACTICE_REVIEW' | 'MENTOR';
+        purpose: 'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING';
     };
     query?: {
         dataHandlingTier?: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
@@ -13011,6 +13284,27 @@ export type GetObservationResponses = {
 };
 
 export type GetObservationResponse = GetObservationResponses[keyof GetObservationResponses];
+
+export type ListPrecomputeNeedsData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/practices/precompute';
+};
+
+export type ListPrecomputeNeedsResponses = {
+    /**
+     * Precompute needs returned
+     */
+    200: Array<PracticePrecomputeSummary>;
+};
+
+export type ListPrecomputeNeedsResponse = ListPrecomputeNeedsResponses[keyof ListPrecomputeNeedsResponses];
 
 export type ListPracticeReleasesData = {
     body?: never;

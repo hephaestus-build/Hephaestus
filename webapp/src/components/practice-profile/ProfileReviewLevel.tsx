@@ -212,6 +212,7 @@ export function ProfileReviewLevel({
 				</PracticeTabsRail>
 				<TabsContent value="practices" className="min-w-0">
 					<ReviewRunPracticeTable
+						workspaceSlug={workspaceSlug}
 						entries={practices}
 						signals={signals}
 						observationsByPractice={observationsByPractice}

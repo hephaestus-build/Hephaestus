@@ -1,9 +1,26 @@
-import { ChevronDown, ChevronRight, CircleDollarSign, Info } from "lucide-react";
+import {
+	createColumnHelper,
+	FlexRender,
+	functionalUpdate,
+	type SortingState,
+	useTable,
+} from "@tanstack/react-table";
+import { ChevronDown, ChevronRight, CircleDollarSign, Info, Search } from "lucide-react";
+// oxlint-disable-next-line no-restricted-imports -- TanStack Table keys its caches on identity, which the compiler memoises as an optimisation rather than promises; each `useMemo` below says what breaks without it.
+import { type ReactNode, useMemo } from "react";
 
+import { cn } from "cn";
 import type { AdminWorkspaceLlmUsage, WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkeleton";
+import { type DataTableFeatures, dataTableFeatures } from "@/components/common/data-table";
+import { DataTableHeader } from "@/components/common/DataTableHeader";
+import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { TablePagination } from "@/components/common/TablePagination";
+import { Section } from "@/components/layout/Section";
+import { CAP_STATE_DEFS, type CapState } from "@/components/practice-vocabulary/cap-state-defs";
+import type { Purse } from "@/components/practice-vocabulary/purse-defs";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -12,25 +29,52 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@/components/ui/empty";
-import {
-	Table,
-	TableBody,
-	TableCaption,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/ui/table";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCaption, TableCell, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
-import { MoneyCell } from "./MoneyCell";
 
 import { BudgetPaceAlert } from "./BudgetPaceAlert";
 import { CapIsNotMonthScoped } from "./CapIsNotMonthScoped";
-import { CAP_STATE_LABELS, CapMeter, type CapState, capState } from "./CapMeter";
+import { CapMeter, capState } from "./CapMeter";
 import { type Fx, FxDisclosure, FxSpendLine, spendConversion } from "./fx";
 import { LlmUsageByDayTable, LlmUsageByJobTypeTable } from "./LlmUsageBreakdownTables";
-import { budgetUsedPercent, projectBudget } from "./usage-utils";
+import { LlmUsageByPracticeTable } from "./LlmUsageByPracticeTable";
+import { MoneyCell } from "./MoneyCell";
+import { PurseHeading, PurseLeaf } from "./PurseHeading";
+import {
+	budgetUsedPercent,
+	FIRST_COLUMN,
+	precomputeByPracticeDescription,
+	projectBudget,
+	purseCap,
+	pursesOf,
+} from "./usage-utils";
+
+/** The columns the workspaces table sorts by, as the address names them. */
+export const INSTANCE_USAGE_SORTS = [
+	"workspace",
+	"sharedSpend",
+	"ownProviderSpend",
+	"runs",
+] as const;
+export type InstanceUsageSort = (typeof INSTANCE_USAGE_SORTS)[number];
+
+/** What the reader chose to see of the workspaces table: the route keeps it in the address. */
+export interface AdminInstanceUsageView {
+	/** Matched against workspace names. */
+	q: string;
+	sort: InstanceUsageSort;
+	desc: boolean;
+	/** Zero-based. */
+	page: number;
+}
+
+export const INSTANCE_USAGE_PAGE_SIZE = 25;
+
+/** The longest search the address keeps, so the field never takes more than that. */
+export const INSTANCE_USAGE_SEARCH_MAX_LENGTH = 200;
 
 export interface AdminInstanceLlmUsageTableProps {
 	rows: AdminWorkspaceLlmUsage[];
@@ -44,6 +88,8 @@ export interface AdminInstanceLlmUsageTableProps {
 	isLoading: boolean;
 	error: unknown;
 	onRetry?: () => void;
+	view: AdminInstanceUsageView;
+	onViewChange: (patch: Partial<AdminInstanceUsageView>) => void;
 	expandedWorkspaceSlug: string | null;
 	detailReport?: WorkspaceLlmUsageReport;
 	isDetailLoading: boolean;
@@ -52,8 +98,6 @@ export interface AdminInstanceLlmUsageTableProps {
 	onToggleDetails: (workspace: AdminWorkspaceLlmUsage) => void;
 	onEditSharedModelBudget: (workspace: AdminWorkspaceLlmUsage) => void;
 }
-
-const SKELETON_COLUMNS = ["w-32", "w-16", "w-24", "w-16", "w-24", "w-28", "w-12", null];
 
 function detailPanelId(workspaceSlug: string): string {
 	return `workspace-usage-details-${workspaceSlug}`;
@@ -69,29 +113,49 @@ interface CapUsage {
 	/** Share of the cap consumed. Can exceed 100. */
 	percent?: number;
 	paused: boolean;
-	state: CapState;
-	/** The spend shown is a floor: some of this stream's usage has no price set. */
-	hasUnpricedUsage: boolean;
+	/** Worst first; empty for a cap with room left and every run priced. */
+	states: CapState[];
 }
 
-function capUsage(input: {
-	cap?: number;
-	spend: number;
-	verdict?: WorkspaceLlmUsageReport["instanceBudgetVerdict"];
-	paused: boolean;
-	isCurrentMonth: boolean;
-}): CapUsage {
-	const { cap, spend, verdict, paused, isCurrentMonth } = input;
+function capUsage(row: AdminWorkspaceLlmUsage, purse: Purse, isCurrentMonth: boolean): CapUsage {
+	const { capUsd: cap, spendUsd: spend, verdict, ...live } = purseCap(row, purse);
+	const paused = isCurrentMonth && live.paused;
 	const percent = budgetUsedPercent(spend, cap);
-	const isPaused = isCurrentMonth && paused;
+	const state = capState(percent, paused, isCurrentMonth);
+	const unpriced = isCurrentMonth && verdict === "UNVERIFIABLE";
 	return {
 		cap,
 		spend,
 		percent,
-		paused: isPaused,
-		state: capState(percent, isPaused, isCurrentMonth),
-		hasUnpricedUsage: isCurrentMonth && verdict === "UNVERIFIABLE",
+		paused,
+		states: [...(state == null ? [] : [state]), ...(unpriced ? ["UNPRICED" as const] : [])],
 	};
+}
+
+const columnHelper = createColumnHelper<DataTableFeatures, AdminWorkspaceLlmUsage>();
+
+const CAP_HELP: Record<Purse, { header: string; help: string; meter: string }> = {
+	SHARED: {
+		header: "Budget",
+		help: "The monthly cap you set on the spend you pay for.",
+		meter: "Shared-model budget",
+	},
+	OWN_PROVIDER: {
+		header: "Cap",
+		help: "The workspace’s own money. Only its admins can change this.",
+		meter: "Provider cap",
+	},
+};
+
+/** The view's sort, or the default where the column it names is not on screen, such as a stale address. */
+function shownSort(
+	sort: InstanceUsageSort,
+	desc: boolean,
+	showsOwnProvider: boolean,
+): SortingState {
+	return sort === "ownProviderSpend" && !showsOwnProvider
+		? [{ id: "sharedSpend", desc: true }]
+		: [{ id: sort, desc }];
 }
 
 /** The provider cap is read-only here by design: it is the workspace's own money. */
@@ -104,6 +168,8 @@ export function AdminInstanceLlmUsageTable({
 	isLoading,
 	error,
 	onRetry,
+	view,
+	onViewChange,
 	expandedWorkspaceSlug,
 	detailReport,
 	isDetailLoading,
@@ -112,6 +178,130 @@ export function AdminInstanceLlmUsageTable({
 	onToggleDetails,
 	onEditSharedModelBudget,
 }: AdminInstanceLlmUsageTableProps) {
+	const purses = pursesOf({ ownProviderInUse: rows.some((row) => row.ownProviderInUse) });
+	const showsOwnProvider = purses.includes("OWN_PROVIDER");
+	// Identity matters as much as the value: `useTable` republishes controlled state on every render,
+	// so a fresh array here writes the sorting atom every time the parent re-renders.
+	const sorting = useMemo(
+		() => shownSort(view.sort, view.desc, showsOwnProvider),
+		[view.sort, view.desc, showsOwnProvider],
+	);
+	// The table's `data`, keyed the same way `columns` is: the core row model is cached against this
+	// array's identity. Name order underneath, so workspaces that tie on the sorted column read
+	// alphabetically.
+	const data = useMemo(
+		() => [...rows].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+		[rows],
+	);
+
+	// TanStack Table caches its column model, and every row model derived from it, against this
+	// array's identity.
+	const columns = useMemo(
+		() =>
+			columnHelper.columns([
+				columnHelper.accessor("displayName", {
+					id: "workspace",
+					header: "Workspace",
+					cell: ({ row }) => (
+						<>
+							<div className="font-medium">{row.original.displayName}</div>
+							<div className="font-mono text-xs text-muted-foreground">
+								{row.original.workspaceSlug}
+							</div>
+						</>
+					),
+					meta: { className: cn(FIRST_COLUMN, "w-full") },
+				}),
+				...purses.map((purse) =>
+					columnHelper.group({
+						id: purse,
+						header: () => <PurseHeading purse={purse} />,
+						columns: columnHelper.columns([
+							columnHelper.accessor(
+								(row) =>
+									purse === "SHARED" ? row.instanceTotalCostUsd : row.ownProviderTotalCostUsd,
+								{
+									id: purse === "SHARED" ? "sharedSpend" : "ownProviderSpend",
+									header: () => <PurseLeaf purse={purse}>Spend</PurseLeaf>,
+									cell: ({ getValue }) => (
+										<>
+											<MoneyCell>{formatCostUsd(getValue())}</MoneyCell>
+											<FxSpendLine usd={getValue()} fx={fx} />
+										</>
+									),
+									enableGlobalFilter: false,
+									sortDescFirst: true,
+									meta: { numeric: true },
+								},
+							),
+							columnHelper.display({
+								id: purse === "SHARED" ? "sharedCap" : "ownProviderCap",
+								header: () => (
+									<HelpHeader help={CAP_HELP[purse].help}>
+										<PurseLeaf purse={purse}>{CAP_HELP[purse].header}</PurseLeaf>
+									</HelpHeader>
+								),
+								cell: ({ row }) => (
+									<CapCell
+										purse={purse}
+										usage={capUsage(row.original, purse, isCurrentMonth)}
+										label={CAP_HELP[purse].meter}
+										workspace={row.original.displayName}
+									/>
+								),
+								meta: { numeric: true },
+							}),
+						]),
+					}),
+				),
+				columnHelper.accessor("events", {
+					id: "runs",
+					header: "Runs",
+					cell: ({ getValue }) => getValue().toLocaleString(),
+					enableGlobalFilter: false,
+					sortDescFirst: true,
+					meta: { numeric: true },
+				}),
+				columnHelper.display({
+					id: "actions",
+					header: () => <span className="sr-only">Actions</span>,
+					cell: ({ row }) => (
+						<RowActions
+							workspace={row.original}
+							isExpanded={expandedWorkspaceSlug === row.original.workspaceSlug}
+							isCurrentMonth={isCurrentMonth}
+							onToggleDetails={onToggleDetails}
+							onEditSharedModelBudget={onEditSharedModelBudget}
+						/>
+					),
+				}),
+			]),
+		[purses, fx, isCurrentMonth, expandedWorkspaceSlug, onToggleDetails, onEditSharedModelBudget],
+	);
+
+	// Pages are cut from the filtered and sorted rows here rather than by the table, so a page past
+	// the last one, typed or left by a narrower filter, reads as the last page without rewriting the
+	// address.
+	const table = useTable({
+		features: dataTableFeatures,
+		data,
+		columns,
+		onSortingChange: (updater) => {
+			const [next] = functionalUpdate(updater, sorting);
+			const sort = INSTANCE_USAGE_SORTS.find((id) => id === next?.id) ?? "sharedSpend";
+			onViewChange({ sort, desc: next?.desc ?? true, page: 0 });
+		},
+		onGlobalFilterChange: (updater) => {
+			// The library types `globalFilter` as `any`, so the value is narrowed on the way back out.
+			const next: unknown = functionalUpdate(updater, view.q.trim());
+			onViewChange({ q: typeof next === "string" ? next : "", page: 0 });
+		},
+		state: { sorting, globalFilter: view.q.trim() },
+	});
+	const matching = table.getPrePaginatedRowModel().rows;
+	const pageCount = Math.max(1, Math.ceil(matching.length / INSTANCE_USAGE_PAGE_SIZE));
+	const page = Math.min(view.page, pageCount - 1);
+
 	if (error != null) {
 		return <QueryErrorAlert error={error} title="We could not load AI usage" onRetry={onRetry} />;
 	}
@@ -137,125 +327,85 @@ export function AdminInstanceLlmUsageTable({
 			spendConversion(row.instanceTotalCostUsd, fx) != null ||
 			spendConversion(row.ownProviderTotalCostUsd, fx) != null,
 	);
+	const visibleRows = matching.slice(
+		page * INSTANCE_USAGE_PAGE_SIZE,
+		(page + 1) * INSTANCE_USAGE_PAGE_SIZE,
+	);
+	const hasFilter = view.q.trim() !== "";
 
 	return (
-		<div className="space-y-4">
-			{!isCurrentMonth && <CapIsNotMonthScoped subject="budget" />}
-			<Table bordered>
-				<TableCaption className="sr-only">
-					Per-workspace AI spend for the selected month, most expensive first
-				</TableCaption>
-				<TableHeader>
-					<TableRow>
-						<TableHead scope="col">Workspace</TableHead>
-						<TableHead scope="col" className="text-right">
-							Shared-model spend
-						</TableHead>
-						<TableHead scope="col" className="text-right">
-							<HelpHeader help="The monthly cap you set on the spend you pay for.">
-								Shared-model budget
-							</HelpHeader>
-						</TableHead>
-						<TableHead scope="col" className="text-right">
-							Provider spend
-						</TableHead>
-						<TableHead scope="col" className="text-right">
-							<HelpHeader help="The workspace’s own money. Only its admins can change this.">
-								Provider cap
-							</HelpHeader>
-						</TableHead>
-						<TableHead scope="col">Status</TableHead>
-						<TableHead scope="col" className="text-right">
-							Runs
-						</TableHead>
-						<TableHead scope="col">
-							<span className="sr-only">Actions</span>
-						</TableHead>
-					</TableRow>
-				</TableHeader>
-				{isLoading ? (
-					<TableRowsSkeleton columns={SKELETON_COLUMNS} rows={5} />
-				) : (
-					<TableBody>
-						{rows.map((row) => {
-							const isExpanded = expandedWorkspaceSlug === row.workspaceSlug;
-							const shared = capUsage({
-								cap: row.instanceMonthlyBudgetUsd,
-								spend: row.instanceTotalCostUsd,
-								verdict: row.instanceBudgetVerdict,
-								paused: row.instancePaused,
-								isCurrentMonth,
-							});
-							const provider = capUsage({
-								cap: row.ownProviderMonthlyBudgetUsd,
-								spend: row.ownProviderTotalCostUsd,
-								verdict: row.ownProviderBudgetVerdict,
-								paused: row.ownProviderPaused,
-								isCurrentMonth,
-							});
-							return (
-								<TableRow key={row.workspaceSlug}>
-									<TableCell>
-										<div className="font-medium">{row.displayName}</div>
-										<div className="font-mono text-xs text-muted-foreground">
-											{row.workspaceSlug}
-										</div>
-									</TableCell>
-									<TableCell numeric className="text-right">
-										<MoneyCell>{formatCostUsd(row.instanceTotalCostUsd)}</MoneyCell>
-										<FxSpendLine usd={row.instanceTotalCostUsd} fx={fx} />
-									</TableCell>
-									<CapCell usage={shared} label="Shared-model budget" workspace={row.displayName} />
-									<TableCell numeric className="text-right">
-										<MoneyCell>{formatCostUsd(row.ownProviderTotalCostUsd)}</MoneyCell>
-										<FxSpendLine usd={row.ownProviderTotalCostUsd} fx={fx} />
-									</TableCell>
-									<CapCell usage={provider} label="Provider cap" workspace={row.displayName} />
-									<TableCell>
-										<StatusCell
-											shared={shared}
-											provider={provider}
-											isCurrentMonth={isCurrentMonth}
-										/>
-									</TableCell>
-									<TableCell numeric className="text-right">
-										{row.events.toLocaleString()}
-									</TableCell>
-									<TableCell>
-										<div className="flex justify-end gap-2">
-											<Button
-												variant="outline"
-												size="sm"
-												aria-expanded={isExpanded}
-												// The panel is unmounted while collapsed; a constant IDREF would dangle.
-												aria-controls={isExpanded ? detailPanelId(row.workspaceSlug) : undefined}
-												aria-label={`Details for ${row.displayName}`}
-												onClick={() => onToggleDetails(row)}
-											>
-												{isExpanded ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden />}
-												Details
-											</Button>
-											{/* Current month only: a budget is not month-scoped, so editing one from a
-											    closed month would quietly change what runs today. */}
-											{isCurrentMonth && (
-												<Button
-													variant="outline"
-													size="sm"
-													// Must start with the visible label for speech control (WCAG SC 2.5.3).
-													aria-label={`Set budget for ${row.displayName} (shared models)`}
-													onClick={() => onEditSharedModelBudget(row)}
-												>
-													Set budget
-												</Button>
-											)}
-										</div>
+		<div className="space-y-8">
+			<div className="space-y-4">
+				<FilterToolbar hasFilter={hasFilter} onReset={() => onViewChange({ q: "", page: 0 })}>
+					<InputGroup className="w-full sm:w-72">
+						<Label htmlFor="instance-usage-search" className="sr-only">
+							Search workspaces
+						</Label>
+						<InputGroupAddon>
+							<Search aria-hidden />
+						</InputGroupAddon>
+						<InputGroupInput
+							id="instance-usage-search"
+							type="search"
+							placeholder="Search by name…"
+							maxLength={INSTANCE_USAGE_SEARCH_MAX_LENGTH}
+							value={view.q}
+							onChange={(event) => table.setGlobalFilter(event.target.value)}
+						/>
+					</InputGroup>
+				</FilterToolbar>
+				{!isCurrentMonth && <CapIsNotMonthScoped subject="budget" />}
+				<Table bordered>
+					<TableCaption className="sr-only">
+						Per-workspace AI spend for the selected month
+					</TableCaption>
+					<DataTableHeader table={table} />
+					{isLoading ? (
+						<TableRowsSkeleton
+							rows={5}
+							columns={table.getVisibleLeafColumns().map((column) => ({
+								width: column.id === "actions" ? null : "w-16",
+								numeric: column.columnDef.meta?.numeric,
+								className: column.columnDef.meta?.className,
+							}))}
+						/>
+					) : (
+						<TableBody>
+							{visibleRows.length === 0 && (
+								<TableRow variant="static">
+									<TableCell
+										colSpan={table.getVisibleLeafColumns().length}
+										className="h-24 text-center text-muted-foreground"
+									>
+										No workspaces match your search
 									</TableCell>
 								</TableRow>
-							);
-						})}
-					</TableBody>
-				)}
-			</Table>
+							)}
+							{visibleRows.map((row) => (
+								<TableRow key={row.id} variant="static">
+									{row.getVisibleCells().map((cell) => {
+										const { meta } = cell.column.columnDef;
+										return (
+											<TableCell
+												key={cell.id}
+												numeric={meta?.numeric}
+												className={cn(meta?.numeric === true && "text-right", meta?.className)}
+											>
+												<FlexRender cell={cell} />
+											</TableCell>
+										);
+									})}
+								</TableRow>
+							))}
+						</TableBody>
+					)}
+				</Table>
+				<TablePagination
+					page={page}
+					totalPages={pageCount}
+					onPageChange={(next) => onViewChange({ page: next })}
+				/>
+			</div>
 
 			{expandedRow != null && (
 				<WorkspaceUsageDetails
@@ -276,6 +426,53 @@ export function AdminInstanceLlmUsageTable({
 	);
 }
 
+interface RowActionsProps {
+	workspace: AdminWorkspaceLlmUsage;
+	isExpanded: boolean;
+	isCurrentMonth: boolean;
+	onToggleDetails: (workspace: AdminWorkspaceLlmUsage) => void;
+	onEditSharedModelBudget: (workspace: AdminWorkspaceLlmUsage) => void;
+}
+
+function RowActions({
+	workspace,
+	isExpanded,
+	isCurrentMonth,
+	onToggleDetails,
+	onEditSharedModelBudget,
+}: RowActionsProps) {
+	const budgetAction = workspace.instanceMonthlyBudgetUsd == null ? "Set budget" : "Change budget";
+	return (
+		<div className="flex justify-end gap-2">
+			<Button
+				variant="outline"
+				size="sm"
+				aria-expanded={isExpanded}
+				// The panel is unmounted while collapsed; a constant IDREF would dangle.
+				aria-controls={isExpanded ? detailPanelId(workspace.workspaceSlug) : undefined}
+				aria-label={`Details for ${workspace.displayName}`}
+				onClick={() => onToggleDetails(workspace)}
+			>
+				{isExpanded ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden />}
+				Details
+			</Button>
+			{/* Current month only: a budget is not month-scoped, so editing one from a closed month
+			    would quietly change what runs today. */}
+			{isCurrentMonth && (
+				<Button
+					variant="outline"
+					size="sm"
+					// Must start with the visible label for speech control (WCAG SC 2.5.3).
+					aria-label={`${budgetAction} for ${workspace.displayName} (shared models)`}
+					onClick={() => onEditSharedModelBudget(workspace)}
+				>
+					{budgetAction}
+				</Button>
+			)}
+		</div>
+	);
+}
+
 type CapScope = "shared" | "provider";
 
 interface CapPace {
@@ -292,23 +489,18 @@ function pacesWorthWarningAbout(
 	if (report == null) {
 		return [];
 	}
-	const streams = [
-		{
-			scope: "shared" as const,
-			spend: report.instanceTotalCostUsd,
-			cap: report.instanceMonthlyBudgetUsd,
-			paused: report.instancePaused,
-		},
-		{
-			scope: "provider" as const,
-			spend: report.ownProviderTotalCostUsd,
-			cap: report.ownProviderMonthlyBudgetUsd,
-			paused: report.ownProviderPaused,
-		},
-	];
+	const streams = (
+		[
+			["shared", "SHARED"],
+			["provider", "OWN_PROVIDER"],
+		] as const
+	).map(([scope, purse]) => {
+		const { spendUsd, capUsd, paused } = purseCap(report, purse);
+		return { scope, spend: spendUsd, cap: capUsd, paused };
+	});
 	return streams.flatMap(({ paused, ...stream }) => {
 		const percent = budgetUsedPercent(stream.spend, stream.cap);
-		if (percent == null || capState(percent, paused, isCurrentMonth) !== "near") {
+		if (percent == null || capState(percent, paused, isCurrentMonth) !== "NEAR") {
 			return [];
 		}
 		return [{ ...stream, percent }];
@@ -329,8 +521,9 @@ interface WorkspaceUsageDetailsProps {
 }
 
 /**
- * The two breakdown tables stack until `xl`: side by side they would each be too narrow to avoid a
- * horizontal scroller of their own, which is two-dimensional scrolling (WCAG 2.2 SC 1.4.10).
+ * The same sections as the workspace's own usage page, in the same order, each table stacked at full
+ * width: side by side they would each be too narrow to avoid a horizontal scroller of their own,
+ * which is two-dimensional scrolling (WCAG 2.2 SC 1.4.10).
  */
 function WorkspaceUsageDetails({
 	workspace,
@@ -343,47 +536,54 @@ function WorkspaceUsageDetails({
 	now,
 	isCurrentMonth,
 }: WorkspaceUsageDetailsProps) {
-	const panelId = detailPanelId(workspace.workspaceSlug);
+	const loaded = isLoading ? undefined : report;
+	// The row's own figures, already on screen, so the skeleton has the columns the report will.
+	const purses = pursesOf(workspace);
 	const paces = pacesWorthWarningAbout(report, isCurrentMonth);
 	return (
-		<section
-			id={panelId}
-			aria-labelledby={`${panelId}-heading`}
-			className="space-y-4 rounded-md border bg-muted/20 p-4"
+		<Section
+			id={detailPanelId(workspace.workspaceSlug)}
+			title={workspace.displayName}
+			description="Usage details"
+			size="lg"
+			className="space-y-6 border-t pt-6"
 		>
-			{/* `h2`, not `h3`: `CardTitle` renders a `<div>`, so an `h3` would skip a level (SC 1.3.1). */}
-			<h2 id={`${panelId}-heading`} className="font-medium">
-				Usage details · {workspace.displayName}
-			</h2>
 			{error == null ? (
-				<>
-					{paces.map((pace) => (
-						<BudgetPaceAlert
-							key={pace.scope}
-							scope={pace.scope}
-							subjectName={workspace.displayName}
-							percent={pace.percent}
-							spendUsd={pace.spend}
-							capUsd={pace.cap}
-							projection={projectBudget(pace.spend, pace.cap, month, now)}
-							fx={fx}
-						/>
-					))}
-					<div className="grid gap-4 xl:grid-cols-2">
-						<section aria-labelledby={`${panelId}-run-type`} className="min-w-0 space-y-2">
-							<h3 id={`${panelId}-run-type`} className="font-medium">
-								By run type
-							</h3>
-							<LlmUsageByJobTypeTable report={isLoading ? undefined : report} fx={fx} />
-						</section>
-						<section aria-labelledby={`${panelId}-day`} className="min-w-0 space-y-2">
-							<h3 id={`${panelId}-day`} className="font-medium">
-								By day
-							</h3>
-							<LlmUsageByDayTable report={isLoading ? undefined : report} fx={fx} />
-						</section>
-					</div>
-				</>
+				<div className="space-y-8">
+					{paces.length > 0 && (
+						<div className="space-y-4">
+							{paces.map((pace) => (
+								<BudgetPaceAlert
+									key={pace.scope}
+									scope={pace.scope}
+									subjectName={workspace.displayName}
+									percent={pace.percent}
+									spendUsd={pace.spend}
+									capUsd={pace.cap}
+									projection={projectBudget(pace.spend, pace.cap, month, now)}
+									fx={fx}
+								/>
+							))}
+						</div>
+					)}
+					<Section level={3} title="By run type">
+						<LlmUsageByJobTypeTable report={loaded} purses={purses} />
+					</Section>
+					{/* Only once loaded: most workspaces have no precompute calls, and a skeleton that
+					    then vanishes moves more than a section that appears among the others. */}
+					{loaded != null && loaded.byPractice.length > 0 && (
+						<Section
+							level={3}
+							title="Precompute models by practice"
+							description={precomputeByPracticeDescription(isCurrentMonth)}
+						>
+							<LlmUsageByPracticeTable report={loaded} purses={purses} />
+						</Section>
+					)}
+					<Section level={3} title="By day">
+						<LlmUsageByDayTable report={loaded} purses={purses} />
+					</Section>
+				</div>
 			) : (
 				<QueryErrorAlert
 					error={error}
@@ -391,12 +591,12 @@ function WorkspaceUsageDetails({
 					onRetry={onRetry}
 				/>
 			)}
-		</section>
+		</Section>
 	);
 }
 
 interface HelpHeaderProps {
-	children: string;
+	children: ReactNode;
 	help: string;
 }
 
@@ -406,7 +606,7 @@ function HelpHeader({ children, help }: HelpHeaderProps) {
 		<Tooltip>
 			<TooltipTrigger className="inline-flex min-h-6 cursor-help items-center gap-1 font-medium">
 				{children}
-				<Info className="size-3 text-muted-foreground" aria-hidden />
+				<Info className="size-3" aria-hidden />
 			</TooltipTrigger>
 			<TooltipContent>{help}</TooltipContent>
 		</Tooltip>
@@ -414,97 +614,38 @@ function HelpHeader({ children, help }: HelpHeaderProps) {
 }
 
 interface CapCellProps {
+	purse: Purse;
 	usage: CapUsage;
 	label: string;
 	workspace: string;
 }
 
-function CapCell({ usage, label, workspace }: CapCellProps) {
-	if (usage.cap == null) {
-		return (
-			<TableCell className="text-right">
-				<span className="text-muted-foreground">—</span>
-			</TableCell>
-		);
-	}
-
+/**
+ * With no cap, a purse can still have calls with no price, and that state is not left out. The cell
+ * is at least as wide as a meter needs and grows to its longest badge, so no state is cut short.
+ */
+function CapCell({ purse, usage, label, workspace }: CapCellProps) {
 	const percent = usage.percent ?? 0;
-	const rounded = Math.round(percent);
-
 	return (
-		<TableCell className="text-right">
-			<div className="ml-auto flex w-24 flex-col items-end gap-1">
-				<span className="tabular-nums">
+		<div className="ml-auto flex min-w-28 flex-col items-end gap-1">
+			{usage.cap == null ? (
+				<span className="text-muted-foreground">—</span>
+			) : (
+				<>
 					<MoneyCell>{formatCapUsd(usage.cap)}</MoneyCell>
-				</span>
-				<CapMeter
-					percent={percent}
-					paused={usage.paused}
-					spendUsd={usage.spend}
-					capUsd={usage.cap}
-					label={`${label} used by ${workspace}`}
-				/>
-				{/* The meter's tone never carries the state alone — this line says it in words (SC 1.4.1). */}
-				<span className="text-xs text-muted-foreground tabular-nums">
-					<MoneyCell>{formatCostUsd(usage.spend)}</MoneyCell> · {rounded}%
-					{usage.state != null && ` · ${CAP_STATE_LABELS[usage.state]}`}
-				</span>
-			</div>
-		</TableCell>
-	);
-}
-
-interface StatusCellProps {
-	shared: CapUsage;
-	provider: CapUsage;
-	isCurrentMonth: boolean;
-}
-
-const CAP_SCOPE_LABELS: Record<CapScope, string> = {
-	shared: "shared models",
-	provider: "own provider",
-};
-
-/** Worst first, so a paused cap is never buried under a warning. */
-const BADGE_STATES = ["paused", "near"] as const;
-
-const BADGE_VARIANTS: Record<(typeof BADGE_STATES)[number], "destructive" | "warning"> = {
-	paused: "destructive",
-	near: "warning",
-};
-
-function StatusCell({ shared, provider, isCurrentMonth }: StatusCellProps) {
-	if (!isCurrentMonth) {
-		return <span className="text-muted-foreground">—</span>;
-	}
-
-	const streams: [CapScope, CapUsage][] = [
-		["shared", shared],
-		["provider", provider],
-	];
-	const badges = BADGE_STATES.flatMap((state) =>
-		streams
-			.filter(([, usage]) => usage.state === state)
-			.map(([scope]) => ({
-				key: `${state}-${scope}`,
-				label: `${CAP_STATE_LABELS[state]} · ${CAP_SCOPE_LABELS[scope]}`,
-				variant: BADGE_VARIANTS[state],
-			})),
-	);
-	const noPriceSet = shared.hasUnpricedUsage || provider.hasUnpricedUsage;
-
-	if (badges.length === 0 && !noPriceSet) {
-		return <span className="text-muted-foreground">—</span>;
-	}
-
-	return (
-		<div className="flex flex-col items-start gap-1">
-			{badges.map((badge) => (
-				<Badge key={badge.key} variant={badge.variant}>
-					{badge.label}
-				</Badge>
+					<CapMeter
+						percent={percent}
+						paused={usage.paused}
+						spendUsd={usage.spend}
+						capUsd={usage.cap}
+						label={`${label} used by ${workspace}`}
+					/>
+					<span className="text-xs text-muted-foreground">{Math.round(percent)}% used</span>
+				</>
+			)}
+			{usage.states.map((state) => (
+				<StatusBadge key={state} def={CAP_STATE_DEFS[purse][state]} />
 			))}
-			{noPriceSet && <span className="text-xs text-warning">Some runs have no price set</span>}
 		</div>
 	);
 }

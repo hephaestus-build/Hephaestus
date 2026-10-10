@@ -64,6 +64,7 @@ function connection(id: number, displayName: string): LlmConnection {
 		displayName,
 		authMode: "BEARER",
 		apiProtocol: "openai-responses",
+		purposes: ["PRACTICE_REVIEW", "MENTOR"],
 		baseUrl: `https://provider-${id}.example.test/v1`,
 		enabled: true,
 		hasApiKey: true,
@@ -112,10 +113,10 @@ describe("instance AI models route", () => {
 			"true",
 		);
 		expect(
-			screen.getByRole<HTMLButtonElement>("button", { name: "Delete Slow provider" }).disabled,
+			screen.getByRole<HTMLButtonElement>("button", { name: "Edit Slow provider" }).disabled,
 		).toBe(true);
 		expect(
-			screen.getByRole<HTMLButtonElement>("button", { name: "Delete Fast provider" }).disabled,
+			screen.getByRole<HTMLButtonElement>("button", { name: "Edit Fast provider" }).disabled,
 		).toBe(false);
 
 		slowToggle.resolve();

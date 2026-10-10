@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import java.time.Duration;
@@ -25,6 +26,7 @@ import reactor.netty.resources.LoopResources;
  * {@link LlmProperties} so the validator and this dialler cannot drift on what it means.
  */
 @Configuration
+@ConditionalOnWorkerRole
 class LlmProxyWebClientConfig {
 
     @Bean(destroyMethod = "dispose")

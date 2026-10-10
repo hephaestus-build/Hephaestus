@@ -34,7 +34,7 @@ public class LlmModelResolver {
             LlmConnection c = instance.getConnection();
             return new ResolvedLlmModel(
                     c.getBaseUrl(),
-                    c.getApiProtocol(),
+                    c.getApiProtocol().wire(),
                     instance.getUpstreamModelId(),
                     instance.getContextWindow(),
                     instance.getMaxOutputTokens(),
@@ -48,13 +48,13 @@ public class LlmModelResolver {
             WorkspaceLlmConnection c = byo.getConnection();
             return new ResolvedLlmModel(
                     c.getBaseUrl(),
-                    c.getApiProtocol(),
+                    c.getApiProtocol().wire(),
                     byo.getUpstreamModelId(),
                     byo.getContextWindow(),
                     byo.getMaxOutputTokens(),
                     byo.getReasoningEffort());
         }
-        throw new IllegalStateException("The agent config must bind an available OpenAI-compatible model");
+        throw new IllegalStateException("The binding does not reference a model");
     }
 
     /**
@@ -98,21 +98,17 @@ public class LlmModelResolver {
     private boolean isUsable(LlmModel model, Long workspaceId) {
         boolean visible = model.getVisibility() == ModelVisibility.PUBLIC
                 || grantRepository.existsByIdModelIdAndIdWorkspaceId(model.getId(), workspaceId);
-        return (model.isEnabled()
-                && model.getConnection().isEnabled()
-                && isSupportedProtocol(model.getConnection().getApiProtocol())
-                && visible);
+        return model.isEnabled() && model.getConnection().isEnabled() && visible;
     }
 
     private boolean isUsable(WorkspaceLlmModel model, Long workspaceId) {
-        return (model.isEnabled()
+        return model.isEnabled()
                 && model.getConnection().isEnabled()
-                && isSupportedProtocol(model.getConnection().getApiProtocol())
-                && model.getWorkspace().getId().equals(workspaceId));
+                && model.getWorkspace().getId().equals(workspaceId);
     }
 
     private static IllegalStateException unavailable() {
-        return new IllegalStateException("The configured OpenAI-compatible model is not available");
+        return new IllegalStateException("The configured model is not available");
     }
 
     @Transactional(readOnly = true)
@@ -196,10 +192,9 @@ public class LlmModelResolver {
             return llmConnectionRepository
                     .findById(ref.connectionId())
                     .filter(LlmConnection::isEnabled)
-                    .filter(c -> isSupportedProtocol(c.getApiProtocol()))
                     .map(c -> new ProxyCredential(
                             c.getBaseUrl(),
-                            c.getApiProtocol(),
+                            c.getApiProtocol().wire(),
                             c.getAuthMode(),
                             model.getUpstreamModelId(),
                             blankToNull(c.getApiKey())))
@@ -219,10 +214,9 @@ public class LlmModelResolver {
             return workspaceLlmConnectionRepository
                     .findById(ref.connectionId())
                     .filter(WorkspaceLlmConnection::isEnabled)
-                    .filter(c -> isSupportedProtocol(c.getApiProtocol()))
                     .map(c -> new ProxyCredential(
                             c.getBaseUrl(),
-                            c.getApiProtocol(),
+                            c.getApiProtocol().wire(),
                             c.getAuthMode(),
                             model.getUpstreamModelId(),
                             blankToNull(c.getApiKey())))
@@ -261,9 +255,5 @@ public class LlmModelResolver {
 
     private static @Nullable String blankToNull(@Nullable String value) {
         return value != null && !value.isBlank() ? value : null;
-    }
-
-    private static boolean isSupportedProtocol(@Nullable String apiProtocol) {
-        return "openai-completions".equals(apiProtocol) || "openai-responses".equals(apiProtocol);
     }
 }

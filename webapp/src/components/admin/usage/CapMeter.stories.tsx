@@ -57,7 +57,7 @@ export const ZeroCap: Story = {
 	play: async ({ canvas }) => {
 		await expect(sharedBudgetMeter(canvas)).toHaveAttribute(
 			"aria-valuetext",
-			"100% used, $0 of $0",
+			"100% used, $0.00 of $0",
 		);
 	},
 };

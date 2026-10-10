@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -37,6 +39,10 @@ public record AvailableLlmModelDTO(
         @NonNull @Schema(description = "Data-handling tier derived from the admin's declared facts")
         DataHandlingTier dataHandlingTier,
 
+        @NonNull
+        @Schema(description = "The purposes a binding may assign this model to, from its connection's protocol")
+        List<AgentPurpose> purposes,
+
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,
 
         @Nullable @Schema(description = "Input rate per 1M tokens (USD)")
@@ -60,6 +66,7 @@ public record AvailableLlmModelDTO(
                 model.getConnection().getDisplayName(),
                 model.getReasoningEffort(),
                 model.getDataHandlingTier(),
+                AgentPurpose.servedBy(model.getConnection().getApiProtocol()),
                 pricingMode,
                 currentPrice != null ? currentPrice.getPer1mInputUsd() : null,
                 currentPrice != null ? currentPrice.getPer1mOutputUsd() : null,
@@ -76,6 +83,7 @@ public record AvailableLlmModelDTO(
                 model.getConnection().getDisplayName(),
                 model.getReasoningEffort(),
                 model.getDataHandlingTier(),
+                AgentPurpose.servedBy(model.getConnection().getApiProtocol()),
                 model.getPricingMode(),
                 model.getPer1mInputUsd(),
                 model.getPer1mOutputUsd(),

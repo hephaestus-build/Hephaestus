@@ -1,6 +1,6 @@
 import deepEqual from "fast-deep-equal";
 import { ChevronRight, RotateCcw } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { type ReactElement, type ReactNode, useId, useRef, useState } from "react";
 
 import type {
 	PracticeAutomatedReviewPolicy,
@@ -45,6 +45,7 @@ import {
 } from "@/components/admin/practice-editor/review-settings";
 import { CodeEditor } from "@/components/common/CodeEditor";
 import { type FormError, FormErrorSummary } from "@/components/common/FormErrorSummary";
+import { InlineLink } from "@/components/common/InlineLink";
 import {
 	ACTOR_ROLE_LABELS,
 	type ActorRole,
@@ -83,6 +84,8 @@ import { hasText } from "@/lib/text";
 type DefinitionChange = NonNullable<UpdatePracticeRequest["definitionChanges"]>[number];
 
 const NO_GROUP = "__none__";
+
+const PRECOMPUTE_GUIDE_URL = "https://docs.hephaestus.build/admin/precompute-scripts";
 
 export interface PracticeDefinitionGroupOption {
 	slug: string;
@@ -128,6 +131,11 @@ interface PracticeDefinitionFormBaseProps {
 	onSubmit: (value: PracticeDefinitionValue) => void | Promise<void>;
 	definitionOptions: PracticeDefinitionOptions;
 	evidenceOutcome?: PracticeEvidenceOutcome;
+	/**
+	 * A link to the AI models page, rendered as *AI models* in the precompute script's help. Only a
+	 * workspace has that page; without it the words stay plain.
+	 */
+	precomputeModelsLink?: ReactElement;
 }
 
 interface PracticeDefinitionFormCreateProps extends PracticeDefinitionFormBaseProps {
@@ -377,6 +385,22 @@ function recommendedPolicyWithCurrentSupport(
 	return recommended;
 }
 
+/**
+ * Only a reviewed practice runs a script, so its section hides under any other support choice. The
+ * script stays in the draft until a save, and the note says so.
+ */
+function HeldScriptNote({ script, reviewed }: { script: string; reviewed: boolean }) {
+	if (reviewed || script.trim() === "") {
+		return null;
+	}
+	return (
+		<p className="max-w-2xl text-sm text-muted-foreground">
+			A precompute script needs a practice that Hephaestus can review. Your script stays in this
+			draft, and saving with this choice removes it.
+		</p>
+	);
+}
+
 /** A kind the instance no longer offers, named where this build still has words for it. */
 function withdrawnKindSentence(artifactKind: string): string {
 	return isKnownArtifactKind(artifactKind)
@@ -397,6 +421,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		initialData,
 		definitionOptions,
 		evidenceOutcome,
+		precomputeModelsLink,
 	} = props;
 	const formDisabled = isPending || disabled;
 	const [form, setForm] = useState<FormState>(() => initialState(definitionOptions, initialData));
@@ -404,7 +429,10 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	// Counts refused submits, not "has submitted": it re-keys the summary so a second refusal
 	// focuses it again.
 	const [refusals, setRefusals] = useState(0);
-	const [showAdvanced, setShowAdvanced] = useState(() => Boolean(initialData?.precomputeScript));
+	const [showAdvanced, setShowAdvanced] = useState(false);
+	const [showPrecompute, setShowPrecompute] = useState(() =>
+		hasText(initialData?.precomputeScript),
+	);
 	const workTypes = orderedWorkTypes(definitionOptions);
 	const groupItems = [
 		{ value: NO_GROUP, label: "Unassigned" },
@@ -462,6 +490,12 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	};
 
 	const selectWorkType = (next: PracticeWorkTypeDefinitionOptions) => {
+		// Each work type keeps its own script. A switch that swaps the script in or out opens its
+		// section, so the change is not made out of sight.
+		const nextScript = workTypeDrafts.get(next.artifactKind)?.precomputeScript ?? "";
+		if (next.artifactKind !== artifactKind && nextScript !== form.precomputeScript) {
+			setShowPrecompute(true);
+		}
 		setForm((previous) => {
 			const previousKind = previous.artifactKind;
 			if (previousKind === next.artifactKind) {
@@ -511,7 +545,6 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 				...previous,
 				automatedReviewPolicy,
 				...normalizeReviewSettings(reviewFields),
-				precomputeScript: nowGuidanceOnly ? "" : previous.precomputeScript,
 			};
 		});
 	};
@@ -545,6 +578,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 			...(form.whatGoodLooksLike.trim()
 				? { whatGoodLooksLike: form.whatGoodLooksLike.trim() }
 				: {}),
+			// The script stays in the draft across support choices, so choosing back restores it. Only
+			// the save decides: a policy that cannot be reviewed sends no script, and an edit clears it.
 			...(canRunMentoring && form.precomputeScript.trim()
 				? { precomputeScript: form.precomputeScript.trim() }
 				: {}),
@@ -710,14 +745,17 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 
 						<Separator />
 
-						<PracticeMentoringSupportEditor
-							value={form.automatedReviewPolicy}
-							recommended={selectedWorkType?.recommendedPolicy ?? form.automatedReviewPolicy}
-							supportedAutomatedReviewModes={supportedAutomatedReviewModes}
-							disabled={formDisabled}
-							onChange={updatePolicy}
-							error={shownErrors.policy}
-						/>
+						<div className="space-y-4">
+							<PracticeMentoringSupportEditor
+								value={form.automatedReviewPolicy}
+								recommended={selectedWorkType?.recommendedPolicy ?? form.automatedReviewPolicy}
+								supportedAutomatedReviewModes={supportedAutomatedReviewModes}
+								disabled={formDisabled}
+								onChange={updatePolicy}
+								error={shownErrors.policy}
+							/>
+							<HeldScriptNote script={form.precomputeScript} reviewed={canRunMentoring} />
+						</div>
 
 						<Separator />
 
@@ -871,140 +909,139 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 							)}
 						</section>
 
+						{canRunMentoring && (
+							<>
+								<Separator />
+								<CollapsibleSection
+									title="Precompute script"
+									subtitle="Optional. Code that finds places for the review to check."
+									open={showPrecompute}
+									onOpenChange={setShowPrecompute}
+								>
+									<p className="max-w-2xl text-sm text-muted-foreground">
+										TypeScript that runs before each review of this practice. It points the review
+										at places to check and never writes feedback.{" "}
+										<InlineLink href={PRECOMPUTE_GUIDE_URL} external>
+											Write a precompute script
+										</InlineLink>
+										. It can call the models on{" "}
+										{precomputeModelsLink === undefined ? (
+											"AI models"
+										) : (
+											<InlineLink render={precomputeModelsLink}>AI models</InlineLink>
+										)}
+										.
+									</p>
+									<CodeEditor
+										value={form.precomputeScript}
+										onChange={(value) =>
+											setForm((previous) => ({ ...previous, precomputeScript: value }))
+										}
+										language="typescript"
+										ariaLabel="Precompute script"
+										className="h-[400px]"
+										readOnly={formDisabled}
+									/>
+								</CollapsibleSection>
+							</>
+						)}
+
 						{afterFields}
 
 						<Separator />
 
-						<Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
-							<CollapsibleTrigger
-								render={
-									<Button
-										type="button"
-										variant="ghost"
-										size="inline"
-										className="group min-w-0 items-start text-left whitespace-normal disabled:opacity-100"
-									/>
-								}
-							>
-								<ChevronRight className="mt-0.5 size-4 transition-transform group-aria-expanded:rotate-90" />
-								<span>
-									<span className="block text-lg font-semibold">Technical settings</span>
-									<span className="block text-sm font-normal text-muted-foreground">
-										Identifier, feedback delivery{canRunMentoring ? ", and static analysis" : ""}
-									</span>
-								</span>
-							</CollapsibleTrigger>
-							<CollapsibleContent className="mt-4 space-y-6 rounded-lg border p-4">
-								<PracticeIdentifierField
-									mode={mode}
-									name={form.name}
-									slug={form.slug}
-									error={shownErrors.slug}
-									onChange={(slug) => setForm((previous) => ({ ...previous, slug }))}
-								/>
+						<CollapsibleSection
+							title="Technical settings"
+							subtitle="Identifier and feedback delivery"
+							open={showAdvanced}
+							onOpenChange={setShowAdvanced}
+						>
+							<PracticeIdentifierField
+								mode={mode}
+								name={form.name}
+								slug={form.slug}
+								error={shownErrors.slug}
+								onChange={(slug) => setForm((previous) => ({ ...previous, slug }))}
+							/>
 
-								<div className="space-y-4">
-									<div>
-										<p className="font-medium">Feedback delivery</p>
-										<p className="text-sm text-muted-foreground">
-											Use these choices when feedback from this practice overlaps with other
-											feedback.
-										</p>
-									</div>
-									<label
-										className="flex items-center justify-between gap-4 text-sm"
-										htmlFor={`${deliveryId}-summary`}
-									>
-										<span>Show this practice in the summary, not beside a diff line</span>
-										<Switch
-											id={`${deliveryId}-summary`}
-											checked={form.deliveryBehavior.summaryOnly}
-											disabled={formDisabled}
-											onCheckedChange={(summaryOnly) =>
-												setForm((previous) => ({
-													...previous,
-													deliveryBehavior: { ...previous.deliveryBehavior, summaryOnly },
-												}))
-											}
-										/>
-									</label>
-									<Field>
-										<FieldLabel htmlFor={`${deliveryId}-overlap`}>Overlap group</FieldLabel>
-										<Input
-											id={`${deliveryId}-overlap`}
-											value={form.deliveryBehavior.overlapGroup ?? ""}
-											disabled={formDisabled}
-											onChange={(event) =>
-												setForm((previous) => ({
-													...previous,
-													deliveryBehavior: {
-														...previous.deliveryBehavior,
-														overlapGroup: event.target.value,
-													},
-												}))
-											}
-										/>
-										<FieldDescription>
-											On an issue, only the first practice that is not met in this group is shown.
-										</FieldDescription>
-									</Field>
-									<Field>
-										<FieldLabel htmlFor={`${deliveryId}-redundant`}>
-											Preferred practice identifier
-										</FieldLabel>
-										<Input
-											id={`${deliveryId}-redundant`}
-											pattern="[a-z0-9]+(-[a-z0-9]+)*"
-											title="Use lowercase letters, numbers and single hyphens."
-											aria-invalid={hasText(shownErrors.delivery)}
-											aria-describedby={
-												hasText(shownErrors.delivery) ? `${deliveryId}-redundant-error` : undefined
-											}
-											value={form.deliveryBehavior.redundantToSlug ?? ""}
-											disabled={formDisabled}
-											onChange={(event) =>
-												setForm((previous) => ({
-													...previous,
-													deliveryBehavior: {
-														...previous.deliveryBehavior,
-														redundantToSlug: event.target.value,
-													},
-												}))
-											}
-										/>
-										<FieldDescription>
-											When both practices are not met, show feedback from the preferred practice
-											instead of this one.
-										</FieldDescription>
-										<FieldError id={`${deliveryId}-redundant-error`}>
-											{shownErrors.delivery}
-										</FieldError>
-									</Field>
+							<div className="space-y-4">
+								<div>
+									<p className="font-medium">Feedback delivery</p>
+									<p className="text-sm text-muted-foreground">
+										Use these choices when feedback from this practice overlaps with other feedback.
+									</p>
 								</div>
-
-								{canRunMentoring && (
-									<div className="space-y-3">
-										<div>
-											<p className="font-medium">Static analysis</p>
-											<p className="text-sm text-muted-foreground">
-												Optional TypeScript that prepares structured context before a review. Most
-												practices do not need it.
-											</p>
-										</div>
-										<CodeEditor
-											value={form.precomputeScript}
-											onChange={(value) =>
-												setForm((previous) => ({ ...previous, precomputeScript: value }))
-											}
-											language="typescript"
-											ariaLabel="Static analysis script"
-											className="h-[400px]"
-											readOnly={formDisabled}
-										/>
-									</div>
-								)}
-							</CollapsibleContent>
-						</Collapsible>
+								<label
+									className="flex items-center justify-between gap-4 text-sm"
+									htmlFor={`${deliveryId}-summary`}
+								>
+									<span>Show this practice in the summary, not beside a diff line</span>
+									<Switch
+										id={`${deliveryId}-summary`}
+										checked={form.deliveryBehavior.summaryOnly}
+										disabled={formDisabled}
+										onCheckedChange={(summaryOnly) =>
+											setForm((previous) => ({
+												...previous,
+												deliveryBehavior: { ...previous.deliveryBehavior, summaryOnly },
+											}))
+										}
+									/>
+								</label>
+								<Field>
+									<FieldLabel htmlFor={`${deliveryId}-overlap`}>Overlap group</FieldLabel>
+									<Input
+										id={`${deliveryId}-overlap`}
+										value={form.deliveryBehavior.overlapGroup ?? ""}
+										disabled={formDisabled}
+										onChange={(event) =>
+											setForm((previous) => ({
+												...previous,
+												deliveryBehavior: {
+													...previous.deliveryBehavior,
+													overlapGroup: event.target.value,
+												},
+											}))
+										}
+									/>
+									<FieldDescription>
+										On an issue, only the first practice that is not met in this group is shown.
+									</FieldDescription>
+								</Field>
+								<Field>
+									<FieldLabel htmlFor={`${deliveryId}-redundant`}>
+										Preferred practice identifier
+									</FieldLabel>
+									<Input
+										id={`${deliveryId}-redundant`}
+										pattern="[a-z0-9]+(-[a-z0-9]+)*"
+										title="Use lowercase letters, numbers and single hyphens."
+										aria-invalid={hasText(shownErrors.delivery)}
+										aria-describedby={
+											hasText(shownErrors.delivery) ? `${deliveryId}-redundant-error` : undefined
+										}
+										value={form.deliveryBehavior.redundantToSlug ?? ""}
+										disabled={formDisabled}
+										onChange={(event) =>
+											setForm((previous) => ({
+												...previous,
+												deliveryBehavior: {
+													...previous.deliveryBehavior,
+													redundantToSlug: event.target.value,
+												},
+											}))
+										}
+									/>
+									<FieldDescription>
+										When both practices are not met, show feedback from the preferred practice
+										instead of this one.
+									</FieldDescription>
+									<FieldError id={`${deliveryId}-redundant-error`}>
+										{shownErrors.delivery}
+									</FieldError>
+								</Field>
+							</div>
+						</CollapsibleSection>
 					</div>
 				</fieldset>
 			</DrawerBody>
@@ -1017,6 +1054,48 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 				</Button>
 			</DrawerFooter>
 		</form>
+	);
+}
+
+interface CollapsibleSectionProps {
+	title: string;
+	subtitle: string;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	children: ReactNode;
+}
+
+/**
+ * A part of the form most authors skip: its title and what it holds, then its fields, unframed like
+ * the sections around it. A control that needs a frame, such as the code editor, draws its own.
+ */
+function CollapsibleSection({
+	title,
+	subtitle,
+	open,
+	onOpenChange,
+	children,
+}: CollapsibleSectionProps) {
+	return (
+		<Collapsible open={open} onOpenChange={onOpenChange}>
+			<CollapsibleTrigger
+				render={
+					<Button
+						type="button"
+						variant="ghost"
+						size="inline"
+						className="group min-w-0 items-start text-left whitespace-normal disabled:opacity-100"
+					/>
+				}
+			>
+				<ChevronRight className="mt-0.5 size-4 transition-transform group-aria-expanded:rotate-90" />
+				<span>
+					<span className="block text-lg font-semibold">{title}</span>
+					<span className="block text-sm font-normal text-muted-foreground">{subtitle}</span>
+				</span>
+			</CollapsibleTrigger>
+			<CollapsibleContent className="mt-4 space-y-6">{children}</CollapsibleContent>
+		</Collapsible>
 	);
 }
 

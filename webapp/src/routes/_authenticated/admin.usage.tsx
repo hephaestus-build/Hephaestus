@@ -3,6 +3,7 @@ import { createFileRoute, Link, retainSearchParams } from "@tanstack/react-route
 import { CircleDollarSign } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import {
 	adminGetLlmUsageReportOptions,
@@ -12,7 +13,12 @@ import {
 	getLlmUsageReportQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { AdminWorkspaceLlmUsage } from "@/api/types.gen";
-import { AdminInstanceLlmUsageTable } from "@/components/admin/usage/AdminInstanceLlmUsageTable";
+import {
+	type AdminInstanceUsageView,
+	AdminInstanceLlmUsageTable,
+	INSTANCE_USAGE_SEARCH_MAX_LENGTH,
+	INSTANCE_USAGE_SORTS,
+} from "@/components/admin/usage/AdminInstanceLlmUsageTable";
 import { MonthNavigator } from "@/components/admin/usage/MonthNavigator";
 import { SetBudgetDialog } from "@/components/admin/usage/SetBudgetDialog";
 import {
@@ -26,17 +32,43 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { useSearchState } from "@/lib/search-params";
+
+/** The workspaces table's view. Each param leaves the address while it holds its default. */
+const instanceUsageSearchSchema = usageSearchSchema.extend({
+	q: z.string().max(INSTANCE_USAGE_SEARCH_MAX_LENGTH).optional().catch(undefined),
+	sort: z.enum(INSTANCE_USAGE_SORTS).optional().catch(undefined),
+	desc: z
+		.union([z.boolean(), z.enum(["true", "false"]).transform((value) => value === "true")])
+		.optional()
+		.catch(undefined),
+	page: z.coerce.number().int().min(0).optional().catch(undefined),
+});
+
+/** One array while the list loads, so the table's data keeps its identity. */
+const NO_WORKSPACES: AdminWorkspaceLlmUsage[] = [];
+
+/** Most shared-model spend first: the money an instance admin sets budgets for. */
+const DEFAULT_VIEW: AdminInstanceUsageView = { q: "", sort: "sharedSpend", desc: true, page: 0 };
 
 export const Route = createFileRoute("/_authenticated/admin/usage")({
 	head: instanceAdminHead("AI usage"),
 	component: AdminInstanceUsagePage,
-	validateSearch: usageSearchSchema,
+	validateSearch: instanceUsageSearchSchema,
 	search: { middlewares: [retainSearchParams(USAGE_SEARCH_PARAMS)] },
 });
 
 function AdminInstanceUsagePage() {
 	const queryClient = useQueryClient();
-	const month = monthOf(Route.useSearch());
+	const search = Route.useSearch();
+	const month = monthOf(search);
+	const setSearch = useSearchState();
+	const view: AdminInstanceUsageView = {
+		q: search.q ?? DEFAULT_VIEW.q,
+		sort: search.sort ?? DEFAULT_VIEW.sort,
+		desc: search.desc ?? DEFAULT_VIEW.desc,
+		page: search.page ?? DEFAULT_VIEW.page,
+	};
 	const [editing, setEditing] = useState<AdminWorkspaceLlmUsage | null>(null);
 	const onScreenWorkspaceRef = useRef<AdminWorkspaceLlmUsage | null>(null);
 	const editBudgetFor = (workspace: AdminWorkspaceLlmUsage | null) => {
@@ -49,10 +81,6 @@ function AdminInstanceUsagePage() {
 		...adminGetLlmUsageReportOptions({ query: { month } }),
 		placeholderData: keepPreviousData,
 	});
-	const rows = [...(listQuery.data?.workspaces ?? [])].sort(
-		(a, b) =>
-			b.instanceTotalCostUsd - a.instanceTotalCostUsd || a.displayName.localeCompare(b.displayName),
-	);
 	const fx = listQuery.data?.fx;
 	const detailQuery = useQuery({
 		...getLlmUsageReportOptions({
@@ -112,6 +140,7 @@ function AdminInstanceUsagePage() {
 						renderMonthLink={(nextMonth, props) => (
 							<Link
 								{...props}
+								from={Route.fullPath}
 								to="/admin/usage"
 								search={(previous) => ({ ...previous, month: nextMonth })}
 							/>
@@ -121,7 +150,7 @@ function AdminInstanceUsagePage() {
 			/>
 
 			<AdminInstanceLlmUsageTable
-				rows={rows}
+				rows={listQuery.data?.workspaces ?? NO_WORKSPACES}
 				month={month}
 				now={now}
 				fx={fx}
@@ -130,6 +159,22 @@ function AdminInstanceUsagePage() {
 				error={listQuery.error}
 				onRetry={() => {
 					void listQuery.refetch();
+				}}
+				view={view}
+				onViewChange={(patch) => {
+					void setSearch(
+						(previous) => {
+							const next = { ...view, ...patch };
+							return {
+								...previous,
+								q: next.q === "" ? undefined : next.q,
+								sort: next.sort === DEFAULT_VIEW.sort ? undefined : next.sort,
+								desc: next.desc === DEFAULT_VIEW.desc ? undefined : next.desc,
+								page: next.page === 0 ? undefined : next.page,
+							};
+						},
+						{ replace: true },
+					);
 				}}
 				expandedWorkspaceSlug={expanded?.workspaceSlug ?? null}
 				detailReport={detailQuery.data}

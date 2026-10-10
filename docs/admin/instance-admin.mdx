@@ -71,6 +71,26 @@ A cap blocks new spend. It is not a refund or a guarantee that the provider's bi
 
 1. Inspect monthly AI usage by workspace.
 
+The table of workspaces has one row for each workspace:
+
+| Column | What it shows |
+| --- | --- |
+| **Workspace** | The workspace's name and its slug. |
+| **Shared models**: **Spend**, **Budget** | The month's spend on the instance's shared models. **Budget** shows the shared-model budget and the share of it that the month used. It also shows a state when it applies: **Paused**, **Near the budget**, or **No price set**. A workspace without a budget shows a dash, and still shows **No price set** when it applies. |
+| **Own provider**: **Spend**, **Cap** | The same figures for the workspace's own provider, against its provider cap. Its near state is **Near the cap**. Only the workspace's admins set this cap. These columns appear when at least one workspace uses its own provider in the month. |
+| **Runs** | The month's review attempts and Heph turns. |
+
+The table shows the highest shared-model spend first.
+Select **Workspace**, a **Spend** heading, or **Runs** to sort by that column.
+The table filters by workspace name and shows 25 workspaces on each page.
+The address keeps the filter, the sort, and the page, so you can share the view.
+
+In the current month, **Set budget** or **Change budget** on a row sets the workspace's shared-model budget.
+**Details** shows the usage of one workspace below the table, under its name and **Usage details**, with its practices.
+In those tables, **No price set** counts the runs that have usage without a price.
+In the table by practice, it counts reviews.
+[Usage by practice](./ai-providers.mdx#usage-by-practice) describes those tables.
+
 ## Person data
 
 The person-data console handles access and erasure requests, including people who have never signed

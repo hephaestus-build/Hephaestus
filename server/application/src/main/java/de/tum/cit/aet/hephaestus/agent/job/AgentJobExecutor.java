@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelKind;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
@@ -23,6 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
@@ -55,13 +58,13 @@ import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.Serial;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -179,6 +182,7 @@ public class AgentJobExecutor {
     private final MeterRegistry meterRegistry;
     private final PracticeReviewRefusalMetrics practiceReviewRefusalMetrics;
     private final LlmUsageRecorder usageRecorder;
+    private final PrecomputeRunRecorder precomputeRuns;
     private final LlmBudgetService llmBudgetService;
     private final @Nullable LlmAdmissionService llmAdmissionService;
 
@@ -219,6 +223,7 @@ public class AgentJobExecutor {
             PracticeReviewRefusalMetrics practiceReviewRefusalMetrics,
             AgentJobTelemetry jobTelemetry,
             LlmUsageRecorder usageRecorder,
+            PrecomputeRunRecorder precomputeRuns,
             LlmBudgetService llmBudgetService,
             @Nullable LlmAdmissionService llmAdmissionService,
             ArtifactSourceCatalogRegistry sourceCatalogs,
@@ -239,6 +244,7 @@ public class AgentJobExecutor {
         this.practiceReviewRefusalMetrics = practiceReviewRefusalMetrics;
         this.jobTelemetry = jobTelemetry;
         this.usageRecorder = usageRecorder;
+        this.precomputeRuns = precomputeRuns;
         this.llmBudgetService = llmBudgetService;
         this.llmAdmissionService = llmAdmissionService;
         this.capacityState = capacityState;
@@ -871,11 +877,22 @@ public class AgentJobExecutor {
             // Sandboxes access providers through the LLM proxy with an attempt-scoped credential.
             Instant workDeadline =
                     Instant.now().plusSeconds(snapshot.timeoutSeconds()).truncatedTo(ChronoUnit.SECONDS);
+            Instant tokenExpiry = workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE);
             String jobToken = workerJwtIssuer.issueForJobUntil(
                     jobId,
                     job.getWorkspace().getId(),
                     job.getRetryCount(),
-                    workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE));
+                    tokenExpiry,
+                    WorkerJwtIssuer.LLM_PROXY_SCOPE);
+            // A second credential, so the precompute scripts never hold the review's capabilities.
+            String precomputeToken = job.getPurpose() == AgentPurpose.PRACTICE_REVIEW
+                    ? workerJwtIssuer.issueForJobUntil(
+                            jobId,
+                            job.getWorkspace().getId(),
+                            job.getRetryCount(),
+                            tokenExpiry,
+                            WorkerJwtIssuer.LLM_PRECOMPUTE_SCOPE)
+                    : null;
             PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
                     snapshot.apiProtocol(),
                     snapshot.upstreamModelId(),
@@ -883,7 +900,9 @@ public class AgentJobExecutor {
                     snapshot.maxOutputTokens(),
                     snapshot.reasoningEffort(),
                     jobToken,
-                    snapshot.timeoutSeconds());
+                    snapshot.timeoutSeconds(),
+                    precomputeToken,
+                    precomputeToken == null ? Map.of() : snapshot.precomputeModels());
 
             PracticeSandboxSpec agentSpec = practiceAgent.buildSandboxSpec(adapterRequest);
             SandboxSpec sandboxSpec = buildSandboxSpec(
@@ -1106,12 +1125,12 @@ public class AgentJobExecutor {
         ConfigSnapshot snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
         LlmPriceSnapshot price = terminalPriceOrUnpriced(snapshot);
         // No runner report exists on this path by definition — the job never reached a clean finish.
-        TerminalUsage usage = TerminalUsage.resolve(null, counts);
+        TerminalUsage usage = TerminalUsage.fromProxy(counts);
         boolean billed =
-                usage.appendTo(usageRecorder, job.getWorkspace().getId(), job, snapshot.upstreamModelId(), price);
+                usage.appendTo(usageRecorder, jobRepository, job.getWorkspace().getId(), job, snapshot, price);
         if (billed) {
             log.info(
-                    "Recorded PRICED usage for terminated job ({}): jobId={}, calls={}",
+                    "Recorded confirmed usage for terminated job ({}): jobId={}, calls={}",
                     reason,
                     job.getId(),
                     usage.totalCalls());
@@ -1348,17 +1367,12 @@ public class AgentJobExecutor {
                         != binding.getDataHandlingTier()) return refuseUnavailableModel(job);
                 if (llmAdmissionService != null) {
                     var admitted = llmAdmissionService.admit(binding);
-                    var ref = admitted.connection();
-                    if (submitted.connectionScope() != ref.scope()
-                            || !Objects.equals(submitted.connectionId(), ref.connectionId())
-                            || !Objects.equals(submitted.modelId(), ref.modelId())
-                            || !Objects.equals(submitted.workspaceId(), ref.workspaceId())
-                            || !Objects.equals(
-                                    submitted.upstreamModelId(),
-                                    admitted.resolved().upstreamModelId())) {
+                    if (!submitted.model().isAdmittedAs(admitted)) {
                         return refuseUnavailableModel(job);
                     }
-                    snapshot = submitted.withPriceSnapshot(admitted.price());
+                    snapshot = submitted
+                            .withPriceSnapshot(admitted.price())
+                            .withPrecompute(admitPrecompute(job, submitted.precompute(), llmAdmissionService));
                 } else {
                     snapshot = submitted;
                 }
@@ -1402,6 +1416,41 @@ public class AgentJobExecutor {
 
             return new ClaimResult(job, snapshot);
         });
+    }
+
+    /**
+     * Re-admits each precompute model frozen at submit and freezes its price, as for the review's own
+     * model. A model that no longer resolves to the same catalog row, or that has no usable price, drops
+     * out of this job. The review still runs without it.
+     */
+    private @Nullable Map<ModelKind, FrozenModel> admitPrecompute(
+            AgentJob job, @Nullable Map<ModelKind, FrozenModel> submitted, LlmAdmissionService admission) {
+        if (submitted == null) {
+            return null;
+        }
+        Map<ModelKind, FrozenModel> admitted = new EnumMap<>(ModelKind.class);
+        for (AgentPurpose purpose : AgentPurpose.precompute()) {
+            FrozenModel slot = submitted.get(purpose.kind());
+            if (slot == null) {
+                continue;
+            }
+            DataHandlingTier tier = Objects.requireNonNullElse(slot.dataHandlingTier(), DataHandlingTier.UNDECLARED);
+            Optional<FrozenModel> priced = memberAiPolicy
+                    .precomputeBinding(job.getWorkspace().getId(), purpose, job.getJobType(), job.getMetadata())
+                    .filter(binding -> binding.getDataHandlingTier() == tier)
+                    .flatMap(admission::admitIfAvailable)
+                    .filter(slot::isAdmittedAs)
+                    .map(model -> slot.withPriceSnapshot(model.price()));
+            if (priced.isPresent()) {
+                admitted.put(purpose.kind(), priced.get());
+            } else {
+                log.info(
+                        "Dropping a precompute model that is no longer available: jobId={}, kind={}",
+                        job.getId(),
+                        purpose.kind());
+            }
+        }
+        return admitted.isEmpty() ? null : admitted;
     }
 
     /**
@@ -1589,7 +1638,8 @@ public class AgentJobExecutor {
                                     .message();
                         default -> null;
                     };
-            int updated = transitionTerminal(jobId, terminalStatus, Instant.now(), errorMessage);
+            Instant finishedAt = Instant.now();
+            int updated = transitionTerminal(jobId, terminalStatus, finishedAt, errorMessage);
             if (updated == 0) {
                 log.info("Job no longer owned/RUNNING, skipping output persist: jobId={}", jobId);
                 return null;
@@ -1621,7 +1671,11 @@ public class AgentJobExecutor {
             var runnerUsage = agentResult.usage();
             // TerminalUsage retains one coherent observed token vector, including a proxy-only fallback
             // when the runner never wrote usage.json.
-            TerminalUsage usage = TerminalUsage.resolve(runnerUsage, proxyCounts);
+            TerminalUsage usage = TerminalUsage.resolve(
+                    runnerUsage,
+                    proxyCounts,
+                    jobRepository.sumPrecomputeUsageByKind(
+                            freshJob.getWorkspace().getId(), jobId, freshJob.getRetryCount()));
 
             // Use the ledger totals: the runner may omit usage details counted by the proxy.
             if (runnerUsage != null && runnerUsage.totalCalls() > 0) {
@@ -1637,7 +1691,12 @@ public class AgentJobExecutor {
             freshJob.setLlmModelVersion(snapshot.modelVersion());
             jobRepository.saveAndFlush(freshJob);
 
-            usage.appendTo(usageRecorder, freshJob.getWorkspace().getId(), freshJob, snapshot.upstreamModelId(), price);
+            usage.appendTo(usageRecorder, jobRepository, freshJob.getWorkspace().getId(), freshJob, snapshot, price);
+            precomputeRuns.record(
+                    freshJob,
+                    sandboxResult.outputFiles().get(SandboxLayout.PRECOMPUTE_REPORT_FILE),
+                    snapshot.precomputeModels(),
+                    finishedAt);
             return terminalStatus;
         });
     }
@@ -1654,10 +1713,10 @@ public class AgentJobExecutor {
      * other storage limits are not judged here.
      */
     private static boolean textRepresentableInJsonb(JsonNode node) {
-        if (node.isString()) return representableText(node.asString());
+        if (node.isString()) return StorableText.isStorable(node.asString());
         if (node.isObject()) {
             for (Map.Entry<String, JsonNode> property : node.properties()) {
-                if (!representableText(property.getKey()) || !textRepresentableInJsonb(property.getValue())) {
+                if (!StorableText.isStorable(property.getKey()) || !textRepresentableInJsonb(property.getValue())) {
                     return false;
                 }
             }
@@ -1673,12 +1732,7 @@ public class AgentJobExecutor {
 
     /** A transcript is kept whole or replaced whole: a TEXT column refuses NUL, and UTF-8 has no lone surrogate. */
     private static String representableTranscript(String transcript) {
-        return representableText(transcript) ? transcript : UNSTORABLE_TRANSCRIPT;
-    }
-
-    /** A fresh encoder per call, because a {@code CharsetEncoder} is not thread-safe. */
-    private static boolean representableText(String text) {
-        return text.indexOf('\u0000') < 0 && StandardCharsets.UTF_8.newEncoder().canEncode(text);
+        return StorableText.isStorable(transcript) ? transcript : UNSTORABLE_TRANSCRIPT;
     }
 
     private static final class TerminalPersistenceException extends RuntimeException {

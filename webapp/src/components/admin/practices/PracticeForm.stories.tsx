@@ -84,6 +84,13 @@ export const Create: Story = {
 		// The level is the full viewport at 320px, so the longest form in the app has to fit it by
 		// scrolling down and never across.
 		await expectNoPanelOverflow(await settledDrawerPanel());
+		// No script yet, so its section waits closed, with its subtitle saying it is optional.
+		const script = screen.getByRole("button", { name: /^Precompute script/u });
+		await expect(script).toHaveAttribute("aria-expanded", "false");
+		await userEvent.click(script);
+		await expect(
+			screen.getByText(/^TypeScript that runs before each review of this practice\./u),
+		).toBeVisible();
 	},
 };
 
@@ -102,8 +109,66 @@ export const EscapeLeavesACleanEditor: Story = {
 	},
 };
 
-export const EditWithAdvanced: Story = {
+/**
+ * A practice with a script opens with the script showing. The script has a section of its own after
+ * when the practice is reviewed, because it runs before each of those reviews; the technical
+ * settings stay closed.
+ */
+export const EditWithPrecomputeScript: Story = {
 	args: { mode: "edit", initialData: mockPracticeWithAllTriggers, onSubmit: fn() },
+	play: async () => {
+		await settledDrawerPanel();
+		const script = screen.getByRole("button", { name: /^Precompute script/u });
+		await expect(script).toHaveAttribute("aria-expanded", "true");
+		// The snapshot shows the section this story is about, not the top of the form.
+		script.scrollIntoView({ block: "start" });
+		await expect(screen.getByRole("button", { name: /^Technical settings/u })).toHaveAttribute(
+			"aria-expanded",
+			"false",
+		);
+		await expect(
+			screen.getByText("Optional. Code that finds places for the review to check."),
+		).toBeVisible();
+		await expect(screen.getByText("Identifier and feedback delivery")).toBeVisible();
+		await expect(screen.getByRole("link", { name: /^Write a precompute script/u })).toHaveAttribute(
+			"href",
+			"https://docs.hephaestus.build/admin/precompute-scripts",
+		);
+		await expect(screen.getByRole("link", { name: "AI models" })).toHaveAttribute(
+			"href",
+			"/w/demo/admin/models",
+		);
+		// The script is written the way the guide teaches it.
+		const [contract] = await screen.findAllByText(/definePrecompute\(/u);
+		await expect(contract).toBeVisible();
+	},
+};
+
+/**
+ * Only a practice that Hephaestus reviews runs a script, so *Guidance only* hides the section. The
+ * script stays in the draft and a note says so: choosing review again brings it back, and only a save
+ * under a choice without review removes it.
+ */
+export const ScriptKeptAcrossSupportChoices: Story = {
+	args: { mode: "edit", initialData: mockPracticeWithAllTriggers, onSubmit: fn() },
+	play: async () => {
+		await settledDrawerPanel();
+		await userEvent.click(screen.getByRole("radio", { name: /^Guidance only/u }));
+		await expect(screen.queryByRole("button", { name: /^Precompute script/u })).toBeNull();
+		const note = screen.getByText(
+			"A precompute script needs a practice that Hephaestus can review. Your script stays in this draft, and saving with this choice removes it.",
+		);
+		await expect(note).toBeVisible();
+
+		await userEvent.click(screen.getByRole("radio", { name: /^AI-supported mentoring/u }));
+		await expect(note).not.toBeInTheDocument();
+		const [contract] = await screen.findAllByText(/definePrecompute\(/u);
+		await expect(contract).toBeVisible();
+
+		// The snapshot shows the note under the choice it explains.
+		await userEvent.click(screen.getByRole("radio", { name: /^Guidance only/u }));
+		screen.getByText(/^A precompute script needs a practice/u).scrollIntoView({ block: "center" });
+	},
 };
 
 /** A copy whose catalog entry withdrew automated review keeps its authored settings but never runs. */

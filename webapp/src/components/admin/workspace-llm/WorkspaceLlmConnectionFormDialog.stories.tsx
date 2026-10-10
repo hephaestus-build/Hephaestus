@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn, screen, userEvent } from "storybook/test";
+import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { WorkspaceLlmConnection } from "@/api/types.gen";
 import { expectSettledVisible } from "@/stories/overlay";
@@ -13,6 +13,7 @@ const mockConnection: WorkspaceLlmConnection = {
 	displayName: "My OpenAI account",
 	authMode: "BEARER",
 	apiProtocol: "openai-completions",
+	purposes: ["PRACTICE_REVIEW", "MENTOR", "PRACTICE_DECISION"],
 	baseUrl: "https://api.openai.com/v1",
 	enabled: true,
 	hasApiKey: true,
@@ -41,6 +42,37 @@ export const Connect: Story = {};
 
 export const Edit: Story = {
 	args: { editing: mockConnection },
+};
+
+export const ConnectEmbeddings: Story = {
+	play: async ({ args }) => {
+		await userEvent.type(await screen.findByLabelText("Display name"), "Embeddings");
+		await userEvent.click(screen.getByRole("combobox", { name: "API" }));
+		await userEvent.click(await screen.findByRole("option", { name: "Embeddings API" }));
+		await userEvent.click(screen.getByRole("button", { name: "Add connection" }));
+		await expect(args.onCreate).toHaveBeenCalledWith(
+			expect.objectContaining({ displayName: "Embeddings", apiProtocol: "openai-embeddings" }),
+		);
+	},
+};
+
+export const EditEmbeddings: Story = {
+	args: {
+		editing: {
+			...mockConnection,
+			id: 2,
+			slug: "embeddings",
+			displayName: "Embeddings",
+			apiProtocol: "openai-embeddings",
+			purposes: ["PRACTICE_EMBEDDING"],
+		},
+	},
+	play: async () => {
+		const api = await screen.findByLabelText("API");
+		await expectSettledVisible(api);
+		await expect(api).toHaveValue("Embeddings API");
+		await expect(screen.queryByRole("combobox", { name: "API" })).toBeNull();
+	},
 };
 
 export const Submitting: Story = {

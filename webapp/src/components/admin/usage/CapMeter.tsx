@@ -1,36 +1,30 @@
 import type { ReactNode } from "react";
 
+import type { CapState } from "@/components/practice-vocabulary/cap-state-defs";
 import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
 
 import { BUDGET_WARN_PERCENT } from "./usage-utils";
 
-/** Whether a cap is worth naming as a state, and which one. `null` means "just a number". */
-export type CapState = "paused" | "near" | null;
-
 /**
- * A past month is never a state: caps are compared against *today's* limits, so a finished month can
- * be over one without anything being held back.
+ * Whether a cap's use is worth naming, and how: `null` means "just a number". A past month is never a
+ * state: caps are compared against *today's* limits, so a finished month can be over one without
+ * anything being held back. The meter's tone never carries the state alone; every caller badges it
+ * beside the bar (SC 1.4.1).
  */
 export function capState(
 	percent: number | undefined,
 	paused: boolean,
 	isCurrentMonth: boolean,
-): CapState {
+): Extract<CapState, "PAUSED" | "NEAR"> | null {
 	if (!isCurrentMonth) {
 		return null;
 	}
 	if (paused) {
-		return "paused";
+		return "PAUSED";
 	}
-	return percent != null && percent >= BUDGET_WARN_PERCENT ? "near" : null;
+	return percent != null && percent >= BUDGET_WARN_PERCENT ? "NEAR" : null;
 }
-
-/** The tone never carries the state alone — every caller prints one of these beside the bar (SC 1.4.1). */
-export const CAP_STATE_LABELS: Record<Exclude<CapState, null>, string> = {
-	paused: "Paused",
-	near: "Near cap",
-};
 
 export interface CapMeterProps {
 	spendUsd: number;

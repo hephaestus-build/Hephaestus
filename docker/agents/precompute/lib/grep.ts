@@ -5,9 +5,6 @@ import { createInterface } from "node:readline";
 
 import { globFilesSync } from "./files.ts";
 
-import { isInDiff } from "./diff-parser.ts";
-import type { DiffFile, Hint } from "./types.ts";
-
 export interface GrepMatch {
 	file: string;
 	line: number;
@@ -18,6 +15,19 @@ export interface GrepOptions {
 	glob?: string;
 	maxResults?: number;
 	fixedString?: boolean;
+}
+
+/** Runs a search for a precompute child, which may not start programs itself. */
+type GrepRunner = (pattern: string, dir: string, opts: GrepOptions) => Promise<GrepMatch[]>;
+
+let delegate: GrepRunner | undefined;
+
+/**
+ * A precompute child calls this once, before it imports the practice script: every `grep` the script
+ * makes then runs in the runner, the only process allowed to start `grep`.
+ */
+export function delegateGrep(runner: GrepRunner): void {
+	delegate = runner;
 }
 
 const GLOB_GREP_BATCH_SIZE = 256;
@@ -142,6 +152,9 @@ export async function grep(
 	dir: string,
 	opts: GrepOptions = {},
 ): Promise<GrepMatch[]> {
+	if (delegate !== undefined) {
+		return delegate(pattern, dir, opts);
+	}
 	const { glob, maxResults = 500, fixedString = false } = opts;
 	if (maxResults <= 0) {
 		return [];
@@ -162,22 +175,6 @@ export async function grep(
 	);
 }
 
-export function matchesToHints(
-	matches: GrepMatch[],
-	pattern: string,
-	diffFiles: Map<string, DiffFile>,
-	flagFn?: (match: GrepMatch) => Record<string, boolean | number | string>,
-): Hint[] {
-	return matches.map((m) => ({
-		file: m.file,
-		line: m.line,
-		pattern,
-		context: m.content,
-		inDiff: isInDiff(diffFiles, m.file, m.line),
-		flags: flagFn ? flagFn(m) : {},
-	}));
-}
-
 export async function readFileLines(file: string): Promise<Map<number, string>> {
 	try {
 		const content = await readFile(file, "utf8");
@@ -194,8 +191,4 @@ export async function readFileLines(file: string): Promise<Map<number, string>> 
 
 export function findFiles(dir: string, extension: string): string[] {
 	return globFilesSync(`**/*.${extension}`, dir).map((file) => path.join(dir, file));
-}
-
-export function findSwiftFiles(dir: string): string[] {
-	return findFiles(dir, "swift");
 }

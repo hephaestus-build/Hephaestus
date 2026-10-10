@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -91,6 +93,60 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     @WithAdminUser
+    @DisplayName("each binding names the members it serves, with a precompute binding capped at their review")
+    void shouldNameTheMembersEachBindingServesWhenTheReviewIsStricterThanAPrecomputeModel() {
+        Workspace workspace = setupWorkspace("binding-served");
+        LlmModel review = seedInstanceModel("binding-served-review");
+        review.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
+        llmModelRepository.save(review);
+        LlmConnection embeddings = LlmCatalogTestFixtures.connection("binding-served-embedding");
+        embeddings.setApiProtocol(LlmApiProtocol.OPENAI_EMBEDDINGS);
+        LlmModel embedding = LlmCatalogTestFixtures.model(
+                llmConnectionRepository.save(embeddings), "binding-served-embedding-model", "text-embedding-3-small");
+        embedding.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
+        embedding = llmModelRepository.save(embedding);
+
+        assign(workspace, "PRACTICE_REVIEW", "IN_HOUSE", review)
+                .jsonPath("$.servedTiers")
+                .isEqualTo(List.of("IN_HOUSE", "CLOUD"));
+        // Cloud members' reviews run on the in-house model, so the cloud embedding model serves nobody.
+        assign(workspace, "PRACTICE_EMBEDDING", "CLOUD", embedding)
+                .jsonPath("$.servedTiers")
+                .isEqualTo(List.of());
+
+        webTestClient
+                .get()
+                .uri("/workspaces/{slug}/agents", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$[?(@.purpose == 'PRACTICE_REVIEW')].servedTiers")
+                .isEqualTo(List.of(List.of("IN_HOUSE", "CLOUD")))
+                .jsonPath("$[?(@.purpose == 'PRACTICE_EMBEDDING')].servedTiers")
+                .isEqualTo(List.of(List.of()));
+    }
+
+    private WebTestClient.BodyContentSpec assign(Workspace workspace, String purpose, String tier, LlmModel model) {
+        return webTestClient
+                .put()
+                .uri(
+                        "/workspaces/{slug}/agents/{purpose}?dataHandlingTier={tier}",
+                        workspace.getWorkspaceSlug(),
+                        purpose,
+                        tier)
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("instanceModelId", model.getId(), "enabled", true))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody();
+    }
+
+    @Test
+    @WithAdminUser
     @DisplayName("a disabled binding is listed but not ready, and deleting it turns the purpose off")
     void disabledBindingIsNotReadyAndCanBeDeleted() {
         Workspace workspace = setupWorkspace("binding-off");
@@ -160,6 +216,45 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .expectStatus()
                 .isBadRequest()
                 .expectBody(Void.class);
+    }
+
+    @Test
+    @WithAdminUser
+    @DisplayName("a purpose refuses a model of another kind and accepts it where its kind fits")
+    void shouldRejectAModelWhenItsKindDoesNotFitThePurpose() {
+        Workspace workspace = setupWorkspace("binding-kind");
+        LlmConnection connection = LlmCatalogTestFixtures.connection("binding-kind");
+        connection.setApiProtocol(LlmApiProtocol.OPENAI_EMBEDDINGS);
+        LlmModel model = llmModelRepository.save(LlmCatalogTestFixtures.model(
+                llmConnectionRepository.save(connection), "binding-kind-model", "text-embedding-3-small"));
+
+        webTestClient
+                .put()
+                .uri("/workspaces/{slug}/agents/{purpose}", workspace.getWorkspaceSlug(), "PRACTICE_REVIEW")
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("instanceModelId", model.getId(), "enabled", true))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.detail")
+                .isEqualTo("This is an embedding model. Choose a chat model here.");
+
+        webTestClient
+                .put()
+                .uri("/workspaces/{slug}/agents/{purpose}", workspace.getWorkspaceSlug(), "PRACTICE_EMBEDDING")
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("instanceModelId", model.getId(), "enabled", true))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.purpose")
+                .isEqualTo("PRACTICE_EMBEDDING")
+                .jsonPath("$.instanceModelId")
+                .isEqualTo(model.getId());
     }
 
     @Test

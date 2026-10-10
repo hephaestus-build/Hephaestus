@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
 import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -40,7 +41,7 @@ class ProxyBudgetGateTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        gate = new ProxyBudgetGate(budgetService);
+        gate = new ProxyBudgetGate(budgetService, new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000));
     }
 
     private static LlmBudgetHeadroom instanceCapOfOneDollar() {
@@ -67,7 +68,9 @@ class ProxyBudgetGateTest extends BaseUnitTest {
                                 UUID.randomUUID(),
                                 0,
                                 new BigDecimal(spentSoFarUsd),
-                                "worker-1"));
+                                "worker-1"),
+                null,
+                null);
     }
 
     @Nested
@@ -199,9 +202,32 @@ class ProxyBudgetGateTest extends BaseUnitTest {
         @DisplayName("an unattributable route with no workspace never blocks, and never queries the ledger")
         void aRouteWithNoWorkspaceFailsOpen() {
             ProxyRouting noWorkspace = new ProxyRouting(
-                    "job:legacy", "openai-completions", "https://frozen.example.com/v1", null, null, null, null, null);
+                    "job:legacy",
+                    "openai-completions",
+                    "https://frozen.example.com/v1",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
 
             assertThat(gate.isBlocked(noWorkspace)).isFalse();
+        }
+    }
+
+    /** The routing carries the attempt's tokens on every precompute model and practice together. */
+    @Nested
+    class PrecomputeCap {
+
+        @ParameterizedTest
+        @CsvSource({"199999, false", "200000, true"})
+        void shouldRefuseWhenTheAttemptsPrecomputeTokensReachTheCap(long tokens, boolean reached) {
+            var attempt = new ProxyRouting.BilledAttempt(
+                    LlmUsageSourceType.PRECOMPUTE_EMBEDDING, UUID.randomUUID(), 0, BigDecimal.ZERO, "worker", tokens);
+
+            assertThat(gate.isPrecomputeCapReached(attempt)).isEqualTo(reached);
         }
     }
 }

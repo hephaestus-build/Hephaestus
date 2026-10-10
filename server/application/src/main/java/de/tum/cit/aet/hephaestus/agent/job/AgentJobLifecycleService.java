@@ -207,7 +207,7 @@ public class AgentJobLifecycleService {
     }
 
     /**
-     * Appends an UNPRICED ledger row only once the job crossed {@code execution_started_at}. A non-null
+     * Appends the attempt's ledger rows only once the job crossed {@code execution_started_at}. A non-null
      * {@code worker_id} proves only that a worker claimed the row, and preparation before that boundary
      * cannot incur provider usage — booking it would make the workspace's month unverifiable for free.
      */
@@ -219,9 +219,15 @@ public class AgentJobLifecycleService {
         LlmPriceSnapshot price =
                 snap.priceSnapshot() != null ? snap.priceSnapshot() : LlmPriceSnapshot.unpricedInstance();
         // A cancel from the API cannot see what the attempt consumed; the executor path that observes
-        // the cancellation bills the proxy-attributed tokens. This row records that the spend is unknown.
-        TerminalUsage.none().appendTo(usageRecorder, workspaceId, job, snap.upstreamModelId(), price);
-        log.info("Recorded UNPRICED usage ledger entry (user-cancel): jobId={}", job.getId());
+        // the cancellation bills the proxy-attributed tokens, so the review's own row carries none. A
+        // precompute call waits for the job row and is dropped once the transition above ends the
+        // attempt, so the precompute rows are complete here.
+        boolean billed =
+                TerminalUsage.none().appendTo(usageRecorder, agentJobRepository, workspaceId, job, snap, price);
+        log.info(
+                "Recorded {} usage ledger entry (user-cancel): jobId={}",
+                billed ? "a confirmed" : "an UNPRICED",
+                job.getId());
     }
 
     /**

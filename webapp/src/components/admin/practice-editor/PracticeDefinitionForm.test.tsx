@@ -221,3 +221,51 @@ describe("the unsaved-changes guard around a save", () => {
 		await screen.findByRole("alertdialog", { name: "Discard unsaved changes?" });
 	});
 });
+
+describe("the precompute script section", () => {
+	it("waits closed without a script, links its guide, and names AI models as words where the host has no link", async () => {
+		await renderCreateForm(vi.fn());
+		const trigger = screen.getByRole("button", { name: /^Precompute script/u });
+		expect(trigger.getAttribute("aria-expanded")).toBe("false");
+		fireEvent.click(trigger);
+
+		const guide = await screen.findByRole("link", { name: /^Write a precompute script/u });
+		expect(guide.getAttribute("href")).toBe(
+			"https://docs.hephaestus.build/admin/precompute-scripts",
+		);
+		screen.getByText(/It can call the models on AI models\.$/u);
+		expect(screen.queryByRole("link", { name: "AI models" })).toBeNull();
+		// The script has its own section, so the technical settings do not name it.
+		screen.getByText("Identifier and feedback delivery");
+	});
+
+	it("opens itself when a switch of work type swaps the script out of sight", async () => {
+		await renderWithRouter(
+			<PracticeDefinitionForm
+				mode="edit"
+				groups={[]}
+				definitionOptions={mockPracticeDefinitionOptions}
+				initialData={{
+					...mockPullRequestReviewFields,
+					slug: "reviewable-diffs",
+					name: "Small changes",
+					criteria: "Changes must remain reviewable.",
+					automatedReviewPolicy: mockPullRequestPolicy,
+					precomputeScript: "export default definePrecompute({});",
+				}}
+				isPending={false}
+				cancelAction={<Link to="/">Cancel</Link>}
+				onSubmit={vi.fn()}
+			/>,
+			"/admin/practices/new",
+		);
+		const trigger = screen.getByRole("button", { name: /^Precompute script/u });
+		expect(trigger.getAttribute("aria-expanded")).toBe("true");
+		fireEvent.click(trigger);
+		expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+		// An issue has no script of its own yet, so this one leaves the form: the section says so.
+		fireEvent.click(screen.getByRole("radio", { name: /^Issue/u }));
+		expect(trigger.getAttribute("aria-expanded")).toBe("true");
+	});
+});

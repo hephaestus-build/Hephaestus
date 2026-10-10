@@ -1,12 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import { CircleAlert, CircleDollarSign } from "lucide-react";
-import { type ReactNode, useId } from "react";
+import type { ReactNode } from "react";
 
 import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { BudgetExhaustedAlert } from "@/components/admin/workspace-llm/BudgetExhaustedAlert";
+import { StatTile } from "@/components/common/StatTile";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { Section } from "@/components/layout/Section";
+import { CAP_STATE_DEFS, type CapState } from "@/components/practice-vocabulary/cap-state-defs";
+import { PURSE_DEFS, type Purse } from "@/components/practice-vocabulary/purse-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
 	Empty,
 	EmptyContent,
@@ -19,17 +23,25 @@ import { formatCapUsd, formatCostUsd } from "@/lib/money";
 
 import { BudgetPaceAlert } from "./BudgetPaceAlert";
 import { CapIsNotMonthScoped } from "./CapIsNotMonthScoped";
-import { CAP_STATE_LABELS, CapMeter, capState } from "./CapMeter";
+import { CapMeter, capState } from "./CapMeter";
 import {
 	type Fx,
-	FxAmount,
+	FxApprox,
 	type FxConversion,
 	FxDisclosure,
 	spendConversion,
 	spendOfCapConversion,
 } from "./fx";
 import { LlmUsageByDayTable, LlmUsageByJobTypeTable } from "./LlmUsageBreakdownTables";
-import { budgetUsedPercent, formatMonthLabel, projectBudget } from "./usage-utils";
+import { LlmUsageByPracticeTable } from "./LlmUsageByPracticeTable";
+import {
+	budgetUsedPercent,
+	formatMonthLabel,
+	precomputeByPracticeDescription,
+	projectBudget,
+	purseCap,
+	pursesOf,
+} from "./usage-utils";
 
 export interface WorkspaceUsageReportProps {
 	report: WorkspaceLlmUsageReport;
@@ -49,22 +61,23 @@ export function WorkspaceUsageReport({
 	onEditOwnProviderCap,
 	now,
 }: WorkspaceUsageReportProps) {
-	const sharedSpend = report.instanceTotalCostUsd;
-	const providerSpend = report.ownProviderTotalCostUsd;
-	const sharedBudget = report.instanceMonthlyBudgetUsd;
-	const providerCap = report.ownProviderMonthlyBudgetUsd;
+	const shared = purseCap(report, "SHARED");
+	const provider = purseCap(report, "OWN_PROVIDER");
+	const sharedSpend = shared.spendUsd;
+	const providerSpend = provider.spendUsd;
+	const sharedBudget = shared.capUsd;
+	const providerCap = provider.capUsd;
 	const sharedPercent = budgetUsedPercent(sharedSpend, sharedBudget);
 	const providerPercent = budgetUsedPercent(providerSpend, providerCap);
 	const { unpricedEventCount } = report;
-	const providerPaused = isCurrentMonth && report.ownProviderPaused;
-	const sharedPaused = isCurrentMonth && report.instancePaused;
-	const providerWarning =
-		capState(providerPercent, providerPaused, isCurrentMonth) === "near" ? providerPercent : null;
-	const sharedWarning =
-		capState(sharedPercent, sharedPaused, isCurrentMonth) === "near" ? sharedPercent : null;
+	const providerPaused = isCurrentMonth && provider.paused;
+	const sharedPaused = isCurrentMonth && shared.paused;
+	const providerState = capState(providerPercent, providerPaused, isCurrentMonth);
+	const sharedState = capState(sharedPercent, sharedPaused, isCurrentMonth);
 	const hasUsage =
 		report.byJobType.length > 0 || report.byDay.length > 0 || sharedSpend > 0 || providerSpend > 0;
-	const hasProviderCapOrSpend = providerCap != null || providerSpend > 0;
+	const purses = pursesOf(report);
+	const usesOwnProvider = purses.includes("OWN_PROVIDER");
 
 	const fx: Fx = report.fx;
 	const sharedTitleFx =
@@ -75,140 +88,160 @@ export function WorkspaceUsageReport({
 		providerCap == null
 			? spendConversion(providerSpend, fx)
 			: spendOfCapConversion(providerSpend, providerCap, fx);
-	const hasConversion =
-		sharedTitleFx != null ||
-		providerTitleFx != null ||
-		spendConversion(sharedSpend, fx) != null ||
-		spendConversion(providerSpend, fx) != null;
+	const hasConversion = sharedTitleFx != null || providerTitleFx != null;
+
+	const alerts = [
+		providerPaused && (
+			<BudgetExhaustedAlert
+				key="paused-own"
+				scope="own"
+				verdict={provider.verdict}
+				month={month}
+				unpricedEventCount={unpricedEventCount}
+				context="usage"
+				workspaceSlug={workspaceSlug}
+				onEditOwnProviderCap={onEditOwnProviderCap}
+			/>
+		),
+		sharedPaused && (
+			<BudgetExhaustedAlert
+				key="paused-shared"
+				scope="shared"
+				verdict={shared.verdict}
+				month={month}
+				unpricedEventCount={unpricedEventCount}
+				context="usage"
+				workspaceSlug={workspaceSlug}
+			/>
+		),
+		providerState === "NEAR" && providerPercent != null && (
+			<BudgetPaceAlert
+				key="near-own"
+				scope="provider"
+				percent={providerPercent}
+				spendUsd={providerSpend}
+				capUsd={providerCap}
+				projection={projectBudget(providerSpend, providerCap, month, now)}
+				fx={fx}
+			/>
+		),
+		sharedState === "NEAR" && sharedPercent != null && (
+			<BudgetPaceAlert
+				key="near-shared"
+				scope="shared"
+				percent={sharedPercent}
+				spendUsd={sharedSpend}
+				capUsd={sharedBudget}
+				projection={projectBudget(sharedSpend, sharedBudget, month, now)}
+				fx={fx}
+			/>
+		),
+		unpricedEventCount > 0 && (
+			<Alert key="unpriced" variant="warning" role="status">
+				<CircleAlert aria-hidden />
+				<AlertTitle>
+					{unpricedEventCount === 1
+						? "1 run has no price"
+						: `${unpricedEventCount.toLocaleString()} runs have no price`}
+				</AlertTitle>
+				<AlertDescription>
+					<p>
+						Usage with no price is not counted in these totals, so real spend may be higher. Add
+						prices for your own models in <AiModelsLink workspaceSlug={workspaceSlug} />. For shared
+						models, ask an instance admin.
+					</p>
+				</AlertDescription>
+			</Alert>
+		),
+	].filter((alert) => alert !== false);
 
 	return (
-		<>
-			{providerPaused && (
-				<BudgetExhaustedAlert
-					scope="own"
-					verdict={report.ownProviderBudgetVerdict}
-					month={month}
-					unpricedEventCount={unpricedEventCount}
-					context="usage"
-					workspaceSlug={workspaceSlug}
-					onEditOwnProviderCap={onEditOwnProviderCap}
-				/>
-			)}
-			{sharedPaused && (
-				<BudgetExhaustedAlert
-					scope="shared"
-					verdict={report.instanceBudgetVerdict}
-					month={month}
-					unpricedEventCount={unpricedEventCount}
-					context="usage"
-					workspaceSlug={workspaceSlug}
-				/>
-			)}
+		<div className="space-y-8">
+			{alerts.length > 0 && <div className="space-y-4">{alerts}</div>}
 
-			{providerWarning != null && (
-				<BudgetPaceAlert
-					scope="provider"
-					percent={providerWarning}
-					spendUsd={providerSpend}
-					capUsd={providerCap}
-					projection={projectBudget(providerSpend, providerCap, month, now)}
-					fx={fx}
-				/>
-			)}
-			{sharedWarning != null && (
-				<BudgetPaceAlert
-					scope="shared"
-					percent={sharedWarning}
-					spendUsd={sharedSpend}
-					capUsd={sharedBudget}
-					projection={projectBudget(sharedSpend, sharedBudget, month, now)}
-					fx={fx}
-				/>
-			)}
-
-			{unpricedEventCount > 0 && (
-				<Alert variant="warning" role="status">
-					<CircleAlert aria-hidden />
-					<AlertTitle>
-						{unpricedEventCount === 1
-							? "1 run is not counted in these totals"
-							: `${unpricedEventCount.toLocaleString()} runs are not counted in these totals`}
-					</AlertTitle>
-					<AlertDescription>
-						<p>
-							They have no price set, so real spend may be higher. Add prices for your own models in{" "}
-							<AiModelsLink workspaceSlug={workspaceSlug} />. For shared models, ask an instance
-							admin.
-						</p>
-					</AlertDescription>
-				</Alert>
-			)}
-
-			<div className="grid gap-4 md:grid-cols-2">
-				<CapCard
-					purse="shared"
-					isCurrentMonth={isCurrentMonth}
-					spendUsd={sharedSpend}
-					capUsd={sharedBudget}
-					paused={sharedPaused}
-					titleFx={sharedTitleFx}
-				/>
-				{hasProviderCapOrSpend ? (
-					<CapCard
-						purse="provider"
-						isCurrentMonth={isCurrentMonth}
-						spendUsd={providerSpend}
-						capUsd={providerCap}
-						paused={providerPaused}
-						titleFx={providerTitleFx}
-					>
-						{isCurrentMonth ? (
-							<Button variant="outline" size="sm" onClick={onEditOwnProviderCap}>
-								{providerCap == null ? "Set cap" : "Change cap"}
-							</Button>
-						) : (
-							<CapIsNotMonthScoped subject="cap" />
-						)}
-					</CapCard>
-				) : (
-					<NoProviderCard
-						isCurrentMonth={isCurrentMonth}
-						workspaceSlug={workspaceSlug}
-						onEditOwnProviderCap={onEditOwnProviderCap}
+			<Section
+				title={isCurrentMonth ? "Spend this month" : `Spend in ${formatMonthLabel(month)}`}
+				// Only the own provider's cap is the workspace's to set, and only once that purse is in use.
+				actions={
+					isCurrentMonth && usesOwnProvider ? (
+						<Button variant="outline" size="sm" onClick={onEditOwnProviderCap}>
+							{providerCap == null ? "Set provider cap" : "Change provider cap"}
+						</Button>
+					) : undefined
+				}
+			>
+				<div className="grid gap-4 md:grid-cols-2">
+					<PurseTile
+						purse="SHARED"
+						spendUsd={sharedSpend}
+						capUsd={sharedBudget}
+						titleFx={sharedTitleFx}
+						meterLabel="Shared-model budget used"
+						paused={sharedPaused}
+						state={sharedState}
+						unpriced={isCurrentMonth && shared.verdict === "UNVERIFIABLE"}
 					/>
-				)}
-			</div>
+					{usesOwnProvider ? (
+						<PurseTile
+							purse="OWN_PROVIDER"
+							spendUsd={providerSpend}
+							capUsd={providerCap}
+							titleFx={providerTitleFx}
+							meterLabel="Your provider cap used"
+							paused={providerPaused}
+							state={providerState}
+							unpriced={isCurrentMonth && provider.verdict === "UNVERIFIABLE"}
+						/>
+					) : (
+						<StatTile
+							variant="muted"
+							icon={<PurseIcon purse="OWN_PROVIDER" />}
+							title={PURSE_DEFS.OWN_PROVIDER.label}
+							value={formatCostUsd(0)}
+						>
+							<p className="text-sm text-muted-foreground">
+								Work on a provider you connect in <AiModelsLink workspaceSlug={workspaceSlug} /> is
+								billed to your own account and shows here.
+							</p>
+						</StatTile>
+					)}
+				</div>
+				{!isCurrentMonth && <CapIsNotMonthScoped subject="cap" />}
+			</Section>
 
 			{hasUsage ? (
 				<>
-					<Card>
-						<CardHeader>
-							<CardTitle>By run type</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<LlmUsageByJobTypeTable report={report} fx={fx} />
-						</CardContent>
-					</Card>
+					<Section title="By run type">
+						<LlmUsageByJobTypeTable report={report} purses={purses} />
+					</Section>
 
-					<Card>
-						<CardHeader>
-							<CardTitle>By day</CardTitle>
-						</CardHeader>
-						<CardContent>
-							{report.byDay.length === 0 ? (
-								<Empty variant="outlined">
-									<EmptyHeader>
-										<EmptyMedia variant="icon">
-											<CircleDollarSign />
-										</EmptyMedia>
-										<EmptyTitle>No daily breakdown yet</EmptyTitle>
-									</EmptyHeader>
-								</Empty>
-							) : (
-								<LlmUsageByDayTable report={report} fx={fx} />
-							)}
-						</CardContent>
-					</Card>
+					{report.byPractice.length > 0 && (
+						<Section
+							title="Precompute models by practice"
+							description={precomputeByPracticeDescription(isCurrentMonth)}
+						>
+							<LlmUsageByPracticeTable
+								report={report}
+								purses={purses}
+								workspaceSlug={workspaceSlug}
+							/>
+						</Section>
+					)}
+
+					<Section title="By day">
+						{report.byDay.length === 0 ? (
+							<Empty variant="outlined">
+								<EmptyHeader>
+									<EmptyMedia variant="icon">
+										<CircleDollarSign />
+									</EmptyMedia>
+									<EmptyTitle>No daily breakdown yet</EmptyTitle>
+								</EmptyHeader>
+							</Empty>
+						) : (
+							<LlmUsageByDayTable report={report} purses={purses} />
+						)}
+					</Section>
 				</>
 			) : (
 				<Empty variant="outlined">
@@ -234,7 +267,7 @@ export function WorkspaceUsageReport({
 			)}
 
 			{hasConversion && <FxDisclosure fx={fx} isCurrentMonth={isCurrentMonth} />}
-		</>
+		</div>
 	);
 }
 
@@ -250,156 +283,85 @@ function AiModelsLink({ workspaceSlug }: { workspaceSlug: string }) {
 	);
 }
 
-interface CapHeadlineProps {
+function PurseIcon({ purse }: { purse: Purse }) {
+	const Icon = PURSE_DEFS[purse].icon;
+	return <Icon className="size-4 text-muted-foreground" aria-hidden />;
+}
+
+function TileLine({ children }: { children: ReactNode }) {
+	return <p className="text-sm text-muted-foreground tabular-nums">{children}</p>;
+}
+
+interface PurseTileProps {
+	purse: Purse;
 	spendUsd: number;
 	capUsd: number | undefined;
 	titleFx: FxConversion | null;
-}
-
-function CapHeadline({ spendUsd, capUsd, titleFx }: CapHeadlineProps) {
-	return (
-		<CardTitle className="text-2xl tabular-nums">
-			{formatCostUsd(spendUsd)}
-			{(capUsd != null || titleFx != null) && (
-				<span className="text-base font-normal text-muted-foreground">
-					{capUsd != null && <> of {formatCapUsd(capUsd)}</>}
-					<FxAmount conversion={titleFx} />
-				</span>
-			)}
-		</CardTitle>
-	);
-}
-
-const PURSE_COPY = {
-	shared: {
-		spendLabel: "Shared-model spend",
-		capDescription: "Shared-model budget · set by an instance admin",
-		noCapDescription: "No shared-model budget set by an instance admin",
-		meterLabel: "Shared-model budget used",
-	},
-	provider: {
-		spendLabel: "Your provider spend",
-		capDescription: "Provider cap · set by you, billed by your provider",
-		noCapDescription: "No provider cap set · billed to you by your provider",
-		meterLabel: "Your provider cap used",
-	},
-} as const;
-
-interface CapCardProps {
-	/** Whose money the card counts: the host's shared budget or the workspace's own provider cap. */
-	purse: keyof typeof PURSE_COPY;
-	isCurrentMonth: boolean;
-	spendUsd: number;
-	capUsd: number | undefined;
+	/** The meter's accessible name, distinct per purse. */
+	meterLabel: string;
 	paused: boolean;
-	titleFx: FxConversion | null;
-	/** The control that acts on the cap, for the purse the reader owns. */
-	children?: ReactNode;
+	state: CapState | null;
+	/** Some of this purse's calls have no price, so its cap cannot be checked. */
+	unpriced: boolean;
 }
 
-function CapCard({
+const NO_LIMIT_SET: Record<Purse, string> = {
+	SHARED: "No budget set",
+	OWN_PROVIDER: "No cap set",
+};
+
+/** One purse's spend this month against its own limit. The two tiles are never summed. */
+function PurseTile({
 	purse,
-	isCurrentMonth,
 	spendUsd,
 	capUsd,
-	paused,
 	titleFx,
-	children,
-}: CapCardProps) {
-	const labelId = useId();
-	const { spendLabel, capDescription, noCapDescription, meterLabel } = PURSE_COPY[purse];
+	meterLabel,
+	paused,
+	state,
+	unpriced,
+}: PurseTileProps) {
+	// The workspace's own provider bills it whether or not it has a cap; the shared budget's line says
+	// who set it.
+	const showsDescription = purse === "OWN_PROVIDER" || capUsd != null;
 	return (
-		<Card role="region" aria-labelledby={labelId}>
-			<CardHeader>
-				<CardDescription id={labelId}>
-					{isCurrentMonth ? `${spendLabel} so far` : spendLabel}
-				</CardDescription>
-				<CapHeadline spendUsd={spendUsd} capUsd={capUsd} titleFx={titleFx} />
-				<CardDescription>{capUsd == null ? noCapDescription : capDescription}</CardDescription>
-			</CardHeader>
-			<CardContent className="space-y-3">
-				{capUsd != null && (
-					<CapMeterWithCaption
+		<StatTile
+			icon={<PurseIcon purse={purse} />}
+			title={PURSE_DEFS[purse].label}
+			value={formatCostUsd(spendUsd)}
+			qualifier={capUsd == null ? undefined : `of ${formatCapUsd(capUsd)}`}
+			detail={
+				<>
+					{titleFx != null && (
+						<TileLine>
+							<FxApprox conversion={titleFx} />
+						</TileLine>
+					)}
+					{capUsd == null && <TileLine>{NO_LIMIT_SET[purse]}</TileLine>}
+					{showsDescription && <TileLine>{PURSE_DEFS[purse].description}</TileLine>}
+				</>
+			}
+		>
+			{capUsd != null && (
+				<div className="space-y-2">
+					<CapMeter
+						percent={budgetUsedPercent(spendUsd, capUsd)}
 						paused={paused}
-						isCurrentMonth={isCurrentMonth}
 						spendUsd={spendUsd}
 						capUsd={capUsd}
 						label={meterLabel}
 					/>
-				)}
-				{children}
-			</CardContent>
-		</Card>
-	);
-}
-
-interface NoProviderCardProps {
-	isCurrentMonth: boolean;
-	workspaceSlug: string;
-	onEditOwnProviderCap: () => void;
-}
-
-function NoProviderCard({
-	isCurrentMonth,
-	workspaceSlug,
-	onEditOwnProviderCap,
-}: NoProviderCardProps) {
-	const labelId = useId();
-	return (
-		<Card role="region" aria-labelledby={labelId}>
-			<CardHeader>
-				<CardDescription id={labelId}>Your provider spend</CardDescription>
-				<CardTitle className="text-2xl tabular-nums">{formatCostUsd(0)}</CardTitle>
-				<CardDescription>
-					No provider cap set · nothing has run on a provider of your own
-				</CardDescription>
-			</CardHeader>
-			<CardContent className="space-y-3">
-				<p className="text-sm text-muted-foreground">
-					Connect your own provider in <AiModelsLink workspaceSlug={workspaceSlug} /> to bill AI
-					work to your own account.
-				</p>
-				{isCurrentMonth ? (
-					<Button variant="outline" size="sm" onClick={onEditOwnProviderCap}>
-						Set cap
-					</Button>
-				) : (
-					<CapIsNotMonthScoped subject="cap" />
-				)}
-			</CardContent>
-		</Card>
-	);
-}
-
-interface CapMeterWithCaptionProps {
-	paused: boolean;
-	isCurrentMonth: boolean;
-	spendUsd: number;
-	capUsd: number;
-	label: string;
-}
-
-function CapMeterWithCaption({
-	paused,
-	isCurrentMonth,
-	spendUsd,
-	capUsd,
-	label,
-}: CapMeterWithCaptionProps) {
-	const percent = budgetUsedPercent(spendUsd, capUsd);
-	const state = capState(percent, paused, isCurrentMonth);
-	return (
-		<div className="space-y-1.5">
-			<CapMeter
-				percent={percent}
-				paused={paused}
-				spendUsd={spendUsd}
-				capUsd={capUsd}
-				label={label}
-			/>
-			<p className="text-sm text-muted-foreground tabular-nums">
-				{Math.round(percent)}% used{state != null && ` · ${CAP_STATE_LABELS[state]}`}
-			</p>
-		</div>
+					<div className="flex flex-wrap items-center justify-between gap-2">
+						<span className="text-sm text-muted-foreground tabular-nums">
+							{Math.round(budgetUsedPercent(spendUsd, capUsd))}% used
+						</span>
+						<span className="flex flex-wrap gap-1.5">
+							{state != null && <StatusBadge def={CAP_STATE_DEFS[purse][state]} />}
+							{unpriced && <StatusBadge def={CAP_STATE_DEFS[purse].UNPRICED} />}
+						</span>
+					</div>
+				</div>
+			)}
+		</StatTile>
 	);
 }

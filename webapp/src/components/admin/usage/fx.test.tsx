@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { FxRateInfo, LlmUsageByDay, WorkspaceLlmUsageReport } from "@/api/types.gen";
 
+import { NO_PRECOMPUTE_USAGE } from "./fixtures";
 import {
 	capConversion,
 	type Fx,
@@ -44,6 +45,8 @@ function dayReport(
 		instancePaused: false,
 		ownProviderBudgetVerdict: "WITHIN",
 		ownProviderPaused: false,
+		ownProviderInUse: ownProviderTotalCostUsd > 0,
+		...NO_PRECOMPUTE_USAGE,
 	};
 }
 
@@ -147,18 +150,19 @@ function day(costUsd: number, iso: string): LlmUsageByDay {
 	};
 }
 
-describe("totals convert the USD sum", () => {
-	/** Each row rounds up on its own, so `Σ convert(row)` is €2.04 while `convert(Σ USD)` is €2.02. */
-	const rows = [0.575, 0.575, 0.575, 0.575];
-
-	it("renders the breakdown footer from the USD total", () => {
-		const byDay = rows.map((value, index) => day(value, `2026-07-0${index + 1}T00:00:00.000Z`));
-		render(<LlmUsageByDayTable report={dayReport(byDay, 2.3)} fx={eur} />);
+describe("breakdown totals", () => {
+	// One number per cell: an estimate stacked under a total breaks the money column's right edge.
+	it("stay in USD, with the estimate left to the tiles and the disclosure", () => {
+		const byDay = [0.575, 0.575, 0.575, 0.575].map((value, index) =>
+			day(value, `2026-07-0${index + 1}T00:00:00.000Z`),
+		);
+		render(
+			<LlmUsageByDayTable report={{ ...dayReport(byDay, 2.3), fx: eur }} purses={["SHARED"]} />,
+		);
 
 		const footer = screen.getByRole("row", { name: /^Total/u });
 		expect(footer.textContent).toContain("$2.30");
-		expect(footer.textContent).toContain("≈ €2.02");
-		expect(footer.textContent).not.toContain("€2.04");
+		expect(footer.textContent).not.toContain("€");
 	});
 });
 
@@ -254,7 +258,12 @@ describe("without a configured currency", () => {
 				events: 3,
 			},
 		];
-		const { container } = render(<LlmUsageByDayTable report={dayReport(rows, 4.25, 1.75)} />);
+		const { container } = render(
+			<LlmUsageByDayTable
+				report={dayReport(rows, 4.25, 1.75)}
+				purses={["SHARED", "OWN_PROVIDER"]}
+			/>,
+		);
 
 		expect(screen.queryAllByRole("img")).toHaveLength(0);
 		expect(container.textContent).not.toContain("€");

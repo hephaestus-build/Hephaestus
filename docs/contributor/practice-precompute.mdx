@@ -1,0 +1,262 @@
+---
+id: practice-precompute
+title: Precompute runner internals
+description: How the precompute runner runs a script, what it records, what a script can reach, how the server learns a script's needs, and how to test it.
+---
+
+# Precompute runner internals
+
+This page describes how the precompute runner runs a practice's precompute script.
+The runner is `docker/agents/precompute/runner.ts`, and its library is `docker/agents/precompute/lib/`.
+
+## The contract
+
+[Write a precompute script](/admin/precompute-scripts) owns the script contract.
+It describes `definePrecompute`, `meta`, the model slots, the context, the primitives, the result, the reasons and the limits.
+This page does not repeat those facts.
+[ADR 0054](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0054-precompute-calls-models-through-the-runner.md) records why a script calls models through the runner.
+
+Other documents own the adjacent facts:
+
+| Fact | Home |
+| --- | --- |
+| Where bundled scripts live, how a bundled practice changes, the positional contract, and how a section is bounded | [Practice catalogue](./practice-catalogue.md#precompute-scripts) |
+| The stage time, the script deadlines, the process grants, and `precompute-models.json` | [Workspace ABI](./agent/workspace-abi.mdx#precompute-validation-and-limits) |
+| The practice header of each model call, and the precompute report (`precompute.json`) | [Workspace ABI](./agent/workspace-abi.mdx#precompute-report) |
+| The stages of a review and where leads stop | [Practice review pipeline](./practice-review-pipeline.mdx) |
+| How an admin assigns the models, sees which practices use them, and reads their cost by practice | [Precompute models](/admin/ai-providers#precompute-models) |
+| What each line about a script in a review means, and the metrics | [Practice review operations](/admin/practice-review-operations#precompute-scripts) |
+| The live tests | [Testing](./testing.mdx#live-precompute-models) |
+
+### Two contracts
+
+The runner runs two contracts.
+The child process tells them apart by the shape of the default export.
+
+| Contract | Default export | Returns | Can call models | Deadline |
+| --- | --- | --- | --- | --- |
+| **Positional** | `(repo, diffFiles, metadata, contextDir, changeDir, contextReference) => result` | Hints, metrics and directions | No | The positional deadline |
+| **Definition** | `definePrecompute({ meta, run })` | Leads, facts, unrated items and directions | Yes | The definition deadline, which is longer, because the script can wait for models |
+
+The positional contract is the supported legacy contract of the bundled scripts.
+Every bundled script uses it, so the runner must keep it while a bundled script or a customized copy of one uses it.
+The [practice catalogue](./practice-catalogue.md#precompute-scripts) describes it.
+The [workspace ABI](./agent/workspace-abi.mdx#precompute-validation-and-limits) gives both deadlines.
+
+`lib/precompute.ts` is the only import that the admin page documents.
+It re-exports the readers that a workspace script needs.
+A bundled script can also import other modules of `lib/` directly.
+A workspace that customized a bundled practice keeps a copy of its script, so such an import must stay valid.
+
+## Writing a bundled script
+
+A bundled script is `server/application/src/main/resources/practices/precompute/<slug>.ts`.
+The [practice catalogue](./practice-catalogue.md#precompute-scripts) tells how a bundled practice and its script change.
+
+1. Write a new bundled script with the definition contract, as [Write a precompute script](/admin/precompute-scripts) tells.
+2. Import from `docker/agents/precompute/lib/precompute.ts` where it exports what you need.
+3. Put shared readers and scanning mechanics in `docker/agents/precompute/lib/`, and the predicates of one practice in its script.
+4. Add the tests that [Testing](#testing) describes.
+
+## How the runner runs a script
+
+The runner starts one Node process for each script, through `child.ts`.
+The [workspace ABI](./agent/workspace-abi.mdx#precompute-validation-and-limits) gives how many run at a time, their grants, and their deadlines.
+
+A definition script runs in these steps:
+
+1. The child imports the script and sends `meta` to the runner.
+2. The runner validates `meta` with the zod schema in `lib/contract.ts`.
+3. The runner decides which declared slots are available.
+4. If a `required` slot is not available, the runner stops the child.
+5. Otherwise, the runner replies with the available slots and the token limit of the practice.
+6. The child calls `run` with the context, and sends the result.
+7. The runner validates the result with zod, settles the leads, and writes the section and the result.
+
+[Write a precompute script](/admin/precompute-scripts#meta) gives the status of a script that step 2 or step 4 stops.
+
+A slot is available when `precompute-models.json` has a model for it and that model's protocol serves the slot.
+`lib/contract.ts` holds the slots, the protocols, the reasons, the entry limits of one call, and the run statuses.
+`PrecomputeContractSyncTest` keeps the slots, protocols, reasons and statuses equal to the Java side.
+`PrecomputeCapsSyncTest` keeps `MODEL_SLOT_CAPS` equal to the entry limits of `LlmProxyService`.
+
+### Model calls through IPC
+
+`ctx.models` in the child are stub objects from `lib/models-ipc.ts`.
+Each call goes to the runner as a message.
+`lib/models-host.ts` in the runner makes the call against the LLM proxy with `PRECOMPUTE_PROXY_TOKEN`, which the child never holds.
+`ctx.tools.grep` also runs in the runner, because the child cannot start a program.
+
+A decision model with the `openai-decisions` protocol calls the [OpenAI Decisions API](https://developers.openai.com/api/docs/guides/decisions).
+On an `openai-completions` model, the runner asks for one letter for each question and reads `top_logprobs` at each answer position.
+This adapter works only with models that return log probabilities, such as vLLM deployments and OpenAI chat models without reasoning.
+
+The runner refuses a call that holds more entries than the entry limit of its slot, `MODEL_SLOT_CAPS` in `lib/contract.ts`, with the reason `too-large`.
+[Limits](/admin/precompute-scripts#limits) gives the values.
+The embedding stub sets `maxEmbeddingsPerCall` to its limit, so the AI SDK splits a larger `embedMany` into calls within the limit.
+`classify` packs its questions with `PACK_SIZE` in `lib/precompute.ts`, which stays below the decision limit.
+On the Decisions, Embeddings and Rerank APIs, the proxy enforces the same limits with HTTP 413.
+A decision call to a Chat Completions model has only the runner's check.
+
+### Token accounting
+
+The runner reserves tokens before each call, against the token limit of the practice and the attempt token limit.
+[Limits](/admin/precompute-scripts#limits) gives the size of a reservation.
+When the call ends, the runner settles the account with the tokens that the provider reported.
+A call that fails, is cancelled, or reports no tokens keeps its reservation, because the provider can have billed it.
+The LLM proxy enforces the attempt token limit and the purses again, as [Cost and limits](/admin/ai-providers#cost-and-limits) tells.
+
+`MODEL_CONCURRENCY` in `runner.ts` limits the model calls in flight for all scripts together.
+`MAX_IN_FLIGHT` in `lib/script-run.ts` stops a script that has too many requests in flight.
+[Limits](/admin/precompute-scripts#limits) gives both values.
+
+## What the runner records
+
+When a practice ends, the runner writes `<slug>.md`, the section, and `<slug>.json`, the result.
+A definition script's result has these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `contract` | `definition`. |
+| `status` | `ok`, `skipped`, `error`, or `timeout`. `timeout` means that the runner stopped the script at its deadline, or that the stage ended before the script started. |
+| `durationMs` | The time from the start of the script to its result. |
+| `leads`, `facts`, `unrated`, `directions`, `kinds` | What the script returned, after the runner settled the leads. Each lead carries the quote that the runner wrote and its rating score. |
+| `dropped` | The leads that the runner did not show. |
+| `models` | Slot → `{ need, bound, notRated }`. `bound` tells if the job has a model for the slot. `notRated` counts the calls that the runner could not rate, by reason. |
+| `error` | For `error` and `timeout`, why the script failed or was stopped. The report `precompute.json` keeps its first line for `error` only, as the [workspace ABI](./agent/workspace-abi.mdx#precompute-report) tells. |
+
+A positional script's result has `contract` (`positional`), `status` (`ok`), `durationMs`, `hints`, `dropped`, `metrics` and `directions`.
+There, `dropped` counts the changed-line hints that the runner did not show.
+
+A script that fails before it sends `meta`, or that never starts, gets a result of the same shape with the contract `unknown`.
+Its status is `error` or `timeout`.
+Only a valid result without `meta` shows that a script is positional.
+Thus, a positional script that fails is also `unknown`.
+Its needs are not known, so the server records no models for it.
+
+The result holds no tokens and no calls.
+The proxy counts those for each practice, and the usage report shows them.
+`.timing.json` holds the totals of the stage: `durationMs`, `practices`, `positionalHints`, `inDiffHints`, `leads` and `errors`.
+`positionalHints` and `inDiffHints` count the hints of positional scripts, and `leads` counts the leads of definition scripts.
+`errors` counts the results with the status `error` or `timeout`.
+
+The review runner turns the results into the report `precompute.json` in `out/`, which the server stores.
+The [workspace ABI](./agent/workspace-abi.mdx#precompute-report) gives its shape.
+
+## What a script can reach
+
+A precompute script is code that a workspace admin writes.
+Hephaestus trusts it like the practice definition that it belongs to.
+The script still never holds a credential.
+The [workspace ABI](./agent/workspace-abi.mdx#precompute-validation-and-limits) gives the grants of the script's process.
+
+The [Node permission model](https://nodejs.org/docs/latest-v24.x/api/permissions.html) is a seat belt, not a sandbox.
+It follows symbolic links, and it does not restrict the network.
+Thus, a token must not be in a process that runs script code:
+
+| Process | Tokens in its environment |
+| --- | --- |
+| The container's PID 1 and `pi-precompute.sh` | `LLM_PROXY_TOKEN` and `PRECOMPUTE_PROXY_TOKEN` |
+| `pi-precompute.ts` and `runner.ts`, started with `env -i` | `PRECOMPUTE_PROXY_TOKEN` only, with `LLM_PROXY_URL` |
+| A script's process | None. Its environment is empty. |
+| The review runner | `LLM_PROXY_TOKEN` only. The stage unsets `PRECOMPUTE_PROXY_TOKEN` before the review starts. |
+
+A script's process can read the `/proc/<pid>/environ` of another process only through a symbolic link in a folder that it may read.
+No untrusted party can put such a link there:
+
+- The checkout writes each link of the repository as a plain file.
+- The server stages context inputs only as regular files.
+- The script's process has no write grant.
+- The only link in the stage is the fixed `lib` link.
+
+The model calls of a script have these controls:
+
+| Control | Effect |
+| --- | --- |
+| Model calls through IPC | Each call goes to the runner as a message, and the runner makes it with a credential that the script never holds. |
+| Request allowlist | The runner keeps only the fields that a precompute call can set. It drops provider options and headers. Chat keeps only function tools. |
+| Practice header | The runner names the script's practice on each call. A script cannot name another practice, because the allowlist drops its headers. The [workspace ABI](./agent/workspace-abi.mdx#precompute-models) gives the header. |
+| No default provider | `lib/models-ipc.ts` sets the AI SDK [global provider](https://ai-sdk.dev/docs/ai-sdk-core/provider-management#global-provider-configuration) to an empty provider, so a script cannot reach another provider through it. |
+| Parsed messages | The runner parses every message and result with zod. A message that does not parse stops the script. |
+
+## How the server learns needs
+
+A script declares `meta.models` in code, and the server does not parse scripts.
+Thus, the server knows what a script needs only after a review runs it.
+
+The server stores the report of each review attempt as `agent_job_precompute_run` rows.
+The [workspace ABI](./agent/workspace-abi.mdx#precompute-report) describes the report.
+A row holds the status, the number of leads, the declared models, the run time, and the error line of a failed script.
+A script whose models are not known has no models in its row.
+
+The job's snapshot holds only the models of its latest attempt.
+Thus, a row of an earlier attempt cannot read its tiers from the snapshot.
+The row itself stores the tier of the model that the attempt froze for each declared model.
+A retry cannot change the tiers of an earlier attempt.
+The proxy records the calls and tokens of each slot in an `agent_job_precompute_usage` row, with the tier of the model that served them.
+Thus, a script that did not finish, whose run has no models, still shows the tier of each model that it called.
+
+`GET /workspaces/{workspaceSlug}/agents/jobs/{jobId}/precompute` returns the rows of the current attempt of one review, joined with the usage rows of that attempt.
+Only the attempt's terminal write records its rows.
+Thus, the list is empty while a retry runs, and a retry never shows the rows of an earlier attempt.
+
+`GET /workspaces/{workspaceSlug}/practices/precompute` serves the needs to workspace admins.
+It gives one entry for each practice with a script.
+The entry has the needs from the newest run that declared the script's models.
+A run whose models are not known says nothing about them, so the server passes over it.
+For each need, it names the tiers that no ready assignment serves now.
+When that run ran an earlier version of the script, the entry gives `scriptChanged: true` and no needs.
+
+`MemberAiRoutingAdapter.precomputeBinding` chooses the model of each precompute slot for one developer.
+Its ceiling is the stricter of the developer's AI choice and the tier of the review's own model for that developer.
+The job's slots and the claim check call it, through `ReviewMemberAiPolicy`.
+The needs endpoint calls `unservedTiers` through `PracticeNeedsAdapter`.
+`unservedTiers` applies the same ceiling to each member tier, through `serving`.
+
+The LLM proxy does not apply this rule again.
+Before each call, it checks only that the model fits the developer's own AI choice.
+[Privacy](/admin/ai-providers#privacy) states the rule for admins.
+
+## Testing
+
+| Test | What it proves |
+| --- | --- |
+| `docker/agents/precompute/definition.test.ts` | The runner runs the fixtures against the proxy stand-in, holds the token limits, settles leads, and renders sections. |
+| `docker/agents/precompute/runner.test.ts` | Process grants, deadlines, sections, and a stopped stage. |
+| `docker/agents/precompute/scripts.test.ts` | The bundled positional scripts. |
+| `docker/agents/precompute/live.test.ts` | The runner and `fixtures/every-slot.ts` against real models. |
+| `server/application/src/test/resources/agent/pi-precompute-report.spec.ts` | `precompute.json` for each status, its bounds, and a script without a result. |
+| `PiResultParserPrecomputeReportTest` | The server reads the report within its bounds and drops entries outside the contract. |
+| `PracticePrecomputeIntegrationTest` | The stored runs and the first line of a failed script's error, also when it holds a NUL. The runs of one review, with the calls that the proxy counted and the tiers of the attempt shown. The needs endpoint. Both endpoints with their access rules. The check that the proxy asks for each call allows a precompute model only within the developer's own AI choice. |
+| `ReviewMemberAiPolicyTest` | The review's precompute models come from the routing adapter for the reviewed developer. A Cloud member whose review runs on an In-house model gets no Cloud decision model. |
+| `LlmUsageByPracticeIntegrationTest` | The cost split by practice adds up to the usage rows. |
+| `docker/agents/precompute/validate.test.ts` | `validate.ts` runs a definition script and a positional script. It skips a script without its required model and exits with 1 for a failed script. It stops with exit code 2 on a bad file name, a missing argument, or an input that it cannot use. |
+| `PrecomputeContractSyncTest` | The slots, protocols, reasons, run statuses, practice header and slug pattern are the same in `lib/contract.ts` and in Java. |
+| `PrecomputeCapsSyncTest` | `MODEL_SLOT_CAPS` in `lib/contract.ts` equals the entry limits of one precompute call in `LlmProxyService`. |
+| `MemberAiRoutingAdapterTest` | The data-class rule of [Privacy](/admin/ai-providers#privacy) for the job's slots and the needs endpoint. |
+
+Run one TypeScript file with `node --test <file>`.
+`vp run test:agents` runs all of them.
+The Java tests run in the server's test tiers (`server/AGENTS.md` § Test tiers).
+
+`test/proxy-stand-in.ts` serves the precompute proxy routes, `POST /precompute/<slot>/<operation>`.
+It checks the precompute token and records each request.
+A test gives it a handler that answers by item.
+A handler must throw for an item that it does not know, so that a changed prompt fails the test.
+A test asserts what the runner guarantees, never the wording of a real model.
+
+To test a new definition script:
+
+1. Put a fixture next to the others in `docker/agents/precompute/fixtures/`.
+2. Add a case to `definition.test.ts` that runs the fixture with no models.
+3. Assert the leads that code finds and the `unrated` lines.
+4. Add a case for each slot with a stand-in handler that answers by item.
+5. Assert the leads, the quotes, and the `models` report in `<slug>.json`.
+
+`validate.ts` runs one script of either contract on a repository without models, through the same staging as the tests.
+[Run a script on your own change](/admin/precompute-scripts#run-a-script-on-your-own-change) gives its options.
+
+To run a script with models, set `LLM_PROXY_URL` to a server that serves the precompute routes, and `PRECOMPUTE_PROXY_TOKEN` to its token.
+Then pass a models file to `runner.ts` with `--models`.
+`live.test.ts` shows this setup with the stand-in.
+`fixtures/every-slot.ts` uses every primitive and every slot.

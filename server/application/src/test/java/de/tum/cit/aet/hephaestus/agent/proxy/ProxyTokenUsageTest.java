@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.ObjectMapper;
 
@@ -115,5 +117,41 @@ class ProxyTokenUsageTest extends BaseUnitTest {
     @Test
     void missingUsageReturnsNull() throws Exception {
         assertThat(ProxyTokenUsage.from(MAPPER.readTree("{}"), false)).isNull();
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "openai-decisions|{\"usage\":{\"input_tokens\":40,\"output_tokens\":3}}|40|3",
+                "openai-embeddings|{\"usage\":{\"prompt_tokens\":12,\"total_tokens\":12}}|12|0",
+                "cohere-rerank|{\"usage\":{\"total_tokens\":30,\"prompt_tokens\":25}}|30|0",
+                "cohere-rerank|{\"usage\":{\"prompt_tokens\":25}}|25|0",
+                "openai-completions|{\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":1}}|9|1",
+                "openai-responses|{\"usage\":{\"input_tokens\":7,\"output_tokens\":2}}|7|2"
+            })
+    void shouldReadTheUsageShapeOfEachProtocolWhenAPrecomputeCallIsServed(
+            String protocol, String body, int input, int output) throws Exception {
+        var usage = ProxyTokenUsage.from(
+                MAPPER.readTree(body), LlmApiProtocol.parse(protocol).orElseThrow());
+
+        assertThat(usage).isEqualTo(new ProxyTokenUsage(input, output, 0, 0, 0));
+    }
+
+    @Test
+    void shouldCountNoTokensWhenARerankingProviderReportsNone() throws Exception {
+        assertThat(ProxyTokenUsage.from(
+                        MAPPER.readTree("{\"usage\":{\"search_units\":1}}"), LlmApiProtocol.COHERE_RERANK))
+                .isNull();
+        assertThat(ProxyTokenUsage.from(MAPPER.readTree("{\"results\":[]}"), LlmApiProtocol.COHERE_RERANK))
+                .isNull();
+    }
+
+    @Test
+    void shouldRejectADecisionUsageWhenItLacksTheOutputCount() throws Exception {
+        var body = MAPPER.readTree("{\"usage\":{\"input_tokens\":40}}");
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ProxyTokenUsage.from(body, LlmApiProtocol.OPENAI_DECISIONS));
     }
 }

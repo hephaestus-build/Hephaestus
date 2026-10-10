@@ -73,9 +73,20 @@ class WorkerJwtTest extends BaseUnitTest {
     @Test
     void shouldExpireJobTokenAtDeclaredUploadDeadline() {
         Instant deadline = Instant.now().plusSeconds(600).truncatedTo(ChronoUnit.SECONDS);
-        JobJwt jwt = (JobJwt) verifier.verify(issuer.issueForJobUntil(UUID.randomUUID(), 42L, 0, deadline));
+        JobJwt jwt = (JobJwt) verifier.verify(
+                issuer.issueForJobUntil(UUID.randomUUID(), 42L, 0, deadline, WorkerJwtIssuer.LLM_PROXY_SCOPE));
 
         assertThat(jwt.expiresAt()).isEqualTo(deadline);
+    }
+
+    @Test
+    void shouldCarryOnlyThePrecomputeScopeWhenIssuedForPrecompute() {
+        Instant deadline = Instant.now().plusSeconds(600);
+
+        JobJwt jwt = (JobJwt) verifier.verify(
+                issuer.issueForJobUntil(UUID.randomUUID(), 42L, 0, deadline, WorkerJwtIssuer.LLM_PRECOMPUTE_SCOPE));
+
+        assertThat(jwt.scopes()).containsExactly("llm_precompute");
     }
 
     @Test

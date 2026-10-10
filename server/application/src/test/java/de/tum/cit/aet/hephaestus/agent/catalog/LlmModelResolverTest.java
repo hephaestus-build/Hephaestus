@@ -45,7 +45,7 @@ class LlmModelResolverTest extends BaseUnitTest {
         connection = new LlmConnection();
         connection.setId(10L);
         connection.setEnabled(true);
-        connection.setApiProtocol("openai-responses");
+        connection.setApiProtocol(LlmApiProtocol.OPENAI_RESPONSES);
         connection.setBaseUrl("https://api.example.test/v1");
         connection.setAuthMode(LlmAuthMode.BEARER);
         connection.setApiKey("secret");

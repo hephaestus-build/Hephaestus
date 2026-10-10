@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -36,14 +37,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class AgentBindingController {
 
     private final AgentBindingService agentBindingService;
+    private final MemberAiRoutingAdapter routing;
 
     @GetMapping
     @Operation(summary = "List the workspace's agents and how each is configured")
     @ApiResponse(responseCode = "200", description = "Bindings returned")
     @RequireAtLeastWorkspaceAdmin
     public ResponseEntity<List<AgentBindingDTO>> listAgents(WorkspaceContext workspaceContext) {
+        var served = routing.servedTiers(workspaceContext.id());
         List<AgentBindingDTO> bindings = agentBindingService.getBindings(workspaceContext).stream()
-                .map(binding -> AgentBindingDTO.from(binding, agentBindingService.isReady(binding)))
+                .map(binding -> dto(binding, served))
                 .toList();
         return ResponseEntity.ok(bindings);
     }
@@ -72,7 +75,7 @@ public class AgentBindingController {
             @Valid @RequestBody AgentBindingRequestDTO request) {
         WorkspaceAgentBinding binding =
                 agentBindingService.upsertBinding(workspaceContext, purpose, dataHandlingTier, request);
-        return ResponseEntity.ok(AgentBindingDTO.from(binding, agentBindingService.isReady(binding)));
+        return ResponseEntity.ok(dto(binding, routing.servedTiers(workspaceContext.id())));
     }
 
     @DeleteMapping("/{purpose}")
@@ -86,5 +89,14 @@ public class AgentBindingController {
             @RequestParam(defaultValue = "UNDECLARED") DataHandlingTier dataHandlingTier) {
         agentBindingService.deleteBinding(workspaceContext, purpose, dataHandlingTier);
         return ResponseEntity.noContent().build();
+    }
+
+    private AgentBindingDTO dto(
+            WorkspaceAgentBinding binding, Map<AgentPurpose, Map<DataHandlingTier, List<DataHandlingTier>>> served) {
+        return AgentBindingDTO.from(
+                binding,
+                agentBindingService.isReady(binding),
+                served.getOrDefault(binding.getPurpose(), Map.of())
+                        .getOrDefault(binding.getDataHandlingTier(), List.of()));
     }
 }

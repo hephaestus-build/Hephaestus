@@ -1,18 +1,16 @@
-import { Bot, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type { WorkspaceLlmModel } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { AiMark } from "@/components/icons/AiMark";
 import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandlingBadge";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-	Empty,
-	EmptyDescription,
-	EmptyHeader,
-	EmptyMedia,
-	EmptyTitle,
-} from "@/components/ui/empty";
+	MODEL_READINESS_DEFS,
+	type ModelReadiness,
+} from "@/components/practice-vocabulary/model-readiness-defs";
+import { Button } from "@/components/ui/button";
 import {
 	Table,
 	TableBody,
@@ -25,6 +23,10 @@ import {
 import { priceLabel } from "@/lib/llm-pricing";
 
 export interface WorkspaceLlmModelsTableProps {
+	/** Names the table, since each provider has one. */
+	providerName: string;
+	/** False when the provider is turned off, so none of its models can run. */
+	connectionEnabled: boolean;
 	models: WorkspaceLlmModel[];
 	/** Ids of the models with a write in flight. */
 	mutatingIds: ReadonlySet<number>;
@@ -32,7 +34,23 @@ export interface WorkspaceLlmModelsTableProps {
 	onDelete: (model: WorkspaceLlmModel) => void;
 }
 
+const COLUMNS = 5;
+
+/** What keeps a model from running, provider first; null for a model that can run. */
+function readiness(model: WorkspaceLlmModel, connectionEnabled: boolean): ModelReadiness | null {
+	if (!connectionEnabled) {
+		return "CONNECTION_OFF";
+	}
+	return model.enabled ? null : "OFF";
+}
+
+/**
+ * A provider's models, one bordered table per provider. An empty one keeps its header and says so in
+ * a row. The columns have fixed widths, so the tables of providers stacked on one page line up.
+ */
 export function WorkspaceLlmModelsTable({
+	providerName,
+	connectionEnabled,
 	models,
 	mutatingIds,
 	onEdit,
@@ -40,53 +58,63 @@ export function WorkspaceLlmModelsTable({
 }: WorkspaceLlmModelsTableProps) {
 	const [deleting, setDeleting] = useState<WorkspaceLlmModel | null>(null);
 
-	if (models.length === 0) {
-		return (
-			<Empty variant="outlined">
-				<EmptyHeader>
-					<EmptyMedia variant="icon">
-						<Bot />
-					</EmptyMedia>
-					<EmptyTitle>No models yet</EmptyTitle>
-					<EmptyDescription>Add a model to use this provider.</EmptyDescription>
-				</EmptyHeader>
-			</Empty>
-		);
-	}
-
 	return (
 		<>
-			<Table bordered>
-				<TableCaption className="sr-only">Models on your own connected providers</TableCaption>
+			<Table bordered className="min-w-200 table-fixed">
+				<TableCaption className="sr-only">Models on {providerName}</TableCaption>
 				<TableHeader>
-					<TableRow>
+					<TableRow variant="static">
 						<TableHead scope="col">Model</TableHead>
-						<TableHead scope="col">Data handling</TableHead>
-						<TableHead scope="col">Price</TableHead>
-						<TableHead scope="col">Active</TableHead>
-						<TableHead scope="col" className="text-right">
+						<TableHead scope="col" className="w-36">
+							Data handling
+						</TableHead>
+						<TableHead scope="col" className="w-72">
+							Price
+						</TableHead>
+						<TableHead scope="col" className="w-36">
+							Status
+						</TableHead>
+						<TableHead scope="col" className="w-24 text-right">
 							Actions
 						</TableHead>
 					</TableRow>
 				</TableHeader>
 				<TableBody>
+					{models.length === 0 && (
+						<TableRow variant="static">
+							{/* Start-aligned: centred in a table wider than a phone, it would sit partly out of view. */}
+							<TableCell colSpan={COLUMNS} className="h-16 text-muted-foreground">
+								No models yet. Add a model to use this provider.
+							</TableCell>
+						</TableRow>
+					)}
 					{models.map((model) => {
 						const busy = mutatingIds.has(model.id);
+						const status = readiness(model, connectionEnabled);
 						return (
 							<TableRow key={model.id}>
 								<TableCell>
-									<div className="font-medium">{model.displayName}</div>
+									<span className="flex min-w-0 items-center gap-2 font-medium">
+										<AiMark brand={model.brand} size="sm" />
+										<span className="min-w-0 truncate" title={model.displayName}>
+											{model.displayName}
+										</span>
+									</span>
 								</TableCell>
 								<TableCell>
 									<DataHandlingBadge tier={model.dataHandlingTier} />
 								</TableCell>
 								{/* Left-aligned: `priceLabel` is a sentence, not a figure; `tabular-nums` only
-								    aligns the digits inside it. */}
-								<TableCell numeric>{priceLabel(model, "workspace")}</TableCell>
+								    aligns the digits inside it. It wraps inside its fixed column. */}
+								<TableCell numeric className="whitespace-normal">
+									{priceLabel(model, "workspace")}
+								</TableCell>
 								<TableCell>
-									<Badge variant={model.enabled ? "default" : "secondary"}>
-										{model.enabled ? "Active" : "Off"}
-									</Badge>
+									{status === null ? (
+										<span className="text-muted-foreground">Ready</span>
+									) : (
+										<StatusBadge def={MODEL_READINESS_DEFS[status]} />
+									)}
 								</TableCell>
 								<TableCell className="text-right">
 									<div className="flex justify-end gap-1">

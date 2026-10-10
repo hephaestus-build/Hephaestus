@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1791486276211-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_llm_connection_api_protocol' AND conrelid = 'public.llm_connection'::regclass</sqlCheck>
+        </preConditions>
+        <comment>Accept the decision, embedding and reranking protocols on shared connections. No row changes: the new predicate admits every value the earlier one did.</comment>
+        <sql><![CDATA[
+ALTER TABLE llm_connection
+    DROP CONSTRAINT ck_llm_connection_api_protocol,
+    ADD CONSTRAINT ck_llm_connection_api_protocol CHECK (api_protocol IN (
+        'openai-completions', 'openai-responses', 'openai-decisions', 'openai-embeddings', 'cohere-rerank'));
+        ]]></sql>
+        <rollback>
+            <stop>Restore a verified database backup made before this upgrade. Connections saved since then can use a protocol that the earlier constraint refuses.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1791486276211-2" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_ws_llm_connection_api_protocol' AND conrelid = 'public.workspace_llm_connection'::regclass</sqlCheck>
+        </preConditions>
+        <comment>Accept the decision, embedding and reranking protocols on workspace connections. No row changes: the new predicate admits every value the earlier one did.</comment>
+        <sql><![CDATA[
+ALTER TABLE workspace_llm_connection
+    DROP CONSTRAINT ck_ws_llm_connection_api_protocol,
+    ADD CONSTRAINT ck_ws_llm_connection_api_protocol CHECK (api_protocol IN (
+        'openai-completions', 'openai-responses', 'openai-decisions', 'openai-embeddings', 'cohere-rerank'));
+        ]]></sql>
+        <rollback>
+            <stop>Restore a verified database backup made before this upgrade. Connections saved since then can use a protocol that the earlier constraint refuses.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1791486276211-3" author="hephaestus">
+        <createTable tableName="agent_job_precompute_usage">
+            <column name="job_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempt" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_kind" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="practice_slug" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="data_handling_tier" type="VARCHAR(24)"/>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="calls" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="input_tokens" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="output_tokens" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1791486276211-4" author="hephaestus">
+        <addPrimaryKey columnNames="attempt, job_id, model_kind, practice_slug" constraintName="agent_job_precompute_usagePK" tableName="agent_job_precompute_usage"/>
+    </changeSet>
+    <changeSet id="1791486276211-5" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="job_id" baseTableName="agent_job_precompute_usage" constraintName="fk_agent_job_precompute_usage_job" deferrable="false" initiallyDeferred="false" onDelete="CASCADE" referencedColumnNames="id" referencedTableName="agent_job" validate="true"/>
+    </changeSet>
+    <changeSet id="1791486276211-6" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="agent_job_precompute_usage" constraintName="fk_agent_job_precompute_usage_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1791486276211-7" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_llm_usage_event_source_type' AND conrelid = 'public.llm_usage_event'::regclass</sqlCheck>
+        </preConditions>
+        <comment>Accept ledger rows for the decision, embedding and reranking models of precompute scripts. No row changes: the new predicate admits every value the earlier one did.</comment>
+        <sql><![CDATA[
+ALTER TABLE llm_usage_event
+    DROP CONSTRAINT ck_llm_usage_event_source_type,
+    ADD CONSTRAINT ck_llm_usage_event_source_type CHECK (source_type IN (
+        'AGENT_JOB', 'MENTOR_TURN', 'PRECOMPUTE_DECISION', 'PRECOMPUTE_EMBEDDING', 'PRECOMPUTE_RERANKING'));
+        ]]></sql>
+        <rollback>
+            <stop>Restore a verified database backup made before this upgrade. Ledger rows written since then can have a source type that the earlier constraint refuses.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1791486276211-8" author="hephaestus">
+        <comment>Only the four model kinds can hold precompute usage.</comment>
+        <sql><![CDATA[
+ALTER TABLE agent_job_precompute_usage
+    ADD CONSTRAINT ck_agent_job_precompute_usage_model_kind CHECK (model_kind IN ('CHAT', 'DECISION', 'EMBEDDING', 'RERANKING'));
+        ]]></sql>
+        <rollback>
+            <sql>ALTER TABLE agent_job_precompute_usage DROP CONSTRAINT ck_agent_job_precompute_usage_model_kind;</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1791486276211-9" author="hephaestus">
+        <createIndex indexName="idx_agent_job_precompute_usage_job" tableName="agent_job_precompute_usage">
+            <column name="job_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791486276211-10" author="hephaestus">
+        <createIndex indexName="idx_agent_job_precompute_usage_workspace" tableName="agent_job_precompute_usage">
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791486276211-11" author="hephaestus">
+        <createTable tableName="agent_job_precompute_run">
+            <column name="attempt" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="practice_slug" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="error" type="VARCHAR(500)"/>
+            <column name="duration_ms" type="INTEGER"/>
+            <column name="finished_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="leads" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="models" type="JSONB"/>
+            <column name="practice_revision_id" type="BIGINT"/>
+            <column name="status" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="job_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1791486276211-12" author="hephaestus">
+        <addPrimaryKey columnNames="attempt, job_id, practice_slug" constraintName="agent_job_precompute_runPK" tableName="agent_job_precompute_run"/>
+    </changeSet>
+    <changeSet id="1791486276211-13" author="hephaestus">
+        <createIndex indexName="idx_agent_job_precompute_run_job" tableName="agent_job_precompute_run">
+            <column name="job_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791486276211-14" author="hephaestus">
+        <createIndex indexName="idx_agent_job_precompute_run_practice" tableName="agent_job_precompute_run">
+            <column name="workspace_id"/>
+            <column name="practice_slug"/>
+            <column descending="true" name="finished_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791486276211-15" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="job_id" baseTableName="agent_job_precompute_run" constraintName="fk_agent_job_precompute_run_job" deferrable="false" initiallyDeferred="false" onDelete="CASCADE" referencedColumnNames="id" referencedTableName="agent_job" validate="true"/>
+    </changeSet>
+    <changeSet id="1791486276211-16" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="agent_job_precompute_run" constraintName="fk_agent_job_precompute_run_workspace" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+    <changeSet id="1791486276211-17" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="agent_job_precompute_run" baseColumnNames="practice_revision_id" constraintName="sfk_agent_job_precompute_run_practice_revision" referencedTableName="practice_revision" referencedColumnNames="id" onDelete="SET NULL"/>
+    </changeSet>
+    <changeSet id="1791486276211-18" author="hephaestus">
+        <comment>Only the five precompute run states can be stored.</comment>
+        <sql><![CDATA[
+ALTER TABLE agent_job_precompute_run
+    ADD CONSTRAINT ck_agent_job_precompute_run_status CHECK (status IN ('OK', 'SKIPPED', 'FAILED', 'TIMED_OUT', 'NOT_FINISHED'));
+        ]]></sql>
+        <rollback>
+            <sql>ALTER TABLE agent_job_precompute_run DROP CONSTRAINT ck_agent_job_precompute_run_status;</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1791486276211-19" author="hephaestus">
+        <createIndex indexName="idx_agent_job_precompute_run_practice_revision" tableName="agent_job_precompute_run">
+            <column name="practice_revision_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

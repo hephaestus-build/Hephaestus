@@ -13,18 +13,21 @@ const undeclared: AgentBinding = {
 	dataHandlingTier: "UNDECLARED",
 	enabled: true,
 	ready: false,
+	servedTiers: [],
 };
 const inHouse: AgentBinding = {
 	purpose: "PRACTICE_REVIEW",
 	dataHandlingTier: "IN_HOUSE",
 	enabled: true,
 	ready: true,
+	servedTiers: ["IN_HOUSE"],
 };
 const cloud: AgentBinding = {
 	purpose: "PRACTICE_REVIEW",
 	dataHandlingTier: "CLOUD",
 	enabled: true,
 	ready: true,
+	servedTiers: ["CLOUD"],
 };
 
 describe("workspace review model readiness", () => {
@@ -41,7 +44,13 @@ describe("workspace review model readiness", () => {
 	it("does not mistake a ready mentor assignment for a practice-review model", () => {
 		expect(
 			availableReviewBinding([
-				{ purpose: "MENTOR", dataHandlingTier: "IN_HOUSE", enabled: true, ready: true },
+				{
+					purpose: "MENTOR",
+					dataHandlingTier: "IN_HOUSE",
+					enabled: true,
+					ready: true,
+					servedTiers: ["IN_HOUSE", "CLOUD"],
+				},
 			]),
 		).toBeUndefined();
 	});

@@ -1,0 +1,19 @@
+{
+  "chat": {
+    "protocol": "openai-responses",
+    "modelId": "gpt-chat"
+  },
+  "decision": {
+    "protocol": "openai-completions",
+    "modelId": "qwen-decider",
+    "reasoningEffort": "HIGH"
+  },
+  "embedding": {
+    "protocol": "openai-embeddings",
+    "modelId": "embedder"
+  },
+  "reranking": {
+    "protocol": "cohere-rerank",
+    "modelId": "reranker"
+  }
+}

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
@@ -418,7 +419,7 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
         connection.setSlug("review-connection");
         connection.setDisplayName("Review connection");
         connection.setBaseUrl("https://api.openai.com");
-        connection.setApiProtocol("openai-completions");
+        connection.setApiProtocol(LlmApiProtocol.OPENAI_COMPLETIONS);
         connection.setEnabled(true);
         connection = llmConnectionRepository.save(connection);
 

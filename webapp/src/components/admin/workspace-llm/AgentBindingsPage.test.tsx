@@ -1,7 +1,9 @@
 import { fireEvent, type queries, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { renderWithRouter } from "@/test/router-harness";
 
-import type { AgentBinding, AvailableLlmModel } from "@/api/types.gen";
+import type { AgentBinding, AvailableLlmModel, PracticePrecomputeSummary } from "@/api/types.gen";
 
 import { AgentBindingsPage, type AgentBindingsPageProps } from "./AgentBindingsPage";
 
@@ -12,6 +14,7 @@ const inHouseModel: AvailableLlmModel = {
 	displayName: "GPT Test",
 	connectionDisplayName: "Shared OpenAI",
 	pricingMode: "NO_CHARGE",
+	purposes: ["PRACTICE_REVIEW", "MENTOR"],
 };
 
 const cloudModel: AvailableLlmModel = {
@@ -21,6 +24,7 @@ const cloudModel: AvailableLlmModel = {
 	displayName: "GPT Other",
 	connectionDisplayName: "Shared OpenAI",
 	pricingMode: "NO_CHARGE",
+	purposes: ["PRACTICE_REVIEW", "MENTOR"],
 };
 
 const inHouseBinding: AgentBinding = {
@@ -32,28 +36,36 @@ const inHouseBinding: AgentBinding = {
 	timeoutSeconds: 600,
 	maxConcurrentJobs: 1,
 	allowInternet: false,
+	servedTiers: ["IN_HOUSE", "CLOUD"],
 };
 
-function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {
-	const onSave = vi.fn();
-	const onTurnOff = vi.fn();
-	render(
+function Page(overrides: Partial<AgentBindingsPageProps>) {
+	return (
 		<AgentBindingsPage
 			workspaceSlug="demo"
+			state={{ status: "ready" }}
 			bindings={[inHouseBinding]}
 			availableModels={[inHouseModel, cloudModel]}
 			practicesEnabled
 			aiChoiceRequired={false}
-			isLoading={false}
-			isError={false}
-			loadError={null}
-			pendingTargets={new Set()}
-			onRetry={vi.fn()}
-			onSave={onSave}
-			onTurnOff={onTurnOff}
+			precomputeNeeds={{ status: "ready", summaries: [] }}
+			ownProviderAllowed
+			pendingWrites={new Map()}
+			onSave={vi.fn()}
+			onTurnOff={vi.fn()}
 			{...overrides}
-		/>,
+		/>
 	);
+}
+
+function renderAt(overrides: Partial<AgentBindingsPageProps>) {
+	return render(<Page {...overrides} />);
+}
+
+function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {
+	const onSave = vi.fn();
+	const onTurnOff = vi.fn();
+	renderAt({ onSave, onTurnOff, ...overrides });
 	return { onSave, onTurnOff };
 }
 
@@ -61,18 +73,21 @@ type Scope = ReturnType<typeof within<typeof queries>>;
 
 const UNCHOSEN_ROW = "Members who have not chosen";
 
+/** The purpose's row, opened if it is closed: a closed row holds no forms. */
+function purposeRegion(purpose: string): Scope {
+	const trigger = screen.getByRole("button", { name: purpose });
+	if (trigger.getAttribute("aria-expanded") !== "true") {
+		fireEvent.click(trigger);
+	}
+	return within(screen.getByRole("region", { name: purpose }));
+}
+
 function row(purpose: string, title: string): Scope {
-	const card = screen.getByRole("region", { name: purpose });
-	return within(within(card).getByRole("group", { name: title }));
+	return within(purposeRegion(purpose).getByRole("group", { name: title }));
 }
 
 const reviewsInHouse = () => row("Practice reviews", "In-house");
-const cloudBinding: AgentBinding = {
-	...inHouseBinding,
-	dataHandlingTier: "CLOUD",
-	instanceModelId: 21,
-	ready: false,
-};
+
 const saveButton = (scope: Scope) => scope.getByRole("button", { name: /^Save assignment/u });
 const timeoutInput = (scope: Scope) =>
 	scope.getByLabelText<HTMLInputElement>(/^Timeout \(seconds\)/u);
@@ -80,11 +95,10 @@ const timeoutInput = (scope: Scope) =>
 describe("AgentBindingsPage", () => {
 	it("renders one row per tier under each purpose, with the undeclared row last", () => {
 		renderPage();
-		const reviews = within(screen.getByRole("region", { name: "Practice reviews" }));
+		const reviews = purposeRegion("Practice reviews");
 		const rowNames = reviews
-			.getAllByRole("heading", { level: 3 })
-			.map((heading) => heading.textContent)
-			.filter((name) => name !== "Who gets which model");
+			.getAllByRole("heading", { level: 4 })
+			.map((heading) => heading.textContent);
 		expect(rowNames).toStrictEqual(["In-house", "Cloud", UNCHOSEN_ROW]);
 
 		const unassignedSwitch = row("Heph", "In-house").getByRole("switch", {
@@ -92,45 +106,6 @@ describe("AgentBindingsPage", () => {
 		});
 		expect(unassignedSwitch.getAttribute("aria-checked")).toBe("false");
 		expect(unassignedSwitch.getAttribute("aria-disabled")).toBe("true");
-	});
-
-	it("previews who gets which model by the member’s choice, including members who have not chosen", () => {
-		renderPage({ bindings: [inHouseBinding, cloudBinding] });
-		const reviews = within(screen.getByRole("region", { name: "Practice reviews" }));
-		const definitionAfter = (term: string) =>
-			reviews.getByText(term, { selector: "dt" }).nextElementSibling?.textContent;
-
-		expect(definitionAfter("In-house")).toBe("GPT Test (In-house)");
-		expect(definitionAfter("Cloud")).toBe("GPT Test (In-house)");
-		expect(definitionAfter("Members who have not chosen")).toBe("No model is used");
-	});
-
-	it("drops the unchosen preview row once the choice is required", () => {
-		renderPage({ aiChoiceRequired: true });
-		const reviews = within(screen.getByRole("region", { name: "Practice reviews" }));
-		expect(reviews.queryByText("Members who have not chosen", { selector: "dt" })).toBeNull();
-		row("Practice reviews", UNCHOSEN_ROW).getByText(/no one uses it now/u);
-	});
-
-	it("names the readiness of a bound row and says nothing for an empty one", () => {
-		renderPage({ bindings: [inHouseBinding, cloudBinding] });
-		reviewsInHouse().getByText("Ready");
-		row("Practice reviews", "Cloud").getByText("Not ready");
-		expect(row("Heph", "In-house").queryByText(/ready/iu)).toBeNull();
-	});
-
-	it("tells an admin to clear a moved model when no other model of the row's tier exists", () => {
-		renderPage({
-			bindings: [{ ...inHouseBinding, instanceModelId: 21 }],
-			availableModels: [cloudModel],
-		});
-		const inHouse = reviewsInHouse();
-		expect(inHouse.getByRole("combobox", { name: /In-house/u }).hasAttribute("disabled")).toBe(
-			true,
-		);
-		expect(inHouse.getByText(/is now declared as/u).textContent).toBe(
-			"GPT Other is now declared as Cloud and no longer serves this assignment. Clear the assignment, or ask an instance admin for a model declared as In-house.",
-		);
 	});
 
 	it("shows the binding it saves, so the payload cannot disagree with the controls", () => {
@@ -148,22 +123,6 @@ describe("AgentBindingsPage", () => {
 			{ purpose: "PRACTICE_REVIEW", tier: "IN_HOUSE" },
 			expect.objectContaining({ instanceModelId: 20, enabled: true }),
 		);
-	});
-
-	it("shows the server's refusal on the row it refused", () => {
-		renderPage({
-			saveErrors: {
-				"PRACTICE_REVIEW:IN_HOUSE": "This model is declared as Cloud. Assign it under Cloud.",
-			},
-		});
-		const inHouse = reviewsInHouse();
-		expect(inHouse.getByRole("alert").textContent).toBe(
-			"This model is declared as Cloud. Assign it under Cloud.",
-		);
-		expect(inHouse.getByRole("combobox", { name: /In-house/u }).getAttribute("aria-invalid")).toBe(
-			"true",
-		);
-		expect(row("Practice reviews", "Cloud").queryByRole("alert")).toBeNull();
 	});
 
 	it("exposes the advanced settings as a disclosure", () => {
@@ -277,5 +236,81 @@ describe("AgentBindingsPage", () => {
 		fireEvent.click(clearAssignment);
 
 		expect(onTurnOff).toHaveBeenCalledWith({ purpose: "PRACTICE_REVIEW", tier: "IN_HOUSE" });
+	});
+});
+
+const expanded = (name: string) =>
+	screen.getByRole("button", { name }).getAttribute("aria-expanded");
+
+describe("AgentBindingsPage rows", () => {
+	const decisionModel: AvailableLlmModel = {
+		...cloudModel,
+		id: 30,
+		displayName: "Decider",
+		purposes: ["PRACTICE_DECISION"],
+	};
+	const needs: PracticePrecomputeSummary[] = [
+		{
+			practiceSlug: "comment-quality",
+			practiceName: "Comment quality",
+			asOf: { jobId: "job-1", finishedAt: new Date("2026-10-03T09:00:00") },
+			scriptChanged: false,
+			needs: [
+				{
+					purpose: "PRACTICE_DECISION",
+					need: "REQUIRED",
+					unmetTiers: ["IN_HOUSE", "CLOUD", "UNDECLARED"],
+				},
+			],
+		},
+	];
+
+	it("opens a precompute row whose required model some members lack, and says who", async () => {
+		await renderWithRouter(
+			<Page
+				availableModels={[inHouseModel, cloudModel, decisionModel]}
+				precomputeNeeds={{ status: "ready", summaries: needs }}
+			/>,
+			"/",
+		);
+		expect(expanded("Decision model")).toBe("true");
+		expect(expanded("Embedding model")).toBe("false");
+		expect(screen.getByRole("note").textContent).toBe(
+			"1 practice needs a decision model for In-house and Cloud members and members who have not chosen. Until you assign one, its precompute script does not run, and the review checks the practice without its help.",
+		);
+		expect(
+			screen.getByRole("button", { name: "Decision model" }).getAttribute("aria-describedby"),
+		).not.toBeNull();
+		screen.getByText("Needs attention", { ignore: ".sr-only" });
+	});
+
+	it("opens a precompute row once, when needs that arrive after the page ask for it", async () => {
+		function NeedsArriveLater() {
+			const [precomputeNeeds, setPrecomputeNeeds] = useState<
+				AgentBindingsPageProps["precomputeNeeds"]
+			>({ status: "loading" });
+			return (
+				<>
+					<button
+						type="button"
+						onClick={() => setPrecomputeNeeds({ status: "ready", summaries: [...needs] })}
+					>
+						Needs arrive
+					</button>
+					<Page
+						availableModels={[inHouseModel, cloudModel, decisionModel]}
+						precomputeNeeds={precomputeNeeds}
+					/>
+				</>
+			);
+		}
+		await renderWithRouter(<NeedsArriveLater />, "/");
+		expect(expanded("Decision model")).toBe("false");
+		fireEvent.click(screen.getByRole("button", { name: "Needs arrive" }));
+		expect(expanded("Decision model")).toBe("true");
+		// Decided once: the reader's close holds while the same needs come back.
+		fireEvent.click(screen.getByRole("button", { name: "Decision model" }));
+		fireEvent.click(screen.getByRole("button", { name: "Needs arrive" }));
+		expect(expanded("Decision model")).toBe("false");
 	});
 });

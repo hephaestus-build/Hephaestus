@@ -3,14 +3,19 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -19,8 +24,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -150,6 +158,7 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
                         30,
                         false,
                         null,
+                        null,
                         null)
                 .toJson(mapper));
         when(preferences.forDeveloper(1L, 20L)).thenReturn(new MemberAiPreferences.Decision(false, null));
@@ -167,5 +176,45 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
                 .isTrue();
         assertThat(policy.permitsReview(1L, AgentJobType.CONVERSATION_REVIEW, metadata))
                 .isFalse();
+    }
+
+    /** The review's precompute models are routed for the reviewed developer and capped at the review's own tier. */
+    @Test
+    void shouldGiveNoCloudPrecomputeModelWhenTheCloudMembersReviewRunsInHouse() {
+        var bindings = mock(WorkspaceAgentBindingRepository.class);
+        var resolver = mock(LlmModelResolver.class);
+        var routed = new ReviewMemberAiPolicy(
+                new MemberAiRoutingAdapter(
+                        bindings, preferences, resolver, mock(WorkspaceRepository.class), suppression),
+                mapper,
+                preferences,
+                issues,
+                ownership,
+                suppression);
+        when(preferences.forDeveloper(1L, 20L))
+                .thenReturn(new MemberAiPreferences.Decision(true, MemberAiChoice.CLOUD));
+        var review = readyBinding(resolver, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.IN_HOUSE);
+        var decision = readyBinding(resolver, AgentPurpose.PRACTICE_DECISION, DataHandlingTier.CLOUD);
+        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_REVIEW))
+                .thenReturn(List.of(review));
+        when(bindings.findByWorkspaceIdAndPurpose(1L, AgentPurpose.PRACTICE_DECISION))
+                .thenReturn(List.of(decision));
+        var metadata = mapper.createObjectNode().put("about_user_id", 20L);
+
+        assertThat(routed.binding(1L, AgentJobType.PULL_REQUEST_REVIEW, metadata))
+                .contains(review);
+        assertThat(routed.precomputeBinding(
+                        1L, AgentPurpose.PRACTICE_DECISION, AgentJobType.PULL_REQUEST_REVIEW, metadata))
+                .isEmpty();
+    }
+
+    private static WorkspaceAgentBinding readyBinding(
+            LlmModelResolver resolver, AgentPurpose purpose, DataHandlingTier tier) {
+        var binding = new WorkspaceAgentBinding();
+        binding.setPurpose(purpose);
+        binding.setDataHandlingTier(tier);
+        binding.setEnabled(true);
+        lenient().when(resolver.isAvailable(binding)).thenReturn(true);
+        return binding;
     }
 }

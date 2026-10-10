@@ -498,8 +498,9 @@ Plan for support contact, not only a dashboard change.
 Some started attempts may return no trustworthy usage counters.
 Migrated legacy attempts may lack an admission price snapshot.
 These events are recorded without a price and **excluded from monthly totals**.
+An attempt on a model declared **No metered API cost** is the exception: it always records a confirmed $0.
 The reported total is then a lower bound, not confirmed spend.
-The UI shows the confirmed total and a separate unpriced-call count.
+The UI shows the confirmed total and, under **No price set**, the count of runs that have usage without a price.
 
 The purse reads **UNVERIFIABLE** instead of **WITHIN**.
 **EXHAUSTED** still takes priority.

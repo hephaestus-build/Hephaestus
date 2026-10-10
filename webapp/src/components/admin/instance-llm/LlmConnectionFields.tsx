@@ -31,10 +31,18 @@ import { Input } from "@/components/ui/input";
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
+	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import {
+	LLM_API_PROTOCOL_GROUPS,
+	LLM_API_PROTOCOL_LABELS,
+	LLM_API_PROTOCOL_SELECT_ITEMS,
+	llmApiProtocolDescription,
+} from "@/lib/llm-api-protocol-labels";
 import {
 	type FieldErrors,
 	type LlmConnectionFormField,
@@ -43,6 +51,7 @@ import {
 import {
 	authModeDefaultFor,
 	baseUrlDefaultFor,
+	type LlmApiProtocol,
 	type LlmAuthMode,
 	type OpenAiConnectionIdentity,
 	PROVIDER_PRESET_LABELS,
@@ -50,7 +59,6 @@ import {
 	PROVIDER_PRESET_SELECT_ITEMS,
 	type ProviderPreset,
 	presetForConnection,
-	usesResponsesApi,
 } from "@/lib/llm-provider-type";
 import { hasText } from "@/lib/text";
 
@@ -58,7 +66,7 @@ export interface LlmConnectionFieldsValue {
 	displayName: string;
 	baseUrl: string;
 	preset: ProviderPreset;
-	useResponsesApi: boolean;
+	apiProtocol: LlmApiProtocol;
 	authMode: LlmAuthMode;
 	/** Always blank on open: a stored key is never read back to the browser. */
 	apiKey: string;
@@ -87,7 +95,7 @@ export function connectionFieldsValueOf(
 		displayName: connection?.displayName ?? "",
 		baseUrl: connection?.baseUrl ?? baseUrlDefaultFor("OPENAI"),
 		preset: connection ? presetForConnection(connection) : "OPENAI",
-		useResponsesApi: connection ? usesResponsesApi(connection.apiProtocol) : true,
+		apiProtocol: connection?.apiProtocol ?? "openai-responses",
 		authMode: connection?.authMode ?? "BEARER",
 		apiKey: "",
 		clearApiKey: false,
@@ -104,6 +112,23 @@ export function validateConnectionFields(
 		// Immutable once created, so an edit neither sends nor validates it.
 		baseUrl: isEdit ? undefined : value.baseUrl,
 	});
+}
+
+/**
+ * What a connection's key is, without the key: its last four characters, or that there is none. Both
+ * consoles say it in these words, beside a provider and in the edit form.
+ */
+export function apiKeyLine({
+	hasApiKey,
+	apiKeyLast4,
+}: {
+	hasApiKey: boolean;
+	apiKeyLast4?: string;
+}): string {
+	if (!hasApiKey) {
+		return "No API key";
+	}
+	return hasText(apiKeyLast4) ? `Key ends in ${apiKeyLast4}` : "Key stored";
 }
 
 export interface LlmConnectionFieldsProps {
@@ -128,7 +153,10 @@ export function LlmConnectionFields({
 	const displayNameId = useId();
 	const presetId = useId();
 	const presetLabelId = useId();
-	const responsesApiId = useId();
+	const apiProtocolId = useId();
+	const apiProtocolLabelId = useId();
+	const apiProtocolDescriptionId = useId();
+	const lockedApiId = useId();
 	const baseUrlId = useId();
 	const connectionPlatformId = useId();
 	const connectionPlatformLabelId = useId();
@@ -138,15 +166,20 @@ export function LlmConnectionFields({
 	const clearApiKeyId = useId();
 	const displayNameErrorId = useId();
 	const baseUrlErrorId = useId();
+	const apiProtocolDescription = llmApiProtocolDescription(value.apiProtocol);
 
-	const applyPreset = (next: ProviderPreset) => {
-		const baseUrlWasTypedByHand =
-			Boolean(value.baseUrl) && value.baseUrl !== baseUrlDefaultFor(value.preset);
-		update({
-			preset: next,
-			authMode: authModeDefaultFor(next),
-			...(baseUrlWasTypedByHand ? {} : { baseUrl: baseUrlDefaultFor(next) }),
-		});
+	const baseUrlWasTypedByHand =
+		hasText(value.baseUrl) && value.baseUrl !== baseUrlDefaultFor(value.preset);
+	const presetChange = (next: ProviderPreset): Partial<LlmConnectionFieldsValue> => ({
+		preset: next,
+		authMode: authModeDefaultFor(next),
+		...(baseUrlWasTypedByHand ? {} : { baseUrl: baseUrlDefaultFor(next) }),
+	});
+
+	const applyApiProtocol = (next: LlmApiProtocol) => {
+		// Neither OpenAI nor Azure OpenAI serves a rerank API, so their address would be wrong here.
+		const presetServesIt = next !== "cohere-rerank" || value.preset === "OTHER";
+		update({ apiProtocol: next, ...(presetServesIt ? {} : presetChange("OTHER")) });
 	};
 
 	return (
@@ -179,7 +212,7 @@ export function LlmConnectionFields({
 							value={value.preset}
 							onValueChange={(next) => {
 								if (hasText(next)) {
-									applyPreset(next);
+									update(presetChange(next));
 								}
 							}}
 						>
@@ -202,22 +235,59 @@ export function LlmConnectionFields({
 						)}
 					</Field>
 
-					<Field orientation="horizontal">
-						<Checkbox
-							id={responsesApiId}
-							checked={value.useResponsesApi}
-							onCheckedChange={(checked) => update({ useResponsesApi: checked })}
-						/>
-						<FieldContent>
-							<FieldLabel htmlFor={responsesApiId} className="font-normal">
-								Use the Responses API
-							</FieldLabel>
-							<FieldDescription>
-								Turn this off only if the endpoint serves Chat Completions alone.
+					<Field>
+						<FieldLabel id={apiProtocolLabelId} htmlFor={apiProtocolId}>
+							API
+						</FieldLabel>
+						<Select
+							items={LLM_API_PROTOCOL_SELECT_ITEMS}
+							value={value.apiProtocol}
+							onValueChange={(next) => {
+								if (hasText(next)) {
+									applyApiProtocol(next);
+								}
+							}}
+						>
+							<SelectTrigger
+								id={apiProtocolId}
+								className="w-full"
+								aria-describedby={
+									hasText(apiProtocolDescription) ? apiProtocolDescriptionId : undefined
+								}
+							>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent aria-labelledby={apiProtocolLabelId}>
+								{LLM_API_PROTOCOL_GROUPS.map(({ group, label, protocols }) => (
+									<SelectGroup key={group}>
+										<SelectLabel>{label}</SelectLabel>
+										{protocols.map((protocol) => (
+											<SelectItem key={protocol} value={protocol}>
+												{LLM_API_PROTOCOL_LABELS[protocol].label}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								))}
+							</SelectContent>
+						</Select>
+						{hasText(apiProtocolDescription) && (
+							<FieldDescription id={apiProtocolDescriptionId}>
+								{apiProtocolDescription}
 							</FieldDescription>
-						</FieldContent>
+						)}
 					</Field>
 				</FieldGroup>
+			)}
+
+			{isEdit && (
+				<Field>
+					<FieldLabel htmlFor={lockedApiId}>API</FieldLabel>
+					<Input
+						id={lockedApiId}
+						value={LLM_API_PROTOCOL_LABELS[value.apiProtocol].label}
+						disabled
+					/>
+				</Field>
 			)}
 
 			<Field data-invalid={Boolean(errors.baseUrl)}>
@@ -236,7 +306,7 @@ export function LlmConnectionFields({
 				/>
 				{isEdit && (
 					<FieldDescription>
-						Endpoint, API shape and authentication cannot change. Add a connection instead.
+						Endpoint, API and authentication cannot change. Add a connection instead.
 					</FieldDescription>
 				)}
 				{hasText(errors.baseUrl) && <FieldError id={baseUrlErrorId}>{errors.baseUrl}</FieldError>}
@@ -323,9 +393,7 @@ export function LlmConnectionFields({
 						value={value.apiKey}
 						onChange={(event) => update({ apiKey: event.target.value })}
 						disabled={value.clearApiKey}
-						placeholder={
-							hasApiKey ? `Configured · ends in ····${apiKeyLast4 ?? "····"}` : "Enter API key"
-						}
+						placeholder={hasApiKey ? apiKeyLine({ hasApiKey, apiKeyLast4 }) : "Enter API key"}
 						autoComplete="off"
 					/>
 					<FieldDescription>

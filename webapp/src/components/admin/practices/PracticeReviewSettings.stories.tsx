@@ -14,6 +14,7 @@ const readyBinding: AgentBinding = {
 	enabled: true,
 	ready: true,
 	instanceModelId: 1,
+	servedTiers: ["IN_HOUSE", "CLOUD"],
 };
 const model = {
 	status: "ready" as const,

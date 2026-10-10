@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-	API_PROTOCOLS,
-	authModeDefaultFor,
-	baseUrlDefaultFor,
-	defaultProtocolFor,
-	presetForConnection,
-} from "./llm-provider-type";
+import { authModeDefaultFor, baseUrlDefaultFor, presetForConnection } from "./llm-provider-type";
 
 describe("OpenAI-compatible endpoint presets", () => {
 	it("gives Azure its own auth mode and base-URL template", () => {
@@ -17,18 +11,10 @@ describe("OpenAI-compatible endpoint presets", () => {
 		);
 	});
 
-	it.each([
-		[true, API_PROTOCOLS.OPENAI_RESPONSES],
-		[false, API_PROTOCOLS.OPENAI_COMPLETIONS],
-		[undefined, API_PROTOCOLS.OPENAI_RESPONSES],
-	])("defaults useResponsesApi=%s to the matching wire API", (useResponsesApi, protocol) => {
-		expect(defaultProtocolFor(useResponsesApi)).toBe(protocol);
-	});
-
 	it("does not infer the create-time Azure preset while editing", () => {
 		expect(
 			presetForConnection({
-				apiProtocol: API_PROTOCOLS.OPENAI_RESPONSES,
+				apiProtocol: "openai-responses",
 				baseUrl: "https://example.openai.azure.com/openai/v1",
 			}),
 		).toBe("OTHER");

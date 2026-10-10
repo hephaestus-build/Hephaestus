@@ -4,9 +4,9 @@ import { CircleDollarSign } from "lucide-react";
 import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { StatTileSkeleton } from "@/components/common/StatTile";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { LlmUsageByJobTypeTable } from "./LlmUsageBreakdownTables";
@@ -79,30 +79,24 @@ export function WorkspaceLlmUsagePage({
 	);
 }
 
+/** The report's shape without its landmarks: a skeleton must not claim the regions the report will own. */
 function UsageSkeleton() {
 	return (
-		<div className="space-y-6" aria-busy="true">
-			<div className="grid gap-4 md:grid-cols-2">
-				{["shared", "provider"].map((slot) => (
-					<Card key={slot}>
-						<CardHeader>
-							<Skeleton className="h-4 w-40" />
-							<Skeleton className="h-7 w-28" />
-						</CardHeader>
-						<CardContent>
+		<div className="space-y-8" aria-busy="true">
+			<div className="space-y-3">
+				<Skeleton className="h-7 w-40" />
+				<div className="grid gap-4 md:grid-cols-2">
+					{["shared", "provider"].map((slot) => (
+						<StatTileSkeleton key={slot}>
 							<Skeleton className="h-1.5 w-full" />
-						</CardContent>
-					</Card>
-				))}
+						</StatTileSkeleton>
+					))}
+				</div>
 			</div>
-			<Card>
-				<CardHeader>
-					<CardTitle>By run type</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<LlmUsageByJobTypeTable />
-				</CardContent>
-			</Card>
+			<div className="space-y-3">
+				<Skeleton className="h-7 w-32" />
+				<LlmUsageByJobTypeTable purses={["SHARED"]} />
+			</div>
 		</div>
 	);
 }

@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -21,13 +21,8 @@ public record CreateWorkspaceLlmConnectionRequestDTO(
         @NonNull @NotBlank @Size(max = 2048) @Schema(description = "Provider base URL")
         String baseUrl,
 
-        @NonNull
-        @NotBlank
-        @Pattern(
-                regexp = "openai-completions|openai-responses",
-                message = "apiProtocol must be one of openai-completions, openai-responses")
-        @Schema(description = "Wire protocol", example = "openai-responses")
-        String apiProtocol,
+        @NonNull @NotNull @Schema(description = "Wire protocol", example = "openai-responses")
+        LlmApiProtocol apiProtocol,
 
         @Nullable @Schema(description = "Credential shape (default BEARER)")
         LlmAuthMode authMode,

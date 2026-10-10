@@ -1,6 +1,17 @@
+import { cn } from "cn";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { hasText } from "@/lib/text";
+
+/** A column whose cells need more than a width: a column hidden below `lg`, or right-aligned figures. */
+export interface TableSkeletonColumn {
+	/** A Tailwind width class, or `null` for a column with nothing to promise. */
+	width: string | null;
+	/** The column's own classes, so a cell that the header hides below `lg` is hidden here too. */
+	className?: string;
+	/** Right-aligned, where the figures will be. */
+	numeric?: boolean;
+}
 
 export interface TableRowsSkeletonProps {
 	/**
@@ -8,7 +19,7 @@ export interface TableRowsSkeletonProps {
 	 * `null` for one that doesn't (a trailing action slot has nothing to promise). Length must match
 	 * the header's column count, or the placeholder columns won't line up with the real ones.
 	 */
-	columns: (string | null)[];
+	columns: readonly (string | null | TableSkeletonColumn)[];
 	rows?: number;
 }
 
@@ -22,12 +33,20 @@ export function TableRowsSkeleton({ columns, rows = 5 }: TableRowsSkeletonProps)
 	return (
 		<TableBody>
 			{Array.from({ length: rows }, (_, rowIndex) => (
-				<TableRow key={rowIndex}>
-					{columns.map((width, cellIndex) => (
-						<TableCell key={cellIndex}>
-							{hasText(width) && <Skeleton className={`h-5 ${width}`} />}
-						</TableCell>
-					))}
+				<TableRow key={rowIndex} variant="static">
+					{columns.map((column, cellIndex) => {
+						const plain = column === null || typeof column === "string";
+						const width = plain ? column : column.width;
+						return (
+							<TableCell key={cellIndex} className={plain ? undefined : column.className}>
+								{hasText(width) && (
+									<Skeleton
+										className={cn("h-5", width, !plain && column.numeric === true && "ml-auto")}
+									/>
+								)}
+							</TableCell>
+						);
+					})}
 				</TableRow>
 			))}
 		</TableBody>

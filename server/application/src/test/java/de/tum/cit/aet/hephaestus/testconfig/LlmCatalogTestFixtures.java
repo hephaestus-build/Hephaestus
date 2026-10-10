@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelVisibility;
@@ -15,8 +16,6 @@ import java.math.BigDecimal;
  * has, and set anything else on the returned instance (both entities are fully mutable).
  */
 public final class LlmCatalogTestFixtures {
-
-    public static final String OPENAI_COMPLETIONS = "openai-completions";
 
     /**
      * A syntactically valid, deliberately non-resolvable host. {@code .example} is reserved by
@@ -34,7 +33,7 @@ public final class LlmCatalogTestFixtures {
         connection.setSlug(slug);
         connection.setDisplayName("Connection " + slug);
         connection.setBaseUrl(BASE_URL);
-        connection.setApiProtocol(OPENAI_COMPLETIONS);
+        connection.setApiProtocol(LlmApiProtocol.OPENAI_COMPLETIONS);
         connection.setEnabled(true);
         return connection;
     }

@@ -3,6 +3,7 @@ import type {
 	DeliveryPolicyTrace,
 	PracticeSignal,
 	PracticeTraceEntry,
+	PrecomputeRun,
 	ReviewedWorkRef,
 	TracedArtifact,
 	TracedSignal,
@@ -380,6 +381,66 @@ const practiceTraceEntries = [
 		withheldReasons: [],
 	},
 ] satisfies PracticeTraceEntry[];
+
+/** What a practice's precompute script did in one review, one run per way it can end. */
+export const precomputeRuns = {
+	found: { status: "OK", leads: 4, models: [] },
+	skipped: {
+		status: "SKIPPED",
+		leads: 0,
+		models: [
+			{ purpose: "PRACTICE_DECISION", need: "REQUIRED", bound: false, notRated: [] },
+			{ purpose: "PRACTICE_EMBEDDING", need: "OPTIONAL", bound: true, notRated: [] },
+		],
+	},
+	partial: {
+		status: "OK",
+		leads: 3,
+		models: [
+			{
+				purpose: "PRACTICE_DECISION",
+				need: "REQUIRED",
+				bound: true,
+				notRated: [
+					{ reason: "DEADLINE", count: 5 },
+					{ reason: "OFF_FORMAT", count: 1 },
+				],
+			},
+			{
+				purpose: "PRACTICE_RERANKING",
+				need: "OPTIONAL",
+				bound: true,
+				notRated: [{ reason: "BUDGET", count: 2 }],
+			},
+		],
+	},
+	ratedNone: {
+		status: "OK",
+		leads: 0,
+		models: [
+			{
+				purpose: "PRACTICE_DECISION",
+				need: "REQUIRED",
+				bound: true,
+				notRated: [{ reason: "DEADLINE", count: 6 }],
+			},
+		],
+	},
+	timedOut: {
+		status: "TIMED_OUT",
+		leads: 2,
+		models: [
+			{
+				purpose: "PRACTICE_DECISION",
+				need: "REQUIRED",
+				bound: true,
+				notRated: [{ reason: "OFF_FORMAT", count: 1 }],
+			},
+		],
+	},
+	notFinished: { status: "NOT_FINISHED", leads: 0, models: [] },
+	failed: { status: "FAILED", leads: 0, models: [] },
+} satisfies Record<string, PrecomputeRun>;
 
 export const deniedDeliveryPolicyEvaluation: DeliveryPolicyTrace = {
 	reviewId: "22222222-2222-2222-2222-222222222222",

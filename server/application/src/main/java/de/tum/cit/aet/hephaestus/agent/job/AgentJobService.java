@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelKind;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.handler.IssueReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
@@ -38,7 +40,9 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -53,6 +57,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -396,8 +401,9 @@ public class AgentJobService {
             job.setIdempotencyKey(reviewKey);
             job.setTraceId(resolveTraceId());
             try {
-                job.setConfigSnapshot(
-                        ConfigSnapshot.from(binding, llmModelResolver).toJson(objectMapper));
+                job.setConfigSnapshot(ConfigSnapshot.from(binding, llmModelResolver)
+                        .withPrecompute(precomputeSlots(workspace.getId(), jobType, submission.metadata()))
+                        .toJson(objectMapper));
             } catch (IllegalStateException unavailableModel) {
                 log.warn(
                         "Skipping practice-review binding whose model is no longer available: workspaceId={}",
@@ -438,6 +444,22 @@ public class AgentJobService {
             TransactionCallbacks.afterCommit(() -> AgentJobTelemetry.queued(job));
         }
         return result;
+    }
+
+    /**
+     * Each precompute model is routed like the review's own model, through the same developer's tier
+     * ceiling. A purpose with no ready binding gives no slot: the review runs, and the scripts that
+     * need that model report that it is missing.
+     */
+    private @Nullable Map<ModelKind, FrozenModel> precomputeSlots(
+            Long workspaceId, AgentJobType jobType, JsonNode metadata) {
+        Map<ModelKind, FrozenModel> slots = new EnumMap<>(ModelKind.class);
+        for (AgentPurpose purpose : AgentPurpose.precompute()) {
+            memberAiPolicy
+                    .precomputeBinding(workspaceId, purpose, jobType, metadata)
+                    .ifPresent(binding -> slots.put(purpose.kind(), FrozenModel.from(binding, llmModelResolver)));
+        }
+        return slots.isEmpty() ? null : slots;
     }
 
     private String resolveTraceId() {

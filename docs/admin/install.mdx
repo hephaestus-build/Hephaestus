@@ -344,15 +344,15 @@ The bundle contains `AGENT_ENABLED` and `GIT_CHECKOUT_ENABLED`.
 The job queue runs on PostgreSQL, so this bundle needs no NATS setup.
 
 [Connect an AI Provider](./ai-providers) explains model setup.
-It covers provider connection registration, tests, model prices, model shares, and a binding to the **practice reviews** purpose.
+It covers provider connection registration, tests, model prices, model shares, and an assignment to the **practice reviews** purpose.
 No reviews run until setup is complete.
 
-If the flags are on but no model is bound, webhook-driven reviews skip with only a DEBUG log line.
-An unbound workspace is a normal state.
+If the flags are on but no model is assigned, webhook-driven reviews skip with only a DEBUG log line.
+A workspace without an assigned model is a normal state.
 A higher-level log line for each event would create noise.
 The manual dev trigger answers with the reason.
 
-1. Use it to tell "unbound" apart from "broken".
+1. Use it to tell "no model assigned" apart from "broken".
 
 ## 8. Legal pages (public instances)
 
@@ -365,7 +365,7 @@ instance to users. See [Legal Pages](./legal-pages).
 ## 9. First practice review
 
 Before this procedure, GitHub must be connected (step 6).
-A model must also be bound to practice reviews ([Connect an AI
+A model must also be assigned to practice reviews ([Connect an AI
 Provider](./ai-providers)).
 The procedure runs one review and lets you read its feedback before anyone else can:
 

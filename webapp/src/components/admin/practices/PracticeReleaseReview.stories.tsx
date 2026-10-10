@@ -113,3 +113,18 @@ export const RecordedVersionBase: Story = {
 export const Submitting: Story = {
 	args: { pending: true },
 };
+
+/** The script that runs before each review carries the editor's name for it. */
+export const PrecomputeScriptUpdate: Story = {
+	args: {
+		proposal: {
+			...proposal,
+			current: base,
+			offered: { ...base, precomputeScript: "export default { models: {} };" },
+			fields: [{ field: "PRECOMPUTE_SCRIPT", offeredChanged: true, conflict: false }],
+		},
+	},
+	play: async () => {
+		await expect(screen.getByText("Precompute script")).toBeVisible();
+	},
+};

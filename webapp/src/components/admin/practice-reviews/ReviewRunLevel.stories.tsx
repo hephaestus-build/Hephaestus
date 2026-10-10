@@ -9,11 +9,14 @@ import { expectNoPanelOverflow } from "@/stories/reflow";
 import { expectGenuinelyDisabled } from "@/test/controls";
 import { levelsOpenedBy } from "@/test/detail-stack";
 
+import { precedes } from "@/test/dom";
+
 import {
 	manyObservations,
 	reviewFeedback,
 	reviewJob,
 	reviewObservations,
+	reviewPrecompute,
 	workspacePractices,
 } from "./fixtures";
 import { reviewLevel } from "./review-levels";
@@ -65,13 +68,14 @@ const meta = {
 		job: { status: "ready", job: reviewJob(COMPLETED_RUN) },
 		observations: ready(observationsOf(COMPLETED_RUN)),
 		feedback: ready(feedbackOf(COMPLETED_RUN)),
+		precompute: { status: "ready", scripts: [] },
 		practices: workspacePractices,
 		onCancel: fn(),
 		cancelPending: false,
 		onRetryResultProcessing: fn(),
 		retryResultProcessingPending: false,
 	},
-	argTypes: { path: { control: false } },
+	argTypes: { path: { control: false }, precompute: { control: false } },
 	render: (args) => (
 		<InLevelStack entry={reviewLevel(COMPLETED_RUN)} path={args.path} size="detailWide">
 			{(level) => <ReviewRunLevel {...args} {...level} />}
@@ -110,6 +114,10 @@ export const CompletedWithMixedOutput: Story = {
 		).toEqual(["observation:66666666-6666-6666-6666-666666666666"]);
 		panel.getByRole("heading", { name: "How this review ran", level: 3 });
 		panel.getByRole("button", { name: "Copy configuration" });
+		// No script ran, so there is no section about scripts.
+		await expect(
+			panel.queryByRole("region", { name: "Precompute scripts" }),
+		).not.toBeInTheDocument();
 		// A finished, processed review owes nothing, so the level has no footer to offer.
 		await expect(panel.queryByRole("button", { name: "Cancel review" })).not.toBeInTheDocument();
 		await expect(
@@ -245,7 +253,9 @@ export const AnsweredByAnEarlierReview: Story = {
 		await expect(panel.getByRole("link", { name: "Errors carry their context" })).toBeVisible();
 		await expect(panel.queryByText("No observations were recorded")).toBeNull();
 		await expect(panel.queryByText("Nothing was assessed")).toBeNull();
-		const calls = panel.getAllByRole("term").find((term) => term.textContent === "Model calls");
+		const calls = panel
+			.getAllByRole("term")
+			.find((term) => term.textContent === "Review model calls");
 		await expect(calls?.nextElementSibling).toHaveTextContent(/^0$/u);
 	},
 };
@@ -455,5 +465,57 @@ export const OneSectionFailed: Story = {
 		await expect(panel.getByText("We could not load observations")).toBeVisible();
 		// The other section is unaffected, which is the whole point of two states rather than one.
 		await panel.findByText(/2 issues to tighten in this change/u);
+	},
+};
+
+/**
+ * What the precompute scripts did sits between what the review produced and how it ran: it
+ * explains the output above it, and its calls are not the run card's.
+ */
+export const WithPrecomputeScripts: Story = {
+	args: {
+		job: { status: "ready", job: { ...reviewJob(COMPLETED_RUN), dataHandlingTier: "CLOUD" } },
+		precompute: {
+			status: "ready",
+			scripts: [reviewPrecompute.found, reviewPrecompute.callsNotRated, reviewPrecompute.failed],
+		},
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		const section = panel.getByRole("region", { name: "Precompute scripts" });
+		await expect(
+			within(section).getByText("What each practice’s script did before this review."),
+		).toBeVisible();
+		await expect(within(section).getByRole("link", { name: "AI usage" })).toHaveAttribute(
+			"href",
+			"/w/demo/admin/usage",
+		);
+		const observations = panel.getByRole("heading", { name: "Observations", level: 3 });
+		const runCard = panel.getByRole("heading", { name: "How this review ran", level: 3 });
+		await expect(precedes(observations, section)).toBe(true);
+		await expect(precedes(section, runCard)).toBe(true);
+	},
+};
+
+/** A failed read is said, never shown as a review without scripts. */
+export const PrecomputeFailedToLoad: Story = {
+	args: {
+		precompute: {
+			status: "error",
+			error: { status: 503, detail: "The precompute record is unavailable." },
+			onRetry: fn(),
+		},
+	},
+	play: async ({ args, userEvent }) => {
+		const panel = within(await settledDrawerPanel());
+		const section = panel.getByRole("region", { name: "Precompute scripts" });
+		await expect(
+			within(section).getByText("We could not load what the precompute scripts did"),
+		).toBeVisible();
+		await userEvent.click(within(section).getByRole("button", { name: "Retry" }));
+		if (args.precompute.status !== "error") {
+			throw new Error("This story is the error branch");
+		}
+		await expect(args.precompute.onRetry).toHaveBeenCalledOnce();
 	},
 };

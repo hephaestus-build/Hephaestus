@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
+
+import type { AgentBinding } from "@/api/types.gen";
 import { ReviewRunningBanner } from "./ReviewRunningBanner";
 
 const readyModel = {
@@ -8,7 +10,8 @@ const readyModel = {
 		purpose: "PRACTICE_REVIEW",
 		enabled: true,
 		ready: true,
-	} as const,
+		servedTiers: ["IN_HOUSE", "CLOUD"],
+	} satisfies AgentBinding,
 };
 
 const meta = {

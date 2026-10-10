@@ -41,8 +41,19 @@ public record WorkspaceLlmUsageReportDTO(
 
         @NonNull
         @Schema(
-                description = "Calls this month (either purse) whose price is not yet known. They are excluded from "
-                        + "both totals above, so a non-zero value means the real spend may be higher than shown.")
+                description = "Whether this month has an own-provider purse to show. True when the month has at least "
+                        + "one own-provider call, priced or not, so a month of confirmed $0.00 calls counts. For the "
+                        + "current month, also true when the workspace has an enabled own-provider model on an "
+                        + "enabled connection, so its admins can set a provider cap before the first call. The "
+                        + "spend and cap fields cannot answer this.")
+        Boolean ownProviderInUse,
+
+        @NonNull
+        @Schema(
+                description = "Runs this month (job attempts and mentor turns, either purse) with at least one "
+                        + "ledger row whose price is not yet known, each counted once. A precompute row counts "
+                        + "toward the run of its review. Those rows are excluded from both totals above, so a "
+                        + "non-zero value means the real spend may be higher than shown.")
         Long unpricedEventCount,
 
         @NonNull
@@ -67,6 +78,16 @@ public record WorkspaceLlmUsageReportDTO(
 
         @NonNull List<LlmUsageByJobTypeDTO> byJobType,
         @NonNull List<LlmUsageByDayDTO> byDay,
+
+        @NonNull
+        @Schema(
+                description = "The decision, embedding and reranking calls of precompute scripts, one entry per "
+                        + "practice, most spend first. Their spend is already part of byJobType. Chat calls of "
+                        + "precompute scripts are in each review's own cost and not here.")
+        List<LlmUsageByPracticeDTO> byPractice,
+
+        @NonNull @Schema(description = "The byPractice entries in total, read from the ledger.")
+        LlmUsagePrecomputeTotalDTO precomputeTotal,
 
         @Nullable
         @Schema(

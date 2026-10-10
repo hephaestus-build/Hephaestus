@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, before, describe, it } from "node:test";
 
 import { isPracticeModule } from "./lib/practice-contract.ts";
 import type { DiffFile, PracticeScript } from "./lib/types.ts";
+import { stagePrecompute } from "./stage.ts";
 
 const SCRIPTS_DIR = path.resolve(
 	import.meta.dirname,
 	"../../../server/application/src/main/resources/practices/precompute",
 );
-const LIB_DIR = path.resolve(import.meta.dirname, "lib");
 
 const tempDirs: string[] = [];
 
@@ -21,18 +21,13 @@ async function createTempDir(prefix: string): Promise<string> {
 	return dir;
 }
 
-/**
- * Stage a single script in a work dir laid out like the runner (`practices/<script>` + symlinked `lib/`)
- * so its `../lib/types` import resolves, then import the staged copy and return its default export.
- */
+/** Stage a single script as the runner does, then import the staged copy and return its default export. */
 async function loadScript(name: string): Promise<PracticeScript> {
-	const work = await createTempDir(`pc-script-${name}-`);
-	await mkdir(path.join(work, "practices"), { recursive: true });
-	await writeFile(path.join(work, "package.json"), '{"type":"module"}\n');
-	await symlink(LIB_DIR, path.join(work, "lib"));
-	const staged = path.join(work, "practices", `${name}.ts`);
-	await cp(path.join(SCRIPTS_DIR, `${name}.ts`), staged);
-	const mod: unknown = await import(staged);
+	const { root, practices } = await stagePrecompute({
+		[name]: await readFile(path.join(SCRIPTS_DIR, `${name}.ts`), "utf8"),
+	});
+	tempDirs.push(root);
+	const mod: unknown = await import(path.join(practices, `${name}.ts`));
 	if (!isPracticeModule(mod)) {
 		throw new Error(`${name} does not export a default function`);
 	}

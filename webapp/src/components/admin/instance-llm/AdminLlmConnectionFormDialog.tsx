@@ -19,8 +19,9 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { listsNoModels, UNLISTED_MODELS } from "@/lib/llm-api-protocol-labels";
 import type { FieldErrors, LlmConnectionFormField } from "@/lib/llm-form-validation";
-import { defaultProtocolFor, type LlmAuthMode } from "@/lib/llm-provider-type";
+import type { LlmApiProtocol, LlmAuthMode } from "@/lib/llm-provider-type";
 import { hasText } from "@/lib/text";
 
 import {
@@ -39,7 +40,7 @@ export interface AdminLlmConnectionFormDialogProps {
 	onUpdate: (id: number, body: UpdateLlmConnectionRequest) => void;
 	onProbe: (
 		request: {
-			apiProtocol: string;
+			apiProtocol: LlmApiProtocol;
 			baseUrl: string;
 			apiKey?: string;
 			authMode?: LlmAuthMode;
@@ -79,7 +80,7 @@ export function AdminLlmConnectionFormDialog({
 function probeInputsDiffer(a: LlmConnectionFieldsValue, b: LlmConnectionFieldsValue): boolean {
 	return (
 		a.baseUrl !== b.baseUrl ||
-		a.useResponsesApi !== b.useResponsesApi ||
+		a.apiProtocol !== b.apiProtocol ||
 		a.authMode !== b.authMode ||
 		a.apiKey !== b.apiKey ||
 		a.clearApiKey !== b.clearApiKey
@@ -118,7 +119,7 @@ function AdminLlmConnectionFormDialogContent({
 		};
 	}, []);
 
-	const apiProtocol = defaultProtocolFor(fields.useResponsesApi);
+	const { apiProtocol } = fields;
 	const clearProbe = () => {
 		probeGeneration.current += 1;
 		setProbeResult(null);
@@ -208,6 +209,12 @@ function AdminLlmConnectionFormDialogContent({
 		});
 	};
 
+	// A failed test that is not only a missing model list is a fault, in the server's words.
+	let failure = probeError;
+	if (probeResult !== null && !probeResult.reachable && !listsNoModels(apiProtocol, probeResult)) {
+		failure = probeResult.message ?? "The provider did not answer.";
+	}
+
 	let testLabel = "Test and fetch models";
 	if (isProbing) {
 		testLabel = "Testing…";
@@ -223,7 +230,8 @@ function AdminLlmConnectionFormDialogContent({
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit connection" : "Add connection"}</DialogTitle>
 					<DialogDescription>
-						Connect an endpoint that implements an OpenAI API. Add and price its models next.
+						Connect an OpenAI-compatible or Cohere-compatible endpoint. Add and price its models
+						next.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -245,7 +253,7 @@ function AdminLlmConnectionFormDialogContent({
 						</p>
 					)}
 
-					<div className="space-y-2">
+					<div>
 						<Button
 							type="button"
 							variant="outline"
@@ -255,41 +263,20 @@ function AdminLlmConnectionFormDialogContent({
 						>
 							{testLabel}
 						</Button>
-						{/* The outcome of a button the admin just pressed, not a failure: `role="alert"` is
-						    assertive and would cut across whatever is being read (SC 4.1.3). */}
-						{probeResult?.reachable === true && (
-							<Alert variant="success" role="status">
-								<AlertDescription>
-									Reachable. Found {probeResult.models.length} model
-									{probeResult.models.length === 1 ? "" : "s"}.
-									{probeResult.models.length > 0 && (
-										<div className="mt-1.5 flex flex-wrap gap-1">
-											{probeResult.models.slice(0, 12).map((modelId) => (
-												<Badge key={modelId} variant="outline" size="xs" className="font-mono">
-													{modelId}
-												</Badge>
-											))}
-										</div>
-									)}
-								</AlertDescription>
-							</Alert>
-						)}
-						{probeResult && !probeResult.reachable && (
-							<Alert variant="warning">
-								<AlertDescription>
-									We could not fetch the model list.{" "}
-									{probeResult.message ?? "The provider did not answer."} You can still save the
-									connection and enter a model ID.
-								</AlertDescription>
-							</Alert>
-						)}
-						{hasText(probeError) && (
-							<Alert variant="warning">
-								<AlertDescription>
-									We could not fetch the model list. {probeError} You can still save the connection
-									and enter a model ID.
-								</AlertDescription>
-							</Alert>
+						{/* Mounted empty, so a result is announced when it arrives (ARIA22). Polite: it answers
+						    the button the admin just pressed, and must not cut across what is being read. */}
+						<div role="status" className="not-empty:mt-2">
+							<ProbeFound apiProtocol={apiProtocol} probeResult={probeResult} />
+						</div>
+						{hasText(failure) && (
+							<div className="mt-2">
+								<Alert variant="warning">
+									<AlertDescription>
+										We could not fetch the model list. {failure} You can still save the connection
+										and enter a model ID.
+									</AlertDescription>
+								</Alert>
+							</div>
 						)}
 					</div>
 				</DialogBody>
@@ -305,4 +292,43 @@ function AdminLlmConnectionFormDialogContent({
 			</DialogForm>
 		</DialogContent>
 	);
+}
+
+interface ProbeFoundProps {
+	apiProtocol: LlmApiProtocol;
+	probeResult: LlmProbeResult | null;
+}
+
+/**
+ * What a test that is no fault found: the models, or that a precompute endpoint lists none. The
+ * status region around it announces it, so it takes no alert role of its own.
+ */
+function ProbeFound({ apiProtocol, probeResult }: ProbeFoundProps) {
+	if (probeResult?.reachable === true) {
+		return (
+			<Alert variant="success" role="none">
+				<AlertDescription>
+					Reachable. Found {probeResult.models.length} model
+					{probeResult.models.length === 1 ? "" : "s"}.
+					{probeResult.models.length > 0 && (
+						<div className="mt-1.5 flex flex-wrap gap-1">
+							{probeResult.models.slice(0, 12).map((modelId) => (
+								<Badge key={modelId} variant="outline" size="xs" className="font-mono">
+									{modelId}
+								</Badge>
+							))}
+						</div>
+					)}
+				</AlertDescription>
+			</Alert>
+		);
+	}
+	if (probeResult !== null && listsNoModels(apiProtocol, probeResult)) {
+		return (
+			<Alert role="none">
+				<AlertDescription>{UNLISTED_MODELS}</AlertDescription>
+			</Alert>
+		);
+	}
+	return null;
 }

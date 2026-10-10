@@ -17,6 +17,8 @@ import {
 	listPracticesOptions,
 	listPracticesQueryKey,
 	listPracticeReleasesOptions,
+	listPrecomputeNeedsOptions,
+	listPrecomputeNeedsQueryKey,
 	previewGroupAdoptionOptions,
 	previewPracticeAdoptionOptions,
 } from "@/api/@tanstack/react-query.gen";
@@ -54,9 +56,11 @@ import {
 	PracticeTreeSkeleton,
 } from "@/components/admin/practices/PracticeSkeletons";
 import {
+	type PrecomputeNeedsState,
 	WorkspacePracticePanel,
 	type WorkspacePracticeState,
 } from "@/components/admin/practices/WorkspacePracticePanel";
+import { panelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { detailStackKey, parseDetailStack } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
@@ -163,6 +167,11 @@ function PracticeCatalogRoute() {
 		...listAdoptablePracticesOptions({ path: { workspaceSlug } }),
 		enabled: library === true,
 	});
+	// What each precompute script needs is read only on a practice's own level.
+	const precomputeNeedsQuery = useQuery({
+		...listPrecomputeNeedsOptions({ path: { workspaceSlug } }),
+		enabled: detailStack.some((entry) => entry.kind === "practice"),
+	});
 	// `useQueries` cannot correlate a result with the entry that produced it, so each payload is
 	// tagged: without it every read is a union, and a mis-ordered stack is a runtime `undefined.name`
 	// rather than a type error.
@@ -210,6 +219,12 @@ function PracticeCatalogRoute() {
 		},
 		onClose: stackControls.close,
 	});
+
+	const precomputeNeedsOf = (practiceSlug: string): PrecomputeNeedsState =>
+		panelState(precomputeNeedsQuery, (summaries) => ({
+			status: "ready" as const,
+			summary: summaries.find((summary) => summary.practiceSlug === practiceSlug),
+		}));
 
 	let libraryState: LibraryState = { status: "loading" };
 	if (catalogQuery.isError) {
@@ -546,6 +561,7 @@ function PracticeCatalogRoute() {
 								nested={level.nested}
 								path={pathAt(level.depth)}
 								state={state}
+								precompute={precomputeNeedsOf(entry.id)}
 							/>
 						);
 					}
@@ -584,8 +600,13 @@ function PracticeCatalogRoute() {
 											: {
 													mode: "edit" as const,
 													initialData: editing,
-													onSubmit: async (slug, data, groupSlug) =>
-														saved(editor.update(slug, data, groupSlug)),
+													onSubmit: async (slug, data, groupSlug) => {
+														await saved(editor.update(slug, data, groupSlug));
+														// A changed script makes the needs on record stale.
+														void queryClient.invalidateQueries({
+															queryKey: listPrecomputeNeedsQueryKey({ path: { workspaceSlug } }),
+														});
+													},
 													evidenceOutcome: evidenceOutcomesQuery.data?.find(
 														(outcome) => outcome.practiceSlug === entry.id,
 													),

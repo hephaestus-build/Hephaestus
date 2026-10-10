@@ -1,11 +1,20 @@
+import { Link } from "@tanstack/react-router";
 import { WorkflowIcon } from "lucide-react";
 
-import type { AgentJob, Practice, ReviewFeedback, ReviewObservation } from "@/api/types.gen";
+import type {
+	AgentJob,
+	Practice,
+	ReviewFeedback,
+	ReviewObservation,
+	ReviewPrecompute,
+} from "@/api/types.gen";
+import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { Section } from "@/components/layout/Section";
 import {
 	RESULT_PROCESSING_DEFS,
 	reviewStatusDef,
@@ -25,6 +34,7 @@ import type { ReviewSectionState } from "./review-states";
 import { ReviewArtifactLink } from "./ReviewArtifact";
 import { ReviewLevelHeader } from "./ReviewLevelHeader";
 import { ReviewOutputSections } from "./ReviewOutputSections";
+import { ReviewPrecomputeTable } from "./ReviewPrecomputeTable";
 import { ReviewRunActions } from "./ReviewRunActions";
 import { ReviewRunCard } from "./ReviewRunCard";
 import { ReviewRunNotices } from "./ReviewRunNotices";
@@ -40,6 +50,8 @@ export interface ReviewRunLevelProps {
 	 */
 	observations: ReviewSectionState<ReviewObservation>;
 	feedback: ReviewSectionState<ReviewFeedback>;
+	/** What each practice's precompute script did before the review; the section shows only with one. */
+	precompute: PanelState<{ scripts: ReviewPrecompute[] }>;
 	/** The workspace's practices, for the hover card on each observation's practice. */
 	practices: Practice[] | undefined;
 	onCancel: () => void;
@@ -55,7 +67,7 @@ function isEmptyResult(state: ReviewSectionState<unknown>): boolean {
 
 /**
  * One practice review: what it reviewed, how it ended, what it observed and what feedback it
- * composed, then how it ran. Its only actions — cancel a running review, retry the processing of its
+ * composed, what the precompute scripts did before it, then how it ran. Its only actions — cancel a running review, retry the processing of its
  * results — are the footer, and only when one applies.
  */
 export function ReviewRunLevel({
@@ -65,6 +77,7 @@ export function ReviewRunLevel({
 	job: jobState,
 	observations,
 	feedback,
+	precompute,
 	practices,
 	onCancel,
 	cancelPending,
@@ -158,6 +171,7 @@ export function ReviewRunLevel({
 						practices={practices}
 					/>
 				)}
+				<PrecomputeScripts workspaceSlug={workspaceSlug} state={precompute} />
 				<ReviewRunCard job={run} />
 			</DrawerBody>
 			{hasActions && (
@@ -172,6 +186,50 @@ export function ReviewRunLevel({
 				</DrawerFooter>
 			)}
 		</>
+	);
+}
+
+/**
+ * Absent while it loads and when no script ran: a skeleton for a section that may not exist would
+ * hold space that the run card then jumps into.
+ */
+function PrecomputeScripts({
+	workspaceSlug,
+	state,
+}: {
+	workspaceSlug: string;
+	state: ReviewRunLevelProps["precompute"];
+}) {
+	if (state.status === "loading" || (state.status === "ready" && state.scripts.length === 0)) {
+		return null;
+	}
+	return (
+		<Section
+			level={3}
+			title="Precompute scripts"
+			description="What each practice’s script did before this review."
+		>
+			{state.status === "error" ? (
+				<QueryErrorAlert
+					error={state.error}
+					title="We could not load what the precompute scripts did"
+					onRetry={state.onRetry}
+				/>
+			) : (
+				<>
+					<ReviewPrecomputeTable workspaceSlug={workspaceSlug} scripts={state.scripts} />
+					<p className="text-xs text-muted-foreground">
+						Spend is on{" "}
+						<InlineLink
+							render={<Link to="/w/$workspaceSlug/admin/usage" params={{ workspaceSlug }} />}
+						>
+							AI usage
+						</InlineLink>
+						.
+					</p>
+				</>
+			)}
+		</Section>
 	);
 }
 

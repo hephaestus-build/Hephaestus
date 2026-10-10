@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import static org.springframework.security.oauth2.core.authorization.OAuth2AuthorizationManagers.hasScope;
+
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
@@ -7,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.core.web.PayloadSizeFilter;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.AndRequestMatcher;
@@ -35,7 +39,9 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <ol>
  *   <li>the sandbox capabilities on the gateway connector, authenticated by a proxy-scoped bearer
- *       credential and rate-limited per authenticated principal;
+ *       credential, authorized by its scope, and rate-limited per authenticated principal. The
+ *       {@link WorkerJwtIssuer#LLM_PRECOMPUTE_SCOPE} reaches only the precompute calls, and
+ *       {@link WorkerJwtIssuer#LLM_PROXY_SCOPE} reaches everything else;
  *   <li>everything else on the gateway connector, denied and answered {@code 404} so the connector
  *       admits to no route a sandbox is not meant to call;
  *   <li>the capability paths on every other connector, denied the same way, so they exist only where
@@ -63,9 +69,11 @@ class LlmProxySecurityConfig {
             WorkerProperties workerProperties)
             throws Exception {
         var paths = PathPatternRequestMatcher.withDefaults();
+        RequestMatcher precomputeCalls = paths.matcher(HttpMethod.POST, "/internal/llm/precompute/{slot}/**");
         RequestMatcher modelCalls = new OrRequestMatcher(
                 paths.matcher(HttpMethod.POST, "/internal/llm/chat/completions"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/responses"),
+                precomputeCalls,
                 paths.matcher(HttpMethod.POST, "/internal/llm/admit-observations"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/public-feedback-history"));
         RequestMatcher runtimeReads = new OrRequestMatcher(
@@ -81,7 +89,10 @@ class LlmProxySecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(
                         (request, response, exception) -> response.setStatus(HttpStatus.NOT_FOUND.value())))
-                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> auth.requestMatchers(precomputeCalls)
+                        .access(hasScope(WorkerJwtIssuer.LLM_PRECOMPUTE_SCOPE))
+                        .anyRequest()
+                        .access(hasScope(WorkerJwtIssuer.LLM_PROXY_SCOPE)))
                 .addFilterBefore(
                         new JobTokenAuthenticationFilter(
                                 agentJobRepository,
@@ -97,7 +108,7 @@ class LlmProxySecurityConfig {
                         JobTokenAuthenticationFilter.class)
                 .addFilterAfter(
                         new SandboxGatewayRateLimitFilter(limit, bucketResolver, objectMapper, accounting),
-                        JobTokenAuthenticationFilter.class);
+                        AuthorizationFilter.class);
 
         return http.build();
     }

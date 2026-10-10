@@ -181,3 +181,61 @@ describe("workspace practice scope", () => {
 		);
 	});
 });
+
+const scriptSection = () => screen.queryByRole("button", { name: /^Precompute script/u });
+const keptNote = () => screen.queryByText(/Your script stays in this draft/u);
+
+describe("a precompute script across support choices", () => {
+	const script = "export default definePrecompute({});";
+
+	async function renderScripted(
+		onSubmit: (slug: string, request: UpdatePracticeRequest, group: string | null) => void,
+	) {
+		await renderWithRouter(
+			<PracticeForm
+				mode="edit"
+				workspaceSlug="team"
+				groups={[]}
+				definitionOptions={mockPracticeDefinitionOptions}
+				initialData={{ ...practice(mockPullRequestReviewFields), precomputeScript: script }}
+				isPending={false}
+				cancel={<Link to="/">Cancel</Link>}
+				onSubmit={onSubmit}
+			/>,
+			"/w/team/admin/practices/review-swift",
+		);
+	}
+
+	it("comes back when the author chooses review again", async () => {
+		const onSubmit =
+			vi.fn<(slug: string, request: UpdatePracticeRequest, group: string | null) => void>();
+		await renderScripted(onSubmit);
+		expect(keptNote()).toBeNull();
+
+		fireEvent.click(screen.getByRole("radio", { name: /^Guidance only/u }));
+		expect(scriptSection()).toBeNull();
+		expect(keptNote()).not.toBeNull();
+
+		fireEvent.click(screen.getByRole("radio", { name: /^AI-supported mentoring/u }));
+		expect(scriptSection()).not.toBeNull();
+		expect(keptNote()).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		const request = onSubmit.mock.calls[0]?.[1];
+		expect(request?.precomputeScript).toBe(script);
+		expect(request?.clear).not.toContain("PRECOMPUTE_SCRIPT");
+	});
+
+	it("is cleared by a save that keeps the practice without review", async () => {
+		const onSubmit =
+			vi.fn<(slug: string, request: UpdatePracticeRequest, group: string | null) => void>();
+		await renderScripted(onSubmit);
+
+		fireEvent.click(screen.getByRole("radio", { name: /^Guidance only/u }));
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		const request = onSubmit.mock.calls[0]?.[1];
+		expect(request?.precomputeScript).toBeUndefined();
+		expect(request?.clear).toContain("PRECOMPUTE_SCRIPT");
+	});
+});

@@ -81,6 +81,7 @@ export const UpdateChangesReviewBehavior: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Review Hephaestus update" }));
 		await expect(await canvas.findByText("The updated default criteria.")).toBeVisible();
 		await expect(canvas.getByText("How it is reviewed")).toBeVisible();
+		await expect(canvas.getByText("Precompute script")).toBeVisible();
 		// The one occasion, with the evidence that review reads: at the merge the threads are read
 		// whole, which is what licenses a claim that nobody ever resolved one.
 		await expect(canvas.getAllByText("Merged").length).toBeGreaterThan(0);

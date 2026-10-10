@@ -263,8 +263,7 @@ function AdminLlmPage() {
 		} else {
 			modelsSection = (
 				<AdminLlmModelsSection
-					connectionDisplayName={selectedConnection.displayName}
-					connectionEnabled={selectedConnection.enabled}
+					connection={selectedConnection}
 					workspaceOptions={workspaceOptions}
 					models={modelsForSelectedConnection}
 					mutatingIds={mutatingModelIds}

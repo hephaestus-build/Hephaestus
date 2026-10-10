@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import java.math.BigDecimal;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -38,8 +39,30 @@ public class LlmAdmissionService {
         return admitLocked(locked);
     }
 
+    /**
+     * {@link #admit} for a model whose loss must not fail the caller's work. An exception that leaves a
+     * transactional bean, such as the resolver, marks the joined transaction rollback-only. So this
+     * method checks availability first and turns only its own refusals into empty.
+     */
+    @Transactional
+    public Optional<AdmittedLlmModel> admitIfAvailable(WorkspaceAgentBinding binding) {
+        WorkspaceAgentBinding locked = binding.getId() != null
+                ? bindingRepository
+                        .findByWorkspaceIdAndIdForUpdate(binding.getWorkspace().getId(), binding.getId())
+                        .orElse(null)
+                : binding;
+        if (locked == null || !resolver.isAvailable(locked)) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(admitLocked(locked));
+        } catch (IllegalStateException unavailable) {
+            return Optional.empty();
+        }
+    }
+
     private static IllegalStateException modelUnavailable() {
-        return new IllegalStateException("The configured OpenAI-compatible model is not available");
+        return new IllegalStateException("The configured model is not available");
     }
 
     private AdmittedLlmModel admitLocked(ModelBindingSource locked) {
@@ -80,8 +103,7 @@ public class LlmAdmissionService {
         return priceRepository
                 .findByModelIdAndEffectiveToIsNull(modelId)
                 .map(price -> snapshot(price.getPricingMode(), FundingSource.INSTANCE, price.getId(), null, price))
-                .orElseThrow(
-                        () -> new IllegalStateException("The configured OpenAI-compatible model has no usable price"));
+                .orElseThrow(() -> new IllegalStateException("The configured model has no usable price"));
     }
 
     private LlmPriceSnapshot workspacePrice(Long modelId, Long workspaceId) {
@@ -138,8 +160,7 @@ public class LlmAdmissionService {
                 switch (mode) {
                     case PRICED -> PricingState.PRICED;
                     case NO_CHARGE -> PricingState.NO_CHARGE;
-                    case UNPRICED ->
-                        throw new IllegalStateException("The configured OpenAI-compatible model has no usable price");
+                    case UNPRICED -> throw new IllegalStateException("The configured model has no usable price");
                 };
         return new LlmPriceSnapshot(source, state, priceId, workspaceModelId, input, output, cacheRead, cacheWrite);
     }

@@ -1,6 +1,6 @@
 # ADR 0026: Per-purpose agent bindings and governed OpenAI-compatible LLM catalog
 
-**Status:** Accepted, amended 2026-07-26 (named-agent-config model deleted) and 2026-09-22 (member AI choice is per account, and the tiers collapse to in-house and cloud from one declared fact)
+**Status:** Accepted, amended 2026-07-26 (named-agent-config model deleted), 2026-09-22 (member AI choice is per account, and the tiers collapse to in-house and cloud from one declared fact) and 2026-10-09 (precompute purposes and model protocols)
 **Date:** 2026-07-24
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md) (in-app LLM proxy as the sole credential path), [ADR 0025](0025-agent-job-queue-on-postgresql.md) (PostgreSQL agent job queue)
@@ -216,3 +216,24 @@ or a purpose needs more than one model (fallback chains, per-job-type routing), 
 `UNIQUE(workspace_id, purpose)` is the constraint that has to give; or provider contracts beyond the
 OpenAI Chat Completions and Responses shapes become load-bearing, which would move protocol out of
 the connection row and into its own negotiation.
+
+## Update — 2026-10-09: precompute purposes and model protocols
+
+Supersedes the purpose list of § Decision (`PRACTICE_REVIEW` | `MENTOR`) and the last clause of
+§ Revisit trigger. [ADR 0054](0054-precompute-calls-models-through-the-runner.md) owns the reasons.
+
+The revisit trigger "provider contracts beyond the OpenAI Chat Completions and Responses shapes become
+load-bearing" fired. The protocol stays a string on the connection row, and the API carries it as an
+enum of the same values. The connection CHECK constraints accept five values: `openai-completions`
+and `openai-responses` (chat), `openai-decisions` (decision), `openai-embeddings` (embedding) and
+`cohere-rerank` (reranking). `LlmApiProtocol` gives each value its model kind and upstream path.
+
+`AgentPurpose` gains `PRACTICE_DECISION`, `PRACTICE_EMBEDDING` and `PRACTICE_RERANKING`. Each purpose
+names the model kind that its binding must hold. `PRACTICE_DECISION` also accepts an
+`openai-completions` model. Each available model lists the purposes that its protocol serves, so the
+bindings page offers only those models. Through the API, a binding of another kind is refused with a
+400.
+
+`allowInternet` is refused for every purpose except `MENTOR`. The three precompute purposes do not use
+the execution limits. The binding table, its unique key `(workspace, purpose, tier)` and the tier
+routing do not change: as § Decision says, a new need is a new purpose value.

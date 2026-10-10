@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** Recheck the live choice before each proxy request; queued snapshots are not permission. */
 @Service
+@ConditionalOnWorkerRole
 @RequiredArgsConstructor
 class ProxyRequestPolicy {
     private final EgressPolicy egress;
@@ -32,7 +34,8 @@ class ProxyRequestPolicy {
         var model = new LlmModelResolver.ConnectionRef(
                 request.connectionScope(), request.connectionId(), request.modelId(), workspaceId);
         return switch (attempt.sourceType()) {
-            case AGENT_JOB ->
+            // A precompute model is checked like the review's own model: against the reviewed developer.
+            case AGENT_JOB, PRECOMPUTE_DECISION, PRECOMPUTE_EMBEDDING, PRECOMPUTE_RERANKING ->
                 jobs.findByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
                         .filter(job -> reviews.allows(job, model))
                         .isPresent();

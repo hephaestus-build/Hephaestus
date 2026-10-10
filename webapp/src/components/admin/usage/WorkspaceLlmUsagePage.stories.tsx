@@ -5,7 +5,7 @@ import { withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow, expectTablesScrollInPlace } from "@/stories/reflow";
 import { STORY_NOW } from "@/stories/story-clock";
 
-import { STORY_MONTH, usageReport, withOwnProvider } from "./fixtures";
+import { STORY_MONTH, usageReport, withMonthTotals, withOwnProvider } from "./fixtures";
 import { WorkspaceLlmUsagePage } from "./WorkspaceLlmUsagePage";
 
 // The report's own states are `WorkspaceUsageReport.stories.tsx`; this file pins what the page adds
@@ -35,17 +35,19 @@ type Story = StoryObj<typeof meta>;
 export const Ready: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { name: "AI usage" })).toBeVisible();
-		canvas.getByRole("region", { name: /^Shared-model spend/u });
-		canvas.getByRole("region", { name: /^Your provider spend/u });
+		// One section per heading, in reading order: the tiles, then each breakdown.
+		await expect(
+			canvas.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
+		).toStrictEqual(["Spend this month", "By run type", "By day"]);
+		canvas.getByRole("region", { name: "Spend this month" });
 	},
 };
 
 export const Loading: Story = {
 	args: { view: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByRole("table", { name: "AI spend by run type" }).closest("[aria-busy]"),
-		).toHaveAttribute("aria-busy", "true");
+		const table = await canvas.findByRole("table", { name: "AI spend by run type" });
+		await expect(table.closest("[aria-busy]")).toHaveAttribute("aria-busy", "true");
 		// The skeleton must not claim the landmarks the report will own.
 		await expect(canvas.queryByRole("region", { name: /spend/u })).toBeNull();
 	},
@@ -84,9 +86,10 @@ export const MobileReflow: Story = {
 		view: {
 			status: "ready",
 			report: {
-				...capped,
-				instanceTotalCostUsd: 25.0142,
-				ownProviderTotalCostUsd: 10.12,
+				...withMonthTotals(capped, {
+					instanceTotalCostUsd: 25.0142,
+					ownProviderTotalCostUsd: 10.12,
+				}),
 				instanceBudgetVerdict: "EXHAUSTED",
 				instancePaused: true,
 				ownProviderBudgetVerdict: "EXHAUSTED",

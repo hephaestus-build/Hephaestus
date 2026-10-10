@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
@@ -26,6 +28,8 @@ import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
@@ -68,6 +72,15 @@ class AgentBindingServiceTest extends BaseUnitTest {
         return ctx;
     }
 
+    private static LlmModel model(long id, LlmApiProtocol apiProtocol) {
+        LlmConnection connection = new LlmConnection();
+        connection.setApiProtocol(apiProtocol);
+        LlmModel model = new LlmModel();
+        model.setId(id);
+        model.setConnection(connection);
+        return model;
+    }
+
     private Workspace workspace() {
         Workspace w = new Workspace();
         w.setId(1L);
@@ -81,8 +94,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());
-        LlmModel model = new LlmModel();
-        model.setId(99L);
+        LlmModel model = model(99L, LlmApiProtocol.OPENAI_COMPLETIONS);
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -125,8 +137,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());
-        LlmModel model = new LlmModel();
-        model.setId(99L);
+        LlmModel model = model(99L, LlmApiProtocol.OPENAI_COMPLETIONS);
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
 
@@ -139,6 +150,71 @@ class AgentBindingServiceTest extends BaseUnitTest {
         verify(bindingRepository, never()).save(any());
     }
 
+    private void stubNewUndeclaredBinding(AgentPurpose purpose, LlmModel model) {
+        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(workspace()));
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(1L, purpose, DataHandlingTier.UNDECLARED))
+                .thenReturn(Optional.empty());
+        when(llmModelRepository.findById(model.getId())).thenReturn(Optional.of(model));
+        when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
+    }
+
+    @ParameterizedTest(name = "{0} refuses a {1} model")
+    @CsvSource({
+        "PRACTICE_REVIEW, OPENAI_EMBEDDINGS, This is an embedding model. Choose a chat model here.",
+        "MENTOR, COHERE_RERANK, This is a reranking model. Choose a chat model here.",
+        "PRACTICE_EMBEDDING, OPENAI_COMPLETIONS, This is a chat model. Choose an embedding model here.",
+        "PRACTICE_RERANKING, OPENAI_EMBEDDINGS, This is an embedding model. Choose a reranking model here.",
+        "PRACTICE_DECISION, OPENAI_RESPONSES, This is a chat model. Choose a decision model or a chat completions model here."
+    })
+    void upsertRejectsAModelWhenItsKindDoesNotFitThePurpose(
+            AgentPurpose purpose, LlmApiProtocol apiProtocol, String message) {
+        stubNewUndeclaredBinding(purpose, model(99L, apiProtocol));
+
+        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        assertThatThrownBy(() -> service.upsertBinding(context(), purpose, DataHandlingTier.UNDECLARED, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(message);
+        verify(bindingRepository, never()).save(any());
+        verify(configAudit, never()).record(any());
+    }
+
+    @ParameterizedTest(name = "{0} accepts a {1} model")
+    @CsvSource({
+        "PRACTICE_DECISION, OPENAI_DECISIONS",
+        "PRACTICE_DECISION, OPENAI_COMPLETIONS",
+        "PRACTICE_EMBEDDING, OPENAI_EMBEDDINGS",
+        "PRACTICE_RERANKING, COHERE_RERANK",
+        "PRACTICE_REVIEW, OPENAI_RESPONSES"
+    })
+    void upsertBindsAModelWhenItsKindFitsThePurpose(AgentPurpose purpose, LlmApiProtocol apiProtocol) {
+        stubNewUndeclaredBinding(purpose, model(99L, apiProtocol));
+        when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
+        WorkspaceAgentBinding saved = service.upsertBinding(context(), purpose, DataHandlingTier.UNDECLARED, request);
+
+        assertThat(saved.getPurpose()).isEqualTo(purpose);
+        var bound = saved.getInstanceModel();
+        assertThat(bound).isNotNull();
+        assertThat(bound.getId()).isEqualTo(99L);
+    }
+
+    @ParameterizedTest(name = "{0} refuses internet access")
+    @CsvSource({
+        "PRACTICE_DECISION, OPENAI_DECISIONS",
+        "PRACTICE_EMBEDDING, OPENAI_EMBEDDINGS",
+        "PRACTICE_RERANKING, COHERE_RERANK"
+    })
+    void upsertRejectsInternetAccessWhenThePurposeIsNotHeph(AgentPurpose purpose, LlmApiProtocol apiProtocol) {
+        stubNewUndeclaredBinding(purpose, model(99L, apiProtocol));
+
+        var request = new AgentBindingRequestDTO(99L, null, null, null, true, true);
+        assertThatThrownBy(() -> service.upsertBinding(context(), purpose, DataHandlingTier.UNDECLARED, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Only Heph can have internet access");
+        verify(bindingRepository, never()).save(any());
+    }
+
     @Test
     void upsertRejectsAModelThatIsNotAvailableToTheWorkspace() {
         Workspace w = workspace();
@@ -146,8 +222,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());
-        LlmModel model = new LlmModel();
-        model.setId(99L);
+        LlmModel model = model(99L, LlmApiProtocol.OPENAI_COMPLETIONS);
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(false);
 
@@ -165,8 +240,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD))
                 .thenReturn(Optional.empty());
-        LlmModel model = new LlmModel();
-        model.setId(99L);
+        LlmModel model = model(99L, LlmApiProtocol.OPENAI_COMPLETIONS);
         model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
 
@@ -188,8 +262,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         1L, AgentPurpose.MENTOR, DataHandlingTier.IN_HOUSE))
                 .thenReturn(Optional.empty());
-        LlmModel model = new LlmModel();
-        model.setId(99L);
+        LlmModel model = model(99L, LlmApiProtocol.OPENAI_COMPLETIONS);
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
 
         var request = new AgentBindingRequestDTO(99L, null, null, null, null, true);
@@ -210,8 +283,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         1L, AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD))
                 .thenReturn(Optional.empty());
-        LlmModel model = new LlmModel();
-        model.setId(99L);
+        LlmModel model = model(99L, LlmApiProtocol.OPENAI_COMPLETIONS);
         model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
@@ -234,8 +306,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());
-        LlmModel model = new LlmModel();
-        model.setId(99L);
+        LlmModel model = model(99L, LlmApiProtocol.OPENAI_COMPLETIONS);
         model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);

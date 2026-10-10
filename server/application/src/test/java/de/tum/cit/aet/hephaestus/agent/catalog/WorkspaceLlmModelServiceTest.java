@@ -84,6 +84,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
         connection.setId(50L);
         connection.setWorkspace(workspace);
         connection.setDisplayName("My Provider");
+        connection.setApiProtocol(LlmApiProtocol.OPENAI_RESPONSES);
         return connection;
     }
 
@@ -474,6 +475,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             LlmConnection instanceConnection = new LlmConnection();
             instanceConnection.setId(200L);
             instanceConnection.setDisplayName("Shared Provider");
+            instanceConnection.setApiProtocol(LlmApiProtocol.OPENAI_COMPLETIONS);
             LlmModel sharedModel = new LlmModel();
             sharedModel.setId(1L);
             sharedModel.setDisplayName("Shared GPT");

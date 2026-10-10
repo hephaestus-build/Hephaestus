@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -52,7 +53,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 slug,
                 "My Provider",
                 LlmCatalogTestFixtures.PUBLIC_BASE_URL,
-                "openai-completions",
+                LlmApiProtocol.OPENAI_COMPLETIONS,
                 LlmAuthMode.BEARER,
                 "sk-workspace-secret",
                 true,
@@ -335,6 +336,41 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(available)
                 .extracting(AvailableLlmModelDTO::scope)
                 .containsExactlyInAnyOrder(LlmModelScope.SHARED, LlmModelScope.WORKSPACE);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldNameThePurposesEachAvailableModelCanServeWhenListed() {
+        Workspace workspace = setupWorkspace("avail-purpose-ws");
+        LlmModel chat = seedInstanceModel("gpt-5-purpose-upstream", ModelVisibility.PUBLIC, true);
+        LlmConnection embeddingConnection = LlmCatalogTestFixtures.connection("instance-conn-" + System.nanoTime());
+        embeddingConnection.setApiProtocol(LlmApiProtocol.OPENAI_EMBEDDINGS);
+        LlmModel embedding = llmModelRepository.save(LlmCatalogTestFixtures.model(
+                llmConnectionRepository.save(embeddingConnection),
+                "instance-model-" + System.nanoTime(),
+                "text-embedding-purpose-upstream"));
+
+        List<AvailableLlmModelDTO> available = webTestClient
+                .get()
+                .uri("/workspaces/{slug}/llm/available-models", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(new ParameterizedTypeReference<List<AvailableLlmModelDTO>>() {})
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(available)
+                .filteredOn(model -> model.id().equals(chat.getId()))
+                .singleElement()
+                .extracting(AvailableLlmModelDTO::purposes)
+                .isEqualTo(List.of(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR, AgentPurpose.PRACTICE_DECISION));
+        assertThat(available)
+                .filteredOn(model -> model.id().equals(embedding.getId()))
+                .singleElement()
+                .extracting(AvailableLlmModelDTO::purposes)
+                .isEqualTo(List.of(AgentPurpose.PRACTICE_EMBEDDING));
     }
 
     @Test

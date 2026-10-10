@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
@@ -209,7 +210,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             connection.setSlug("ledger-connection");
             connection.setDisplayName("Ledger connection");
             connection.setBaseUrl(LlmCatalogTestFixtures.BASE_URL);
-            connection.setApiProtocol(LlmCatalogTestFixtures.OPENAI_COMPLETIONS);
+            connection.setApiProtocol(LlmApiProtocol.OPENAI_COMPLETIONS);
             connection.setEnabled(true);
             connection = workspaceConnections.save(connection);
             var model = new WorkspaceLlmModel();

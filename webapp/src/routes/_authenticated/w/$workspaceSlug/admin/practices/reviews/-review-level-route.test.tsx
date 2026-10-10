@@ -8,7 +8,7 @@ import {
 	listPracticeReviewObservationsQueryKey,
 	listPracticeReviewsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import { reviewJob } from "@/components/admin/practice-reviews/fixtures";
+import { reviewJob, reviewPrecompute } from "@/components/admin/practice-reviews/fixtures";
 import { reviewHandlers } from "@/components/admin/practice-reviews/story-mock-server";
 import { hasText } from "@/lib/text";
 import { server } from "@/mocks/server";
@@ -82,6 +82,23 @@ describe("review level", () => {
 		const feedback = urlFor("/practices/reviews/feedback");
 		expect(feedback?.searchParams.get("size")).toBe("5");
 		expect(feedback?.searchParams.get("agentJobId")).toBe(COMPLETED_RUN);
+	});
+
+	/**
+	 * Its own read, by this review's id, so a slow or failed one costs the reader that section alone.
+	 * What the section shows of the answer is its stories' to prove.
+	 */
+	it("asks for what this review's precompute scripts did", async () => {
+		stub(
+			http.get("*/workspaces/:workspaceSlug/agents/jobs/:jobId/precompute", () =>
+				HttpResponse.json([reviewPrecompute.found]),
+			),
+		);
+
+		renderRouteAtWithRouter(reviewLevel(COMPLETED_RUN));
+		await screen.findByRole("region", { name: "Precompute scripts" }, ROUTE_RENDER_WAIT);
+
+		expect(urlFor(`/workspaces/acme/agents/jobs/${COMPLETED_RUN}/precompute`)).toBeDefined();
 	});
 
 	/**

@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.net.URI;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.StreamSupport;
@@ -58,6 +60,12 @@ public record AgentJobDTO(
                         "Upstream model this job was admitted on, frozen at submit time (e.g. gpt-5.4-mini). Available from submission, unlike llmModel, which the runner reports only once the job has run.")
         @Nullable
         String model,
+
+        @Schema(
+                description = "Data handling tier of the slot whose model this job was admitted on, frozen at "
+                        + "submit time. Absent when the snapshot names no tier that this server knows.")
+        @Nullable
+        DataHandlingTier dataHandlingTier,
 
         @Schema(description = "Container exit code") @Nullable
         Integer exitCode,
@@ -151,6 +159,7 @@ public record AgentJobDTO(
                 ReviewRunOutcome.coveringJobId(job.getOutput()),
                 redactInstanceBaseUrl(snapshot),
                 snapshotString(snapshot, "upstreamModelId"),
+                dataHandlingTier(snapshot),
                 job.getExitCode(),
                 job.getErrorMessage(),
                 job.getDeliveryStatus(),
@@ -191,6 +200,7 @@ public record AgentJobDTO(
                 ReviewRunOutcome.coveringJobId(row.getOutput()),
                 redactInstanceBaseUrl(snapshot),
                 snapshotString(snapshot, "upstreamModelId"),
+                dataHandlingTier(snapshot),
                 row.getExitCode(),
                 row.getErrorMessage(),
                 row.getDeliveryStatus(),
@@ -265,6 +275,15 @@ public record AgentJobDTO(
         } catch (IllegalArgumentException e) {
             return "(redacted)";
         }
+    }
+
+    /** A value this server does not know, from a newer node during a rolling deploy, reads as absent. */
+    private static @Nullable DataHandlingTier dataHandlingTier(JsonNode snapshot) {
+        String tier = snapshotString(snapshot, "dataHandlingTier");
+        return Arrays.stream(DataHandlingTier.values())
+                .filter(value -> value.name().equals(tier))
+                .findFirst()
+                .orElse(null);
     }
 
     private static @Nullable String snapshotString(JsonNode snapshot, String field) {

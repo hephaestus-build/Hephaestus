@@ -59,6 +59,13 @@ public final class SandboxLayout {
     /** Workspace-relative filename of the composition stage's output, collected from {@link #OUTPUT_PATH}. */
     public static final String FEEDBACK_FILENAME = "feedback.json";
 
+    /**
+     * Filename of the precompute report, collected from {@link #OUTPUT_PATH}: one entry per staged precompute
+     * script with its status, leads, and models. The runner writes it before it deletes
+     * {@link #PRECOMPUTE_OUT_PREFIX}, which is never collected.
+     */
+    public static final String PRECOMPUTE_REPORT_FILE = "precompute.json";
+
     /** Workspace-relative filename of the composition stage's instructions, staged beside the runner. */
     public static final String FEEDBACK_COMPOSER_PROMPT_FILENAME = "feedback-composer.md";
 
@@ -121,6 +128,12 @@ public final class SandboxLayout {
 
     public static final String NODE_PACKAGE_JSON_FILENAME = "package.json";
 
+    /**
+     * Workspace-relative filename of the models that the precompute scripts may call, by slot. It holds
+     * no credential: the precompute stage alone receives {@code $PRECOMPUTE_PROXY_TOKEN}.
+     */
+    public static final String PRECOMPUTE_MODELS_FILE = "precompute-models.json";
+
     /** Workspace-relative filename of the shared provider-registration ES module both runners import. */
     public static final String PROVIDER_HELPER_FILENAME = "pi-provider.ts";
 
@@ -180,6 +193,6 @@ public final class SandboxLayout {
 
     /** Exact workspace paths an adapter may pass in {@link PiPlanSpec#extraInputs()}. */
     public static Set<String> allowedExtraInputPaths() {
-        return Set.of(MENTOR_SYSTEM_PROMPT_PATH);
+        return Set.of(MENTOR_SYSTEM_PROMPT_PATH, PRECOMPUTE_MODELS_FILE);
     }
 }
