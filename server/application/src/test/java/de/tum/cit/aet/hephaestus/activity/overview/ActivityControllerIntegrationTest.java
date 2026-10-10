@@ -288,6 +288,47 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
+        void shouldNarrowThePublicPageToTheNamedRepositoriesAndRefuseAnUnknownOne() {
+            var other = repository("activity-org/gadgets", true);
+            other.setVisibility(Repository.Visibility.PUBLIC);
+            other.setPrivate(false);
+            repositoryRepository.save(other);
+            jdbc.update(
+                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now() WHERE workspace_id=?",
+                    workspace.getId());
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2, DAY, other);
+
+            assertThat(page().people())
+                    .extracting(p -> p.login())
+                    .containsExactlyInAnyOrder(ada.getLogin(), zoe.getLogin());
+            var narrowed = Objects.requireNonNull(webTestClient
+                    .get()
+                    .uri(
+                            "/public/workspaces/{slug}/activity?range=all&to=" + TO + "&repo={repo}",
+                            workspace.getWorkspaceSlug(),
+                            other.getNameWithOwner())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(PublicActivityDTO.class)
+                    .returnResult()
+                    .getResponseBody());
+            assertThat(narrowed.people()).extracting(p -> p.login()).containsExactly(zoe.getLogin());
+            assertThat(narrowed.repositories()).hasSize(2);
+            webTestClient
+                    .get()
+                    .uri(
+                            "/public/workspaces/{slug}/activity?repo={repo}",
+                            workspace.getWorkspaceSlug(),
+                            unmonitored.getNameWithOwner())
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound()
+                    .expectBody(Void.class);
+        }
+
+        @Test
         void shouldReturnTheSameErrorForUnknownOffAndInactiveWorkspaces() {
             var unknown = error("unknown");
             workspace.setPublicActivityEnabled(false);

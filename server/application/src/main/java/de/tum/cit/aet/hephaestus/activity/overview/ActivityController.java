@@ -79,6 +79,7 @@ public class ActivityController {
     @Operation(
             operationId = "getPublicActivityHiddenCount",
             summary = "Count hidden public contributors without identifying them")
+    @ApiResponse(responseCode = "200", description = "Hidden contributors counted")
     public PublicActivityHiddenCountDTO getPublicActivityHiddenCount(WorkspaceContext workspaceContext) {
         return new PublicActivityHiddenCountDTO(publicObjections.hiddenPeople(workspaceContext.id()));
     }
@@ -89,6 +90,7 @@ public class ActivityController {
     @Operation(
             operationId = "updatePublicActivityObjection",
             summary = "Honor a contributor publication objection, or restore workspace visibility")
+    @ApiResponse(responseCode = "204", description = "Contributor visibility updated")
     public ResponseEntity<Void> updatePublicActivityObjection(
             WorkspaceContext workspaceContext, @PathVariable long userId, @RequestParam boolean hidden) {
         publicObjections.hide(workspaceContext.id(), userId, hidden);

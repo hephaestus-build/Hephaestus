@@ -3,10 +3,15 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -28,6 +33,9 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
     @Mock
     private ConnectionService connectionService;
 
+    @Mock
+    private PublicActivityPolicy publicActivityPolicy;
+
     private WorkspaceQueryService newService() {
         return new WorkspaceQueryService(
                 workspaceRepository,
@@ -35,6 +43,7 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
                 repositoryToMonitorRepository,
                 currentAccountUsers,
                 connectionService,
+                publicActivityPolicy,
                 new WorkspaceProperties(false, null, false, null, WorkspaceProperties.CreationPolicy.ADMIN_ONLY),
                 new WorkspaceSubdomainProperties(false, ""),
                 "http://localhost:4200",
@@ -93,6 +102,41 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
         List<Workspace> workspaces = service.findAccessibleWorkspaces();
 
         assertThat(workspaces).extracting(Workspace::getWorkspaceSlug).containsExactly("gh-space");
+    }
+
+    @Test
+    void shouldNameTheProviderOfTheActiveConnection() {
+        Workspace workspace = workspace(1L, "gh-space", "GitHub Workspace", false);
+        when(connectionService.findActiveProviderKind(1L)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+
+        assertThat(newService().scmProviderType(workspace)).isEqualTo(IdentityProviderType.GITLAB);
+    }
+
+    @Test
+    void shouldNameNoProviderWithoutAnActiveConnection() {
+        Workspace workspace = workspace(1L, "gh-space", "GitHub Workspace", false);
+        when(connectionService.findActiveProviderKind(1L)).thenReturn(Optional.empty());
+
+        assertThat(newService().scmProviderType(workspace)).isNull();
+    }
+
+    @Test
+    void shouldPublishPublicActivityOnlyWhenTheInstanceAllowsItAndAnActiveWorkspaceTurnedItOn() {
+        Workspace enabled = workspace(1L, "open", "Open", true);
+        Workspace off = workspace(2L, "off", "Off", false);
+        Workspace suspended = workspace(3L, "suspended", "Suspended", true);
+        suspended.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+
+        assertThat(publishes(enabled, true)).isTrue();
+        assertThat(publishes(enabled, false)).isFalse();
+        assertThat(publishes(off, true)).isFalse();
+        assertThat(publishes(suspended, true)).isFalse();
+    }
+
+    private boolean publishes(Workspace workspace, boolean instanceAllows) {
+        return WorkspaceListItemDTO.from(
+                        workspace, connectionService, "/w/" + workspace.getWorkspaceSlug(), instanceAllows)
+                .publishesPublicActivity();
     }
 
     private Workspace workspace(Long id, String slug, String displayName, boolean publiclyViewable) {

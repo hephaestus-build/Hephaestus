@@ -8,6 +8,7 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 const featureFlags = {
 	practicesEnabled: true,
+	publishesPublicActivity: false,
 } as const;
 
 const meta = {

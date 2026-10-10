@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -19,6 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +50,7 @@ public class WorkspaceQueryService {
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final CurrentAccountUsers currentAccountUsers;
     private final ConnectionService connectionService;
+    private final PublicActivityPolicy publicActivityPolicy;
 
     /**
      * Per-kind availability ports — keyed for O(1) lookup when building the providers DTO.
@@ -65,6 +69,7 @@ public class WorkspaceQueryService {
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             CurrentAccountUsers currentAccountUsers,
             ConnectionService connectionService,
+            PublicActivityPolicy publicActivityPolicy,
             WorkspaceProperties workspaceProperties,
             WorkspaceSubdomainProperties subdomains,
             @Value("${hephaestus.webapp.url}") String webappUrl,
@@ -74,6 +79,7 @@ public class WorkspaceQueryService {
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.currentAccountUsers = currentAccountUsers;
         this.connectionService = connectionService;
+        this.publicActivityPolicy = publicActivityPolicy;
         this.workspaceProperties = workspaceProperties;
         this.subdomains = subdomains;
         this.webappUrl = webappUrl;
@@ -103,16 +109,25 @@ public class WorkspaceQueryService {
      * current authenticated user. During a user view, only the viewed workspace.
      */
     public List<WorkspaceListItemDTO> findAccessibleWorkspaceListItems() {
+        boolean publicActivityAllowed = publicActivityPolicy.allowed();
         var viewed = UserViewContextHolder.get();
         if (viewed != null) {
             return workspaceRepository.findById(viewed.workspaceId()).stream()
-                    .map(workspace ->
-                            WorkspaceListItemDTO.from(workspace, connectionService, workspaceAddress(workspace)))
+                    .map(workspace -> WorkspaceListItemDTO.from(
+                            workspace, connectionService, workspaceAddress(workspace), publicActivityAllowed))
                     .toList();
         }
         return findAccessibleWorkspaces().stream()
-                .map(w -> WorkspaceListItemDTO.from(w, connectionService, workspaceAddress(w)))
+                .map(w -> WorkspaceListItemDTO.from(w, connectionService, workspaceAddress(w), publicActivityAllowed))
                 .toList();
+    }
+
+    /** The source-control provider of the workspace's active connection; none when no connection is bound. */
+    public @Nullable IdentityProviderType scmProviderType(Workspace workspace) {
+        return connectionService
+                .findActiveProviderKind(workspace.getId())
+                .map(IdentityProviderType::from)
+                .orElse(null);
     }
 
     /**

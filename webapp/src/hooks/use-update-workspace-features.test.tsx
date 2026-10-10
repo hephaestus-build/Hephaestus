@@ -24,6 +24,7 @@ const workspace: WorkspaceListItem = {
 	displayName: "Acme",
 	id: 1,
 	practicesEnabled: false,
+	publishesPublicActivity: false,
 	status: "ACTIVE",
 	workspaceSlug: "acme",
 	workspaceAddress: "https://hephaestus.build/w/acme",

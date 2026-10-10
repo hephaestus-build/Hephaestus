@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityDTO;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.net.URI;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -19,9 +21,10 @@ class PublicActivityService {
     private final WorkspaceRepository workspaces;
     private final PublicActivityPolicy policy;
     private final ActivityPeopleService people;
+    private final WorkspaceQueryService workspaceQueries;
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
-    public PublicActivityDTO page(String slug, ActivityPeopleRangeParams range) {
+    public PublicActivityDTO page(String slug, ActivityPeopleRangeParams range, Set<String> repositoryKeys) {
         var workspace = workspaces.findPublicActivityWorkspace(slug);
         if (!policy.allowed() || workspace.isEmpty()) {
             var exception =
@@ -32,7 +35,8 @@ class PublicActivityService {
         var selected = workspace.get();
         return PublicActivityDTO.from(
                 selected.getDisplayName(),
+                workspaceQueries.scmProviderType(selected),
                 selected.isPublicActivitySearchEngines(),
-                people.publicPeople(selected.getId(), range));
+                people.publicPeople(selected.getId(), range, repositoryKeys));
     }
 }

@@ -4428,6 +4428,10 @@ export type PublicActivity = {
     from: string;
     highlights: PublicActivityHighlights;
     people: Array<PublicActivityPerson>;
+    /**
+     * The source-control provider the repositories and people belong to
+     */
+    providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
     repositories: Array<PublicActivityRepository>;
     to: string;
     workspaceName: string;
@@ -4445,6 +4449,10 @@ export type PublicActivityCounts = {
     pullRequestsMerged: number;
     pullRequestsOpened: number;
     pullRequestsReviewed: number;
+};
+
+export type PublicActivityHiddenCount = {
+    hiddenPeople: number;
 };
 
 export type PublicActivityHighlights = {
@@ -6947,6 +6955,10 @@ export type WorkspaceListItem = {
      */
     providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
     /**
+     * Whether the public activity page is live: the instance allows it and the workspace turned it on
+     */
+    publishesPublicActivity: boolean;
+    /**
      * Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)
      */
     status: string;
@@ -9395,13 +9407,14 @@ export type GetPublicActivityData = {
         range?: '30d' | '90d' | '1y' | 'all' | 'custom';
         from?: string;
         to?: string;
+        repo?: Array<string>;
     };
     url: '/public/workspaces/{slug}/activity';
 };
 
 export type GetPublicActivityResponses = {
     /**
-     * OK
+     * Public contributions counted
      */
     200: PublicActivity;
 };
@@ -10191,6 +10204,15 @@ export type UpdatePublicActivityObjectionErrors = {
 
 export type UpdatePublicActivityObjectionError = UpdatePublicActivityObjectionErrors[keyof UpdatePublicActivityObjectionErrors];
 
+export type UpdatePublicActivityObjectionResponses = {
+    /**
+     * Contributor visibility updated
+     */
+    204: void;
+};
+
+export type UpdatePublicActivityObjectionResponse = UpdatePublicActivityObjectionResponses[keyof UpdatePublicActivityObjectionResponses];
+
 export type GetActivityPersonWorkData = {
     body?: never;
     path: {
@@ -10279,6 +10301,15 @@ export type GetPublicActivityHiddenCountErrors = {
 };
 
 export type GetPublicActivityHiddenCountError = GetPublicActivityHiddenCountErrors[keyof GetPublicActivityHiddenCountErrors];
+
+export type GetPublicActivityHiddenCountResponses = {
+    /**
+     * Hidden contributors counted
+     */
+    200: PublicActivityHiddenCount;
+};
+
+export type GetPublicActivityHiddenCountResponse = GetPublicActivityHiddenCountResponses[keyof GetPublicActivityHiddenCountResponses];
 
 export type GetActivityWorkData = {
     body?: never;
