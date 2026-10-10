@@ -39,9 +39,12 @@ function SlackIntegrationPage() {
 			return;
 		}
 		if (status === "success") {
-			toast.success("Slack workspace connected");
+			toast.success("Slack workspace connected", { id: "slack-connect-result" });
 		} else {
-			toast.error("We could not connect Slack", { description: description ?? reason });
+			toast.error("We could not connect Slack", {
+				id: "slack-connect-result",
+				description: description ?? reason,
+			});
 		}
 		void navigate({ search: {}, replace: true });
 	}, [status, reason, description, navigate]);

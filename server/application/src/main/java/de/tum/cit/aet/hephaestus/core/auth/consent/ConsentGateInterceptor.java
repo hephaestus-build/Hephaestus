@@ -39,6 +39,7 @@ class ConsentGateInterceptor implements HandlerInterceptor {
                 || (method.equals("GET")
                         && (path.equals("/user")
                                 || path.equals("/user/consent")
+                                || path.equals("/auth/csrf")
                                 || path.equals("/auth/client/configuration")
                                 || path.equals("/auth/dev-login/client")))
                 || (method.equals("PUT") && path.equals("/user/consent"))

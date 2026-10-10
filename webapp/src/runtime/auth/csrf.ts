@@ -1,17 +1,17 @@
+import { z } from "zod";
+
 import { createClient } from "@/api/client/client.gen";
 import { getCsrfToken } from "@/api/sdk.gen";
 import environment from "@/environment";
 import { isRecord } from "@/lib/is-record";
 
 const csrfClient = createClient({ baseUrl: environment.serverUrl, credentials: "include" });
+const tokenSchema = z.object({ token: z.string().min(1), headerName: z.string().min(1) });
 let tokenRequest: Promise<{ token: string; headerName: string }> | undefined;
 
 async function loadToken(): Promise<{ token: string; headerName: string }> {
 	const { data } = await getCsrfToken({ client: csrfClient, throwOnError: true });
-	if (data.token === "" || data.headerName === "") {
-		throw new Error("Could not prepare a secure request.");
-	}
-	return data;
+	return tokenSchema.parse(data);
 }
 
 async function settleToken(pending: Promise<{ token: string; headerName: string }>) {

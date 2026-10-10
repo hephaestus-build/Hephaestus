@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ZodError } from "zod";
 
 import environment from "@/environment";
 import { server } from "@/mocks/server";
@@ -38,6 +39,21 @@ function replayResponse(bodies: string[], headers: (string | null)[]) {
 }
 
 describe("apex CSRF transport", () => {
+	it("refuses malformed discovery without sending a credentialed mutation", async () => {
+		let mutations = 0;
+		server.use(
+			http.get(`${api}/auth/csrf`, () =>
+				HttpResponse.json({ token: 42, headerName: "X-XSRF-TOKEN" }),
+			),
+			http.post(`${api}/settings`, () => {
+				mutations += 1;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		await expect(refetchCsrfToken()).rejects.toThrow(ZodError);
+		await expect(mutation()).rejects.toThrow(ZodError);
+		expect(mutations).toBe(0);
+	});
 	it("discovers a token with credentials before sending the mutation", async () => {
 		const headers: (string | null)[] = [];
 		server.use(

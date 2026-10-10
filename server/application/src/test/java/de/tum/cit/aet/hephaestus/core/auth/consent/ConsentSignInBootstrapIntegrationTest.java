@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.consent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.web.CsrfController;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -139,6 +140,36 @@ class ConsentSignInBootstrapIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo("pending-second-account");
         assertProtectedContentBlocked(pendingCookie);
         assertProtectedContentBlocked(replacement);
+    }
+
+    @Test
+    void shouldPrepareTenantConsentAndSignOutBeforeTheNoticeIsAccepted() {
+        String session = signIn("pending-tenant-account", null);
+        assertProtectedContentBlocked(session);
+        var discovery = client.get()
+                .uri("/auth/csrf")
+                .header(HttpHeaders.ORIGIN, "https://tenant.hephaestus.build")
+                .cookie(cookieName, session)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://tenant.hephaestus.build")
+                .expectBody(CsrfController.CsrfTokenDTO.class)
+                .returnResult();
+        var token = Objects.requireNonNull(discovery.getResponseBody());
+        var csrfCookie = Objects.requireNonNull(discovery.getResponseCookies().getFirst("__Host-XSRF-TOKEN"));
+        assertThat(token.token()).isEqualTo(csrfCookie.getValue());
+        assertProtectedContentBlocked(session);
+        client.post()
+                .uri("/auth/logout")
+                .header(HttpHeaders.ORIGIN, "https://tenant.hephaestus.build")
+                .header(token.headerName(), token.token())
+                .cookie(cookieName, session)
+                .cookie(csrfCookie.getName(), csrfCookie.getValue())
+                .exchange()
+                .expectStatus()
+                .isNoContent();
     }
 
     private String signIn(String username, @Nullable String ambientCookie) {
