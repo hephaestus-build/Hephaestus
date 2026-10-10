@@ -51,9 +51,12 @@ type Handler = (request: RpcRequest) => unknown;
 let container: HTMLDivElement;
 let root: Root;
 
-function answer(handler: Handler): void {
+function answer(handler: Handler, resolvedOrigin?: string): void {
 	platform.sendMessage.mockImplementation(async (request) => {
-		const data = await handler(request);
+		const data =
+			request.type === "resolve-instance-origin"
+				? { origin: resolvedOrigin ?? request.origin }
+				: await handler(request);
 		if (data instanceof Error) {
 			const code = "code" in data && typeof data.code === "string" ? data.code : "server";
 			return { ok: false, generation: 0, error: { code, message: data.message } };
@@ -245,6 +248,35 @@ it("connects to a self-hosted address typed into the disclosure instead", async 
 			{ type: "configure-instance", origin: "https://heph.example.test", webAppOrigin: undefined },
 		]),
 	);
+});
+
+it("asks for the discovered apex on a fresh click before configuring a pasted workspace address", async () => {
+	answer(() => SIGNED_OUT, "https://heph.example.test");
+	platform.request.mockResolvedValue(true);
+	await render();
+	await until(() => expect(container.textContent).toContain("Use a self-hosted instance"));
+	await act(async () => {
+		required(container.querySelector("details"), "the self-hosted disclosure").open = true;
+	});
+	await fill("Hephaestus address", "https://acme.heph.example.test");
+	await click(button("Connect instance"));
+	await until(() =>
+		expect(container.textContent).toContain("This workspace uses heph.example.test"),
+	);
+	expect(requests("configure-instance")).toStrictEqual([]);
+	expect(platform.request.mock.calls).toStrictEqual([
+		[{ origins: ["https://acme.heph.example.test/*"] }],
+	]);
+	await click(button("Connect to heph.example.test"));
+	await until(() =>
+		expect(requests("configure-instance")).toStrictEqual([
+			{ type: "configure-instance", origin: "https://heph.example.test", webAppOrigin: undefined },
+		]),
+	);
+	expect(platform.request.mock.calls).toStrictEqual([
+		[{ origins: ["https://acme.heph.example.test/*"] }],
+		[{ origins: ["https://heph.example.test/*"] }],
+	]);
 });
 
 it("says a closed sign-in window changed nothing, instead of reporting an error", async () => {

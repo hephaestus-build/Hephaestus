@@ -1,4 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { toast } from "sonner";
+import { z } from "zod";
 
 import { ConnectionStateNotice } from "@/components/admin/integrations/ConnectionStateNotice";
 import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
@@ -18,12 +21,30 @@ import { workspaceAdminHead } from "@/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/slack")({
 	head: workspaceAdminHead("Slack"),
+	validateSearch: z.object({
+		status: z.enum(["success", "error"]).optional().catch(undefined),
+		reason: z.string().optional().catch(undefined),
+		description: z.string().optional().catch(undefined),
+	}),
 	remountDeps: ({ params }) => params.workspaceSlug,
 	component: SlackIntegrationPage,
 });
 
 function SlackIntegrationPage() {
 	const { workspaceSlug: slug } = Route.useParams();
+	const { status, reason, description } = Route.useSearch();
+	const navigate = Route.useNavigate();
+	useEffect(() => {
+		if (status === undefined) {
+			return;
+		}
+		if (status === "success") {
+			toast.success("Slack workspace connected");
+		} else {
+			toast.error("We could not connect Slack", { description: description ?? reason });
+		}
+		void navigate({ search: {}, replace: true });
+	}, [status, reason, description, navigate]);
 	const slack = useSlackIntegration(slug);
 	const { hasConnection } = slack;
 	const ready = !slack.isLoading && !slack.loadError;

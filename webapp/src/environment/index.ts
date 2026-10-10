@@ -18,6 +18,8 @@ interface RuntimeEnvVars {
 	APPLICATION_VERSION?: string;
 	APPLICATION_CLIENT_URL?: string;
 	APPLICATION_SERVER_URL?: string;
+	HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED?: string;
+	HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN?: string;
 	XSRF_COOKIE_NAME?: string;
 	DEPLOYMENT_ENVIRONMENT?: string;
 	SENTRY_DSN?: string;
@@ -92,6 +94,10 @@ const environment = {
 		name: DEPLOYMENT_NAMES[deploymentEnvironment] ?? "Local",
 		isProduction: deploymentEnvironment === "production",
 		pullRequest: previewPullRequest,
+	},
+	workspaceSubdomains: {
+		enabled: env("HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED") === "true",
+		baseDomain: env("HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN"),
 	},
 	clientUrl: env("APPLICATION_CLIENT_URL"),
 	serverUrl: env("APPLICATION_SERVER_URL"),

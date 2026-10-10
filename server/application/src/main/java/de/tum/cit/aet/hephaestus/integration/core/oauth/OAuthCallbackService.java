@@ -77,6 +77,13 @@ public class OAuthCallbackService {
     private final AccountWorkspaceMembershipQuery membershipQuery;
     private final TransactionTemplate transactionTemplate;
 
+    public String workspaceSlug(long workspaceId) {
+        return workspaceRepository
+                .findById(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace does not exist"))
+                .getWorkspaceSlug();
+    }
+
     public OAuthCallbackService(
             ConnectionRepository connectionRepository,
             ConnectionService connectionService,

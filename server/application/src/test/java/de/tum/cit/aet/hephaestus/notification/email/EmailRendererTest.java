@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.notification.email;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent.Kind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.HashMap;
@@ -13,6 +14,27 @@ import org.junit.jupiter.params.provider.EnumSource;
 class EmailRendererTest extends BaseUnitTest {
 
     private final EmailRenderer renderer = EmailTestSupport.renderer();
+
+    @Test
+    void shouldUseWorkspaceAddressInBothEmailAlternatives() {
+        var tenantRenderer = EmailTestSupport.renderer(new WorkspaceSubdomainProperties(true, "hephaestus.example"));
+        var email = tenantRenderer.render(
+                EmailKind.WORKSPACE_ALERT,
+                Map.of(
+                        "workspaceSlug",
+                        "delivery-team",
+                        "workspaceName",
+                        "Delivery team",
+                        "integration",
+                        "GitHub",
+                        "description",
+                        "Reconnect GitHub",
+                        "unsubscribeUrl",
+                        "https://hephaestus.example/unsubscribe"));
+        assertThat(email.text()).contains("https://delivery-team.hephaestus.example/admin/settings");
+        assertThat(email.html()).contains("https://delivery-team.hephaestus.example/admin/settings");
+        assertThat(email.text()).doesNotContain("/w/delivery-team");
+    }
 
     @ParameterizedTest
     @EnumSource(EmailKind.class)

@@ -79,6 +79,11 @@ function Setup({ developmentBuild }: { developmentBuild: boolean }) {
 					});
 					return;
 				}
+				const resolved = await ask({ type: "resolve-instance-origin", origin: parsed.origin });
+				if (resolved.origin !== parsed.origin) {
+					setState({ status: "confirm-apex", origin: resolved.origin });
+					return;
+				}
 				await ask({
 					type: "configure-instance",
 					origin: parsed.origin,
@@ -100,6 +105,7 @@ function Setup({ developmentBuild }: { developmentBuild: boolean }) {
 			hostedHost={HOSTED_HOST}
 			developmentBuild={developmentBuild}
 			state={state}
+			onConnectApex={(origin) => connect("custom", { origin })}
 			onConnectHosted={() => connect("hosted", { origin: HOSTED_INSTANCE_ORIGIN })}
 			onConnectCustom={(input) => connect("custom", input)}
 			privacyUrl={EXTENSION_PRIVACY_URL}

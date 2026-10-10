@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { apiBasePath } from "@/runtime/api-base-path";
+import { workspaceAddressConfig, workspaceRewrite } from "@/runtime/workspace-address";
 
 export const USER_VIEW_STORAGE_KEY = "hephaestus.user-view";
 
@@ -35,14 +36,31 @@ export function getUserViewSession(): UserViewSession | undefined {
 
 export function startUserView(session: UserViewSession): void {
 	sessionStorage.setItem(USER_VIEW_STORAGE_KEY, JSON.stringify(userViewSchema.parse(session)));
-	window.location.assign(`/w/${session.workspaceSlug}/user/${encodeURIComponent(session.login)}`);
+	const path = `/w/${session.workspaceSlug}/user/${encodeURIComponent(session.login)}`;
+	if (!workspaceAddressConfig.enabled) {
+		window.location.assign(path);
+		return;
+	}
+	const url = new URL(path, window.location.origin);
+	const target = workspaceRewrite(workspaceAddressConfig, window.location.origin).output?.({ url });
+	window.location.assign(target === undefined ? url.href : String(target));
 }
 
 export function exitUserView(): void {
 	const workspaceSlug = getUserViewSession()?.workspaceSlug;
 	clearUserView();
 	if (workspaceSlug === undefined) {
-		window.location.assign("/admin/workspaces");
+		window.location.assign(
+			workspaceAddressConfig.enabled
+				? new URL("/admin/workspaces", workspaceAddressConfig.apexOrigin).href
+				: "/admin/workspaces",
+		);
+	} else if (workspaceAddressConfig.enabled) {
+		const url = new URL(`/w/${workspaceSlug}/view-as`, window.location.origin);
+		const target = workspaceRewrite(workspaceAddressConfig, window.location.origin).output?.({
+			url,
+		});
+		window.location.assign(target === undefined ? url.href : String(target));
 	} else {
 		window.location.assign(`/admin/workspaces/${workspaceSlug}/users`);
 	}

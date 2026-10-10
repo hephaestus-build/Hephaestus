@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
@@ -84,9 +85,23 @@ class PracticeFeedbackCommentFormatterTest extends BaseUnitTest {
         assertThat(result).contains("[Hephaestus](https://hephaestus.example/w/team/feedback/scm.issue/7)");
     }
 
+    @Test
+    void linksProviderCommentsToTheWorkspaceAddressButKeepsPreferencesOnTheApex() {
+        var formatter = new PracticeFeedbackCommentFormatter(
+                new ApplicationProperties(null, new ApplicationProperties.Webapp("https://hephaestus.example")),
+                teamWorkspace(),
+                new WorkspaceSubdomainProperties(true, "hephaestus.example"));
+        assertThat(formatter.format("Body", job()))
+                .contains("https://team.hephaestus.example/feedback/scm.pull_request/42")
+                .contains("https://hephaestus.example/settings#practice-feedback")
+                .doesNotContain("/w/team");
+    }
+
     private static PracticeFeedbackCommentFormatter formatter(String webappUrl) {
         return new PracticeFeedbackCommentFormatter(
-                new ApplicationProperties(null, new ApplicationProperties.Webapp(webappUrl)), teamWorkspace());
+                new ApplicationProperties(null, new ApplicationProperties.Webapp(webappUrl)),
+                teamWorkspace(),
+                new WorkspaceSubdomainProperties(false, ""));
     }
 
     private static AgentJob job() {

@@ -7,9 +7,8 @@ sidebar_position: 18
 Workspace subdomains give each workspace an address such as `https://ls1intum.hephaestus.build`.
 Authentication and the API stay on the apex, `https://hephaestus.build`.
 The instance switch is off by default.
-Keep it off until a later release supports workspace addresses in the web app.
-This release prepares the edge.
-It does not add tenant-host navigation.
+The web app supports workspace addresses.
+Prepare DNS, TLS, and OAuth callbacks before you turn on the switch.
 
 ## Configure the server
 
@@ -43,7 +42,7 @@ The server switch alone does not configure DNS, TLS, redirects, or SPA routes.
 Use DNS-only records and a DNS-01 wildcard certificate, as [ADR 0053](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0053-workspace-addresses-are-a-presentation-origin.md) requires.
 Cloudflare must not proxy these hosts.
 
-Before you turn it on in a supported release, configure DNS, TLS, and the apex callbacks.
+Before you turn it on, configure DNS, TLS, and the apex callbacks.
 To turn it off, set `enabled` to `false` in the app and proxy settings and recreate both.
 Keep the apex workspace paths available.
 
@@ -138,7 +137,20 @@ See [Traefik ACME](https://doc.traefik.io/traefik/reference/install-configuratio
 
 ### Check and turn off
 
-In a release that supports tenant-host navigation, set the switch and base domain in both app and proxy settings.
+1. Upgrade the app and proxy to this release with the switch off.
+2. Prepare the DNS-only wildcard record and DNS-01 wildcard certificate.
+3. Register the exact apex OAuth callbacks and verify apex sign-in.
+4. Set the switch and base domain in both app and proxy settings.
+5. Recreate the app and proxy with Compose's `--wait` option.
+6. Verify workspace navigation, public activity, sign-in, and an authenticated change on a workspace host.
+
+The webapp container receives the same switch and base domain as the server.
+`APPLICATION_CLIENT_URL` is the apex app origin.
+`APPLICATION_SERVER_URL` is the absolute apex API URL, including `/api`.
+The reference Compose configuration supplies these values.
+For another deployment, supply all four values to the webapp container.
+Keep the server, webapp, and proxy settings consistent.
+
 Recreate the app and proxy with Compose's `--wait` option.
 Invalid edge settings stop the proxy with a clear startup error instead of serving a partial configuration.
 Check the container logs if Compose reports a startup failure.
@@ -221,7 +233,9 @@ Send that header on unsafe requests to the apex, with credentials.
 
 At startup and after sign-in or sign-out, fetch the token before any other credentialed request.
 Wait for the response before starting other requests.
-If an unsafe request fails with a CSRF 403, refetch the token once and retry that request once.
+A CSRF 403 has problem type `urn:hephaestus:csrf`.
+On that response, refetch the token once and retry the rejected request once.
+Do not retry another 403 or an ambiguous network failure.
 OAuth sign-in and browser sign-out clear the previous CSRF cookie through Spring Security.
 
 The endpoint is available before sign-in and sends `Cache-Control: no-store`.
@@ -231,6 +245,26 @@ It must not appear in logs.
 The auth cookies keep the `__Host-` prefix, `Secure`, `Path=/`, and no `Domain`.
 Return paths remain relative-only.
 Workspace detail and list responses expose the canonical `workspaceAddress` for the SPA.
+
+## Browser state and navigation
+
+Each origin keeps its own cookie choices, theme, and **View as user** session.
+No browser storage or session token is copied between hosts.
+The workspace-specific **View as user** entry opens on the workspace host before it stores the view.
+Instance administration stays on the apex.
+Workspace administration uses `/admin` on the workspace host.
+Links to instance administration use absolute apex URLs.
+
+Sign-in uses the apex `/login` page.
+The return path is relative, such as `/w/<slug>/activity?range=1y`.
+After sign-in, a document request reaches the edge's workspace redirect.
+The server does not accept an absolute return path.
+Slack connection callbacks derive their return workspace from the signed workspace ID, not browser storage.
+
+The extension reads `/.well-known/hephaestus.json` on a pasted workspace host.
+This public, non-cacheable document names the configured apex and base domain.
+The extension asks for access to the apex before it connects.
+It does not guess a parent domain or send credentials during discovery.
 
 ## Workspace names and upgrade
 

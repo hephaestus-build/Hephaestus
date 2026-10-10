@@ -85,6 +85,15 @@ main() {
 
   log "Generating runtime config..."
 
+  local subdomains="${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}"
+  case "$subdomains" in true|false) ;; *) log "Invalid workspace subdomains switch"; exit 1 ;; esac
+  mkdir -p "${HTML_DIR}/.well-known"
+  printf '{"apexOrigin":"%s","baseDomain":"%s","workspaceSubdomainsEnabled":%s}\n' \
+    "$(escape_for_js "${APPLICATION_CLIENT_URL:-}")" \
+    "$(escape_for_js "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}")" \
+    "$subdomains" > "${HTML_DIR}/.well-known/hephaestus.json"
+
+
   # Extract all env var names from TypeScript (single source of truth)
   local -a all_vars
   mapfile -t all_vars < <(extract_env_vars)

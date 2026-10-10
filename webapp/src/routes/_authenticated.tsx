@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { workspaceAddressConfig, tenantSlug } from "@/runtime/workspace-address";
 
 import { Spinner } from "@/components/ui/spinner";
 import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
@@ -17,7 +18,10 @@ export const Route = createFileRoute("/_authenticated")({
 			throw redirect({
 				to: "/consent",
 				search: { returnTo: location.href },
-				mask: { to: location.pathname, search: location.search, hash: location.hash },
+				mask:
+					tenantSlug(new URL(window.location.origin), workspaceAddressConfig) === undefined
+						? { to: location.pathname, search: location.search, hash: location.hash }
+						: undefined,
 			});
 		}
 		const viewed = getUserViewSession();

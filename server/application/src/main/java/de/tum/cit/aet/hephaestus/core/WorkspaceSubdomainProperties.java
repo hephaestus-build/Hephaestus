@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.workspace;
+package de.tum.cit.aet.hephaestus.core;
 
 import java.util.regex.Pattern;
 import org.springframework.boot.context.properties.ConfigurationProperties;

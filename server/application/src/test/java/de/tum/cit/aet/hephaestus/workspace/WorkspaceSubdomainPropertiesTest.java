@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.net.URI;
 import org.junit.jupiter.api.Test;

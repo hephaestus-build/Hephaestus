@@ -40,6 +40,7 @@ export const requestSchema = z.discriminatedUnion("type", [
 		// Only a development build asks for it: a local API server does not serve the web app.
 		webAppOrigin: z.string().max(2048).optional(),
 	}),
+	z.object({ type: z.literal("resolve-instance-origin"), origin: z.string().max(2048) }),
 	z.object({ type: z.literal("clear-instance") }),
 	z.object({ type: z.literal("list-sign-in-options") }),
 	z.object({
@@ -93,6 +94,7 @@ export type Surface = "options" | "inline" | "action";
 export const COMMAND_SURFACES: Record<RpcCommand, readonly Surface[]> = {
 	"get-state": ["options", "inline", "action"],
 	"configure-instance": ["options"],
+	"resolve-instance-origin": ["options"],
 	"clear-instance": ["options"],
 	"list-sign-in-options": ["options"],
 	"sign-in": ["options"],
@@ -196,6 +198,7 @@ export interface ReportViewState {
 export interface RpcResponses {
 	"get-state": AppState;
 	"configure-instance": AppState;
+	"resolve-instance-origin": { origin: string };
 	"clear-instance": AppState;
 	"list-sign-in-options": SignInOptions;
 	"sign-in": AppState;

@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
+	redirect,
 	HeadContent,
 	Outlet,
 	useLocation,
@@ -85,6 +86,7 @@ import { safeReturnTo } from "@/runtime/auth/guard";
 import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools";
 import { useProviderColors } from "@/runtime/theme/provider-colors";
 import { exitUserView } from "@/runtime/user-view/session";
+import { workspaceAddressConfig, workspaceRewrite } from "@/runtime/workspace-address";
 import { isCopilotExcludedRoute } from "./-copilot-route";
 
 const GlobalCopilot = lazy(async () => import("./-GlobalCopilot"));
@@ -346,6 +348,19 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			typeof search.survey === "string" && search.survey.length > 0 ? search.survey : undefined,
 		login: search.login === true || search.login === "true" ? true : undefined,
 	}),
+	beforeLoad: ({ location }) => {
+		if (!workspaceAddressConfig.enabled) {
+			return;
+		}
+		const url = new URL(location.href, window.location.origin);
+		const rewritten = workspaceRewrite(workspaceAddressConfig, window.location.origin).output?.({
+			url,
+		});
+		const target = new URL(rewritten ?? url);
+		if (target.origin !== window.location.origin) {
+			throw redirect({ href: target.href, reloadDocument: true });
+		}
+	},
 	// Fallback tab title; the deepest match that sets its own `head` wins.
 	head: () => ({ meta: [{ title: "Hephaestus" }] }),
 	component: RootRoute,

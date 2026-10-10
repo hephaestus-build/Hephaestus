@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.notification.email;
 
 import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -18,17 +19,27 @@ public class EmailRenderer {
     private final ITemplateEngine templateEngine;
     private final MessageSource messages;
     private final ApplicationProperties applicationProperties;
+    private final WorkspaceSubdomainProperties subdomains;
 
     public EmailRenderer(
-            ITemplateEngine templateEngine, MessageSource messages, ApplicationProperties applicationProperties) {
+            ITemplateEngine templateEngine,
+            MessageSource messages,
+            ApplicationProperties applicationProperties,
+            WorkspaceSubdomainProperties subdomains) {
         this.templateEngine = templateEngine;
         this.messages = messages;
         this.applicationProperties = applicationProperties;
+        this.subdomains = subdomains;
     }
 
     public RenderedEmail render(EmailKind kind, Map<String, Object> model) {
         Map<String, Object> variables = new HashMap<>(model);
         variables.put("webappUrl", applicationProperties.webapp().url());
+        if (model.get("workspaceSlug") instanceof String slug) {
+            variables.put(
+                    "workspaceAddress",
+                    subdomains.address(slug, applicationProperties.webapp().url()));
+        }
         String subjectKey = "email." + kind.templateName() + ".subject";
         if (kind == EmailKind.PRODUCT_FEEDBACK) {
             subjectKey += "." + model.get("feedbackKind");

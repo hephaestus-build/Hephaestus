@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.notification.email;
 
 import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templatemode.TemplateMode;
@@ -14,6 +15,10 @@ public final class EmailTestSupport {
     private EmailTestSupport() {}
 
     public static EmailRenderer renderer() {
+        return renderer(new WorkspaceSubdomainProperties(false, ""));
+    }
+
+    public static EmailRenderer renderer(WorkspaceSubdomainProperties subdomains) {
         ClassLoaderTemplateResolver html = new ClassLoaderTemplateResolver();
         html.setPrefix("templates/");
         html.setSuffix(".html");
@@ -27,6 +32,9 @@ public final class EmailTestSupport {
         engine.addTemplateResolver(html);
         engine.setTemplateEngineMessageSource(messages);
         return new EmailRenderer(
-                engine, messages, new ApplicationProperties(null, new ApplicationProperties.Webapp(WEBAPP_URL)));
+                engine,
+                messages,
+                new ApplicationProperties(null, new ApplicationProperties.Webapp(WEBAPP_URL)),
+                subdomains);
     }
 }

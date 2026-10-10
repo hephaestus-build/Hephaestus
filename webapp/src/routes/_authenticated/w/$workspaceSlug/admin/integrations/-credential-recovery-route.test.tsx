@@ -292,7 +292,6 @@ describe("Slack credential recovery", () => {
 				name: "Redirecting to Slack…",
 			});
 			expect(pending.disabled).toBe(true);
-			expect(window.sessionStorage.getItem("slack-connect-return-slug")).toBe("acme");
 			response.resolve();
 
 			await waitFor(() => expect(window.location.href).toBe(vendorUrl));
@@ -306,7 +305,6 @@ describe("Slack credential recovery", () => {
 			).toStrictEqual(["POST /workspaces/acme/connections"]);
 		} finally {
 			server.events.removeListener("request:start", record);
-			window.sessionStorage.removeItem("slack-connect-return-slug");
 			window.location.hash = "";
 		}
 	});
@@ -321,23 +319,19 @@ describe("Slack credential recovery", () => {
 				),
 			),
 		);
-		try {
-			renderRouteAt("/w/acme/admin/integrations/slack");
-			const user = userEvent.setup();
-			await user.click(
-				await screen.findByRole("button", { name: "Reconnect Slack" }, ROUTE_RENDER_WAIT),
-			);
+		renderRouteAt("/w/acme/admin/integrations/slack");
+		const user = userEvent.setup();
+		await user.click(
+			await screen.findByRole("button", { name: "Reconnect Slack" }, ROUTE_RENDER_WAIT),
+		);
 
-			await screen.findByText("Slack is not configured.");
-			await waitFor(() =>
-				expect(
-					screen.getByRole<HTMLButtonElement>("button", { name: "Reconnect Slack" }).disabled,
-				).toBe(false),
-			);
-			screen.getByText("Token unreadable");
-		} finally {
-			window.sessionStorage.removeItem("slack-connect-return-slug");
-		}
+		await screen.findByText("Slack is not configured.");
+		await waitFor(() =>
+			expect(
+				screen.getByRole<HTMLButtonElement>("button", { name: "Reconnect Slack" }).disabled,
+			).toBe(false),
+		);
+		screen.getByText("Token unreadable");
 	});
 
 	it("shows the bot token as connected again once it reads", async () => {

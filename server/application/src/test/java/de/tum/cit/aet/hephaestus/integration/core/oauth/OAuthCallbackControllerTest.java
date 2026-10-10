@@ -74,6 +74,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        lenient().when(callbackService.workspaceSlug(42L)).thenReturn("team");
         // Real routing — its behaviour is unit-tested separately; using the real bean
         // here gives the test exact parity with production path resolution.
         routing = new IntegrationKindRouting();
@@ -111,7 +112,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getHeaders().getLocation()).isNotNull();
         var location0 = response.getHeaders().getLocation();
         assertNotNull(location0);
-        assertThat(location0.toString()).isEqualTo(PROPS.successRedirect());
+        assertThat(location0.toString()).isEqualTo(PROPS.successRedirect() + "&workspaceSlug=team");
 
         ArgumentCaptor<ConnectFinalization.Completed> completed =
                 ArgumentCaptor.forClass(ConnectFinalization.Completed.class);
@@ -160,13 +161,30 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("kind", "SLACK").containsEntry("error", "access_denied");
-        assertThat(body.getDetail()).isEqualTo("The user denied the request");
+        assertThat(body.getProperties()).containsEntry("kind", "SLACK").containsEntry("error", "missing_state");
+        assertThat(body.getDetail()).isEqualTo("The state parameter is required.");
 
-        // State was never consumed — the user might retry without re-issuing.
+        // An unbound callback cannot name a return workspace.
         verify(oauthStateService, never()).consume(any());
         // Strategy never called.
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
+        verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
+    }
+
+    @Test
+    void cancelledSlackConnectReturnsToTheWorkspaceBoundBySignedState() {
+        when(oauthStateService.consume("signed-state"))
+                .thenReturn(new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L));
+        var response = controller.callbackGet(
+                "slack",
+                "signed-state",
+                "access_denied",
+                "Connection cancelled",
+                Map.of("workspaceSlug", "forged-team"),
+                htmlRequest());
+        assertThat(response.getHeaders().getLocation())
+                .hasToString(
+                        "/integrations?status=error&reason=access_denied&description=Connection+cancelled&kind=SLACK&workspaceSlug=team");
         verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
     }
 
@@ -185,7 +203,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertNotNull(location1);
         String location = location1.toString();
         assertThat(location).contains("status=error");
-        assertThat(location).contains("reason=access_denied");
+        assertThat(location).contains("reason=missing_state");
         assertThat(location).contains("kind=SLACK");
         verify(oauthStateService, never()).consume(any());
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
@@ -458,7 +476,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         var location6 = response.getHeaders().getLocation();
         assertNotNull(location6);
-        assertThat(location6.toString()).isEqualTo(PROPS.successRedirect());
+        assertThat(location6.toString()).isEqualTo(PROPS.successRedirect() + "&workspaceSlug=team");
         verify(callbackService).completeConnection(any(), any(), any());
     }
 

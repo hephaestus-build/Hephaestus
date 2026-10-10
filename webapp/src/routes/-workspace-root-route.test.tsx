@@ -12,6 +12,7 @@ import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
+import { workspaceRewrite } from "@/runtime/workspace-address";
 import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
@@ -380,5 +381,34 @@ describe("a member", () => {
 		await screen.findByRole("heading", { name: /Activity/u }, ROUTE_RENDER_WAIT);
 		expect(asked).not.toHaveBeenCalled();
 		expect(screen.queryByRole("alertdialog")).toBeNull();
+	});
+});
+
+describe("tenant workspace root", () => {
+	it("loads the same public activity page and query as the apex workspace path", async () => {
+		server.use(unauthenticatedUser);
+		const reads: URL[] = [];
+		const page = publicActivity();
+		publish(page, reads);
+		const router = createRouter({
+			...ROUTER_SEARCH,
+			routeTree,
+			origin: "https://acme.hephaestus.build",
+			rewrite: workspaceRewrite(
+				{ enabled: true, baseDomain: "hephaestus.build", apexOrigin: "https://hephaestus.build" },
+				"https://acme.hephaestus.build",
+			),
+			history: createMemoryHistory({ initialEntries: ["/?range=30d"] }),
+			context: { queryClient: new QueryClient(), auth: undefined },
+		});
+		await router.load();
+		expect(router.state.location.pathname).toBe("/w/acme");
+		expect(router.history.location.href).toBe("/?range=30d");
+		expect(reads).toHaveLength(1);
+		expect(reads[0]?.pathname).toBe("/public/workspaces/acme/activity");
+		expect(router.state.matches.at(-1)?.loaderData).toMatchObject({
+			status: "ready",
+			page: { workspaceName: "Acme" },
+		});
 	});
 });
