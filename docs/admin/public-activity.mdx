@@ -81,16 +81,35 @@ A page client can use this state for a one-time Show me / Hide me step.
 
 Only `GET` and `HEAD /public/workspaces/{slug}/activity` publish workspace data without sign-in.
 It accepts the activity range presets and custom dates.
-Each query checks the stored repository visibility, not the state when publication was enabled.
-GitLab project create, rename, transfer and update events refresh both visibility fields.
+Each query requires stored public visibility and a recent successful repository sync for this workspace.
+A missing confirmation, an expired confirmation, or a known unavailable repository excludes the repository,
+its contributions, and its coverage from the public response.
+A sync that reports repository access loss (404 or authorization failure) marks that workspace's monitor unavailable immediately.
+Installation repository removal and GitLab project removal or transfer out of scope stop publication by removing the workspace monitor.
+A GitLab project event whose metadata lookup reports access loss also marks the monitor unavailable.
+These actions do not change another workspace's access to the same repository.
+A successful sync can restore publication when it confirms that the repository is public and accessible again.
+
+`HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE` supplies
+`hephaestus.public-activity.repository-visibility-max-age` and defaults to `48h`.
+The value must be a positive duration.
+This is twice the default daily `hephaestus.sync.cron` interval (03:00 server time).
+Use twice your configured metadata sync interval when you change the cadence.
+The limit is enforced during each public query, without a cleanup job.
+If sync is disabled, credentials stop working, or metadata fetches keep failing,
+publication stops no later than this limit after the last successful repository sync.
+A failed sync does not renew the confirmation.
+Repositories that have never completed a successful sync are not published.
+GitLab requires a complete successful repository sync; partial resource failures can therefore hide a repository earlier.
+
+GitLab project create, rename, transfer and update events refresh stored visibility.
 A system hook supplies `project_update`; normal project and group webhooks do not supply visibility-change events.
-Push events and the existing metadata sync paths also refresh visibility.
-Without a delivered system-hook event, a change is reflected after the next successful metadata sync:
-by default, the daily `hephaestus.sync.cron` run at 03:00 server time, plus that run's processing time.
-There is no finite bound while sync is disabled or project metadata cannot be fetched.
-This includes access loss, invalid credentials, and provider errors.
-Before making a public GitLab project private, turn the workspace page off, then sync and verify it before enabling it again.
-See [GitLab system hooks](https://docs.gitlab.com/administration/system_hooks/) and
+Push events and metadata sync paths also refresh stored visibility.
+Without a delivered visibility event, a private change is detected by the next successful metadata sync,
+or the repository is excluded when its confirmation expires, whichever happens first.
+The existing 60-second anonymous cache lifetime applies after exclusion as it does after a publication setting change.
+See [GitHub installation repository events](https://docs.github.com/en/webhooks/webhook-events-and-payloads#installation_repositories),
+[GitLab system hooks](https://docs.gitlab.com/administration/system_hooks/) and
 [GitLab webhook events](https://docs.gitlab.com/user/project/integrations/webhook_events/#project-events).
 Unknown, inactive, and disabled pages return the same not-found problem.
 Other workspace endpoints require sign-in and workspace access.
