@@ -57,7 +57,7 @@ class WorkspaceSubdomainAuthIntegrationTest extends RealAuthIntegrationTest {
                 "INSERT INTO identity_link(account_id,provider_id,subject,linked_at) VALUES(?,993101,'993102',now())",
                 account.getId());
         jdbc.update(
-                "INSERT INTO workspace_membership(workspace_id,user_id,role,created_at) VALUES(?,993102,'MEMBER',now())",
+                "INSERT INTO workspace_membership(workspace_id,user_id,role,created_at,hidden) VALUES(?,993102,'MEMBER',now(),false)",
                 workspace.getId());
         var session = issuer.issue(Objects.requireNonNull(account.getId()), TokenConstraints.session(null, null), null)
                 .value();
