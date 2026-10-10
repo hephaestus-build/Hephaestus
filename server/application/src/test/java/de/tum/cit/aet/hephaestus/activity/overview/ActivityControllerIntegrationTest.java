@@ -385,6 +385,14 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             workspace.setPublicActivitySearchEngines(true);
             workspaceRepository.save(workspace);
             assertThat(page().allowSearchEngines()).isTrue();
+            webTestClient
+                    .get()
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectHeader()
+                    .doesNotExist("X-Robots-Tag");
         }
 
         @Test

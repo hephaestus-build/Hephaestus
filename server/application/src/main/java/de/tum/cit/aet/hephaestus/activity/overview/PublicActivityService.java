@@ -21,7 +21,7 @@ class PublicActivityService {
     private final ActivityPeopleService people;
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
-    public Publication page(String slug, ActivityPeopleRangeParams range) {
+    public PublicActivityDTO page(String slug, ActivityPeopleRangeParams range) {
         var workspace = workspaces.findPublicActivityWorkspace(slug);
         if (!policy.allowed() || workspace.isEmpty()) {
             var exception =
@@ -30,13 +30,9 @@ class PublicActivityService {
             throw exception;
         }
         var selected = workspace.get();
-        return new Publication(
-                PublicActivityDTO.from(
-                        selected.getDisplayName(),
-                        selected.isPublicActivitySearchEngines(),
-                        people.publicPeople(selected.getId(), range)),
-                selected.isPublicActivitySearchEngines());
+        return PublicActivityDTO.from(
+                selected.getDisplayName(),
+                selected.isPublicActivitySearchEngines(),
+                people.publicPeople(selected.getId(), range));
     }
-
-    record Publication(PublicActivityDTO activity, boolean allowSearchEngines) {}
 }

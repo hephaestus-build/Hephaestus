@@ -29,16 +29,16 @@ public class PublicActivityController {
     @Operation(operationId = "getPublicActivity", summary = "Read human contributions to public repositories")
     public ResponseEntity<PublicActivityDTO> getPublicActivity(
             @PathVariable String slug, @ParameterObject ActivityPeopleRangeParams range) {
-        var publication = activity.page(slug, range);
+        var page = activity.page(slug, range);
         var response = ResponseEntity.ok()
                 .varyBy("Cookie", "Authorization")
                 .cacheControl(
                         CurrentAccount.isAuthenticated()
                                 ? CacheControl.noStore()
                                 : CacheControl.maxAge(Duration.ofSeconds(60)).cachePublic());
-        if (!publication.allowSearchEngines()) {
+        if (!page.allowSearchEngines()) {
             response.header("X-Robots-Tag", "noindex");
         }
-        return response.body(publication.activity());
+        return response.body(page);
     }
 }
