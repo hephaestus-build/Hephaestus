@@ -11,11 +11,9 @@ import { SearchIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { cn } from "cn";
-import type { ActivityPeople, ActivityPerson, ActivityRepository } from "@/api/types.gen";
+import type { ActivityPeople, ActivityPerson } from "@/api/types.gen";
 import { type DataTableFeatures, dataTableFeatures } from "@/components/common/data-table";
 import { DataTableHeader } from "@/components/common/DataTableHeader";
-import { FacetMultiSelect } from "@/components/common/FacetMultiSelect";
-import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { InfiniteListEnd } from "@/components/common/InfiniteListEnd";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
@@ -52,11 +50,8 @@ export interface ActivityPeopleTableProps {
 	providerType: ProviderType;
 	order: PeopleOrder;
 	onOrderChange: (order: PeopleOrder) => void;
-	/** The repositories to pick from. */
-	repositories: readonly ActivityRepository[];
 	/** The repositories the table counts, by full path; none is every repository. */
 	repo: readonly string[];
-	onRepoChange: (repo: string[]) => void;
 }
 
 /** A step of rows to render at a time: enough to scroll through, few enough to render at once. */
@@ -93,9 +88,7 @@ export function ActivityPeopleTable({
 	providerType,
 	order,
 	onOrderChange,
-	repositories,
 	repo,
-	onRepoChange,
 }: ActivityPeopleTableProps) {
 	const [search, setSearch] = useState("");
 	const [shown, setShown] = useState(ROWS_STEP);
@@ -226,31 +219,19 @@ export function ActivityPeopleTable({
 		},
 	});
 
-	// A repository the URL names but the workspace does not is still listed, so it can be cleared.
-	const repositoryKeys = [...new Set([...repositories.map(({ key }) => key), ...repo])];
 	const toolbar = (
-		<FilterToolbar hasFilter={repo.length > 0} onReset={() => onRepoChange([])}>
-			<InputGroup className="w-full sm:w-64">
-				<InputGroupAddon>
-					<SearchIcon />
-				</InputGroupAddon>
-				<InputGroupInput
-					type="search"
-					placeholder="Search people"
-					aria-label="Search people"
-					value={search}
-					onChange={(event) => table.setGlobalFilter(event.target.value)}
-				/>
-			</InputGroup>
-			{repositoryKeys.length > 1 && (
-				<FacetMultiSelect
-					title="Repository"
-					options={repositoryKeys.map((key) => ({ value: key, label: key }))}
-					selected={repo}
-					onChange={onRepoChange}
-				/>
-			)}
-		</FilterToolbar>
+		<InputGroup className="w-full sm:w-64">
+			<InputGroupAddon>
+				<SearchIcon />
+			</InputGroupAddon>
+			<InputGroupInput
+				type="search"
+				placeholder="Search people"
+				aria-label="Search people"
+				value={search}
+				onChange={(event) => table.setGlobalFilter(event.target.value)}
+			/>
+		</InputGroup>
 	);
 	const stale = state.status === "ready" && state.stale;
 	const found = table.getFilteredRowModel().rows.length;
@@ -280,8 +261,8 @@ export function ActivityPeopleTable({
 						icon={<EmptyIcon />}
 						title={
 							repo.length > 0
-								? "No contributions to these repositories in this range"
-								: "No contributions in this range"
+								? "No activity in these repositories in this range"
+								: "No activity in this range"
 						}
 					/>
 				</div>

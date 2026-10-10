@@ -1,13 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
-import {
-	LARGE_PEOPLE,
-	PEOPLE,
-	peopleOf,
-	readyPeople,
-	REPOSITORIES,
-} from "@/stories/activity-story-data";
+import { LARGE_PEOPLE, PEOPLE, peopleOf, readyPeople } from "@/stories/activity-story-data";
 import { withProvider, withStandardPage } from "@/stories/decorators";
 import { settledPopup } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -24,9 +18,7 @@ const meta = {
 		providerType: "GITHUB",
 		order: { sort: "contributions", desc: true },
 		onOrderChange: fn(),
-		repositories: REPOSITORIES,
 		repo: [],
-		onRepoChange: fn(),
 	},
 	render: (args) => (
 		<Stateful initial={args.order}>
@@ -186,29 +178,18 @@ export const Large: Story = {
 	},
 };
 
-export const FilteredByRepository: Story = {
-	args: { repo: ["hephaestus-build/Hephaestus"] },
-	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
-		await expect(args.onRepoChange).toHaveBeenCalledWith([]);
-	},
-};
-
 export const Empty: Story = {
 	args: { state: readyPeople(peopleOf([])) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No contributions in this range")).toBeVisible();
+		await expect(canvas.getByText("No activity in this range")).toBeVisible();
 	},
 };
 
-/** With repositories picked, the empty table says the pick is why, and the pick stays clearable. */
+/** With repositories picked, the empty table names its scope. */
 export const EmptyForRepositories: Story = {
 	args: { state: readyPeople(peopleOf([])), repo: ["hephaestus-build/Hephaestus"] },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByText("No contributions to these repositories in this range"),
-		).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Reset" })).toBeVisible();
+		await expect(canvas.getByText("No activity in these repositories in this range")).toBeVisible();
 	},
 };
 
@@ -227,7 +208,7 @@ export const StaleEmpty: Story = {
 	args: { state: { status: "ready", people: peopleOf([]), stale: true } },
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText("No contributions in this range").closest("[aria-busy='true']"),
+			canvas.getByText("No activity in this range").closest("[aria-busy='true']"),
 		).not.toBeNull();
 	},
 };
@@ -250,22 +231,6 @@ export const Failed: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /Retry/u }));
 		await expect(onRetry).toHaveBeenCalledOnce();
-	},
-};
-
-/**
- * A repository the workspace no longer has fails the read; the pick stays in the toolbar, named,
- * so it can be cleared.
- */
-export const FailedForUnknownRepository: Story = {
-	args: {
-		state: { status: "error", error: new Error("Repository not found"), onRetry },
-		repo: ["acme/old"],
-	},
-	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByRole("combobox", { name: "Repository: acme/old" })).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
-		await expect(args.onRepoChange).toHaveBeenCalledWith([]);
 	},
 };
 

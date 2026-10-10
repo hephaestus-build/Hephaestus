@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { setDate, startOfMonth, subMonths } from "date-fns";
+import { format, setDate, startOfMonth, subMonths } from "date-fns";
 import { expect, fn, screen, waitFor, within } from "storybook/test";
 
 import { settledPopup } from "@/stories/overlay";
-import { daysBefore } from "@/stories/story-clock";
+import { daysBefore, STORY_NOW } from "@/stories/story-clock";
 
 import { periodLabel } from "./activity-period";
 import { ActivityPeriodPicker } from "./ActivityPeriodPicker";
@@ -40,17 +40,28 @@ export const PickCustomRange: Story = {
 		const popup = within(await settledPopup());
 		const apply = popup.getByRole("button", { name: "Apply" });
 		await expect(apply).toBeDisabled();
-		// Last month is wholly in the past, so every day of it can be picked.
-		await userEvent.click(popup.getByRole("button", { name: /previous month/iu }));
-		await userEvent.click(popup.getByRole("button", { name: / 10th, /u }));
-		await userEvent.click(popup.getByRole("button", { name: / 12th, /u }));
+		const thisMonth = startOfMonth(new Date(STORY_NOW));
+		const lastMonth = subMonths(thisMonth, 1);
+		const grids = popup.getAllByRole("grid");
+		await expect(grids).toHaveLength(2);
+		await userEvent.click(
+			within(popup.getByRole("grid", { name: format(lastMonth, "MMMM yyyy") })).getByRole(
+				"button",
+				{ name: / 20th, /u },
+			),
+		);
+		await userEvent.click(
+			within(popup.getByRole("grid", { name: format(thisMonth, "MMMM yyyy") })).getByRole(
+				"button",
+				{ name: / 1st, /u },
+			),
+		);
 		await expect(args.onPeriodChange).not.toHaveBeenCalled();
 		await userEvent.click(apply);
-		const lastMonth = subMonths(startOfMonth(new Date()), 1);
 		await expect(args.onPeriodChange).toHaveBeenCalledWith({
 			kind: "custom",
-			from: setDate(lastMonth, 10),
-			to: setDate(lastMonth, 12),
+			from: setDate(lastMonth, 20),
+			to: thisMonth,
 		});
 		// Applying closes the calendar.
 		await waitFor(async () =>
@@ -84,8 +95,14 @@ export const Updating: Story = {
 /** On a narrow screen the presets are one select, and the custom range stays beside it. */
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
-	play: async ({ canvas }) => {
+	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByRole("combobox", { name: "Time range" })).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Custom range" })).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "Custom range" }));
+		const grids = within(await settledPopup()).getAllByRole("grid");
+		await expect(grids).toHaveLength(2);
+		for (const grid of grids) {
+			await expect(grid.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
+			await expect(grid.getBoundingClientRect().right).toBeLessThanOrEqual(window.innerWidth);
+		}
 	},
 };

@@ -14,6 +14,7 @@ import {
 import { withProvider, withStandardPage } from "@/stories/decorators";
 import { settledPopup } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { Stateful } from "@/stories/stateful";
 import { daysBefore } from "@/stories/story-clock";
 
 import { WorkspaceActivityPage } from "./WorkspaceActivityPage";
@@ -28,6 +29,8 @@ const meta = {
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
 	args: {
+		view: "people",
+		onViewChange: fn(),
 		providerType: "GITHUB",
 		period: { kind: "preset", preset: "90d" },
 		onPeriodChange: fn(),
@@ -49,6 +52,20 @@ const meta = {
 			onCopy,
 		},
 	},
+	render: (args) => (
+		<Stateful initial={args.view}>
+			{(view, setView) => (
+				<WorkspaceActivityPage
+					{...args}
+					view={view}
+					onViewChange={(next) => {
+						args.onViewChange(next);
+						setView(next);
+					}}
+				/>
+			)}
+		</Stateful>
+	),
 } satisfies Meta<typeof WorkspaceActivityPage>;
 
 export default meta;
@@ -59,7 +76,7 @@ export const Default: Story = {
 		const headings = canvas
 			.getAllByRole("heading", { level: 2 })
 			.map((heading) => heading.textContent);
-		await expect(headings).toStrictEqual(["People", "Automation", "Timeline"]);
+		await expect(headings).toStrictEqual(["Activity by person", "Automation"]);
 		await expect(canvas.getByText(/^History since .* for 2 of 2 repositories\.$/u)).toBeVisible();
 		await userEvent.click(canvas.getByRole("combobox", { name: "Team: Everyone" }));
 		const options = within(await settledPopup()).getAllByRole("option");
@@ -163,7 +180,7 @@ export const OneTeam: Story = {
 export const Empty: Story = {
 	args: { people: readyPeople(peopleOf([])) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No contributions in this range")).toBeVisible();
+		await expect(canvas.getByText("No activity in this range")).toBeVisible();
 		await expect(canvas.getByRole("combobox", { name: "Team: Everyone" })).toBeVisible();
 	},
 };
@@ -225,5 +242,51 @@ export const Failed: Story = {
 		await expect(retry).toHaveBeenCalledOnce();
 		// The team still says what the page asked for, so the reader can pick another.
 		await expect(canvas.getByRole("combobox", { name: "Team: gone" })).toBeVisible();
+	},
+};
+
+/** Changing views keeps a person's search and the shared scope controls. */
+export const SwitchViews: Story = {
+	play: async ({ canvas, userEvent }) => {
+		const search = canvas.getByRole("searchbox", { name: "Search people" });
+		await userEvent.type(search, "Ada");
+		await expect(
+			canvas.getByRole("table", { name: "People" }).querySelectorAll("tbody tr"),
+		).toHaveLength(1);
+		await userEvent.click(canvas.getByRole("tab", { name: "Timeline" }));
+		await expect(canvas.queryByRole("table", { name: "People" })).not.toBeInTheDocument();
+		await expect(canvas.getByRole("combobox", { name: "Repository" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: /Copy as Markdown/u })).toBeVisible();
+		await userEvent.click(canvas.getByRole("tab", { name: "People" }));
+		await expect(canvas.getByRole("searchbox", { name: "Search people" })).toHaveValue("Ada");
+		await expect(
+			canvas.getByRole("table", { name: "People" }).querySelectorAll("tbody tr"),
+		).toHaveLength(1);
+	},
+};
+
+export const TimelineLoading: Story = {
+	args: { view: "timeline", timeline: { status: "loading" } },
+};
+
+export const TimelineEmpty: Story = {
+	args: {
+		view: "timeline",
+		timeline: {
+			status: "ready",
+			stale: false,
+			items: [],
+			hasMore: false,
+			isLoadingMore: false,
+			onLoadMore: fn(),
+			onCopy,
+		},
+	},
+};
+
+export const TimelineFailed: Story = {
+	args: {
+		view: "timeline",
+		timeline: { status: "error", error: new Error("Network down"), onRetry: retry },
 	},
 };

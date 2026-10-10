@@ -93,7 +93,7 @@ function CustomRange({
 				endMonth={today}
 				disabled={{ before: EARLIEST_CUSTOM_DAY, after: today }}
 				excludeDisabled
-				numberOfMonths={1}
+				numberOfMonths={2}
 			/>
 			<Separator />
 			<div className="flex items-center justify-between gap-3 p-2">
