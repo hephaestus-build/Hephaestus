@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requireLong;
 import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requireText;
 
+import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -28,6 +29,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import tools.jackson.databind.JsonNode;
 
 /** Authorizes repository identity before provider credentials cross into trusted Git preparation. */
 @Component
@@ -201,6 +203,17 @@ public class ReviewRepositoryPreparer {
         }));
     }
 
+    /**
+     * The diff base retained with the queued head, or null. Only a JSON boolean {@code true} and a nonblank textual base
+     * retain a range; older jobs remain unknown. This records original identity, not provider provenance. The push
+     * coalescer decides replacement before capture.
+     */
+    private static @Nullable String admittedDiffBase(JsonNode metadata) {
+        JsonNode retained = metadata.get(PullRequestReviewHandler.RETAINED_RANGE_METADATA_KEY);
+        if (retained == null || !retained.isBoolean() || !retained.asBoolean()) return null;
+        return MetaJson.optString(metadata, "base_ref_oid");
+    }
+
     /** A pinned review range: target is the recorded diff base or the resolved merge base. */
     public record PreparedReview(RepositoryKey key, String head, String target) {}
 
@@ -211,18 +224,24 @@ public class ReviewRepositoryPreparer {
         String head = requireText(metadata, "commit_sha");
         String recordedBase = null;
         if (authorized.source().recordsReviewDiffBase()) {
-            if (!head.equals(authorized.head())) {
-                throw new JobPreparationException("Recorded merge request revision does not match the queued head");
-            }
-            recordedBase = authorized.base();
-            if (recordedBase == null || recordedBase.isBlank()) {
-                authorized = hydrateReviewRange(job, authorized, head);
+            // An admitted pair is the range this occasion was requested for. The mirror and the provider may since hold
+            // another pair, for a newer head or for the same head after the target moved, so neither stands in for it.
+            recordedBase = admittedDiffBase(metadata);
+            if (recordedBase == null) {
                 if (!head.equals(authorized.head())) {
                     throw new JobPreparationException("Recorded merge request revision does not match the queued head");
                 }
                 recordedBase = authorized.base();
                 if (recordedBase == null || recordedBase.isBlank()) {
-                    throw new ReviewSourceNotReadyException("Recorded merge request base commit is not ready");
+                    authorized = hydrateReviewRange(job, authorized, head);
+                    if (!head.equals(authorized.head())) {
+                        throw new JobPreparationException(
+                                "Recorded merge request revision does not match the queued head");
+                    }
+                    recordedBase = authorized.base();
+                    if (recordedBase == null || recordedBase.isBlank()) {
+                        throw new ReviewSourceNotReadyException("Recorded merge request base commit is not ready");
+                    }
                 }
             }
         }

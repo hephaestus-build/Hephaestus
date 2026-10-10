@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
@@ -45,6 +46,7 @@ import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewSubjectStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -73,6 +75,9 @@ import tools.jackson.databind.node.ObjectNode;
 class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
     @Mock
     private PublicReviewEligibility publicEligibility;
+
+    @Mock
+    private ReviewedWorkChanges reviewedWorkChanges;
 
     @BeforeEach
     void allowMemberAiForUnrelatedScenarios() {
@@ -720,7 +725,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 memberAiPolicy,
                 documentProjection,
                 publicEligibility,
-                mock(ReviewedWorkChanges.class),
+                reviewedWorkChanges,
+                List.of(),
                 mock(EntityManager.class));
     }
 
@@ -910,6 +916,29 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                         PracticeFeedbackDeliveryPolicy.ReviewedRevision.UNKNOWN,
                         PracticeFeedbackDeliveryPolicy.ReviewedRevision.UNKNOWN,
                         PracticeFeedbackDeliveryPolicy.ReviewedRevision.UNKNOWN);
+    }
+
+    @Test
+    void shouldRefuseUnknownRangeSemanticsWhenNoScmAdapterExists() {
+        AgentJob job = pullRequestJob();
+        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        assertInstanceOf(ObjectNode.class, job.getMetadata()).put("commit_sha", REVIEWED_HEAD);
+        PullRequest work = openPullRequest();
+        work.setHeadRefOid(REVIEWED_HEAD);
+        assertInstanceOf(Repository.class, work.getRepository())
+                .setProvider(TestEntities.gitProvider(1L, IdentityProviderType.GITHUB));
+        when(pullRequestRepository.lockById(PULL_REQUEST_ID)).thenReturn(Optional.of(PULL_REQUEST_ID));
+        when(pullRequestRepository.findByIdWithAuthorAndRepository(PULL_REQUEST_ID))
+                .thenReturn(Optional.of(work));
+        when(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, "owner/repo"))
+                .thenReturn(true);
+        when(reviewedWorkChanges.deliverableCapture(WORKSPACE_ID, job.getId(), PULL_REQUEST_ID))
+                .thenReturn(Optional.of(new ReviewedWorkChanges.CapturedIdentity(
+                        REVIEWED_HEAD, work.getBaseRefOid(), "unused-with-unknown-semantics")));
+
+        var revision = policy().lockedReviewedRevision(job, null);
+
+        assertThat(revision).isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.UNKNOWN);
     }
 
     @Test

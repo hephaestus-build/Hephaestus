@@ -31,7 +31,9 @@ query GetProjectMergeRequests($fullPath: ID!, $first: Int!, $after: String, $upd
                 targetBranch
                 diffHeadSha
                 mergeCommitSha
+                # The diff base with the head GitLab paired it with.
                 diffRefs {
+                    headSha
                     baseSha
                 }
                 discussionLocked

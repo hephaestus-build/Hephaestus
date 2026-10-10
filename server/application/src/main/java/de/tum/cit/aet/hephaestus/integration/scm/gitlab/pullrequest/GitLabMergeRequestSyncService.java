@@ -580,7 +580,6 @@ public class GitLabMergeRequestSyncService {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static ScalarFields extractScalarFields(
             ClientGraphQlResponse response, String nodePath, Map<String, Object> node) {
         String globalId = (String) node.get("id");
@@ -616,12 +615,9 @@ public class GitLabMergeRequestSyncService {
                 : (String) node.get("diffHeadSha");
         String mergeCommitSha = (String) node.get("mergeCommitSha");
 
-        // Extract baseSha from diffRefs
-        String baseSha = null;
-        Map<String, Object> diffRefs = (Map<String, Object>) node.get("diffRefs");
-        if (diffRefs != null) {
-            baseSha = (String) diffRefs.get("baseSha");
-        }
+        // A base only beside the head GitLab paired it with; never beside a failed, absent or other head.
+        var pair = GitLabMergeRequestFields.diffRefs(response, nodePath, node, diffHeadSha);
+        String baseSha = pair == null ? null : pair.base();
 
         return new ScalarFields(
                 globalId,

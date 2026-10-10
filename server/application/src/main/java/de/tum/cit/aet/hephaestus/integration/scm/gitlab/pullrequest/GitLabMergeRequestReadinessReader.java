@@ -250,20 +250,7 @@ public class GitLabMergeRequestReadinessReader {
                         response, MERGE_REQUEST, node, "approvedBy", GitLabMergeRequestFields::user),
                 merge(response, node),
                 null,
-                diffRefs(response, node, headSha));
-    }
-
-    private static @Nullable DiffRefs diffRefs(ClientGraphQlResponse response, Map<String, Object> node, String head) {
-        String path = MERGE_REQUEST + ".diffRefs";
-        if (GitLabMergeRequestFields.failed(response, path)
-                || GitLabMergeRequestFields.failed(response, path + ".headSha")
-                || GitLabMergeRequestFields.failed(response, path + ".baseSha")
-                || !(node.get("diffRefs") instanceof Map<?, ?> refs)
-                || !(refs.get("headSha") instanceof String pairedHead)
-                || !head.equals(pairedHead)
-                || !(refs.get("baseSha") instanceof String base)
-                || base.isBlank()) return null;
-        return new DiffRefs(pairedHead, base);
+                GitLabMergeRequestFields.diffRefs(response, MERGE_REQUEST, node, headSha));
     }
 
     /** The merge's facts, each read without an error or left unknown. */

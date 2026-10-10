@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -76,6 +77,7 @@ public class PracticeFeedbackDeliveryPolicy {
     private final FeedbackApprovalRepository approvalRepository;
     private final PublicReviewEligibility publicReviewEligibility;
     private final ReviewedWorkChanges reviewedWorkChanges;
+    private final List<ScmTokenSource> scmSources;
 
     private final EntityManager entityManager;
 
@@ -97,9 +99,11 @@ public class PracticeFeedbackDeliveryPolicy {
             DocumentProjection documentProjection,
             PublicReviewEligibility publicReviewEligibility,
             ReviewedWorkChanges reviewedWorkChanges,
+            List<ScmTokenSource> scmSources,
             EntityManager entityManager) {
         this.entityManager = entityManager;
         this.reviewedWorkChanges = reviewedWorkChanges;
+        this.scmSources = List.copyOf(scmSources);
         this.conversationSourceLiveness = conversationSourceLiveness;
         this.memberAiPolicy = memberAiPolicy;
         this.documentProjection = documentProjection;
@@ -821,8 +825,9 @@ public class PracticeFeedbackDeliveryPolicy {
      * The final comparison before a new public write, under the work's row lock, which the caller's transaction holds
      * until it commits: an admission or a mirror write on the same work is ordered before or after the reservation
      * made under it. Nothing orders when the provider receives a request sent after that commit. The mirror is read
-     * again after the lock, and compared with the run's own authorized capture: its head and its title and
-     * description, since an unchanged head does not establish unchanged words. Earlier reads are pre-filters only.
+     * again after the lock, and compared with the run's own authorized capture: its head, on GitLab its diff base, and
+     * its title and description, since an unchanged head does not establish an unchanged range or unchanged words.
+     * Earlier reads are pre-filters only.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public ReviewedRevision lockedReviewedRevision(AgentJob job, @Nullable String proposalRevision) {
@@ -853,11 +858,30 @@ public class PracticeFeedbackDeliveryPolicy {
         String head = current.getHeadRefOid();
         if (head == null || head.isBlank()) return ReviewedRevision.UNKNOWN;
         if (!head.equals(captured.head())) return ReviewedRevision.CHANGED;
+        Boolean recordsDiffBase = recordsDiffBase(current);
+        if (recordsDiffBase == null) return ReviewedRevision.UNKNOWN;
+        if (recordsDiffBase) {
+            // GitLab's base is the diff base it paired with the head; the same head can later have another. GitHub's is
+            // the target tip, which moves without changing what was reviewed, so only GitLab compares it.
+            String base = current.getBaseRefOid();
+            if (base == null || !base.matches(CitationVerification.GIT_OBJECT_ID)) return ReviewedRevision.UNKNOWN;
+            if (!base.equals(captured.base())) return ReviewedRevision.CHANGED;
+        }
         return captured.titleAndDescriptionRevision()
                         .equals(ReviewedWork.revision(
                                 ArtifactKinds.PULL_REQUEST, current.getTitle(), current.getBody()))
                 ? ReviewedRevision.CURRENT
                 : ReviewedRevision.CHANGED;
+    }
+
+    private @Nullable Boolean recordsDiffBase(PullRequest pullRequest) {
+        var repository = pullRequest.getRepository();
+        if (repository == null) return null;
+        return scmSources.stream()
+                .filter(source -> source.kind() == repository.getProvider().kind())
+                .findFirst()
+                .map(ScmTokenSource::recordsReviewDiffBase)
+                .orElse(null);
     }
 
     /** How the commit a package was reviewed at compares with the work's current head. */

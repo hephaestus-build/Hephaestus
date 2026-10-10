@@ -278,10 +278,14 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
             head_ref_name = COALESCE(EXCLUDED.head_ref_name, issue.head_ref_name),
             base_ref_name = COALESCE(EXCLUDED.base_ref_name, issue.base_ref_name),
             head_ref_oid = COALESCE(EXCLUDED.head_ref_oid, issue.head_ref_oid),
+            -- A stored base belongs to the stored head and target: a write that names another head or another
+            -- target without its own base makes the stored base unknown. An omitted head or target keeps it.
             base_ref_oid = CASE
                 WHEN EXCLUDED.base_ref_oid IS NOT NULL THEN EXCLUDED.base_ref_oid
                 WHEN EXCLUDED.head_ref_oid IS NOT NULL
                     AND EXCLUDED.head_ref_oid IS DISTINCT FROM issue.head_ref_oid THEN NULL
+                WHEN EXCLUDED.base_ref_name IS NOT NULL
+                    AND EXCLUDED.base_ref_name IS DISTINCT FROM issue.base_ref_name THEN NULL
                 ELSE issue.base_ref_oid
             END,
             merged_by_id = COALESCE(EXCLUDED.merged_by_id, issue.merged_by_id),

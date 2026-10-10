@@ -1619,6 +1619,93 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     .isEmpty();
         }
 
+        @Test
+        void shouldTakeNoDiffBaseFromAPageThatLostItsHead() {
+            syncPage(paired(FIRST_HEAD, FIRST_HEAD, "a".repeat(40)), List.of());
+            assertThat(mr2().getBaseRefOid()).isEqualTo("a".repeat(40));
+
+            Map<String, @Nullable Object> lost = paired(null, NEXT_HEAD, "b".repeat(40));
+            lost.put("updatedAt", "2026-01-31T18:20:00Z");
+            syncPage(
+                    lost,
+                    List.of(GraphQlResponses.error(
+                            "Internal server error", "project", "mergeRequests", "nodes", 0, "diffHeadSha")));
+
+            PullRequest after = mr2();
+            assertThat(after.getHeadRefOid()).isEqualTo(FIRST_HEAD);
+            assertThat(after.getBaseRefOid())
+                    .as("a base is never stored beside a head the page did not read")
+                    .isEqualTo("a".repeat(40));
+        }
+
+        /**
+         * Pages and reads at one GitLab version are ordered by when they were asked for, as the reviews are: an earlier
+         * page applied after a later accepted pair leaves it, and a later page with its own pair replaces it.
+         */
+        @Test
+        void shouldKeepTheDiffBaseOfALaterAcceptedReadOverAnEarlierPageAtTheSameVersion() {
+            String version = "2026-01-31T18:10:00Z";
+            syncPage(paired(FIRST_HEAD, FIRST_HEAD, "a".repeat(40)), List.of());
+            assertThat(mr2().getBaseRefOid()).isEqualTo("a".repeat(40));
+
+            Instant accepted = Instant.now().plusSeconds(60).truncatedTo(ChronoUnit.MICROS);
+            assertThat(mergeRequestProcessor.applyReadiness(
+                            savedRepo,
+                            MR2_IID,
+                            new GitLabMergeRequestReadinessReader.Facts(
+                                    savedRepo.getNativeId(),
+                                    NATIVE_MR2_ID,
+                                    "opened",
+                                    Instant.parse(version),
+                                    FIRST_HEAD,
+                                    true,
+                                    "mergeable",
+                                    true,
+                                    GitLabHeadPipeline.NOT_CAPTURED,
+                                    List.of(),
+                                    null,
+                                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
+                                    null,
+                                    new GitLabMergeRequestReadinessReader.DiffRefs(FIRST_HEAD, "b".repeat(40))),
+                            accepted,
+                            ProcessingContext.forSync(null, savedRepo)))
+                    .isTrue();
+            assertThat(mr2().getBaseRefOid()).isEqualTo("b".repeat(40));
+
+            // Asked for now, before the read above was: its pair at the same version does not replace that read's.
+            syncPage(paired(FIRST_HEAD, FIRST_HEAD, "c".repeat(40)), List.of());
+            assertThat(mr2().getBaseRefOid()).isEqualTo("b".repeat(40));
+
+            syncAt(accepted.plusSeconds(1), FIRST_HEAD, "c".repeat(40));
+            assertThat(mr2().getBaseRefOid()).isEqualTo("c".repeat(40));
+
+            syncAt(accepted.plusSeconds(2), null, "d".repeat(40));
+            assertThat(mr2().getBaseRefOid())
+                    .as("a base without its head is not accepted")
+                    .isEqualTo("c".repeat(40));
+
+            syncAt(accepted.plusSeconds(3), NEXT_HEAD, null);
+            PullRequest moved = mr2();
+            assertThat(moved.getHeadRefOid()).isEqualTo(NEXT_HEAD);
+            assertThat(moved.getBaseRefOid())
+                    .as("the base of the previous head is forgotten when no pair came with the new one")
+                    .isNull();
+        }
+
+        /** MR !2 at the listing's version, with {@code head} and the diffRefs GitLab paired with {@code pairedHead}. */
+        private Map<String, @Nullable Object> paired(@Nullable String head, String pairedHead, String base) {
+            Map<String, @Nullable Object> node =
+                    page(head, "2026-01-31T18:10:00Z", null, "mergeable", List.of(approverNode()));
+            node.put("diffRefs", Map.of("headSha", pairedHead, "baseSha", base));
+            return node;
+        }
+
+        private void syncAt(Instant fetchedAt, @Nullable String head, @Nullable String base) {
+            mergeRequestProcessor.processFromSync(
+                    syncedMergeRequest(true, "mergeable", null, null, head, GitLabHeadPipeline.NOT_CAPTURED, base),
+                    ProcessingContext.forSync(null, savedRepo).withObservedAt(fetchedAt));
+        }
+
         /** Merge request !2 as GitLab's listing gives it; a null head, version or pipeline is sent as null. */
         private Map<String, @Nullable Object> page(
                 @Nullable String head,
@@ -2830,6 +2917,18 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             @Nullable List<GitLabMergeRequestProcessor.SyncUserData> approvers,
             @Nullable String head,
             GitLabHeadPipeline headPipeline) {
+        return syncedMergeRequest(approved, detailedMergeStatus, reviewers, approvers, head, headPipeline, null);
+    }
+
+    /** MR !2 as a sync reads it at {@code head}, with the diff base GitLab paired with that head where it gave one. */
+    private GitLabMergeRequestProcessor.SyncMergeRequestData syncedMergeRequest(
+            boolean approved,
+            @Nullable String detailedMergeStatus,
+            @Nullable List<GitLabMergeRequestProcessor.SyncReviewerData> reviewers,
+            @Nullable List<GitLabMergeRequestProcessor.SyncUserData> approvers,
+            @Nullable String head,
+            GitLabHeadPipeline headPipeline,
+            @Nullable String base) {
         return new GitLabMergeRequestProcessor.SyncMergeRequestData(
                 "gid://gitlab/MergeRequest/" + NATIVE_MR2_ID,
                 String.valueOf(MR2_IID),
@@ -2852,7 +2951,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 "feature/oauth",
                 "main",
                 head, // diffHeadSha
-                null, // baseSha
+                base, // baseSha
                 null, // mergeCommitSha
                 false, // discussionLocked
                 0, // commentsCount

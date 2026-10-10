@@ -51,6 +51,12 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
     private static final Logger log = LoggerFactory.getLogger(PullRequestReviewHandler.class);
 
+    /**
+     * Present and true when admission retained {@code base_ref_oid} with {@code commit_sha} from one mirror row. This
+     * records the requested range, not the provider provenance of an existing mirror value. Older jobs have no marker.
+     */
+    public static final String RETAINED_RANGE_METADATA_KEY = "review_range_retained_at_admission";
+
     private final JsonMapper objectMapper;
     private final PracticeReviewPreparation preparation;
     private final ReviewResultParser resultParser;
@@ -111,6 +117,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         metadata.put("commit_sha", submissionRequest.headRefOid());
         if (submissionRequest.baseRefOid() != null) {
             metadata.put("base_ref_oid", submissionRequest.baseRefOid());
+            metadata.put(RETAINED_RANGE_METADATA_KEY, true);
         }
         metadata.put("source_branch", submissionRequest.headRefName());
         metadata.put("target_branch", submissionRequest.baseRefName());

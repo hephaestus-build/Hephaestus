@@ -367,9 +367,28 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             assertThat(metadata.get("pr_number").asInt()).isEqualTo(42);
             assertThat(metadata.get("commit_sha").asString()).isEqualTo("abc123def456");
             assertThat(metadata.path("base_ref_oid").asString()).isEqualTo("a".repeat(40));
+            assertThat(metadata.path(PullRequestReviewHandler.RETAINED_RANGE_METADATA_KEY)
+                            .isBoolean())
+                    .isTrue();
+            assertThat(metadata.path(PullRequestReviewHandler.RETAINED_RANGE_METADATA_KEY)
+                            .asBoolean())
+                    .isTrue();
             assertThat(metadata.get("title").asString()).isEqualTo("Fix authentication bug");
             assertThat(metadata.get("body").asString()).isEqualTo("This PR fixes the login issue");
             assertThat(submission.idempotencyKey()).isEqualTo("pr_review:owner/repo:42:manual:abc123def456");
+        }
+
+        @Test
+        void recordsNoRetainedRangeWhenTheMirrorHadNoBase() {
+            var base = sampleRequest();
+            var request = new PullRequestReviewSubmissionRequest(
+                    base.pullRequest(), base.headRefName(), base.headRefOid(), base.baseRefName(), null);
+
+            JsonNode metadata = handler.createSubmission(request).metadata();
+
+            assertThat(metadata.has("base_ref_oid")).isFalse();
+            assertThat(metadata.has(PullRequestReviewHandler.RETAINED_RANGE_METADATA_KEY))
+                    .isFalse();
         }
 
         @ParameterizedTest

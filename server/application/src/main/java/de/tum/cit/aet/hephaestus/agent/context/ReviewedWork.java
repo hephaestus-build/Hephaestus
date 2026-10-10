@@ -236,12 +236,8 @@ public record ReviewedWork(
 
     /** The head of a pinned {@code base:head} change identity, or {@code null} for one that is not. */
     public static @Nullable String headOf(@Nullable String range) {
-        String[] parts = range == null ? new String[0] : range.split(":", -1);
-        return parts.length == 2
-                        && parts[0].matches(CitationVerification.GIT_OBJECT_ID)
-                        && parts[1].matches(CitationVerification.GIT_OBJECT_ID)
-                ? parts[1]
-                : null;
+        String[] parts = pinnedRange(range);
+        return parts == null ? null : parts[1];
     }
 
     /** The pinned head a manifest captured with its core: null unless both the core and the change were available. */
@@ -249,9 +245,27 @@ public record ReviewedWork(
         return available(manifest, PullRequestContentSource.CORE) == null ? null : pinnedHead(manifest);
     }
 
+    /** The pinned base of the same change identity as {@link #capturedHead}, under the same conditions. */
+    public static @Nullable String capturedBase(JobFolderIndex manifest) {
+        if (available(manifest, PullRequestContentSource.CORE) == null) return null;
+        SourceCaptureState.Available diff = available(manifest, PullRequestContentSource.DIFF);
+        String[] parts = diff == null ? null : pinnedRange(diff.facts().immutableIdentity());
+        return parts == null ? null : parts[0];
+    }
+
     private static @Nullable String pinnedHead(JobFolderIndex manifest) {
         SourceCaptureState.Available diff = available(manifest, PullRequestContentSource.DIFF);
         return diff == null ? null : headOf(diff.facts().immutableIdentity());
+    }
+
+    /** The base and head of a pinned {@code base:head} change identity, each a Git object id, or null. */
+    private static String @Nullable [] pinnedRange(@Nullable String range) {
+        String[] parts = range == null ? new String[0] : range.split(":", -1);
+        return parts.length == 2
+                        && parts[0].matches(CitationVerification.GIT_OBJECT_ID)
+                        && parts[1].matches(CitationVerification.GIT_OBJECT_ID)
+                ? parts
+                : null;
     }
 
     private static SourceCaptureState.@Nullable Available available(JobFolderIndex manifest, SourceKind kind) {

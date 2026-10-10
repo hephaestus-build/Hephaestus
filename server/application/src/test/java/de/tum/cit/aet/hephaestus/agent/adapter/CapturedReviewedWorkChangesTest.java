@@ -13,6 +13,11 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
+import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -166,15 +171,49 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
     void shouldDeliverAgainstTheIdentityAnAuthorizedPinnedCaptureRecorded() {
         captured(capture(42, HEAD), ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD));
 
+        // The base is the pinned change's own, from the authorized manifest, not from the job's admission metadata.
         assertThat(changes.deliverableCapture(7, RUN, 42))
                 .contains(new ReviewedWorkChanges.CapturedIdentity(
-                        HEAD, ReviewedWork.revision(ArtifactKinds.PULL_REQUEST, "Title", "Body")));
+                        HEAD,
+                        ReviewedWorkFixtures.BASE,
+                        ReviewedWork.revision(ArtifactKinds.PULL_REQUEST, "Title", "Body")));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"issue manifest", "unpinned manifest", "other pinned head", "other work", "no head"})
+    @ValueSource(
+            strings = {
+                "issue manifest",
+                "unpinned manifest",
+                "other pinned head",
+                "other work",
+                "no head",
+                "malformed range"
+            })
     void shouldNotDeliverAgainstACaptureThatDoesNotProveItsIdentity(String capture) {
         switch (capture) {
+            case "malformed range" -> {
+                // A pinned change whose base is not a Git object id proves neither its base nor its head.
+                JobFolderIndex pinned = ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD);
+                captured(
+                        capture(42, HEAD),
+                        new JobFolderIndex(
+                                pinned.contractVersion(),
+                                "0".repeat(64),
+                                ArtifactKinds.PULL_REQUEST.value(),
+                                pinned.capturedAt(),
+                                pinned.sources().stream()
+                                        .map(source -> source.kind().equals(PullRequestContentSource.DIFF)
+                                                ? new SourceCapture(
+                                                        source.kind(),
+                                                        new SourceCaptureState.Available(
+                                                                SourceContentState.NON_EMPTY,
+                                                                SourceCompleteness.COMPLETE,
+                                                                new SourceCaptureFacts(
+                                                                        Instant.EPOCH, null, null, "base:" + HEAD)),
+                                                        source.artifacts())
+                                                : source)
+                                        .toList()));
+            }
             case "issue manifest" -> {
                 // Pull request sources, pinned at the captured head, under another artifact kind.
                 JobFolderIndex pinned = ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD);

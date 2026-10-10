@@ -11,6 +11,8 @@ import org.jspecify.annotations.Nullable;
  * Submission request for {@code PULL_REQUEST_REVIEW} jobs. Combines the async-safe
  * {@link ScmEventPayload.PullRequestData} snapshot with branch information not present on that DTO.
  *
+ * @param baseRefOid the base the mirror recorded together with {@code headRefOid}, read from the same pull request row;
+ *     the retained range requested for this occasion, whose provider authority is that of the mirror
  * @param observationOrigin which population this run's observations belong to; {@code null} defaults to
  *     the rule below. Explicit because the default cannot see a backfill: a campaign replays the signal
  *     the artifact's current state would have raised, so its request carries a trigger signal and would
