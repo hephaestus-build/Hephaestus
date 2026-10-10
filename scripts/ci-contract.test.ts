@@ -3105,14 +3105,16 @@ void describe("CI contract", () => {
 	void test("decides what to release in tested TypeScript, on outputs the workflow reads", async () => {
 		const source = await readFile(".github/workflows/release.yml", "utf8");
 		const decide = job(source, "release");
-		// Four branches over the release listing, one of them "cut a release on this push"; inline
-		// bash cannot be tested, and the ordinary feature merge is the case that must not regress.
+		// The planner owns the release decision. The workflow consumes only its tested outputs.
 		assert.match(decide, /node scripts\/plan-release\.ts "\$SHA"/u);
 		assert.doesNotMatch(decide, /PARENT_VERSION|gh release view/u);
 		// Every output the workflow reads is one the planner writes, and nothing it writes is dead.
-		const plan = planRelease("cafe", "0.75.0", [
-			{ isDraft: false, isPrerelease: false, tag: "v0.74.0", targetCommitish: "main" },
-		]);
+		const plan = planRelease(
+			"cafe",
+			"0.75.0",
+			[{ isDraft: false, isPrerelease: false, tag: "v0.74.0", targetCommitish: "main" }],
+			false,
+		);
 		const read = [...source.matchAll(/steps\.cut\.outputs\.(?<name>[\w-]+)/gu)].map(
 			({ groups }) => {
 				const name = groups?.name;
