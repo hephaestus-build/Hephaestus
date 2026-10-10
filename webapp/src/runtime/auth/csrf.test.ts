@@ -1,9 +1,10 @@
 import { http, HttpResponse } from "msw";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
 import environment from "@/environment";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { csrfFetch, refetchCsrfToken } from "./csrf";
 
 const api = "http://localhost:8080";
@@ -26,6 +27,10 @@ afterEach(() => {
 
 async function mutation() {
 	return csrfFetch(`${api}/settings`, { method: "POST", credentials: "include", body: "payload" });
+}
+
+function csrfRefusal() {
+	return HttpResponse.json({ type: "urn:hephaestus:csrf" }, { status: 403 });
 }
 
 function replayResponse(bodies: string[], headers: (string | null)[]) {
@@ -90,6 +95,33 @@ describe("apex CSRF transport", () => {
 		expect(issued).toBe(2);
 		expect(headers).toStrictEqual(["token-1", "token-1", "token-2", "token-2"]);
 	});
+	it("recovers when another request has already failed to refresh the token", async () => {
+		const delayedRefusal = deferred<undefined>();
+		await refetchCsrfToken();
+		const discovery = vi
+			.fn()
+			.mockReturnValueOnce(HttpResponse.json({ token: 42, headerName: "X-XSRF-TOKEN" }))
+			.mockReturnValue(HttpResponse.json({ token: "token-3", headerName: "X-XSRF-TOKEN" }));
+		const handleMutation = vi
+			.fn()
+			.mockImplementationOnce(csrfRefusal)
+			.mockImplementationOnce(async () => {
+				await delayedRefusal.promise;
+				return csrfRefusal();
+			})
+			.mockReturnValue(new HttpResponse(null, { status: 204 }));
+		server.use(
+			http.get(`${api}/auth/csrf`, discovery),
+			http.post(`${api}/settings`, handleMutation),
+		);
+		const first = mutation();
+		const second = mutation();
+		await expect(first).rejects.toThrow(ZodError);
+		delayedRefusal.resolve(undefined);
+		await expect(second).resolves.toHaveProperty("status", 204);
+		expect(discovery).toHaveBeenCalledTimes(2);
+	});
+
 	it("does not replay an authorization refusal", async () => {
 		let calls = 0;
 		server.use(

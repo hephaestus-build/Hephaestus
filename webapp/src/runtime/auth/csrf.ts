@@ -14,6 +14,12 @@ async function loadToken(): Promise<{ token: string; headerName: string }> {
 	return tokenSchema.parse(data);
 }
 
+// oxlint-disable-next-line typescript/promise-function-async -- Preserve promise identity for concurrent token replacement.
+function currentTokenRequest() {
+	tokenRequest ??= loadToken();
+	return tokenRequest;
+}
+
 async function settleToken(pending: Promise<{ token: string; headerName: string }>) {
 	try {
 		return await pending;
@@ -53,8 +59,7 @@ export const csrfFetch: typeof globalThis.fetch = async (input, init) => {
 	if (new URL(request.url).origin !== new URL(environment.serverUrl).origin) {
 		throw new Error("Credentialed requests must use the configured API origin.");
 	}
-	tokenRequest ??= loadToken();
-	const pending = tokenRequest;
+	const pending = currentTokenRequest();
 	const token = await settleToken(pending);
 	if (unsafe) {
 		request.headers.set(token.headerName, token.token);
@@ -64,7 +69,10 @@ export const csrfFetch: typeof globalThis.fetch = async (input, init) => {
 	const response = await fetch(request);
 	if (retry !== undefined && (await isCsrfRefusal(response))) {
 		// Concurrent refusals for the same token share its replacement.
-		const fresh = await (tokenRequest === pending ? refetchCsrfToken() : settleToken(tokenRequest));
+		if (tokenRequest === pending) {
+			tokenRequest = loadToken();
+		}
+		const fresh = await settleToken(currentTokenRequest());
 		retry.headers.set(fresh.headerName, fresh.token);
 		// oxlint-disable-next-line no-restricted-globals -- Only a definitive CSRF refusal is retried, once.
 		return fetch(retry);
