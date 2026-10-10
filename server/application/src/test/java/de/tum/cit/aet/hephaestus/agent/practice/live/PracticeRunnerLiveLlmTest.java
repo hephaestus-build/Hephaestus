@@ -37,10 +37,13 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
@@ -472,8 +475,20 @@ class PracticeRunnerLiveLlmTest {
      * every observation it carries.
      */
     static final class ProxyStandIn implements AutoCloseable {
+        /**
+         * The whole wait for forwarding work and the upstream client. Their own close() waits for every
+         * unfinished response stream, so a stalled upstream would hold a runner assertion in cleanup until
+         * the JUnit timeout replaces it.
+         */
+        private static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(5);
+
         private final HttpServer server;
+        private final ExecutorService executor;
         private final HttpClient client = HttpClient.newHttpClient();
+        private final Object lifecycle = new Object();
+        // Guarded by lifecycle, so close() cannot miss a forwarding that registers concurrently.
+        private final Set<Forwarding> active = new HashSet<>();
+        private boolean closed;
 
         ProxyStandIn(LiveLlmCredentials creds) throws IOException {
             server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
@@ -486,7 +501,8 @@ class PracticeRunnerLiveLlmTest {
                 }
             });
             server.createContext("/", exchange -> forward(exchange, creds));
-            server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+            executor = Executors.newVirtualThreadPerTaskExecutor();
+            server.setExecutor(executor);
             server.start();
         }
 
@@ -522,36 +538,148 @@ class PracticeRunnerLiveLlmTest {
         }
 
         private void forward(HttpExchange exchange, LiveLlmCredentials creds) throws IOException {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(
-                            creds.baseUrl() + exchange.getRequestURI().getPath()))
-                    .header("authorization", "Bearer " + creds.apiKey())
-                    .header("content-type", "application/json")
-                    .method(
-                            exchange.getRequestMethod(),
-                            HttpRequest.BodyPublishers.ofByteArray(
-                                    exchange.getRequestBody().readAllBytes()))
-                    .build();
-            try {
-                HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-                response.headers()
-                        .firstValue("content-type")
-                        .ifPresent(type -> exchange.getResponseHeaders().set("content-type", type));
-                // Chunked: a streamed completion reaches the runner as it arrives.
-                exchange.sendResponseHeaders(response.statusCode(), 0);
-                try (var in = response.body();
-                        var out = exchange.getResponseBody()) {
-                    in.transferTo(out);
+            Forwarding forwarding = new Forwarding(exchange);
+            if (!register(forwarding)) {
+                exchange.close();
+                return;
+            }
+            try (exchange) {
+                HttpRequest request = HttpRequest.newBuilder(URI.create(
+                                creds.baseUrl() + exchange.getRequestURI().getPath()))
+                        .header("authorization", "Bearer " + creds.apiKey())
+                        .header("content-type", "application/json")
+                        .method(
+                                exchange.getRequestMethod(),
+                                HttpRequest.BodyPublishers.ofByteArray(
+                                        exchange.getRequestBody().readAllBytes()))
+                        .build();
+                try {
+                    HttpResponse<InputStream> response =
+                            client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+                    try (InputStream upstream = response.body()) {
+                        if (!attach(forwarding, upstream)) {
+                            // close() took its snapshot before this stream arrived.
+                            return;
+                        }
+                        response.headers()
+                                .firstValue("content-type")
+                                .ifPresent(type -> exchange.getResponseHeaders().set("content-type", type));
+                        // Forward the response with chunked transfer encoding.
+                        exchange.sendResponseHeaders(response.statusCode(), 0);
+                        try (var out = exchange.getResponseBody()) {
+                            upstream.transferTo(out);
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    exchange.sendResponseHeaders(502, -1);
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                exchange.sendResponseHeaders(502, -1);
+            } finally {
+                synchronized (lifecycle) {
+                    active.remove(forwarding);
+                }
             }
         }
 
+        private boolean register(Forwarding forwarding) {
+            synchronized (lifecycle) {
+                return !closed && active.add(forwarding);
+            }
+        }
+
+        private boolean attach(Forwarding forwarding, InputStream upstream) {
+            synchronized (lifecycle) {
+                if (closed) {
+                    return false;
+                }
+                forwarding.upstream = upstream;
+                return true;
+            }
+        }
+
+        /**
+         * Stops forwarding within {@link #CLOSE_TIMEOUT}. Every cancellation stage runs even when an earlier one
+         * fails, and blocking work stays outside the lifecycle lock. A resource that has not terminated by the
+         * deadline fails the close; under try-with-resources an earlier assertion stays primary.
+         */
         @Override
         public void close() {
-            server.stop(0);
-            client.close();
+            List<HttpExchange> exchanges = new ArrayList<>();
+            List<InputStream> streams = new ArrayList<>();
+            synchronized (lifecycle) {
+                if (closed) {
+                    return;
+                }
+                closed = true;
+                for (Forwarding forwarding : active) {
+                    exchanges.add(forwarding.exchange);
+                    if (forwarding.upstream != null) {
+                        streams.add(forwarding.upstream);
+                    }
+                }
+            }
+            long deadline = System.nanoTime() + CLOSE_TIMEOUT.toNanos();
+            List<Exception> failures = new ArrayList<>();
+            try {
+                server.stop(0);
+            } catch (RuntimeException e) {
+                failures.add(e);
+            }
+            try {
+                executor.shutdownNow();
+            } catch (RuntimeException e) {
+                failures.add(e);
+            }
+            for (InputStream stream : streams) {
+                try {
+                    stream.close();
+                } catch (IOException | RuntimeException e) {
+                    failures.add(e);
+                }
+            }
+            for (HttpExchange exchange : exchanges) {
+                try {
+                    exchange.close();
+                } catch (RuntimeException e) {
+                    failures.add(e);
+                }
+            }
+            try {
+                client.shutdownNow();
+            } catch (RuntimeException e) {
+                failures.add(e);
+            }
+            try {
+                if (!executor.awaitTermination(remaining(deadline).toNanos(), TimeUnit.NANOSECONDS)) {
+                    failures.add(new IllegalStateException("forwarding work did not stop within " + CLOSE_TIMEOUT));
+                }
+                if (!client.awaitTermination(remaining(deadline))) {
+                    failures.add(new IllegalStateException("the upstream client did not stop within " + CLOSE_TIMEOUT));
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                failures.add(e);
+            }
+            if (!failures.isEmpty()) {
+                IllegalStateException failure = new IllegalStateException("The proxy stand-in did not shut down");
+                failures.forEach(failure::addSuppressed);
+                throw failure;
+            }
+        }
+
+        private static Duration remaining(long deadline) {
+            return Duration.ofNanos(Math.max(0, deadline - System.nanoTime()));
+        }
+
+        /** One forwarded request and, once the upstream answers, the response stream it transfers. */
+        private static final class Forwarding {
+            private final HttpExchange exchange;
+            // Guarded by the stand-in's lifecycle lock.
+            private @Nullable InputStream upstream;
+
+            Forwarding(HttpExchange exchange) {
+                this.exchange = exchange;
+            }
         }
     }
 }
