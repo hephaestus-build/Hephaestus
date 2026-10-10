@@ -2,16 +2,17 @@ import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { HttpResponse, http } from "msw";
+import { HttpResponse, http, type PathParams } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import type { PublicActivity } from "@/api/types.gen";
+import type { PublicActivity, PublicActivityOnboardingRequest } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
+import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -95,7 +96,7 @@ describe("the address of a workspace", () => {
 		const { router } = renderRouteAtWithRouter("/w/private?range=1y");
 
 		await waitFor(() => expect(router.state.location.pathname).toBe("/login"), ROUTE_RENDER_WAIT);
-		expect(router.state.location.search.returnTo).toBe("/w/private/activity?range=1y");
+		expect(router.state.location.search.returnTo).toBe("/w/private?range=1y");
 	});
 
 	it("shows the page to a visitor when the identity cannot be read", async () => {
@@ -202,22 +203,45 @@ describe("search engines", () => {
 });
 
 describe("a signed-in person who is not a member", () => {
+	/** The page, the person's own workspace, and the answers the first-visit step records. */
+	function visit() {
+		const answers: unknown[] = [];
+		const requests: URL[] = [];
+		let hidden = false;
+		server.use(
+			http.get("*/public/workspaces/:slug/activity", ({ request }) => {
+				requests.push(new URL(request.url));
+				return HttpResponse.json(
+					publicActivity({
+						people: hidden
+							? [person("bob", "Bob Brenner")]
+							: [person("ada", "Ada Lovelace"), person("bob", "Bob Brenner")],
+					}),
+				);
+			}),
+			http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("other")])),
+			http.get("*/workspaces/other/members/me", () =>
+				HttpResponse.json({ role: "MEMBER", userId: 42, userLogin: "ada", userName: "Ada" }),
+			),
+			http.get("*/user/public-activity/workspaces/acme/onboarding", () =>
+				HttpResponse.json({ seen: answers.length > 0, visible: !hidden }),
+			),
+			http.put<PathParams, PublicActivityOnboardingRequest>(
+				"*/user/public-activity/workspaces/acme/onboarding",
+				async ({ request }) => {
+					const body = await request.json();
+					answers.push(body);
+					hidden = !body.visible;
+					return HttpResponse.json({ seen: true, visible: body.visible });
+				},
+			),
+		);
+		return { answers, requests };
+	}
+
 	it("sees the page, and the step to show or hide themselves", async () => {
 		const user = userEvent.setup();
-		const answers: unknown[] = [];
-		let seen = false;
-		publish();
-		server.use(
-			http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("other")])),
-			http.get("*/user/public-activity/workspaces/acme/onboarding", () =>
-				HttpResponse.json({ seen, visible: true }),
-			),
-			http.put("*/user/public-activity/workspaces/acme/onboarding", async ({ request }) => {
-				answers.push(await request.json());
-				seen = true;
-				return HttpResponse.json({ seen, visible: false });
-			}),
-		);
+		const { answers } = visit();
 		const { router } = renderRouteAtWithRouter("/w/acme");
 
 		const step = await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
@@ -232,6 +256,65 @@ describe("a signed-in person who is not a member", () => {
 
 		await waitFor(() => expect(answers).toStrictEqual([{ visible: false }]));
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+	});
+
+	it("no longer sees their own row once they hide, without reloading", async () => {
+		const user = userEvent.setup();
+		const { requests } = visit();
+		renderRouteAtWithRouter("/w/acme");
+
+		const step = await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
+		expect(requests).toHaveLength(1);
+		await user.click(within(step).getByRole("button", { name: "Hide me" }));
+
+		await waitFor(() => expect(requests.length).toBeGreaterThan(1));
+		await waitFor(() => expect(names()).toStrictEqual(["Bob Brenner"]));
+	});
+
+	it("can leave the step for this visit with Escape, and go on while a save never answers", async () => {
+		const user = userEvent.setup();
+		// Never answered: a save that settled later would read the page again, into the next case.
+		const hangs = deferred<Response>();
+		visit();
+		server.use(
+			http.put("*/user/public-activity/workspaces/acme/onboarding", async () => hangs.promise),
+		);
+		renderRouteAtWithRouter("/w/acme");
+
+		const step = await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
+		await user.click(within(step).getByRole("button", { name: "Hide me" }));
+		await user.click(within(step).getByRole("button", { name: "Decide later" }));
+
+		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+	});
+
+	it("has no active workspace here, so the chrome reads nothing the server would refuse", async () => {
+		const { requests } = visit();
+		const paths: string[] = [];
+		server.events.on("request:start", ({ request }) => {
+			paths.push(new URL(request.url).pathname);
+		});
+		renderRouteAtWithRouter("/w/acme");
+
+		await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
+		server.events.removeAllListeners();
+		expect(requests).toHaveLength(1);
+		// Membership, survey invitations and the Heph setup are members-only reads of a workspace.
+		expect(paths.filter((path) => /^\/workspaces\/[^/]+\//u.test(path))).toStrictEqual([]);
+	});
+
+	it("sees the colours of the workspace's provider, not their own", async () => {
+		visit();
+		server.use(
+			http.get("*/public/workspaces/:slug/activity", () =>
+				HttpResponse.json(publicActivity({ providerType: "GITLAB" })),
+			),
+		);
+		renderRouteAtWithRouter("/w/acme");
+
+		await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(document.documentElement.dataset.provider).toBe("gitlab"));
+		screen.getByRole("columnheader", { name: /Merge requests/u, hidden: true });
 	});
 });
 

@@ -79,13 +79,15 @@ export function useWorkspacePublicActivity({
 		if (settings.data === undefined) {
 			return;
 		}
+		const body = {
+			publicActivityEnabled: settings.data.enabled,
+			allowSearchEngines: settings.data.allowSearchEngines,
+			...patch,
+		};
+		// A page that is off has no search engine choice: the server forgets it, so this says the same.
 		update.mutate({
 			path,
-			body: {
-				publicActivityEnabled: settings.data.enabled,
-				allowSearchEngines: settings.data.allowSearchEngines,
-				...patch,
-			},
+			body: { ...body, allowSearchEngines: body.publicActivityEnabled && body.allowSearchEngines },
 		});
 	};
 

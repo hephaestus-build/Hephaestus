@@ -3,13 +3,13 @@ import { useRef } from "react";
 import {
 	AlertDialog,
 	AlertDialogAction,
+	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { ARTIFACT_KIND, artifactKindNoun } from "@/lib/artifact-kinds";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
@@ -29,14 +29,14 @@ export interface PublicActivityOnboardingDialogProps {
 	currentlyVisible: boolean;
 	answer: PublicActivityAnswer;
 	onAnswer: (visible: boolean) => void;
-	/** Leaves the step for this visit, so a failing save cannot hold the workspace shut. */
+	/** Leaves the step until the next visit: Escape and Decide later, which a save in flight does not hold back. */
 	onDefer: () => void;
 }
 
 /**
  * The step that tells a person a workspace publishes its activity, and what the page holds of
- * them. Both answers are the same size and neither is focused, so neither is the default. Only an
- * answer closes it: a person who has not chosen is asked again next time.
+ * them. Both answers are the same size and neither is focused, so neither is the default. Escape
+ * and Decide later leave it for this visit, and a person who has not chosen is asked again next time.
  */
 export function PublicActivityOnboardingDialog({
 	open,
@@ -47,17 +47,23 @@ export function PublicActivityOnboardingDialog({
 	onAnswer,
 	onDefer,
 }: PublicActivityOnboardingDialogProps) {
-	const titleRef = useRef<HTMLHeadingElement>(null);
+	const popupRef = useRef<HTMLDivElement>(null);
 	const pullRequests = artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType);
 	const repositories = getProviderTerms(providerType).repositories.toLowerCase();
 	const saving = answer.status === "saving";
 	return (
-		<AlertDialog open={open}>
-			<AlertDialogContent initialFocus={titleRef}>
-				<AlertDialogHeader>
-					<AlertDialogTitle ref={titleRef} tabIndex={-1}>
-						{workspaceName} has a public activity page
-					</AlertDialogTitle>
+		<AlertDialog
+			open={open}
+			onOpenChange={(next) => {
+				if (!next) {
+					onDefer();
+				}
+			}}
+		>
+			{/* Focus starts on the dialog, announced with its title and text, not on either answer. */}
+			<AlertDialogContent ref={popupRef} initialFocus={popupRef}>
+				<AlertDialogHeader className="place-items-start text-left">
+					<AlertDialogTitle>{workspaceName} has a public activity page</AlertDialogTitle>
 					{/* One description, so a screen reader hears all of what is shown, not its first line. */}
 					<AlertDialogDescription render={<div />}>
 						<div className="space-y-3">
@@ -79,12 +85,9 @@ export function PublicActivityOnboardingDialog({
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				{answer.status === "error" && (
-					<div role="alert" className="space-y-2 text-sm text-destructive">
-						<p>{answer.message}</p>
-						<Button variant="link" size="inline" onClick={onDefer}>
-							Decide later
-						</Button>
-					</div>
+					<p role="alert" className="text-sm text-destructive">
+						{answer.message}
+					</p>
 				)}
 				<AlertDialogFooter className="grid grid-cols-2 sm:flex-none">
 					<ChoiceButton visible answer={answer} disabled={saving} onAnswer={onAnswer}>
@@ -93,6 +96,9 @@ export function PublicActivityOnboardingDialog({
 					<ChoiceButton visible={false} answer={answer} disabled={saving} onAnswer={onAnswer}>
 						Hide me
 					</ChoiceButton>
+					<AlertDialogCancel variant="ghost" className="col-span-2">
+						Decide later
+					</AlertDialogCancel>
 				</AlertDialogFooter>
 			</AlertDialogContent>
 		</AlertDialog>

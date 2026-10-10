@@ -11,6 +11,7 @@ import {
 	HeadContent,
 	Outlet,
 	useLocation,
+	useMatch,
 	useMatches,
 	useNavigate,
 	useRouter,
@@ -77,6 +78,7 @@ import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
 import { isMentorSetUp } from "@/lib/mentor-preference";
 import { stepUpChallengeOf } from "@/lib/problem-detail";
+import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
 import { type AuthContextType, useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/guard";
@@ -444,9 +446,19 @@ function UserViewConfirmAccess() {
 	);
 }
 
-/** The active workspace's provider colours, on app surfaces only: sign-in reads no workspace. */
+/**
+ * The active workspace's provider colours, on app surfaces only: sign-in reads no workspace. A public
+ * activity page wears its own workspace's, whoever reads it, since a visitor has no workspace here.
+ */
 function ProviderColors() {
-	useProviderColors(useActiveWorkspaceSlug().providerType);
+	const own = useActiveWorkspaceSlug().providerType;
+	const published = useMatch({
+		from: "/w/$workspaceSlug/",
+		shouldThrow: false,
+		select: ({ loaderData }) =>
+			loaderData?.status === "ready" ? loaderData.page.providerType : undefined,
+	});
+	useProviderColors(toScmProviderType(published ?? own));
 	return null;
 }
 

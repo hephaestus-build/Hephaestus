@@ -545,6 +545,10 @@ describe("Workspace activity", () => {
 			http.get("*/workspaces/:workspaceSlug/members/me", () =>
 				HttpResponse.json({ role, userId: 7, userLogin: "ada-lrz", userName: "Ada" }),
 			),
+			// Ada is the only member; Bob contributes without a membership.
+			http.get("*/workspaces/:workspaceSlug/users", () =>
+				HttpResponse.json([{ id: 7, login: "ada-lrz", name: "Ada", teams: [], url: "" }]),
+			),
 			http.get("*/workspaces/:workspaceSlug/activity/people", ({ request }) => {
 				record(request);
 				return HttpResponse.json(people);
@@ -885,6 +889,20 @@ describe("Workspace activity", () => {
 		await waitFor(() =>
 			expect(visibility.map((url) => url.search)).toStrictEqual(["?hidden=true", "?hidden=false"]),
 		);
+	});
+
+	it("leaves a member to be hidden under Members, not from their activity page", async () => {
+		role = "ADMIN";
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/users", () =>
+				HttpResponse.json([{ id: 8, login: "bob", name: "Bob", teams: [], url: "" }]),
+			),
+		);
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await within(level).findByRole("button", { name: "Treat as automation" });
+		expect(within(level).queryByRole("button", { name: "Hide from activity" })).toBeNull();
 	});
 
 	it("offers a member no way to hide a person", async () => {

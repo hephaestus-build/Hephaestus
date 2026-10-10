@@ -50,8 +50,10 @@ import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
 import { pageHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { announcePublicActivityChoice } from "@/lib/public-activity-choice";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
+import { refreshPublicActivity } from "@/runtime/tanstack-query/refresh-public-activity";
 
 export const Route = createFileRoute("/_authenticated/settings")({
 	head: pageHead("User settings"),
@@ -239,6 +241,8 @@ function RouteComponent() {
 		...updatePublicActivityChoiceMutation(),
 		onSuccess: (data) => {
 			queryClient.setQueryData(getPublicActivityChoiceQueryKey({}), data);
+			void refreshPublicActivity(queryClient);
+			announcePublicActivityChoice(data.visible);
 		},
 		onError: () => {
 			toast.error("We could not save your choice. Try again.");

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import {
 	answerPublicActivityOnboardingMutation,
@@ -10,6 +10,11 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { PublicActivityAnswer } from "@/components/onboarding/PublicActivityOnboardingDialog";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { announcePublicActivityChoice } from "@/lib/public-activity-choice";
+import { refreshPublicActivity } from "@/runtime/tanstack-query/refresh-public-activity";
+
+/** A save that has not answered by now has failed, so the step never waits on it forever. */
+const SAVE_TIMEOUT_MS = 15_000;
 
 /**
  * A signed-in person's step for a workspace that publishes its activity: whether they have answered,
@@ -24,22 +29,23 @@ export function usePublicActivityOnboarding({
 	enabled: boolean;
 }) {
 	const queryClient = useQueryClient();
+	const router = useRouter();
 	const path = { slug: workspaceSlug };
 	const onboarding = useQuery({ ...getPublicActivityOnboardingOptions({ path }), enabled });
-	// Only a failing save needs it, but a person who left the step is not asked again on this visit.
-	const [deferred, setDeferred] = useState(false);
+	// Leaving the step is for this visit only: the next load asks again.
+	const [deferredFor, setDeferredFor] = useState<string>();
 	const answer = useMutation({
 		...answerPublicActivityOnboardingMutation(),
-		onSuccess: (data, { body }) => {
+		// Offline, a paused save would hold both answers forever; a failed one lets the person go on.
+		networkMode: "always",
+		onSuccess: async (data, { body }) => {
 			queryClient.setQueryData(getPublicActivityOnboardingQueryKey({ path }), data);
 			// One answer for the account: User settings reads the same choice.
 			void queryClient.invalidateQueries({ queryKey: getPublicActivityChoiceQueryKey({}) });
-			toast.success(
-				body.visible
-					? "You show on public activity pages"
-					: "You are hidden on public activity pages",
-				{ description: "You can change this at any time in User settings." },
-			);
+			announcePublicActivityChoice(body.visible);
+			// A public page open now still lists this person until it reads again.
+			await refreshPublicActivity(queryClient);
+			await router.invalidate();
 		},
 	});
 
@@ -53,10 +59,11 @@ export function usePublicActivityOnboarding({
 		};
 	}
 	return {
-		open: enabled && onboarding.data?.seen === false && !deferred,
+		open: enabled && onboarding.data?.seen === false && deferredFor !== workspaceSlug,
 		currentlyVisible: onboarding.data?.visible ?? true,
 		answer: state,
-		onAnswer: (visible: boolean) => answer.mutate({ path, body: { visible } }),
-		onDefer: () => setDeferred(true),
+		onAnswer: (visible: boolean) =>
+			answer.mutate({ path, body: { visible }, signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) }),
+		onDefer: () => setDeferredFor(workspaceSlug),
 	};
 }

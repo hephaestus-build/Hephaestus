@@ -43,6 +43,8 @@ export const Default: Story = {
 		const hide = step.getByRole("button", { name: "Hide me" });
 		await expect(show).not.toHaveFocus();
 		await expect(hide).not.toHaveFocus();
+		// Focus is on the dialog, announced with its title and text, so no ring marks the title.
+		await expect(screen.getByRole("alertdialog")).toHaveFocus();
 		await expect(show.getBoundingClientRect().width).toBeCloseTo(
 			hide.getBoundingClientRect().width,
 			0,
@@ -61,12 +63,15 @@ export const ShowMe: Story = {
 	},
 };
 
-/** Only an answer closes the step: Escape leaves it open, and the person is asked again next time. */
-export const CannotBeDismissed: Story = {
-	play: async ({ userEvent }) => {
-		await dialog();
+/** Escape and Decide later leave the step for this visit, without an answer. */
+export const Deferred: Story = {
+	play: async ({ args, userEvent }) => {
+		const step = await dialog();
 		await userEvent.keyboard("{Escape}");
-		await expect(screen.getByRole("alertdialog")).toBeVisible();
+		await expect(args.onDefer).toHaveBeenCalledOnce();
+		await userEvent.click(step.getByRole("button", { name: "Decide later" }));
+		await expect(args.onDefer).toHaveBeenCalledTimes(2);
+		await expect(args.onAnswer).not.toHaveBeenCalled();
 	},
 };
 
@@ -82,10 +87,12 @@ export const Saving: Story = {
 			"aria-disabled",
 			"true",
 		);
+		// A save that never answers cannot hold the person in the step.
+		await expect(step.getByRole("button", { name: "Decide later" })).toBeEnabled();
 	},
 };
 
-/** A failing save does not hold the workspace shut: the person can leave the step for this visit. */
+/** A failing save says so, and the person can still answer again or decide later. */
 export const Failed: Story = {
 	args: { answer: { status: "error", message: "We could not save your choice. Try again." } },
 	play: async ({ args, userEvent }) => {
@@ -93,8 +100,8 @@ export const Failed: Story = {
 		await expect(step.getByRole("alert")).toHaveTextContent(
 			"We could not save your choice. Try again.",
 		);
-		await userEvent.click(step.getByRole("button", { name: "Decide later" }));
-		await expect(args.onDefer).toHaveBeenCalledOnce();
+		await userEvent.click(step.getByRole("button", { name: "Hide me" }));
+		await expect(args.onAnswer).toHaveBeenCalledWith(false);
 	},
 };
 
@@ -115,6 +122,20 @@ export const GitLab: Story = {
 		const step = await dialog();
 		await expect(step.getByText(/For public projects only/u)).toBeVisible();
 		await expect(step.getByText(/the merge requests you opened and reviewed/u)).toBeVisible();
+	},
+};
+
+/** At 320 px the text and its list stay on the left edge, where a person reads them. */
+export const Narrow: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async () => {
+		const step = await dialog();
+		const title = step.getByRole("heading").getBoundingClientRect();
+		const list = step.getAllByRole("list")[0];
+		await expect(list?.getBoundingClientRect().left).toBeLessThan(title.left + 40);
+		await expect(getComputedStyle(step.getByText(/^Anyone can see it/u)).textAlign).not.toBe(
+			"center",
+		);
 	},
 };
 

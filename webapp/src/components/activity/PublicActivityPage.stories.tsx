@@ -49,7 +49,7 @@ export const SignedOut: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				/This page shows public pull requests, reviews and issues in public repositories\./u,
+				/This page shows pull requests, reviews and issues in public repositories\./u,
 			),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Sign in" }));
@@ -153,9 +153,7 @@ export const GitLab: Story = {
 	args: { providerType: "GITLAB" },
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText(
-				/This page shows public merge requests, reviews and issues in public projects\./u,
-			),
+			canvas.getByText(/This page shows merge requests, reviews and issues in public projects\./u),
 		).toBeVisible();
 		await expect(canvas.getByRole("columnheader", { name: /Merge requests/u })).toBeVisible();
 	},

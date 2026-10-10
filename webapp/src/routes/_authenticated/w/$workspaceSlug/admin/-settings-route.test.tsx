@@ -93,7 +93,7 @@ describe("the public activity page setting", () => {
 		await screen.findByText("3");
 	});
 
-	it("turns the page off at once, keeping the search engines choice", async () => {
+	it("turns the page off at once, and publishing again starts with search engines off", async () => {
 		const user = userEvent.setup();
 		settings = { enabled: true, allowSearchEngines: true };
 		renderSettingsRoute(false);
@@ -101,11 +101,20 @@ describe("the public activity page setting", () => {
 		await user.click(
 			await screen.findByRole("switch", { name: "Publish the page" }, ROUTE_RENDER_WAIT),
 		);
-
 		await waitFor(() =>
-			expect(changes).toStrictEqual([{ publicActivityEnabled: false, allowSearchEngines: true }]),
+			expect(changes).toStrictEqual([{ publicActivityEnabled: false, allowSearchEngines: false }]),
 		);
 		expect(screen.queryByRole("alertdialog")).toBeNull();
+
+		await user.click(screen.getByRole("switch", { name: "Publish the page" }));
+		const dialog = await screen.findByRole("alertdialog");
+		within(dialog).getByText(/Search engines are asked not to list it until you allow that/u);
+		await user.click(within(dialog).getByRole("button", { name: "Make public" }));
+
+		await waitFor(() => expect(changes).toHaveLength(2));
+		expect(changes[1]).toStrictEqual({ publicActivityEnabled: true, allowSearchEngines: false });
+		const searchEngines = await screen.findByRole("switch", { name: "Allow search engines" });
+		expect(searchEngines.getAttribute("aria-checked")).toBe("false");
 	});
 
 	it("lets search engines in without turning the page off", async () => {

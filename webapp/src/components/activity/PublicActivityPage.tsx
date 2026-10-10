@@ -68,7 +68,7 @@ export function PublicActivityPage({
 				title={workspaceName === undefined ? "Public activity" : `${workspaceName} activity`}
 				description={
 					<>
-						This page shows public {pullRequests}, reviews and issues in public{" "}
+						This page shows {pullRequests}, reviews and issues in public{" "}
 						{terms.repositories.toLowerCase()}.{" "}
 						{viewer.status === "signed-out" ? (
 							<>

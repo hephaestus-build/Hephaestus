@@ -210,6 +210,18 @@ export const GitLab: Story = {
 	},
 };
 
+/** At 320 px the confirmation keeps its text left-aligned, bullets included. */
+export const ConfirmationNarrow: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("switch", { name: PAGE }));
+		const dialog = await confirmation();
+		await expect(
+			getComputedStyle(dialog.getByText(/^Anyone can see the page/u)).textAlign,
+		).not.toBe("center");
+	},
+};
+
 export const Dark: Story = {
 	args: { state: live },
 	globals: { theme: "dark" },

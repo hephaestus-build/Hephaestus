@@ -43,7 +43,7 @@ export const Route = createFileRoute("/w/$workspaceSlug/")({
 		// A public page needs no identity, so an identity that cannot be read is a visitor.
 		const user = await resolveCurrentUser(context.queryClient).catch(() => null);
 		if (!user) {
-			return;
+			return { signedIn: false };
 		}
 		if (await consentIsPending(context.queryClient)) {
 			throw redirect({
@@ -72,6 +72,7 @@ export const Route = createFileRoute("/w/$workspaceSlug/")({
 				replace: true,
 			});
 		}
+		return { signedIn: true };
 	},
 	loaderDeps: ({ search: { range, from, to, repo } }) => ({ range, from, to, repo }),
 	loader: async ({ context, params, deps, location }): Promise<PublicActivityLoad> => {
@@ -96,14 +97,17 @@ export const Route = createFileRoute("/w/$workspaceSlug/")({
 						replace: true,
 					});
 				}
-				// The workspace gate sends a signed-out visitor to sign in and a signed-in one to their own
-				// workspace, the same for a workspace that is private as for one that does not exist.
-				throw redirect({
-					to: "/w/$workspaceSlug/activity",
-					params,
-					search: location.search,
-					replace: true,
-				});
+				// A visitor signs in and comes back to this address, and a signed-in person reaches their own
+				// workspace. Either way a private workspace answers as one that does not exist.
+				if (context.signedIn) {
+					throw redirect({
+						to: "/w/$workspaceSlug/activity",
+						params,
+						search: location.search,
+						replace: true,
+					});
+				}
+				throw redirect({ to: "/login", search: { returnTo: location.href } });
 			}
 			return { status: "error", error };
 		}

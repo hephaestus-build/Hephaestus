@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import {
 	getPublicActivityHiddenCountQueryKey,
+	getUsersWithTeamsOptions,
 	listHiddenContributorsQueryKey,
 	updateActivityAutomationMutation,
 	updatePublicActivityObjectionMutation,
@@ -188,10 +189,17 @@ function WorkspaceActivity() {
 				description: problemDetailOf(error),
 			}),
 	});
-	// A provider's bot and an account counted as automation never show on a page, so there is nothing
-	// to hide.
+	// Members are hidden and shown again under Members. This is for a person with no membership, who
+	// has no account here to hide themselves with, so the members have to be known first. A provider's
+	// bot and an account counted as automation never show on a page, so there is nothing to hide.
+	const members = useQuery({
+		...getUsersWithTeamsOptions({ path: { workspaceSlug } }),
+		enabled: isAdmin && person?.kind === "PERSON",
+	});
 	const hideAction =
-		isAdmin && person?.kind === "PERSON" ? (
+		isAdmin &&
+		person?.kind === "PERSON" &&
+		members.data?.some((member) => member.id === person.person.id) === false ? (
 			<HidePersonAction
 				name={person.person.name}
 				pending={hiding.isPending}

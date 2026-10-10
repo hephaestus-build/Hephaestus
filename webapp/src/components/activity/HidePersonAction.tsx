@@ -49,7 +49,7 @@ export function HidePersonAction({ name, pending, onConfirm }: HidePersonActionP
 						<AlertDialogDescription>
 							{name} leaves the public activity page, workspace activity and their totals. Their
 							work stays in the source repositories. To show them again, use Undo right after, or
-							Workspace settings later. A member is shown again under Members.
+							Workspace settings later.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

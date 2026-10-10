@@ -41,9 +41,10 @@ describe("survey invitations in the app chrome", () => {
 
 	it("preserves the survey deep link through the sign-in guard", async () => {
 		server.use(unauthenticatedUser);
-		const { router } = renderRouteAtWithRouter(`/w/acme?survey=${unseen.id}`);
+		const destination = `/w/acme?survey=${unseen.id}`;
+		const { router } = renderRouteAtWithRouter(destination);
 		await waitFor(() => expect(router.state.location.pathname).toBe("/login"), ROUTE_RENDER_WAIT);
-		expect(router.state.location.search.returnTo).toContain(`survey=${unseen.id}`);
+		expect(router.state.location.search.returnTo).toContain(destination);
 	});
 
 	it("opens the email-linked survey rather than the first available survey", async () => {

@@ -248,16 +248,15 @@ function PublishDialog({
 	providerType: ProviderType;
 	onConfirm: () => void;
 }) {
-	const titleRef = useRef<HTMLHeadingElement>(null);
+	const popupRef = useRef<HTMLDivElement>(null);
 	const pullRequests = artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType);
 	const repositories = getProviderTerms(providerType).repositories.toLowerCase();
 	return (
 		<AlertDialog open={open} onOpenChange={onOpenChange}>
-			<AlertDialogContent initialFocus={titleRef}>
-				<AlertDialogHeader>
-					<AlertDialogTitle ref={titleRef} tabIndex={-1}>
-						Make the activity of {workspaceName} public?
-					</AlertDialogTitle>
+			{/* Focus starts on the dialog itself, which is announced with its title and text; Cancel is not the default either. */}
+			<AlertDialogContent ref={popupRef} initialFocus={popupRef}>
+				<AlertDialogHeader className="place-items-start text-left">
+					<AlertDialogTitle>Make the activity of {workspaceName} public?</AlertDialogTitle>
 					{/* One description, so a screen reader hears all of what becomes public. */}
 					<AlertDialogDescription render={<div />}>
 						<div className="space-y-3">
@@ -278,8 +277,8 @@ function PublishDialog({
 							<p>
 								The page shows nothing from private {repositories}, practices, feedback, AI content,
 								Slack, Outline or automation accounts. People on it can hide themselves by signing
-								in. It asks search engines not to list it until you allow that. You can turn it off
-								at any time.
+								in. Search engines are asked not to list it until you allow that. Turning the page
+								off takes that choice back.
 							</p>
 						</div>
 					</AlertDialogDescription>
