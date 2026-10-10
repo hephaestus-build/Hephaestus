@@ -53,6 +53,7 @@ jobs:
       build-config: ${{ steps.filter.outputs.build-config }}
       test-config: ${{ steps.filter.outputs.test-config }}
       security-config: ${{ steps.filter.outputs.security-config }}
+      dependency-review: ${{ steps.filter.outputs.dependency-review }}
       release-images: ${{ steps.filter.outputs.release-images }}
       docker-config: ${{ steps.filter.outputs.docker-config }}
       pmd-canary: ${{ steps.filter.outputs.pmd-canary }}
@@ -419,6 +420,11 @@ jobs:
               - '.github/workflows/ci-tests.yml'
               - '.github/actions/setup-toolchain/**'
               - '.github/actions/setup-caches/**'
+            # Documentation prose cannot change a dependency graph; all other paths stay eligible.
+            dependency-review:
+              - '**'
+              - '!docs/**/*.md'
+              - '!docs/**/*.mdx'
             security-config:
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-security-scan.yml'
@@ -809,6 +815,7 @@ jobs:
       security-events: write
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
+      dependency_review_changed: ${{ needs.detect-changes.outputs.dependency-review != 'false' }}
 
   Test:
     uses: ./.github/workflows/ci-tests.yml

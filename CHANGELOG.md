@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.87.0
+
+### Minor Changes
+
+- Workers can retain practice review transcripts for 24 hours for investigation. Raw transcripts require complete ownership records for captured sources and copied feedback. Otherwise, workers retain only bounded counts of calls, tokens, tool use and errors, marked as metadata only. Reviews which copy history without complete ownership records retain metadata only.
+
+  Transcripts stay outside the database and web app. Person erasure removes them with the review's folder. Hard kills and failed uploads can leave no transcript.
+
+### Patch Changes
+
+- Practice definitions now count a stated user benefit, such as data that is still there after a restart, as the reason for a stored-data decision. A sufficient approval is no longer set aside because a different reviewer's approval was withdrawn. Previews that hold known sample data in the view are recognised as representative.
+  Review the available practice updates in workspace administration before applying them.
+- Commit-subject reviews assess whether each subject describes a specific step. They no longer ask for code explanations or use commit-scope hints to assess subject clarity.
+- Supported release rescans now check every authenticated image even when archived evidence or another image fails validation. Diagnostics distinguish a refused policy from an unavailable scan, and any failure still fails the overall check.
+
+  Release evidence now includes a signed checksum file that authenticates its SBOM, advisory and policy bytes. Older unsigned archives are reported as unauthenticated without trusting their evidence, while their authenticated images are still scanned against current policy.
+
+- Duplication reviews distinguish repeated maintained logic from independent code that follows the same framework pattern. Structural similarities remain inspection leads rather than requests to introduce unnecessary abstractions.
+- Issue practice definitions establish the current request before they judge requested work.
+  A brief or vague request is still judged, conflicting current requests stay undecided, and an explicit withdrawal leaves no requested work to judge.
+  Historical and closure practices keep their own scope.
+  Single-concern issue practice definitions assess the issue itself, without requiring a comparison with sibling issues.
+  Review the available practice updates in workspace administration before applying them.
+
+  Issue scope reviews include captured discussion when establishing the current request. Unaccepted proposals do not replace that request.
+
+- Release evidence capture resources when cleanup fails, so later reviews on the same worker thread can start. Keep the original failure and any cleanup errors visible.
+- Release vulnerability exceptions now apply only to the exact image they were reviewed for. A reviewed claim that vulnerable Go code is absent can carry over to a rebuilt image only when its Go binaries are byte-for-byte unchanged. Such a claim is still reviewed again when the advisory changes or the exception expires. Verifying an earlier release fails if its stored result relied on an exception for a different image. Release SBOMs now also record a SHA-256 for every file in the image.
+- Security checks now recognize that the reviewed launch helpers do not contain the HTTP/2 processing code affected by a newly classified vulnerability. The assessment remains bound to the exact helper files and advisory source.
+
+  The bundled proxy retains a known HTTP/2 CPU denial-of-service risk in ordinary client and server traffic, including cleartext HTTP/2. Disabling the dashboard does not remove this risk. The reviewed vendor images have a temporary security-policy exception until October 16, 2026 at 00:00 UTC, with no automatic renewal. A fixed vendor replacement is tracked in [#2659](https://github.com/hephaestus-build/Hephaestus/issues/2659).
+
+- Reviews of large issues no longer treat unknown child-work counts as proof that a breakdown is missing.
+- GitHub sync clears outdated child-issue totals when the provider reports zero. Deleted child issues no longer count toward progress.
+- The bundled NATS broker includes Go security fixes while retaining the existing JetStream configuration.
+  NATS images now come from `docker.io/synadia/nats-server`; include that repository if you maintain an image allowlist or mirror.
+- Issue reviews now account for clarifications in open-issue discussions. When a comment is added, edited or removed, earlier observations stop representing the current request and pending public feedback cannot use the old evidence.
+- Practice reviews keep text on each side of an HTML comment separate.
+  Template comments can no longer join issue numbers or turn separate words into a placeholder.
+- Feedback on reviewed work can compare the code and practice revisions behind current assessments and earlier feedback. Missing revision identities remain unknown.
+- Practice reviews avoid unavailable positive-feedback references while preparing summary and line comments.
+- When composing feedback, Hephaestus now retains cited evidence explaining what remains undecided or why a practice did not apply.
+- Delayed pull request and merge request reviews no longer receive check results from a newer revision. A review sees check results only when they were reported for the revision it reviews.
+- Browser session cookies require Secure outside local HTTP E2E tests.
+  The server rejects insecure cookies with an HTTPS issuer or a `__Host-` cookie name.
+- The bundled reverse proxy now uses Traefik 3.7.14. The web interface image includes updated nginx and OS packages.
+
+  Dashboard-enabled Traefik configurations retain a known CPU-exhaustion risk from malicious Range headers until a fixed vendor image is available. The reference proxy configurations keep the dashboard disabled. The vendor replacement is tracked in #2659.
+
 ## 0.86.1
 
 ### Patch Changes
