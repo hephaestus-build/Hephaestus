@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.89.0
+
+### Minor Changes
+
+- Workspace activity lists everyone with work in the range in one table that you can sort by each count. It sorts by Contributions first: pull requests opened, pull requests reviewed, and issues opened. A sorted table shows each person's position. Choose 30 days, 90 days, 12 months, all time, or a custom range, then pick a team and repositories. The address keeps your view, so you can share it. The page says how far back the history is complete. A **New** badge marks a first contribution in the range. Each figure uses GitHub's or GitLab's own icon and colour. Bot accounts appear apart under Automation, and a workspace admin can treat a machine user account as automation or count it as a person again. Open a person to see their weekly bars, their counts in each repository, and their work. Your own Activity page gets the same ranges and weekly bars, in place of the daily and monthly bars. On GitLab, drawers, popovers and tooltips now use GitLab's colours too.
+
+  **Operators:** Custom activity API clients read the new `kind` field (`PERSON`, `BOT` or `AUTOMATION`) instead of `automation`. The bundled webapp needs no action.
+
+- A workspace that publishes its activity now has a public page that anyone can open without signing in, at the workspace's address. It shows who contributed to the public repositories, in the same table that members see, in GitHub's or GitLab's own words and icons. The page says what it shows and lets people sign in to hide themselves. It asks search engines not to list it unless the workspace allows that.
+
+  Workspace admins turn the page on under **Workspace settings**, after a confirmation that states what becomes public. They can allow search engines, see how many people are hidden, and hide a person who has no account from **Workspace activity**. Instance admins allow public pages under **Instance settings**. The first time a person opens a workspace with a public page, a step asks **Show me** or **Hide me**. **User settings** has the same choice as **Show me on public activity pages**.
+
+- You can publish human contributions to public repositories with separate instance and workspace controls. Public pages default to off on self-hosted instances. People can hide their activity across all public pages, and workspace administrators can honor objections from contributors without an account. Public-page objections remain in force after account deletion or identity disconnection. Anonymous request limits can be adjusted for shared networks. Public pages exclude repositories when access is lost or a successful repository metadata confirmation is more than 48 hours old by default. You can set the visibility limit to match your sync cadence.
+
+  **Operators:** Whole-workspace anonymous access is removed. Take and verify a database backup before upgrade. Public activity pages must be enabled explicitly after the activity history repair is verified. The optional `HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED=true` setting supplies an instance default. Review the public activity administration guide before publication.
+
+- Operators can prepare DNS-only workspace hosts and a Let's Encrypt DNS-01 wildcard certificate. The workspace subdomain switch stays off by default. Keep it off until a later release supports workspace addresses in the web app. DNS credentials stay in read-only files, outside container environment values and release trees.
+
+### Patch Changes
+
+- Workspace activity loads sooner in workspaces with a long activity history while preserving each person’s first contribution date.
+- Sorting people by name starts A–Z even when a search has no matches.
+- Workspace activity separates People and Timeline into tabs, keeps your scope when switching, and shows two months when choosing a custom range. Contributions now explain which work they include.
+- Historical merge reviews distinguish recorded review gates from incomplete decision history. Dated closure remains usable evidence. Unresolved gates and unknown deciding event times retain their own outcomes.
+- Practice feedback on Swift changes now judges code in its context. Ending work quietly after a newer search replaces it counts as normal control flow, not a hidden error, but a cancellation that hides a real failure still does not. Artwork that only repeats the title and other text read with it may stay hidden from screen readers. Preview variants that show the same sample in another appearance are no longer treated as copy-paste. A stable state established by a preview's default setup counts as previewed.
+- Queued GitLab reviews now preserve the original code range when Hephaestus recorded that range at the time of the request. New commits or a moved target branch no longer substitute a different range. This applies to new review requests with a recorded range. Unknown original ranges and stopped reviews are not recovered or retried.
+
+  Before posting feedback on a merge request, Hephaestus also checks the captured code range against the current recorded range. A changed range withholds feedback. An unknown current range uses the existing bounded retry. This check also applies to prepared reviews requested earlier. Comments and review status are still read when the review runs.
+
+- A practice review no longer fails at once when its evidence is still held by an earlier attempt or a cleanup. It retries within the existing retry limit instead. A review that still cannot start within that limit fails as before.
+- Error-handling review standards distinguish defensive checks of values guaranteed by their type or API contract from paths that can fail. Failures from runtime input, responses and stored data remain in scope.
+- Reviews of merged pull requests now accept a written account of what was delivered and deferred for the linked issue, such as delivery bullets in the description, without requiring ticked checkboxes. Generic checks such as a passing build, and a bare closing reference, still do not count as an account.
+- For models using OpenAI chat completions or the OpenAI Responses adapter, review trace records include adapter call times and the time to receive response headers. Failed and aborted calls retain their timing, including waits for retries within a call. Debug records also distinguish an adapter-reported failure reason from a missing or unreadable reason, and Responses failures name the stream's own failed, incomplete or error ending. Calls through other provider adapters remain untimed and are identifiable from the timed-call count.
+- Review feedback on a pull request or merge request stops when its title or description changed after capture. This also applies when the commit stays the same. Feedback waits and retries when it cannot compare the capture with the current work.
+
+  New reviews of an author's current work use the recorded occasion when their capture proves it retained the original admitted work. A newer result for a practice then stands even if an older review finishes later. Prior reviews and captures without that proof keep their existing ordering.
+
 ## 0.88.0
 
 ### Minor Changes
