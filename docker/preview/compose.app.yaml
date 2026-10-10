@@ -281,6 +281,8 @@ services:
       # built as http://. An unescaped '.' matches any character, which is harmless for an IP range:
       # 172.(1[6-9]|2[0-9]|3[01]).[0-9]{1,3}.[0-9]{1,3}
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES}
+      HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "false"
+      HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: ""
       APPLICATION_HOST_URL: https://${SERVICE_FQDN_WEBAPP}
       # Coolify renames each service to `<service>-pr-<id>` and publishes the renamed hosts as
       # SERVICE_NAME_*, so the bare service name resolves to nothing inside a preview. The defaults
@@ -382,6 +384,8 @@ services:
     restart: unless-stopped
     environment:
       APPLICATION_VERSION: preview
+      HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "false"
+      HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: ""
       APPLICATION_CLIENT_URL: https://${SERVICE_FQDN_WEBAPP}
       GIT_BRANCH: ${COOLIFY_BRANCH:-}
       # One origin, as production has: the API answers under the app's own hostname at /api, and

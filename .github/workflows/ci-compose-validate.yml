@@ -23,6 +23,9 @@ jobs:
         with:
           install: "frozen"
 
+      - name: Verify workspace subdomain routing and reversal
+        run: vp run test:workspace-subdomains
+
       - name: Render the self-hosted stack
         working-directory: docker/self-host
         run: |

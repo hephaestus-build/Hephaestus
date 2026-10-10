@@ -45,6 +45,111 @@ Before you turn it on, configure the edge and deploy the tenant-host SPA.
 To turn it off, set `enabled` to `false` and restart the server.
 Keep the apex workspace paths available.
 
+## Configure DNS and the edge
+
+DNS and TLS can be prepared before the tenant-host SPA is deployed.
+The edge serves the same trusted SPA on every valid tenant host.
+It does not check whether a workspace exists.
+
+### Cloudflare checklist for hephaestus.build
+
+1. Open the `hephaestus.build` zone and select **DNS**.
+2. Create a wildcard record with **Name** `*`, pointing to the same origin as the apex.
+3. Set the wildcard and apex records to **DNS only** (grey cloud).
+4. Keep explicit records for reserved services, including `docs`, separate from the wildcard.
+5. Open **My Profile → API Tokens → Create Token** and select **Edit zone DNS**.
+6. Add **Zone → Zone → Read** and **Zone → DNS → Edit** permissions.
+7. Set **Zone Resources** to **Include → Specific zone → hephaestus.build**.
+8. Save the token in the proxy host's credential file, not in Git or the webapp environment.
+
+Use one zone-scoped token with both permissions.
+Do not use the account's global API key.
+Cloudflare supplies DNS only, not the HTTP connection or TLS certificate.
+Do not configure its proxy, Origin CA, origin locks, or trusted-proxy address ranges.
+The server trusts only the actual Traefik ingress address.
+
+See [Cloudflare wildcard records](https://developers.cloudflare.com/dns/manage-dns-records/reference/wildcard-dns-records/) and [API token creation](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/).
+The permissions follow [lego's Cloudflare provider](https://go-acme.github.io/lego/dns/cloudflare/).
+
+### Compose settings
+
+Use the same settings for the reference and single-host deployments.
+The proxy chooses one ACME challenge through these optional variables:
+
+| Variable | Default | With subdomains |
+| --- | --- | --- |
+| `ACME_CHALLENGE` | `httpchallenge.entrypoint` | `dnschallenge.provider` |
+| `ACME_CHALLENGE_VALUE` | `http` | Your lego DNS provider, such as `cloudflare` |
+| `TRAEFIK_DNS_ENV_FILE` | `/etc/hephaestus/dns.env` | Absolute path to the proxy-only credential file |
+
+For Cloudflare, put this entry in the credential file:
+
+```dotenv
+CF_DNS_API_TOKEN=<zone-scoped-token>
+```
+
+Create the file with mode `0600` and limit host access to the deployment operator.
+Compose passes it only to Traefik.
+The file is optional for HTTP-01 deployments.
+Cloudflare DNS-01 needs the token before certificate issuance.
+Never print its contents in diagnostics or add it to a release artifact.
+
+For another provider, use its name and required variables from [lego's provider list](https://go-acme.github.io/lego/dns/).
+Choose a provider that supports certificates for both a wildcard and its apex.
+Do not disable DNS propagation checks.
+Allow the proxy to reach the provider API and public DNS servers.
+
+Set these non-secret values alongside `APP_HOSTNAME`:
+
+```dotenv
+APP_HOSTNAME=hephaestus.build
+HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED=true
+HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN=hephaestus.build
+ACME_CHALLENGE=dnschallenge.provider
+ACME_CHALLENGE_VALUE=cloudflare
+TRAEFIK_DNS_ENV_FILE=/etc/hephaestus/dns.env
+```
+
+In pull-based production deployment, set the switch and base domain in both `app.env` and `proxy.env`.
+Set the ACME variables and credential-file path in `proxy.env` only.
+The promotion workflow selects a verified release.
+It does not upload or replace host secrets.
+See [pull-based deployment](./pull-based-deployment.mdx).
+
+For the single-host installer, set these values in its one `.env` file.
+Previews keep subdomains off and use their existing proxy.
+
+Traefik requests one certificate with the apex as `tls.domains.main` and `*.<base>` as its SAN.
+It uses DNS-01 and keeps ACME state in the existing persistent volume.
+With subdomains off, the default remains HTTP-01.
+Keep a working DNS-01 configuration during switch reversal if other services still use the wildcard certificate.
+See [Traefik ACME](https://doc.traefik.io/traefik/reference/install-configuration/tls/certificate-resolvers/acme/).
+
+### Routing and reversal
+
+The proxy's native file-provider template enables tenant routers only when the switch is `true`.
+They use an anchored, single-label host expression and reject the server's reserved labels.
+The tenant SPA router has priority 6, above the canonical-host redirect at priority 4.
+Maintenance uses the same tenant host and path restrictions at priority 1.
+
+Tenant `/api`, auth, OAuth, sign-in, consent, webhook, and management paths have no application route.
+Do not add tenant hosts or broad wildcard expressions to `APP_HOST_MATCH`.
+That variable is only for the apex and explicit instance aliases.
+
+The webapp container's nginx owns the `/w/<slug>` redirect, not the client router.
+On the apex, it returns 308 and keeps the escaped path and query.
+It rejects invalid and reserved tenant labels.
+The redirect sends `Cache-Control: no-store`, so a browser does not keep it after switch reversal.
+
+Apex sign-in, consent, auth, legal, unsubscribe, instance administration, and settings paths remain unchanged.
+The tenant runtime configuration points `APPLICATION_SERVER_URL` at the HTTPS apex `/api`.
+The existing CSP permits HTTPS API connections.
+
+Turn the switch off in the app and proxy settings and recreate both containers.
+Tenant routes disappear and apex workspace paths serve the SPA again.
+No DNS record, credential, or ACME-state deletion is needed.
+See [Traefik file templates](https://doc.traefik.io/traefik/reference/dynamic-configuration/file/) and [nginx return](https://nginx.org/en/docs/http/ngx_http_rewrite_module.html#return).
+
 ### Check the same-site precondition
 
 Use a DNS base domain, not an IP address.
@@ -68,7 +173,14 @@ Instance administration shows the same callback that authentication uses.
 1. Open **Login providers** in instance administration.
 2. Copy each provider's callback URI.
 3. If the registered address differs, register the exact URI shown.
-4. Before enabling subdomains, turn off GitHub wildcard matching and remove tenant-host callbacks.
+4. In the GitHub login app settings, set **Callback URL** to `https://hephaestus.build/api/login/oauth2/code/github`.
+5. Turn off **Enable wildcard matching in the callback URL** and remove tenant-host callbacks.
+6. In the GitLab OAuth application, set **Redirect URI** to `https://hephaestus.build/api/login/oauth2/code/gitlab`.
+7. In the Outline OAuth application, set **Redirect URI** to `https://hephaestus.build/api/login/oauth2/code/outline`.
+
+Self-hosters replace `hephaestus.build` with their apex and use the registration ID shown in instance administration.
+Do not add a final slash or wildcard.
+Dynamic providers can have a different registration ID.
 
 GitHub, GitLab, Slack sign-in, and Outline use this policy.
 The separate Slack workspace connection uses its configured `hephaestus.integration.slack.redirect-uri`.
@@ -77,6 +189,7 @@ GitHub App installations and GitLab token connections do not use a request-deriv
 
 If the registered callback already matches the configured issuer origin and API prefix, no callback update is needed.
 This includes existing callbacks registered at the apex.
+See [GitLab OAuth applications](https://docs.gitlab.com/integration/oauth_provider/) and [Outline's OAuth provider](https://docs.getoutline.com/s/hosting/doc/oauth-provider-9YJWoe3BJN).
 See [GitHub's callback guidance](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-user-authorization-callback-url).
 Exact callback comparison follows [OAuth Security Best Current Practice](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.1.3).
 

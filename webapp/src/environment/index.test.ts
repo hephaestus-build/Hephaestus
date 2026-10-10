@@ -78,3 +78,24 @@ describe("CSRF cookie name", () => {
 		expect(environment.xsrfCookieName).toBe("XSRF-TOKEN");
 	});
 });
+
+describe("workspace presentation origins", () => {
+	it("keeps the apex API separate from the tenant base domain", async () => {
+		const environment = await environmentFor({
+			APPLICATION_CLIENT_URL: "https://hephaestus.example.com",
+			APPLICATION_SERVER_URL: "https://hephaestus.example.com/api",
+			HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "true",
+			HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: "hephaestus.example.com",
+		});
+		expect(environment.workspaceSubdomains).toStrictEqual({
+			enabled: true,
+			baseDomain: "hephaestus.example.com",
+		});
+		expect(environment.serverUrl).toBe("https://hephaestus.example.com/api");
+	});
+
+	it("keeps subdomains off when runtime configuration is absent", async () => {
+		const environment = await environmentFor(undefined);
+		expect(environment.workspaceSubdomains).toStrictEqual({ enabled: false, baseDomain: "" });
+	});
+});

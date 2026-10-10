@@ -62,6 +62,8 @@ services:
       APPLICATION_VERSION: ${IMAGE_TAG}
       APPLICATION_CLIENT_URL: https://${APP_HOSTNAME}
       APPLICATION_SERVER_URL: https://${APP_HOSTNAME}/api
+      HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}
+      HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}
       # Imprint/privacy source. Leave unset and bind-mount a host directory
       # onto /usr/share/nginx/html/legal-overrides for forks. Use "tumaet" only
       # for the canonical AET deployment. See docs/admin/legal-pages.mdx.
@@ -219,6 +221,8 @@ services:
       NATS_USERNAME: ${NATS_USERNAME:?Set NATS_USERNAME}
       NATS_PASSWORD: ${NATS_PASSWORD:?Set NATS_PASSWORD}
       # Auth (Hephaestus-native; ADR 0017). State-cookie key MUST be base64 32-byte AES.
+      HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}
+      HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}
       HEPHAESTUS_AUTH_ISSUER: https://${APP_HOSTNAME}
       HEPHAESTUS_AUTH_STATE_COOKIE_KEY: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY:?Set HEPHAESTUS_AUTH_STATE_COOKIE_KEY to a Base64-encoded 32-byte key}
       # First instance super-admin bootstrap (auth-cutover runbook). The admin UI is admin-gated, so

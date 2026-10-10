@@ -16,6 +16,16 @@ services:
       # state that a release replaces. Traefik would then re-issue on every deployment and Let's
       # Encrypt would rate-limit the domain into serving an untrusted certificate.
       - letsencrypt:/letsencrypt
+    env_file:
+      - path: ${TRAEFIK_DNS_ENV_FILE:-/etc/hephaestus/dns.env}
+        required: false
+    environment:
+      HEPHAESTUS_EDGE_MAINTENANCE_ENABLED: "true"
+      HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}
+      HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: ${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}
+      APP_HOSTNAME: ${APP_HOSTNAME}
+      ACME_CHALLENGE: ${ACME_CHALLENGE:-httpchallenge.entrypoint}
+      ACME_CHALLENGE_VALUE: ${ACME_CHALLENGE_VALUE:-http}
     command:
       - "--ping=true"
       - "--ping.entrypoint=http"
@@ -45,10 +55,9 @@ services:
       - "--serversTransport.forwardingTimeouts.dialTimeout=10s"
       - "--serversTransport.forwardingTimeouts.responseHeaderTimeout=30s"
       - "--providers.docker.exposedbydefault=false"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.email=admin@tum.de"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=http"
+      - "--certificatesresolvers.letsencrypt.acme.${ACME_CHALLENGE:-httpchallenge.entrypoint}=${ACME_CHALLENGE_VALUE:-http}"
       - "--providers.docker=true"
       # Docker labels cannot define TLS options, so load them through the file provider.
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
@@ -92,6 +101,7 @@ services:
         target: /etc/nginx/conf.d/default.conf
     labels:
       - "traefik.enable=true"
+      - "traefik.http.services.maintenance.loadbalancer.server.port=80"
       - "traefik.http.middlewares.gzip.compress=true"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
       - "traefik.http.routers.http-maintenance.entryPoints=http"
@@ -127,11 +137,7 @@ networks:
 
 configs:
   traefik-dynamic:
-    content: |
-      tls:
-        options:
-          default:
-            minVersion: VersionTLS12
+    file: ./traefik/dynamic.yml
   nginx-default-config:
     content: |
       server {
