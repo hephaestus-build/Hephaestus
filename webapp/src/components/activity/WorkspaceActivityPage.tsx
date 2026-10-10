@@ -134,19 +134,21 @@ export function WorkspaceActivityPage({
 
 /**
  * How far back the counts are complete: "History since 3 March 2024 for 12 of 14 repositories", or,
- * while no repository's history is complete, how many still lack it.
+ * while the complete repositories hold no history yet, how many repositories are still incomplete.
  */
 function coverageNote({ coverage }: ActivityPeople): string | undefined {
 	const { since, completeRepositories, totalRepositories } = coverage;
-	if (totalRepositories === 0) {
+	const incomplete = totalRepositories - completeRepositories;
+	if (totalRepositories === 0 || (since === undefined && incomplete === 0)) {
 		return undefined;
 	}
 	const repositories = totalRepositories === 1 ? "repository" : "repositories";
 	if (since === undefined) {
-		if (completeRepositories === totalRepositories) {
-			return undefined;
-		}
-		return `The history of ${totalRepositories - completeRepositories} of ${totalRepositories} ${repositories} is not complete yet, so the counts can be low.`;
+		const which =
+			completeRepositories === 0
+				? `the ${totalRepositories} ${repositories}`
+				: `${incomplete} of ${totalRepositories} ${repositories}`;
+		return `The history of ${which} is not complete yet, so the counts can be low.`;
 	}
 	return `History since ${formatDate(since)} for ${completeRepositories} of ${totalRepositories} ${repositories}.`;
 }

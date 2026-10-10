@@ -252,14 +252,16 @@ export function ActivityPeopleTable({
 				/>
 			)}
 			{empty && (
-				<ActivityEmpty
-					icon={<PeopleIcon />}
-					title={
-						repo.length > 0
-							? "No contributions to these repositories in this range"
-							: "No contributions in this range"
-					}
-				/>
+				<div aria-busy={stale || undefined} className={cn(stale && STALE)}>
+					<ActivityEmpty
+						icon={<PeopleIcon />}
+						title={
+							repo.length > 0
+								? "No contributions to these repositories in this range"
+								: "No contributions in this range"
+						}
+					/>
+				</div>
 			)}
 			{state.status !== "error" && !empty && (
 				<>

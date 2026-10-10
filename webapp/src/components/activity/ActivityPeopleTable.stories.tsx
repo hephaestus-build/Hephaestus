@@ -160,6 +160,16 @@ export const Stale: Story = {
 	},
 };
 
+/** An empty result that stands in while the next range loads is marked as the previous one's. */
+export const StaleEmpty: Story = {
+	args: { state: { status: "ready", people: peopleOf([]), stale: true } },
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("No contributions in this range").closest("[aria-busy='true']"),
+		).not.toBeNull();
+	},
+};
+
 export const Loading: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {

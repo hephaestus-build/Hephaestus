@@ -138,7 +138,7 @@ export const NoCompleteHistory: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByText(
-				"The history of 2 of 2 repositories is not complete yet, so the counts can be low.",
+				"The history of the 2 repositories is not complete yet, so the counts can be low.",
 			),
 		).toBeVisible();
 	},

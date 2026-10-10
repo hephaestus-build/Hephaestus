@@ -39,11 +39,14 @@ export const OneTeam: Story = {
 	},
 };
 
-/** Before the teams arrive, the address's slug stands in for the name. */
+/** Before the teams arrive, the address's slug stands in for the name, and no search claims a miss. */
 export const Loading: Story = {
 	args: { teams: undefined, value: "payments" },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("combobox", { name: "Team: payments" })).toBeVisible();
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("combobox", { name: "Team: payments" }));
+		const popup = within(await settledPopup());
+		await userEvent.type(popup.getByRole("combobox", { name: "Search teams" }), "zz");
+		await expect(popup.getByText("No teams loaded")).toBeVisible();
 	},
 };
 
