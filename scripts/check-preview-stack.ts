@@ -29,6 +29,7 @@ const OWN_IMAGE_PREFIX = "ghcr.io/hephaestus-build/";
 const DELIBERATELY_OMITTED = new Set([
 	// Clone policy clears publication settings. Previews keep the configured default off.
 	"HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED",
+	"HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE",
 	"HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_CAPACITY",
 	"HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_PERIOD",
 	// Previews send no email: no relay host, sender identity or production SMTP credentials.
