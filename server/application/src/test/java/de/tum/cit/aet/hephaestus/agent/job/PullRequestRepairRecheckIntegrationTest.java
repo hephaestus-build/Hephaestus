@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeFeedbackDeliveryPolicy;
 import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ReplaceableReviewCoverage;
+import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppSupportReader;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -166,6 +167,7 @@ import tools.jackson.databind.node.ObjectNode;
  * A merge request whose author answered a problem — by editing the description or pushing — is reviewed again
  * for that problem's practice once the burst settles, through the real ledger, gate and admission.
  */
+@MockitoSpyBean(types = {PullRequestReviewHandler.class, InAppSupportReader.class})
 class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
     private static final String REPO = "org/repair-repo";
@@ -227,7 +229,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     @Autowired
     private ObservationAdmissionService admissionService;
 
-    @MockitoSpyBean
+    @Autowired
     private PullRequestReviewHandler admissionHandler;
 
     @Autowired

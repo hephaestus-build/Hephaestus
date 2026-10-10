@@ -146,8 +146,7 @@ class ReviewedWorkTest extends BaseUnitTest {
                         Map.of(METADATA, mapper.writeValueAsBytes(staging)),
                         42,
                         mapper,
-                        admittedAt,
-                        admitted,
+                        new ReviewedWork.AdmissionBasis(admittedAt, admitted),
                         catalogs)
                 .orElseThrow()
                 .retainedBasis();
@@ -228,8 +227,7 @@ class ReviewedWorkTest extends BaseUnitTest {
                         Map.of(METADATA, mapper.writeValueAsBytes(staging("b"))),
                         42,
                         mapper,
-                        ADMITTED_AT,
-                        admitted("b"),
+                        new ReviewedWork.AdmissionBasis(ADMITTED_AT, admitted("b")),
                         reviewable)
                 .orElseThrow();
 
@@ -246,8 +244,7 @@ class ReviewedWorkTest extends BaseUnitTest {
                         Map.of(METADATA, mapper.writeValueAsBytes(staging("b"))),
                         7,
                         mapper,
-                        ADMITTED_AT,
-                        admitted("b"),
+                        new ReviewedWork.AdmissionBasis(ADMITTED_AT, admitted("b")),
                         reviewable)
                 .orElseThrow();
 

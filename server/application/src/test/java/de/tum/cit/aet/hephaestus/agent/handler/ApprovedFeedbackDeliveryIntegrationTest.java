@@ -17,8 +17,12 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
@@ -82,7 +86,10 @@ import tools.jackson.databind.node.ObjectNode;
 class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
     private static final String NOTE = "The description says why the migration is split into two steps.";
-    private static final String HEAD = "reviewed-head";
+    private static final String HEAD = "b".repeat(40);
+    private static final String EARLIER_HEAD = "e".repeat(40);
+    private static final String TITLE = "Split the migration";
+    private static final String DESCRIPTION = "";
     private static final int ISSUE = 5;
 
     @Autowired
@@ -189,8 +196,8 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
                 7101L,
                 Objects.requireNonNull(gitlab.getId()),
                 1,
-                "Split the migration",
-                "",
+                TITLE,
+                DESCRIPTION,
                 "OPEN",
                 null,
                 "https://gitlab.com/acme/api/-/merge_requests/1",
@@ -216,7 +223,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
                 "feature/migration",
                 "main",
                 HEAD,
-                "base",
+                ReviewedWorkFixtures.BASE,
                 null,
                 null);
         mergeRequestId = pullRequestRepository
@@ -252,7 +259,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
     @Test
     @WithAdminUser
     void shouldSuppressAsStaleWithoutPostingWhenTheMergeRequestMovedAfterTheReview() {
-        Feedback proposal = propose("earlier-head");
+        Feedback proposal = propose(EARLIER_HEAD);
 
         approve(proposal);
 
@@ -578,7 +585,23 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
                 .put("repository_id", repository.getId())
                 .put("pr_number", 1)
                 .put("repository_full_name", "acme/api")
-                .put("commit_sha", reviewedCommit));
+                .put("commit_sha", reviewedCommit)
+                .put("title", TITLE)
+                .put("body", DESCRIPTION));
+        // What the review captured: the core and the change pinned at the reviewed commit, as the job admitted them.
+        JobFolderIndex manifest = ReviewedWorkFixtures.pullRequestManifest(now, DESCRIPTION, reviewedCommit);
+        ReviewedWork captured = ReviewedWork.captured(
+                        objectMapper.writeValueAsBytes(manifest),
+                        Map.of(
+                                SandboxLayout.CONTEXT_PREFIX + "metadata.json",
+                                ReviewedWorkFixtures.metadata(objectMapper, TITLE, DESCRIPTION, reviewedCommit)),
+                        mergeRequestId,
+                        objectMapper)
+                .orElseThrow();
+        ObjectNode snapshot = objectMapper.createObjectNode();
+        snapshot.set("manifest", objectMapper.valueToTree(manifest));
+        snapshot.set(ReviewedWork.SNAPSHOT_KEY, objectMapper.valueToTree(captured));
+        job.setEvidenceSnapshot(snapshot);
         AgentJob review = agentJobRepository.save(job);
         UUID observation = observe(practice, review, mergeRequestId, developer, Outcome.MET, null, now);
         return recordProposal(review, observation);

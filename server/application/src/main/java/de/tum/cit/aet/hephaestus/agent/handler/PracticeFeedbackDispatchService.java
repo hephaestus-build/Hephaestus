@@ -213,7 +213,7 @@ class PracticeFeedbackDispatchService {
         boolean writeBegan = false;
         try {
             boolean hasSummary = !dispatch.getBody().isBlank();
-            if (!hasSummary && inlineNotes(dispatch).isEmpty()) {
+            if (!hasSummary && packageContent(dispatch).diffNotes().isEmpty()) {
                 return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
             }
             if (hasSummary && summaryRef == null) {
@@ -248,7 +248,8 @@ class PracticeFeedbackDispatchService {
                         }
                         case CURRENT -> {}
                     }
-                    if (inlineNotes(dispatch).isEmpty() && repeatedSummaries.repeatsLastPosted(dispatch, job)) {
+                    if (packageContent(dispatch).diffNotes().isEmpty()
+                            && repeatedSummaries.repeatsLastPosted(dispatch, job)) {
                         return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE);
                     }
                     var reservation = stateMachine.reserve(
@@ -377,7 +378,7 @@ class PracticeFeedbackDispatchService {
         }
         // An approved package may consist of line notes alone; it then has no summary to look up or post.
         boolean hasSummary = !dispatch.getBody().isBlank();
-        var inlineNotes = inlineNotes(dispatch);
+        var inlineNotes = packageContent(dispatch).diffNotes();
         if (!hasSummary && inlineNotes.isEmpty()) {
             return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
         }
@@ -535,7 +536,8 @@ class PracticeFeedbackDispatchService {
     /** The proposal as approved: its summary, absent when it is line notes alone, and the exact line notes. */
     boolean matchesImmutablePackage(Feedback feedback, FeedbackDispatch dispatch) {
         String body = feedback.getBody() == null ? "" : feedback.getBody();
-        return body.equals(dispatch.getBody()) && proposedInlineNotes(feedback).equals(inlineNotes(dispatch));
+        return body.equals(dispatch.getBody())
+                && proposedInlineNotes(feedback).equals(packageContent(dispatch).diffNotes());
     }
 
     /**
@@ -680,10 +682,6 @@ class PracticeFeedbackDispatchService {
         List<UUID> cited = Objects.requireNonNull(transactionTemplate.execute(
                 status -> repository.lockCitedObservations(dispatch.getWorkspaceId(), dispatch.getId())));
         return policy.evaluateAtEgress(job, dispatch.getFeedbackId(), practiceSlugs, Set.copyOf(cited));
-    }
-
-    private List<DiffNote> inlineNotes(FeedbackDispatch dispatch) {
-        return packageContent(dispatch).diffNotes();
     }
 
     DeliveryContent packageContent(FeedbackDispatch dispatch) {

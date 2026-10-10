@@ -97,8 +97,15 @@ public record ReviewedWork(
      */
     public static Optional<ReviewedWork> captured(
             byte[] manifestBytes, Map<String, byte[]> staged, long artifactId, ObjectMapper mapper) {
-        return captured(manifestBytes, staged, artifactId, mapper, null, null, null);
+        return captured(manifestBytes, staged, artifactId, mapper, null, null);
     }
+
+    /**
+     * The job a capture was staged for, as it was admitted: its own admission instant and its original metadata.
+     * Either may be unknown; a capture is then not marked, never refused.
+     */
+    public record AdmissionBasis(
+            @Nullable Instant admittedAt, @Nullable JsonNode metadata) {}
 
     /**
      * As {@link #captured(byte[], Map, long, ObjectMapper)}, marking a pull request capture
@@ -111,8 +118,7 @@ public record ReviewedWork(
             Map<String, byte[]> staged,
             long artifactId,
             ObjectMapper mapper,
-            @Nullable Instant admittedAt,
-            @Nullable JsonNode admittedMetadata,
+            @Nullable AdmissionBasis admission,
             @Nullable ArtifactSourceCatalogRegistry sourceCatalogs) {
         JobFolderIndex manifest;
         try {
@@ -149,9 +155,8 @@ public record ReviewedWork(
                         "Staged pull request metadata names another commit than the pinned change");
             }
         }
-        boolean retained = head != null
-                && reviewable(manifest, sourceCatalogs)
-                && retainedAtAdmission(staging, admittedAt, admittedMetadata);
+        boolean retained =
+                head != null && reviewable(manifest, sourceCatalogs) && retainedAtAdmission(staging, admission);
         return Optional.of(new ReviewedWork(
                 kind.value(),
                 artifactId,
@@ -173,8 +178,9 @@ public record ReviewedWork(
                         SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
     }
 
-    private static boolean retainedAtAdmission(
-            JsonNode staging, @Nullable Instant admittedAt, @Nullable JsonNode admitted) {
+    private static boolean retainedAtAdmission(JsonNode staging, @Nullable AdmissionBasis admission) {
+        Instant admittedAt = admission == null ? null : admission.admittedAt();
+        JsonNode admitted = admission == null ? null : admission.metadata();
         if (admittedAt == null
                 || admitted == null
                 || !admitted.path("title").isString()

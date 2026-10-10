@@ -1022,8 +1022,7 @@ public class AgentJobExecutor {
                             inputFiles,
                             reviewedArtifactId,
                             objectMapper,
-                            admitted.getCreatedAt(),
-                            admitted.getMetadata(),
+                            new ReviewedWork.AdmissionBasis(admitted.getCreatedAt(), admitted.getMetadata()),
                             sourceCatalogs)
                     .ifPresent(work -> snapshot.set(ReviewedWork.SNAPSHOT_KEY, objectMapper.valueToTree(work)));
         }
