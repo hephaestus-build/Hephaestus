@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -115,6 +116,11 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         metadata.put("target_branch", submissionRequest.baseRefName());
         metadata.put("title", pullRequestData.title());
         metadata.put("body", pullRequestData.body());
+        // Whether the work was still open when this review was admitted, from the event that admitted it and
+        // never read again: only such a review may stand over an older one of the same work (Observation.occasionAt).
+        metadata.put(
+                Observation.CURRENT_WORK_METADATA_KEY,
+                pullRequestData.state() == Issue.State.OPEN && !pullRequestData.isMerged());
         // Who this author-run is about and who merged: a MERGER practice is reviewed only when they are
         // the same person (PracticeCatalogInjector.attributable), so the two ids travel with the job.
         if (pullRequestData.authorId() != null) {

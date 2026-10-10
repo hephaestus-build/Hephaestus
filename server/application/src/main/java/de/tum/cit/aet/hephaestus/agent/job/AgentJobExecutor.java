@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
@@ -165,6 +166,7 @@ public class AgentJobExecutor {
 
     private final AgentProperties agentProperties;
     private final AgentJobRepository jobRepository;
+    private final ArtifactSourceCatalogRegistry sourceCatalogs;
     private final ReviewMemberAiPolicy memberAiPolicy;
     private final JobTypeHandlerRegistry handlerRegistry;
     private final PracticePiAdapter practiceAgent;
@@ -219,9 +221,11 @@ public class AgentJobExecutor {
             LlmUsageRecorder usageRecorder,
             LlmBudgetService llmBudgetService,
             @Nullable LlmAdmissionService llmAdmissionService,
+            ArtifactSourceCatalogRegistry sourceCatalogs,
             Optional<WorkerCapacityState> capacityState,
             Optional<WorkerProperties> workerProperties) {
         this.agentProperties = agentProperties;
+        this.sourceCatalogs = sourceCatalogs;
         this.jobRepository = jobRepository;
         this.memberAiPolicy = memberAiPolicy;
         this.handlerRegistry = handlerRegistry;
@@ -900,7 +904,8 @@ public class AgentJobExecutor {
                     job.getRetryCount(),
                     preparedInputs.automatedReviewReadinessReport(),
                     preparedInputs.answeredPractices(),
-                    reviewedArtifactId(job));
+                    reviewedArtifactId(job),
+                    job);
             return new PreparedSandbox(sandboxSpec, preparedInputs);
         } catch (RuntimeException exception) {
             preparedInputs.close();
@@ -918,6 +923,7 @@ public class AgentJobExecutor {
                 retryCount,
                 preparedInputs.automatedReviewReadinessReport(),
                 preparedInputs.answeredPractices(),
+                null,
                 null);
     }
 
@@ -934,13 +940,15 @@ public class AgentJobExecutor {
             int retryCount,
             @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
             List<AnsweredPractice> answeredPractices,
-            @Nullable Long reviewedArtifactId) {
+            @Nullable Long reviewedArtifactId,
+            @Nullable AgentJob admitted) {
         String inputsDigest = ProvenanceDigest.inputsDigestHex(inputFiles, inputPaths, inputDirectories, jobId);
         JsonNode evidenceSnapshot = evidenceSnapshot(
                 snapshotMetadata(inputFiles, inputPaths),
                 automatedReviewReadinessReport,
                 answeredPractices,
-                reviewedArtifactId);
+                reviewedArtifactId,
+                admitted);
         Integer updated = transactionTemplate.execute(status -> jobRepository.updateProvenanceDigests(
                 jobId,
                 workerId,
@@ -987,7 +995,8 @@ public class AgentJobExecutor {
             Map<String, byte[]> inputFiles,
             @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
             List<AnsweredPractice> answeredPractices,
-            @Nullable Long reviewedArtifactId) {
+            @Nullable Long reviewedArtifactId,
+            @Nullable AgentJob admitted) {
         byte[] manifest = inputFiles.get(SandboxLayout.MANIFEST_PATH);
         byte[] practices = inputFiles.get(SandboxLayout.PRACTICES_PREFIX + "index.json");
         // Java null, not NullNode: NullNode serializes to the JSON value null, which is a non-SQL-NULL
@@ -1006,8 +1015,15 @@ public class AgentJobExecutor {
         if (!answeredPractices.isEmpty()) {
             snapshot.set("answeredPractices", objectMapper.valueToTree(answeredPractices));
         }
-        if (reviewedArtifactId != null) {
-            ReviewedWork.captured(manifest, inputFiles, reviewedArtifactId, objectMapper)
+        if (reviewedArtifactId != null && admitted != null) {
+            // The claimed job's own admission values: never the work or the job read again later.
+            ReviewedWork.captured(
+                            manifest,
+                            inputFiles,
+                            reviewedArtifactId,
+                            objectMapper,
+                            new ReviewedWork.AdmissionBasis(admitted.getCreatedAt(), admitted.getMetadata()),
+                            sourceCatalogs)
                     .ifPresent(work -> snapshot.set(ReviewedWork.SNAPSHOT_KEY, objectMapper.valueToTree(work)));
         }
         return snapshot;

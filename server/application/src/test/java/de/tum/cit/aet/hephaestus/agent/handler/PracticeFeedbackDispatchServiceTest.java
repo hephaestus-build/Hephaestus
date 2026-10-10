@@ -53,14 +53,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -175,6 +177,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .when(repository.claim(any(), any(), anyString(), any(), any(Integer.class), anyInt()))
                 .thenReturn(1);
         lenient().when(repository.beginWrite(any(), any(), anyString())).thenReturn(1);
+        lenient()
+                .when(policy.lockedReviewedRevision(any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT);
         lenient()
                 .when(repository.beginInlineWrite(any(), any(), anyString(), anyString()))
                 .thenReturn(1);
@@ -306,8 +311,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<Predicate<List<InlineFeedbackChannel.DeliveredSignal>>> fence =
-                ArgumentCaptor.forClass(Predicate.class);
+        ArgumentCaptor<Function<List<InlineFeedbackChannel.DeliveredSignal>, FeedbackDispatchStateMachine.Reservation>>
+                fence = ArgumentCaptor.forClass(Function.class);
         when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), fence.capture()))
                 .thenReturn(delivered(List.of()));
 
@@ -316,7 +321,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         var attempted = InlineFeedbackChannel.DeliveredSignal.attempted(
                 "k", FeedbackAnchor.DiffAnchor.singleLine("src/App.java", 3));
 
-        assertThat(fence.getValue().test(List.of(attempted))).isTrue();
+        assertThat(fence.getValue().apply(List.of(attempted)))
+                .isEqualTo(FeedbackDispatchStateMachine.Reservation.RESERVED);
         verify(repository)
                 .beginInlineWrite(
                         eq(dispatch.getId()),
@@ -325,7 +331,101 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                         argThat(placements -> placements.contains("\"writeMayHaveStarted\":true")));
         when(repository.beginInlineWrite(any(), any(), anyString(), anyString()))
                 .thenReturn(0);
-        assertThat(fence.getValue().test(List.of(attempted))).isFalse();
+        assertThat(fence.getValue().apply(List.of(attempted)))
+                .isEqualTo(FeedbackDispatchStateMachine.Reservation.LEASE_LOST);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = FeedbackSuppressionReason.class,
+            names = {
+                "ARTIFACT_CLOSED",
+                "ARTIFACT_MERGED",
+                "WORKSPACE_DELIVERY_PAUSED",
+                "RECIPIENT_OPTED_OUT",
+                "PUBLIC_SUBJECT_INELIGIBLE"
+            })
+    void shouldKeepTheExactPolicyRefusalAfterTheFinalSummaryLock(FeedbackSuppressionReason refusal) {
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        var finalCheck = new AtomicBoolean();
+        when(policy.lockedReviewedRevision(any(), any())).thenAnswer(invocation -> {
+            finalCheck.set(true);
+            return PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT;
+        });
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(invocation -> finalCheck.get()
+                        ? PracticeFeedbackDeliveryPolicy.Decision.suppressed(refusal)
+                        : PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(REVIEWED_HEAD)));
+
+        var result = dispatchAutomaticReview(job, "body", Set.of("practice"));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
+        assertThat(result.suppressionReason()).isEqualTo(refusal);
+        verify(repository, never()).beginWrite(any(), any(), anyString());
+        verify(channel, never()).postSummary(any(), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = FeedbackSuppressionReason.class,
+            names = {"ARTIFACT_CLOSED", "WORKSPACE_DELIVERY_PAUSED", "RECIPIENT_OPTED_OUT", "PUBLIC_SUBJECT_INELIGIBLE"
+            })
+    void shouldKeepTheExactPolicyRefusalAfterTheFinalApprovedSummaryLock(FeedbackSuppressionReason refusal) {
+        Feedback feedback = approvedFeedback();
+        when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
+                .thenReturn(
+                        Optional.of(approvedDispatch(FeedbackDispatchState.PENDING, feedback.getId(), false, null, 0)));
+        when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        var finalCheck = new AtomicBoolean();
+        when(policy.lockedReviewedRevision(any(), any())).thenAnswer(invocation -> {
+            finalCheck.set(true);
+            return PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT;
+        });
+        when(policy.evaluateAtEgress(any(), any(), any(), any()))
+                .thenAnswer(invocation -> finalCheck.get()
+                        ? PracticeFeedbackDeliveryPolicy.Decision.suppressed(refusal)
+                        : PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(REVIEWED_HEAD)));
+
+        var result = service.dispatchApproved(job, feedback);
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
+        assertThat(result.suppressionReason()).isEqualTo(refusal);
+        verify(repository, never()).beginWrite(any(), any(), anyString());
+        verify(channel, never()).postSummary(any(), any());
+    }
+
+    /** The early read saw the reviewed work; the final check under the work's lock is what decides. */
+    @ParameterizedTest
+    @EnumSource(
+            value = PracticeFeedbackDeliveryPolicy.ReviewedRevision.class,
+            names = {"CHANGED", "UNKNOWN"})
+    void shouldReserveNoInlineWriteWhenTheLockedCheckRefusesWhatTheEarlyReadAllowed(
+            PracticeFeedbackDeliveryPolicy.ReviewedRevision locked) {
+        var lineNotes = List.of(new ReviewResultParser.DiffNote("src/App.java", 3, null, "Split this.", "k", null));
+        dispatch = withPackage(
+                dispatch(job, FeedbackDispatchState.PENDING, false, 0, ""),
+                new ReviewResultParser.DeliveryContent(null, lineNotes, List.of(), List.of()));
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+        when(policy.lockedReviewedRevision(any(), any())).thenReturn(locked);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Function<List<InlineFeedbackChannel.DeliveredSignal>, FeedbackDispatchStateMachine.Reservation>>
+                fence = ArgumentCaptor.forClass(Function.class);
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), fence.capture()))
+                .thenReturn(delivered(List.of()));
+
+        service.dispatchAutomaticPackage(
+                job, new ReviewResultParser.DeliveryContent(null, lineNotes, List.of(), List.of()), Set.of("practice"));
+
+        assertThat(fence.getValue()
+                        .apply(List.of(InlineFeedbackChannel.DeliveredSignal.attempted(
+                                "k", FeedbackAnchor.DiffAnchor.singleLine("src/App.java", 3)))))
+                .isEqualTo(
+                        locked == PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED
+                                ? FeedbackDispatchStateMachine.Reservation.STALE
+                                : FeedbackDispatchStateMachine.Reservation.UNKNOWN);
+        verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
     }
 
     @Test
@@ -343,8 +443,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(dispatch));
         when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), any()))
                 .thenReturn(
-                        new DiffNotePoster.DiffNoteResult(List.of(), false, true, false, false, false, List.of()),
-                        new DiffNotePoster.DiffNoteResult(List.of(), false, false, false, false, false, List.of()));
+                        new DiffNotePoster.DiffNoteResult(List.of(), false, true, false, false, false, List.of(), null),
+                        new DiffNotePoster.DiffNoteResult(
+                                List.of(), false, false, false, false, false, List.of(), null));
         var content = new ReviewResultParser.DeliveryContent(null, lineNotes, List.of(), List.of());
 
         var unconfirmed = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
@@ -699,7 +800,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 "thread-ref");
         when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), any()))
                 .thenReturn(
-                        new DiffNotePoster.DiffNoteResult(List.of(), false, false, false, false, false, List.of()),
+                        new DiffNotePoster.DiffNoteResult(
+                                List.of(), false, false, false, false, false, List.of(), null),
                         delivered(List.of(deliveredSignal)));
 
         var incomplete = service.dispatchApproved(job, feedback);
@@ -888,7 +990,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any(), any()))
                 .thenReturn(
                         new DiffNotePoster.DiffNoteResult(
-                                List.of(landed, refused), false, false, false, false, false, List.of()),
+                                List.of(landed, refused), false, false, false, false, false, List.of(), null),
                         delivered(List.of(landed, retried)));
 
         var incomplete = service.dispatchApproved(job, feedback);
@@ -1157,8 +1259,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
         var result = service.dispatchApproved(job, feedback);
 
-        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
-        assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.APPROVAL_STALE);
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        assertThat(result.suppressionReason()).isNull();
         verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
     }
 
@@ -1273,7 +1375,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(diffNotePoster.deliverPackage(
                         eq(job), any(), eq(TWO_LINE_NOTES), any(), reviewedRevision.capture(), any()))
                 .thenReturn(new DiffNotePoster.DiffNoteResult(
-                        List.of(found, refused), false, false, false, true, false, List.of()));
+                        List.of(found, refused), false, false, false, true, false, List.of(), null));
 
         var result = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
 
@@ -1301,7 +1403,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(dispatch));
         when(diffNotePoster.deliverPackage(eq(job), any(), eq(TWO_LINE_NOTES), any(), any(), any()))
                 .thenReturn(new DiffNotePoster.DiffNoteResult(
-                        List.of(unknown, refused), false, true, false, true, false, List.of()));
+                        List.of(unknown, refused), false, true, false, true, false, List.of(), null));
 
         var result = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
 
@@ -1360,7 +1462,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(diffNotePoster.deliverPackage(
                         eq(job), any(), eq(APPROVED_LINE_NOTES), any(), reviewedRevision.capture(), any()))
                 .thenReturn(new DiffNotePoster.DiffNoteResult(
-                        List.of(landed, refused), false, false, false, true, false, List.of()));
+                        List.of(landed, refused), false, false, false, true, false, List.of(), null));
 
         when(policy.currentReviewedRevision(job, recorded))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
@@ -1382,7 +1484,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
     /** Every note acknowledged: what the poster returns for a package it fully delivered or found. */
     private static DiffNotePoster.DiffNoteResult delivered(List<InlineFeedbackChannel.DeliveredSignal> signals) {
-        return new DiffNotePoster.DiffNoteResult(signals, true, false, false, false, false, List.of());
+        return new DiffNotePoster.DiffNoteResult(signals, true, false, false, false, false, List.of(), null);
     }
 
     /** A proposal approved as line notes alone: it has no summary, so its body is absent. */

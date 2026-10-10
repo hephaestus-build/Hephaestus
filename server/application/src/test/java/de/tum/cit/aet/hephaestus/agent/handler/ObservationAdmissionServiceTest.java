@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -26,6 +28,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -101,6 +104,9 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     @Mock
     private ObjectProvider<InAppSupportReader> supportReaders;
 
+    @Mock
+    private PullRequestRepository pullRequests;
+
     private ObservationAdmissionService service;
     private AgentJob job;
     private ObservationAdmissionService.AdmissionIdentity identity;
@@ -137,7 +143,8 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                 evidenceFiles,
                 publicEligibility,
                 reviewHistory,
-                supportReaders);
+                supportReaders,
+                pullRequests);
         lenient().when(supportReaders.getIfAvailable()).thenReturn(supportReader);
         job = new AgentJob();
         job.setId(UUID.randomUUID());
@@ -210,7 +217,8 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                         evidenceFiles,
                         publicEligibility,
                         reviewHistory,
-                        readers)
+                        readers,
+                        pullRequests)
                 .admit(identity, mapper.createArrayNode());
     }
 
@@ -643,5 +651,90 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                         .path("anchorable")
                         .asBoolean())
                 .isFalse();
+    }
+
+    private ObjectNode reviewedTarget(long pullRequestId) {
+        return mapper.createObjectNode()
+                .put("pull_request_id", pullRequestId)
+                .put("repository_id", 7L)
+                .put("repository_full_name", "org/repo")
+                .put("pr_number", 12);
+    }
+
+    @Test
+    void shouldLockThePreparedPullRequestBeforeTheJobAndAdmitAnUnchangedTarget() {
+        job.setMetadata(reviewedTarget(42L));
+
+        service.admit(identity, mapper.createArrayNode());
+
+        var order = inOrder(pullRequests, prepared);
+        order.verify(pullRequests).lockById(42L);
+        order.verify(prepared).record(job);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"pull_request_id", "repository_id", "repository_full_name", "pr_number"})
+    void shouldRefuseATargetThatChangedWhileThePullRequestLockWasAwaited(String field) {
+        job.setMetadata(reviewedTarget(42L));
+        when(Objects.requireNonNull(handlers.get(AgentJobType.PULL_REQUEST_REVIEW))
+                        .prepareObservations(any(), any()))
+                .thenAnswer(invocation -> {
+                    ObjectNode changed = reviewedTarget(42L);
+                    if (field.equals("repository_full_name")) {
+                        changed.put(field, "org/other");
+                    } else {
+                        changed.put(field, 43L);
+                    }
+                    job.setMetadata(changed);
+                    return prepared;
+                });
+
+        assertThatThrownBy(() -> service.admit(identity, mapper.createArrayNode()))
+                .isInstanceOf(ObservationAdmissionService.StaleAttemptException.class);
+
+        verify(pullRequests).lockById(42L);
+        verify(prepared, never()).record(any());
+    }
+
+    @Test
+    void shouldRefuseATargetMovedToAnotherWorkspaceWhileThePullRequestLockWasAwaited() {
+        job.setMetadata(reviewedTarget(42L));
+        when(Objects.requireNonNull(handlers.get(AgentJobType.PULL_REQUEST_REVIEW))
+                        .prepareObservations(any(), any()))
+                .thenAnswer(invocation -> {
+                    Workspace other = new Workspace();
+                    other.setId(2L);
+                    job.setWorkspace(other);
+                    return prepared;
+                });
+
+        assertThatThrownBy(() -> service.admit(identity, mapper.createArrayNode()))
+                .isInstanceOf(ObservationAdmissionService.StaleAttemptException.class);
+
+        verify(prepared, never()).record(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"18446744073709551616", "\"42\"", "0", "-1", "4.2", "null"})
+    void shouldLockNothingForAPullRequestIdThatIsNotAPositiveLong(String id) {
+        ObjectNode metadata = reviewedTarget(42L);
+        metadata.set("pull_request_id", mapper.readTree(id));
+        job.setMetadata(metadata);
+
+        service.admit(identity, mapper.createArrayNode());
+
+        verify(pullRequests, never()).lockById(anyLong());
+        verify(prepared).record(job);
+    }
+
+    @Test
+    void shouldLockNothingForAnotherJobType() {
+        job.setJobType(AgentJobType.ISSUE_REVIEW);
+        job.setMetadata(reviewedTarget(42L));
+
+        service.admit(identity, mapper.createArrayNode());
+
+        verify(pullRequests, never()).lockById(anyLong());
+        verify(prepared).record(job);
     }
 }

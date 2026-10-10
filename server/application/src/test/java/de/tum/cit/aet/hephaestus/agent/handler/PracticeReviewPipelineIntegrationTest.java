@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
@@ -342,8 +343,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 null,
                 "feature/pipeline",
                 "main",
-                "pipelinesha",
-                "basesha",
+                HEAD_SHA,
+                BASE_SHA,
                 null,
                 null // mergeCommitSha
                 );
@@ -373,7 +374,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         metadata.put("repository_full_name", "org/pipeline-repo");
         metadata.put("pr_number", 50);
         metadata.put("pr_url", "https://github.com/org/pipeline-repo/pull/50");
-        metadata.put("commit_sha", "pipelinesha");
+        metadata.put("commit_sha", HEAD_SHA);
         metadata.put("source_branch", "feature/pipeline");
         metadata.put("target_branch", "main");
         metadata.put("title", "Pipeline Test PR");
@@ -395,7 +396,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     /** The provider accounts for every line note of a package without returning a handle to record. */
     private void stubInlinePackageDelivered() {
         when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), any()))
-                .thenReturn(new DiffNotePoster.DiffNoteResult(List.of(), true, false, false, false, false, List.of()));
+                .thenReturn(new DiffNotePoster.DiffNoteResult(
+                        List.of(), true, false, false, false, false, List.of(), null));
     }
 
     @Autowired
@@ -982,16 +984,31 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
     private ObjectNode evidenceSnapshot(Practice... practices) {
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(OBJECT_MAPPER);
+        ObjectNode core = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null);
         addArtifact(
                 snapshot,
-                EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null),
+                core,
                 "context/metadata.json",
-                "{\"body\":\"Test body\"}");
+                OBJECT_MAPPER
+                        .createObjectNode()
+                        .put("title", "Pipeline Test PR")
+                        .put("body", "Test body")
+                        .put("commit_sha", HEAD_SHA)
+                        .toString());
+        addArtifact(snapshot, core, PullRequestContentSource.DESCRIPTION_FILE, "Test body");
         addArtifact(
                 snapshot,
                 EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", BASE_SHA + ":" + HEAD_SHA),
                 PullRequestContentSource.CHANGE_FILE,
                 "{\"base_sha\":\"" + BASE_SHA + "\",\"head_sha\":\"" + HEAD_SHA + "\"}");
+        snapshot.set(
+                ReviewedWork.SNAPSHOT_KEY,
+                OBJECT_MAPPER.valueToTree(ReviewedWork.captured(
+                                OBJECT_MAPPER.writeValueAsBytes(snapshot.path("manifest")),
+                                capturedFiles,
+                                prId,
+                                OBJECT_MAPPER)
+                        .orElseThrow()));
         for (Practice practice : practices) {
             EvidenceSnapshotFixtures.admittedPractice(
                     snapshot,
@@ -1005,7 +1022,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
         capturedFiles.put(path, bytes);
         EvidenceSnapshotFixtures.artifact(snapshot, source, path, ProvenanceDigest.sha256Hex(bytes))
-                .put("mediaType", "application/json")
+                .put("mediaType", path.endsWith(".json") ? "application/json" : "text/markdown")
                 .put("bytes", bytes.length);
     }
 
@@ -1270,7 +1287,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         }
 
         private static DiffNotePoster.DiffNoteResult incomplete(DeliveredSignal... signals) {
-            return new DiffNotePoster.DiffNoteResult(List.of(signals), false, false, false, false, false, List.of());
+            return new DiffNotePoster.DiffNoteResult(
+                    List.of(signals), false, false, false, false, false, List.of(), null);
         }
 
         /** The observations bound to this job's feedback recorded in {@code state}. */
@@ -1449,8 +1467,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     null,
                     "feature/pipeline",
                     "main",
-                    "pipelinesha",
-                    "basesha",
+                    HEAD_SHA,
+                    BASE_SHA,
                     null,
                     null // mergeCommitSha
                     );

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.context.providers.DocumentContentSource;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
@@ -35,11 +36,13 @@ import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService.
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaults;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewSettings;
+import jakarta.persistence.EntityManager;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
@@ -49,6 +52,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
@@ -71,6 +75,9 @@ public class PracticeFeedbackDeliveryPolicy {
     private final PracticeRepository practiceRepository;
     private final FeedbackApprovalRepository approvalRepository;
     private final PublicReviewEligibility publicReviewEligibility;
+    private final ReviewedWorkChanges reviewedWorkChanges;
+
+    private final EntityManager entityManager;
 
     PracticeFeedbackDeliveryPolicy(
             IssueRepository issueRepository,
@@ -88,7 +95,11 @@ public class PracticeFeedbackDeliveryPolicy {
             ConversationSourceLiveness conversationSourceLiveness,
             ReviewMemberAiPolicy memberAiPolicy,
             DocumentProjection documentProjection,
-            PublicReviewEligibility publicReviewEligibility) {
+            PublicReviewEligibility publicReviewEligibility,
+            ReviewedWorkChanges reviewedWorkChanges,
+            EntityManager entityManager) {
+        this.entityManager = entityManager;
+        this.reviewedWorkChanges = reviewedWorkChanges;
         this.conversationSourceLiveness = conversationSourceLiveness;
         this.memberAiPolicy = memberAiPolicy;
         this.documentProjection = documentProjection;
@@ -740,7 +751,10 @@ public class PracticeFeedbackDeliveryPolicy {
             DeliveryPolicyFactsSnapshot facts) {}
 
     private static Optional<Long> integralId(@Nullable JsonNode metadata, String key) {
-        if (metadata == null || !metadata.path(key).isIntegralNumber()) {
+        if (metadata == null
+                || !metadata.path(key).isIntegralNumber()
+                || !metadata.path(key).canConvertToLong()
+                || metadata.path(key).asLong() <= 0) {
             return Optional.empty();
         }
         return Optional.of(metadata.path(key).asLong());
@@ -796,6 +810,54 @@ public class PracticeFeedbackDeliveryPolicy {
             return ReviewedRevision.UNKNOWN;
         }
         return reviewed.equals(head) ? ReviewedRevision.CURRENT : ReviewedRevision.CHANGED;
+    }
+
+    /** {@link #reviewedRevisionMatches}, keeping an unknown comparison apart from a proven change. */
+    static ReviewedRevision approvedRevision(Feedback feedback, AgentJob job, Decision<?> decision) {
+        return reviewedRevision(feedback.getReviewedRevision(), job, decision.artifact());
+    }
+
+    /**
+     * The final comparison before a new public write, under the work's row lock, which the caller's transaction holds
+     * until it commits: an admission or a mirror write on the same work is ordered before or after the reservation
+     * made under it. Nothing orders when the provider receives a request sent after that commit. The mirror is read
+     * again after the lock, and compared with the run's own authorized capture: its head and its title and
+     * description, since an unchanged head does not establish unchanged words. Earlier reads are pre-filters only.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ReviewedRevision lockedReviewedRevision(AgentJob job, @Nullable String proposalRevision) {
+        if (isIssueJob(job)) return ReviewedRevision.CURRENT;
+        long workspaceId = requireWorkspaceId(job);
+        JsonNode metadata = job.getMetadata();
+        Long pullRequestId = integralId(metadata, "pull_request_id").orElse(null);
+        if (pullRequestId == null
+                || pullRequestId <= 0
+                || pullRequestRepository.lockById(pullRequestId).isEmpty()) {
+            return ReviewedRevision.UNKNOWN;
+        }
+        PullRequest current = pullRequestRepository
+                .findByIdWithAuthorAndRepository(pullRequestId)
+                .orElse(null);
+        if (current == null) return ReviewedRevision.UNKNOWN;
+        // A pull request this session loaded before the lock would otherwise answer with what it read then.
+        entityManager.refresh(current);
+        if (!isEligibleTarget(current, metadata, "pr_number", workspaceId)) return ReviewedRevision.UNKNOWN;
+        var captured = reviewedWorkChanges
+                .deliverableCapture(workspaceId, job.getId(), pullRequestId)
+                .orElse(null);
+        if (captured == null
+                || !captured.head().equals(pinnedHead(job))
+                || (proposalRevision != null && !captured.head().equals(proposalRevision))) {
+            return ReviewedRevision.UNKNOWN;
+        }
+        String head = current.getHeadRefOid();
+        if (head == null || head.isBlank()) return ReviewedRevision.UNKNOWN;
+        if (!head.equals(captured.head())) return ReviewedRevision.CHANGED;
+        return captured.titleAndDescriptionRevision()
+                        .equals(ReviewedWork.revision(
+                                ArtifactKinds.PULL_REQUEST, current.getTitle(), current.getBody()))
+                ? ReviewedRevision.CURRENT
+                : ReviewedRevision.CHANGED;
     }
 
     /** How the commit a package was reviewed at compares with the work's current head. */

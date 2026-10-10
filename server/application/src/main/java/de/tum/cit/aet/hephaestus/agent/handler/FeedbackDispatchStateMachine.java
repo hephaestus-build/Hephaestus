@@ -19,6 +19,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -197,16 +199,70 @@ class FeedbackDispatchStateMachine {
         return retry(dispatch, owner, error, null, null, true, deliveredSignals(dispatch));
     }
 
+    /** What the final check before a new provider write decided, in the transaction that reserved it or did not. */
+    enum ReservationStatus {
+        RESERVED,
+        STALE,
+        UNKNOWN,
+        LEASE_LOST,
+        REFUSED
+    }
+
+    record Reservation(ReservationStatus status, @Nullable FeedbackSuppressionReason suppressionReason) {
+        static final Reservation RESERVED = new Reservation(ReservationStatus.RESERVED, null);
+        static final Reservation STALE = new Reservation(ReservationStatus.STALE, null);
+        static final Reservation UNKNOWN = new Reservation(ReservationStatus.UNKNOWN, null);
+        static final Reservation LEASE_LOST = new Reservation(ReservationStatus.LEASE_LOST, null);
+
+        Reservation {
+            Objects.requireNonNull(status);
+            if ((status == ReservationStatus.REFUSED) != (suppressionReason != null))
+                throw new IllegalArgumentException("Only a refused reservation carries a suppression reason");
+        }
+
+        static Reservation refused(FeedbackSuppressionReason reason) {
+            return new Reservation(ReservationStatus.REFUSED, Objects.requireNonNull(reason));
+        }
+
+        FeedbackSuppressionReason refusal() {
+            return Objects.requireNonNull(suppressionReason, "A refused reservation names its reason");
+        }
+    }
+
+    /**
+     * Compares the work with what was reviewed and, only when it is current, reserves the write, in one short
+     * transaction whose work lock {@code lockedRevision} takes first.
+     */
+    Reservation reserve(
+            Supplier<PracticeFeedbackDeliveryPolicy.Decision<PracticeFeedbackDeliveryPolicy.ReviewedRevision>>
+                    lockedRevision,
+            IntSupplier beginWrite) {
+        return Objects.requireNonNull(transactionTemplate.execute(status -> {
+            var decision = lockedRevision.get();
+            if (!decision.allowed()) return Reservation.refused(decision.refusal());
+            return switch (decision.target()) {
+                case CHANGED -> Reservation.STALE;
+                case UNKNOWN -> Reservation.UNKNOWN;
+                case CURRENT -> beginWrite.getAsInt() == 1 ? Reservation.RESERVED : Reservation.LEASE_LOST;
+            };
+        }));
+    }
+
     /**
      * Records, before an inline create request leaves, the receipt of every note of the package: what the request
-     * carries as unconfirmed, what is known, what was proven not created. False once the lease is lost, so nothing is
-     * sent.
+     * carries as unconfirmed, what is known, what was proven not created. Anything but {@link Reservation#RESERVED}
+     * means nothing is sent.
      */
-    boolean recordInlineAttempt(FeedbackDispatch dispatch, String owner, List<DeliveredSignal> receipt) {
+    Reservation recordInlineAttempt(
+            FeedbackDispatch dispatch,
+            String owner,
+            List<DeliveredSignal> receipt,
+            Supplier<PracticeFeedbackDeliveryPolicy.Decision<PracticeFeedbackDeliveryPolicy.ReviewedRevision>>
+                    lockedRevision) {
         String placements = deliveredSignalsJson(receipt);
-        Integer began = transactionTemplate.execute(
-                status -> repository.beginInlineWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner, placements));
-        return began != null && began == 1;
+        return reserve(
+                lockedRevision,
+                () -> repository.beginInlineWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner, placements));
     }
 
     /**

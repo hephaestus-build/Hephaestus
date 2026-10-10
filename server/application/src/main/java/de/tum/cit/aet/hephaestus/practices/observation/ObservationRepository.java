@@ -35,6 +35,15 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Repository
 public interface ObservationRepository extends JpaRepository<Observation, UUID> {
+    /** Native entity reads must include Hibernate's derived field as well as the stored columns. */
+    String OBSERVATION_SELECT = """
+        SELECT f.*, (SELECT j.created_at FROM agent_job j
+          WHERE j.id = f.agent_job_id AND j.workspace_id = f.workspace_id
+            AND f.origin <> 'BACKFILL' AND
+        """ + Observation.OCCASION_SCOPE + """
+          ) AS "occasionAt" FROM observation f
+        """;
+
     /** Lock the issue while publishing so a later mirror transition must retire these rows. */
     @Query(value = """
         SELECT i.review_snapshot_id FROM issue i
@@ -699,8 +708,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     AND f2.artifact_id = f.artifact_id
                     AND f2.origin <> 'BACKFILL'
                     AND f2.superseded_at IS NULL
-            """ + VALID_LATEST_RUN_GUARD + """
-                  ORDER BY f2.observed_at DESC, f2.agent_job_id DESC
+            """ + VALID_LATEST_RUN_GUARD + LATEST_RUN_ORDER + """
                   LIMIT 1
               )
             GROUP BY p.slug, p.name
@@ -725,6 +733,18 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("workspaceId") Long workspaceId);
 
     /**
+     * The order {@link LatestRun#of} applies, over the candidate run aliased {@code f2}: its proved occasion
+     * ({@link Observation#OCCASION_SCOPE}), else its completion, then
+     * completion, then job id.
+     */
+    String LATEST_RUN_ORDER = """
+                   ORDER BY COALESCE((SELECT j.created_at FROM agent_job j
+                       WHERE j.id = f2.agent_job_id AND j.workspace_id = f2.workspace_id
+                         AND f2.origin <> 'BACKFILL' AND""" + " " + Observation.OCCASION_SCOPE + """
+                   ), f2.observed_at) DESC, f2.observed_at DESC, f2.agent_job_id DESC
+        """;
+
+    /**
      * The run that speaks for the claim of the observation aliased {@code f}: the newest run that recorded this
      * practice about this developer on this work within one origin class, and still stands, not superseded and not
      * invalidated. It is the rule {@link LatestRun#perClaim} applies in memory; native because it needs
@@ -733,24 +753,26 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     String LATEST_RUN_OF_CLAIM = """
                   (SELECT f2.agent_job_id FROM observation f2
                    WHERE f2.practice_id = f.practice_id
+                     AND f2.workspace_id = f.workspace_id
                      AND f2.about_user_id = f.about_user_id
                      AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
                      AND (f2.origin = 'BACKFILL') = (f.origin = 'BACKFILL')
                      AND f2.superseded_at IS NULL
-        """ + VALID_LATEST_RUN_GUARD + """
-                   ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1)
+        """ + VALID_LATEST_RUN_GUARD + LATEST_RUN_ORDER + """
+                   LIMIT 1)
         """;
 
     /** {@link #LATEST_RUN_OF_CLAIM} over live runs alone: the run {@link LatestRun#perLiveClaim} keeps. */
     String LATEST_LIVE_RUN_OF_CLAIM = """
                   (SELECT f2.agent_job_id FROM observation f2
                    WHERE f2.practice_id = f.practice_id
+                     AND f2.workspace_id = f.workspace_id
                      AND f2.about_user_id = f.about_user_id
                      AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
                      AND f2.origin = 'LIVE'
                      AND f2.superseded_at IS NULL
-        """ + VALID_LATEST_RUN_GUARD + """
-                   ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1)
+        """ + VALID_LATEST_RUN_GUARD + LATEST_RUN_ORDER + """
+                   LIMIT 1)
         """;
 
     /**
@@ -767,8 +789,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * carries the class through so a surface can label a backfilled item rather than pass it off as live.
      */
     @Query(
-            value = """
-                    SELECT f.* FROM observation f
+            value = OBSERVATION_SELECT + """
                     JOIN practice p ON p.id = f.practice_id
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
@@ -776,7 +797,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
               AND f.superseded_at IS NULL
               AND f.observed_at >= :since
               AND f.outcome IN (:outcomes)
-              AND f.agent_job_id =""" + LATEST_RUN_OF_CLAIM + """
+              AND f.agent_job_id =""" + LATEST_RUN_OF_CLAIM
+                    + """
             ORDER BY f.observed_at DESC
             """,
             nativeQuery = true)
@@ -793,14 +815,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * superseded; the earlier result stays true of the work as it was. Every status.
      */
     @Query(
-            value = """
-                    SELECT f.* FROM observation f
+            value = OBSERVATION_SELECT + """
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
             """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
               AND f.superseded_at IS NULL
               AND f.observed_at >= :since
-              AND f.agent_job_id <>""" + LATEST_RUN_OF_CLAIM + """
+              AND f.agent_job_id <>""" + LATEST_RUN_OF_CLAIM
+                    + """
             ORDER BY f.observed_at DESC, f.agent_job_id DESC, f.id DESC
             """,
             nativeQuery = true)
@@ -811,8 +833,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             Pageable pageable);
 
     /** Full person history for a job folder, with the existing repository and claim visibility guards. */
-    @Query(value = """
-            SELECT f.* FROM observation f
+    @Query(value = OBSERVATION_SELECT + """
             WHERE f.about_user_id = :aboutUserId AND f.workspace_id = :workspaceId
             """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
               AND f.superseded_at IS NULL AND f.outcome IN ('MET', 'NOT_MET')
@@ -829,8 +850,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * has moved on from since it was reviewed ({@code superseded_at}) or an admin invalidated, as every developer
      * surface does.
      */
-    @Query(value = """
-                    SELECT f.* FROM observation f
+    @Query(value = OBSERVATION_SELECT + """
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
             """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
@@ -849,8 +869,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * {@link #findByDeveloperAndWorkspaceBetween} for several developers of the workspace at once, under the same
      * guards, for the caller to partition by {@code about_user_id}. The caller passes at least one developer.
      */
-    @Query(value = """
-                    SELECT f.* FROM observation f
+    @Query(value = OBSERVATION_SELECT + """
                     WHERE f.workspace_id = :workspaceId
                       AND f.about_user_id IN (:developerIds)
             """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
@@ -872,14 +891,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * the rows a standing reads. The caller passes at least one developer.
      */
     @Query(
-            value = """
-                    SELECT f.* FROM observation f
+            value = OBSERVATION_SELECT + """
                     WHERE f.workspace_id = :workspaceId
                       AND f.about_user_id IN (:developerIds)
             """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
               AND f.superseded_at IS NULL
               AND f.observed_at >= :since
-              AND (f.agent_job_id =""" + LATEST_RUN_OF_CLAIM + """
+              AND (f.agent_job_id =""" + LATEST_RUN_OF_CLAIM
+                    + """
                    OR (f.origin = 'LIVE' AND f.agent_job_id ="""
                     + LATEST_LIVE_RUN_OF_CLAIM + """
                   ))

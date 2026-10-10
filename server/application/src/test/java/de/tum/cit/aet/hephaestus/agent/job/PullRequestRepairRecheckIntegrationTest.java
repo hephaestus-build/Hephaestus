@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -34,12 +35,16 @@ import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.PracticeFeedbackDeliveryPolicy;
+import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ReplaceableReviewCoverage;
+import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppSupportReader;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -114,6 +119,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
@@ -138,15 +144,18 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.task.support.TaskExecutorAdapter;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -158,6 +167,7 @@ import tools.jackson.databind.node.ObjectNode;
  * A merge request whose author answered a problem — by editing the description or pushing — is reviewed again
  * for that problem's practice once the burst settles, through the real ledger, gate and admission.
  */
+@MockitoSpyBean(types = {PullRequestReviewHandler.class, InAppSupportReader.class})
 class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
     private static final String REPO = "org/repair-repo";
@@ -218,6 +228,12 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private ObservationAdmissionService admissionService;
+
+    @Autowired
+    private PullRequestReviewHandler admissionHandler;
+
+    @Autowired
+    private PracticeFeedbackDeliveryPolicy deliveryPolicy;
 
     @Autowired
     private JobTypeHandlerRegistry handlerRegistry;
@@ -1325,6 +1341,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                     mock(LlmUsageRecorder.class),
                     budgets,
                     null,
+                    mock(ArtifactSourceCatalogRegistry.class),
                     Optional.empty(),
                     Optional.empty());
             assertThat(executor.processJob(repair.getId())).isTrue();
@@ -1509,6 +1526,148 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         }
 
         assertThat(ReviewRunOutcome.fromJobOutput(job(older).getOutput())).isEqualTo(ReviewRunOutcome.SUPERSEDED);
+    }
+
+    @Test
+    void shouldPublishAfterTheCoalescerLocksTheNewestRunningReviewWithoutInvertingTheWorkLock() throws Exception {
+        practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        push(NEXT_HEAD);
+        settle(pr);
+        AgentJob newest = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        newest.setStatus(AgentJobStatus.RUNNING);
+        newest.setWorkerId("admission-lock-worker");
+        agentJobRepository.saveAndFlush(newest);
+        var prepared = new CountDownLatch(1);
+        var mirrorHeld = new CountDownLatch(1);
+        doAnswer(invocation -> {
+                    prepared.countDown();
+                    awaitUninterruptibly(mirrorHeld);
+                    return (PreparedObservations) admitted -> {};
+                })
+                .when(admissionHandler)
+                .prepareObservations(
+                        ArgumentMatchers.argThat(candidate -> candidate.getId().equals(newest.getId())), any());
+        try (ExecutorService threads = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<?> publishing = threads.submit(() -> admissionService.admit(
+                    new ObservationAdmissionService.AdmissionIdentity(
+                            newest.getId(), workspace.getId(), 0, "admission-lock-worker"),
+                    MAPPER.createArrayNode()));
+            awaitUninterruptibly(prepared);
+            Future<?> replacing = threads.submit(() -> transactions.executeWithoutResult(status -> {
+                assertThat(pullRequestRepository.lockById(pr.getId())).isPresent();
+                mirrorHeld.countDown();
+                try {
+                    assertThat(aBackendWaitsOnALock()).isTrue();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                coalescer.replaceCovered(workspace.getId(), pr.getId());
+            }));
+            replacing.get(30, TimeUnit.SECONDS);
+            publishing.get(30, TimeUnit.SECONDS);
+        } finally {
+            mirrorHeld.countDown();
+        }
+        assertThat(ObservationAdmissionService.isAdmitted(job(newest))).isTrue();
+        assertThat(job(newest).getStatus()).isEqualTo(AgentJobStatus.RUNNING);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"pull_request_id", "repository_id"})
+    void shouldRejectAnImmutableTargetChangedBetweenPreparationAndPublication(String field) throws Exception {
+        practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        push(NEXT_HEAD);
+        settle(pr);
+        AgentJob newest = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        newest.setStatus(AgentJobStatus.RUNNING);
+        newest.setWorkerId("target-race-worker");
+        agentJobRepository.saveAndFlush(newest);
+        var prepared = new CountDownLatch(1);
+        var changed = new CountDownLatch(1);
+        var published = new AtomicBoolean();
+        doAnswer(invocation -> {
+                    prepared.countDown();
+                    awaitUninterruptibly(changed);
+                    return (PreparedObservations) admitted -> published.set(true);
+                })
+                .when(admissionHandler)
+                .prepareObservations(
+                        ArgumentMatchers.argThat(candidate -> candidate.getId().equals(newest.getId())), any());
+        try (ExecutorService threads = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<?> publishing = threads.submit(() -> assertThatThrownBy(() -> admissionService.admit(
+                            new ObservationAdmissionService.AdmissionIdentity(
+                                    newest.getId(), workspace.getId(), 0, "target-race-worker"),
+                            MAPPER.createArrayNode()))
+                    .isInstanceOf(ObservationAdmissionService.StaleAttemptException.class));
+            awaitUninterruptibly(prepared);
+            transactions.executeWithoutResult(status -> {
+                AgentJob current = agentJobRepository
+                        .findByIdWithWorkspaceForUpdate(newest.getId())
+                        .orElseThrow();
+                ObjectNode metadata = (ObjectNode)
+                        Objects.requireNonNull(current.getMetadata()).deepCopy();
+                metadata.put(field, metadata.path(field).asLong() + 1);
+                current.setMetadata(metadata);
+                agentJobRepository.saveAndFlush(current);
+            });
+            changed.countDown();
+            publishing.get(30, TimeUnit.SECONDS);
+        } finally {
+            changed.countDown();
+        }
+        assertThat(published).isFalse();
+        assertThat(ObservationAdmissionService.isAdmitted(job(newest))).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"title", "body"})
+    void shouldRefreshTheCachedMirrorUnderThePublicWriteLock(String field) throws Exception {
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        var monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(workspace);
+        monitor.setNameWithOwner(REPO);
+        monitors.saveAndFlush(monitor);
+        AgentJob reviewed = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        ObjectNode metadata =
+                (ObjectNode) Objects.requireNonNull(reviewed.getMetadata()).deepCopy();
+        metadata.put("repository_id", repository.getId())
+                .put("repository_full_name", REPO)
+                .put("commit_sha", HEAD)
+                .put("pr_number", pr.getNumber());
+        reviewed.setMetadata(metadata);
+        agentJobRepository.saveAndFlush(reviewed);
+        var cached = new CountDownLatch(1);
+        var edited = new CountDownLatch(1);
+        try (ExecutorService threads = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<PracticeFeedbackDeliveryPolicy.ReviewedRevision> reading =
+                    threads.submit(() -> transactions.execute(status -> {
+                        PullRequest before = pullRequestRepository
+                                .findByIdWithAuthorAndRepository(pr.getId())
+                                .orElseThrow();
+                        assertThat(before.getHeadRefOid()).isEqualTo(HEAD);
+                        cached.countDown();
+                        awaitUninterruptibly(edited);
+                        return deliveryPolicy.lockedReviewedRevision(reviewed, null);
+                    }));
+            awaitUninterruptibly(cached);
+            transactions.executeWithoutResult(status -> {
+                assertThat(pullRequestRepository.lockById(pr.getId())).isPresent();
+                PullRequest changed = pullRequestRepository
+                        .findByIdWithAuthorAndRepository(pr.getId())
+                        .orElseThrow();
+                if (field.equals("title")) changed.setTitle("A newer title");
+                else changed.setBody("A newer description");
+                pullRequestRepository.saveAndFlush(changed);
+            });
+            edited.countDown();
+            assertThat(reading.get(30, TimeUnit.SECONDS))
+                    .isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
+        } finally {
+            edited.countDown();
+        }
     }
 
     /** Whichever locks the queued row first decides it; the other leaves it alone. */

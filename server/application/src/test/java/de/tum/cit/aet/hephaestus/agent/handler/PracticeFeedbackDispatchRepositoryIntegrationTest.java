@@ -4,10 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluation;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluationRepository;
@@ -25,15 +32,20 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +53,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -63,6 +77,21 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private FeedbackDispatchStateMachine stateMachine;
+
+    @Autowired
+    private PracticeFeedbackDeliveryPolicy deliveryPolicy;
+
+    @Autowired
+    private PullRequestRepository pullRequests;
+
+    @Autowired
+    private RepositoryRepository repositories;
+
+    @Autowired
+    private RepositoryToMonitorRepository monitors;
+
     private Workspace workspace;
     private UUID jobId;
     private Long ownerId;
@@ -80,6 +109,154 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
         job.setStatus(AgentJobStatus.COMPLETED);
         job.setConfigSnapshot(JsonNodeFactory.instance.objectNode());
         jobId = jobRepository.saveAndFlush(job).getId();
+    }
+
+    @Test
+    void shouldReserveBeforeALaterMirrorWriteAndKeepTheWorkLockUntilTheReceiptCommits() throws Exception {
+        var work = reviewedPullRequest();
+        AgentJob job = jobRepository.findById(jobId).orElseThrow();
+        UUID dispatchId = insertDispatch(workspace.getId(), jobId, "work-reservation-race");
+        assertThat(claim(dispatchId, "reserving", Instant.now().plusSeconds(60)))
+                .isEqualTo(1);
+        var checked = new CountDownLatch(1);
+        var writing = new CountDownLatch(1);
+        try (var threads = Executors.newVirtualThreadPerTaskExecutor()) {
+            var reservation = threads.submit(() -> stateMachine.reserve(
+                    () -> {
+                        var revision = deliveryPolicy.lockedReviewedRevision(job, null);
+                        checked.countDown();
+                        await(writing);
+                        Integer holder = jdbcTemplate.queryForObject("SELECT pg_backend_pid()", Integer.class);
+                        Awaitility.await()
+                                .atMost(Duration.ofSeconds(10))
+                                .untilAsserted(() -> assertThat(jdbcTemplate.queryForObject(
+                                                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity a WHERE ? = ANY(pg_blocking_pids(a.pid)))",
+                                                Boolean.class,
+                                                holder))
+                                        .isTrue());
+                        return PracticeFeedbackDeliveryPolicy.Decision.allowed(revision);
+                    },
+                    () -> dispatchRepository.beginWrite(dispatchId, workspace.getId(), "reserving")));
+            var writer = threads.submit(() -> {
+                await(checked);
+                writing.countDown();
+                transactions.executeWithoutResult(status -> {
+                    assertThat(pullRequests.lockById(work.getId())).isPresent();
+                    assertThat(jdbcTemplate.queryForObject(
+                                    "SELECT write_started FROM feedback_dispatch WHERE id = ?",
+                                    Boolean.class,
+                                    dispatchId))
+                            .isTrue();
+                    jdbcTemplate.update("UPDATE issue SET body = 'New description' WHERE id = ?", work.getId());
+                });
+            });
+            assertThat(reservation.get(30, TimeUnit.SECONDS))
+                    .isEqualTo(FeedbackDispatchStateMachine.Reservation.RESERVED);
+            writer.get(30, TimeUnit.SECONDS);
+        } finally {
+            checked.countDown();
+            writing.countDown();
+        }
+        var revision = transactions.execute(status -> deliveryPolicy.lockedReviewedRevision(job, null));
+        assertThat(revision).isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
+    }
+
+    @Test
+    void shouldReserveNothingAfterAMirrorWriteWinsTheWorkLock() throws Exception {
+        var work = reviewedPullRequest();
+        AgentJob job = jobRepository.findById(jobId).orElseThrow();
+        UUID dispatchId = insertDispatch(workspace.getId(), jobId, "mirror-reservation-race");
+        assertThat(claim(dispatchId, "reserving", Instant.now().plusSeconds(60)))
+                .isEqualTo(1);
+        var held = new CountDownLatch(1);
+        var waiting = new CountDownLatch(1);
+        try (var threads = Executors.newVirtualThreadPerTaskExecutor()) {
+            var writer = threads.submit(() -> transactions.executeWithoutResult(status -> {
+                assertThat(pullRequests.lockById(work.getId())).isPresent();
+                jdbcTemplate.update("UPDATE issue SET body = 'New description' WHERE id = ?", work.getId());
+                held.countDown();
+                await(waiting);
+                Integer holder = jdbcTemplate.queryForObject("SELECT pg_backend_pid()", Integer.class);
+                Awaitility.await()
+                        .atMost(Duration.ofSeconds(10))
+                        .untilAsserted(() -> assertThat(jdbcTemplate.queryForObject(
+                                        "SELECT EXISTS(SELECT 1 FROM pg_stat_activity a WHERE ? = ANY(pg_blocking_pids(a.pid)))",
+                                        Boolean.class,
+                                        holder))
+                                .isTrue());
+            }));
+            var reservation = threads.submit(() -> {
+                await(held);
+                waiting.countDown();
+                return stateMachine.reserve(
+                        () -> PracticeFeedbackDeliveryPolicy.Decision.allowed(
+                                deliveryPolicy.lockedReviewedRevision(job, null)),
+                        () -> dispatchRepository.beginWrite(dispatchId, workspace.getId(), "reserving"));
+            });
+            writer.get(30, TimeUnit.SECONDS);
+            assertThat(reservation.get(30, TimeUnit.SECONDS)).isEqualTo(FeedbackDispatchStateMachine.Reservation.STALE);
+        } finally {
+            held.countDown();
+            waiting.countDown();
+        }
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT write_started FROM feedback_dispatch WHERE id = ?", Boolean.class, dispatchId))
+                .isFalse();
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(30, TimeUnit.SECONDS)) throw new IllegalStateException("Race latch timed out");
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(interrupted);
+        }
+    }
+
+    private PullRequest reviewedPullRequest() {
+        var mapper = JsonMapper.builder().build();
+        var repository = new Repository();
+        repository.setProvider(ensureGitHubProvider());
+        repository.setNativeId(70201L);
+        repository.setName("reservation");
+        repository.setNameWithOwner("dispatch-org/reservation");
+        repository = repositories.saveAndFlush(repository);
+        var monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(workspace);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitors.saveAndFlush(monitor);
+        var work = new PullRequest();
+        work.setProvider(repository.getProvider());
+        work.setNativeId(70202L);
+        work.setRepository(repository);
+        work.setNumber(1);
+        work.setState(Issue.State.OPEN);
+        work.setTitle("Original title");
+        work.setBody("Original description");
+        work.setHeadRefOid("b".repeat(40));
+        work = pullRequests.saveAndFlush(work);
+        AgentJob job = jobRepository.findById(jobId).orElseThrow();
+        job.setMetadata(mapper.createObjectNode()
+                .put("pull_request_id", work.getId())
+                .put("repository_id", repository.getId())
+                .put("repository_full_name", repository.getNameWithOwner())
+                .put("pr_number", work.getNumber())
+                .put("commit_sha", work.getHeadRefOid()));
+        var manifest = ReviewedWorkFixtures.pullRequestManifest(Instant.now(), work.getBody(), work.getHeadRefOid());
+        var capture = ReviewedWork.captured(
+                        mapper.writeValueAsBytes(manifest),
+                        Map.of(
+                                "context/metadata.json",
+                                ReviewedWorkFixtures.metadata(
+                                        mapper, work.getTitle(), work.getBody(), work.getHeadRefOid())),
+                        work.getId(),
+                        mapper)
+                .orElseThrow();
+        job.setEvidenceSnapshot(mapper.createObjectNode().set("manifest", mapper.valueToTree(manifest)));
+        ((ObjectNode) Objects.requireNonNull(job.getEvidenceSnapshot()))
+                .set(ReviewedWork.SNAPSHOT_KEY, mapper.valueToTree(capture));
+        jobRepository.saveAndFlush(job);
+        return work;
     }
 
     @Test
