@@ -87,6 +87,7 @@ class CatalogFalseLapseLineTest extends BaseUnitTest {
             changes-dependencies-deliberately | a package name supplies no reason | A package name or an edit label is not a reason
             handles-errors-instead-of-swallowing-them | a fixed valid URL drops no runtime failure | A valid fixed URL has no runtime-dependent parse failure
             handles-errors-instead-of-swallowing-them | runtime input and transport can fail | Do not extend this exception to a URL from runtime input, or to a network request that uses the URL.
+            handles-errors-instead-of-swallowing-them | a guarantee comes from a type or contract | never from the guard itself or a name; where the sources leave it open, the case stays possible.
             handles-errors-instead-of-swallowing-them | recorded failures are not swallowed twice | A later check on an empty value does not swallow a failure already recorded by its handler.
             keeps-views-free-of-networking-and-persistence | framework view storage belongs in views | Core Data's `@FetchRequest`, and SwiftUI's `@AppStorage` and `@SceneStorage`
             declares-permissions-truthfully-at-point-of-use | the root view can present the feature | A root view can be that feature.
