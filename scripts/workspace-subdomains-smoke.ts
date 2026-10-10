@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { mkdtemp, readFile, mkdir, writeFile, cp, rm } from "node:fs/promises";
 import { request } from "node:https";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -15,6 +17,7 @@ const root = path.join(import.meta.dirname, "..");
 const project = `hephaestus-edge-${randomUUID().slice(0, 8)}`;
 const directory = await mkdtemp(path.join(tmpdir(), `${project}-`));
 const base = "edge.example.invalid";
+let ca: Buffer;
 const image = `${project}-webapp:smoke`;
 const env: NodeJS.ProcessEnv = {
 	...process.env,
@@ -91,7 +94,7 @@ async function get(port: number, host: string, url: string, method = "GET") {
 				servername: host,
 				path: url,
 				method,
-				rejectUnauthorized: false,
+				ca,
 				headers: { Host: host },
 				timeout: 5000,
 			},
@@ -147,6 +150,65 @@ async function waitForBody(port: number, host: string, url: string, expected: st
 }
 
 try {
+	await run(
+		"openssl",
+		[
+			"req",
+			"-x509",
+			"-newkey",
+			"rsa:2048",
+			"-noenc",
+			"-days",
+			"1",
+			"-subj",
+			"/CN=Hephaestus edge smoke CA",
+			"-addext",
+			"basicConstraints=critical,CA:TRUE",
+			"-keyout",
+			path.join(directory, "ca.key"),
+			"-out",
+			path.join(directory, "ca.pem"),
+		],
+		{ stdout: "ignore", stderr: "ignore" },
+	);
+	await run(
+		"openssl",
+		[
+			"req",
+			"-x509",
+			"-newkey",
+			"rsa:2048",
+			"-noenc",
+			"-days",
+			"1",
+			"-CA",
+			path.join(directory, "ca.pem"),
+			"-CAkey",
+			path.join(directory, "ca.key"),
+			"-subj",
+			`/CN=${base}`,
+			"-addext",
+			"basicConstraints=critical,CA:FALSE",
+			"-addext",
+			"extendedKeyUsage=serverAuth",
+			"-addext",
+			`subjectAltName=DNS:${base},DNS:*.${base},DNS:a.b.${base},DNS:acme.${base}.evil.invalid`,
+			"-keyout",
+			path.join(directory, "tls.key"),
+			"-out",
+			path.join(directory, "tls.pem"),
+		],
+		{ stdout: "ignore", stderr: "ignore" },
+	);
+	ca = await readFile(path.join(directory, "ca.pem"));
+	const dynamicTemplate = await readFile(path.join(root, "docker/traefik/dynamic.yml"), "utf8");
+	await writeFile(
+		path.join(directory, "dynamic.yml"),
+		dynamicTemplate.replace(
+			"tls:\n",
+			"tls:\n  stores:\n    default:\n      defaultCertificate:\n        certFile: /smoke/tls.pem\n        keyFile: /smoke/tls.key\n",
+		),
+	);
 	await mkdir(path.join(directory, "fixture"));
 	await writeFile(
 		path.join(directory, "fixture/index.html"),
@@ -170,7 +232,14 @@ try {
 	);
 	const overrideDocument = new Document({
 		services: {
-			"reverse-proxy": { ports: ["127.0.0.1::80", "127.0.0.1::443", "127.0.0.1::8080"], command },
+			"reverse-proxy": {
+				ports: [],
+				command,
+				volumes: [
+					`${directory}/tls.pem:/smoke/tls.pem:ro`,
+					`${directory}/tls.key:/smoke/tls.key:ro`,
+				],
+			},
 			webapp: { ports: [], depends_on: {}, environment: { SENTRY_DSN: "" } },
 			"application-server": {
 				entrypoint: ["nginx", "-g", "daemon off;"],
@@ -180,6 +249,7 @@ try {
 			},
 		},
 		networks: { "shared-network": { name: project } },
+		configs: { "traefik-dynamic": { file: path.join(directory, "dynamic.yml") } },
 	});
 
 	for (const service of ["reverse-proxy", "webapp"]) {
@@ -232,6 +302,37 @@ try {
 			asString(dynamic.file, "dynamic config path"),
 			path.join(root, "docker/traefik/dynamic.yml"),
 		);
+		// Docker's random port allocator does not exclude other host listeners.
+		const probes = [80, 443, 8080].map((target) => ({
+			target,
+			probe: createServer().listen(0, "127.0.0.1"),
+		}));
+		try {
+			await Promise.all(probes.map(async ({ probe }) => once(probe, "listening")));
+			const ports = probes.map(({ probe, target }) => {
+				const address = probe.address();
+				assert.ok(address !== null && typeof address !== "string");
+				return `127.0.0.1:${address.port}:${target}`;
+			});
+			const portNode = overrideDocument.createNode(ports);
+			portNode.tag = "!override";
+			overrideDocument.setIn(["services", "reverse-proxy", "ports"], portNode);
+			await writeFile(override, overrideDocument.toString());
+		} finally {
+			await Promise.all(
+				probes.map(async ({ probe }) => {
+					const closed = Promise.withResolvers<undefined>();
+					probe.close((error) => {
+						if (error === undefined) {
+							closed.resolve(undefined);
+						} else {
+							closed.reject(error);
+						}
+					});
+					await closed.promise;
+				}),
+			);
+		}
 		await run(
 			"docker",
 			[
@@ -251,6 +352,9 @@ try {
 		const port = Number(published.trim().split(":").at(-1));
 		assert.ok(port > 0);
 		await waitForBody(port, base, "/", "tenant-spa");
+		await assert.rejects(get(port, "untrusted.example.invalid", "/"), {
+			code: "ERR_TLS_CERT_ALTNAME_INVALID",
+		});
 		const apiPublished = await output("docker", [...args, "port", "reverse-proxy", "8080"], {
 			env,
 		});
