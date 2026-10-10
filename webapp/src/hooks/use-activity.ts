@@ -235,6 +235,11 @@ export function useActivityWork({
 			({ count }) => `Copied ${count} ${count === 1 ? "item" : "items"} as Markdown`,
 		);
 
+	// A disabled query still hands back what the cache holds under its key — for a person not known
+	// yet, that is everyone's timeline, which must never pass for theirs.
+	if (!enabled) {
+		return { status: "loading" };
+	}
 	return infiniteListState(query, (pages) => ({
 		items: pages.flatMap((page) => page.content),
 		stale: query.isPlaceholderData,

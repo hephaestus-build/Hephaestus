@@ -230,22 +230,28 @@ export function ActivityPeopleTable({
 			)}
 		</FilterToolbar>
 	);
-	if (state.status === "error") {
-		return (
-			<div className="space-y-3">
+	const stale = state.status === "ready" && state.stale;
+	const found = table.getFilteredRowModel().rows.length;
+	const columnCount = table.getVisibleLeafColumns().length;
+	const empty = state.status === "ready" && data.length === 0;
+	// The toolbar and the count stay mounted through every state, so the count's live region exists
+	// before its first words.
+	return (
+		<div className="space-y-3">
+			<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
 				{toolbar}
+				<p role="status" className="text-sm text-muted-foreground tabular-nums">
+					{state.status === "ready" && !empty && peopleCount(found, data.length, search)}
+				</p>
+			</div>
+			{state.status === "error" && (
 				<QueryErrorAlert
 					error={state.error}
 					title="We could not load people"
 					onRetry={state.onRetry}
 				/>
-			</div>
-		);
-	}
-	if (state.status === "ready" && data.length === 0) {
-		return (
-			<div className="space-y-3">
-				{toolbar}
+			)}
+			{empty && (
 				<ActivityEmpty
 					icon={<PeopleIcon />}
 					title={
@@ -254,68 +260,59 @@ export function ActivityPeopleTable({
 							: "No contributions in this range"
 					}
 				/>
-			</div>
-		);
-	}
-	const stale = state.status === "ready" && state.stale;
-	const found = table.getFilteredRowModel().rows.length;
-	const columnCount = table.getVisibleLeafColumns().length;
-	return (
-		<div className="space-y-3">
-			<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-				{toolbar}
-				<p role="status" className="text-sm text-muted-foreground tabular-nums">
-					{state.status === "ready" && peopleCount(found, data.length, search)}
-				</p>
-			</div>
-			<Table
-				bordered
-				aria-label="People"
-				aria-busy={state.status === "loading" || stale || undefined}
-				className={cn("min-w-200", stale && STALE)}
-			>
-				<DataTableHeader table={table} />
-				<TableBody>
-					{state.status === "loading" &&
-						Array.from({ length: SKELETON_ROWS }, (_, index) => (
-							<TableRow key={index} variant="static" aria-hidden>
-								<TableCell colSpan={columnCount}>
-									<div className="flex items-center gap-3">
-										<Skeleton className="size-8 rounded-full" />
-										<Skeleton className="h-4 w-40" />
-										<Skeleton className="ml-auto h-4 w-1/2" />
-									</div>
-								</TableCell>
-							</TableRow>
-						))}
-					{state.status === "ready" && found === 0 && (
-						<TableRow variant="static">
-							<TableCell colSpan={columnCount} className="p-4 whitespace-normal">
-								<Empty>
-									<EmptyHeader>
-										<EmptyTitle>No one matches your search</EmptyTitle>
-										<EmptyDescription>Try a different name.</EmptyDescription>
-									</EmptyHeader>
-								</Empty>
-							</TableCell>
-						</TableRow>
-					)}
-					{table.getRowModel().rows.map((row) => (
-						<TableRow key={row.id} className="relative">
-							{row.getVisibleCells().map((cell) => (
-								<TableCell key={cell.id}>
-									<FlexRender cell={cell} />
-								</TableCell>
+			)}
+			{state.status !== "error" && !empty && (
+				<>
+					<Table
+						bordered
+						aria-label="People"
+						aria-busy={state.status === "loading" || stale || undefined}
+						className={cn("min-w-200", stale && STALE)}
+					>
+						<DataTableHeader table={table} />
+						<TableBody>
+							{state.status === "loading" &&
+								Array.from({ length: SKELETON_ROWS }, (_, index) => (
+									<TableRow key={index} variant="static" aria-hidden>
+										<TableCell colSpan={columnCount}>
+											<div className="flex items-center gap-3">
+												<Skeleton className="size-8 rounded-full" />
+												<Skeleton className="h-4 w-40" />
+												<Skeleton className="ml-auto h-4 w-1/2" />
+											</div>
+										</TableCell>
+									</TableRow>
+								))}
+							{state.status === "ready" && found === 0 && (
+								<TableRow variant="static">
+									<TableCell colSpan={columnCount} className="p-4 whitespace-normal">
+										<Empty>
+											<EmptyHeader>
+												<EmptyTitle>No one matches your search</EmptyTitle>
+												<EmptyDescription>Try a different name.</EmptyDescription>
+											</EmptyHeader>
+										</Empty>
+									</TableCell>
+								</TableRow>
+							)}
+							{table.getRowModel().rows.map((row) => (
+								<TableRow key={row.id} className="relative">
+									{row.getVisibleCells().map((cell) => (
+										<TableCell key={cell.id}>
+											<FlexRender cell={cell} />
+										</TableCell>
+									))}
+								</TableRow>
 							))}
-						</TableRow>
-					))}
-				</TableBody>
-			</Table>
-			<InfiniteListEnd
-				hasMore={table.getCanNextPage()}
-				onLoadMore={() => setShown((count) => count + ROWS_STEP)}
-				moreLabel="Show more people"
-			/>
+						</TableBody>
+					</Table>
+					<InfiniteListEnd
+						hasMore={table.getCanNextPage()}
+						onLoadMore={() => setShown((count) => count + ROWS_STEP)}
+						moreLabel="Show more people"
+					/>
+				</>
+			)}
 		</div>
 	);
 }

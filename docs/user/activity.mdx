@@ -14,12 +14,12 @@ It counts GitHub or GitLab work and never scores it.
 The sidebar has two pages under **Dashboards**:
 
 - **Activity** is your own page. A workspace without practice reviews opens here. A workspace with practice reviews opens on your [Practice profile](./practice-profile.mdx).
-- **Workspace activity** shows everyone who contributed to the workspace or one team.
+- **Workspace activity** shows everyone with work in the workspace or one team.
 
 Every workspace has both pages, and no setting turns them on.
 They show work in the workspace’s repositories.
 Everyone with a workspace role sees it, regardless of their individual GitHub or GitLab access.
-On GitLab, the pages say _merge request_ where this guide says _pull request_.
+On GitLab, the pages say *merge request* where this guide says *pull request*.
 They use GitLab’s own icons and colors.
 
 Pull requests and issues open on GitHub or GitLab, where you act on them.
@@ -111,7 +111,7 @@ The page shows one tile for each kind of work:
 | **Issues**        | Issues you opened                                        | Your closed issues                                                    |
 
 Below the number, each tile compares it with the previous period of the same length.
-For example, _4 more than the previous 30 days_.
+For example, *4 more than the previous 30 days*.
 **All time** has no previous period, so it shows no comparison.
 Bars then show the number for each week of the range.
 A week starts on Monday.
@@ -150,8 +150,8 @@ Planning, pairing, and help in chat do not appear here.
 
 **Timeline** lists your work in the range, newest first and grouped by day.
 Each pull request or issue has one row.
-The row shows its events, such as _Merged_, _Approved_, _Commented_, or your number of comments.
-Forty comments on one pull request produce one row with _40_, not forty rows.
+The row shows its events, such as *Merged*, *Approved*, *Commented*, or your number of comments.
+Forty comments on one pull request produce one row with *40*, not forty rows.
 Older work loads as you scroll down.
 You can also select **Show earlier activity**.
 
@@ -171,8 +171,9 @@ A plain text field pastes Markdown.
 
 ## Workspace activity
 
-Workspace activity lists everyone who contributed in the range, one row for each person.
-This includes people who contributed to the workspace’s repositories without a workspace role.
+Workspace activity lists everyone with work in the range, one row for each person.
+Work includes comments, so a person with only comments has a row with 0 contributions.
+The list includes people without a workspace role who worked in the workspace’s repositories.
 
 1. In the team list, select **Everyone** or one team. Type to find a team.
 2. Choose the range, as on your own page.
@@ -184,8 +185,9 @@ A team includes its sub-teams and counts activity in the repositories its settin
 If a team filters reviews by label, it counts only reviews of pull requests with one of those labels.
 
 Below the page title, the page says how far back the counts are complete.
-For example, _History since 3 March 2024 for 12 of 14 repositories_.
+For example, *History since 3 March 2024 for 12 of 14 repositories*.
 Counts for an earlier range can be lower than the real work.
+While the history of the repositories is not complete, the page says so, because all counts can be low.
 
 ### People
 
@@ -233,7 +235,7 @@ A workspace admin can count a machine user account as automation too:
 To undo this, open the account under **Automation** and select **Count as a person**.
 A bot account from GitHub or GitLab always stays automation.
 
-### Timeline
+### Workspace timeline
 
 **Timeline** lists the work of everyone in the view and who did it, with **Copy as Markdown**.
 

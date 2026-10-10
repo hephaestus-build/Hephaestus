@@ -14,6 +14,7 @@ import {
 import { withProvider, withStandardPage } from "@/stories/decorators";
 import { settledPopup } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { daysBefore } from "@/stories/story-clock";
 
 import { WorkspaceActivityPage } from "./WorkspaceActivityPage";
 
@@ -113,6 +114,36 @@ export const Stale: Story = {
 	},
 };
 
+/** Some repositories' history is complete: the note says since when, and for how many. */
+export const PartialHistory: Story = {
+	args: {
+		people: readyPeople({
+			...peopleOf(PEOPLE),
+			coverage: { since: daysBefore(400), completeRepositories: 1, totalRepositories: 2 },
+		}),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/^History since .* for 1 of 2 repositories\.$/u)).toBeVisible();
+	},
+};
+
+/** No repository's history is complete yet, so the counts can be low, and the page says so. */
+export const NoCompleteHistory: Story = {
+	args: {
+		people: readyPeople({
+			...peopleOf(PEOPLE),
+			coverage: { completeRepositories: 0, totalRepositories: 2 },
+		}),
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText(
+				"The history of 2 of 2 repositories is not complete yet, so the counts can be low.",
+			),
+		).toBeVisible();
+	},
+};
+
 /** A workspace with no teams has no team to pick. */
 export const NoTeams: Story = {
 	args: { facets: { teams: [], repositories: REPOSITORIES } },
@@ -155,7 +186,7 @@ export const Reflow: Story = {
 	},
 };
 
-/** The highlights keep their place while the people load, so the table does not move. */
+/** The highlights hold their place while the people load. */
 export const Loading: Story = {
 	args: { people: { status: "loading" }, facets: undefined, timeline: { status: "loading" } },
 	play: async ({ canvas }) => {

@@ -64,7 +64,7 @@ export function ActivityTeamPicker({ teams, value, onChange }: ActivityTeamPicke
 			</ComboboxTrigger>
 			<ComboboxContent align="start" className="min-w-64" aria-label="Team">
 				<ComboboxSearchInput placeholder="Search teams…" aria-label="Search teams" />
-				<ComboboxEmpty>No team matches</ComboboxEmpty>
+				<ComboboxEmpty>{teams === undefined ? "No teams loaded" : "No team matches"}</ComboboxEmpty>
 				<ComboboxList aria-label="Teams">
 					{(option: TeamOption) => (
 						<ComboboxItem key={option.key} value={option}>

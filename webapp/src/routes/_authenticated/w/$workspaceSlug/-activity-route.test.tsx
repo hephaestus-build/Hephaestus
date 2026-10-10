@@ -505,6 +505,18 @@ function positions(): (string | null | undefined)[][] {
 		]);
 }
 
+/** The people at once for the first read; every later read waits until `held` settles. */
+function firstAtOnce(held: Promise<void>) {
+	let answered = false;
+	return async () => {
+		if (answered) {
+			await held;
+		}
+		answered = true;
+		return HttpResponse.json(people);
+	};
+}
+
 /** The people for every scope but one that names a repository, which the server does not know. */
 function unknownRepository(request: Request) {
 	return new URL(request.url).searchParams.has("repo")
@@ -682,11 +694,56 @@ describe("Workspace activity", () => {
 		);
 	});
 
-	it("drops custom days after today or before any history", async () => {
-		renderRouteAtWithRouter("/w/acme/workspace-activity?from=1970-01-01&to=2999-12-31");
+	it.each([
+		["a last day after today", "from=2026-01-01&to=2999-12-31"],
+		["a first day before any history", "from=1970-01-01&to=2026-01-31"],
+	])("drops a custom range with %s", async (_case, days) => {
+		renderRouteAtWithRouter(`/w/acme/workspace-activity?${days}`);
 
 		await screen.findByRole("table", { name: "People" }, ROUTE_RENDER_WAIT);
 		expect(readsOf("/activity/people")[0]?.search).toBe("?range=90d");
+	});
+
+	it("keeps the pickers' options while another team's people load", async () => {
+		const held = deferred();
+		server.use(http.get("*/workspaces/:workspaceSlug/activity/people", firstAtOnce(held.promise)));
+		const user = userEvent.setup();
+		renderRouteAtWithRouter("/w/acme/workspace-activity");
+
+		await user.click(
+			await screen.findByRole("combobox", { name: "Team: Everyone" }, ROUTE_RENDER_WAIT),
+		);
+		await user.click(await screen.findByRole("option", { name: "Core" }));
+		await waitFor(() =>
+			expect(screen.getByRole("table", { name: "People" }).getAttribute("aria-busy")).toBe("true"),
+		);
+
+		screen.getByRole("combobox", { name: "Team: Core" });
+		await user.click(screen.getByRole("combobox", { name: "Repository" }));
+		const options = await screen.findAllByRole("option");
+		expect(options.map((option) => option.textContent)).toStrictEqual(["acme/api", "acme/web"]);
+		held.resolve();
+	});
+
+	it("lists none of everyone's work as a person's before the people say who they are", async () => {
+		const held = deferred();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/activity/people", async () => {
+				await held.promise;
+				return HttpResponse.json(people);
+			}),
+			http.get(/\/workspaces\/[^/]+\/activity\/(?:people\/\d+\/)?work/u, () =>
+				HttpResponse.json({ content: [workItem(1)] }),
+			),
+		);
+		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
+
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		// The page's own timeline has the work; the level, whose person is not known yet, does not.
+		await waitFor(() => expect(screen.getAllByText("Pull request 1")).toHaveLength(1));
+		expect(within(level).queryByText("Pull request 1")).toBeNull();
+		expect(within(level).queryByRole("button", { name: /Copy as Markdown/u })).toBeNull();
+		held.resolve();
 	});
 
 	it("writes a team by its slug, never its id", async () => {
@@ -779,15 +836,21 @@ describe("Workspace activity", () => {
 		const user = userEvent.setup();
 		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
 
-		await user.click(
-			await screen.findByRole("button", { name: "Treat as automation" }, ROUTE_RENDER_WAIT),
+		const action = await screen.findByRole(
+			"button",
+			{ name: "Treat as automation" },
+			ROUTE_RENDER_WAIT,
 		);
+		const readsBefore = readsOf("/activity/people").length;
+		await user.click(action);
 
 		await waitFor(() =>
 			expect(automation.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
 				"/workspaces/acme/activity/people/8/automation?treatAsAutomation=true",
 			]),
 		);
+		// The people are read again, so the account moves between the lists at once.
+		await waitFor(() => expect(readsOf("/activity/people").length).toBeGreaterThan(readsBefore));
 	});
 
 	it("lets an admin count an account treated as automation as a person again", async () => {
@@ -826,21 +889,17 @@ describe("Workspace activity", () => {
 		);
 		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
 
-		await waitFor(
-			() => expect(readsOf("/activity/people/8").length).toBeGreaterThan(0),
-			ROUTE_RENDER_WAIT,
-		);
-		expect(screen.queryByRole("button", { name: /automation|as a person/u })).toBeNull();
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await within(level).findByRole("heading", { name: "Bob" });
+		expect(within(level).queryByRole("button", { name: /automation|as a person/u })).toBeNull();
 	});
 
 	it("offers a member no automation action", async () => {
 		renderRouteAtWithRouter("/w/acme/workspace-activity?detail=person:bob");
 
-		await waitFor(
-			() => expect(readsOf("/activity/people/8").length).toBeGreaterThan(0),
-			ROUTE_RENDER_WAIT,
-		);
-		expect(screen.queryByRole("button", { name: "Treat as automation" })).toBeNull();
+		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
+		await within(level).findByRole("heading", { name: "Bob" });
+		expect(within(level).queryByRole("button", { name: "Treat as automation" })).toBeNull();
 	});
 
 	it("sends an old profile address to the person on Workspace activity", async () => {

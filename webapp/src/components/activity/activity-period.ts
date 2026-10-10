@@ -19,6 +19,12 @@ export type ActivityPreset = (typeof ACTIVITY_PRESETS)[number];
 
 export const DEFAULT_ACTIVITY_PRESET: ActivityPreset = "90d";
 
+/**
+ * The first day a custom range may start on: no provider history is older, and a day centuries
+ * back would only draw tens of thousands of empty weeks.
+ */
+export const EARLIEST_CUSTOM_DAY = new Date(2000, 0, 1);
+
 /** What activity counts: a preset, or the days from one to another, both included, in local time. */
 export type ActivityPeriod =
 	| { kind: "preset"; preset: ActivityPreset }

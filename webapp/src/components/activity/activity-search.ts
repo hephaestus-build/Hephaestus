@@ -9,7 +9,7 @@ import { toDayParam } from "@/lib/date-range-search";
 import { multiValue } from "@/lib/search-params";
 
 import { ACTIVITY_CATEGORIES, type ActivityCategory } from "./activity-kind-defs";
-import { ACTIVITY_PRESETS, DEFAULT_ACTIVITY_PRESET } from "./activity-period";
+import { ACTIVITY_PRESETS, DEFAULT_ACTIVITY_PRESET, EARLIEST_CUSTOM_DAY } from "./activity-period";
 
 /** Your Activity opens one category of your own activity: `activity:reviews`. */
 export const SELF_ACTIVITY_LEVEL_KINDS = ["activity"] as const;
@@ -88,14 +88,10 @@ function isActivityCategory(value: string): value is ActivityCategory {
 	return (ACTIVITY_CATEGORIES as readonly string[]).includes(value);
 }
 
-/**
- * A day of a custom range, from the first year any provider history could have to today. A day out
- * of that span drops, so the preset counts instead: a future day has nothing to count, and a day
- * centuries back would only draw a hundred thousand empty weeks.
- */
+/** A day of a custom range, as the calendar offers them; any other day drops to the preset. */
 const customDay = z.iso
 	.date()
-	.refine((day) => day >= "2000-01-01" && day <= toDayParam(new Date()))
+	.refine((day) => day >= toDayParam(EARLIEST_CUSTOM_DAY) && day <= toDayParam(new Date()))
 	.optional()
 	.catch(undefined);
 

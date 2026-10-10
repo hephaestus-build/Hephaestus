@@ -9,7 +9,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 
-import { ACTIVITY_PRESET_OPTIONS, type ActivityPeriod, periodLabel } from "./activity-period";
+import {
+	ACTIVITY_PRESET_OPTIONS,
+	type ActivityPeriod,
+	EARLIEST_CUSTOM_DAY,
+	periodLabel,
+} from "./activity-period";
 
 export interface ActivityPeriodPickerProps {
 	period: ActivityPeriod;
@@ -84,7 +89,9 @@ function CustomRange({
 				defaultMonth={initial?.from ?? today}
 				selected={draft}
 				onSelect={setDraft}
-				disabled={{ after: today }}
+				startMonth={EARLIEST_CUSTOM_DAY}
+				endMonth={today}
+				disabled={{ before: EARLIEST_CUSTOM_DAY, after: today }}
 				excludeDisabled
 				numberOfMonths={1}
 			/>
