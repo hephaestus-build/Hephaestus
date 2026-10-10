@@ -499,6 +499,10 @@ describe("Activity", () => {
 				"core",
 			),
 		);
+		expect(readsOf("/activity/people")).toHaveLength(2);
+		expect(
+			readsOf("/activity/people").every((url) => url.searchParams.get("team") === "core"),
+		).toBe(true);
 	});
 
 	it("offers only teams that are not hidden, naming a sub-team by its path through visible teams", async () => {

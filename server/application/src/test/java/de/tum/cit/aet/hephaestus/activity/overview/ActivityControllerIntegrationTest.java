@@ -454,6 +454,18 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
+    void shouldHideAnotherMembersWorkOnEveryPersonReadPath() {
+        var issue = issue(monitored, Issue.State.OPEN, ada);
+        record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, issue.getId(), DAY);
+        workspaceMembershipService.updateMemberVisibility(workspace.getId(), ada.getId(), true);
+        get("/people/" + ada.getId(), uri -> uri).isNotFound().expectBody(Void.class);
+        get("/people/" + ada.getId() + "/work", uri -> uri).isNotFound().expectBody(Void.class);
+        get("/work", uri -> uri.queryParam("login", ada.getLogin()))
+                .isNotFound()
+                .expectBody(Void.class);
+    }
+
+    @Test
     void shouldReturnZeroCountsForOwnActivityBeforeTheFirstContribution() {
         var caller = userRepository
                 .findByLoginAndProviderId(
@@ -988,7 +1000,13 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         @Test
         void shouldFindTheFirstContributionInsideTheTeamScope() {
             Instant old = Instant.parse(FROM).minus(Duration.ofDays(1000));
-            record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -980L, old, unmonitored);
+            record(
+                    zoe,
+                    ActivityEventType.ISSUE_CREATED,
+                    ActivityTargetType.ISSUE,
+                    -980L,
+                    old,
+                    repository("acme/other-team", true));
             record(
                     ada,
                     ActivityEventType.ISSUE_CREATED,

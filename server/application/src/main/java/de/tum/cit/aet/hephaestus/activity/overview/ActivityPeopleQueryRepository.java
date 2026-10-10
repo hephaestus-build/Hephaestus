@@ -76,7 +76,6 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                     row_number() OVER (PARTITION BY actor_id, reviewed_id) AS review_first,
                     row_number() OVER (PARTITION BY actor_id, week, reviewed_id) AS week_review_first,
                     row_number() OVER (PARTITION BY actor_id, helped_id) AS helped_first,
-                    row_number() OVER (PARTITION BY actor_id, week, helped_id) AS week_helped_first,
                     row_number() OVER (PARTITION BY actor_id, week) AS week_first
             """;
     String HEADLINE_COUNTS = """
@@ -100,7 +99,7 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                         ELSE count(*) FILTER (WHERE reviewed_id IS NOT NULL AND week_review_first = 1) END AS reviewed,
                     CASE WHEN grouping(week) = 1
                         THEN count(*) FILTER (WHERE helped_id IS NOT NULL AND helped_first = 1)
-                        ELSE count(*) FILTER (WHERE helped_id IS NOT NULL AND week_helped_first = 1) END AS helped,
+                        ELSE 0 END AS helped,
                     count(*) FILTER (WHERE week_first = 1) AS active_weeks
             """;
     String PERSON_COUNTS = HEADLINE_COUNTS + TYPE_COUNTS + """
@@ -137,7 +136,8 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                 FROM marked GROUP BY GROUPING SETS ((actor_id), (actor_id, week))
             """ + RESULT;
     String PERSON = NORMALIZED + """
-                    , row_number() OVER (PARTITION BY actor_id, repository_id, reviewed_id) AS repo_review_first,
+                    , row_number() OVER (PARTITION BY actor_id, week, helped_id) AS week_helped_first,
+                    row_number() OVER (PARTITION BY actor_id, repository_id, reviewed_id) AS repo_review_first,
                     row_number() OVER (PARTITION BY actor_id, repository_id, helped_id) AS repo_helped_first,
                     row_number() OVER (PARTITION BY actor_id, repository_id, week) AS repo_week_first
                 FROM normalized n

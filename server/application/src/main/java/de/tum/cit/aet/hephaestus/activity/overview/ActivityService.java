@@ -62,9 +62,17 @@ public class ActivityService {
                 repositoryKeys,
                 peopleQueries.teams(workspaceId),
                 peopleQueries.repositories(workspaceId));
-        Set<Long> actors = login != null
-                ? Set.of(scopes.member(workspaceId, login).getId())
-                : Set.copyOf(peopleQueries.findActorIds(selected));
+        Set<Long> actors;
+        if (login != null) {
+            long userId = scopes.member(workspaceId, login).getId();
+            peopleQueries.contributor(
+                    workspaceId,
+                    userId,
+                    CurrentScmIdentityHolder.getAccountActorIds().contains(userId));
+            actors = Set.of(userId);
+        } else {
+            actors = Set.copyOf(peopleQueries.findActorIds(selected));
+        }
         return work(
                 new ActivityScope(workspaceId, actors, selected.teamIds(), selected.repositoryIds()),
                 page.range(params, clock, peopleQueries.earliest(selected, clock.instant())),
