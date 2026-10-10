@@ -79,7 +79,7 @@ export const Observations: Story = {
 			legend.getByRole<HTMLAnchorElement>("link", { name: "35 met observations" }).href,
 		);
 		await expect(positive.pathname).toBe("/w/demo/admin/practices/reviews/observations");
-		await expect(positive.searchParams.get("outcome")).toBe('["MET"]');
+		await expect(positive.searchParams.getAll("outcome")).toStrictEqual(["MET"]);
 		await expect(positive.searchParams.get("from")).toBe(reviewOverviewScope.from);
 		const flags = within(canvas.getByRole("list", { name: "Observations checked by an admin" }));
 		const incorrect = new URL(
@@ -116,9 +116,11 @@ export const Feedback: Story = {
 			legend.getByRole<HTMLAnchorElement>("link", { name: "5 withheld" }).href,
 		);
 		await expect(withheld.pathname).toBe("/w/demo/admin/practices/reviews/feedback");
-		await expect(withheld.searchParams.get("deliveryState")).toBe(
-			'["SUPPRESSED","DISCARDED","SUPERSEDED"]',
-		);
+		await expect(withheld.searchParams.getAll("deliveryState")).toStrictEqual([
+			"SUPPRESSED",
+			"DISCARDED",
+			"SUPERSEDED",
+		]);
 	},
 };
 
@@ -136,10 +138,11 @@ export const OnePractice: Story = {
 		const delivered = new URL(
 			legend.getByRole<HTMLAnchorElement>("link", { name: "14 delivered" }).href,
 		);
-		await expect(delivered.searchParams.get("practiceSlug")).toBe('["thin-controllers"]');
-		await expect(delivered.searchParams.get("deliveryState")).toBe(
-			'["DELIVERED","PARTIALLY_DELIVERED"]',
-		);
+		await expect(delivered.searchParams.getAll("practiceSlug")).toStrictEqual(["thin-controllers"]);
+		await expect(delivered.searchParams.getAll("deliveryState")).toStrictEqual([
+			"DELIVERED",
+			"PARTIALLY_DELIVERED",
+		]);
 	},
 };
 

@@ -340,7 +340,7 @@ export const PracticeNameOpensTheDetailLevel: Story = {
 		const link = canvas.getByRole("link", { name: prDescriptionPractice.name });
 		await expect(
 			new URL(link.getAttribute("href") ?? "", "https://example.test").searchParams.get("detail"),
-		).toBe('["practice:pr-description-quality"]');
+		).toBe("practice:pr-description-quality");
 	},
 };
 

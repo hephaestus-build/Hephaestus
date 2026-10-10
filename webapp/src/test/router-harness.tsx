@@ -10,6 +10,7 @@ import {
 import { act, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 
+import { parseSearch, stringifySearch } from "@/lib/search-params";
 import { routeTree } from "@/routeTree.gen";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 
@@ -34,6 +35,8 @@ export function renderRouteAtWithRouter(
 		routeTree,
 		history: createMemoryHistory({ initialEntries: Array.isArray(path) ? path : [path] }),
 		context: { queryClient, auth: undefined },
+		parseSearch,
+		stringifySearch,
 	});
 	render(
 		<QueryClientProvider client={queryClient}>

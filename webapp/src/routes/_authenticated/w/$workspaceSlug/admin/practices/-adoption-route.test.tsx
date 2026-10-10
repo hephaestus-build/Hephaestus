@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CatalogPracticePreview } from "@/api/types.gen";
 import { mockPractices } from "@/components/admin/practices/fixtures";
+import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
@@ -186,7 +187,9 @@ describe("catalog adoption over practice setup", () => {
 		await screen.findByRole("button", { name: "Add practice" }, ROUTE_RENDER_WAIT);
 		// The catalog is still the page; only the drawer stack changed.
 		expect(router.state.location.pathname).toBe("/w/acme/admin/practices");
-		expect(router.state.location.search.detail).toStrictEqual([`catalog-practice:${preview.slug}`]);
+		expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+			`catalog-practice:${preview.slug}`,
+		]);
 	});
 
 	it("opens a workspace practice read-only over the tree instead of in the edit form", async () => {
@@ -212,12 +215,12 @@ describe("catalog adoption over practice setup", () => {
 		// so leaving the form lands back on the panel it was opened from rather than on the bare tree.
 		const edit = await screen.findByRole("link", { name: "Edit practice" }, ROUTE_RENDER_WAIT);
 		expect(edit.getAttribute("href")).toBe(
-			`/w/acme/admin/practices?detail=${encodeURIComponent(
-				'["practice:already-mine","practice-edit:already-mine"]',
-			)}`,
+			"/w/acme/admin/practices?detail=practice:already-mine&detail=practice-edit:already-mine",
 		);
 		expect(router.state.location.pathname).toBe("/w/acme/admin/practices");
-		expect(router.state.location.search.detail).toStrictEqual(["practice:already-mine"]);
+		expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+			"practice:already-mine",
+		]);
 	});
 
 	it("pins adoption to the reviewed ETag and returns to the catalog", async () => {
@@ -244,7 +247,7 @@ describe("catalog adoption over practice setup", () => {
 		await waitFor(() => expect(seenIfMatch).toHaveBeenCalledWith(preview.etag));
 		// Adding closes the drawer rather than opening the practice form, so the next one is one click away.
 		await waitFor(
-			() => expect(router.state.location.search.detail).toBeUndefined(),
+			() => expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([]),
 			ROUTE_RENDER_WAIT,
 		);
 		expect(router.state.location.pathname).toBe("/w/acme/admin/practices");
@@ -328,7 +331,7 @@ describe("catalog adoption over practice setup", () => {
 		// Both halves: closing on its own is what a route that swallowed every failure would also do.
 		await screen.findByText("This practice is already in the workspace", {}, ROUTE_RENDER_WAIT);
 		await waitFor(
-			() => expect(router.state.location.search.detail).toBeUndefined(),
+			() => expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([]),
 			ROUTE_RENDER_WAIT,
 		);
 	});
@@ -366,7 +369,7 @@ describe("catalog adoption over practice setup", () => {
 		);
 		// The level goes; the tree it was opened over is what the reader lands on.
 		await waitFor(
-			() => expect(router.state.location.search.detail).toBeUndefined(),
+			() => expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([]),
 			ROUTE_RENDER_WAIT,
 		);
 	});
@@ -387,7 +390,9 @@ describe("catalog adoption over practice setup", () => {
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
 
 		// The level is still open and still holds the draft: refusing has to be free.
-		expect(router.state.location.search.detail).toStrictEqual(["practice-new:draft"]);
+		expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+			"practice-new:draft",
+		]);
 		screen.getByDisplayValue("A draft worth keeping");
 	});
 
@@ -403,7 +408,7 @@ describe("catalog adoption over practice setup", () => {
 		);
 
 		await waitFor(
-			() => expect(router.state.location.search.detail).toBeUndefined(),
+			() => expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([]),
 			ROUTE_RENDER_WAIT,
 		);
 	});
@@ -415,7 +420,7 @@ describe("catalog adoption over practice setup", () => {
 		fireEvent.keyDown(document.body, { key: "Escape" });
 
 		await waitFor(
-			() => expect(router.state.location.search.detail).toBeUndefined(),
+			() => expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([]),
 			ROUTE_RENDER_WAIT,
 		);
 		expect(screen.queryByRole("alertdialog")).toBeNull();

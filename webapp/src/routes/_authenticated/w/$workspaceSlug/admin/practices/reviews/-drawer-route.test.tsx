@@ -24,6 +24,7 @@ import {
 } from "@/components/admin/practice-reviews/fixtures";
 import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
 import { reviewHandlers } from "@/components/admin/practice-reviews/story-mock-server";
+import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { artifactTrace, tracedArtifacts } from "@/components/practice-trace/fixtures";
 import { browserTimeZone } from "@/lib/dates";
 import { server } from "@/mocks/server";
@@ -108,10 +109,9 @@ describe("practice review levels", () => {
 			ROUTE_RENDER_WAIT,
 		);
 		within(level).getByRole("heading", { name: observation.summary });
-		expect(router.state.location.search).toMatchObject({
-			severity: ["MAJOR"],
-			detail: [`observation:${observation.id}`],
-		});
+		expect(router.state.location.searchStr).toBe(
+			`?severity=MAJOR&detail=observation:${observation.id}`,
+		);
 
 		fireEvent.keyDown(document.body, { key: "Escape" });
 
@@ -120,7 +120,7 @@ describe("practice review levels", () => {
 			ROUTE_RENDER_WAIT,
 		);
 		expect(router.state.location.pathname).toBe(`${REVIEWS}/observations`);
-		expect(router.state.location.search).toMatchObject({ severity: ["MAJOR"] });
+		expect(router.state.location.searchStr).toBe("?severity=MAJOR");
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 		screen.getByRole("link", { name: observation.summary });
 	});
@@ -152,7 +152,7 @@ describe("practice review levels", () => {
 			{ name: source.summary },
 			ROUTE_RENDER_WAIT,
 		);
-		expect(router.state.location.search.detail).toStrictEqual([
+		expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
 			feedbackKey,
 			`observation:${source.observationId}`,
 		]);
@@ -173,7 +173,7 @@ describe("practice review levels", () => {
 		await userEvent.click(backToFeedback);
 
 		await waitFor(
-			() => expect(router.state.location.search.detail).toStrictEqual([feedbackKey]),
+			() => expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([feedbackKey]),
 			ROUTE_RENDER_WAIT,
 		);
 		await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(1));
@@ -314,7 +314,7 @@ describe("practice review levels", () => {
 		);
 
 		await screen.findByRole("dialog", { name: practice.practiceName }, ROUTE_RENDER_WAIT);
-		expect(router.state.location.search.detail).toStrictEqual([
+		expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
 			`practice:${practice.practiceSlug}`,
 		]);
 		await waitFor(() => expect(requestsTo("/practices/reviews/observations")).not.toHaveLength(0));
@@ -399,7 +399,7 @@ describe("the reviewed-work level", () => {
 		);
 
 		await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
-		expect(router.state.location.search).toMatchObject({ detail: ["work:pull-request:1423"] });
+		expect(router.state.location.search).toMatchObject({ detail: "work:pull-request:1423" });
 		const read = await waitFor(() => {
 			const found = requestsTo(TRACE_1423).at(-1);
 			assert(found);
