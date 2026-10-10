@@ -1148,6 +1148,14 @@ if (scenario !== undefined && scenario !== "") {
 											stopReason: "error",
 											usage: callUsage(17),
 											content: [],
+											errorMessage: "503 upstream body sk-orchestration-secret",
+											diagnostics: [
+												{
+													type: "openai_completions_failure",
+													timestamp: 1_760_000_000_000,
+													details: { kind: "HTTP_ERROR", phase: "request", status: 503 },
+												},
+											],
 										},
 									});
 									if (scenario === "compose-public-error") {
@@ -1675,8 +1683,24 @@ if (scenario !== undefined && scenario !== "") {
 											stopReason: "error",
 											usage: callUsage(23),
 											content: [],
+											// A malformed diagnostic claims nothing: the failure stays UNKNOWN.
+											diagnostics: [
+												{
+													type: "openai_completions_failure",
+													timestamp: "soon",
+													details: { kind: "sk-orchestration-secret", status: 503 },
+												},
+											],
 										},
 									});
+									if (scenario === "compose-private-error") {
+										emit({
+											type: "auto_retry_end",
+											success: false,
+											attempt: 3,
+											finalError: "sk-orchestration-secret",
+										});
+									}
 									return;
 								}
 								if (scenario === "compose-runtime-error") {
@@ -3251,6 +3275,55 @@ if (scenario !== undefined && scenario !== "") {
 								);
 								assert.ok(isRecord(payload) && Array.isArray(payload.units));
 								assert.equal(payload.units.length, 1);
+							}
+							const failures: Record<string, [string, unknown][]> = {
+								// The last call failed with a stated native status.
+								"compose-public-error": [
+									[
+										"review composition",
+										{
+											kind: "HTTP_ERROR",
+											phase: "request",
+											status: 503,
+											at: 1_760_000_000_000,
+											retryEndedUnsuccessfully: false,
+										},
+									],
+								],
+								// A later successful call clears the earlier failure; its count stays.
+								"compose-recovered-error": [["review composition", null]],
+								// A malformed diagnostic is UNKNOWN; the native unsuccessful retry-end event marks it.
+								"compose-private-error": [
+									[
+										"composition",
+										{
+											kind: "UNKNOWN",
+											phase: null,
+											status: null,
+											at: null,
+											retryEndedUnsuccessfully: true,
+										},
+									],
+								],
+							};
+							const debugText = readFileSync(nodePath.join(cwd, "out/runner-debug.json"), "utf8");
+							assert.ok(!debugText.includes("sk-orchestration-secret"));
+							const debug: unknown = JSON.parse(debugText);
+							assert.ok(isRecord(debug) && Array.isArray(debug.turns));
+							for (const [label, final] of failures[stage] ?? []) {
+								const turn: unknown = debug.turns.find(
+									(entry: unknown) => isRecord(entry) && entry.label === label,
+								);
+								assert.ok(isRecord(turn), label);
+								assert.deepEqual(turn.finalModelFailure, final, `${stage} ${label}`);
+								assert.ok(isRecord(turn.modelFailures));
+								assert.equal(
+									Object.values(turn.modelFailures).reduce(
+										(sum: number, count: unknown) => sum + (typeof count === "number" ? count : 0),
+										0,
+									),
+									1,
+								);
 							}
 							break;
 						}

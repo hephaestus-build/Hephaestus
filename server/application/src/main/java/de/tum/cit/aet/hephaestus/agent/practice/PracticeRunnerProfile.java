@@ -19,6 +19,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-precompute.ts",
             "pi-precompute.sh",
             "pi-error-text.ts",
+            "pi-model-failure.ts",
             "pi-text.ts",
             "pi-observation-normalize.ts",
             "pi-practice-coverage.ts",

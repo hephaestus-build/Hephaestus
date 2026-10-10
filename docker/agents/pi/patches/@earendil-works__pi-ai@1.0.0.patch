@@ -2,15 +2,66 @@ diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
 index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae2fa1cf9e 100644
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
-@@ -14,6 +14,7 @@ import { getDeclaredTools, resolveTranscript, resolveTranscriptTools, } from "..
+@@ -14,6 +14,8 @@ import { getDeclaredTools, resolveTranscript, resolveTranscriptTools, } from "..
  import { appendGrammarToolInputJsonDelta, createGrammarToolInputProperties, getGrammarToolInput, getJsonSchemaToolParameters, resolveGrammarConstrainedSampling, resolveJsonSchemaStrictSampling, } from "./constrained-sampling.js";
  import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
  import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.js";
 +import { openAITokenUsage } from "./openai-token-usage.js";
++import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { buildBaseOptions, clampThinkingBudgetToAnswerRoom, thinkingBudgetForLevel } from "./simple-options.js";
  import { transformMessages } from "./transform-messages.js";
  /**
-@@ -361,7 +362,7 @@ export const stream = (model, context, options) => {
+@@ -148,6 +150,31 @@ function resolveCacheRetention(cacheRetention, env) {
+     }
+     return "short";
+ }
++/**
++ * Closed facts about why a completion failed, for a caller's diagnostics: the SDK's own error classes and numeric
++ * status, and this adapter's own end-of-stream checks. Never the error's text, body, headers or request.
++ */
++function failureDetails(error, signal, adapterFailure, phase) {
++    let kind = "UNKNOWN";
++    let status;
++    if (signal?.aborted || error instanceof OpenAI.APIUserAbortError) {
++        kind = "ABORTED";
++    }
++    else if (adapterFailure) {
++        kind = adapterFailure;
++    }
++    else if (error instanceof OpenAI.APIConnectionTimeoutError) {
++        kind = "CONNECTION_TIMEOUT";
++    }
++    else if (error instanceof OpenAI.APIConnectionError) {
++        kind = "CONNECTION_ERROR";
++    }
++    else if (error instanceof OpenAI.APIError && Number.isInteger(error.status) && error.status >= 400 && error.status <= 599) {
++        kind = "HTTP_ERROR";
++        status = error.status;
++    }
++    return status === undefined ? { kind, phase } : { kind, phase, status };
++}
+ export const stream = (model, context, options) => {
+     const stream = new AssistantMessageEventStream();
+     const normalizedContext = resolveTranscript(context, getCompat(model).supportsMidConvoSystemMessages);
+@@ -177,6 +204,9 @@ export const stream = (model, context, options) => {
+                 block.thinkingSignature = JSON.stringify(streamedReasoningDetails);
+             }
+         };
++        // What a failure diagnostic may state: where the call failed, and the adapter's own end-of-stream cause.
++        let failurePhase = "request";
++        let adapterFailure;
+         try {
+             const apiKey = getClientApiKey(model.provider, options?.apiKey, options?.headers);
+             const compat = getCompat(model);
+@@ -199,6 +229,7 @@ export const stream = (model, context, options) => {
+                 maxRetryDelayMs: options?.maxRetryDelayMs,
+                 signal: options?.signal,
+             });
++            failurePhase = "response_body";
+             await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
+             stream.push({ type: "start", partial: output });
+             let textBlock = null;
+@@ -361,7 +392,7 @@ export const stream = (model, context, options) => {
                      output.responseModel ||= chunk.model;
                  }
                  if (chunk.usage) {
@@ -19,7 +70,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
                  }
                  const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined;
                  if (!choice)
-@@ -369,7 +370,7 @@ export const stream = (model, context, options) => {
+@@ -369,7 +400,7 @@ export const stream = (model, context, options) => {
                  // Fallback: some providers (e.g., Moonshot) return usage
                  // in choice.usage instead of the standard chunk.usage
                  if (!chunk.usage && choice.usage) {
@@ -28,7 +79,39 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
                  }
                  if (choice.finish_reason) {
                      output.rawStopReason = choice.finish_reason;
-@@ -1158,9 +1159,6 @@ function convertTools(tools, compat) {
+@@ -473,16 +504,19 @@ export const stream = (model, context, options) => {
+             if (options?.signal?.aborted) {
+                 throw new Error("Request was aborted");
+             }
+             if (output.stopReason === "aborted") {
++                adapterFailure = "ABORTED";
+                 throw new Error("Request was aborted");
+             }
+             if (!hasFinishReason && !compat.supportsFinishReason) {
+                 output.stopReason = output.content.some((block) => block.type === "toolCall") ? "toolUse" : "stop";
+             }
+             if (output.stopReason === "error") {
++                adapterFailure = "FINISH_REASON_ERROR";
+                 throw new Error(output.errorMessage || "Provider returned an error stop reason");
+             }
+             if ((compat.supportsFinishReason && !hasFinishReason) || output.stopReason === "pending") {
++                adapterFailure = "STREAM_INCOMPLETE";
+                 throw new Error("Stream ended without finish_reason");
+             }
+             stream.push({ type: "done", reason: output.stopReason, message: output });
+@@ -509,6 +543,11 @@ export const stream = (model, context, options) => {
+             if (rawMetadata && !output.errorMessage.includes(String(rawMetadata))) {
+                 output.errorMessage += `\n${rawMetadata}`;
+             }
++            appendAssistantMessageDiagnostic(output, {
++                type: "openai_completions_failure",
++                timestamp: Date.now(),
++                details: failureDetails(error, options?.signal, adapterFailure, failurePhase),
++            });
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
+@@ -1158,9 +1197,6 @@ function convertTools(tools, compat) {
      });
  }
  function parseChunkUsage(rawUsage, model) {
@@ -38,7 +121,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
      // Follow documented OpenAI/OpenRouter semantics: cached_tokens is cache-read
      // tokens (hits). Providers disagree on placement: OpenAI/OpenRouter use
      // prompt_tokens_details.cached_tokens, DeepSeek uses prompt_cache_hit_tokens,
-@@ -1172,19 +1170,17 @@ function parseChunkUsage(rawUsage, model) {
+@@ -1172,19 +1208,17 @@ function parseChunkUsage(rawUsage, model) {
      // Do not subtract writes from cached_tokens, otherwise spec-compliant
      // providers are under-reported. DS4 mirrors this contract too:
      // https://github.com/antirez/ds4/pull/29
