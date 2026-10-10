@@ -7,8 +7,6 @@ export const REVIEW_RANGES = ["7d", "30d", "90d", "1y"] as const;
 
 export type ReviewRange = (typeof REVIEW_RANGES)[number];
 
-export const DEFAULT_REVIEW_RANGE: ReviewRange = "7d";
-
 interface ReviewRangeDef {
 	days: number;
 	/** "Last 7 days": the range as a control or a caption names it. */
