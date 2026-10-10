@@ -4,7 +4,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { expect, it, vi } from "vitest";
 
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { AuthProvider } from "@/runtime/auth/AuthContext";

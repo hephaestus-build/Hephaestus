@@ -5,7 +5,7 @@ import ReactDOM from "react-dom/client";
 
 import { client } from "@/api/client.gen";
 import environment from "@/environment";
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { RouteError } from "@/runtime/sentry/RouteError";
 
 import "./styles.css";

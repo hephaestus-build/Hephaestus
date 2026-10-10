@@ -9,7 +9,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 
 import { AppSidebar } from "./AppSidebar";
 

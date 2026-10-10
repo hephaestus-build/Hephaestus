@@ -9,7 +9,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 
 import { NavAdmin } from "./NavAdmin";
 

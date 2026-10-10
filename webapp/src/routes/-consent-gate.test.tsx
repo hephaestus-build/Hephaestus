@@ -3,7 +3,7 @@ import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";

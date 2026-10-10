@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { isRecord } from "@/lib/is-record";
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { hasText } from "@/lib/text";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";

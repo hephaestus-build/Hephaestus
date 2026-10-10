@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";

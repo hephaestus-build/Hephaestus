@@ -11,7 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { Route as workspaceActivityRoute } from "@/routes/_authenticated/w/$workspaceSlug/workspace-activity";
 
 import { useWorkspaceSwitcher } from "./use-workspace-switcher";

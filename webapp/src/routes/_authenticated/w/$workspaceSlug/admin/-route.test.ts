@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isRecord } from "@/lib/is-record";
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { hasText } from "@/lib/text";
 import type { WorkspaceRole } from "@/lib/workspace-roles";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";

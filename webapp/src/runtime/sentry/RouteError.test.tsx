@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { expect, it, vi } from "vitest";
 
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { RouteError } from "./RouteError";
 
 const { captureException } = vi.hoisted(() => ({ captureException: vi.fn() }));

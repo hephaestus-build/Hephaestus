@@ -1,5 +1,5 @@
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
-import { parseSearch } from "@/lib/search-params";
+import { parseSearch } from "@/lib/router-search";
 
 /**
  * The detail stack a link opens, read back with the app's own search parser, so an assertion

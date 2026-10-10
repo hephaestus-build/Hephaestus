@@ -10,7 +10,7 @@ import {
 import { act, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { routeTree } from "@/routeTree.gen";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 

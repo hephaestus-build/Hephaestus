@@ -12,7 +12,7 @@ import { initialize, mswLoader } from "msw-storybook-addon";
 import type { ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { handlers } from "@/mocks/handlers";
 import { ThemeProvider } from "@/runtime/theme/ThemeContext";
 

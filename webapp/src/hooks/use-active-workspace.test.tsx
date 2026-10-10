@@ -10,7 +10,7 @@ import { act, render, screen } from "@testing-library/react";
 import { describe, it, vi } from "vitest";
 
 import { listWorkspacesOptions } from "@/api/@tanstack/react-query.gen";
-import { ROUTER_SEARCH } from "@/lib/search-params";
+import { ROUTER_SEARCH } from "@/lib/router-search";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
 
