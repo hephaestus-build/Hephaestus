@@ -1407,5 +1407,50 @@
 		},
 		"reason": "The same previews supply idle, results and failure, but loading appears only on the way to a sample result, so no preview holds the loading state the content view declares.",
 		"workType": "pull_request"
+	},
+{
+		"id": "outcome-delivery-bullets-with-unticked-issue",
+		"expected": {
+			"merge-confirms-the-linked-issue-outcome": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Export saved trips\", \"body\": \"For #31, delivered here:\\n- Saved trips can now be exported as a calendar file.\\n- The exported file keeps each trip's stops in travel order.\\n\", \"source_branch\": \"trip-export\", \"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-06T09:00:00Z\"}\n",
+			"context/description.md": "For #31, delivered here:\n- Saved trips can now be exported as a calendar file.\n- The exported file keeps each trip's stops in travel order.\n",
+			"context/linked_work_items.json": "{\"workItems\":[{\"number\":31,\"title\":\"Export saved trips\",\"state\":\"OPEN\",\"how\":\"mentions\",\"body\":\"## Acceptance criteria\\n- [ ] Saved trips can be exported as a calendar file\\n- [ ] Exported trips keep their stops in travel order\\n\",\"url\":\"https://example.org/team/project/issues/31\",\"labels\":[]}],\"unresolvedReferences\":[],\"truncated\":false}\n",
+			"context/linked_work_items/31.md": "# #31: Export saved trips\n\nState: OPEN\n\n## Acceptance criteria\n- [ ] Saved trips can be exported as a calendar file\n- [ ] Exported trips keep their stops in travel order\n",
+			"context/general_comments.json": "[]\n"
+		},
+		"reason": "The authored account names both adopted outcome items. The issue can stay open and its boxes unticked; no closing formula or code inference is needed.",
+		"workType": "pull_request"
+	},
+{
+		"id": "outcome-partial-handoff-silent-remainder",
+		"expected": {
+			"merge-confirms-the-linked-issue-outcome": "NOT_MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Export saved trips\", \"body\": \"Closes #31\\n\\nDelivered here:\\n- Saved trips can now be exported as a calendar file.\\n\", \"source_branch\": \"trip-export\", \"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-06T09:00:00Z\"}\n",
+			"context/description.md": "Closes #31\n\nDelivered here:\n- Saved trips can now be exported as a calendar file.\n",
+			"context/linked_work_items.json": "{\"workItems\":[{\"number\":31,\"title\":\"Export saved trips\",\"state\":\"CLOSED\",\"how\":\"closesOnMerge\",\"body\":\"## Acceptance criteria\\n- [ ] Saved trips can be exported as a calendar file\\n- [ ] Exported trips keep their stops in travel order\\n\",\"url\":\"https://example.org/team/project/issues/31\",\"labels\":[]}],\"unresolvedReferences\":[],\"truncated\":false}\n",
+			"context/linked_work_items/31.md": "# #31: Export saved trips\n\nState: CLOSED\n\n## Acceptance criteria\n- [ ] Saved trips can be exported as a calendar file\n- [ ] Exported trips keep their stops in travel order\n",
+			"context/general_comments.json": "[]\n"
+		},
+		"reason": "The change closes the issue and so adopts both outcome items, but the handoff reports only one as delivered and neither names nor defers the other.",
+		"workType": "pull_request"
+	},
+{
+		"id": "outcome-generic-template-with-bare-closing-reference",
+		"expected": {
+			"merge-confirms-the-linked-issue-outcome": "NOT_MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Export saved trips\", \"body\": \"Closes #31\\n\\n## Checklist\\n- [x] The build passes\\n- [x] Lint is clean\\n\", \"source_branch\": \"trip-export\", \"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-06T09:00:00Z\"}\n",
+			"context/description.md": "Closes #31\n\n## Checklist\n- [x] The build passes\n- [x] Lint is clean\n",
+			"context/linked_work_items.json": "{\"workItems\":[{\"number\":31,\"title\":\"Export saved trips\",\"state\":\"CLOSED\",\"how\":\"closesOnMerge\",\"body\":\"## Acceptance criteria\\n- [ ] Saved trips can be exported as a calendar file\\n- [ ] Exported trips keep their stops in travel order\\n\",\"url\":\"https://example.org/team/project/issues/31\",\"labels\":[]}],\"unresolvedReferences\":[],\"truncated\":false}\n",
+			"context/linked_work_items/31.md": "# #31: Export saved trips\n\nState: CLOSED\n\n## Acceptance criteria\n- [ ] Saved trips can be exported as a calendar file\n- [ ] Exported trips keep their stops in travel order\n",
+			"context/general_comments.json": "[]\n"
+		},
+		"reason": "A feature title, a bare closing reference and generic build and lint checks name neither outcome item, so nothing accounts for the adopted outcome.",
+		"workType": "pull_request"
 	}
 ]
