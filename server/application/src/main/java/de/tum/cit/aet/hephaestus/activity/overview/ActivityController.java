@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserInfoDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -17,6 +18,7 @@ import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -82,6 +84,16 @@ public class ActivityController {
     @ApiResponse(responseCode = "200", description = "Hidden contributors counted")
     public PublicActivityHiddenCountDTO getPublicActivityHiddenCount(WorkspaceContext workspaceContext) {
         return new PublicActivityHiddenCountDTO(publicObjections.hiddenPeople(workspaceContext.id()));
+    }
+
+    @GetMapping("/hidden-contributors")
+    @RequireAtLeastWorkspaceAdmin
+    @Operation(
+            operationId = "listHiddenContributors",
+            summary = "List the contributors without a membership whom an admin hid from activity")
+    @ApiResponse(responseCode = "200", description = "Hidden contributors listed")
+    public List<UserInfoDTO> listHiddenContributors(WorkspaceContext workspaceContext) {
+        return publicObjections.hiddenContributors(workspaceContext.id());
     }
 
     @PatchMapping("/people/{userId}/public-visibility")

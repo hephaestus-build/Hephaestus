@@ -3192,6 +3192,49 @@ paths:
       summary: Fetch a workspace by slug
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/activity/hidden-contributors:
+    get:
+      operationId: listHiddenContributors
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserInfo"
+          description: Hidden contributors listed
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A request parameter is not valid
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Workspace, contributor, team or repository not found"
+      summary: List the contributors without a membership whom an admin hid from activity
+      tags:
+      - Activity
   /workspaces/{workspaceSlug}/activity/members/{login}/open-work:
     get:
       description: "Review requests, open pull requests and assigned issues, most\

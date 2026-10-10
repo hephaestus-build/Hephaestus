@@ -589,12 +589,17 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .isEqualTo("{\"contributorHidden\":true}");
             assertThat(page().people()).isEmpty();
             assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
+            assertThat(publicObjections.hiddenContributors(workspace.getId()))
+                    .extracting(person -> person.login())
+                    .containsExactly(outside.getLogin());
             var other = createWorkspace(
                     "objection-other", "Other", "other-objection-org", AccountType.ORG, persistUser("objection-owner"));
             assertThat(publicObjections.hiddenPeople(other.getId())).isZero();
             assertThatThrownBy(() -> publicObjections.hide(other.getId(), outside.getId(), true))
                     .isInstanceOf(EntityNotFoundException.class);
+            assertThat(publicObjections.hiddenContributors(other.getId())).isEmpty();
             publicObjections.hide(workspace.getId(), outside.getId(), false);
+            assertThat(publicObjections.hiddenContributors(workspace.getId())).isEmpty();
             assertThat(page().people()).extracting(p -> p.login()).containsExactly(outside.getLogin());
             webTestClient
                     .patch()
@@ -619,6 +624,26 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .isEqualTo(1)
                     .jsonPath("$.length()")
                     .isEqualTo(1);
+            webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/activity/hidden-contributors", workspace.getWorkspaceSlug())
+                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.length()")
+                    .isEqualTo(1)
+                    .jsonPath("$[0].login")
+                    .isEqualTo(outside.getLogin());
+            webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/activity/hidden-contributors", workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
             webTestClient
                     .patch()
                     .uri(

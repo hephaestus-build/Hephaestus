@@ -9994,6 +9994,44 @@ export type GetWorkspaceResponses = {
 
 export type GetWorkspaceResponse = GetWorkspaceResponses[keyof GetWorkspaceResponses];
 
+export type ListHiddenContributorsData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/activity/hidden-contributors';
+};
+
+export type ListHiddenContributorsErrors = {
+    /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
+     * The caller is not a member of the workspace
+     */
+    403: ProblemDetail;
+    /**
+     * Workspace, contributor, team or repository not found
+     */
+    404: ProblemDetail;
+};
+
+export type ListHiddenContributorsError = ListHiddenContributorsErrors[keyof ListHiddenContributorsErrors];
+
+export type ListHiddenContributorsResponses = {
+    /**
+     * Hidden contributors listed
+     */
+    200: Array<UserInfo>;
+};
+
+export type ListHiddenContributorsResponse = ListHiddenContributorsResponses[keyof ListHiddenContributorsResponses];
+
 export type GetOpenWorkData = {
     body?: never;
     path: {
