@@ -57,7 +57,7 @@ export function ActivityDetailDrawer({
 	const pathAt = levelPathAt(stack, { pageLabel, labelOf, onClose });
 
 	return (
-		<DetailDrawerStack stack={stack} size="detailWide" onClose={onClose}>
+		<DetailDrawerStack stack={stack} size="detail" onClose={onClose}>
 			{(_entry, level): ReactNode => {
 				const target = stack[level.depth]?.target;
 				switch (target?.kind) {

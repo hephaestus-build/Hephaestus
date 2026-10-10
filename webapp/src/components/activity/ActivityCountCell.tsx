@@ -34,13 +34,13 @@ const PEOPLE_ICON = providerIcon(PeopleIcon, GitLabUsersIcon);
 export function ActivityCountCell({ category, counts, providerType }: ActivityCountCellProps) {
 	const parts = PARTS[category](counts, providerType);
 	return (
-		<span className="inline-flex items-center justify-end gap-2">
+		<span className="inline-flex items-center justify-end gap-2 align-middle">
 			{parts.map((part, index) => (
 				<span key={part.key} className="inline-flex min-w-9 justify-end">
 					{part.count > 0 ? (
 						<CountChip icon={part.icon} tone={part.tone} phrase={part.phrase}>
 							<span aria-hidden className="font-medium tabular-nums">
-								{part.count}
+								{part.count.toLocaleString("en-GB")}
 							</span>
 						</CountChip>
 					) : (
@@ -61,15 +61,21 @@ export function ActivityCountHeader({
 	category: CountedCategory;
 	providerType: ProviderType;
 }) {
-	const def = ACTIVITY_CATEGORY_DEFS[category];
-	const Icon = def.icon(providerType);
+	const Icon = HEADER_ICONS[category](providerType);
 	return (
 		<span className="inline-flex items-center gap-1.5">
 			<Icon size={16} className="shrink-0" />
-			{def.label(providerType)}
+			{ACTIVITY_CATEGORY_DEFS[category].label(providerType)}
 		</span>
 	);
 }
+
+/** Each column's icon is that of what it sorts by: a pull request opened, not a merge. */
+const HEADER_ICONS: Record<CountedCategory, (provider: ProviderType) => IconComponent> = {
+	"pull-requests": ACTIVITY_KIND_DEFS.PULL_REQUEST_OPENED.icon,
+	reviews: ACTIVITY_CATEGORY_DEFS.reviews.icon,
+	issues: ACTIVITY_KIND_DEFS.ISSUE_OPENED.icon,
+};
 
 interface Part {
 	key: string;

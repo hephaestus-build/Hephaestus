@@ -95,7 +95,7 @@ export function ActivityPage({
 	}
 	const login = account.status === "ready" ? account.login : undefined;
 	return (
-		<PageLayout className="space-y-8">
+		<PageLayout className="max-w-4xl space-y-8">
 			{header}
 			<OpenWorkSections state={openWork} providerType={providerType} reviewNow={reviewNow} />
 			<PersonActivitySections

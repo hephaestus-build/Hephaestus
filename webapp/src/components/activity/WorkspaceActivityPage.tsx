@@ -72,7 +72,7 @@ export function WorkspaceActivityPage({
 				title="Workspace activity"
 				description={ready && coverageNote(ready)}
 			/>
-			<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+			<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
 				<ActivityTeamPicker teams={facets?.teams} value={team} onChange={onTeamChange} />
 				<ActivityPeriodPicker
 					period={period}

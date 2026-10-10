@@ -33,7 +33,8 @@ export function RangeControls<TRange extends string>({
 	const showUpdating = useSpinDelay(updating, { delay: 1000, minDuration: 500 });
 	return (
 		<div className="flex flex-wrap items-center gap-3">
-			<span role="status" className="text-sm text-muted-foreground">
+			{/* Empty, it gives up its gap, so the toggle starts where the row does. */}
+			<span role="status" className="text-sm text-muted-foreground empty:-me-3">
 				{showUpdating ? "Updating…" : ""}
 			</span>
 			<FilterToggle label="Time range" options={options} value={range} onChange={onRangeChange} />

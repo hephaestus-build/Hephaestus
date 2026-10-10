@@ -24,7 +24,7 @@ export function ActivityAutomationList({ automation }: ActivityAutomationListPro
 			{sorted.map(({ person, counts, kind }) => (
 				<Item key={person.id} render={<li />} variant="row" size="sm" className="relative">
 					<ItemMedia>
-						<MemberAvatar user={person} size="sm" />
+						<MemberAvatar user={person} />
 					</ItemMedia>
 					<ItemContent className="min-w-0">
 						<ItemTitle className="min-w-0">

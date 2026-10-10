@@ -186,6 +186,7 @@ function KindRow({
 }) {
 	const def = ACTIVITY_KIND_DEFS[kind];
 	const Icon = def.icon(providerType);
+	// The icon keeps the kind's own colour, as everywhere else; only its bars take a mark tone.
 	const tone = ACTIVITY_TONES[markTone(def.tone)];
 	const rows = weekRows(overview.weeks, (tally) => tally[kind]);
 	const config = { count: { label: def.label, color: tone.fill } } satisfies ChartConfig;
@@ -194,7 +195,7 @@ function KindRow({
 	return (
 		<li className="space-y-1">
 			<p className="flex items-center gap-2 text-sm">
-				<Icon size={16} className={cn("shrink-0", tone.text)} />
+				<Icon size={16} className={cn("shrink-0", ACTIVITY_TONES[def.tone].text)} />
 				{def.label}
 				<span className="font-semibold text-foreground tabular-nums">{total}</span>
 			</p>

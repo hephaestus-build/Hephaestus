@@ -53,6 +53,7 @@ export function ActivityTeamPicker({ teams, value, onChange }: ActivityTeamPicke
 		>
 			<ComboboxTrigger
 				type="button"
+				size="sm"
 				aria-label={`Team: ${selected.label}`}
 				className="w-full justify-between font-normal sm:w-56"
 			>

@@ -73,6 +73,12 @@ const fold = (text: string): string =>
 
 const columnHelper = createColumnHelper<DataTableFeatures, ActivityPerson>();
 
+/**
+ * Below `sm` the position and the person stay in place while the figures scroll under them, so a
+ * narrow screen shows whose row it is and that there is more to the side.
+ */
+const PINNED = "max-sm:sticky max-sm:z-10 max-sm:bg-card";
+
 /** A number column fits its figures and leaves the rest of the row to the person. */
 const NUMBER_COLUMN = { numeric: true, className: "w-px" };
 
@@ -113,6 +119,7 @@ export function ActivityPeopleTable({
 	);
 	const columns = useMemo(() => {
 		const firstContributors = new Set(firstContributorIds);
+		const positioned = order.sort !== "name";
 		const countColumn = (category: CountedCategory) =>
 			columnHelper.accessor(PEOPLE_COUNTS[category], {
 				id: category,
@@ -135,7 +142,7 @@ export function ActivityPeopleTable({
 						<span className="sr-only">Position</span>
 					</>
 				),
-				meta: { numeric: true, className: "w-px pl-3" },
+				meta: { numeric: true, className: cn("w-10 min-w-10 pl-3 max-sm:left-0", PINNED) },
 				cell: ({ row }) => (
 					<span className="text-muted-foreground">{positions.get(row.original.person.id)}</span>
 				),
@@ -144,7 +151,13 @@ export function ActivityPeopleTable({
 				id: "name" satisfies PeopleSort,
 				header: "Person",
 				sortFn: (a, b) => nameOrder.compare(a.original.person.name, b.original.person.name),
-				meta: { className: "min-w-48" },
+				meta: {
+					className: cn(
+						"min-w-40 sm:min-w-48",
+						PINNED,
+						positioned ? "max-sm:left-10" : "max-sm:left-0",
+					),
+				},
 				cell: ({ row }) => (
 					<PersonCell person={row.original} first={firstContributors.has(row.original.person.id)} />
 				),
@@ -161,23 +174,24 @@ export function ActivityPeopleTable({
 			columnHelper.accessor(PEOPLE_COUNTS["active-weeks"], {
 				id: "active-weeks" satisfies PeopleSort,
 				header: () => (
-					<span title="Active weeks: weeks with any work in the range">
+					<>
 						<span aria-hidden>Weeks</span>
 						<span className="sr-only">Active weeks</span>
-					</span>
+					</>
 				),
 				meta: NUMBER_COLUMN,
 				cell: ({ getValue }) => <Figure count={getValue()} unit="active week" />,
 			}),
 			columnHelper.display({
 				id: "trend",
-				header: "Weekly",
+				// The line shows what it is; its name is for a screen reader.
+				header: () => <span className="sr-only">Weekly trend</span>,
 				meta: { className: "w-px pr-3" },
 				cell: ({ row }) =>
 					from && to && <ActivitySparkline weeks={row.original.weeks} span={{ from, to }} />,
 			}),
 		]);
-	}, [positions, providerType, from, to, firstContributorIds]);
+	}, [positions, providerType, from, to, firstContributorIds, order.sort]);
 
 	const table = useTable({
 		features: dataTableFeatures,
@@ -287,7 +301,10 @@ export function ActivityPeopleTable({
 										<TableCell colSpan={columnCount}>
 											<div className="flex items-center gap-3">
 												<Skeleton className="size-8 rounded-full" />
-												<Skeleton className="h-4 w-40" />
+												<div className="space-y-1.5">
+													<Skeleton className="h-4 w-40" />
+													<Skeleton className="h-3 w-16" />
+												</div>
 												<Skeleton className="ml-auto h-4 w-1/2" />
 											</div>
 										</TableCell>
@@ -388,7 +405,7 @@ function Figure({
 	if (count === 0) {
 		return <NoneMark phrase={`0 ${unit}s`} />;
 	}
-	return <span className={cn(strong && "font-semibold")}>{count}</span>;
+	return <span className={cn(strong && "font-semibold")}>{count.toLocaleString("en-GB")}</span>;
 }
 
 /** "12 people", or what a search leaves of them: "3 of 12 people". */

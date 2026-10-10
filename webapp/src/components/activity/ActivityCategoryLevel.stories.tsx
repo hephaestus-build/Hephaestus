@@ -48,7 +48,7 @@ const meta = {
 			{(stack, setStack) => (
 				<DetailDrawerStack
 					stack={stack}
-					size="detailWide"
+					size="detail"
 					onClose={(depth) => setStack(stack.slice(0, depth))}
 				>
 					{(_entry, level) => (
