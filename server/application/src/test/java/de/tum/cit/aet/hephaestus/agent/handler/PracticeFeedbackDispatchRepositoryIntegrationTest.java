@@ -49,6 +49,8 @@ import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -204,6 +206,57 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
                 .isFalse();
     }
 
+    // Same head and words; only GitLab's diff base can differ. Its base is the pair GitLab recorded with the head.
+    @ParameterizedTest
+    @CsvSource({"equal, CURRENT", "different, CHANGED", "absent, UNKNOWN", "malformed, UNKNOWN"})
+    void shouldCompareTheCapturedGitLabDiffBaseUnderTheWorkLock(
+            String mirror, PracticeFeedbackDeliveryPolicy.ReviewedRevision expected) {
+        String base =
+                switch (mirror) {
+                    case "equal" -> ReviewedWorkFixtures.BASE;
+                    case "different" -> "d".repeat(40);
+                    case "absent" -> null;
+                    case "malformed" -> "not-a-commit";
+                    default -> throw new IllegalArgumentException(mirror);
+                };
+        reviewedPullRequest(true, base);
+        AgentJob job = jobRepository.findById(jobId).orElseThrow();
+
+        var revision = transactions.execute(status -> deliveryPolicy.lockedReviewedRevision(job, null));
+        assertThat(revision).isEqualTo(expected);
+    }
+
+    @Test
+    void shouldKeepTheGitHubPolicyWhenOnlyTheTargetTipMoved() {
+        reviewedPullRequest(false, "d".repeat(40));
+        AgentJob job = jobRepository.findById(jobId).orElseThrow();
+
+        var revision = transactions.execute(status -> deliveryPolicy.lockedReviewedRevision(job, null));
+        assertThat(revision).isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT);
+    }
+
+    @Test
+    void shouldCompareTheGitLabBaseCommittedAfterTheSessionLoadedTheWork() throws Exception {
+        var work = reviewedPullRequest(true, ReviewedWorkFixtures.BASE);
+        AgentJob job = jobRepository.findById(jobId).orElseThrow();
+
+        var revision = transactions.execute(status -> {
+            // The session holds the work as loaded before another writer changed its base.
+            assertThat(pullRequests.findById(work.getId()).orElseThrow().getBaseRefOid())
+                    .isEqualTo(ReviewedWorkFixtures.BASE);
+            try (var threads = Executors.newVirtualThreadPerTaskExecutor()) {
+                threads.submit(() -> transactions.executeWithoutResult(other -> jdbcTemplate.update(
+                                "UPDATE issue SET base_ref_oid = ? WHERE id = ?", "d".repeat(40), work.getId())))
+                        .get(30, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+            return deliveryPolicy.lockedReviewedRevision(job, null);
+        });
+
+        assertThat(revision).isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
+    }
+
     private static void await(CountDownLatch latch) {
         try {
             if (!latch.await(30, TimeUnit.SECONDS)) throw new IllegalStateException("Race latch timed out");
@@ -214,9 +267,17 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
     }
 
     private PullRequest reviewedPullRequest() {
+        return reviewedPullRequest(false, null);
+    }
+
+    /**
+     * A captured pull request; its pinned change is {@code ReviewedWorkFixtures.BASE:head}, and {@code mirrorBase} is
+     * what the mirror holds as its base now.
+     */
+    private PullRequest reviewedPullRequest(boolean gitLab, @Nullable String mirrorBase) {
         var mapper = JsonMapper.builder().build();
         var repository = new Repository();
-        repository.setProvider(ensureGitHubProvider());
+        repository.setProvider(gitLab ? ensureGitLabProvider() : ensureGitHubProvider());
         repository.setNativeId(70201L);
         repository.setName("reservation");
         repository.setNameWithOwner("dispatch-org/reservation");
@@ -234,6 +295,7 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
         work.setTitle("Original title");
         work.setBody("Original description");
         work.setHeadRefOid("b".repeat(40));
+        if (mirrorBase != null) work.setBaseRefOid(mirrorBase);
         work = pullRequests.saveAndFlush(work);
         AgentJob job = jobRepository.findById(jobId).orElseThrow();
         job.setMetadata(mapper.createObjectNode()

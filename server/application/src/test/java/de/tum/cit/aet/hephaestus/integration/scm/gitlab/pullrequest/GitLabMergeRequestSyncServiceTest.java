@@ -207,6 +207,99 @@ class GitLabMergeRequestSyncServiceTest extends BaseUnitTest {
         });
     }
 
+    @Test
+    void shouldHandOnADiffBaseOnlyBesideTheHeadGitLabPairedItWith() {
+        String head = "b".repeat(40);
+        String base = "a".repeat(40);
+        Map<String, @Nullable Object> paired = mergeRequest(3);
+        paired.put("diffRefs", Map.of("headSha", head, "baseSha", base));
+        Map<String, @Nullable Object> otherHead = mergeRequest(4);
+        otherHead.put("diffRefs", Map.of("headSha", "c".repeat(40), "baseSha", base));
+        Map<String, @Nullable Object> noPairedHead = mergeRequest(5);
+        noPairedHead.put("diffRefs", Map.of("baseSha", base));
+        Map<String, @Nullable Object> blankPairedHead = mergeRequest(6);
+        blankPairedHead.put("diffRefs", Map.of("headSha", " ", "baseSha", base));
+        Map<String, @Nullable Object> blankBase = mergeRequest(7);
+        blankBase.put("diffRefs", Map.of("headSha", head, "baseSha", " "));
+        Map<String, @Nullable Object> noBase = mergeRequest(8);
+        noBase.put("diffRefs", Map.of("headSha", head));
+        Map<String, @Nullable Object> noRefs = mergeRequest(9);
+        noRefs.put("diffRefs", null);
+        Map<String, @Nullable Object> noHead = mergeRequest(10);
+        noHead.put("diffHeadSha", null);
+        noHead.put("diffRefs", Map.of("headSha", head, "baseSha", base));
+        List<Map<String, Object>> nodes =
+                nullable(List.of(paired, otherHead, noPairedHead, blankPairedHead, blankBase, noBase, noRefs, noHead));
+        assertVendorCouldReturn(GITLAB, LISTING, "project.mergeRequests.nodes", nodes);
+        scriptedResponses.add(response(nodes));
+
+        service.syncMergeRequests(SCOPE_ID, repository(), null);
+
+        assertThat(synced())
+                .extracting(GitLabMergeRequestProcessor.SyncMergeRequestData::baseSha)
+                .containsExactly(base, null, null, null, null, null, null, null);
+    }
+
+    @Test
+    void shouldHandOnNoDiffBaseWhereItsHeadOrPairFailedToLoadAndLeaveTheOtherMergeRequestsAlone() {
+        String head = "b".repeat(40);
+        String base = "a".repeat(40);
+        List<Map<String, @Nullable Object>> read = IntStream.rangeClosed(3, 7)
+                .mapToObj(iid -> {
+                    Map<String, @Nullable Object> node = mergeRequest(iid);
+                    node.put("diffRefs", Map.of("headSha", head, "baseSha", base));
+                    return node;
+                })
+                .toList();
+        List<Map<String, Object>> nodes = nullable(read);
+        assertVendorCouldReturn(GITLAB, LISTING, "project.mergeRequests.nodes", nodes);
+        // GitLab names each failed field by its merge request's index; the last merge request has none.
+        scriptedResponses.add(response(
+                nodes,
+                List.of(
+                        GraphQlResponses.error(
+                                "Internal server error", "project", "mergeRequests", "nodes", 0, "diffHeadSha"),
+                        GraphQlResponses.error(
+                                "Internal server error", "project", "mergeRequests", "nodes", 1, "diffRefs"),
+                        GraphQlResponses.error(
+                                "Internal server error", "project", "mergeRequests", "nodes", 2, "diffRefs", "headSha"),
+                        GraphQlResponses.error(
+                                "Internal server error",
+                                "project",
+                                "mergeRequests",
+                                "nodes",
+                                3,
+                                "diffRefs",
+                                "baseSha"))));
+
+        service.syncMergeRequests(SCOPE_ID, repository(), null);
+
+        assertThat(synced())
+                .extracting(
+                        GitLabMergeRequestProcessor.SyncMergeRequestData::diffHeadSha,
+                        GitLabMergeRequestProcessor.SyncMergeRequestData::baseSha)
+                .containsExactly(
+                        tuple(null, null), tuple(head, null), tuple(head, null), tuple(head, null), tuple(head, base));
+    }
+
+    @Test
+    void shouldHandOnTheHistoricalPageDiffBaseOnlyBesideItsPairedHead() {
+        String base = "a".repeat(40);
+        Map<String, @Nullable Object> paired = mergeRequest(3);
+        paired.put("diffRefs", Map.of("headSha", "b".repeat(40), "baseSha", base));
+        Map<String, @Nullable Object> otherHead = mergeRequest(4);
+        otherHead.put("diffRefs", Map.of("headSha", "c".repeat(40), "baseSha", base));
+        List<Map<String, Object>> nodes = nullable(List.of(paired, otherHead));
+        assertVendorCouldReturn(GITLAB, "GetProjectMergeRequestsHistorical", "project.mergeRequests.nodes", nodes);
+        scriptedResponses.add(response(nodes));
+
+        service.backfillMergeRequests(SCOPE_ID, repository(), null, 10);
+
+        assertThat(synced())
+                .extracting(GitLabMergeRequestProcessor.SyncMergeRequestData::baseSha)
+                .containsExactly(base, null);
+    }
+
     /** Merge request !{@code iid} as the listing names it, with fields a test adds. */
     private static Map<String, @Nullable Object> mergeRequest(int iid) {
         Map<String, @Nullable Object> node = new HashMap<>();

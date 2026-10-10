@@ -24,13 +24,14 @@ public interface ReviewedWorkChanges {
     boolean linkedCaptureCurrent(long workspaceId, UUID jobId, long pullRequestId, String signalRevision);
 
     /**
-     * The head and title-and-description revision a run captured of exactly this pull request, when its stored
+     * The head, base and title-and-description revision a run captured of exactly this pull request, when its stored
      * identity and manifest are readable, its core and pinned change were available, and its source contract permits
      * both for delivery. Anything else is empty: an identity that cannot be read is unknown, never equal.
      */
     Optional<CapturedIdentity> deliverableCapture(long workspaceId, UUID jobId, long pullRequestId);
 
-    record CapturedIdentity(String head, String titleAndDescriptionRevision) {}
+    /** @param base the base of the pinned change the run reviewed, never read from the job's admission metadata */
+    record CapturedIdentity(String head, String base, String titleAndDescriptionRevision) {}
 
     /** The mirrored material fields, not an integration entity or an event delivery identity. */
     record PullRequestRevision(

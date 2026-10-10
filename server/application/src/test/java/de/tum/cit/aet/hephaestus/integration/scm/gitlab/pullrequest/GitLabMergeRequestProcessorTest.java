@@ -1844,6 +1844,103 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             assertThat(pr.getReviewersObservedAt()).isNull();
         }
 
+        @Test
+        void shouldRecordTheDiffBaseGitLabPairedWithTheStoredHead() {
+            stubSnapshotWrite();
+            pr.setBaseRefOid("e".repeat(40));
+
+            assertThat(readPair(pair(APPROVAL_HEAD, "c".repeat(40)), testRepo.getNativeId(), APPROVAL_HEAD, readAt))
+                    .isTrue();
+
+            assertThat(pr.getBaseRefOid()).isEqualTo("c".repeat(40));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"absent", "other pair head"})
+        void shouldKeepTheStoredBaseWithoutAPairForTheStoredHead(String read) {
+            stubSnapshotWrite();
+            pr.setBaseRefOid("e".repeat(40));
+
+            assertThat(readPair(
+                            "absent".equals(read) ? null : pair("b".repeat(40), "c".repeat(40)),
+                            testRepo.getNativeId(),
+                            APPROVAL_HEAD,
+                            readAt))
+                    .isTrue();
+
+            assertThat(pr.getBaseRefOid()).isEqualTo("e".repeat(40));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"project", "head", "version"})
+        void shouldNotRecordAPairFromAReadThatDoesNotDescribeTheStoredWork(String mismatch) {
+            pr.setBaseRefOid("e".repeat(40));
+            String head = "head".equals(mismatch) ? "b".repeat(40) : APPROVAL_HEAD;
+            var facts = pairFacts(
+                    pair(head, "c".repeat(40)),
+                    "project".equals(mismatch) ? testRepo.getNativeId() + 1 : testRepo.getNativeId(),
+                    head,
+                    "version".equals(mismatch) ? materialVersion.minusSeconds(1) : materialVersion);
+
+            assertThat(processor.applyReadiness(
+                            testRepo, MR_IID, facts, readAt, ProcessingContext.forSync(1L, testRepo)))
+                    .isFalse();
+
+            assertThat(pr.getBaseRefOid()).isEqualTo("e".repeat(40));
+        }
+
+        @Test
+        void shouldNotLetAReadBegunEarlierReplaceAPairAcceptedLater() {
+            stubSnapshotWrite();
+            assertThat(readPair(pair(APPROVAL_HEAD, "c".repeat(40)), testRepo.getNativeId(), APPROVAL_HEAD, readAt))
+                    .isTrue();
+
+            readPair(
+                    pair(APPROVAL_HEAD, "d".repeat(40)), testRepo.getNativeId(), APPROVAL_HEAD, readAt.minusSeconds(1));
+
+            assertThat(pr.getBaseRefOid()).isEqualTo("c".repeat(40));
+        }
+
+        private static GitLabMergeRequestReadinessReader.DiffRefs pair(String head, String base) {
+            return new GitLabMergeRequestReadinessReader.DiffRefs(head, base);
+        }
+
+        private boolean readPair(
+                GitLabMergeRequestReadinessReader.@Nullable DiffRefs pair,
+                long project,
+                String head,
+                Instant requestedAt) {
+            return processor.applyReadiness(
+                    testRepo,
+                    MR_IID,
+                    pairFacts(pair, project, head, materialVersion),
+                    requestedAt,
+                    ProcessingContext.forSync(1L, testRepo));
+        }
+
+        private GitLabMergeRequestReadinessReader.Facts pairFacts(
+                GitLabMergeRequestReadinessReader.@Nullable DiffRefs pair,
+                long project,
+                String head,
+                Instant updatedAt) {
+            var facts = facts(null, head, updatedAt);
+            return new GitLabMergeRequestReadinessReader.Facts(
+                    project,
+                    facts.mergeRequestNativeId(),
+                    facts.state(),
+                    facts.updatedAt(),
+                    facts.headSha(),
+                    facts.mergeable(),
+                    facts.detailedMergeStatus(),
+                    facts.approved(),
+                    facts.headPipeline(),
+                    facts.reviewers(),
+                    facts.approvers(),
+                    facts.merge(),
+                    facts.approvalRows(),
+                    pair);
+        }
+
         private void stubSnapshotWrite() {
             when(pullRequestRepository.save(pr)).thenReturn(pr);
             when(gitLabUserService.findOrCreateUser(any(GitLabUserLookup.class), eq(PROVIDER_ID)))

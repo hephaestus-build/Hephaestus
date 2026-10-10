@@ -157,8 +157,10 @@ public class CapturedReviewedWorkChanges implements ReviewedWorkChanges {
         try {
             ReviewedWork captured = mapper.readValue(stored, ReviewedWork.class);
             String head = captured == null ? null : captured.head();
+            String base = ReviewedWork.capturedBase(manifest);
             if (captured == null
                     || head == null
+                    || base == null
                     || !ArtifactKinds.PULL_REQUEST.value().equals(manifest.artifactKind())
                     || !ArtifactKinds.PULL_REQUEST.value().equals(captured.artifactKind())
                     || captured.artifactId() != pullRequestId
@@ -173,7 +175,7 @@ public class CapturedReviewedWorkChanges implements ReviewedWorkChanges {
                             SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)) {
                 return Optional.empty();
             }
-            return Optional.of(new CapturedIdentity(head, captured.titleAndDescriptionRevision()));
+            return Optional.of(new CapturedIdentity(head, base, captured.titleAndDescriptionRevision()));
         } catch (JacksonException | IllegalArgumentException e) {
             return Optional.empty();
         }

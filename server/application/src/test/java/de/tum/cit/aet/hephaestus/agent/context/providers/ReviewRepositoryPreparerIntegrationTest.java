@@ -3,10 +3,15 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -22,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -34,11 +40,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
     @Autowired
@@ -52,6 +60,9 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactions;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private static final String HEAD = "a".repeat(40);
     private static final String BASE = "b".repeat(40);
@@ -159,6 +170,35 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
         assertThat(stored.getBaseRefOid()).isEqualTo(BASE);
         assertThat(stored.getUpdatedAt()).isEqualTo(pullRequest.getUpdatedAt());
         assertThat(job.getMetadata()).isEqualTo(original);
+    }
+
+    // A push job reaches capture when the coalescer could not prove a newer review covers it; it keeps its own range.
+    @ParameterizedTest
+    @ValueSource(strings = {"scm.pull_request.ready", "scm.pull_request.synchronized"})
+    void shouldPrepareADelayedOccasionAtItsAdmittedPairAfterALaterPush(String signal) {
+        assertThat(signal).isIn(ScmSignals.PULL_REQUEST_READY.value(), ScmSignals.PULL_REQUEST_SYNCHRONIZED.value());
+        var stored = pullRequests.findById(pullRequest.getId()).orElseThrow();
+        stored.setBaseRefOid(BASE);
+        pullRequests.save(stored);
+        // Admitted from that row: its head and the base the mirror recorded with it.
+        var metadata = (ObjectNode) Objects.requireNonNull(job.getMetadata());
+        metadata.put("signal", signal);
+        metadata.put("base_ref_oid", BASE);
+        metadata.put(PullRequestReviewHandler.RETAINED_RANGE_METADATA_KEY, true);
+        // A later push stores the newer head without a provider base, as the GitLab hook does.
+        assertThat(jdbcTemplate.update(
+                        "UPDATE issue SET head_ref_oid = ?, base_ref_oid = NULL WHERE id = ?",
+                        "c".repeat(40),
+                        pullRequest.getId()))
+                .isOne();
+
+        assertThat(preparer.prepare(job))
+                .isEqualTo(new ReviewRepositoryPreparer.PreparedReview(preparer.authorize(job), HEAD, BASE));
+
+        verify(rangeSource, never()).read(anyLong(), anyString(), anyInt());
+        var after = pullRequests.findById(pullRequest.getId()).orElseThrow();
+        assertThat(after.getHeadRefOid()).isEqualTo("c".repeat(40));
+        assertThat(after.getBaseRefOid()).isNull();
     }
 
     @ParameterizedTest

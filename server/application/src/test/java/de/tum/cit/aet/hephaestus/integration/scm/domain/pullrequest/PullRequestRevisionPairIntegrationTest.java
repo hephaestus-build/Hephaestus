@@ -91,6 +91,52 @@ class PullRequestRevisionPairIntegrationTest extends BaseIntegrationTest {
         assertThat(updated.getBaseRefOid()).isEqualTo("later-base");
     }
 
+    // A diff base belongs to its target too: a retargeted pull request at the same head has another range.
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldInvalidateThePreviousPairWhenTheTargetChangesWithoutBase(IdentityProviderType providerType) {
+        Fixture fixture = createFixture(providerType);
+
+        upsert(fixture, "old-head", null, "release");
+
+        PullRequest pullRequest = read(fixture);
+        assertThat(pullRequest.getHeadRefOid()).isEqualTo("old-head");
+        assertThat(pullRequest.getBaseRefName()).isEqualTo("release");
+        assertThat(pullRequest.getBaseRefOid()).isNull();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldPreserveThePairWhenTheTargetIsOmittedOrUnchanged(IdentityProviderType providerType) {
+        Fixture fixture = createFixture(providerType);
+
+        upsert(fixture, "old-head", null, null);
+        assertThat(read(fixture).getBaseRefOid()).isEqualTo("old-base");
+        upsert(fixture, "old-head", null, "main");
+
+        PullRequest pullRequest = read(fixture);
+        assertThat(pullRequest.getBaseRefName()).isEqualTo("main");
+        assertThat(pullRequest.getBaseRefOid()).isEqualTo("old-base");
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldKeepTheNewPairWhenTheTargetChangesWithItsBase(IdentityProviderType providerType) {
+        Fixture fixture = createFixture(providerType);
+
+        upsert(fixture, "old-head", "release-base", "release");
+
+        PullRequest pullRequest = read(fixture);
+        assertThat(pullRequest.getBaseRefName()).isEqualTo("release");
+        assertThat(pullRequest.getBaseRefOid()).isEqualTo("release-base");
+    }
+
     private Fixture createFixture(IdentityProviderType providerType) {
         IdentityProvider provider = providers.save(new IdentityProvider(providerType, "https://scm.example"));
         var author = users.save(TestUserFactory.createUser(1001L, "developer", provider));
@@ -111,6 +157,10 @@ class PullRequestRevisionPairIntegrationTest extends BaseIntegrationTest {
     }
 
     private void upsert(Fixture fixture, @Nullable String head, @Nullable String base) {
+        upsert(fixture, head, base, "main");
+    }
+
+    private void upsert(Fixture fixture, @Nullable String head, @Nullable String base, @Nullable String target) {
         Instant now = Instant.now();
         pullRequests.upsertCore(
                 4001L,
@@ -141,7 +191,7 @@ class PullRequestRevisionPairIntegrationTest extends BaseIntegrationTest {
                 null,
                 null,
                 "feature",
-                "main",
+                target,
                 head,
                 base,
                 null,

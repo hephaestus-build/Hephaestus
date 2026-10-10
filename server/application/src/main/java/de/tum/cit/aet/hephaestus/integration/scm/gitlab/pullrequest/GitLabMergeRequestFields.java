@@ -47,6 +47,31 @@ final class GitLabMergeRequestFields {
         return GitLabHeadPipeline.NOT_CAPTURED;
     }
 
+    /**
+     * The diff version of the merge request at {@code mergeRequestPath} for {@code head}, its {@code diffHeadSha} read
+     * on its own: only where GitLab gave both shas without an error and paired them with that head. Otherwise
+     * {@code null}, never the base beside another or an unknown head.
+     */
+    static GitLabMergeRequestReadinessReader.@Nullable DiffRefs diffRefs(
+            ClientGraphQlResponse response,
+            String mergeRequestPath,
+            Map<String, Object> mergeRequest,
+            @Nullable String head) {
+        String path = mergeRequestPath + ".diffRefs";
+        if (head == null
+                || head.isBlank()
+                || failed(response, mergeRequestPath + ".diffHeadSha")
+                || failed(response, path)
+                || failed(response, path + ".headSha")
+                || failed(response, path + ".baseSha")
+                || !(mergeRequest.get("diffRefs") instanceof Map<?, ?> refs)
+                || !(refs.get("headSha") instanceof String pairedHead)
+                || !head.equals(pairedHead)
+                || !(refs.get("baseSha") instanceof String base)
+                || base.isBlank()) return null;
+        return new GitLabMergeRequestReadinessReader.DiffRefs(pairedHead, base);
+    }
+
     /** GitLab's {@code approved}, or {@code null} where it did not give one: a failed read is not a refusal. */
     static @Nullable Boolean approved(
             ClientGraphQlResponse response, String mergeRequestPath, Map<String, Object> mergeRequest) {

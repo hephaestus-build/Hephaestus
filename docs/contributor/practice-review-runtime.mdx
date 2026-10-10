@@ -50,6 +50,9 @@ sequenceDiagram
   and clones or refreshes the worker-local mirror before pinning the review range. A missing mirror alone
   does not make the source unavailable. Disabled checkout records the tree as not collected. Preparation
   failures are recorded in the capture result.
+- **The review range uses the range retained at admission when available.** The
+  [pipeline guide](./practice-review-pipeline.mdx#capture) owns the rules for a retained range, a job
+  without one, and GitHub.
 - **`evidence_snapshot` and `review_readiness` are written before the container starts**, in their own transaction.
   A failed write fails the run before any model cost accrues. The result is a separate,
   later transaction.

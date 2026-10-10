@@ -158,7 +158,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
      * {@code requestedAt} is stored ({@link PullRequest#takesReviewSnapshotAt}); mergeability and approvals stay unknown
      * while GitLab is still settling them ({@link #isSettling}), and the approvals come only from a whole list.
      * An older GraphQL version can date already-standing merged approvals only through
-     * {@link #recoverStandingApprovalDates}, without changing mutable readiness or membership.
+     * {@link #recoverStandingApprovalDates}, without changing mutable readiness or membership. The diff base GitLab
+     * paired with that head is recorded under the same ordering as the reviews.
      *
      * @return whether the facts were recorded
      */
@@ -188,6 +189,12 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         boolean settling = isSettling(facts.detailedMergeStatus());
         facts.headPipeline().observeOn(pr, requestedAt);
         if (pr.takesReviewSnapshotAt(requestedAt)) {
+            // The diff version GitLab paired with the stored head. A read begun before a later accepted one never
+            // reaches this branch, so it cannot replace the newer pair; an absent pair leaves the stored one as it is.
+            var pair = facts.diffRefs();
+            if (pair != null && pair.head().equals(pr.getHeadRefOid())) {
+                pr.setBaseRefOid(pair.base());
+            }
             ProcessingContext read = context.withObservedAt(requestedAt);
             updateSyncReviewers(facts.reviewers(), pr, providerId, read);
             recordReviewSnapshot(
@@ -441,6 +448,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
     /**
      * @param approved GitLab's {@code approved}; null where the read did not capture it
+     * @param baseSha the diff base GitLab paired with {@code diffHeadSha}; null where the read did not capture that pair
      * @param closingIssueNumbers the iids of GitLab's closing candidates for the MR, from the REST closes-issues route;
      *     null when this sync did not read them, which leaves the stored set alone
      */
@@ -1027,7 +1035,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 data.sourceBranch(),
                 data.targetBranch(),
                 data.diffHeadSha(),
-                data.baseSha(),
+                null, // baseRefOid: recorded with the review snapshot below, as for mergeable
                 mergeUser != null ? mergeUser.getId() : null,
                 data.mergeCommitSha());
 
@@ -1053,6 +1061,17 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         boolean changed = false;
         if (reviewsCurrent) {
             changed |= recordReviewSnapshot(pr, reviewDecision, settling ? null : data.mergeable(), mergeStateStatus);
+            // Only the accepted read can store its pair (see GitLabMergeRequestFields#diffRefs). An older page cannot
+            // replace a newer read. The upsert above invalidated any base whose head or target changed.
+            String pairedBase = data.baseSha();
+            String storedHead = pr.getHeadRefOid();
+            if (pairedBase != null
+                    && storedHead != null
+                    && storedHead.equals(data.diffHeadSha())
+                    && !pairedBase.equals(pr.getBaseRefOid())) {
+                pr.setBaseRefOid(pairedBase);
+                changed = true;
+            }
         } else if (headMoved) {
             changed |= forgetReadiness(pr);
         }

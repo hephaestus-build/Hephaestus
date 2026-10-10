@@ -457,7 +457,64 @@ A body that the job records as absent stages an empty description file.
 The state, draft, merge, approval, check, label and other status fields are the mirror at capture time.
 The `basis` object in `metadata.json` names the admission fields, the admission time, and the mirror sync time.
 Admission time is when the job was accepted, not when the provider event occurred.
-Capture does not reconstruct status at admission, and it does not recover an earlier head or range.
+Capture does not reconstruct status at admission.
+Comments, review threads and review status are current facts at capture time, not the history of the occasion.
+
+When available, the review range uses the head and base retained together at admission.
+Every pull request submission copies its head and its base from one mirror row.
+GitLab records a diff base, and new mirror writes keep it with its head and target branch.
+A write that names another head or another target branch without its own base clears the stored base.
+When neither the known head nor the known target changed, a write without a base keeps it.
+
+The readiness read after a merge request webhook and the page sync record a base only from GitLab's `diffRefs`.
+GitLab must give `diffRefs.headSha` and `diffRefs.baseSha` without a field error, and `diffRefs.headSha` must equal the `diffHeadSha` of the same read.
+Otherwise the read gives no base, and the stored base stays as the head and target rules above leave it.
+A read records its base only when it describes the stored merge request, head, state and version.
+A read or page that was requested before a later stored review read or hook records no base.
+
+Admission marks the retained range with `review_range_retained_at_admission: true` when it copies a base.
+This records the original values, not the provider provenance of an existing mirror row.
+Existing row timestamps do not establish that provenance, and this change does not audit legacy mirror values.
+
+GitLab does not give a pair for every update.
+An opening or ready occasion is usually admitted before the readiness read finishes.
+Such a job can have no admitted base.
+
+- **Retained range (GitLab).** The preparer uses the admitted head and base for every occasion.
+  The mirror or provider can now hold another pair.
+  The newer pair can have a different head, or the same head after the target moved.
+  It does not read the provider's current range and does not change the mirror.
+  If the admitted head or base commit is not available, the preparer refuses the capture.
+  It never uses a newer pair or the target branch in their place.
+- **No retained range (GitLab).** The marker is absent or is not the JSON value `true`, or the base is missing, blank or not text.
+  Every job admitted before the marker existed is in this group.
+  When the queued head still equals the mirror head, the preparer uses the mirror pair.
+  It can also read the provider pair for that head.
+  When the head moved, the preparer refuses the capture with its existing reason.
+- **GitHub.** The base is the target branch tip, not a diff base.
+  The preparer resolves the merge base from it, whether the head moved or not.
+
+Capture never decides which queued review a newer one replaces.
+The push coalescer owns that decision.
+A job that reaches capture is still owed, so it is measured at its own range.
+
+The final public write compares the capture with the mirror under the work's row lock.
+The capture's base and head come from the pinned change of its authorized manifest, not from the job metadata.
+A different head, title or description withholds the write as `REVIEWED_REVISION_CHANGED`.
+On GitLab, the stored diff base is compared too:
+
+| Stored GitLab base | Result |
+| --- | --- |
+| Equal to the captured base | The head, title and description comparison decides |
+| Another commit | Withheld as `REVIEWED_REVISION_CHANGED` |
+| Missing or not a commit id | Unknown: the delivery retries within its bound, then refuses |
+
+GitHub stores the target branch tip, which moves without changing what was reviewed.
+Thus, GitHub keeps the head, title and description comparison only.
+This check applies before new provider writes, also for jobs captured before the base was compared.
+It does not change copies already posted or the reconciliation of an unconfirmed write.
+It does not recover a job that capture refused or a job that stopped.
+GitLab line notes are ordinary location comments, so the same check covers them.
 
 Practice-specific precompute scripts run on these inputs inside the sandbox.
 The server also reads the change to evaluate declared practice subjects and verify citations.
