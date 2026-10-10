@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
@@ -43,6 +45,12 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
 
     @Autowired
     private ActivityEventRepository activityEvents;
+
+    @Autowired
+    private RepositoryRepository repositories;
+
+    @Autowired
+    private RepositoryToMonitorRepository monitoredRepositories;
 
     @Test
     void shouldRejectAnUnlinkedCreatorInsteadOfUsingTheirNamesakeOrTheSubmittedOwner() {
@@ -253,6 +261,18 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
 
     private void recordIssueOpened(Workspace workspace, User actor) {
         UUID id = UUID.randomUUID();
+        Repository repository = new Repository();
+        repository.setProvider(actor.getProvider());
+        repository.setNativeId(id.getMostSignificantBits());
+        repository.setName("issues-" + id);
+        repository.setNameWithOwner("profile/" + repository.getName());
+        repository.setHtmlUrl("https://example.com/" + repository.getNameWithOwner());
+        repository.setDefaultBranch("main");
+        repository = repositories.save(repository);
+        RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(workspace);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitoredRepositories.save(monitor);
         activityEvents.insertIfAbsent(
                 id,
                 "issue-" + id,
@@ -260,7 +280,7 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
                 Instant.now().minusSeconds(60),
                 actor.getId(),
                 workspace.getId(),
-                null,
+                repository.getId(),
                 ActivityTargetType.ISSUE.getValue(),
                 id.getMostSignificantBits());
     }

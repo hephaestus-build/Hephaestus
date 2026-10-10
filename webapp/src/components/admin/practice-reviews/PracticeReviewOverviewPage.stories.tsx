@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
-import type { ActivityRange } from "@/components/activity/activity-range";
+import type { ReviewRange } from "@/components/admin/practice-reviews/review-range";
 import { ReviewRunningBanner } from "@/components/admin/practices/review/ReviewRunningBanner";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -83,7 +83,7 @@ const meta = {
 	},
 	// Controlled: the range comes back through the same prop the choice is reported on.
 	render: (args) => (
-		<Stateful<ActivityRange> initial={args.range}>
+		<Stateful<ReviewRange> initial={args.range}>
 			{(range, setRange) => (
 				<PracticeReviewOverviewPage
 					{...args}

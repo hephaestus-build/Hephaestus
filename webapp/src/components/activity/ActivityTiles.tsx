@@ -1,7 +1,7 @@
 import { useId } from "react";
 
 import { cn } from "cn";
-import type { ActivityOverview } from "@/api/types.gen";
+import type { ActivityOverview } from "@/components/activity/activity-view";
 import { FOCUS_RING } from "@/components/common/focus";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { STAT_TILE_GRID, StatTile, StatTileSkeleton } from "@/components/common/StatTile";
@@ -122,10 +122,14 @@ function ActivityTile({
 			}
 			title={def.label(providerType)}
 			value={headline}
-			qualifier={def.headline.qualifier}
+			qualifier={
+				category === "reviews" && overview.summary.pullRequestsReviewed !== undefined
+					? "pull requests reviewed"
+					: def.headline.qualifier
+			}
 			detail={delta !== undefined && <p className="text-xs text-muted-foreground">{delta}</p>}
 		>
-			{opens && (
+			{opens && overview.buckets.length > 0 && (
 				<TileChart
 					category={category}
 					overview={overview}

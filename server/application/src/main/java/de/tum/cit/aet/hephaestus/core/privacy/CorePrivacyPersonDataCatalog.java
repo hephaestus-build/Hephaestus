@@ -147,7 +147,7 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         mapper,
                         "config_audit_event_membership_subject",
                         "config_audit_event",
-                        "t.entity_type='WORKSPACE_ROLE' AND t.entity_id IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users))",
+                        "t.entity_type IN ('WORKSPACE_ROLE','ACTIVITY_AUTOMATION') AND t.entity_id IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users))",
                         "id,occurred_at,workspace_id,entity_type,entity_id,action,changed_keys,old_value,new_value",
                         "id",
                         "entity_id='ERASED'",

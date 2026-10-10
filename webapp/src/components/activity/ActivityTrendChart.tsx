@@ -3,7 +3,7 @@ import { useId } from "react";
 import { Bar, BarChart, ReferenceLine, XAxis, YAxis } from "recharts";
 
 import { cn } from "cn";
-import type { ActivityOverview } from "@/api/types.gen";
+import type { ActivityOverview } from "@/components/activity/activity-view";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { useNow } from "@/components/common/use-now";
 import { Button } from "@/components/ui/button";

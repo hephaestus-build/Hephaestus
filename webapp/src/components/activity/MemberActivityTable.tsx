@@ -2,7 +2,7 @@ import { PeopleIcon, SearchIcon } from "@primer/octicons-react";
 import { useState } from "react";
 
 import { cn } from "cn";
-import type { MemberActivity } from "@/api/types.gen";
+import type { MemberActivity } from "@/components/activity/activity-view";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -209,6 +209,20 @@ function MemberRow({
 			</TableCell>
 			{ACTIVITY_CATEGORIES.map((category) => {
 				const actions = summaryActions(summary, ACTIVITY_CATEGORY_DEFS[category].kinds);
+				const aggregate = {
+					reviews: summary.pullRequestsReviewed,
+					comments: summary.totalComments,
+					"pull-requests": undefined,
+					issues: undefined,
+				}[category];
+				if (aggregate !== undefined) {
+					return (
+						<TableCell key={category} className="px-3">
+							{aggregate}
+							{category === "reviews" && " pull requests reviewed"}
+						</TableCell>
+					);
+				}
 				return (
 					<TableCell key={category} className="px-3">
 						{actions.length > 0 ? (

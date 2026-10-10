@@ -53,7 +53,10 @@ import org.jspecify.annotations.Nullable;
                     columnNames = {"workspace_id", "event_key"}),
         },
         indexes = {
-            @Index(name = "idx_activity_event_workspace_occurred", columnList = "workspace_id, occurred_at DESC"),
+            @Index(
+                    name = "idx_activity_event_workspace_covering",
+                    columnList = "workspace_id, occurred_at",
+                    options = "INCLUDE (actor_id, event_type, target_type, target_id, repository_id)"),
             @Index(name = "idx_activity_event_actor_occurred", columnList = "actor_id, occurred_at DESC"),
             @Index(
                     name = "idx_activity_event_workspace_actor_occurred",

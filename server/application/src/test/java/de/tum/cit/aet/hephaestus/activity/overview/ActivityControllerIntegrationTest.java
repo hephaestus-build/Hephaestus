@@ -1,24 +1,29 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import de.tum.cit.aet.hephaestus.activity.ActivityAutomation;
+import de.tum.cit.aet.hephaestus.activity.ActivityAutomationRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
 import de.tum.cit.aet.hephaestus.activity.ActivityTargetType;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityActionDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityBucketDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityOverviewDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivitySummaryDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDetailDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.MemberActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO.ReviewerState;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.TeamRefDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO;
-import de.tum.cit.aet.hephaestus.core.time.TimeBucketSize;
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -43,6 +48,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMemb
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermissionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -64,7 +70,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -75,10 +80,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.StatusAssertions;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.util.UriBuilder;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * The Activity read model against real rows: what counts, whose activity a scope covers, and what is open for
@@ -91,14 +97,20 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private static final String TO = "2026-02-01T00:00:00Z";
     private static final Instant DAY = Instant.parse("2026-01-10T12:00:00Z");
 
-    private static final ParameterizedTypeReference<List<MemberActivityDTO>> MEMBER_LIST =
-            new ParameterizedTypeReference<>() {};
-
     @Autowired
     private WebTestClient webTestClient;
 
     @Autowired
     private ActivityEventRepository activityEventRepository;
+
+    @Autowired
+    private ActivityAutomationRepository automationRepository;
+
+    @Autowired
+    private PersonDataService personData;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Autowired
     private RepositoryRepository repositoryRepository;
@@ -163,301 +175,561 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         unmonitored = repository("activity-org/elsewhere", false);
     }
 
+    @Autowired
+    private ActivityPeopleService peopleService;
+
+    @Autowired
+    private SqlReadMeasurement reads;
+
+    @Autowired
+    private ActivityAutomationService automationService;
+
     @Nested
-    class Summary {
+    class People {
+        @Test
+        void shouldKeepTheStatementBudgetWhenTheContributorListGrows() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
+            var before = reads.measure(() -> peopleService.people(workspace.getId(), range, null, Set.of()));
+            List<Long> added = new ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                User outside = persistUser("scale-contributor-" + i);
+                added.add(outside.getId());
+                record(outside, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1000L - i, DAY, monitored);
+            }
+            var after = reads.measure(() -> peopleService.people(workspace.getId(), range, null, Set.of()));
+            assertThat(after.value().people()).extracting(p -> p.person().id()).containsAll(added);
+            assertThat(after.cost()).isEqualTo(before.cost());
+            assertThat(after.cost().statements()).isEqualTo(5);
+            assertThat(after.cost().entities()).isZero();
+        }
 
         @Test
-        void shouldCountOnlyTheMembersOwnActivityInTheRangeWhenLoginIsGiven() {
-            PullRequest zoesWork = pullRequest(zoe, monitored, work -> work);
-            PullRequestReview approval = review(zoesWork, ada, PullRequestReview.State.APPROVED);
-            record(ada, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, approval.getId(), DAY);
-            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY.plusSeconds(60));
-            record(ada, ActivityEventType.COMMENT_CREATED, ActivityTargetType.ISSUE_COMMENT, -2L, DAY.plusSeconds(120));
+        void shouldExcludeHiddenPeopleAndCountEachCommentOnceWhenItsEventsRepeat() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            record(zoe, ActivityEventType.COMMENT_CREATED, ActivityTargetType.ISSUE_COMMENT, -2L, DAY, monitored);
             record(
-                    ada,
-                    ActivityEventType.ISSUE_CREATED,
-                    ActivityTargetType.ISSUE,
-                    -3L,
-                    Instant.parse("2025-12-31T23:59:59Z"));
-            record(zoe, ActivityEventType.PULL_REQUEST_OPENED, ActivityTargetType.PULL_REQUEST, zoesWork.getId(), DAY);
-
-            ActivitySummaryDTO summary = summary(uri -> uri.queryParam("login", ada.getLogin()));
-
-            assertThat(summary.approvals()).isEqualTo(1);
-            assertThat(summary.issuesOpened())
-                    .as("the issue before the range is left out")
-                    .isEqualTo(1);
-            assertThat(summary.comments()).isEqualTo(1);
-            assertThat(summary.pullRequestsOpened())
-                    .as("Zoe's pull request is hers")
-                    .isZero();
-        }
-
-        @Test
-        void shouldNotCountAReviewOfOnesOwnPullRequestWhenTheAuthorReviews() {
-            PullRequest zoesWork = pullRequest(zoe, monitored, work -> work);
-            PullRequestReview ownReview = review(zoesWork, zoe, PullRequestReview.State.COMMENTED);
-            PullRequestReview adasReview = review(zoesWork, ada, PullRequestReview.State.COMMENTED);
-            record(zoe, ActivityEventType.REVIEW_COMMENTED, ActivityTargetType.REVIEW, ownReview.getId(), DAY);
-            record(ada, ActivityEventType.REVIEW_COMMENTED, ActivityTargetType.REVIEW, adasReview.getId(), DAY);
-
-            ActivitySummaryDTO zoes = summary(uri -> uri.queryParam("login", zoe.getLogin()));
-            ActivitySummaryDTO adas = summary(uri -> uri.queryParam("login", ada.getLogin()));
-
-            assertThat(zoes.commentReviews()).isZero();
-            assertThat(adas.commentReviews()).isEqualTo(1);
-            assertThat(work(uri -> uri.queryParam("login", zoe.getLogin())).content())
-                    .as("the work list agrees with the count")
-                    .isEmpty();
-        }
-
-        @Test
-        void shouldLeaveAHiddenMemberOutOfWorkspaceActivityWhenTheirOwnSummaryStillCounts() {
-            User hidden = member("hidden-hal", "Hal");
-            var membership = workspaceMembershipRepository
-                    .findByWorkspace_IdAndUser_Id(workspace.getId(), hidden.getId())
-                    .orElseThrow();
-            membership.setHidden(true);
-            workspaceMembershipRepository.save(membership);
-            record(hidden, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -10L, DAY);
-            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -11L, DAY);
-
-            assertThat(members(uri -> uri))
-                    .extracting(member -> member.user().id())
-                    .contains(ada.getId())
-                    .doesNotContain(hidden.getId());
-            assertThat(summary(uri -> uri).issuesOpened())
-                    .as("only Ada's issue is workspace activity")
-                    .isEqualTo(1);
-            assertThat(summary(uri -> uri.queryParam("login", hidden.getLogin()))
-                            .issuesOpened())
+                    zoe,
+                    ActivityEventType.COMMENT_CREATED,
+                    ActivityTargetType.ISSUE_COMMENT,
+                    -2L,
+                    DAY.plusSeconds(60),
+                    monitored);
+            workspaceMembershipService.updateMemberVisibility(workspace.getId(), ada.getId(), true);
+            var result = peopleService.people(
+                    workspace.getId(),
+                    new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                    null,
+                    Set.of());
+            assertThat(result.people()).extracting(p -> p.person().id()).doesNotContain(ada.getId());
+            assertThat(result.people().stream()
+                            .filter(p -> p.person().id().equals(zoe.getId()))
+                            .findFirst()
+                            .orElseThrow()
+                            .counts()
+                            .comments())
                     .isEqualTo(1);
         }
 
         @Test
-        void shouldReturnNotFoundWhenTheLoginIsNoMember() {
-            User stranger = persistUser("activity-stranger");
+        void shouldMoveMachineUsersInBothDirectionsWithoutGrantingMembership() {
+            User machine = persistUser("machine-contributor");
+            record(machine, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
+            automationService.classify(workspace.getId(), machine.getId(), true);
+            var classified = peopleService.people(workspace.getId(), range, null, Set.of());
+            assertThat(classified.people()).extracting(p -> p.person().id()).doesNotContain(machine.getId());
+            assertThat(classified.automation()).extracting(p -> p.person().id()).contains(machine.getId());
+            assertThat(jdbc.queryForList(
+                            "SELECT entity_type FROM config_audit_event WHERE workspace_id=? AND entity_id=?",
+                            String.class,
+                            workspace.getId(),
+                            machine.getId().toString()))
+                    .contains("ACTIVITY_AUTOMATION");
+            automationService.classify(workspace.getId(), machine.getId(), false);
+            assertThat(peopleService
+                            .people(workspace.getId(), range, null, Set.of())
+                            .people())
+                    .extracting(p -> p.person().id())
+                    .contains(machine.getId());
+            assertThat(peopleService
+                            .people(workspace.getId(), range, null, Set.of())
+                            .people())
+                    .extracting(p -> p.person().id())
+                    .contains(machine.getId());
+        }
 
-            summaryStatus(uri -> uri.queryParam("login", stranger.getLogin()))
-                    .isNotFound()
-                    .expectBody(Void.class);
+        @ParameterizedTest
+        @EnumSource(
+                value = PersonDataRequest.State.class,
+                names = {"ERASING", "FAILED"})
+        void shouldRejectNewAutomationAssociationsAfterErasureAdmissionAndDuringRetry(PersonDataRequest.State state) {
+            User machine = persistUser("erasure-machine");
+            ensureWorkspaceMembership(workspace, machine, WorkspaceRole.MEMBER);
+            long administrator = Objects.requireNonNull(
+                    persistInstanceAdmin("Erasure administrator").getId());
+            var preview = personData.preview(
+                    administrator,
+                    null,
+                    List.of(new PersonIdentity(
+                            Objects.requireNonNull(machine.getProvider().getId()),
+                            machine.getNativeId().toString(),
+                            null)));
+            UUID requestId = preview.request().getId();
+            personData.requestErasure(requestId, administrator, true);
+            jdbc.update("UPDATE person_data_request SET state=? WHERE id=?", state.name(), requestId);
+
+            assertThatThrownBy(() -> automationService.classify(workspace.getId(), machine.getId(), true))
+                    .isInstanceOf(EntityNotFoundException.class);
+            var classification = new ActivityAutomation.Id(workspace.getId(), machine.getId());
+            assertThat(automationRepository.existsById(classification)).isFalse();
+            if (state == PersonDataRequest.State.FAILED) {
+                personData.requestErasure(requestId, administrator, true);
+            }
+            personData.run(requestId);
+            assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+            assertThat(automationRepository.existsById(classification)).isFalse();
         }
 
         @Test
-        void shouldNotCountActivityWhenTheActorIsABot() {
-            User bot = member("activity-bot", "Activity bot");
-            bot.setType(User.Type.BOT);
-            record(userRepository.save(bot), ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -12L, DAY);
-
-            assertThat(summary(uri -> uri.queryParam("login", "activity-bot")).issuesOpened())
-                    .isZero();
-        }
-
-        @Test
-        void shouldRejectTheRangeWhenItStartsAfterItEnds() {
-            status("/summary", uri -> uri.queryParam("from", TO).queryParam("to", FROM))
-                    .isBadRequest()
-                    .expectBody(Void.class);
-        }
-
-        @Test
-        void shouldRejectTheRangeWhenItSpansMoreThanTheMaximum() {
-            status(
-                            "/summary",
-                            uri -> uri.queryParam("from", "2024-12-01T00:00:00Z")
-                                    .queryParam("to", TO))
-                    .isBadRequest()
-                    .expectBody(Void.class);
-        }
-
-        /** The application clock is the system clock here; an hour's margin keeps the run's own duration out of it. */
-        @Test
-        void shouldCountTheSevenDaysBeforeNowWhenNoRangeIsGiven() {
-            Instant now = Instant.now();
-            record(
-                    ada,
-                    ActivityEventType.ISSUE_CREATED,
-                    ActivityTargetType.ISSUE,
-                    -60L,
-                    now.minus(Duration.ofHours(1)));
-            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -61L, now.minus(Duration.ofDays(8)));
-            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -62L, now.plus(Duration.ofHours(1)));
-
-            ActivitySummaryDTO summary = Objects.requireNonNull(
-                            status("/summary", uri -> uri.queryParam("login", ada.getLogin()))
-                                    .isOk()
-                                    .expectBody(ActivityOverviewDTO.class)
-                                    .returnResult()
-                                    .getResponseBody())
-                    .summary();
-
-            assertThat(summary.issuesOpened())
-                    .as("only the issue within the last seven days, and none from the future")
-                    .isEqualTo(1);
-        }
-
-        @Test
-        void shouldRefuseTheRequestWhenTheCallerIsNoMember() {
-            User stranger = persistUser("closed-owner");
-            Workspace closed = createWorkspace("activity-closed", "Closed", "closed-org", AccountType.ORG, stranger);
-
+        void shouldRejectAutomationChangesWhenCallerIsOnlyAMember() {
             webTestClient
-                    .get()
-                    .uri("/workspaces/{slug}/activity/summary", closed.getWorkspaceSlug())
+                    .patch()
+                    .uri(
+                            "/workspaces/{slug}/activity/people/{userId}/automation?treatAsAutomation=true",
+                            workspace.getWorkspaceSlug(),
+                            ada.getId())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
                     .isForbidden()
                     .expectBody(Void.class);
         }
-    }
-
-    @Nested
-    class Buckets {
 
         @Test
-        void shouldListEveryDayOfTheRangeAddingUpToTheSummaryWhenTheRangeIsAMonth() {
-            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -100L, DAY);
-            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -101L, DAY.plusSeconds(60));
-            record(
-                    ada,
-                    ActivityEventType.COMMENT_CREATED,
-                    ActivityTargetType.ISSUE_COMMENT,
-                    -102L,
-                    Instant.parse("2026-01-31T23:59:59Z"));
-            record(
-                    ada,
-                    ActivityEventType.COMMENT_CREATED,
-                    ActivityTargetType.ISSUE_COMMENT,
-                    -103L,
-                    Instant.parse("2026-02-01T00:00:00Z"));
-
-            ActivityOverviewDTO overview = overview(uri -> uri.queryParam("login", ada.getLogin()));
-
-            assertThat(overview.bucket()).isEqualTo(TimeBucketSize.DAY);
-            assertThat(overview.buckets())
-                    .as("31 days, zeros included, oldest first")
-                    .hasSize(31)
-                    .extracting(ActivityBucketDTO::start)
-                    .startsWith(Instant.parse(FROM))
-                    .endsWith(Instant.parse("2026-01-31T00:00:00Z"))
-                    .isSorted();
-            assertThat(bucketAt(overview, "2026-01-10T00:00:00Z").issuesOpened())
-                    .isEqualTo(2);
-            assertThat(bucketAt(overview, "2026-01-31T00:00:00Z").comments())
-                    .as("the comment at the range's end is outside it")
-                    .isEqualTo(1);
-            assertThat(bucketAt(overview, "2026-01-11T00:00:00Z"))
-                    .isEqualTo(new ActivitySummaryDTO(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
-            assertThat(sum(overview.buckets().stream()
-                            .map(ActivityBucketDTO::summary)
-                            .toList()))
-                    .isEqualTo(overview.summary());
+        void shouldKeepOtherWorkspaceEventsOutOfPeopleAndRejectUnknownRepositoryKeys() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
+            var other = createWorkspace("other-activity", "Other activity", "other-org", AccountType.ORG, zoe);
+            assertThat(peopleService
+                            .people(other.getId(), range, null, Set.of())
+                            .people())
+                    .isEmpty();
+            assertThatThrownBy(() ->
+                            peopleService.people(other.getId(), range, null, Set.of(monitored.getNameWithOwner())))
+                    .isInstanceOf(EntityNotFoundException.class);
         }
 
         @Test
-        void shouldCountAnEventOnTheNextDayWhenItIsAfterMidnightInTheZone() {
+        void shouldCountDistinctWorkAcrossReviewsAndWeeksWhenContributorReviewsRepeatedly() {
+            PullRequest pr = pullRequest(zoe, monitored, work -> work);
+            PullRequestReview approval = review(pr, ada, PullRequestReview.State.APPROVED);
+            PullRequestReview changes = review(pr, ada, PullRequestReview.State.CHANGES_REQUESTED);
+            record(ada, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, approval.getId(), DAY, monitored);
             record(
                     ada,
-                    ActivityEventType.ISSUE_CREATED,
-                    ActivityTargetType.ISSUE,
-                    -110L,
-                    Instant.parse("2026-01-10T23:30:00Z"));
-
-            ActivityOverviewDTO utc = overview(uri -> uri.queryParam("login", ada.getLogin()));
-            ActivityOverviewDTO berlin =
-                    overview(uri -> uri.queryParam("login", ada.getLogin()).queryParam("zone", "Europe/Berlin"));
-
-            assertThat(bucketAt(utc, "2026-01-10T00:00:00Z").issuesOpened()).isEqualTo(1);
-            assertThat(berlin.buckets().getFirst().start())
-                    .as("midnight in Berlin of the day the range starts on")
-                    .isEqualTo(Instant.parse("2025-12-31T23:00:00Z"));
-            assertThat(bucketAt(berlin, "2026-01-10T23:00:00Z").issuesOpened())
-                    .as("half past midnight on 11 January in Berlin")
-                    .isEqualTo(1);
-            assertThat(bucketAt(berlin, "2026-01-09T23:00:00Z").issuesOpened()).isZero();
-        }
-
-        /**
-         * Production sets the JVM default time zone (to Europe/Berlin), and a database session takes the default its
-         * connection opened with. Here the default is changed after that, to a zone 14 hours east of UTC, so the JVM,
-         * the session and the asked zone all disagree; a bucket must follow the asked zone alone.
-         */
-        @Test
-        void shouldBucketInTheAskedZoneWhenTheDefaultTimeZoneIsAnother() {
+                    ActivityEventType.REVIEW_CHANGES_REQUESTED,
+                    ActivityTargetType.REVIEW,
+                    changes.getId(),
+                    DAY.plus(Duration.ofDays(7)),
+                    monitored);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
             record(
-                    ada,
-                    ActivityEventType.ISSUE_CREATED,
-                    ActivityTargetType.ISSUE,
-                    -116L,
-                    Instant.parse("2026-01-10T00:30:00Z"));
-            record(
-                    ada,
-                    ActivityEventType.ISSUE_CREATED,
-                    ActivityTargetType.ISSUE,
-                    -117L,
-                    Instant.parse("2026-01-10T23:30:00Z"));
-            TimeZone previous = TimeZone.getDefault();
-            ActivityOverviewDTO utc;
-            try {
-                TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Kiritimati"));
-                utc = overview(uri -> uri.queryParam("login", ada.getLogin()));
-            } finally {
-                TimeZone.setDefault(previous);
-            }
-
-            assertThat(bucketAt(utc, "2026-01-10T00:00:00Z").issuesOpened())
-                    .as("both issues were opened on 10 January in UTC")
-                    .isEqualTo(2);
-        }
-
-        @Test
-        void shouldRejectTheZoneWhenItIsNotAnIanaTimeZone() {
-            get("/summary", uri -> uri.queryParam("zone", "Mars/Olympus_Mons"))
-                    .isBadRequest()
-                    .expectBody(Void.class);
-            get("/summary", uri -> uri.queryParam("zone", "+02:00"))
-                    .isBadRequest()
-                    .expectBody(Void.class);
-        }
-
-        private static ActivitySummaryDTO bucketAt(ActivityOverviewDTO overview, String start) {
-            return overview.buckets().stream()
-                    .filter(bucket -> bucket.start().equals(Instant.parse(start)))
+                    zoe,
+                    ActivityEventType.PULL_REQUEST_OPENED,
+                    ActivityTargetType.PULL_REQUEST,
+                    pr.getId(),
+                    DAY,
+                    monitored);
+            var measured = reads.measure(() -> peopleService.people(
+                    workspace.getId(),
+                    new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                    null,
+                    Set.of()));
+            var person = measured.value().people().stream()
+                    .filter(p -> p.person().id().equals(ada.getId()))
                     .findFirst()
-                    .orElseThrow()
-                    .summary();
+                    .orElseThrow();
+            assertThat(person.counts().contributions()).isEqualTo(2);
+            assertThat(person.counts().pullRequestsReviewed()).isEqualTo(1);
+            assertThat(person.counts().peopleHelped()).isEqualTo(1);
+            assertThat(person.counts().activeWeeks()).isEqualTo(2);
+            assertThat(person.weeks()).hasSize(2);
+            assertThat(measured.cost().statements()).isEqualTo(5);
+            assertThat(measured.cost().entities()).isZero();
+        }
+
+        @Test
+        void shouldSeparateBotsAndIncludeOutsideContributorsWhenMembershipIsNotRequired() {
+            User outside = persistUser("outside-contributor");
+            User bot = persistUser("machine-account");
+            bot.setType(User.Type.BOT);
+            bot = userRepository.save(bot);
+            record(outside, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, monitored);
+            record(bot, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2L, DAY, monitored);
+            var range = new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO));
+            var people = peopleService.people(workspace.getId(), range, null, Set.of());
+            assertThat(people.people())
+                    .extracting(p -> p.person().id())
+                    .contains(outside.getId())
+                    .doesNotContain(bot.getId());
+            assertThat(people.automation()).extracting(p -> p.person().id()).contains(bot.getId());
+            assertThat(peopleService
+                            .people(workspace.getId(), range, null, Set.of())
+                            .people())
+                    .extracting(p -> p.person().id())
+                    .contains(outside.getId());
+        }
+
+        @Test
+        void shouldExcludeOwnReviewsAndUnmonitoredRepositoriesWhenCountingPeople() {
+            PullRequest pr = pullRequest(ada, monitored, work -> work);
+            PullRequestReview own = review(pr, ada, PullRequestReview.State.APPROVED);
+            record(ada, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, own.getId(), DAY, monitored);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1L, DAY, unmonitored);
+            var people = peopleService.people(
+                    workspace.getId(),
+                    new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                    null,
+                    Set.of());
+            assertThat(people.people()).extracting(p -> p.person().id()).doesNotContain(ada.getId());
         }
     }
 
+    @Test
+    void shouldReadFullHistoryWhenAllTimeIsSelected() {
+        Instant old = DAY.minus(Duration.ofDays(3650));
+        record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -908L, old, monitored);
+        var response = Objects.requireNonNull(status("/people", uri -> uri.queryParam("range", "all"))
+                .isOk()
+                .expectBody(ActivityPeopleDTO.class)
+                .returnResult()
+                .getResponseBody());
+        assertThat(response.from()).isEqualTo(old);
+        assertThat(response.people())
+                .filteredOn(person -> person.person().id().equals(ada.getId()))
+                .singleElement()
+                .satisfies(person -> assertThat(person.counts().contributions()).isEqualTo(1));
+    }
+
+    @Test
+    void shouldCountReviewsWithoutAnAuthorInBothPeopleAndWork() {
+        var pull = pullRequest(zoe, monitored, work -> work);
+        var review = review(pull, ada, PullRequestReview.State.APPROVED);
+        jdbc.update("UPDATE issue SET author_id = NULL WHERE id = ?", pull.getId());
+        record(ada, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, review.getId(), DAY);
+        var person = members(uri -> uri).stream()
+                .filter(row -> row.person().id().equals(ada.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(person.counts().pullRequestsReviewed()).isEqualTo(1);
+        assertThat(person.counts().peopleHelped()).isZero();
+        assertThat(person.firstContributionAt()).isEqualTo(DAY);
+        assertThat(work(uri -> uri).content())
+                .singleElement()
+                .satisfies(row ->
+                        assertThat(row.actions()).contains(new ActivityActionDTO(ActivityKind.REVIEW_APPROVED, 1)));
+    }
+
+    @Test
+    void shouldReadOwnActivityWhenTheMemberIsHidden() {
+        var caller = userRepository
+                .findByLoginAndProviderId(
+                        "mentor", Objects.requireNonNull(ensureGitHubProvider().getId()))
+                .orElseThrow();
+        var issue = issue(monitored, Issue.State.OPEN, caller);
+        record(caller, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, issue.getId(), DAY);
+        workspaceMembershipService.updateMemberVisibility(workspace.getId(), caller.getId(), true);
+        assertThat(members(uri -> uri)).extracting(row -> row.person().id()).doesNotContain(caller.getId());
+        var detail = Objects.requireNonNull(get("/people/" + caller.getId(), uri -> uri)
+                .isOk()
+                .expectBody(ActivityPersonDetailDTO.class)
+                .returnResult()
+                .getResponseBody());
+        assertThat(detail.counts().contributions()).isEqualTo(1);
+        get("/people/" + caller.getId() + "/work", uri -> uri)
+                .isOk()
+                .expectBody(ActivityWorkPageDTO.class)
+                .value(page -> assertThat(page.content()).hasSize(1));
+    }
+
+    @Test
+    void shouldHideAnotherMembersWorkOnEveryPersonReadPath() {
+        var issue = issue(monitored, Issue.State.OPEN, ada);
+        record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, issue.getId(), DAY);
+        workspaceMembershipService.updateMemberVisibility(workspace.getId(), ada.getId(), true);
+        get("/people/" + ada.getId(), uri -> uri).isNotFound().expectBody(Void.class);
+        get("/people/" + ada.getId() + "/work", uri -> uri).isNotFound().expectBody(Void.class);
+        get("/work", uri -> uri.queryParam("login", ada.getLogin()))
+                .isNotFound()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldReturnZeroCountsForOwnActivityBeforeTheFirstContribution() {
+        var caller = userRepository
+                .findByLoginAndProviderId(
+                        "mentor", Objects.requireNonNull(ensureGitHubProvider().getId()))
+                .orElseThrow();
+        workspaceMembershipService.updateMemberVisibility(workspace.getId(), caller.getId(), true);
+        get("/people/" + caller.getId(), uri -> uri)
+                .isOk()
+                .expectBody(ActivityPersonDetailDTO.class)
+                .value(detail -> {
+                    assertThat(detail.counts().contributions()).isZero();
+                    assertThat(detail.weeks()).isEmpty();
+                });
+    }
+
+    @Test
+    void shouldDenyEveryAnonymousActivityReadEvenWhenTheWorkspaceIsPubliclyViewable() {
+        workspace.setIsPubliclyViewable(true);
+        workspaceRepository.save(workspace);
+        for (String path : List.of(
+                "/people",
+                "/people/" + ada.getId(),
+                "/people/" + ada.getId() + "/work",
+                "/work",
+                "/members/" + ada.getLogin() + "/open-work")) {
+            webTestClient
+                    .get()
+                    .uri("/workspaces/" + workspace.getWorkspaceSlug() + "/activity" + path)
+                    .exchange()
+                    .expectStatus()
+                    .value(status -> assertThat(status).isIn(401, 403))
+                    .expectBody(Void.class);
+        }
+    }
+
+    @Test
+    void shouldScopeFirstContributionsCoverageAndAllTimeToSelectedRepositories() {
+        var other = repository("activity-org/private-history", true);
+        Instant old = Instant.parse(FROM).minus(Duration.ofDays(1500));
+        record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -991L, old, other);
+        record(
+                zoe,
+                ActivityEventType.ISSUE_CREATED,
+                ActivityTargetType.ISSUE,
+                -992L,
+                old.plus(Duration.ofDays(1000)),
+                monitored);
+        record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -993L, DAY, monitored);
+        jdbc.update(
+                "UPDATE repository_to_monitor SET issue_backfill_high_water_mark=0, pull_request_backfill_high_water_mark=0 WHERE workspace_id=?",
+                workspace.getId());
+        var selected = peopleService.people(
+                workspace.getId(),
+                new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                null,
+                Set.of(monitored.getNameWithOwner()));
+        assertThat(selected.highlights().firstContributors())
+                .contains(ada.getId())
+                .doesNotContain(zoe.getId());
+        assertThat(selected.coverage().since()).isEqualTo(old.plus(Duration.ofDays(1000)));
+        assertThat(selected.coverage().completeRepositories()).isEqualTo(1);
+        assertThat(selected.coverage().totalRepositories()).isEqualTo(1);
+        var all = peopleService.people(
+                workspace.getId(),
+                new ActivityPeopleRangeParams("all", null, null),
+                null,
+                Set.of(monitored.getNameWithOwner()));
+        assertThat(all.from()).isEqualTo(selected.coverage().since());
+        assertThat(all.highlights().firstContributors()).isEmpty();
+        jdbc.update(
+                "UPDATE repository_to_monitor SET issue_backfill_high_water_mark=NULL WHERE workspace_id=?",
+                workspace.getId());
+        var incomplete = peopleService.people(
+                workspace.getId(),
+                new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                null,
+                Set.of(monitored.getNameWithOwner()));
+        assertThat(incomplete.highlights().firstContributors()).isEmpty();
+    }
+
     @Nested
-    class Members {
-
+    class PersonDetail {
         @Test
-        void shouldOrderMembersByNameWhenListingWorkspaceActivity() {
-            record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -20L, DAY);
-
-            List<MemberActivityDTO> members = members(uri -> uri);
-            List<Long> ids = members.stream().map(member -> member.user().id()).toList();
-
-            assertThat(ids).containsSubsequence(ada.getId(), zoe.getId());
-            assertThat(members)
-                    .filteredOn(member -> member.user().id().equals(zoe.getId()))
+        void shouldCountWeeksTypesAndRepositoriesWhenAContributorIsRead() {
+            PullRequest pull = pullRequest(zoe, monitored, work -> work);
+            PullRequestReview first = review(pull, ada, PullRequestReview.State.APPROVED);
+            PullRequestReview second = review(pull, ada, PullRequestReview.State.CHANGES_REQUESTED);
+            record(ada, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, first.getId(), DAY, monitored);
+            record(
+                    ada,
+                    ActivityEventType.REVIEW_CHANGES_REQUESTED,
+                    ActivityTargetType.REVIEW,
+                    second.getId(),
+                    DAY.plus(Duration.ofDays(7)),
+                    monitored);
+            Repository other = repository("activity-org/gadgets", true);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -902L, DAY, other);
+            var detail = Objects.requireNonNull(get("/people/" + ada.getId(), uri -> uri)
+                    .isOk()
+                    .expectBody(ActivityPersonDetailDTO.class)
+                    .returnResult()
+                    .getResponseBody());
+            assertThat(detail.person().id()).isEqualTo(ada.getId());
+            assertThat(detail.counts().contributions()).isEqualTo(2);
+            assertThat(detail.counts().pullRequestsReviewed()).isEqualTo(1);
+            assertThat(detail.counts().peopleHelped()).isEqualTo(1);
+            assertThat(detail.weeks()).hasSize(2);
+            assertThat(detail.breakdown().approvals()).isEqualTo(1);
+            assertThat(detail.breakdown().changeRequests()).isEqualTo(1);
+            assertThat(detail.repositories())
+                    .extracting(row -> row.repository().id())
+                    .containsExactlyInAnyOrder(monitored.getId(), other.getId());
+            var filtered = Objects.requireNonNull(
+                    get("/people/" + ada.getId(), uri -> uri.queryParam("repo", other.getNameWithOwner()))
+                            .isOk()
+                            .expectBody(ActivityPersonDetailDTO.class)
+                            .returnResult()
+                            .getResponseBody());
+            assertThat(filtered.counts().contributions()).isEqualTo(1);
+            assertThat(filtered.repositories())
                     .singleElement()
-                    .satisfies(member ->
-                            assertThat(member.summary().issuesOpened()).isEqualTo(1));
+                    .satisfies(row -> assertThat(row.counts().issuesOpened()).isEqualTo(1));
         }
 
         @Test
-        void shouldLeaveABotOutWhenListingWorkspaceActivity() {
-            User bot = member("activity-member-bot", "Activity bot");
-            bot.setType(User.Type.BOT);
-            userRepository.save(bot);
+        void shouldReturnZeroWhenAVisibleContributorHasNoActivityInTheRange() {
+            record(
+                    ada,
+                    ActivityEventType.ISSUE_CREATED,
+                    ActivityTargetType.ISSUE,
+                    -903L,
+                    Instant.parse(FROM).minusSeconds(1),
+                    monitored);
+            var detail = Objects.requireNonNull(get("/people/" + ada.getId(), uri -> uri)
+                    .isOk()
+                    .expectBody(ActivityPersonDetailDTO.class)
+                    .returnResult()
+                    .getResponseBody());
+            assertThat(detail.counts().contributions()).isZero();
+            assertThat(detail.weeks()).isEmpty();
+            assertThat(detail.repositories()).isEmpty();
+        }
 
-            assertThat(members(uri -> uri))
-                    .extracting(member -> member.user().id())
-                    .contains(ada.getId())
-                    .doesNotContain(bot.getId());
+        @Test
+        void shouldReadDetailsAndWorkForOutsideContributorsAndProviderBots() {
+            User outside = persistUser("detail-contributor");
+            User bot = persistUser("detail-provider-bot");
+            bot.setType(User.Type.BOT);
+            bot = userRepository.save(bot);
+            for (User contributor : List.of(outside, bot)) {
+                PullRequest pull = pullRequest(contributor, monitored, work -> work);
+                record(
+                        contributor,
+                        ActivityEventType.PULL_REQUEST_OPENED,
+                        ActivityTargetType.PULL_REQUEST,
+                        pull.getId(),
+                        DAY,
+                        monitored);
+                PullRequest disconnected = pullRequest(contributor, unmonitored, work -> work);
+                record(
+                        contributor,
+                        ActivityEventType.PULL_REQUEST_OPENED,
+                        ActivityTargetType.PULL_REQUEST,
+                        disconnected.getId(),
+                        DAY.plusSeconds(60),
+                        unmonitored);
+                String path = "/people/" + contributor.getId();
+                var detail = Objects.requireNonNull(get(path, uri -> uri)
+                        .isOk()
+                        .expectBody(ActivityPersonDetailDTO.class)
+                        .returnResult()
+                        .getResponseBody());
+                assertThat(detail.person().id()).isEqualTo(contributor.getId());
+                assertThat(detail.counts().contributions()).isEqualTo(1);
+                assertThat(detail.automation()).isEqualTo(contributor.getType() == User.Type.BOT);
+                var page = Objects.requireNonNull(get(path + "/work", uri -> uri)
+                        .isOk()
+                        .expectBody(ActivityWorkPageDTO.class)
+                        .returnResult()
+                        .getResponseBody());
+                assertThat(page.content()).singleElement().satisfies(work -> {
+                    assertThat(work.id()).isEqualTo("work:" + pull.getId());
+                    assertThat(work.actions())
+                            .containsExactly(new ActivityActionDTO(ActivityKind.PULL_REQUEST_OPENED, 1));
+                });
+                assertThat(page.nextCursor()).isNull();
+                assertThat(workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(
+                                workspace.getId(), contributor.getId()))
+                        .isEmpty();
+            }
+        }
+
+        @Test
+        void shouldRejectHiddenAndUnrelatedPeopleWhenDetailsOrWorkAreRead() {
+            User outsider = persistUser("detail-outsider");
+            for (String suffix : List.of("", "/work")) {
+                get("/people/" + outsider.getId() + suffix, uri -> uri)
+                        .isNotFound()
+                        .expectBody(Void.class);
+            }
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -904L, DAY, monitored);
+            var membership = workspaceMembershipRepository
+                    .findByWorkspace_IdAndUser_Id(workspace.getId(), ada.getId())
+                    .orElseThrow();
+            membership.setHidden(true);
+            workspaceMembershipRepository.save(membership);
+            for (String suffix : List.of("", "/work")) {
+                get("/people/" + ada.getId() + suffix, uri -> uri).isNotFound().expectBody(Void.class);
+            }
+        }
+
+        @Test
+        void shouldWalkWorkOnceWithAllActionsAndKeepRepositoryScopeWhenPagesChange() {
+            PullRequest pull = pullRequest(zoe, monitored, work -> work);
+            PullRequestReview first = review(pull, ada, PullRequestReview.State.APPROVED);
+            PullRequestReview second = review(pull, ada, PullRequestReview.State.CHANGES_REQUESTED);
+            record(ada, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, first.getId(), DAY, monitored);
+            record(
+                    ada,
+                    ActivityEventType.REVIEW_CHANGES_REQUESTED,
+                    ActivityTargetType.REVIEW,
+                    second.getId(),
+                    DAY.plusSeconds(120),
+                    monitored);
+            record(
+                    ada,
+                    ActivityEventType.ISSUE_CREATED,
+                    ActivityTargetType.ISSUE,
+                    -905L,
+                    DAY.plusSeconds(60),
+                    monitored);
+            Repository other = repository("activity-org/other", true);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -906L, DAY.plusSeconds(180), other);
+            String path = "/people/" + ada.getId() + "/work";
+            var page = Objects.requireNonNull(get(
+                            path,
+                            uri -> uri.queryParam("repo", monitored.getNameWithOwner())
+                                    .queryParam("size", 1))
+                    .isOk()
+                    .expectBody(ActivityWorkPageDTO.class)
+                    .returnResult()
+                    .getResponseBody());
+            assertThat(page.content()).singleElement().satisfies(work -> {
+                assertThat(work.id()).isEqualTo("work:" + pull.getId());
+                assertThat(work.actions())
+                        .containsExactlyInAnyOrder(
+                                new ActivityActionDTO(ActivityKind.REVIEW_APPROVED, 1),
+                                new ActivityActionDTO(ActivityKind.REVIEW_CHANGES_REQUESTED, 1));
+            });
+            assertThat(page.nextCursor()).isNotNull();
+            var next = Objects.requireNonNull(get(
+                            path,
+                            uri -> uri.queryParam("repo", monitored.getNameWithOwner())
+                                    .queryParam("size", 1)
+                                    .queryParam("cursor", Objects.requireNonNull(page.nextCursor())))
+                    .isOk()
+                    .expectBody(ActivityWorkPageDTO.class)
+                    .returnResult()
+                    .getResponseBody());
+            assertThat(next.content())
+                    .singleElement()
+                    .satisfies(work -> assertThat(work.id()).isEqualTo("work:-905"));
+            assertThat(next.nextCursor()).isNull();
+            get(path, uri -> uri.queryParam("cursor", "invalid")).isBadRequest().expectBody(Void.class);
         }
     }
 
@@ -544,9 +816,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                             "event:" + unknownComment,
                             "event:" + unknownReview);
             assertThat(entries).allSatisfy(entry -> assertThat(entry.work()).isNull());
-            assertThat(summary(uri -> uri.queryParam("login", ada.getLogin())).approvals())
-                    .as("the count keeps matching the list")
-                    .isEqualTo(2);
         }
 
         @Test
@@ -639,14 +908,14 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         @Test
         void shouldAddUpToTheSummaryWhenEveryPageOfOneMembersWorkIsWalked() {
-            seedMixedActivity(null);
+            seedMixedActivity(monitored);
 
             assertWorkAddsUpToTheSummary(uri -> uri.queryParam("login", ada.getLogin()));
         }
 
         @Test
         void shouldAddUpToTheSummaryWhenEveryPageOfWorkspaceWorkIsWalked() {
-            seedMixedActivity(null);
+            seedMixedActivity(monitored);
 
             assertThat(assertWorkAddsUpToTheSummary(uri -> uri))
                     .as("every kind is listed, each from its own count")
@@ -729,6 +998,39 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
+        void shouldFindTheFirstContributionInsideTheTeamScope() {
+            Instant old = Instant.parse(FROM).minus(Duration.ofDays(1000));
+            record(
+                    zoe,
+                    ActivityEventType.ISSUE_CREATED,
+                    ActivityTargetType.ISSUE,
+                    -980L,
+                    old,
+                    repository("acme/other-team", true));
+            record(
+                    ada,
+                    ActivityEventType.ISSUE_CREATED,
+                    ActivityTargetType.ISSUE,
+                    -981L,
+                    old.plusSeconds(1),
+                    monitored);
+            record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -982L, DAY, monitored);
+            jdbc.update(
+                    "UPDATE repository_to_monitor SET issue_backfill_high_water_mark=0, pull_request_backfill_high_water_mark=0 WHERE workspace_id=?",
+                    workspace.getId());
+            var result = peopleService.people(
+                    workspace.getId(),
+                    new ActivityPeopleRangeParams("custom", Instant.parse(FROM), Instant.parse(TO)),
+                    platform.getSlug(),
+                    Set.of());
+            assertThat(result.highlights().firstContributors()).contains(zoe.getId());
+            assertThat(result.people()).singleElement().satisfies(person -> {
+                assertThat(person.person().id()).isEqualTo(zoe.getId());
+                assertThat(person.firstContributionAt()).isEqualTo(DAY);
+            });
+        }
+
+        @Test
         void shouldCoverOnlyTheTeamAndItsSubTeamsWhenATeamIsGiven() {
             PullRequest zoesWork = pullRequest(zoe, monitored, work -> work);
             record(
@@ -747,15 +1049,15 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     unmonitored);
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -51L, DAY);
 
-            assertThat(members(uri -> uri.queryParam("teamId", platform.getId())))
-                    .extracting(member -> member.user().id())
+            assertThat(members(uri -> uri.queryParam("team", platform.getSlug())))
+                    .extracting(member -> member.person().id())
                     .containsExactly(zoe.getId());
-            assertThat(work(uri -> uri.queryParam("teamId", platform.getId())).content())
+            assertThat(work(uri -> uri.queryParam("team", platform.getSlug())).content())
                     .as("the team's activity is in repositories the team can access")
                     .singleElement()
                     .satisfies(entry -> assertThat(entry.actions())
                             .containsExactly(new ActivityActionDTO(ActivityKind.PULL_REQUEST_OPENED, 1)));
-            ActivitySummaryDTO summary = summary(uri -> uri.queryParam("teamId", platform.getId()));
+            TypeCounts summary = summary(uri -> uri.queryParam("team", platform.getSlug()));
             assertThat(summary.pullRequestsOpened()).isEqualTo(1);
             assertThat(summary.issuesOpened()).isZero();
         }
@@ -778,8 +1080,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     DAY.plusSeconds(60),
                     unmonitored);
 
-            ActivitySummaryDTO summary =
-                    summary(uri -> uri.queryParam("login", zoe.getLogin()).queryParam("teamId", platform.getId()));
+            TypeCounts summary =
+                    summary(uri -> uri.queryParam("login", zoe.getLogin()).queryParam("team", platform.getSlug()));
 
             assertThat(summary.pullRequestsOpened()).isEqualTo(1);
             assertThat(summary.issuesOpened())
@@ -814,7 +1116,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             assertThat(teamSettingsService.addLabelFilter(workspace, platform.getId(), platformLabel.getId()))
                     .isPresent();
 
-            assertThat(summary(uri -> uri.queryParam("teamId", platform.getId()))
+            assertThat(summary(uri -> uri.queryParam("team", platform.getSlug()))
                             .commentReviews())
                     .isEqualTo(1);
         }
@@ -843,7 +1145,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             assertThat(teamSettingsService.updateRepositoryVisibility(workspace, web.getId(), monitored.getId(), true))
                     .isPresent();
 
-            assertThat(summary(uri -> uri.queryParam("teamId", platform.getId()))
+            assertThat(summary(uri -> uri.queryParam("team", platform.getSlug()))
                             .pullRequestsOpened())
                     .isEqualTo(1);
         }
@@ -855,9 +1157,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             Team elsewhere = team("elsewhere", null);
             elsewhere.setOrganization(other.getAccountLogin());
             elsewhere = teamRepository.save(elsewhere);
-            long elsewhereId = elsewhere.getId();
+            String elsewhereKey = elsewhere.getSlug();
 
-            summaryStatus(uri -> uri.queryParam("teamId", elsewhereId))
+            summaryStatus(uri -> uri.queryParam("team", elsewhereKey))
                     .isNotFound()
                     .expectBody(Void.class);
         }
@@ -876,10 +1178,10 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     monitored);
             teamSettingsService.updateTeamVisibility(workspace, web.getId(), true);
 
-            assertThat(members(uri -> uri.queryParam("teamId", platform.getId())))
+            assertThat(members(uri -> uri.queryParam("team", platform.getSlug())))
                     .as("Zoe is only in the hidden sub-team, Ada only in the team below it")
                     .isEmpty();
-            assertThat(summary(uri -> uri.queryParam("login", zoe.getLogin()).queryParam("teamId", platform.getId()))
+            assertThat(summary(uri -> uri.queryParam("login", zoe.getLogin()).queryParam("team", platform.getSlug()))
                             .pullRequestsOpened())
                     .as("only the hidden sub-team can access the repository")
                     .isZero();
@@ -890,10 +1192,10 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             Team empty = team("platform-empty", null);
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -70L, DAY);
 
-            assertThat(members(uri -> uri.queryParam("teamId", empty.getId()))).isEmpty();
-            assertThat(summary(uri -> uri.queryParam("teamId", empty.getId())))
-                    .isEqualTo(new ActivitySummaryDTO(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
-            ActivityWorkPageDTO work = work(uri -> uri.queryParam("teamId", empty.getId()));
+            assertThat(members(uri -> uri.queryParam("team", empty.getSlug()))).isEmpty();
+            assertThat(summary(uri -> uri.queryParam("team", empty.getSlug())))
+                    .isEqualTo(new TypeCounts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+            ActivityWorkPageDTO work = work(uri -> uri.queryParam("team", empty.getSlug()));
             assertThat(work.content()).isEmpty();
             assertThat(work.nextCursor()).isNull();
         }
@@ -906,16 +1208,16 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             seedMixedActivity(monitored);
             record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -150L, DAY, unmonitored);
 
-            assertWorkAddsUpToTheSummary(uri -> uri.queryParam("teamId", platform.getId()));
+            assertWorkAddsUpToTheSummary(uri -> uri.queryParam("team", platform.getSlug()));
             assertWorkAddsUpToTheSummary(
-                    uri -> uri.queryParam("teamId", platform.getId()).queryParam("login", zoe.getLogin()));
+                    uri -> uri.queryParam("team", platform.getSlug()).queryParam("login", zoe.getLogin()));
         }
 
         @Test
         void shouldNotFindATeamWhenItIsHiddenFromWorkspaceActivity() {
             teamSettingsService.updateTeamVisibility(workspace, platform.getId(), true);
 
-            summaryStatus(uri -> uri.queryParam("teamId", platform.getId()))
+            summaryStatus(uri -> uri.queryParam("team", platform.getSlug()))
                     .isNotFound()
                     .expectBody(Void.class);
         }
@@ -1450,28 +1752,48 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         };
     }
 
-    private ActivitySummaryDTO summary(Function<UriBuilder, UriBuilder> query) {
-        return overview(query).summary();
-    }
-
-    private ActivityOverviewDTO overview(Function<UriBuilder, UriBuilder> query) {
-        return Objects.requireNonNull(summaryStatus(query)
-                .isOk()
-                .expectBody(ActivityOverviewDTO.class)
-                .returnResult()
-                .getResponseBody());
+    private TypeCounts summary(Function<UriBuilder, UriBuilder> query) {
+        var raw = UriComponentsBuilder.fromPath("");
+        var parameters =
+                UriComponentsBuilder.fromUri(query.apply(raw).build()).build().getQueryParams();
+        String login = parameters.getFirst("login");
+        return sum(members(query).stream()
+                .filter(p -> login == null || p.person().login().equals(login))
+                .map(person -> {
+                    var detail = Objects.requireNonNull(
+                            get("/people/" + person.person().id(), query)
+                                    .isOk()
+                                    .expectBody(ActivityPersonDetailDTO.class)
+                                    .returnResult()
+                                    .getResponseBody());
+                    var counts = detail.counts();
+                    var types = detail.breakdown();
+                    return new TypeCounts(
+                            Math.toIntExact(counts.pullRequestsOpened()),
+                            Math.toIntExact(counts.pullRequestsMerged()),
+                            types.pullRequestsClosed(),
+                            types.approvals(),
+                            types.changeRequests(),
+                            types.commentReviews(),
+                            types.discussionComments(),
+                            types.codeComments(),
+                            Math.toIntExact(counts.issuesOpened()),
+                            types.issuesClosed());
+                })
+                .toList());
     }
 
     private StatusAssertions summaryStatus(Function<UriBuilder, UriBuilder> query) {
-        return get("/summary", query);
+        return get("/people", query);
     }
 
-    private List<MemberActivityDTO> members(Function<UriBuilder, UriBuilder> query) {
-        return Objects.requireNonNull(get("/members", query)
-                .isOk()
-                .expectBody(MEMBER_LIST)
-                .returnResult()
-                .getResponseBody());
+    private List<ActivityPersonDTO> members(Function<UriBuilder, UriBuilder> query) {
+        return Objects.requireNonNull(get("/people", query)
+                        .isOk()
+                        .expectBody(ActivityPeopleDTO.class)
+                        .returnResult()
+                        .getResponseBody())
+                .people();
     }
 
     private ActivityWorkPageDTO work(Function<UriBuilder, UriBuilder> query) {
@@ -1487,7 +1809,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
      * add up to the summary of the same scope.
      */
     private Set<ActivityKind> assertWorkAddsUpToTheSummary(Function<UriBuilder, UriBuilder> scope) {
-        ActivitySummaryDTO summary = summary(scope);
+        TypeCounts summary = summary(scope);
         Map<ActivityKind, Integer> listed = listedActions(scope, List.of());
         Map<ActivityKind, Integer> reviewsAndComments =
                 listedActions(scope, List.of(ActivityKind.REVIEW_APPROVED, ActivityKind.COMMENTED));
@@ -1495,7 +1817,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(summary).as("the scope has activity to add up").isNotEqualTo(sum(List.of()));
         assertThat(summaryOf(listed)).isEqualTo(summary);
         assertThat(summaryOf(reviewsAndComments))
-                .isEqualTo(new ActivitySummaryDTO(0, 0, 0, summary.approvals(), 0, 0, summary.comments(), 0, 0, 0));
+                .isEqualTo(new TypeCounts(0, 0, 0, summary.approvals(), 0, 0, summary.comments(), 0, 0, 0));
         return listed.keySet();
     }
 
@@ -1635,8 +1957,20 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -163L, Instant.parse(TO), repository);
     }
 
-    private static ActivitySummaryDTO summaryOf(Map<ActivityKind, Integer> counts) {
-        return new ActivitySummaryDTO(
+    private record TypeCounts(
+            int pullRequestsOpened,
+            int pullRequestsMerged,
+            int pullRequestsClosed,
+            int approvals,
+            int changeRequests,
+            int commentReviews,
+            int comments,
+            int codeComments,
+            int issuesOpened,
+            int issuesClosed) {}
+
+    private static TypeCounts summaryOf(Map<ActivityKind, Integer> counts) {
+        return new TypeCounts(
                 counts.getOrDefault(ActivityKind.PULL_REQUEST_OPENED, 0),
                 counts.getOrDefault(ActivityKind.PULL_REQUEST_MERGED, 0),
                 counts.getOrDefault(ActivityKind.PULL_REQUEST_CLOSED, 0),
@@ -1649,11 +1983,11 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 counts.getOrDefault(ActivityKind.ISSUE_CLOSED, 0));
     }
 
-    private static ActivitySummaryDTO sum(List<ActivitySummaryDTO> summaries) {
+    private static TypeCounts sum(List<TypeCounts> summaries) {
         return summaries.stream()
                 .reduce(
-                        new ActivitySummaryDTO(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-                        (a, b) -> new ActivitySummaryDTO(
+                        new TypeCounts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+                        (a, b) -> new TypeCounts(
                                 a.pullRequestsOpened() + b.pullRequestsOpened(),
                                 a.pullRequestsMerged() + b.pullRequestsMerged(),
                                 a.pullRequestsClosed() + b.pullRequestsClosed(),
@@ -1771,7 +2105,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private UUID record(User actor, ActivityEventType type, ActivityTargetType target, long targetId, Instant at) {
-        return record(actor, type, target, targetId, at, null);
+        return record(actor, type, target, targetId, at, monitored);
     }
 
     private UUID record(

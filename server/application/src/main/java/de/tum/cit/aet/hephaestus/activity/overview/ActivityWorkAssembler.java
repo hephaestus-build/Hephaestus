@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Turns a page of work groups into work list entries, loading the page's pull requests, issues and people once
- * each. A group whose work is gone stays in the list without it, so the list keeps matching the counts.
+ * each. A group whose source work is gone remains without source details.
  */
 @Component
 @RequiredArgsConstructor

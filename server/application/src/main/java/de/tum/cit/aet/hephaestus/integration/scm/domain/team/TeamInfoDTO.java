@@ -19,6 +19,9 @@ public record TeamInfoDTO(
 
         @NonNull @Schema(description = "Name of the team") String name,
 
+        @NonNull @Schema(description = "Stable team key for URL filters")
+        String slug,
+
         @Nullable @Schema(description = "ID of the parent team, if this is a sub-team")
         Long parentId,
 
@@ -68,6 +71,7 @@ public record TeamInfoDTO(
         return new TeamInfoDTO(
                 team.getId(),
                 team.getName(),
+                team.getSlug(),
                 team.getParentId(),
                 team.getDescription(),
                 team.getPrivacy(),

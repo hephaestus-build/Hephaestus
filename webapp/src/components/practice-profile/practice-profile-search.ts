@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { ActivityRange } from "@/components/activity/activity-range";
+import { startOfDay, subDays } from "date-fns";
 import {
 	type DetailStackEntry,
 	detailStackSchema,
@@ -92,7 +92,17 @@ export type ReviewTab = (typeof REVIEW_TABS)[number];
 export const DEFAULT_REVIEW_TAB: ReviewTab = "practices";
 
 /** How far back the reviews list reaches; absent is every review. */
-export const REVIEW_TIMEFRAMES = ["7d", "30d", "90d"] as const satisfies readonly ActivityRange[];
+export const REVIEW_TIMEFRAMES = ["7d", "30d", "90d"] as const;
+
+export const REVIEW_TIMEFRAME_DEFS = {
+	"7d": { days: 7, label: "Last 7 days" },
+	"30d": { days: 30, label: "Last 30 days" },
+	"90d": { days: 90, label: "Last 90 days" },
+} as const;
+
+export function reviewRangeStart(now: number, range: ReviewTimeframe): Date {
+	return subDays(startOfDay(now), REVIEW_TIMEFRAME_DEFS[range].days - 1);
+}
 
 export type ReviewTimeframe = (typeof REVIEW_TIMEFRAMES)[number];
 

@@ -27,6 +27,7 @@ const mockTeam: TeamInfo = {
 	hidden: false,
 	membershipCount: 0,
 	repoPermissionCount: 0,
+	slug: "team-1",
 	repositories: [mockRepo],
 	members: [],
 	labels: [

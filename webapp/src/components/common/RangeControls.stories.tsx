@@ -20,8 +20,8 @@ export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		// The status region is there before anything is said in it, so what it says is announced.
 		await expect(canvas.getByRole("status")).toBeEmptyDOMElement();
-		await userEvent.click(canvas.getByRole("button", { name: "7 days" }));
-		await expect(args.onRangeChange).toHaveBeenCalledWith("7d");
+		await userEvent.click(canvas.getByRole("button", { name: "90 days" }));
+		await expect(args.onRangeChange).toHaveBeenCalledWith("90d");
 	},
 };
 

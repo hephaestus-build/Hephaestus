@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import type { ProfileReviewRun, ReviewedWorkRef } from "@/api/types.gen";
-import { ACTIVITY_RANGE_DEFS } from "@/components/activity/activity-range";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { SelectFilter } from "@/components/common/SelectFilter";
@@ -17,6 +16,7 @@ import { hasText } from "@/lib/text";
 import {
 	PROFILE_REVIEWS_PAGE_SIZE,
 	REVIEW_TIMEFRAMES,
+	REVIEW_TIMEFRAME_DEFS,
 	REVIEWS_OF_YOUR_WORK,
 	type ReviewTimeframe,
 } from "./practice-profile-search";
@@ -24,7 +24,7 @@ import { ReviewRunsTable, ReviewRunsTableSkeleton } from "./ReviewRunsTable";
 
 const TIMEFRAME_OPTIONS = REVIEW_TIMEFRAMES.map((value) => ({
 	value,
-	label: ACTIVITY_RANGE_DEFS[value].label,
+	label: REVIEW_TIMEFRAME_DEFS[value].label,
 }));
 
 export interface ProfileReviewsLevelProps {

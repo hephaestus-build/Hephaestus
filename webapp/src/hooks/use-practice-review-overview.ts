@@ -7,8 +7,11 @@ import {
 	listPracticeReviewsOptions,
 } from "@/api/@tanstack/react-query.gen";
 import type { PracticeReviewOverview } from "@/api/types.gen";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
 import type { OutcomeScope } from "@/components/admin/practice-reviews/review-outcomes";
+import {
+	REVIEW_RANGE_DEFS,
+	type ReviewRange,
+} from "@/components/admin/practice-reviews/review-range";
 import {
 	ACTIVE_REVIEW_POLL_MS,
 	type FeedbackSearch,
@@ -64,9 +67,9 @@ export function usePracticeReviewOverview(
 export function usePreviousReviewPeriod(
 	workspaceSlug: string,
 	from: Date,
-	range: ActivityRange,
+	range: ReviewRange,
 ): PreviousReviewPeriodState {
-	const { days, previous: name } = ACTIVITY_RANGE_DEFS[range];
+	const { days, previous: name } = REVIEW_RANGE_DEFS[range];
 	const query = useQuery(
 		getPracticeReviewOverviewOptions({
 			path: { workspaceSlug },
