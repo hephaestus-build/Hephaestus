@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.workspace.dto.AssignRoleRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceMembershipDTO;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import java.util.List;
@@ -43,7 +42,6 @@ public class WorkspaceMembershipController {
 
     /** One representative membership, with the account's effective workspace role. */
     @GetMapping("/me")
-    @SecurityRequirements
     public ResponseEntity<WorkspaceMembershipDTO> getCurrentUserMembership(WorkspaceContext context) {
         User currentUser = requireCurrentUser();
         WorkspaceMembership membership = workspaceMembershipService.getMembership(context.id(), currentUser.getId());
@@ -59,7 +57,6 @@ public class WorkspaceMembershipController {
     }
 
     @GetMapping
-    @SecurityRequirements
     public ResponseEntity<List<WorkspaceMembershipDTO>> listMembers(
             WorkspaceContext context,
             @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0") @Min(0) int page,
@@ -77,7 +74,6 @@ public class WorkspaceMembershipController {
     }
 
     @GetMapping("/{userId}")
-    @SecurityRequirements
     public ResponseEntity<WorkspaceMembershipDTO> getMember(WorkspaceContext context, @PathVariable Long userId) {
         WorkspaceMembership membership = requireMembership(context.id(), userId);
         return ResponseEntity.ok(WorkspaceMembershipDTO.from(membership));

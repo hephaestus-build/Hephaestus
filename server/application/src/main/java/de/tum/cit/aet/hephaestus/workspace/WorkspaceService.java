@@ -66,7 +66,7 @@ public class WorkspaceService {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceService.class);
 
-    private static final boolean DEFAULT_PUBLIC_VISIBILITY = false;
+    private static final boolean DEFAULT_PUBLIC_ACTIVITY_ENABLED = false;
 
     // Core repositories
     private final WorkspaceRepository workspaceRepository;
@@ -131,7 +131,7 @@ public class WorkspaceService {
         Workspace workspace = new Workspace();
         workspace.setWorkspaceSlug(slug);
         workspace.setDisplayName(displayName);
-        workspace.setIsPubliclyViewable(DEFAULT_PUBLIC_VISIBILITY);
+        workspace.setPublicActivityEnabled(DEFAULT_PUBLIC_ACTIVITY_ENABLED);
         workspace.setAccountLogin(accountLogin);
         workspace.setAccountType(accountType);
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
@@ -280,13 +280,15 @@ public class WorkspaceService {
         return updateToken(requireSlug(workspaceContext), personalAccessToken);
     }
 
-    public Workspace updatePublicVisibility(String slug, Boolean isPubliclyViewable) {
+    public Workspace updatePublicActivity(String slug, Boolean publicActivityEnabled, boolean allowSearchEngines) {
         Workspace workspace = requireWorkspace(slug);
-        return workspaceSettingsService.updatePublicVisibility(workspace.getId(), isPubliclyViewable);
+        return workspaceSettingsService.updatePublicActivity(
+                workspace.getId(), publicActivityEnabled, allowSearchEngines);
     }
 
-    public Workspace updatePublicVisibility(WorkspaceContext workspaceContext, Boolean isPubliclyViewable) {
-        return updatePublicVisibility(requireSlug(workspaceContext), isPubliclyViewable);
+    public Workspace updatePublicActivity(
+            WorkspaceContext workspaceContext, Boolean publicActivityEnabled, boolean allowSearchEngines) {
+        return updatePublicActivity(requireSlug(workspaceContext), publicActivityEnabled, allowSearchEngines);
     }
 
     public Workspace updateFeatures(WorkspaceContext workspaceContext, UpdateWorkspaceFeaturesRequestDTO request) {

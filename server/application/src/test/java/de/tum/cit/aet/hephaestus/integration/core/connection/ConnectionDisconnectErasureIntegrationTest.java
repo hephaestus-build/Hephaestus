@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -10,6 +11,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.InstallationCredential;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -29,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,9 +44,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Admin disconnect of a GitHub connection through the real endpoint, strategy and SCM eraser, on
- * PostgreSQL. No GitHub App credentials are configured in tests, so the provider teardown always fails
- * and logs a warning. Triggers make the disconnect fail with a genuine SQL error, either while erasing
+ * Disconnect through the lifecycle service and admin endpoint, with real PostgreSQL erasure.
+ * The provider-failure case controls the upstream boundary. Triggers make the disconnect fail
+ * with a genuine SQL error, either while erasing
  * or only at commit, after every statement has succeeded. The workspace purge's strict teardown is
  * driven directly inside a purge-shaped transaction that erases the mirror first.
  */
@@ -118,7 +121,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
                 + " BEFORE DELETE ON repository_to_monitor FOR EACH ROW WHEN (OLD.workspace_id = "
                 + workspace.getId() + ") EXECUTE FUNCTION " + BLOCK + "()");
 
-        assertThat(disconnectReturningProviderWarnings(false)).isEmpty();
+        assertThat(disconnectReturningProviderWarnings()).isEmpty();
 
         assertConnectionUntouched();
     }
@@ -131,7 +134,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
                 + " AFTER INSERT ON connection_audit DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.connection_id = "
                 + connection.getId() + ") EXECUTE FUNCTION " + BLOCK + "()");
 
-        assertThat(disconnectReturningProviderWarnings(false)).isEmpty();
+        assertThat(disconnectReturningProviderWarnings()).isEmpty();
 
         assertConnectionUntouched();
     }
@@ -139,10 +142,27 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
     @Test
     @WithAdminUser
     void shouldEraseAndUninstallWhenProviderTeardownFails() {
-        assertThat(disconnectReturningProviderWarnings(true))
+        ConnectionStrategy provider = mock(ConnectionStrategy.class);
+        doAnswer(invocation -> {
+                    scmWorkspaceContentEraser.eraseWorkspaceScmMirror(workspace.getId());
+                    return null;
+                })
+                .when(provider)
+                .eraseLocalData(any());
+        when(provider.prepareProviderTeardown(any())).thenReturn(Optional.of(() -> {
+            throw new IllegalStateException("provider unavailable");
+        }));
+        var actor = persistAccount("disconnect administrator");
+        var request = TransitionRequest.byAccount(
+                IntegrationState.UNINSTALLED,
+                "DISCONNECT",
+                "ADMIN",
+                actor.getId(),
+                UUID.randomUUID().toString(),
+                null);
+        assertThat(captureProviderWarnings(() -> connectionService.disconnect(connection, request, provider)))
                 .singleElement()
-                .satisfies(event ->
-                        assertThat(event.getFormattedMessage()).contains("GitHub App credentials not configured"));
+                .satisfies(event -> assertThat(event.getFormattedMessage()).contains("provider unavailable"));
 
         Connection reloaded = connectionRepository.findById(connection.getId()).orElseThrow();
         assertThat(reloaded.getState()).isEqualTo(IntegrationState.UNINSTALLED);
@@ -192,23 +212,25 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
                 .hasSize(1);
     }
 
-    private List<ILoggingEvent> disconnectReturningProviderWarnings(boolean succeeds) {
-        var logger = (Logger) LoggerFactory.getLogger(ConnectionService.class);
-        var events = new ListAppender<ILoggingEvent>();
-        events.start();
-        logger.addAppender(events);
-        try {
+    private List<ILoggingEvent> disconnectReturningProviderWarnings() {
+        return captureProviderWarnings(() -> {
             var response = webTestClient
                     .patch()
                     .uri("/workspaces/{slug}/connections/{id}/status", workspace.getWorkspaceSlug(), connection.getId())
                     .headers(TestAuthUtils.withCurrentUser())
                     .bodyValue(Map.of("state", "UNINSTALLED"))
                     .exchange();
-            if (succeeds) {
-                response.expectStatus().isOk().expectBody(Void.class);
-            } else {
-                response.expectStatus().is5xxServerError().expectBody(Void.class);
-            }
+            response.expectStatus().is5xxServerError().expectBody(Void.class);
+        });
+    }
+
+    private List<ILoggingEvent> captureProviderWarnings(Runnable disconnect) {
+        var logger = (Logger) LoggerFactory.getLogger(ConnectionService.class);
+        var events = new ListAppender<ILoggingEvent>();
+        events.start();
+        logger.addAppender(events);
+        try {
+            disconnect.run();
         } finally {
             logger.detachAppender(events);
             events.stop();

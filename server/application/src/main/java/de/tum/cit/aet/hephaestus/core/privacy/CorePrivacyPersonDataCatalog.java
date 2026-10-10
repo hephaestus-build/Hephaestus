@@ -32,7 +32,8 @@ import tools.jackson.databind.ObjectMapper;
     "person_data_request",
     "person_data_request_administration",
     "person_data_store_administration",
-    "person_suppression"
+    "person_suppression",
+    "public_activity_objection"
 })
 public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
@@ -192,6 +193,21 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "id,administrator_account_id",
                         "administrator_account_id=NULL,version=version+1",
                         950),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "public_activity_objection",
+                        "public_activity_objection",
+                        "EXISTS(SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb)) i(\"providerId\" bigint,subject text) WHERE i.\"providerId\"=t.provider_id AND i.subject=t.subject)",
+                        "id,provider_id,subject",
+                        "id",
+                        "",
+                        0) {
+                    @Override
+                    public long erase(PersonDataSelection selection) {
+                        return 0;
+                    }
+                },
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

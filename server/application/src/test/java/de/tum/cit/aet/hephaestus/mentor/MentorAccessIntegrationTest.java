@@ -139,9 +139,9 @@ class MentorAccessIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldRefuseHephWhenAWorkspaceIsPubliclyViewableAndTheReaderIsNoMember() {
+    void shouldRefuseHephWhenAWorkspacePublicActivityEnabledAndTheReaderIsNoMember() {
         Workspace workspace = workspace("mentor-access-public");
-        workspace.setIsPubliclyViewable(true);
+        workspace.setPublicActivityEnabled(true);
         workspaces.save(workspace);
 
         // The workspace filter admits a public read; only membership stops the signed-in reader.

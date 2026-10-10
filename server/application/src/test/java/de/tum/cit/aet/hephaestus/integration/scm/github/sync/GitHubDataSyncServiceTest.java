@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
@@ -430,8 +431,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
         assertThatThrownBy(() -> service.syncSyncTarget(syncTargetWithNativeId(NATIVE_ID)))
                 .isSameAs(failure);
 
-        verify(syncTargetProvider).retryUnavailableRepository(SCOPE_ID, SYNC_TARGET_ID);
-        verify(syncTargetProvider, never()).recordRepositoryUnavailable(any(), any());
+        verify(syncTargetProvider).recordRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID);
         verify(syncTargetProvider, never()).clearRepositoryUnavailable(any(), any());
         verifyNoInteractions(issueSyncService, pullRequestSyncService, commitBackfillService);
     }
@@ -462,6 +462,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
         service.syncSyncTarget(syncTarget(null, null));
 
         verify(syncTargetProvider).reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, REPO_NAME);
+        verify(syncTargetProvider).updateSyncTimestamp(eq(SYNC_TARGET_ID), eq(SyncType.REPOSITORY_VISIBILITY), any());
     }
 
     @Test

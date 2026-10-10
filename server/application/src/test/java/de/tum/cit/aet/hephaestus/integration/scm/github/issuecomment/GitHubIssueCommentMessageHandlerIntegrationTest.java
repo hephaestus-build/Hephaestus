@@ -108,7 +108,7 @@ class GitHubIssueCommentMessageHandlerIntegrationTest extends BaseIntegrationTes
         workspace.setWorkspaceSlug("hephaestus-test");
         workspace.setDisplayName("Hephaestus Test");
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
-        workspace.setIsPubliclyViewable(true);
+        workspace.setPublicActivityEnabled(true);
         workspace.setOrganization(org);
         workspace.setAccountLogin("HephaestusTest");
         workspace.setAccountType(AccountType.ORG);

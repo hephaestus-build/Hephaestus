@@ -40,7 +40,7 @@ class WorkspaceAccessServiceTest {
     @Test
     void hasRole_WithEmptyRoles_ReturnsFalse() {
         // Given: Context with no roles
-        WorkspaceContext context = new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of());
+        WorkspaceContext context = new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of());
         WorkspaceContextHolder.setContext(context);
 
         // When & Then
@@ -51,7 +51,7 @@ class WorkspaceAccessServiceTest {
     void hasRole_WithMemberRole_AllowsMemberAccess() {
         // Given: User has MEMBER role
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.MEMBER));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.MEMBER));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then
@@ -64,7 +64,7 @@ class WorkspaceAccessServiceTest {
     void hasRole_WithAdminRole_AllowsAdminAndMemberAccess() {
         // Given: User has ADMIN role
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.ADMIN));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.ADMIN));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then: Admin satisfies MEMBER and ADMIN requirements
@@ -77,7 +77,7 @@ class WorkspaceAccessServiceTest {
     void hasRole_WithOwnerRole_AllowsAllAccess() {
         // Given: User has OWNER role
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.OWNER));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.OWNER));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then: Owner satisfies all role requirements
@@ -89,7 +89,7 @@ class WorkspaceAccessServiceTest {
     @Test
     void isOwner_WithOwnerRole_ReturnsTrue() {
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.OWNER));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.OWNER));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then
@@ -99,7 +99,7 @@ class WorkspaceAccessServiceTest {
     @Test
     void isOwner_WithAdminRole_ReturnsFalse() {
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.ADMIN));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.ADMIN));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then
@@ -109,7 +109,7 @@ class WorkspaceAccessServiceTest {
     @Test
     void isAdmin_WithAdminRole_ReturnsTrue() {
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.ADMIN));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.ADMIN));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then
@@ -120,7 +120,7 @@ class WorkspaceAccessServiceTest {
     void isAdmin_WithOwnerRole_ReturnsTrue() {
         // Given: Owner should also satisfy admin checks
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.OWNER));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.OWNER));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then
@@ -131,7 +131,7 @@ class WorkspaceAccessServiceTest {
     void isMember_WithAnyRole_ReturnsTrue() {
         // Given: Any role should satisfy member check
         WorkspaceContext memberContext =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.MEMBER));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.MEMBER));
 
         // When & Then: MEMBER
         WorkspaceContextHolder.setContext(memberContext);
@@ -139,13 +139,13 @@ class WorkspaceAccessServiceTest {
 
         // Given: ADMIN
         WorkspaceContext adminContext =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.ADMIN));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.ADMIN));
         WorkspaceContextHolder.setContext(adminContext);
         assertThat(accessService.isMember()).isTrue();
 
         // Given: OWNER
         WorkspaceContext ownerContext =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.OWNER));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.OWNER));
         WorkspaceContextHolder.setContext(ownerContext);
         assertThat(accessService.isMember()).isTrue();
     }
@@ -154,7 +154,7 @@ class WorkspaceAccessServiceTest {
     void canManageRole_AsOwner_CanManageAllRoles() {
         // Given: User is OWNER
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.OWNER));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.OWNER));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then: OWNER can manage all roles
@@ -167,7 +167,7 @@ class WorkspaceAccessServiceTest {
     void canManageRole_AsAdmin_CannotManageOwner() {
         // Given: User is ADMIN
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.ADMIN));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.ADMIN));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then: ADMIN can manage MEMBER and ADMIN, but not OWNER
@@ -180,7 +180,7 @@ class WorkspaceAccessServiceTest {
     void canManageRole_AsMember_CannotManageAnyRole() {
         // Given: User is MEMBER
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.MEMBER));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.MEMBER));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then: MEMBER cannot manage any roles
@@ -199,7 +199,7 @@ class WorkspaceAccessServiceTest {
     @Test
     void hasPermission_IsAliasForHasRole() {
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.ADMIN));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.ADMIN));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then: hasPermission behaves same as hasRole
@@ -218,7 +218,7 @@ class WorkspaceAccessServiceTest {
                 "admin-user", "admin-123", new String[] {"app_admin"}, "super-admin-token"));
 
         WorkspaceContext context = new WorkspaceContext(
-                1L, "test", "Test", AccountType.ORG, 123L, false, Set.of() // No workspace roles - not a member
+                1L, "test", "Test", AccountType.ORG, 123L, Set.of() // No workspace roles - not a member
                 );
         WorkspaceContextHolder.setContext(context);
 
@@ -238,13 +238,7 @@ class WorkspaceAccessServiceTest {
                 "admin-user", "admin-123", new String[] {"app_admin"}, "super-admin-token"));
 
         WorkspaceContext context = new WorkspaceContext(
-                1L,
-                "test",
-                "Test",
-                AccountType.ORG,
-                123L,
-                false,
-                Set.of(WorkspaceRole.MEMBER) // Only MEMBER role in workspace
+                1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.MEMBER) // Only MEMBER role in workspace
                 );
         WorkspaceContextHolder.setContext(context);
 
@@ -261,7 +255,7 @@ class WorkspaceAccessServiceTest {
                 "admin-user", "admin-123", new String[] {"app_admin"}, "super-admin-token"));
 
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.OWNER));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.OWNER));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then: Workspace OWNER role still grants all permissions
@@ -277,13 +271,7 @@ class WorkspaceAccessServiceTest {
                 "admin-user", "admin-123", new String[] {"app_admin"}, "super-admin-token"));
 
         WorkspaceContext context = new WorkspaceContext(
-                1L,
-                "test",
-                "Test",
-                AccountType.ORG,
-                123L,
-                false,
-                Set.of(WorkspaceRole.MEMBER) // Has workspace membership
+                1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.MEMBER) // Has workspace membership
                 );
         WorkspaceContextHolder.setContext(context);
 
@@ -303,7 +291,7 @@ class WorkspaceAccessServiceTest {
                 "regular-user-token"));
 
         WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.MEMBER));
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 123L, Set.of(WorkspaceRole.MEMBER));
         WorkspaceContextHolder.setContext(context);
 
         // When & Then: Regular user with MEMBER role cannot access ADMIN endpoints

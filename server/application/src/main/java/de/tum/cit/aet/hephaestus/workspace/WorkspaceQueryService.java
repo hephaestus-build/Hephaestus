@@ -14,13 +14,11 @@ import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceProvidersDTO;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -164,8 +162,8 @@ public class WorkspaceQueryService {
     }
 
     /**
-     * Returns workspaces the current user can see: memberships + publicly viewable workspaces.
-     * If no user is authenticated, only publicly viewable workspaces are returned.
+     * Returns workspaces in which the current account has a membership.
+     * An unauthenticated caller receives an empty list.
      *
      * @return list of accessible workspaces for the current user
      */
@@ -177,8 +175,8 @@ public class WorkspaceQueryService {
     }
 
     /**
-     * Returns workspaces the given SCM users can see: the UNION of their memberships + publicly viewable
-     * workspaces. An empty user set yields only the publicly viewable workspaces. Only ACTIVE workspaces
+     * Returns the union of the given SCM users' memberships. An empty user set yields no workspaces.
+     * Only ACTIVE workspaces
      * are included - SUSPENDED and PURGED workspaces are excluded. Passing several users is how a single
      * account's multiple linked identities are unioned.
      *
@@ -186,19 +184,13 @@ public class WorkspaceQueryService {
      * @return list of accessible workspaces
      */
     public List<Workspace> findAccessibleWorkspaces(Collection<User> currentUsers) {
-        // Always include public, active workspaces
-        List<Workspace> publicWorkspaces =
-                workspaceRepository.findByStatusAndIsPubliclyViewableTrue(Workspace.WorkspaceStatus.ACTIVE);
-
         Set<Long> userIds = currentUsers.stream()
                 .filter(u -> u != null && u.getId() != null)
                 .map(User::getId)
                 .collect(Collectors.toSet());
 
         if (userIds.isEmpty()) {
-            return publicWorkspaces.stream()
-                    .sorted(ACCESSIBLE_WORKSPACE_COMPARATOR)
-                    .toList();
+            return List.of();
         }
 
         // Fetch memberships across every identity and load workspaces by ID
@@ -215,14 +207,7 @@ public class WorkspaceQueryService {
                         .filter(w -> w.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
                         .toList();
 
-        // Merge and de-duplicate by ID to avoid duplicate entities with different instances
-        return Stream.concat(publicWorkspaces.stream(), memberWorkspaces.stream())
-                .collect(Collectors.toMap(
-                        Workspace::getId, w -> w, (existing, replacement) -> existing, LinkedHashMap::new))
-                .values()
-                .stream()
-                .sorted(ACCESSIBLE_WORKSPACE_COMPARATOR)
-                .toList();
+        return memberWorkspaces.stream().sorted(ACCESSIBLE_WORKSPACE_COMPARATOR).toList();
     }
 
     /**

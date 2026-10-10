@@ -363,6 +363,9 @@ hephaestus:
             review-request:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_REVIEW_REQUEST_CAPACITY:10}
                 period: ${HEPHAESTUS_RATE_LIMIT_REVIEW_REQUEST_PERIOD:1h}
+            public-activity:
+                capacity: ${HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_CAPACITY:60}
+                period: ${HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_PERIOD:1m}
             sync-trigger:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_CAPACITY:10}
                 period: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_PERIOD:1h}

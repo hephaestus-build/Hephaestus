@@ -103,6 +103,11 @@ class PreviewSeedPolicyIntegrationTest {
         long gitHubConnectionId = 9_100_004L;
         long outlineConnectionId = 9_100_005L;
         UUID jobId = UUID.randomUUID();
+        seeder.insert("workspace", Map.of("id", workspaceId, "public_activity_enabled", true));
+        jdbcTemplate.execute("""
+                INSERT INTO instance_settings(id, public_activity_allowed) VALUES (1, true)
+                ON CONFLICT(id) DO UPDATE SET public_activity_allowed = true
+                """);
 
         seeder.insert(
                 "llm_connection",
@@ -147,6 +152,10 @@ class PreviewSeedPolicyIntegrationTest {
 
         applyPolicy();
 
+        assertThat(scalar("SELECT public_activity_allowed::text FROM instance_settings WHERE id = 1"))
+                .isEqualTo("false");
+        assertThat(scalar("SELECT public_activity_enabled::text FROM workspace WHERE id = " + workspaceId))
+                .isEqualTo("false");
         assertThat(scalar("SELECT api_key FROM llm_connection WHERE id = " + instanceCatalogId))
                 .isNull();
         assertThat(scalar("SELECT enabled::text FROM llm_connection WHERE id = " + instanceCatalogId))
@@ -186,11 +195,32 @@ class PreviewSeedPolicyIntegrationTest {
                 .isEqualTo(marker);
         assertThat(residualCredentials()).isZero();
 
+        for (String publication : List.of(
+                "UPDATE instance_settings SET public_activity_allowed = true WHERE id = 1",
+                "UPDATE workspace SET public_activity_enabled = true WHERE id = " + workspaceId)) {
+            jdbcTemplate.execute(publication);
+            assertThat(residualCredentials()).isPositive();
+            applyPolicy();
+        }
+
         jdbcTemplate.execute(
                 "UPDATE llm_connection SET api_key = 'restored-after-the-policy' WHERE id = " + instanceCatalogId);
         assertThat(residualCredentials())
                 .as("a credential the policy did not reach leaves the preview un-booted rather than live")
                 .isPositive();
+    }
+
+    @Test
+    void shouldApplyThePolicyBeforePublicActivityColumnsExist() {
+        jdbcTemplate.execute("BEGIN");
+        try {
+            jdbcTemplate.execute("ALTER TABLE instance_settings DROP COLUMN public_activity_allowed");
+            jdbcTemplate.execute("ALTER TABLE workspace DROP COLUMN public_activity_enabled");
+            applyPolicy();
+            assertThat(residualCredentials()).isZero();
+        } finally {
+            jdbcTemplate.execute("ROLLBACK");
+        }
     }
 
     private void seedConnection(long id, long workspaceId, String kind, String config) {

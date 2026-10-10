@@ -31,6 +31,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.ColumnDefault;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -134,12 +135,17 @@ public class Workspace {
     private String displayName;
 
     /**
-     * When {@code true}, unauthenticated users can read the workspace's public endpoints.
+     * When {@code true}, the dedicated public activity page can publish public repository activity.
      * Defaults to {@code false} for privacy.
      */
-    @Column(name = "is_publicly_viewable", nullable = false)
-    @NotNull(message = "Public viewable flag is required")
-    private Boolean isPubliclyViewable = false;
+    @Column(name = "public_activity_enabled", nullable = false)
+    @NotNull(message = "Public activity setting is required")
+    @ColumnDefault("false")
+    private Boolean publicActivityEnabled = false;
+
+    @Column(name = "public_activity_search_engines", nullable = false)
+    @ColumnDefault("false")
+    private boolean publicActivitySearchEngines;
 
     /**
      * Current lifecycle state of the workspace.

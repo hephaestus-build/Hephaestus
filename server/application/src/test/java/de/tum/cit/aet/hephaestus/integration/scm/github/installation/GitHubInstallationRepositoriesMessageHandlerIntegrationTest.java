@@ -84,7 +84,7 @@ class GitHubInstallationRepositoriesMessageHandlerIntegrationTest extends BaseIn
                 .withAccountType(AccountType.ORG);
         Workspace saved = WorkspaceTestFixtures.persistInstallationWorkspace(
                 workspaceRepository, connectionRepository, builder, installationId);
-        saved.setIsPubliclyViewable(true);
+        saved.setPublicActivityEnabled(true);
         saved.setOrganization(org);
         workspaceRepository.save(saved);
     }

@@ -4419,6 +4419,72 @@ export type ProfileReviewRunsPage = {
     size?: number;
 };
 
+/**
+ * The public contract excludes account details, teams, automation and private activity.
+ */
+export type PublicActivity = {
+    allowSearchEngines: boolean;
+    coverage: ActivityCoverage;
+    from: string;
+    highlights: PublicActivityHighlights;
+    people: Array<PublicActivityPerson>;
+    repositories: Array<PublicActivityRepository>;
+    to: string;
+    workspaceName: string;
+};
+
+export type PublicActivityChoice = {
+    visible: boolean;
+};
+
+export type PublicActivityCounts = {
+    activeWeeks: number;
+    contributions: number;
+    issuesOpened: number;
+    peopleHelped: number;
+    pullRequestsMerged: number;
+    pullRequestsOpened: number;
+    pullRequestsReviewed: number;
+};
+
+export type PublicActivityHighlights = {
+    firstContributors: Array<string>;
+    mostPeopleHelped: Array<string>;
+};
+
+export type PublicActivityOnboarding = {
+    seen: boolean;
+    visible: boolean;
+};
+
+export type PublicActivityOnboardingRequest = {
+    visible: boolean;
+};
+
+export type PublicActivityPerson = {
+    avatarUrl: string;
+    counts: PublicActivityCounts;
+    firstContributionAt?: string;
+    login: string;
+    name: string;
+    profileUrl: string;
+    weeks: Array<ActivitySparklineWeek>;
+};
+
+export type PublicActivityPolicy = {
+    allowed: boolean;
+};
+
+export type PublicActivityRepository = {
+    key: string;
+    name: string;
+};
+
+export type PublicActivityWorkspaceSettings = {
+    allowSearchEngines: boolean;
+    enabled: boolean;
+};
+
 export type Question = {
     /**
      * a choice question also takes one free-text answer; false when a stored question omits it
@@ -6548,14 +6614,9 @@ export type UpdateWorkspaceLlmModelRequest = {
     reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
 };
 
-/**
- * Request to update workspace public visibility setting
- */
-export type UpdateWorkspacePublicVisibilityRequest = {
-    /**
-     * Whether the workspace should be publicly viewable without authentication
-     */
-    isPubliclyViewable: boolean;
+export type UpdateWorkspacePublicActivityRequest = {
+    allowSearchEngines: boolean;
+    publicActivityEnabled: boolean;
 };
 
 /**
@@ -6757,10 +6818,6 @@ export type Workspace = {
      */
     installationLinkedAt?: string;
     /**
-     * Whether the workspace is publicly viewable without authentication
-     */
-    isPubliclyViewable: boolean;
-    /**
      * Integration kind backing this workspace (GITHUB or GITLAB)
      */
     kind?: string;
@@ -6780,6 +6837,10 @@ export type Workspace = {
      * High-level git provider type for the workspace's SCM connection (null if none bound)
      */
     providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
+    /**
+     * Whether this workspace has enabled its public activity page
+     */
+    publicActivityEnabled: boolean;
     /**
      * Custom server URL for self-hosted instances (null for cloud defaults)
      */
@@ -7378,7 +7439,7 @@ export type AdminListAuthEventsData = {
         size?: number;
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: string;
         to?: string;
@@ -7401,7 +7462,7 @@ export type AdminExportAuthEventsData = {
     query?: {
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: string;
         to?: string;
@@ -8859,6 +8920,38 @@ export type AdminGetInstanceSettingsResponses = {
 
 export type AdminGetInstanceSettingsResponse = AdminGetInstanceSettingsResponses[keyof AdminGetInstanceSettingsResponses];
 
+export type GetPublicActivityPolicyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/settings/public-activity';
+};
+
+export type GetPublicActivityPolicyResponses = {
+    /**
+     * OK
+     */
+    200: PublicActivityPolicy;
+};
+
+export type GetPublicActivityPolicyResponse = GetPublicActivityPolicyResponses[keyof GetPublicActivityPolicyResponses];
+
+export type UpdatePublicActivityPolicyData = {
+    body: PublicActivityPolicy;
+    path?: never;
+    query?: never;
+    url: '/admin/settings/public-activity';
+};
+
+export type UpdatePublicActivityPolicyResponses = {
+    /**
+     * OK
+     */
+    200: PublicActivityPolicy;
+};
+
+export type UpdatePublicActivityPolicyResponse = UpdatePublicActivityPolicyResponses[keyof UpdatePublicActivityPolicyResponses];
+
 export type AdminUpdateSilentModeData = {
     body: UpdateSilentModeRequest;
     headers?: {
@@ -9290,6 +9383,31 @@ export type SubmitInstanceProductFeedbackResponses = {
     200: unknown;
 };
 
+export type GetPublicActivityData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: {
+        /**
+         * Activity range
+         */
+        range?: '30d' | '90d' | '1y' | 'all' | 'custom';
+        from?: string;
+        to?: string;
+    };
+    url: '/public/workspaces/{slug}/activity';
+};
+
+export type GetPublicActivityResponses = {
+    /**
+     * OK
+     */
+    200: PublicActivity;
+};
+
+export type GetPublicActivityResponse = GetPublicActivityResponses[keyof GetPublicActivityResponses];
+
 export type DeleteCurrentUserData = {
     body?: never;
     headers?: {
@@ -9578,6 +9696,74 @@ export type UpdateNotificationPreferencesResponses = {
 };
 
 export type UpdateNotificationPreferencesResponse = UpdateNotificationPreferencesResponses[keyof UpdateNotificationPreferencesResponses];
+
+export type GetPublicActivityChoiceData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/public-activity';
+};
+
+export type GetPublicActivityChoiceResponses = {
+    /**
+     * OK
+     */
+    200: PublicActivityChoice;
+};
+
+export type GetPublicActivityChoiceResponse = GetPublicActivityChoiceResponses[keyof GetPublicActivityChoiceResponses];
+
+export type UpdatePublicActivityChoiceData = {
+    body: PublicActivityChoice;
+    path?: never;
+    query?: never;
+    url: '/user/public-activity';
+};
+
+export type UpdatePublicActivityChoiceResponses = {
+    /**
+     * OK
+     */
+    200: PublicActivityChoice;
+};
+
+export type UpdatePublicActivityChoiceResponse = UpdatePublicActivityChoiceResponses[keyof UpdatePublicActivityChoiceResponses];
+
+export type GetPublicActivityOnboardingData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/user/public-activity/workspaces/{slug}/onboarding';
+};
+
+export type GetPublicActivityOnboardingResponses = {
+    /**
+     * OK
+     */
+    200: PublicActivityOnboarding;
+};
+
+export type GetPublicActivityOnboardingResponse = GetPublicActivityOnboardingResponses[keyof GetPublicActivityOnboardingResponses];
+
+export type AnswerPublicActivityOnboardingData = {
+    body: PublicActivityOnboardingRequest;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/user/public-activity/workspaces/{slug}/onboarding';
+};
+
+export type AnswerPublicActivityOnboardingResponses = {
+    /**
+     * OK
+     */
+    200: PublicActivityOnboarding;
+};
+
+export type AnswerPublicActivityOnboardingResponse = AnswerPublicActivityOnboardingResponses[keyof AnswerPublicActivityOnboardingResponses];
 
 export type RevokeOtherSessionsData = {
     body?: never;
@@ -9973,6 +10159,38 @@ export type UpdateActivityAutomationResponses = {
 
 export type UpdateActivityAutomationResponse = UpdateActivityAutomationResponses[keyof UpdateActivityAutomationResponses];
 
+export type UpdatePublicActivityObjectionData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        userId: number;
+    };
+    query: {
+        hidden: boolean;
+    };
+    url: '/workspaces/{workspaceSlug}/activity/people/{userId}/public-visibility';
+};
+
+export type UpdatePublicActivityObjectionErrors = {
+    /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
+     * The caller is not a member of the workspace
+     */
+    403: ProblemDetail;
+    /**
+     * Workspace, contributor, team or repository not found
+     */
+    404: ProblemDetail;
+};
+
+export type UpdatePublicActivityObjectionError = UpdatePublicActivityObjectionErrors[keyof UpdatePublicActivityObjectionErrors];
+
 export type GetActivityPersonWorkData = {
     body?: never;
     path: {
@@ -10032,6 +10250,35 @@ export type GetActivityPersonWorkResponses = {
 };
 
 export type GetActivityPersonWorkResponse = GetActivityPersonWorkResponses[keyof GetActivityPersonWorkResponses];
+
+export type GetPublicActivityHiddenCountData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/activity/public-hidden-count';
+};
+
+export type GetPublicActivityHiddenCountErrors = {
+    /**
+     * A request parameter is not valid
+     */
+    400: ProblemDetail;
+    /**
+     * The caller is not a member of the workspace
+     */
+    403: ProblemDetail;
+    /**
+     * Workspace, contributor, team or repository not found
+     */
+    404: ProblemDetail;
+};
+
+export type GetPublicActivityHiddenCountError = GetPublicActivityHiddenCountErrors[keyof GetPublicActivityHiddenCountErrors];
 
 export type GetActivityWorkData = {
     body?: never;
@@ -14139,8 +14386,8 @@ export type SubmitProductSurveyResponseResponses = {
     200: unknown;
 };
 
-export type UpdatePublicVisibilityData = {
-    body: UpdateWorkspacePublicVisibilityRequest;
+export type GetWorkspacePublicActivitySettingsData = {
+    body?: never;
     path: {
         /**
          * Workspace slug
@@ -14148,17 +14395,38 @@ export type UpdatePublicVisibilityData = {
         workspaceSlug: string;
     };
     query?: never;
-    url: '/workspaces/{workspaceSlug}/public-visibility';
+    url: '/workspaces/{workspaceSlug}/public-activity';
 };
 
-export type UpdatePublicVisibilityResponses = {
+export type GetWorkspacePublicActivitySettingsResponses = {
+    /**
+     * OK
+     */
+    200: PublicActivityWorkspaceSettings;
+};
+
+export type GetWorkspacePublicActivitySettingsResponse = GetWorkspacePublicActivitySettingsResponses[keyof GetWorkspacePublicActivitySettingsResponses];
+
+export type UpdatePublicActivityData = {
+    body: UpdateWorkspacePublicActivityRequest;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/public-activity';
+};
+
+export type UpdatePublicActivityResponses = {
     /**
      * Workspace updated
      */
-    200: Workspace;
+    200: PublicActivityWorkspaceSettings;
 };
 
-export type UpdatePublicVisibilityResponse = UpdatePublicVisibilityResponses[keyof UpdatePublicVisibilityResponses];
+export type UpdatePublicActivityResponse = UpdatePublicActivityResponses[keyof UpdatePublicActivityResponses];
 
 export type RemoveRepositoryToMonitorData = {
     body?: never;

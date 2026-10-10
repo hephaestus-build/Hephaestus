@@ -79,7 +79,10 @@ class WorkspaceSubdomainMigrationTest {
                         .isEmpty();
                 oldServer.rollback();
             }
-            liquibase.update(CONTEXTS, LABELS);
+            int changes = (int) pending.stream()
+                    .filter(change -> change.getFilePath().endsWith(CHANGELOG))
+                    .count();
+            liquibase.update(changes, CONTEXTS, LABELS);
         }
     }
 

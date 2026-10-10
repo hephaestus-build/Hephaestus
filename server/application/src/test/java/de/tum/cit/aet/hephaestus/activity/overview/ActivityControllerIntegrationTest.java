@@ -17,14 +17,26 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDetailDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO.ReviewerState;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.TeamRefDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO;
+import de.tum.cit.aet.hephaestus.core.auth.AccountPurger;
+import de.tum.cit.aet.hephaestus.core.auth.AccountService;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPublicActivity;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -51,6 +63,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepo
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
+import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -97,6 +110,18 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private static final String FROM = "2026-01-01T00:00:00Z";
     private static final String TO = "2026-02-01T00:00:00Z";
     private static final Instant DAY = Instant.parse("2026-01-10T12:00:00Z");
+
+    @Autowired
+    private IdentityLinkRepository publicIdentities;
+
+    @Autowired
+    private AccountPublicActivity publicationChoice;
+
+    @Autowired
+    private AccountService accountService;
+
+    @Autowired
+    private AccountPurger accountPurger;
 
     @Autowired
     private WebTestClient webTestClient;
@@ -184,6 +209,684 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private ActivityAutomationService automationService;
+
+    @Autowired
+    private PublicActivityObjectionService publicObjections;
+
+    @Autowired
+    private SyncTargetProvider syncTargets;
+
+    @Autowired
+    private PersonDataRegistry personDataRegistry;
+
+    @Nested
+    class PublicActivity {
+        @BeforeEach
+        void publish() {
+            workspace.setPublicActivityEnabled(true);
+            workspaceRepository.save(workspace);
+            monitored.setVisibility(Repository.Visibility.PUBLIC);
+            monitored.setPrivate(false);
+            repositoryRepository.save(monitored);
+            jdbc.update(
+                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now() WHERE workspace_id=?",
+                    workspace.getId());
+            jdbc.update(
+                    "INSERT INTO instance_settings (id, silent_mode_engaged, version, public_activity_allowed) VALUES (1,true,0,true) ON CONFLICT (id) DO UPDATE SET public_activity_allowed=true");
+        }
+
+        @Test
+        void shouldExcludeUnconfirmedExpiredAndUnavailableRepositoriesAndRestoreAfterSync() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+            for (String state : List.of(
+                    "repository_visibility_confirmed_at=NULL",
+                    "repository_synced_at=now(), repository_visibility_confirmed_at=now()-interval '49 hours'",
+                    "unavailable_since=now()")) {
+                jdbc.update("UPDATE repository_to_monitor SET " + state + " WHERE workspace_id=?", workspace.getId());
+                var excluded = page();
+                assertThat(excluded.people()).isEmpty();
+                assertThat(excluded.repositories()).isEmpty();
+                assertThat(excluded.highlights().firstContributors()).isEmpty();
+                assertThat(excluded.highlights().mostPeopleHelped()).isEmpty();
+                assertThat(excluded.coverage().totalRepositories()).isZero();
+                assertThat(excluded.from()).isNotEqualTo(DAY);
+                jdbc.update(
+                        "UPDATE workspace_membership SET hidden=true WHERE workspace_id=? AND user_id=?",
+                        workspace.getId(),
+                        ada.getId());
+                assertThat(publicObjections.hiddenPeople(workspace.getId())).isZero();
+                jdbc.update(
+                        "UPDATE workspace_membership SET hidden=false WHERE workspace_id=? AND user_id=?",
+                        workspace.getId(),
+                        ada.getId());
+                jdbc.update(
+                        "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now(), unavailable_since=NULL WHERE workspace_id=?",
+                        workspace.getId());
+                assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+                assertThat(page().coverage().totalRepositories()).isEqualTo(1);
+            }
+        }
+
+        @Test
+        void shouldStopPublicationAtOnceWhenTheSyncProviderRecordsAccessLoss() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            var monitor = repositoryToMonitorRepository
+                    .findByWorkspaceIdAndNameWithOwner(workspace.getId(), monitored.getNameWithOwner())
+                    .orElseThrow();
+            assertThat(page().people()).hasSize(1);
+            syncTargets.recordRepositoryUnavailable(workspace.getId(), monitor.getId());
+            assertThat(page().people()).isEmpty();
+            assertThat(page().repositories()).isEmpty();
+            jdbc.update(
+                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now()-interval '49 hours' WHERE id=?",
+                    monitor.getId());
+            syncTargets.clearRepositoryUnavailable(workspace.getId(), monitor.getId());
+            syncTargets.updateSyncTimestamp(
+                    monitor.getId(), SyncTargetProvider.SyncType.REPOSITORY_VISIBILITY, Instant.now());
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+        }
+
+        @Test
+        void shouldReturnTheSameErrorForUnknownOffAndInactiveWorkspaces() {
+            var unknown = error("unknown");
+            workspace.setPublicActivityEnabled(false);
+            workspaceRepository.save(workspace);
+            assertThat(error(workspace.getWorkspaceSlug())).isEqualTo(unknown);
+            workspace.setPublicActivityEnabled(true);
+            workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+            workspaceRepository.save(workspace);
+            assertThat(error(workspace.getWorkspaceSlug())).isEqualTo(unknown);
+        }
+
+        @Test
+        void shouldIncludeOutsideHumansButNotPrivateRepositoriesCommentsAutomationOrOtherWorkspaces() {
+            var outside = persistUser("public-outside");
+            record(outside, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            record(ada, ActivityEventType.COMMENT_CREATED, ActivityTargetType.ISSUE_COMMENT, -2, DAY);
+            var privateRepo = repository("activity-org/private", true);
+            privateRepo.setVisibility(Repository.Visibility.PRIVATE);
+            privateRepo.setPrivate(true);
+            repositoryRepository.save(privateRepo);
+            record(zoe, ActivityEventType.PULL_REQUEST_OPENED, ActivityTargetType.PULL_REQUEST, -3, DAY, privateRepo);
+            var other =
+                    createWorkspace("other-public", "Other", "other-org", AccountType.ORG, persistUser("other-owner"));
+            var sharedMonitor = new RepositoryToMonitor();
+            sharedMonitor.setWorkspace(other);
+            sharedMonitor.setNameWithOwner(monitored.getNameWithOwner());
+            sharedMonitor = repositoryToMonitorRepository.save(sharedMonitor);
+            syncTargets.recordRepositoryUnavailable(other.getId(), sharedMonitor.getId());
+            UUID otherEvent = UUID.randomUUID();
+            activityEventRepository.insertIfAbsent(
+                    otherEvent,
+                    "other-" + otherEvent,
+                    "ISSUE_CREATED",
+                    DAY,
+                    zoe.getId(),
+                    other.getId(),
+                    monitored.getId(),
+                    "issue",
+                    -10L);
+            var bot = persistUser("public-bot");
+            bot.setType(User.Type.BOT);
+            userRepository.save(bot);
+            record(bot, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -11, DAY);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -12, DAY);
+            automationService.classify(workspace.getId(), ada.getId(), true);
+            var result = page();
+            assertThat(result.people()).extracting(p -> p.login()).containsExactly(outside.getLogin());
+            assertThat(result.people().getFirst().counts().contributions()).isEqualTo(1);
+            assertThat(result.repositories()).extracting(r -> r.key()).containsExactly(monitored.getNameWithOwner());
+            assertThat(result.from()).isEqualTo(DAY);
+            monitored.setPrivate(true);
+            repositoryRepository.save(monitored);
+            assertThat(page().people()).isEmpty();
+        }
+
+        @ParameterizedTest
+        @EnumSource(IdentityProviderType.class)
+        void shouldPublishOnlyGitHubAndGitLabActivity(IdentityProviderType type) {
+            var provider =
+                    gitProviderRepository.save(new IdentityProvider(type, "https://public-" + type + ".example"));
+            monitored.setProvider(provider);
+            repositoryRepository.save(monitored);
+            ada.setProvider(provider);
+            userRepository.save(ada);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            var result = page();
+            boolean scm = type == IdentityProviderType.GITHUB || type == IdentityProviderType.GITLAB;
+            assertThat(result.people()).hasSize(scm ? 1 : 0);
+            assertThat(result.repositories()).hasSize(scm ? 1 : 0);
+            assertThat(result.coverage().totalRepositories()).isEqualTo(scm ? 1 : 0);
+        }
+
+        @Test
+        void shouldKeepAnObjectionAfterUnlinkAndAccountPurge() {
+            TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
+            var identity = publicIdentities
+                    .findActiveByProviderSubject(
+                            Objects.requireNonNull(ada.getProvider().getId()),
+                            ada.getNativeId().toString(),
+                            null)
+                    .orElseThrow();
+            var account = identity.getAccount();
+            long accountId = Objects.requireNonNull(account.getId());
+            var otherProvider = gitProviderRepository.save(
+                    new IdentityProvider(IdentityProviderType.GITLAB, "https://unlink.example"));
+            var second = new IdentityLink();
+            second.setAccount(account);
+            second.setProviderId(Objects.requireNonNull(otherProvider.getId()));
+            second.setSubject("purge-subject");
+            publicIdentities.saveAndFlush(second);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().people()).extracting(person -> person.login()).containsExactly(ada.getLogin());
+            publicationChoice.setVisible(accountId, false);
+            accountService.unlinkIdentity(accountId, identity.getId());
+            assertThat(publicIdentities.findById(identity.getId())).isEmpty();
+            assertThat(page().people()).isEmpty();
+            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
+            accountService.softDelete(accountId);
+            accountPurger.purge(accountId);
+            assertThat(publicIdentities.findActiveByAccountId(accountId)).isEmpty();
+            assertThat(page().people()).isEmpty();
+            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
+        }
+
+        @Test
+        void shouldKeepLinkedWorkHiddenAfterAccountPurge() {
+            TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
+            var identity = publicIdentities
+                    .findActiveByProviderSubject(
+                            Objects.requireNonNull(ada.getProvider().getId()),
+                            ada.getNativeId().toString(),
+                            null)
+                    .orElseThrow();
+            long accountId = Objects.requireNonNull(identity.getAccount().getId());
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            publicationChoice.setVisible(accountId, false);
+            accountService.softDelete(accountId);
+            accountPurger.purge(accountId);
+            assertThat(publicIdentities.findById(identity.getId())).isEmpty();
+            assertThat(page().people()).isEmpty();
+            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
+        }
+
+        @Test
+        void shouldExposeRobotsChoiceWithoutInternalIdentifiersAndSupportHead() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().allowSearchEngines()).isFalse();
+            webTestClient
+                    .get()
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.people[0].id")
+                    .doesNotExist()
+                    .jsonPath("$.repositories[0].id")
+                    .doesNotExist()
+                    .jsonPath("$.repositories[0].key")
+                    .isEqualTo(monitored.getNameWithOwner());
+            webTestClient
+                    .head()
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectHeader()
+                    .valueEquals("Cache-Control", "max-age=60, public")
+                    .expectHeader()
+                    .valueEquals("X-Robots-Tag", "noindex")
+                    .expectHeader()
+                    .doesNotExist("Set-Cookie")
+                    .expectBody()
+                    .isEmpty();
+            workspace.setPublicActivitySearchEngines(true);
+            workspaceRepository.save(workspace);
+            assertThat(page().allowSearchEngines()).isTrue();
+            webTestClient
+                    .get()
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectHeader()
+                    .doesNotExist("X-Robots-Tag");
+        }
+
+        @Test
+        void shouldApplyAccountOptOutAndWorkspaceHideToRowsAndTotals() {
+            TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -2, DAY);
+            jdbc.update(
+                    "UPDATE account SET public_activity_visible=false WHERE id IN (SELECT account_id FROM identity_link WHERE provider_id=? AND subject=?)",
+                    ada.getProvider().getId(),
+                    ada.getNativeId().toString());
+            workspaceMembershipService.updateMemberVisibility(workspace.getId(), zoe.getId(), true);
+            assertThat(page().people()).isEmpty();
+            jdbc.update(
+                    "UPDATE account SET public_activity_visible=true WHERE id IN (SELECT account_id FROM identity_link WHERE provider_id=? AND subject=?)",
+                    ada.getProvider().getId(),
+                    ada.getNativeId().toString());
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+        }
+
+        @Test
+        void shouldComputeFirstContributionCoverageAndPeopleHelpedWithinThePublicScope() {
+            TestUserFactory.ensureAccountForUser(accountRepository, publicIdentities, ada);
+            var privateRepo = repository("activity-org/earlier", true);
+            privateRepo.setVisibility(Repository.Visibility.PRIVATE);
+            privateRepo.setPrivate(true);
+            repositoryRepository.save(privateRepo);
+            record(
+                    ada,
+                    ActivityEventType.ISSUE_CREATED,
+                    ActivityTargetType.ISSUE,
+                    -1,
+                    DAY.minus(Duration.ofDays(365)),
+                    privateRepo);
+            var pull = pullRequest(ada, monitored, pr -> pr);
+            record(ada, ActivityEventType.PULL_REQUEST_OPENED, ActivityTargetType.PULL_REQUEST, pull.getId(), DAY);
+            var review = review(pull, zoe, PullRequestReview.State.APPROVED);
+            record(zoe, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, review.getId(), DAY);
+            var before = page();
+            assertThat(before.people())
+                    .filteredOn(p -> p.login().equals(ada.getLogin()))
+                    .extracting(p -> p.firstContributionAt())
+                    .containsExactly(DAY);
+            assertThat(before.coverage().totalRepositories()).isEqualTo(1);
+            jdbc.update(
+                    "UPDATE account SET public_activity_visible=false WHERE id IN (SELECT account_id FROM identity_link WHERE provider_id=? AND subject=?)",
+                    ada.getProvider().getId(),
+                    ada.getNativeId().toString());
+            var after = page();
+            assertThat(after.people()).extracting(p -> p.login()).containsExactly(zoe.getLogin());
+            assertThat(after.people().getFirst().counts().peopleHelped()).isZero();
+        }
+
+        @Test
+        void shouldExcludeSuppressedPeopleEvenWhenTheirLedgerRowsRemain() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            jdbc.update(
+                    "INSERT INTO person_suppression (id,provider_id,subject,team_key) VALUES (?,?,?,'')",
+                    UUID.randomUUID(),
+                    ada.getProvider().getId(),
+                    ada.getNativeId().toString());
+            assertThat(page().people()).isEmpty();
+            jdbc.update(
+                    "UPDATE workspace_membership SET hidden=true WHERE workspace_id=? AND user_id=?",
+                    workspace.getId(),
+                    ada.getId());
+            assertThat(publicObjections.hiddenPeople(workspace.getId())).isZero();
+        }
+
+        @Test
+        void shouldKeepObjectionsReversibleWorkspaceScopedAndUnattributedToTheContributor() {
+            var outside = persistUser("objecting-outside");
+            record(outside, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            publicObjections.hide(workspace.getId(), outside.getId(), true);
+            ensureAdminMembership(workspace);
+            webTestClient
+                    .get()
+                    .uri(
+                            "/workspaces/{slug}/config-audit?entityType=WORKSPACE_VISIBILITY&changedKey=contributorHidden",
+                            workspace.getWorkspaceSlug())
+                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.content.length()")
+                    .isEqualTo(1)
+                    .jsonPath("$.content[0].entityId")
+                    .isEqualTo(workspace.getId().toString())
+                    .jsonPath("$.content[0].oldValue")
+                    .isEqualTo("{\"contributorHidden\":false}")
+                    .jsonPath("$.content[0].newValue")
+                    .isEqualTo("{\"contributorHidden\":true}");
+            assertThat(page().people()).isEmpty();
+            assertThat(publicObjections.hiddenPeople(workspace.getId())).isEqualTo(1);
+            var other = createWorkspace(
+                    "objection-other", "Other", "other-objection-org", AccountType.ORG, persistUser("objection-owner"));
+            assertThat(publicObjections.hiddenPeople(other.getId())).isZero();
+            assertThatThrownBy(() -> publicObjections.hide(other.getId(), outside.getId(), true))
+                    .isInstanceOf(EntityNotFoundException.class);
+            publicObjections.hide(workspace.getId(), outside.getId(), false);
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(outside.getLogin());
+            webTestClient
+                    .patch()
+                    .uri(
+                            "/workspaces/{slug}/activity/people/{id}/public-visibility?hidden=true",
+                            workspace.getWorkspaceSlug(),
+                            outside.getId())
+                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                    .exchange()
+                    .expectStatus()
+                    .isNoContent()
+                    .expectBody(Void.class);
+            webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/activity/public-hidden-count", workspace.getWorkspaceSlug())
+                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.hiddenPeople")
+                    .isEqualTo(1)
+                    .jsonPath("$.length()")
+                    .isEqualTo(1);
+            webTestClient
+                    .patch()
+                    .uri(
+                            "/workspaces/{slug}/activity/people/{id}/public-visibility?hidden=true",
+                            workspace.getWorkspaceSlug(),
+                            outside.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
+            webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/activity/public-hidden-count", workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
+        }
+
+        @Test
+        void shouldExportPublicActivityChoiceAndOnboardingSeenState() {
+            var account = new Account("Public export person");
+            account.setPublicActivityVisible(false);
+            var saved = accountRepository.saveAndFlush(account);
+            jdbc.update("""
+                    INSERT INTO workspace_member_onboarding(workspace_id,account_id,seen_revision,public_activity_seen,updated_at)
+                    VALUES(?,?,0,true,now())
+                    """, workspace.getId(), saved.getId());
+            var scope = new PersonScope(saved.getId(), List.of(), List.of());
+            var accountStore = personDataRegistry.stores().stream()
+                    .filter(store -> store.store().equals("account"))
+                    .findFirst()
+                    .orElseThrow();
+            var onboardingStore = personDataRegistry.stores().stream()
+                    .filter(store -> store.store().equals("workspace_member_onboarding"))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(accountStore.export(accountStore.select(scope)))
+                    .singleElement()
+                    .satisfies(row -> assertThat(
+                                    row.path("public_activity_visible").asBoolean(true))
+                            .isFalse());
+            assertThat(onboardingStore.export(onboardingStore.select(scope)))
+                    .singleElement()
+                    .satisfies(
+                            row -> assertThat(row.path("public_activity_seen").asBoolean())
+                                    .isTrue());
+        }
+
+        @Test
+        void shouldNotDismissRequiredAiOnboardingWhenAnsweringThePublicStep() {
+            jdbc.update(
+                    "INSERT INTO workspace_onboarding_settings(workspace_id,enabled,ai_choice_required,revision,required_connection_ids) VALUES (?,true,true,0,'[]'::jsonb)",
+                    workspace.getId());
+            webTestClient
+                    .put()
+                    .uri("/user/public-activity/workspaces/{slug}/onboarding", workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .bodyValue(Map.of("visible", false))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+            webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/onboarding/me", workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.needsSetup")
+                    .isEqualTo(true)
+                    .jsonPath("$.aiChoiceRequired")
+                    .isEqualTo(true);
+        }
+
+        @Test
+        void shouldApplyTheAccountChoiceWithoutMarkingOtherWorkspaceOnboardingSeen() {
+            var second = createWorkspace(
+                    "public-second", "Second", "public-second-org", AccountType.ORG, persistUser("second-owner"));
+            second.setPublicActivityEnabled(true);
+            workspaceRepository.save(second);
+            webTestClient
+                    .get()
+                    .uri("/user/public-activity/workspaces/public-second/onboarding")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.seen")
+                    .isEqualTo(false)
+                    .jsonPath("$.visible")
+                    .isEqualTo(true);
+            webTestClient
+                    .put()
+                    .uri("/user/public-activity/workspaces/public-second/onboarding")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .bodyValue(Map.of("visible", false))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.seen")
+                    .isEqualTo(true)
+                    .jsonPath("$.visible")
+                    .isEqualTo(false);
+            webTestClient
+                    .get()
+                    .uri("/user/public-activity/workspaces/{slug}/onboarding", workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.seen")
+                    .isEqualTo(false)
+                    .jsonPath("$.visible")
+                    .isEqualTo(false);
+            webTestClient
+                    .put()
+                    .uri("/user/public-activity")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .bodyValue(Map.of("visible", true))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.visible")
+                    .isEqualTo(true);
+            webTestClient
+                    .get()
+                    .uri("/user/public-activity/workspaces/public-second/onboarding")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.seen")
+                    .isEqualTo(true)
+                    .jsonPath("$.visible")
+                    .isEqualTo(true);
+            persistUser("testuser");
+            webTestClient
+                    .get()
+                    .uri("/user/public-activity/workspaces/public-second/onboarding")
+                    .headers(headers -> headers.setBearerAuth("testuser"))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.seen")
+                    .isEqualTo(false);
+            webTestClient
+                    .put()
+                    .uri("/user/public-activity")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .bodyValue(Map.of())
+                    .exchange()
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody(Void.class);
+            webTestClient
+                    .get()
+                    .uri("/user/public-activity")
+                    .exchange()
+                    .expectStatus()
+                    .isUnauthorized()
+                    .expectBody(Void.class);
+        }
+
+        @Test
+        void shouldReservePublicationChangesForAdministratorsAndApplyBothSwitchesImmediately() {
+            ensureAdminMembership(workspace);
+            webTestClient
+                    .put()
+                    .uri("/admin/settings/public-activity")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .bodyValue(Map.of("allowed", false))
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
+            webTestClient
+                    .patch()
+                    .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .bodyValue(Map.of("publicActivityEnabled", false, "allowSearchEngines", false))
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
+            webTestClient
+                    .patch()
+                    .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
+                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                    .bodyValue(Map.of("publicActivityEnabled", true, "allowSearchEngines", true))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+            webTestClient
+                    .get()
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectHeader()
+                    .doesNotExist("X-Robots-Tag")
+                    .expectBody(Void.class);
+            webTestClient
+                    .put()
+                    .uri("/admin/settings/public-activity")
+                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                    .bodyValue(Map.of("allowed", false))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+            error(workspace.getWorkspaceSlug());
+            webTestClient
+                    .put()
+                    .uri("/admin/settings/public-activity")
+                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                    .bodyValue(Map.of("allowed", true))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+            webTestClient
+                    .patch()
+                    .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
+                    .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
+                    .bodyValue(Map.of("publicActivityEnabled", false, "allowSearchEngines", false))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+            error(workspace.getWorkspaceSlug());
+        }
+
+        @Test
+        void shouldCacheOnlyAnonymousSuccessAndDefaultToNoIndex() {
+            webTestClient
+                    .get()
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectHeader()
+                    .valueEquals("Cache-Control", "max-age=60, public")
+                    .expectHeader()
+                    .doesNotExist("Set-Cookie")
+                    .expectHeader()
+                    .valueEquals("X-Robots-Tag", "noindex")
+                    .expectBody(Void.class);
+            webTestClient
+                    .get()
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectHeader()
+                    .valueEquals("Cache-Control", "no-store")
+                    .expectBody(Void.class);
+            webTestClient
+                    .get()
+                    .uri("/workspaces/{slug}/activity/people", workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectHeader()
+                    .value("Cache-Control", value -> assertThat(value).doesNotContain("public"))
+                    .expectBody(Void.class);
+            jdbc.update("UPDATE instance_settings SET public_activity_allowed=false WHERE id=1");
+            error(workspace.getWorkspaceSlug());
+        }
+
+        private String error(String slug) {
+            return Objects.requireNonNull(webTestClient
+                    .get()
+                    .uri("/public/workspaces/{slug}/activity", slug)
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound()
+                    .expectHeader()
+                    .value("Cache-Control", value -> assertThat(value).doesNotContain("public"))
+                    .expectBody(String.class)
+                    .returnResult()
+                    .getResponseBody());
+        }
+
+        private PublicActivityDTO page() {
+            return Objects.requireNonNull(webTestClient
+                    .get()
+                    .uri("/public/workspaces/{slug}/activity?range=all&to=" + TO, workspace.getWorkspaceSlug())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(PublicActivityDTO.class)
+                    .returnResult()
+                    .getResponseBody());
+        }
+    }
 
     @Nested
     class People {
@@ -496,8 +1199,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
-    void shouldDenyEveryAnonymousActivityReadEvenWhenTheWorkspaceIsPubliclyViewable() {
-        workspace.setIsPubliclyViewable(true);
+    void shouldDenyEveryAnonymousActivityReadEvenWhenTheWorkspacePublicActivityEnabled() {
+        workspace.setPublicActivityEnabled(true);
         workspaceRepository.save(workspace);
         for (String path : List.of(
                 "/people",

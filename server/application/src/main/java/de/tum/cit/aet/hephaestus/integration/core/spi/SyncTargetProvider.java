@@ -314,6 +314,8 @@ public interface SyncTargetProvider
         COLLABORATORS,
         /** Full repository metadata sync */
         FULL_REPOSITORY,
+        /** Repository visibility confirmed through this workspace credential */
+        REPOSITORY_VISIBILITY,
         /** Organization-level issue types sync */
         ISSUE_TYPES,
         /** Issue blocking/blocked-by relationships sync */

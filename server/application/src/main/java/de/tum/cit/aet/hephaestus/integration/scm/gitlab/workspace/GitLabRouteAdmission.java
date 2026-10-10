@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.consumer.RouteAdmission;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -44,6 +45,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -393,9 +395,25 @@ public class GitLabRouteAdmission implements RouteAdmission {
     }
 
     private boolean admitProjectEvent(AdmittedRoute route, long nativeId) {
-        GitLabProjectResponse reported = projectSyncService
-                .fetchProjectById(route.workspaceId(), nativeId)
-                .orElse(null);
+        final GitLabProjectResponse reported;
+        try {
+            reported = projectSyncService
+                    .fetchProjectById(route.workspaceId(), nativeId)
+                    .orElse(null);
+        } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {
+            transaction.executeWithoutResult(status -> {
+                if (holdActive(route)) {
+                    String knownPath = repositoryRepository
+                            .findByNativeIdAndProviderId(nativeId, route.providerId())
+                            .map(Repository::getNameWithOwner)
+                            .orElse(null);
+                    ownMonitors(route, nativeId, knownPath)
+                            .forEach(monitor -> syncTargetProvider.recordRepositoryUnavailable(
+                                    route.workspaceId(), monitor.getId()));
+                }
+            });
+            return false;
+        }
         boolean inside = reported != null && route.contains(reported.fullPath());
         Boolean applied = transaction.execute(status -> {
             if (!holdActive(route)) {

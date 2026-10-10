@@ -12,7 +12,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import de.tum.cit.aet.hephaestus.workspace.dto.RenameWorkspaceSlugRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspaceFeaturesRequestDTO;
-import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspacePublicVisibilityRequestDTO;
+import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspacePublicActivityRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspaceStatusRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspaceTokenRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
@@ -20,8 +20,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -54,7 +54,6 @@ public class WorkspaceController {
             responseCode = "200",
             description = "Workspace returned",
             content = @Content(schema = @Schema(implementation = WorkspaceDTO.class)))
-    @SecurityRequirements
     public ResponseEntity<WorkspaceDTO> getWorkspace(WorkspaceContext workspaceContext) {
         Workspace workspace = workspaceService
                 .getWorkspaceBySlug(workspaceContext.slug())
@@ -100,18 +99,40 @@ public class WorkspaceController {
         return ResponseEntity.ok(workspaceQueryService.toWorkspaceDTO(workspace));
     }
 
-    @PatchMapping("/public-visibility")
-    @Operation(summary = "Toggle public visibility for a workspace")
+    public record PublicActivityWorkspaceSettingsDTO(
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean enabled,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean allowSearchEngines) {
+        static PublicActivityWorkspaceSettingsDTO from(Workspace workspace) {
+            return new PublicActivityWorkspaceSettingsDTO(
+                    Boolean.TRUE.equals(workspace.getPublicActivityEnabled()),
+                    workspace.isPublicActivitySearchEngines());
+        }
+    }
+
+    @GetMapping("/public-activity")
+    @RequireAtLeastWorkspaceAdmin
+    @Operation(
+            operationId = "getWorkspacePublicActivitySettings",
+            summary = "Get public activity and search indexing settings")
+    public PublicActivityWorkspaceSettingsDTO getWorkspacePublicActivitySettings(WorkspaceContext workspaceContext) {
+        var workspace =
+                workspaceService.getWorkspaceBySlug(workspaceContext.slug()).orElseThrow();
+        return PublicActivityWorkspaceSettingsDTO.from(workspace);
+    }
+
+    @PatchMapping("/public-activity")
+    @Operation(summary = "Turn the public activity page and search indexing on or off")
     @ApiResponse(
             responseCode = "200",
             description = "Workspace updated",
-            content = @Content(schema = @Schema(implementation = WorkspaceDTO.class)))
+            content = @Content(schema = @Schema(implementation = PublicActivityWorkspaceSettingsDTO.class)))
     @RequireAtLeastWorkspaceAdmin
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_VISIBILITY")
-    public ResponseEntity<WorkspaceDTO> updatePublicVisibility(
-            WorkspaceContext workspaceContext, @Valid @RequestBody UpdateWorkspacePublicVisibilityRequestDTO request) {
-        Workspace workspace = workspaceService.updatePublicVisibility(workspaceContext, request.isPubliclyViewable());
-        return ResponseEntity.ok(workspaceQueryService.toWorkspaceDTO(workspace));
+    public ResponseEntity<PublicActivityWorkspaceSettingsDTO> updatePublicActivity(
+            WorkspaceContext workspaceContext, @Valid @RequestBody UpdateWorkspacePublicActivityRequestDTO request) {
+        Workspace workspace = workspaceService.updatePublicActivity(
+                workspaceContext, request.publicActivityEnabled(), request.allowSearchEngines());
+        return ResponseEntity.ok(PublicActivityWorkspaceSettingsDTO.from(workspace));
     }
 
     @PatchMapping("/features")
@@ -148,7 +169,6 @@ public class WorkspaceController {
             responseCode = "200",
             description = "Repository list",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = String.class))))
-    @SecurityRequirements
     public ResponseEntity<List<String>> getRepositoriesToMonitor(WorkspaceContext workspaceContext) {
         var repositories = workspaceRepositoryMonitorService.getMonitoredRepositories(workspaceContext).stream()
                 .sorted()
@@ -183,7 +203,6 @@ public class WorkspaceController {
 
     @GetMapping("/users")
     @Operation(summary = "List workspace users and the teams they belong to")
-    @SecurityRequirements
     public ResponseEntity<List<UserTeamsDTO>> getUsersWithTeams(WorkspaceContext workspaceContext) {
         return ResponseEntity.ok(workspaceTeamLabelService.getUsersWithTeams(workspaceContext));
     }

@@ -54,7 +54,8 @@ public record ExportBundle(
             @Nullable String name,
             @Nullable String role) {}
 
-    public record Preferences(boolean participateInResearch, boolean practiceFeedbackDeliveryEnabled) {}
+    public record Preferences(
+            boolean participateInResearch, boolean practiceFeedbackDeliveryEnabled, boolean publicActivityVisible) {}
 
     public record AuthEvent(
             @Nullable Instant occurredAt,

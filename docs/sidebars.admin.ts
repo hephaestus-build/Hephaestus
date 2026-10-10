@@ -44,6 +44,7 @@ const sidebars: SidebarsConfig = {
 				"workspace-subdomains",
 				"production-operations-runbook",
 				"activity-history-repair",
+				"public-activity",
 				"observability",
 				"webhook-ingestion-operations",
 				"backup-restore",

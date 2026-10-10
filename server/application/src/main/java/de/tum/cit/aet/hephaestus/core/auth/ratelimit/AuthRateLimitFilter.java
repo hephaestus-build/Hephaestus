@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -72,7 +73,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         EXPORT("export", true, false),
         MENTOR_CHAT("mentor-chat", true, false),
         REVIEW_REQUEST("review-request", true, false),
-        SYNC_TRIGGER("sync-trigger", true, false);
+        SYNC_TRIGGER("sync-trigger", true, false),
+        PUBLIC_ACTIVITY("public-activity", false, false);
 
         private final String namespace;
         /** Whether the limit keys by account (with IP fallback) vs. always by IP. */
@@ -143,6 +145,13 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             return null;
         }
         String method = request.getMethod();
+        if (("GET".equals(method) || "HEAD".equals(method)) && path.matches("/public/workspaces/[^/]+/activity")) {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null
+                    && authentication.isAuthenticated()
+                    && !(authentication instanceof AnonymousAuthenticationToken)) return null;
+            return Endpoint.PUBLIC_ACTIVITY;
+        }
         if ("GET".equals(method) && path.startsWith("/oauth2/authorization/")) {
             return Endpoint.OAUTH_AUTHORIZATION;
         }
@@ -192,6 +201,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             case MENTOR_CHAT -> properties.mentorChat();
             case REVIEW_REQUEST -> properties.reviewRequest();
             case SYNC_TRIGGER -> properties.syncTrigger();
+            case PUBLIC_ACTIVITY -> properties.publicActivity();
         };
     }
 

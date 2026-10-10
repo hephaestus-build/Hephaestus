@@ -59,7 +59,7 @@ class FeedbackResponseServiceTest extends BaseUnitTest {
     void setUp() {
         service = new FeedbackResponseService(
                 reactionRepository, feedbackRepository, currentDeveloperLookup, withdrawalRepository);
-        workspaceContext = new WorkspaceContext(WORKSPACE_ID, "test-ws", "Test WS", null, null, false, Set.of());
+        workspaceContext = new WorkspaceContext(WORKSPACE_ID, "test-ws", "Test WS", null, null, Set.of());
         lenient().when(currentDeveloperLookup.currentDeveloperIdElseThrow()).thenReturn(CONTRIBUTOR_ID);
         lenient().when(currentDeveloperLookup.currentDeveloperId()).thenReturn(Optional.of(CONTRIBUTOR_ID));
     }

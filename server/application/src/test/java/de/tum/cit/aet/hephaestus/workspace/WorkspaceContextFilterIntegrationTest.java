@@ -229,31 +229,24 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
-    void unauthenticatedAccessToPublicWorkspaceIsAllowed() {
+    void shouldRejectAnonymousWorkspaceReadsEvenWhenPublicActivityIsEnabled() {
         User owner = persistUser("public-owner");
         Workspace workspace = createWorkspace("public-space", "Public", "public", AccountType.ORG, owner);
-        workspaceService.updatePublicVisibility(workspace.getWorkspaceSlug(), true);
-
-        WorkspaceEchoControllers.WorkspaceContextSnapshot response = webTestClient
+        workspaceService.updatePublicActivity(workspace.getWorkspaceSlug(), true, false);
+        webTestClient
                 .get()
                 .uri("/workspaces/{workspaceSlug}/context-echo", workspace.getWorkspaceSlug())
                 .exchange()
                 .expectStatus()
-                .isOk()
-                .expectBody(WorkspaceEchoControllers.WorkspaceContextSnapshot.class)
-                .returnResult()
-                .getResponseBody();
-
-        assertThat(response).isNotNull();
-        assertThat(response.contextSlug()).isEqualTo(workspace.getWorkspaceSlug());
-        assertThat(response.roles()).isEmpty(); // anonymous viewer
+                .isUnauthorized()
+                .expectBody(Void.class);
     }
 
     @Test
     void unauthenticatedAccessToPrivateWorkspaceIsUnauthorized() {
         User owner = persistUser("private-owner");
         Workspace workspace = createWorkspace("private-space", "Private", "private", AccountType.ORG, owner);
-        workspaceService.updatePublicVisibility(workspace.getWorkspaceSlug(), false);
+        workspaceService.updatePublicActivity(workspace.getWorkspaceSlug(), false, false);
 
         webTestClient
                 .get()
@@ -327,7 +320,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
-    void oldSlugForPrivateWorkspaceWithoutMembershipReturnsNotFound() {
+    void shouldRejectAnonymousRequestsBeforeResolvingOldSlugs() {
         User owner = persistUser("redirect-owner-private");
         Workspace workspace = createWorkspace("secret-space", "Secret", "secret", AccountType.ORG, owner);
 
@@ -346,12 +339,12 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .uri("/workspaces/{workspaceSlug}/context-echo", "secret-space")
                 .exchange()
                 .expectStatus()
-                .isNotFound()
+                .isUnauthorized()
                 .expectBody(Void.class);
     }
 
     @Test
-    void shouldNotExposePrivateWorkspaceWhenRedirectHistoryIsOld() {
+    void shouldRejectAnonymousRequestsWhenRedirectHistoryIsOld() {
         User owner = persistUser("redirect-owner-private");
         Workspace workspace = createWorkspace("old-private", "Private", "private", AccountType.ORG, owner);
 
@@ -370,7 +363,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .uri("/workspaces/{workspaceSlug}/context-echo", "old-private")
                 .exchange()
                 .expectStatus()
-                .isNotFound()
+                .isUnauthorized()
                 .expectBody(Void.class);
     }
 

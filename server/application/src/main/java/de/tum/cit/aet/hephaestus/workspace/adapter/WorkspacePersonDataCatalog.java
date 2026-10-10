@@ -75,7 +75,7 @@ public class WorkspacePersonDataCatalog implements PersonDataCatalog {
                         "workspace_member_onboarding",
                         "workspace_member_onboarding",
                         "t.account_id = :account",
-                        "id,account_id,seen_revision,updated_at,workspace_id",
+                        "id,account_id,seen_revision,public_activity_seen,updated_at,workspace_id",
                         "id",
                         "",
                         550),

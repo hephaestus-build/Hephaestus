@@ -4,17 +4,72 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 class SecurityFilterChainRuntimeIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private List<SecurityFilterChain> filterChains;
+
+    @Autowired
+    @Qualifier("requestMappingHandlerMapping")
+    private RequestMappingHandlerMapping handlers;
+
+    @Test
+    void shouldRejectEveryAnonymousHandlerOutsideTheExplicitAllowlist() {
+        var anonymous = new AnonymousAuthenticationToken(
+                "test", "anonymous", List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS")));
+        List<String> violations = new ArrayList<>();
+        handlers.getHandlerMethods().forEach((mapping, handler) -> {
+            if (!handler.getBeanType().getPackageName().startsWith("de.tum.cit.aet.hephaestus")) return;
+            var name = handler.getBeanType().getSimpleName() + "."
+                    + handler.getMethod().getName();
+            var methods = mapping.getMethodsCondition().getMethods();
+            if (methods.isEmpty()) methods = Set.of(RequestMethod.GET, RequestMethod.HEAD, RequestMethod.POST);
+            else if (methods.contains(RequestMethod.GET)) {
+                methods = new HashSet<>(methods);
+                methods.add(RequestMethod.HEAD);
+            }
+            for (String pattern : mapping.getPatternValues()) {
+                for (RequestMethod method : methods) {
+                    if (method == RequestMethod.OPTIONS) continue;
+                    String path = pattern.replaceAll("\\{[^}]+}", "anonymous-probe");
+                    var request = new MockHttpServletRequest(method.name(), path);
+                    request.setServletPath(path);
+                    var chain = filterChains.stream()
+                            .filter(candidate -> candidate.matches(request))
+                            .findFirst()
+                            .orElseThrow();
+                    var authorization = chain.getFilters().stream()
+                            .filter(AuthorizationFilter.class::isInstance)
+                            .map(AuthorizationFilter.class::cast)
+                            .findFirst()
+                            .orElseThrow();
+                    var result = authorization.getAuthorizationManager().authorize(() -> anonymous, request);
+                    if ((result == null || result.isGranted()) && !AnonymousEndpointAllowlist.HANDLERS.contains(name)) {
+                        violations.add(method + " " + pattern + " -> " + name);
+                    }
+                }
+            }
+        });
+        assertThat(violations).isEmpty();
+    }
 
     @Test
     void csrfFilterGuardsOnlyTheCookieAppChain() {
@@ -37,12 +92,24 @@ class SecurityFilterChainRuntimeIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void authRateLimitFilterIsInstalledOnASecurityChain() {
-        // All rate-limit coverage is the isolated filter unit test driving doFilter() directly, so a
-        // regression removing addFilterBefore(authRateLimitFilter, AuthorizationFilter.class) — disabling
-        // auth rate limiting entirely in prod — would otherwise be invisible. Assert it is actually wired.
         assertThat(filterChains)
                 .as("at least one security chain must install AuthRateLimitFilter")
                 .anyMatch(chain -> chain.getFilters().stream().anyMatch(AuthRateLimitFilter.class::isInstance));
+        for (var chain : filterChains) {
+            var filters = chain.getFilters();
+            int authentication = IntStream.range(0, filters.size())
+                    .filter(index -> filters.get(index) instanceof BearerTokenAuthenticationFilter)
+                    .findFirst()
+                    .orElse(-1);
+            if (authentication < 0) continue;
+            int limiter = IntStream.range(0, filters.size())
+                    .filter(index -> filters.get(index) instanceof AuthRateLimitFilter)
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(limiter)
+                    .as("authentication precedes the anonymous-only budget")
+                    .isGreaterThan(authentication);
+        }
     }
 
     // The proxy beans are gated on the job-execution capability (worker role + hephaestus.agent.enabled),

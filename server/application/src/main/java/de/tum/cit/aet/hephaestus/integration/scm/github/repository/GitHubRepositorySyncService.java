@@ -115,8 +115,13 @@ public class GitHubRepositorySyncService {
                 throw new IllegalStateException("Incomplete repository identity response");
             }
             return identity.fullName();
-        } catch (WebClientResponseException.NotFound e) {
-            throw new RepositoryNotFoundOnGitProviderException(Long.toString(nativeId), e);
+        } catch (WebClientResponseException e) {
+            var category = exceptionClassifier.classifyWithDetails(e).category();
+            if (category == GitHubExceptionClassifier.Category.NOT_FOUND
+                    || category == GitHubExceptionClassifier.Category.AUTH_ERROR) {
+                throw new RepositoryNotFoundOnGitProviderException(Long.toString(nativeId), e);
+            }
+            throw e;
         }
     }
 
@@ -164,7 +169,8 @@ public class GitHubRepositorySyncService {
             if (response == null || !response.isValid() || !response.getErrors().isEmpty()) {
                 ClassificationResult classification = graphQlSyncHelper.classifyGraphQlErrors(response);
                 if (classification != null) {
-                    if (classification.category() == GitHubExceptionClassifier.Category.NOT_FOUND
+                    if ((classification.category() == GitHubExceptionClassifier.Category.NOT_FOUND
+                                    || classification.category() == GitHubExceptionClassifier.Category.AUTH_ERROR)
                             && response != null
                             && response.field("repository").getValue() == null) {
                         throw new RepositoryNotFoundOnGitProviderException(nameWithOwner);
@@ -285,7 +291,8 @@ public class GitHubRepositorySyncService {
             throw e;
         } catch (Exception e) {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
-            if (classification.category() == GitHubExceptionClassifier.Category.NOT_FOUND) {
+            if (classification.category() == GitHubExceptionClassifier.Category.NOT_FOUND
+                    || classification.category() == GitHubExceptionClassifier.Category.AUTH_ERROR) {
                 throw new RepositoryNotFoundOnGitProviderException(nameWithOwner, e);
             }
             graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(

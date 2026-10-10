@@ -131,7 +131,7 @@ It never shows a hidden person or an erased person.
 
 A hidden person leaves the page and every total on it.
 The page computes positions after it removes hidden people, so no gap shows where a hidden person was.
-Workspace admins see how many people are hidden, never who.
+Public settings expose only hidden counts. Workspace members can infer who is hidden by comparing internal and public lists.
 A person without an account can object through the privacy contact.
 The operator then applies the same hide to that person's verified provider identity.
 

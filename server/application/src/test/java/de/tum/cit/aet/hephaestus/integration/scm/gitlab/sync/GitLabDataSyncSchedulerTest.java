@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRequest;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -403,6 +404,17 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldStopPublicationWhenMetadataFetchReportsAccessLoss() {
+        prepareProject(mockHolder());
+        when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project"))
+                .thenThrow(new RepositoryNotFoundOnGitProviderException("course/project"));
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        verify(syncTargetProvider).recordRepositoryUnavailable(WORKSPACE_ID, 77L);
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.FULL_REPOSITORY), any());
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.REPOSITORY_VISIBILITY), any());
+    }
+
+    @Test
     void shouldSkipAllProjectRequestsAfterMetadataFailure() {
         var holder = mockHolder();
         prepareProject(holder);
@@ -441,22 +453,25 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         when(subIssues.syncSubIssuesForRepository(WORKSPACE_ID, project)).thenReturn(SyncResult.completed(1));
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).clearRepositoryUnavailable(WORKSPACE_ID, 77L);
+        verify(syncTargetProvider).updateSyncTimestamp(eq(77L), eq(SyncType.REPOSITORY_VISIBILITY), any());
         verify(linker).linkCommits(WORKSPACE_ID, project, null);
         verify(subIssues).syncSubIssuesForRepository(WORKSPACE_ID, project);
     }
 
     @Test
-    void shouldNotStartRepositoryBackoffWhenTokenIsRefusedOrRateLimited() {
+    void shouldNotStartRepositoryBackoffForTransientMetadataFailures() {
         var holder = mockHolder();
         prepareProject(holder);
         when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project"))
-                .thenThrow(WebClientResponseException.create(401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], null))
+                .thenThrow(WebClientResponseException.create(
+                        503, "Service Unavailable", HttpHeaders.EMPTY, new byte[0], null))
                 .thenThrow(WebClientResponseException.create(
                         429, "Too Many Requests", HttpHeaders.EMPTY, new byte[0], null));
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider, never()).recordRepositoryUnavailable(any(), any());
         verify(syncTargetProvider, times(2)).retryUnavailableRepository(WORKSPACE_ID, 77L);
+        verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.REPOSITORY_VISIBILITY), any());
     }
 
     @Test
@@ -473,6 +488,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).reconcileSyncTargetIdentity(77L, 123L, "course/renamed");
         verify(syncTargetProvider).clearRepositoryUnavailable(WORKSPACE_ID, 77L);
+        verify(syncTargetProvider).updateSyncTimestamp(eq(77L), eq(SyncType.REPOSITORY_VISIBILITY), any());
         verify(repositoryRepository, never()).delete(any());
     }
 

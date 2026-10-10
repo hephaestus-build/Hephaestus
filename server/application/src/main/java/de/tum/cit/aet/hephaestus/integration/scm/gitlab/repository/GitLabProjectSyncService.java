@@ -182,12 +182,22 @@ public class GitLabProjectSyncService {
     private ClientGraphQlResponse query(
             Long scopeId, String document, String name, Object value, String context, boolean complete) {
         graphQlClientProvider.acquirePermission();
-        ClientGraphQlResponse response = graphQlClientProvider
-                .forScope(scopeId)
-                .documentName(document)
-                .variable(name, value)
-                .execute()
-                .block(gitLabProperties.graphqlTimeout());
+        ClientGraphQlResponse response;
+        try {
+            response = graphQlClientProvider
+                    .forScope(scopeId)
+                    .documentName(document)
+                    .variable(name, value)
+                    .execute()
+                    .block(gitLabProperties.graphqlTimeout());
+        } catch (RuntimeException e) {
+            var category = exceptionClassifier.classifyWithDetails(e).category();
+            if (category == GitLabExceptionClassifier.Category.NOT_FOUND
+                    || category == GitLabExceptionClassifier.Category.AUTH_ERROR) {
+                throw new RepositoryNotFoundOnGitProviderException(context, e);
+            }
+            throw e;
+        }
         var handled = complete
                         && response != null
                         && response.isValid()
@@ -197,7 +207,9 @@ public class GitLabProjectSyncService {
                         exceptionClassifier.classifyGraphQlResponse(response))
                 : responseHandler.handle(response, context, log);
         var classification = handled.classification();
-        if (classification != null && classification.category() == GitLabExceptionClassifier.Category.NOT_FOUND) {
+        if (classification != null
+                && (classification.category() == GitLabExceptionClassifier.Category.NOT_FOUND
+                        || classification.category() == GitLabExceptionClassifier.Category.AUTH_ERROR)) {
             Object projectData = response != null
                     ? response.field(GET_PROJECT_DOCUMENT.equals(document) ? "project" : "projects.nodes")
                             .getValue()

@@ -154,7 +154,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         testWorkspace.setWorkspaceSlug("hephaestus-test");
         testWorkspace.setDisplayName("Hephaestus Test");
         testWorkspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
-        testWorkspace.setIsPubliclyViewable(true);
+        testWorkspace.setPublicActivityEnabled(true);
         testWorkspace.setOrganization(testOrganization);
         testWorkspace.setAccountLogin(FIXTURE_ORG_LOGIN);
         testWorkspace.setAccountType(AccountType.ORG);

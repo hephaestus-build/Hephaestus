@@ -65,6 +65,10 @@ public class RepositoryToMonitor {
     private List<String> generatedPaths = List.of();
 
     private Instant repositorySyncedAt;
+
+    @Nullable
+    private Instant repositoryVisibilityConfirmedAt;
+
     private Instant labelsSyncedAt;
     private Instant milestonesSyncedAt;
     private Instant collaboratorsSyncedAt;

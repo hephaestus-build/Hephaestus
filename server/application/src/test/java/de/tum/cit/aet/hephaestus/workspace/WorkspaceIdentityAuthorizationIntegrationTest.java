@@ -126,7 +126,7 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
         assertNotNull(providerId);
         var owner = userRepository.saveAndFlush(TestUserFactory.createUser(987L, "shared-login", provider));
         var workspace = createWorkspace("identity-http", "Identity", "identity", AccountType.ORG, owner);
-        workspace.setIsPubliclyViewable(false);
+        workspace.setPublicActivityEnabled(false);
         workspaces.saveAndFlush(workspace);
         var account = accounts.saveAndFlush(new Account("Verified owner"));
         var accountId = account.getId();

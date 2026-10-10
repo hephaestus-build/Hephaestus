@@ -40,9 +40,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
  * for the two things actually wrong with the request: an artifact this workspace doesn't monitor, and a
  * caller with no standing on it.
  *
- * <p>{@code isMember()} is checked because {@code WorkspaceContextFilter} admits an anonymous caller on a
- * publicly viewable workspace, and a spend button must not be part of what public visibility grants; it
- * is only the outer fence — {@link ReviewRequestAuthority} owns the rule that decides standing.
+ * <p>{@code isMember()} is the outer workspace fence; {@link ReviewRequestAuthority} decides whether
+ * the caller has standing on the reviewed work.
  */
 @WorkspaceScopedController
 @RequestMapping("/practices/review-requests")

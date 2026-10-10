@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
  * Project events use {@code event_name} (not {@code object_kind}) as the discriminator.
  * The webhook receiver normalizes all project event names to "project" for NATS routing.
  * <p>
- * These events are only available on group-level webhooks.
+ * Group webhooks send create and destroy events. System hooks also send updates, renames and transfers.
  * <p>
  * Supported event_name values:
  * <ul>
@@ -21,7 +21,7 @@ import org.jspecify.annotations.Nullable;
  *   <li>{@code project_update} - Project settings updated</li>
  * </ul>
  *
- * @see <a href="https://docs.gitlab.com/ee/user/project/integrations/webhook_events.html#project-events">
+ * @see <a href="https://docs.gitlab.com/administration/system_hooks/">
  *      GitLab Project Events</a>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)

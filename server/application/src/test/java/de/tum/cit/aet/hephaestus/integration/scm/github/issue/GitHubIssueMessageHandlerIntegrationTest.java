@@ -800,7 +800,7 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         workspace.setWorkspaceSlug("hephaestus-test");
         workspace.setDisplayName("Hephaestus Test");
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
-        workspace.setIsPubliclyViewable(true);
+        workspace.setPublicActivityEnabled(true);
         workspace.setOrganization(org);
         workspace.setAccountLogin(FIXTURE_ORG_LOGIN);
         workspace.setAccountType(AccountType.ORG);

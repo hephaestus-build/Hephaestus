@@ -6,7 +6,12 @@ import java.util.Set;
  * Whose activity to read: the actors, and the teams whose repository and label settings narrow it. No team
  * means the whole workspace.
  */
-public record ActivityScope(long workspaceId, Set<Long> actorIds, Set<Long> teamIds, Set<Long> repositoryIds) {
+public record ActivityScope(
+        long workspaceId, Set<Long> actorIds, Set<Long> teamIds, Set<Long> repositoryIds, boolean publicOnly) {
+    public ActivityScope(long workspaceId, Set<Long> actorIds, Set<Long> teamIds, Set<Long> repositoryIds) {
+        this(workspaceId, actorIds, teamIds, repositoryIds, false);
+    }
+
     public ActivityScope(long workspaceId, Set<Long> actorIds, Set<Long> teamIds) {
         this(workspaceId, actorIds, teamIds, Set.of());
     }

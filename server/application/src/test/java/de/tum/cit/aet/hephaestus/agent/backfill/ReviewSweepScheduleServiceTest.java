@@ -111,6 +111,6 @@ class ReviewSweepScheduleServiceTest extends BaseUnitTest {
     }
 
     private static WorkspaceContext context() {
-        return new WorkspaceContext(WORKSPACE_ID, "acme", "Acme", null, null, false, Set.of());
+        return new WorkspaceContext(WORKSPACE_ID, "acme", "Acme", null, null, Set.of());
     }
 }

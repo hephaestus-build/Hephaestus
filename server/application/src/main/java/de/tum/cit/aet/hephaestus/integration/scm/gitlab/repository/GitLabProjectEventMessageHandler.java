@@ -28,10 +28,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Handles GitLab project webhook events for real-time repository lifecycle updates.
  * <p>
  * Processes {@code project_create}, {@code project_destroy}, {@code project_rename},
- * and {@code project_transfer} events that are normalized to the "project" event key
+ * {@code project_transfer} and {@code project_update} events that are normalized to the "project" event key
  * by the webhook receiver.
  * <p>
- * These events are only available on group-level webhooks.
+ * Group webhooks send create and destroy events. System hooks also send updates, renames and transfers.
  */
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
@@ -92,8 +92,10 @@ public class GitLabProjectEventMessageHandler extends AbstractIntegrationMessage
             handleProjectCreate(event, provider);
         } else if (event.isDeletion()) {
             handleProjectDestroy(event, provider);
-        } else if (event.isRename() || event.isTransfer()) {
-            handleProjectRenameOrTransfer(event, provider);
+        } else if (event.isRename()
+                || event.isTransfer()
+                || GitLabProjectEventDTO.EVENT_PROJECT_UPDATE.equals(event.eventName())) {
+            handleProjectUpdate(event, provider);
         } else {
             log.debug("Unhandled project event action: eventName={}", event.eventName());
         }
@@ -117,7 +119,8 @@ public class GitLabProjectEventMessageHandler extends AbstractIntegrationMessage
         repo.setProvider(provider);
         repo.setName(event.name());
         repo.setNameWithOwner(Objects.requireNonNull(event.pathWithNamespace()));
-        repo.setPrivate("private".equalsIgnoreCase(event.projectVisibility()));
+        repo.setVisibility(GitLabProjectProcessor.mapVisibility(event.projectVisibility()));
+        repo.setPrivate(repo.getVisibility() == Repository.Visibility.PRIVATE);
 
         // Construct HTML URL from server URL + path
         String serverUrl = gitLabProperties.defaultServerUrl();
@@ -164,7 +167,7 @@ public class GitLabProjectEventMessageHandler extends AbstractIntegrationMessage
                                 sanitizeForLog(Objects.requireNonNull(event.pathWithNamespace()))));
     }
 
-    private void handleProjectRenameOrTransfer(GitLabProjectEventDTO event, IdentityProvider provider) {
+    private void handleProjectUpdate(GitLabProjectEventDTO event, IdentityProvider provider) {
         Long providerId = Objects.requireNonNull(provider.getId());
         long nativeId = event.projectId();
 
@@ -190,9 +193,9 @@ public class GitLabProjectEventMessageHandler extends AbstractIntegrationMessage
                                 repo.setHtmlUrl(baseUrl + newPath);
                             }
 
-                            // Update visibility if provided
                             if (event.projectVisibility() != null) {
-                                repo.setPrivate("private".equalsIgnoreCase(event.projectVisibility()));
+                                repo.setVisibility(GitLabProjectProcessor.mapVisibility(event.projectVisibility()));
+                                repo.setPrivate(repo.getVisibility() == Repository.Visibility.PRIVATE);
                             }
 
                             // Re-link organization for transfers (new group may differ)

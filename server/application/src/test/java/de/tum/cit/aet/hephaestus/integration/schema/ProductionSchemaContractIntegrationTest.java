@@ -724,7 +724,7 @@ class ProductionSchemaContractIntegrationTest {
     /** A workspace row with only the columns the schema demands; every setting below is left at its default. */
     private long insertWorkspace(String slug) {
         Long id = jdbcTemplate.queryForObject(
-                "INSERT INTO workspace (slug, display_name, status, account_type, account_login, is_publicly_viewable) "
+                "INSERT INTO workspace (slug, display_name, status, account_type, account_login, public_activity_enabled) "
                         + "VALUES (?, ?, 'ACTIVE', 'ORG', ?, false) RETURNING id",
                 Long.class,
                 slug,

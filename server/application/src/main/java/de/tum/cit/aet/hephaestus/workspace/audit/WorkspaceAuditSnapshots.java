@@ -27,7 +27,8 @@ public final class WorkspaceAuditSnapshots {
         }
     }
 
-    public record VisibilitySnapshot(@Nullable Boolean publiclyViewable) implements ConfigAuditSnapshot {}
+    public record VisibilitySnapshot(@Nullable Boolean publicActivityEnabled, boolean allowSearchEngines)
+            implements ConfigAuditSnapshot {}
 
     /** Presence of a stored SCM token — never the token itself. */
     public record TokenSnapshot(

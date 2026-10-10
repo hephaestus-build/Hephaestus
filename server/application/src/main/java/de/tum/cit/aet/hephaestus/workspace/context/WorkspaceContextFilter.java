@@ -187,9 +187,7 @@ public class WorkspaceContextFilter implements Filter {
                         .ifPresent(accountId -> elevationAudit.recordElevatedAccess(accountId, workspace.getId()));
             }
 
-            boolean isPublicRead = Boolean.TRUE.equals(workspace.getIsPubliclyViewable()) && isReadRequest;
-
-            if (roles.isEmpty() && !isPublicRead) {
+            if (roles.isEmpty()) {
                 if (currentUsers.isEmpty()) {
                     sendWorkspaceUnauthorizedError(httpResponse, slug);
                 } else {
@@ -319,9 +317,8 @@ public class WorkspaceContextFilter implements Filter {
             return false;
         }
 
-        // Avoid leaking workspace existence for private workspaces when the user lacks membership.
+        // Avoid leaking workspace existence when the user lacks membership.
         // Checked across all of the account's linked identities (same union semantics as access control).
-        boolean isPublic = Boolean.TRUE.equals(workspace.getIsPubliclyViewable());
         Set<Long> currentUserIds = currentAccountUsers.resolve().stream()
                 .filter(u -> u != null && u.getId() != null)
                 .map(User::getId)
@@ -331,7 +328,7 @@ public class WorkspaceContextFilter implements Filter {
                         .findByWorkspace_IdAndUser_IdIn(workspace.getId(), currentUserIds)
                         .isEmpty();
 
-        if (!isPublic && !hasMembership) {
+        if (!hasMembership) {
             return false;
         }
 

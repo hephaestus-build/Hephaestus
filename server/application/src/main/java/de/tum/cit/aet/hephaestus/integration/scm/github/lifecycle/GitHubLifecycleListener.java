@@ -682,7 +682,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         Workspace workspace = new Workspace();
         workspace.setWorkspaceSlug(slug);
         workspace.setDisplayName(displayName);
-        workspace.setIsPubliclyViewable(false);
+        workspace.setPublicActivityEnabled(false);
         workspace.setAccountLogin(accountLogin);
         workspace.setAccountType(accountType);
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);

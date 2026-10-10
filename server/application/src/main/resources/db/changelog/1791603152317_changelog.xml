@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1791603152317-1" author="hephaestus">
+        <addColumn tableName="instance_settings">
+            <column name="public_activity_allowed" type="BOOLEAN"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791603152317-2" author="hephaestus">
+        <addColumn tableName="workspace">
+            <column defaultValueBoolean="false" name="public_activity_enabled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791603152317-3" author="hephaestus">
+        <addColumn tableName="workspace">
+            <column defaultValueBoolean="false" name="public_activity_search_engines" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791603152317-4" author="hephaestus">
+        <addColumn tableName="workspace_member_onboarding">
+            <column defaultValueBoolean="false" name="public_activity_seen" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791603152317-5" author="hephaestus">
+        <addColumn tableName="account">
+            <column defaultValueBoolean="true" name="public_activity_visible" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791603152317-6" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="workspace" columnName="is_publicly_viewable"/>
+        </preConditions>
+        <comment>Public activity needs a new publication choice. The broad anonymous-read flag is not carried over.</comment>
+        <dropColumn columnName="is_publicly_viewable" tableName="workspace"/>
+        <rollback>
+            <stop>Restore a verified backup taken before the public activity cutover.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1791603152317-7" author="hephaestus">
+        <preConditions onFail="HALT">
+            <tableExists tableName="auth_event"/>
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conname='ck_auth_event_event_type' AND conrelid='auth_event'::regclass</sqlCheck>
+        </preConditions>
+        <comment>Admit audited changes to instance public activity publication without changing recorded events.</comment>
+        <sql>ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED'));</sql>
+        <rollback><stop>Restore a verified backup taken before the public activity cutover.</stop></rollback>
+    </changeSet>
+    <changeSet id="1791603152317-8" author="hephaestus">
+        <createTable tableName="public_activity_objection">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="public_activity_objectionPK"/>
+            </column>
+            <column name="provider_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1791603152317-9" author="hephaestus">
+        <addUniqueConstraint columnNames="provider_id, subject" constraintName="uq_public_activity_objection_identity" tableName="public_activity_objection"/>
+    </changeSet>
+    <changeSet id="1791603152317-10" author="hephaestus">
+        <dropNotNullConstraint columnDataType="bigint" columnName="seen_revision" tableName="workspace_member_onboarding"/>
+    </changeSet>
+    <changeSet id="1791603152317-11" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="repository_visibility_confirmed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

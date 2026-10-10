@@ -131,7 +131,7 @@ Your instance must disclose diagnostic recipients, basis, and retention.
 
 When a page shows an avatar from a source platform, your browser requests the image from its host.
 That host receives network metadata, such as your IP address and the image address.
-This also occurs on public pages without sign-in.
+This also occurs on pages that do not need sign-in.
 The host’s retention is separate from Hephaestus.
 
 1. Do not include secrets or unnecessary personal or sensitive information in chats, source content, or feedback.
@@ -179,7 +179,8 @@ Practice feedback is guidance, not a grade or a replacement for human review.
 Access differs by role and destination:
 
 - Members can read [Activity](./activity) without individual source-platform permission checks. Normal member access keeps your Practice profile, its feedback, and Heph conversations private. Other members see your standings only inside the counts of [Practices across the workspace](./practice-profile#practices-across-the-workspace), which never name anyone. The page shows every count, also a count of one, so other members can sometimes tell where you stand. [Small counts](./practice-profile#small-counts) lists when. Workspace admins can read observations, delivery metadata, and dispute explanations. They cannot read private practice-page or conversation feedback text, ratings, or other private response notes.
-- Every workspace page needs sign-in. A workspace admin can mark a whole workspace as public through the API. Then anyone can read its members, teams, repositories, and practices through the API. Its activity, practice pages, feedback, and Heph conversations stay private.
+- The public activity page shows contributions to public repositories only. Other workspace pages need sign-in. Hidden people and people who opted out do not appear or contribute to its totals.
+  Contact the workspace privacy contact to object to publication.
 - The About page lists the people who contribute to the Hephaestus open-source project, as GitHub shows them.
 - Feedback on GitHub, GitLab, or Slack is visible to that destination’s audience.
 - Instance admins can use **View as user** to read activity, practice pages, feedback, and existing Heph conversations. This includes access before your first Hephaestus sign-in. Each read has a recorded reason. This access cannot send messages, answer questions, or make choices for you. It does not count as you seeing feedback. Workspace admins do not have this access.

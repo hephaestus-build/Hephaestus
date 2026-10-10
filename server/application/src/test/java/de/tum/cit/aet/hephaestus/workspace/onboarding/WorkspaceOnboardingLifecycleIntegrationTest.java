@@ -94,7 +94,7 @@ class WorkspaceOnboardingLifecycleIntegrationTest extends AbstractWorkspaceInteg
         var member = new WorkspaceMemberOnboarding();
         member.setWorkspace(workspace);
         member.setAccountId(accountId);
-        member.setSeenRevision(0);
+        member.setSeenRevision(0L);
         member.setUpdatedAt(Instant.now());
         members.save(member);
     }

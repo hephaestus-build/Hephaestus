@@ -70,9 +70,10 @@ public class WorkspaceScopedTables {
             "client_sign_in_handoff",
             // GDPR Art. 20 self-service export — account-scoped, spans a principal's data across workspaces.
             "account_export",
-            // Instance-wide rights requests and exact-key processing fences.
+            // Instance-wide rights requests and exact provider-identity controls.
             "person_data_request",
             "person_suppression",
+            "public_activity_objection",
             // Account-scoped consent evidence; spans workspaces
             "consent_decision",
             // The account's own AI choice; one answer for every workspace it is a member of

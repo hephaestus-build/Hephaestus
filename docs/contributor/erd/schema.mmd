@@ -20,6 +20,7 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
         TIMESTAMPTZ deleted_at
         BIGINT version "NOT NULL"
+        BOOLEAN public_activity_visible "NOT NULL"
     }
 
     AccountAiChoice {
@@ -624,6 +625,7 @@ erDiagram
         TIMESTAMPTZ silent_mode_changed_at
         BIGINT version "NOT NULL"
         BIGINT silent_mode_changed_by_account_id FK
+        BOOLEAN public_activity_allowed
     }
 
     Issue {
@@ -1286,6 +1288,12 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
     }
 
+    PublicActivityObjection {
+        UUID id PK
+        BIGINT provider_id UK "NOT NULL"
+        VARCHAR(255) subject UK "NOT NULL"
+    }
+
     PullRequestClosingIssue {
         BIGINT pull_request_id PK,FK
         BIGINT issue_id PK,FK
@@ -1443,6 +1451,7 @@ erDiagram
         TIMESTAMPTZ unavailable_retry_at
         TIMESTAMPTZ unavailable_since
         INTEGER backfill_repair_provider_count
+        TIMESTAMPTZ repository_visibility_confirmed_at
     }
 
     ReviewBackfillRun {
@@ -1644,7 +1653,6 @@ erDiagram
         VARCHAR(10) account_type "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         VARCHAR(120) display_name "NOT NULL"
-        BOOLEAN is_publicly_viewable "NOT NULL"
         VARCHAR(64) slug UK "NOT NULL"
         VARCHAR(20) status "NOT NULL"
         TIMESTAMPTZ updated_at
@@ -1667,6 +1675,8 @@ erDiagram
         VARCHAR(16) practice_delivery_status "NOT NULL"
         BIGINT practice_rollout_revision "NOT NULL"
         BIGINT practice_config_version "NOT NULL"
+        BOOLEAN public_activity_enabled "NOT NULL"
+        BOOLEAN public_activity_search_engines "NOT NULL"
     }
 
     WorkspaceAgentBinding {
@@ -1733,9 +1743,10 @@ erDiagram
     WorkspaceMemberOnboarding {
         BIGINT id PK
         BIGINT account_id FK,UK "NOT NULL"
-        BIGINT seen_revision "NOT NULL"
+        BIGINT seen_revision
         TIMESTAMPTZ updated_at "NOT NULL"
         BIGINT workspace_id FK,UK "NOT NULL"
+        BOOLEAN public_activity_seen "NOT NULL"
     }
 
     WorkspaceMembership {

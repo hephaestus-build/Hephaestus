@@ -1,0 +1,131 @@
+---
+id: public-activity
+title: Public activity pages
+description: Publication settings and privacy controls for public repository activity.
+---
+
+# Public activity pages
+
+A public activity page shows human contributions to public GitHub and GitLab repositories.
+It includes pull requests, reviews, and issues from workspace members and outside contributors.
+It excludes private repositories, automation, practices, feedback, Slack, Outline, and AI content.
+Keep course workspaces private.
+Before publication, verify the activity repair described in the [activity history runbook](./activity-history-repair.mdx).
+
+## Instance setting
+
+**Allow public activity pages** defaults to off.
+Set `HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED=true` to supply an instance default.
+An instance administrator can read and replace this default with `GET` and `PUT /admin/settings/public-activity`.
+The PUT body is `{"allowed": true}` or `{"allowed": false}`.
+The stored choice takes precedence over the configured default and is audited.
+Turning the setting off stops all public activity pages on the next request.
+
+## Workspace settings
+
+A workspace administrator can read `GET /workspaces/{slug}/public-activity` and change
+`PATCH /workspaces/{slug}/public-activity`.
+The PATCH body is `{"publicActivityEnabled": true, "allowSearchEngines": false}`.
+Both fields are required.
+Changes are audited.
+The page is available only when the instance allows it and the active workspace enables it.
+The old whole-workspace public flag no longer grants anonymous access.
+Preview cloning clears both publication choices. A clone does not publish a stored snapshot after synchronization stops.
+
+**Allow search engines** defaults to off.
+The JSON response then carries `X-Robots-Tag: noindex`.
+The DTO also returns `allowSearchEngines: false` for a page client to set `<meta name="robots" content="noindex">` on its HTML page.
+The header protects the JSON response only; it does not protect the webapp HTML.
+The API does not set a robots instruction on HTML pages; the page client must supply it.
+Neither instruction is access control.
+See [Google's robots header contract](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag).
+
+## Personal choice and objections
+
+Each account defaults to visible on public activity pages.
+A signed-in person can read and change `GET` and `PUT /user/public-activity` with `{"visible": false}`
+or `{"visible": true}`.
+The choice applies to all linked provider identities in every workspace.
+A minimal provider-id and subject marker retains an objection after unlinking or account deletion.
+Showing activity again clears markers for identities currently linked to the account, not identities it no longer owns.
+This marker affects publication only; it does not suppress internal processing.
+Hidden people do not contribute to public totals.
+An administrator can read only the count through `GET /workspaces/{slug}/activity/public-hidden-count`.
+This endpoint does not identify the hidden people.
+
+For an objection from a person without an account, the workspace administrator can use
+`PATCH /workspaces/{slug}/activity/people/{userId}/public-visibility?hidden=true`.
+Use `hidden=false` to restore visibility.
+The action reuses workspace activity hiding and therefore also hides that contributor from member activity.
+It does not erase source work, block provider synchronization, or grant workspace access.
+Restoring workspace visibility never overrides an account-wide opt-out.
+For an outside contributor, the audit entry records the workspace and change, not the contributor's identity.
+For a member, this action uses the existing membership visibility operation and its workspace-role audit entry.
+An objection with broader scope belongs in the existing person-data request process.
+
+Workspace administrators handle this action because their workspace publishes the activity.
+Instance administrators can use the existing audited workspace elevation when they handle the privacy contact.
+Do not use the permanent erasure suppression mechanism for a reversible publication objection.
+
+## Onboarding contract
+
+A signed-in visitor can read `GET /user/public-activity/workspaces/{slug}/onboarding`.
+The response gives `seen` and the account-wide `visible` choice.
+`PUT` with `{"visible": true}` or `{"visible": false}` applies the choice and marks this workspace as seen
+in one transaction.
+The public-workspace visitor needs no workspace membership.
+The account always comes from the authenticated session.
+A page client can use this state for a one-time Show me / Hide me step.
+
+## Anonymous responses
+
+Only `GET` and `HEAD /public/workspaces/{slug}/activity` publish workspace data without sign-in.
+It accepts the activity range presets and custom dates.
+Each query requires stored public visibility and a recent successful repository metadata read for this workspace.
+A missing confirmation, an expired confirmation, or a known unavailable repository excludes the repository,
+its contributions, and its coverage from the public response.
+A sync that reports repository access loss (404 or authorization failure) marks that workspace's monitor unavailable immediately.
+Installation repository removal and GitLab project removal or transfer out of scope stop publication by removing the workspace monitor.
+A GitLab project event whose metadata lookup reports access loss also marks the monitor unavailable.
+These actions do not change another workspace's access to the same repository.
+A successful sync can restore publication when it confirms that the repository is public and accessible again.
+
+`HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE` supplies
+`hephaestus.public-activity.repository-visibility-max-age` and defaults to `48h`.
+The value must be a positive duration.
+This is twice the default daily `hephaestus.sync.cron` interval (03:00 server time).
+Use twice your configured metadata sync interval when you change the cadence.
+The limit is enforced during each public query, without a cleanup job.
+If sync is disabled, credentials stop working, or metadata fetches keep failing,
+publication stops no later than this limit after the last successful repository metadata read.
+A failed metadata fetch does not renew the confirmation.
+The separate visibility confirmation does not advance when only issues, pull requests, or other resources sync.
+Repositories without a successful metadata confirmation after this upgrade are not published.
+Run a repository sync before enabling a page.
+
+GitLab project create, rename, transfer and update events refresh stored visibility.
+A system hook supplies `project_update`; normal project and group webhooks do not supply visibility-change events.
+Push events and metadata sync paths also refresh stored visibility.
+Without a delivered visibility event, a private change is detected by the next successful metadata sync,
+or the repository is excluded when its confirmation expires, whichever happens first.
+The existing 60-second anonymous cache lifetime applies after exclusion as it does after a publication setting change.
+See [GitHub installation repository events](https://docs.github.com/en/webhooks/webhook-events-and-payloads#installation_repositories),
+[GitLab system hooks](https://docs.gitlab.com/administration/system_hooks/) and
+[GitLab webhook events](https://docs.gitlab.com/user/project/integrations/webhook_events/#project-events).
+Unknown, inactive, and disabled pages return the same not-found problem.
+Other workspace endpoints require sign-in and workspace access.
+
+Successful anonymous responses carry `Cache-Control: public, max-age=60`.
+Signed-in responses carry `no-store`.
+The response varies by Cookie and Authorization.
+The existing shared rate limiter defaults to 60 anonymous requests per minute per client IP across workspace slugs.
+Set `HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_CAPACITY` and `HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_PERIOD` to adjust this bucket.
+They supply `hephaestus.auth.rate-limit.public-activity.capacity` and `.period`.
+Signed-in requests do not consume this anonymous IP budget.
+It refuses requests if its rate-limit backend is unavailable.
+Proxy trust comes from the servlet container, not a second parser for forwarded headers.
+
+Publication changes apply to new server requests.
+A browser or shared cache can retain an earlier anonymous response for up to 60 seconds.
+The server cannot recall a response already delivered.
+See [Spring Security's cache header contract](https://docs.spring.io/spring-security/reference/servlet/exploits/headers.html).

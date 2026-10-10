@@ -21,7 +21,7 @@ INSERT INTO identity_provider (type, server_url, created_at)
 VALUES ('GITLAB', 'https://gitlab.example.test', now())
 ON CONFLICT (type, server_url) DO NOTHING;
 
-INSERT INTO workspace (id, account_login, account_type, created_at, display_name, is_publicly_viewable, slug, status,
+INSERT INTO workspace (id, account_login, account_type, created_at, display_name, public_activity_enabled, slug, status,
   practices_enabled, practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled)
 VALUES (20, 'ext', 'ORG', now(), 'Extension E2E', false, 'ext-e2e', 'ACTIVE',
   true, true, true)
@@ -132,7 +132,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- A separate repository is monitored by two workspaces, for frame-local workspace choice.
 -- The ordinary ext/demo work remains unambiguous for the other browser tests.
-INSERT INTO workspace (id, account_login, account_type, created_at, display_name, is_publicly_viewable, slug, status,
+INSERT INTO workspace (id, account_login, account_type, created_at, display_name, public_activity_enabled, slug, status,
   practices_enabled, practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled)
 VALUES (21, 'ext-choice', 'ORG', now(), 'Extension E2E alternate', false, 'ext-e2e-alternate', 'ACTIVE',
   true, false, false)

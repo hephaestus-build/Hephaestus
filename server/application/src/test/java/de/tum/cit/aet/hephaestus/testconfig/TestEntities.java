@@ -101,7 +101,7 @@ public final class TestEntities {
         ws.setDisplayName("Workspace " + slug);
         ws.setAccountLogin(slug + "-org");
         ws.setAccountType(AccountType.ORG);
-        ws.setIsPubliclyViewable(true);
+        ws.setPublicActivityEnabled(true);
         ws.setStatus(Workspace.WorkspaceStatus.ACTIVE);
         return ws;
     }
