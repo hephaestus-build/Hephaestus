@@ -127,6 +127,112 @@ class LatestRunTest extends BaseUnitTest {
                 .build();
     }
 
+    @Test
+    void shouldLetTheNewerProvedOccasionSpeakWhenAnOlderOneCompletesLater() {
+        UUID older = UUID.randomUUID();
+        UUID newer = UUID.randomUUID();
+        Observation newerRun = occasion(newer, NOW.plus(Duration.ofMinutes(11)), NOW.plus(Duration.ofMinutes(36)));
+        Observation olderRun = occasion(older, NOW, NOW.plus(Duration.ofMinutes(50)));
+
+        assertThat(LatestRun.perClaim(List.of(olderRun, newerRun))).containsExactly(newerRun);
+        assertThat(LatestRun.perLiveClaim(List.of(olderRun, newerRun))).containsExactly(newerRun);
+        assertThat(olderRun.getObservedAt())
+                .as("completion stays the completion instant")
+                .isEqualTo(NOW.plus(Duration.ofMinutes(50)));
+    }
+
+    @Test
+    void shouldOrderByCompletionWhenARunProvedNoOccasion() {
+        UUID legacy = UUID.randomUUID();
+        UUID proved = UUID.randomUUID();
+        Observation legacyRun = observation(legacy, NOW.plus(Duration.ofMinutes(50)), ObservationOrigin.LIVE);
+        Observation provedRun = occasion(proved, NOW.plus(Duration.ofMinutes(11)), NOW.plus(Duration.ofMinutes(36)));
+
+        assertThat(LatestRun.perClaim(List.of(legacyRun, provedRun)))
+                .as("an unproved run is placed at its completion, never at a guessed occasion")
+                .containsExactly(legacyRun);
+    }
+
+    /**
+     * A run about one person on a pull request does not speak for another person reviewed on it, nor does one
+     * workspace's run speak for another's mirror of the same id; the work alone still narrows per work.
+     */
+    @Test
+    void shouldKeepEachPersonsAndWorkspacesNewestRunOfTheSameWorkAndPractice() {
+        Observation alice = claim(UUID.randomUUID(), 1L, 10L, NOW);
+        Observation aliceLater = claim(UUID.randomUUID(), 1L, 10L, NOW.plus(Duration.ofMinutes(1)));
+        Observation bob = claim(UUID.randomUUID(), 1L, 11L, NOW.minus(Duration.ofMinutes(1)));
+        Observation elsewhere = claim(UUID.randomUUID(), 2L, 10L, NOW.minus(Duration.ofMinutes(2)));
+        List<Observation> window = List.of(alice, aliceLater, bob, elsewhere);
+
+        assertThat(LatestRun.perClaim(window)).containsExactly(aliceLater, bob, elsewhere);
+        assertThat(LatestRun.perLiveClaim(window)).containsExactly(aliceLater, bob, elsewhere);
+        assertThat(LatestRun.perWork(window)).containsExactly(aliceLater);
+    }
+
+    /** A manual run is quoted with the live claim it follows; it neither counts nor is hidden behind it. */
+    @Test
+    void shouldGroupAManualRunWithTheLiveClaimAndKeepABackfillApart() {
+        Observation live = claim(UUID.randomUUID(), 1L, 10L, NOW);
+        Observation manual = Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
+                .workspaceId(1L)
+                .aboutUserId(10L)
+                .practice(practice("reviewable-diff-size"))
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(7L)
+                .outcome(Outcome.MET)
+                .origin(ObservationOrigin.MANUAL)
+                .observedAt(NOW.plus(Duration.ofMinutes(1)))
+                .build();
+        Observation backfill = Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
+                .workspaceId(1L)
+                .aboutUserId(10L)
+                .practice(practice("reviewable-diff-size"))
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(7L)
+                .outcome(Outcome.NOT_MET)
+                .origin(ObservationOrigin.BACKFILL)
+                .observedAt(NOW.minus(Duration.ofMinutes(1)))
+                .build();
+        List<Observation> window = List.of(live, manual, backfill);
+
+        assertThat(LatestRun.perClaim(window)).containsExactly(manual, backfill);
+        assertThat(LatestRun.perLiveClaim(window)).containsExactly(live);
+    }
+
+    private static Observation claim(UUID run, long workspaceId, long aboutUserId, Instant observedAt) {
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(run)
+                .workspaceId(workspaceId)
+                .aboutUserId(aboutUserId)
+                .practice(practice("reviewable-diff-size"))
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(7L)
+                .outcome(Outcome.NOT_MET)
+                .origin(ObservationOrigin.LIVE)
+                .observedAt(observedAt)
+                .build();
+    }
+
+    private static Observation occasion(UUID run, Instant occasionAt, Instant observedAt) {
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(run)
+                .practice(practice("reviewable-diff-size"))
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(7L)
+                .outcome(Outcome.MET)
+                .origin(ObservationOrigin.LIVE)
+                .observedAt(observedAt)
+                .occasionAt(occasionAt)
+                .build();
+    }
+
     private static Observation observation(UUID run, Instant observedAt, ObservationOrigin origin) {
         return Observation.builder()
                 .id(UUID.randomUUID())

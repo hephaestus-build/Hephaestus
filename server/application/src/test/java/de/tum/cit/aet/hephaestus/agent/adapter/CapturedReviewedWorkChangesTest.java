@@ -7,7 +7,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -17,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.PullRequestRevision;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
@@ -148,6 +151,76 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
         PullRequest current = current();
         current.setBody("Repaired description");
         assertThat(changes.materiallyChanged(7, Set.of(RUN), revision(current))).isEmpty();
+    }
+
+    private void captured(String reviewedWork, JobFolderIndex manifest) {
+        var row = mock(AgentJobRepository.CapturedReviewedWorkRow.class);
+        lenient().when(row.getReviewedWork()).thenReturn(reviewedWork);
+        lenient().when(row.getManifest()).thenReturn(mapper.writeValueAsString(manifest));
+        lenient().when(row.getContractVersion()).thenReturn("1.3.0");
+        lenient().when(row.getId()).thenReturn(RUN);
+        when(jobs.findCapturedReviewedWork(7, Set.of(RUN))).thenReturn(List.of(row));
+    }
+
+    @Test
+    void shouldDeliverAgainstTheIdentityAnAuthorizedPinnedCaptureRecorded() {
+        captured(capture(42, HEAD), ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD));
+
+        assertThat(changes.deliverableCapture(7, RUN, 42))
+                .contains(new ReviewedWorkChanges.CapturedIdentity(
+                        HEAD, ReviewedWork.revision(ArtifactKinds.PULL_REQUEST, "Title", "Body")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"issue manifest", "unpinned manifest", "other pinned head", "other work", "no head"})
+    void shouldNotDeliverAgainstACaptureThatDoesNotProveItsIdentity(String capture) {
+        switch (capture) {
+            case "issue manifest" -> {
+                // Pull request sources, pinned at the captured head, under another artifact kind.
+                JobFolderIndex pinned = ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD);
+                captured(
+                        capture(42, HEAD),
+                        new JobFolderIndex(
+                                pinned.contractVersion(),
+                                "0".repeat(64),
+                                ArtifactKinds.ISSUE.value(),
+                                pinned.capturedAt(),
+                                pinned.sources()));
+            }
+            case "unpinned manifest" ->
+                captured(capture(42, HEAD), ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", null));
+            case "other pinned head" ->
+                captured(
+                        capture(42, HEAD),
+                        ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", "2".repeat(40)));
+            case "other work" ->
+                captured(capture(43, HEAD), ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD));
+            case "no head" ->
+                captured(capture(42, null), ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD));
+            default -> throw new IllegalArgumentException(capture);
+        }
+
+        assertThat(changes.deliverableCapture(7, RUN, 42)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"core", "diff"})
+    void shouldNotDeliverAgainstASourceItsContractDeniesFeedbackDelivery(String source) {
+        captured(capture(42, HEAD), ReviewedWorkFixtures.pullRequestManifest(Instant.EPOCH, "Body", HEAD));
+        when(catalogs.isSourceUsePermitted(
+                        new SourceContractVersion("1.3.0"),
+                        source.equals("core") ? PullRequestContentSource.CORE : PullRequestContentSource.DIFF,
+                        SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .thenReturn(false);
+
+        assertThat(changes.deliverableCapture(7, RUN, 42)).isEmpty();
+    }
+
+    @Test
+    void shouldNotDeliverAgainstARunTheWorkspaceScopedLookupDidNotReturn() {
+        when(jobs.findCapturedReviewedWork(7, Set.of(RUN))).thenReturn(List.of());
+
+        assertThat(changes.deliverableCapture(7, RUN, 42)).isEmpty();
     }
 
     private String capture(long id, @Nullable String head) {

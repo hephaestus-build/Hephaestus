@@ -80,6 +80,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -369,6 +370,35 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             assertThat(metadata.get("title").asString()).isEqualTo("Fix authentication bug");
             assertThat(metadata.get("body").asString()).isEqualTo("This PR fixes the login issue");
             assertThat(submission.idempotencyKey()).isEqualTo("pr_review:owner/repo:42:manual:abc123def456");
+        }
+
+        @ParameterizedTest
+        @CsvSource({"OPEN, false, true", "OPEN, true, false", "CLOSED, false, false", "MERGED, true, false"})
+        void retainsOnlyTheOriginalOpenUnmergedAdmissionState(Issue.State state, boolean merged, boolean current) {
+            var data = new ScmEventPayload.PullRequestData(
+                    456L,
+                    42,
+                    "Title",
+                    "Description",
+                    state,
+                    false,
+                    merged,
+                    10,
+                    5,
+                    3,
+                    "https://github.com/owner/repo/pull/42",
+                    new RepositoryRef(123L, "owner/repo", "main"),
+                    789L,
+                    Instant.now(),
+                    Instant.now(),
+                    null,
+                    null,
+                    null);
+            var request =
+                    new PullRequestReviewSubmissionRequest(data, "feature", "a".repeat(40), "main", "b".repeat(40));
+            JsonNode value = handler.createSubmission(request).metadata().path(Observation.CURRENT_WORK_METADATA_KEY);
+            assertThat(value.isBoolean()).isTrue();
+            assertThat(value.asBoolean()).isEqualTo(current);
         }
 
         @Test

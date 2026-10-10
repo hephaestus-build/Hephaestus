@@ -25,6 +25,7 @@ import lombok.Builder.Default;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.Formula;
 import org.hibernate.annotations.Immutable;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.OnDelete;
@@ -195,6 +196,39 @@ public class Observation {
     @NotNull
     @Column(name = "observed_at", nullable = false)
     private Instant observedAt;
+
+    /**
+     * The pull request review job metadata key recording, as the boolean {@code true}, that the work was open and not
+     * merged in the event that admitted the review. Written once at admission; a job without it predates it.
+     */
+    public static final String CURRENT_WORK_METADATA_KEY = "current_work_at_admission";
+
+    /**
+     * Which source jobs are ordered by their occasion rather than by completion: author reviews of a pull request
+     * that was open and unmerged when they were admitted, started by its opening, readiness, a push, an edit or a
+     * manual request, whose capture proved it read the title, description and head as the job was admitted. Reviewer
+     * passes, merge, close and linked-repair reviews, any job without a recognized occasion or without the admitted
+     * {@link #CURRENT_WORK_METADATA_KEY}, and every earlier job keep completion order. SQL over the source job aliased
+     * {@code j}; {@code ObservationRepository#LATEST_RUN_ORDER} applies it with the same fallback.
+     */
+    public static final String OCCASION_SCOPE = "j.job_type = 'PULL_REQUEST_REVIEW'"
+            + " AND (j.metadata -> 'subject_role' IS NULL OR j.metadata ->> 'subject_role' = 'AUTHOR')"
+            + " AND jsonb_typeof(j.metadata -> '" + CURRENT_WORK_METADATA_KEY + "') = 'boolean'"
+            + " AND j.metadata ->> '" + CURRENT_WORK_METADATA_KEY + "' = 'true'"
+            + " AND (j.metadata ->> 'signal' IN ('scm.pull_request.opened', 'scm.pull_request.ready',"
+            + " 'scm.pull_request.synchronized', 'scm.pull_request.edited', 'scm.pull_request.manual_review')"
+            + " OR (j.metadata -> 'signal' IS NULL AND j.metadata ->> 'observation_origin' = 'MANUAL'))"
+            + " AND j.evidence_snapshot -> 'reviewedWork' ->> 'retainedBasis' = 'ADMISSION'";
+
+    /**
+     * When the occasion this observation's run reviewed was admitted, or null when its source job is not in
+     * {@link #OCCASION_SCOPE}, is in another workspace or is gone, or the observation is backfilled; the run is then
+     * ordered by {@link #observedAt}. Hibernate derives it when the row is loaded: an entity built or saved in this
+     * session holds null until it is read again.
+     */
+    @Formula("(SELECT j.created_at FROM agent_job j WHERE j.id = agent_job_id AND j.workspace_id = workspace_id"
+            + " AND origin <> 'BACKFILL' AND " + OCCASION_SCOPE + ")")
+    private @Nullable Instant occasionAt;
 
     @PrePersist
     protected void onCreate() {

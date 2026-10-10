@@ -39,14 +39,15 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
+@MockitoSpyBean(types = {PullRequestReviewHandler.class, InAppSupportReader.class})
 class ObservationAdmissionConcurrencyIntegrationTest extends BaseIntegrationTest {
 
     private static final int TIMEOUT_SECONDS = 30;
 
-    @MockitoSpyBean
+    @Autowired
     private PullRequestReviewHandler reviewHandler;
 
-    @MockitoSpyBean
+    @Autowired
     private InAppSupportReader supportReader;
 
     @Autowired

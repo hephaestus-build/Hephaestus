@@ -38,6 +38,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("productfeedback.SurveyEmailInvitationIntegrationTest", "email-capture"),
             assignment("notification.email.EmailAdminControllerIntegrationTest", "email-capture"),
             assignment("agent.handler.ObservationAdmissionConcurrencyIntegrationTest", "admission-race"),
+            assignment("agent.job.PullRequestRepairRecheckIntegrationTest", "admission-race"),
             assignment("agent.job.DeferredIssueEventIntegrationTest", "issue-event-transaction"),
             assignment("agent.job.ClosedIssueDiscussionIntegrationTest", "issue-event-transaction"),
             assignment("agent.job.IssueUpdateCoalescerIntegrationTest", "issue-coalescer-transaction"),

@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Read
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackTarget;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -36,6 +37,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 class DiffNotePosterTest extends BaseUnitTest {
@@ -50,8 +53,9 @@ class DiffNotePosterTest extends BaseUnitTest {
     /** Every receipt the attempt stored before a request, in order. */
     private final List<List<DeliveredSignal>> stored = new ArrayList<>();
 
-    private boolean recordAttempt(List<DeliveredSignal> receipt) {
-        return stored.add(List.copyOf(receipt));
+    private FeedbackDispatchStateMachine.Reservation recordAttempt(List<DeliveredSignal> receipt) {
+        stored.add(List.copyOf(receipt));
+        return FeedbackDispatchStateMachine.Reservation.RESERVED;
     }
 
     /** The work still sits at the commit the package was reviewed at. */
@@ -369,11 +373,53 @@ class DiffNotePosterTest extends BaseUnitTest {
         ScriptedChannel channel = new ScriptedChannel();
 
         DiffNotePoster.DiffNoteResult result = poster(channel)
-                .deliverPackage(job(), FRESH, List.of(A), List.of(), DiffNotePosterTest::atReviewed, receipt -> false);
+                .deliverPackage(
+                        job(),
+                        FRESH,
+                        List.of(A),
+                        List.of(),
+                        DiffNotePosterTest::atReviewed,
+                        receipt -> FeedbackDispatchStateMachine.Reservation.LEASE_LOST);
 
         assertThat(channel.requested).isEmpty();
         assertThat(result.leaseLost()).isTrue();
         assertThat(result.unconfirmed()).isFalse();
+    }
+
+    @Test
+    void shouldPreserveTheFinalPolicyRefusalWithoutRequestingTheNote() {
+        ScriptedChannel channel = new ScriptedChannel();
+        var refused = FeedbackDispatchStateMachine.Reservation.refused(FeedbackSuppressionReason.ARTIFACT_CLOSED);
+        var result = poster(channel)
+                .deliverPackage(
+                        job(), FRESH, List.of(A), List.of(), DiffNotePosterTest::atReviewed, receipt -> refused);
+        assertThat(channel.requested).isEmpty();
+        assertThat(result.refusalReason()).isEqualTo(refused.refusal());
+        assertThat(result.revisionChanged()).isFalse();
+        assertThat(result.leaseLost()).isFalse();
+        assertThat(result.unconfirmed()).isFalse();
+    }
+
+    /** The early read saw the reviewed work; the final check under the work's lock did not. */
+    @ParameterizedTest
+    @EnumSource(
+            value = FeedbackDispatchStateMachine.ReservationStatus.class,
+            names = {"STALE", "UNKNOWN"})
+    void shouldRequestNothingWhenTheLockedCheckRefusesWhatTheEarlyReadAllowed(
+            FeedbackDispatchStateMachine.ReservationStatus refusedStatus) {
+        var refused = new FeedbackDispatchStateMachine.Reservation(refusedStatus, null);
+        ScriptedChannel channel = new ScriptedChannel();
+
+        DiffNotePoster.DiffNoteResult result = poster(channel)
+                .deliverPackage(
+                        job(), FRESH, List.of(A), List.of(), DiffNotePosterTest::atReviewed, receipt -> refused);
+
+        assertThat(channel.requested).isEmpty();
+        assertThat(result.leaseLost()).isFalse();
+        assertThat(result.revisionChanged())
+                .as("only a proven difference is stale; an unknown one leaves the note owed")
+                .isEqualTo(refused.equals(FeedbackDispatchStateMachine.Reservation.STALE));
+        assertThat(result.complete()).isFalse();
     }
 
     @Test

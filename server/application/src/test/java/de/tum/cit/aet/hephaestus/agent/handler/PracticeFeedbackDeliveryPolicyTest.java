@@ -43,6 +43,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewSubjectStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -51,6 +52,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewPersonMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -717,7 +719,9 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 conversationSourceLiveness,
                 memberAiPolicy,
                 documentProjection,
-                publicEligibility);
+                publicEligibility,
+                mock(ReviewedWorkChanges.class),
+                mock(EntityManager.class));
     }
 
     @ParameterizedTest
