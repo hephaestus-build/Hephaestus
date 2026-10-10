@@ -374,16 +374,54 @@ for (const total of [undefined, 999]) {
 
 const SECRET = "sk-diagnostic-secret";
 
-/** The adapter's own failure diagnostic, and that nothing the server sent reached any diagnostic. */
-function assertFailure(message: Message, details: Raw): void {
+/** The diagnostic name prefix each patched protocol owns. */
+const DIAGNOSTIC: Record<Protocol, string> = {
+	"openai-completions": "openai_completions",
+	"openai-responses": "openai_responses",
+};
+
+/** The call's monotonic span: whole milliseconds only, with a response time only when the response arrived. */
+function assertCall(
+	message: Message,
+	responded: boolean,
+	protocol: Protocol = "openai-completions",
+): { elapsedMs: number; responseMs?: number } {
+	const call = message.diagnostics?.find(
+		(diagnostic) => diagnostic.type === `${DIAGNOSTIC[protocol]}_call`,
+	);
+	assert.ok(call);
+	assert.equal(call.error, undefined);
+	const details: unknown = call.details;
+	assert.ok(typeof details === "object" && details !== null);
+	const elapsedMs: unknown = Reflect.get(details, "elapsedMs");
+	const responseMs: unknown = Reflect.get(details, "responseMs");
+	assert.deepEqual(Object.keys(details), responded ? ["elapsedMs", "responseMs"] : ["elapsedMs"]);
+	assert.ok(typeof elapsedMs === "number" && Number.isSafeInteger(elapsedMs) && elapsedMs >= 0);
+	if (!responded) {
+		return { elapsedMs };
+	}
+	assert.ok(typeof responseMs === "number" && Number.isSafeInteger(responseMs));
+	assert.ok(responseMs >= 0 && responseMs <= elapsedMs);
+	return { elapsedMs, responseMs };
+}
+
+/** The adapter's own failure diagnostic and call span, and that nothing the server sent reached any diagnostic. */
+function assertFailure(
+	message: Message,
+	details: Raw,
+	protocol: Protocol = "openai-completions",
+): void {
 	assert.equal(message.stopReason, details.kind === "ABORTED" ? "aborted" : "error");
-	assert.equal(message.diagnostics?.length, 1);
+	assert.deepEqual(
+		message.diagnostics?.map((diagnostic) => diagnostic.type),
+		[`${DIAGNOSTIC[protocol]}_failure`, `${DIAGNOSTIC[protocol]}_call`],
+	);
 	const [diagnostic] = message.diagnostics ?? [];
 	assert.ok(diagnostic);
-	assert.equal(diagnostic.type, "openai_completions_failure");
 	assert.equal(typeof diagnostic.timestamp, "number");
 	assert.equal(diagnostic.error, undefined);
 	assert.deepEqual(diagnostic.details, details);
+	assertCall(message, details.phase === "response_body", protocol);
 	assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
 }
 
@@ -418,10 +456,36 @@ void test("openai-completions records an aborted call as aborted", async () => {
 	assertFailure(message, { kind: "ABORTED", phase: "request" });
 });
 
-void test("openai-completions attaches no failure diagnostic to a completed call", async () => {
+void test("openai-completions attaches only its call span to a completed call", async () => {
 	const message = await complete("openai-completions", [usageOf("openai-completions", null)]);
 	assert.equal(message.stopReason, "stop");
-	assert.equal(message.diagnostics, undefined);
+	assert.deepEqual(
+		message.diagnostics?.map((diagnostic) => diagnostic.type),
+		["openai_completions_call"],
+	);
+	assertCall(message, true);
+});
+
+void test("openai-completions times a call across an adapter request retry and wait", async () => {
+	let requests = 0;
+	const message = await completeWith(
+		"openai-completions",
+		(response) => {
+			requests += 1;
+			if (requests === 1) {
+				response.writeHead(503, { "content-type": "application/json", "retry-after-ms": "80" });
+				response.end(JSON.stringify({ error: { message: SECRET } }));
+				return;
+			}
+			send(response, reply("openai-completions", [usageOf("openai-completions", null)], false));
+		},
+		{ maxRetries: 1 },
+	);
+	assert.equal(requests, 2);
+	assert.equal(message.stopReason, "stop");
+	const { responseMs } = assertCall(message, true);
+	assert.ok(responseMs !== undefined && responseMs >= 80);
+	assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
 });
 
 void test("openai-completions keeps an error finish reason as an adapter condition, not provider text", async () => {
@@ -451,4 +515,142 @@ void test("openai-completions retains a native connection error without an HTTP 
 		},
 	);
 	assertFailure(message, { kind: "CONNECTION_ERROR", phase: "request" });
+});
+
+/** A Responses stream that starts a message and then sends `terminal`, if any. */
+function responsesUntil(terminal: unknown[]): unknown[] {
+	return [
+		{ type: "response.created", response: { id: "r", status: "in_progress", output: [] } },
+		...terminal,
+	];
+}
+
+void test("openai-responses attaches only its call span to a completed call", async () => {
+	const message = await complete("openai-responses", [usageOf("openai-responses", null)]);
+	assert.equal(message.stopReason, "stop");
+	assert.deepEqual(
+		message.diagnostics?.map((diagnostic) => diagnostic.type),
+		["openai_responses_call"],
+	);
+	assertCall(message, true, "openai-responses");
+});
+
+void test("openai-responses records a server error as its native status, without the body", async () => {
+	const message = await completeWith("openai-responses", (response) => {
+		response.writeHead(500, { "content-type": "application/json", "x-should-retry": "false" });
+		response.end(JSON.stringify({ error: { message: `upstream failed: ${SECRET}` } }));
+	});
+	assertFailure(message, { kind: "HTTP_ERROR", phase: "request", status: 500 }, "openai-responses");
+});
+
+const RESPONSES_TERMINALS: [string, unknown[], string][] = [
+	[
+		"a failed response",
+		[
+			{
+				type: "response.failed",
+				response: { id: "r", status: "failed", error: { code: "server_error", message: SECRET } },
+			},
+		],
+		"RESPONSE_FAILED",
+	],
+	[
+		"an incomplete response that is not an output limit",
+		[
+			{
+				type: "response.incomplete",
+				response: {
+					id: "r",
+					status: "incomplete",
+					incomplete_details: { reason: "content_filter" },
+					output: [],
+				},
+			},
+		],
+		"RESPONSE_STATUS_ERROR",
+	],
+	[
+		"an error event",
+		[{ type: "error", code: "server_error", message: SECRET }],
+		"STREAM_ERROR_EVENT",
+	],
+	["a stream without a terminal event", [], "STREAM_INCOMPLETE"],
+	[
+		"a completed response with an unfinished tool call",
+		[
+			{
+				type: "response.output_item.added",
+				output_index: 0,
+				item: {
+					id: "tool",
+					type: "function_call",
+					call_id: "call",
+					name: "read_file",
+					arguments: '{"path":',
+				},
+			},
+			{
+				type: "response.completed",
+				response: { id: "r", status: "completed", output: [] },
+			},
+		],
+		"TOOL_CALL_INCOMPLETE",
+	],
+];
+
+for (const [name, terminal, kind] of RESPONSES_TERMINALS) {
+	void test(`openai-responses names ${name} by its own terminal branch, not provider text`, async () => {
+		const message = await completeWith("openai-responses", (response) =>
+			send(response, responsesUntil(terminal)),
+		);
+		assertFailure(message, { kind, phase: "response_body" }, "openai-responses");
+	});
+}
+
+void test("openai-responses records abort, timeout and connection failures by the SDK's own classes", async () => {
+	const controller = new AbortController();
+	const aborted = await completeWith(
+		"openai-responses",
+		(response) => {
+			controller.abort();
+			response.end();
+		},
+		{ signal: controller.signal, maxRetries: 0 },
+	);
+	assertFailure(aborted, { kind: "ABORTED", phase: "request" }, "openai-responses");
+	const timedOut = await completeWith("openai-responses", () => undefined, {
+		timeoutMs: 150,
+		maxRetries: 0,
+	});
+	assertFailure(timedOut, { kind: "CONNECTION_TIMEOUT", phase: "request" }, "openai-responses");
+	const dropped = await completeWith(
+		"openai-responses",
+		(response) => {
+			response.destroy();
+		},
+		{ maxRetries: 0 },
+	);
+	assertFailure(dropped, { kind: "CONNECTION_ERROR", phase: "request" }, "openai-responses");
+});
+
+void test("openai-responses times a call across an adapter request retry and wait", async () => {
+	let requests = 0;
+	const message = await completeWith(
+		"openai-responses",
+		(response) => {
+			requests += 1;
+			if (requests === 1) {
+				response.writeHead(503, { "content-type": "application/json", "retry-after-ms": "80" });
+				response.end(JSON.stringify({ error: { message: SECRET } }));
+				return;
+			}
+			send(response, reply("openai-responses", [usageOf("openai-responses", null)], false));
+		},
+		{ maxRetries: 1 },
+	);
+	assert.equal(requests, 2);
+	assert.equal(message.stopReason, "stop");
+	const { responseMs } = assertCall(message, true, "openai-responses");
+	assert.ok(responseMs !== undefined && responseMs >= 80);
+	assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
 });

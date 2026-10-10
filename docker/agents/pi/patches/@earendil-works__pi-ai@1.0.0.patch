@@ -1,25 +1,15 @@
-diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
-index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae2fa1cf9e 100644
---- a/dist/api/openai-completions.js
-+++ b/dist/api/openai-completions.js
-@@ -14,6 +14,8 @@ import { getDeclaredTools, resolveTranscript, resolveTranscriptTools, } from "..
- import { appendGrammarToolInputJsonDelta, createGrammarToolInputProperties, getGrammarToolInput, getJsonSchemaToolParameters, resolveGrammarConstrainedSampling, resolveJsonSchemaStrictSampling, } from "./constrained-sampling.js";
- import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
- import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.js";
-+import { openAITokenUsage } from "./openai-token-usage.js";
-+import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
- import { buildBaseOptions, clampThinkingBudgetToAnswerRoom, thinkingBudgetForLevel } from "./simple-options.js";
- import { transformMessages } from "./transform-messages.js";
- /**
-@@ -148,6 +150,31 @@ function resolveCacheRetention(cacheRetention, env) {
-     }
-     return "short";
- }
+diff --git adist/api/openai-call-diagnostics.js b/dist/api/openai-call-diagnostics.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9e6396bf842a2f24acd7519ea825a51f01b3f429
+--- /dev/null
++++ b/dist/api/openai-call-diagnostics.js
+@@ -0,0 +1,38 @@
++import OpenAI from "openai";
 +/**
-+ * Closed facts about why a completion failed, for a caller's diagnostics: the SDK's own error classes and numeric
-+ * status, and this adapter's own end-of-stream checks. Never the error's text, body, headers or request.
++ * Closed facts about why an OpenAI call failed, for a caller's diagnostics: the SDK's own error classes and numeric
++ * status, and the adapter's own named terminal branch. Never the error's text, body, headers or request.
 + */
-+function failureDetails(error, signal, adapterFailure, phase) {
++export function failureDetails(error, signal, adapterFailure, phase) {
 +    let kind = "UNKNOWN";
 +    let status;
 +    if (signal?.aborted || error instanceof OpenAI.APIUserAbortError) {
@@ -40,28 +30,61 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
 +    }
 +    return status === undefined ? { kind, phase } : { kind, phase, status };
 +}
- export const stream = (model, context, options) => {
-     const stream = new AssistantMessageEventStream();
-     const normalizedContext = resolveTranscript(context, getCompat(model).supportsMidConvoSystemMessages);
-@@ -177,6 +204,9 @@ export const stream = (model, context, options) => {
++/**
++ * When one call reached its boundaries, in whole milliseconds of the monotonic clock from just before the SDK request:
++ * the SDK response (its headers, not a first token) and the end of this message. The span includes request retries
++ * and their waits within the adapter. A boundary the call never reached is left out.
++ */
++export function callDetails(requestStartedAt, responseAt) {
++    const details = { elapsedMs: Math.round(performance.now() - requestStartedAt) };
++    if (responseAt !== undefined) {
++        details.responseMs = Math.round(responseAt - requestStartedAt);
++    }
++    return details;
++}
+diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
+index eecd83c753e3b758b8e44628f560b862f8252839..2cea55d1d05bfdad201f2af282ba222f092dff5b 100644
+--- a/dist/api/openai-completions.js
++++ b/dist/api/openai-completions.js
+@@ -14,6 +14,9 @@ import { getDeclaredTools, resolveTranscript, resolveTranscriptTools, } from "..
+ import { appendGrammarToolInputJsonDelta, createGrammarToolInputProperties, getGrammarToolInput, getJsonSchemaToolParameters, resolveGrammarConstrainedSampling, resolveJsonSchemaStrictSampling, } from "./constrained-sampling.js";
+ import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
+ import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.js";
++import { openAITokenUsage } from "./openai-token-usage.js";
++import { callDetails, failureDetails } from "./openai-call-diagnostics.js";
++import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { buildBaseOptions, clampThinkingBudgetToAnswerRoom, thinkingBudgetForLevel } from "./simple-options.js";
+ import { transformMessages } from "./transform-messages.js";
+ /**
+@@ -177,6 +180,12 @@ export const stream = (model, context, options) => {
                  block.thinkingSignature = JSON.stringify(streamedReasoningDetails);
              }
          };
 +        // What a failure diagnostic may state: where the call failed, and the adapter's own end-of-stream cause.
 +        let failurePhase = "request";
 +        let adapterFailure;
++        // Monotonic call boundaries: the SDK request starts, and its response arrives.
++        let requestStartedAt;
++        let responseAt;
          try {
              const apiKey = getClientApiKey(model.provider, options?.apiKey, options?.headers);
              const compat = getCompat(model);
-@@ -199,6 +229,7 @@ export const stream = (model, context, options) => {
+@@ -194,11 +203,14 @@ export const stream = (model, context, options) => {
+                 ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+                 maxRetries: 0,
+             };
++            requestStartedAt = performance.now();
+             const { data: openaiStream, response } = await retryProviderRequest(() => client.chat.completions.create(params, requestOptions).withResponse(), {
+                 maxRetries: options?.maxRetries,
                  maxRetryDelayMs: options?.maxRetryDelayMs,
                  signal: options?.signal,
              });
++            responseAt = performance.now();
 +            failurePhase = "response_body";
              await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
              stream.push({ type: "start", partial: output });
              let textBlock = null;
-@@ -361,7 +392,7 @@ export const stream = (model, context, options) => {
+@@ -361,7 +373,7 @@ export const stream = (model, context, options) => {
                      output.responseModel ||= chunk.model;
                  }
                  if (chunk.usage) {
@@ -70,7 +93,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
                  }
                  const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined;
                  if (!choice)
-@@ -369,7 +400,7 @@ export const stream = (model, context, options) => {
+@@ -369,7 +381,7 @@ export const stream = (model, context, options) => {
                  // Fallback: some providers (e.g., Moonshot) return usage
                  // in choice.usage instead of the standard chunk.usage
                  if (!chunk.usage && choice.usage) {
@@ -79,8 +102,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
                  }
                  if (choice.finish_reason) {
                      output.rawStopReason = choice.finish_reason;
-@@ -473,16 +504,19 @@ export const stream = (model, context, options) => {
-             if (options?.signal?.aborted) {
+@@ -474,17 +486,25 @@ export const stream = (model, context, options) => {
                  throw new Error("Request was aborted");
              }
              if (output.stopReason === "aborted") {
@@ -98,8 +120,15 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
 +                adapterFailure = "STREAM_INCOMPLETE";
                  throw new Error("Stream ended without finish_reason");
              }
++            appendAssistantMessageDiagnostic(output, {
++                type: "openai_completions_call",
++                timestamp: Date.now(),
++                details: callDetails(requestStartedAt, responseAt),
++            });
              stream.push({ type: "done", reason: output.stopReason, message: output });
-@@ -509,6 +543,11 @@ export const stream = (model, context, options) => {
+             stream.end();
+         }
+@@ -509,6 +529,18 @@ export const stream = (model, context, options) => {
              if (rawMetadata && !output.errorMessage.includes(String(rawMetadata))) {
                  output.errorMessage += `\n${rawMetadata}`;
              }
@@ -108,10 +137,17 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
 +                timestamp: Date.now(),
 +                details: failureDetails(error, options?.signal, adapterFailure, failurePhase),
 +            });
++            if (requestStartedAt !== undefined) {
++                appendAssistantMessageDiagnostic(output, {
++                    type: "openai_completions_call",
++                    timestamp: Date.now(),
++                    details: callDetails(requestStartedAt, responseAt),
++                });
++            }
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -1158,9 +1197,6 @@ function convertTools(tools, compat) {
+@@ -1158,9 +1190,6 @@ function convertTools(tools, compat) {
      });
  }
  function parseChunkUsage(rawUsage, model) {
@@ -121,7 +157,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
      // Follow documented OpenAI/OpenRouter semantics: cached_tokens is cache-read
      // tokens (hits). Providers disagree on placement: OpenAI/OpenRouter use
      // prompt_tokens_details.cached_tokens, DeepSeek uses prompt_cache_hit_tokens,
-@@ -1172,19 +1208,17 @@ function parseChunkUsage(rawUsage, model) {
+@@ -1172,19 +1201,17 @@ function parseChunkUsage(rawUsage, model) {
      // Do not subtract writes from cached_tokens, otherwise spec-compliant
      // providers are under-reported. DS4 mirrors this contract too:
      // https://github.com/antirez/ds4/pull/29
@@ -153,7 +189,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..449e4a98d5f4507d90985223f5cc12ae
  }
  function mapStopReason(reason) {
 diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
-index f413fe5f2a1abcac39c38bbd4a77b38c349a5918..ff89c5c883c06d734f0a88ff4aaefcd26c484785 100644
+index f413fe5f2a1abcac39c38bbd4a77b38c349a5918..10e0f52831e31ed547e8554aaa71836c04185c4f 100644
 --- a/dist/api/openai-responses-shared.js
 +++ b/dist/api/openai-responses-shared.js
 @@ -1,3 +1,4 @@
@@ -161,7 +197,19 @@ index f413fe5f2a1abcac39c38bbd4a77b38c349a5918..ff89c5c883c06d734f0a88ff4aaefcd2
  import { calculateCost } from "../models.js";
  import { shortHash } from "../utils/hash.js";
  import { parseStreamingJson } from "../utils/json-parse.js";
-@@ -437,20 +438,16 @@ export async function processResponsesStream(openaiStream, output, stream, model
+@@ -318,6 +319,11 @@ function appendCustomToolCallInput(block, nextInput, close) {
+     block.arguments = { [customInput.property]: nextInput };
+     return delta;
+ }
++/**
++ * `options.onTerminalFailure`, when given, receives the closed name of this stream's own terminal failure branch just
++ * before it throws: STREAM_ERROR_EVENT, RESPONSE_FAILED, STREAM_INCOMPLETE or TOOL_CALL_INCOMPLETE. Other exceptions
++ * reach the caller unnamed.
++ */
+ export async function processResponsesStream(openaiStream, output, stream, model, options) {
+     let sawTerminalResponseEvent = false;
+     const outputSlots = new Map();
+@@ -437,20 +443,16 @@ export async function processResponsesStream(openaiStream, output, stream, model
          if (response?.id) {
              output.responseId = response.id;
          }
@@ -192,6 +240,123 @@ index f413fe5f2a1abcac39c38bbd4a77b38c349a5918..ff89c5c883c06d734f0a88ff4aaefcd2
          }
          calculateCost(model, output.usage);
          if (options?.applyServiceTierPricing) {
+@@ -640,9 +642,11 @@ export async function processResponsesStream(openaiStream, output, stream, model
+             finalizeResponse(event.response);
+         }
+         else if (event.type === "error") {
++            options?.onTerminalFailure?.("STREAM_ERROR_EVENT");
+             throw new Error(`Error Code ${event.code}: ${event.message}` || "Unknown error");
+         }
+         else if (event.type === "response.failed") {
++            options?.onTerminalFailure?.("RESPONSE_FAILED");
+             sawTerminalResponseEvent = true;
+             output.rawStopReason = event.response?.status;
+             const error = event.response?.error;
+@@ -656,6 +660,7 @@ export async function processResponsesStream(openaiStream, output, stream, model
+         }
+     }
+     if (!sawTerminalResponseEvent) {
++        options?.onTerminalFailure?.("STREAM_INCOMPLETE");
+         throw new Error("OpenAI Responses stream ended before a terminal response event");
+     }
+     // The agent runs every tool call in the final message. Refuse to hand over calls whose
+@@ -667,6 +672,7 @@ export async function processResponsesStream(openaiStream, output, stream, model
+                 continue;
+             const toolCall = block;
+             if (toolCall.partialJson !== undefined || toolCall.customInput !== undefined) {
++                options?.onTerminalFailure?.("TOOL_CALL_INCOMPLETE");
+                 throw new Error(`OpenAI Responses stream completed with an unfinished tool call: ${toolCall.name} (${toolCall.id})`);
+             }
+         }
+diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
+index 4d58c9772b49f0d40e31d42c251a6d993a4a673f..2f533b1fcda160e8ca5c83cbe13b6b6229433d54 100644
+--- a/dist/api/openai-responses.js
++++ b/dist/api/openai-responses.js
+@@ -10,6 +10,8 @@ import { getDeclaredTools, resolveTranscript, resolveTranscriptTools } from "../
+ import { createGrammarToolInputProperties } from "./constrained-sampling.js";
+ import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
+ import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.js";
++import { callDetails, failureDetails } from "./openai-call-diagnostics.js";
++import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { convertResponsesMessages, convertResponsesTools, processResponsesStream } from "./openai-responses-shared.js";
+ import { buildBaseOptions } from "./simple-options.js";
+ const OPENAI_TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);
+@@ -112,6 +114,12 @@ export const stream = (model, context, options) => {
+             stopReason: "pending",
+             timestamp: Date.now(),
+         };
++        // What a failure diagnostic may state: where the call failed, and the adapter's own terminal branch.
++        let failurePhase = "request";
++        let adapterFailure;
++        // Monotonic call boundaries: the SDK request starts, and its response arrives.
++        let requestStartedAt;
++        let responseAt;
+         try {
+             // Create OpenAI client
+             const apiKey = getClientApiKey(model.provider, options?.apiKey, options?.headers);
+@@ -130,11 +138,14 @@ export const stream = (model, context, options) => {
+                 ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+                 maxRetries: 0,
+             };
++            requestStartedAt = performance.now();
+             const { data: openaiStream, response } = await retryProviderRequest(() => client.responses.create(params, requestOptions).withResponse(), {
+                 maxRetries: options?.maxRetries,
+                 maxRetryDelayMs: options?.maxRetryDelayMs,
+                 signal: options?.signal,
+             });
++            responseAt = performance.now();
++            failurePhase = "response_body";
+             await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
+             stream.push({ type: "start", partial: output });
+             await processResponsesStream(openaiStream, output, stream, model, {
+@@ -142,16 +153,28 @@ export const stream = (model, context, options) => {
+                 serviceTier: options?.serviceTier,
+                 grammarToolInputProperties,
+                 applyServiceTierPricing: (usage, serviceTier) => applyServiceTierPricing(usage, serviceTier, model),
++                onTerminalFailure: (kind) => {
++                    adapterFailure = kind;
++                },
+             });
+             if (options?.signal?.aborted) {
+                 throw new Error("Request was aborted");
+             }
+             if (output.stopReason === "pending") {
++                adapterFailure = "STREAM_INCOMPLETE";
+                 throw new Error("OpenAI Responses stream ended without a stop reason");
+             }
+             if (output.stopReason === "aborted" || output.stopReason === "error") {
++                if (output.stopReason === "error") {
++                    adapterFailure = "RESPONSE_STATUS_ERROR";
++                }
+                 throw new Error(output.errorMessage || "An unknown error occurred");
+             }
++            appendAssistantMessageDiagnostic(output, {
++                type: "openai_responses_call",
++                timestamp: Date.now(),
++                details: callDetails(requestStartedAt, responseAt),
++            });
+             stream.push({ type: "done", reason: output.stopReason, message: output });
+             stream.end();
+         }
+@@ -168,6 +191,18 @@ export const stream = (model, context, options) => {
+             output.errorMessage = errorMessage.includes("subscription_sharing_usage_limit_exceeded")
+                 ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
+                 : errorMessage;
++            appendAssistantMessageDiagnostic(output, {
++                type: "openai_responses_failure",
++                timestamp: Date.now(),
++                details: failureDetails(error, options?.signal, adapterFailure, failurePhase),
++            });
++            if (requestStartedAt !== undefined) {
++                appendAssistantMessageDiagnostic(output, {
++                    type: "openai_responses_call",
++                    timestamp: Date.now(),
++                    details: callDetails(requestStartedAt, responseAt),
++                });
++            }
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
 diff --git adist/api/openai-token-usage.js b/dist/api/openai-token-usage.js
 new file mode 100644
 index 0000000000000000000000000000000000000000..677aeb64a3af465c10abbf6069c01512a7677aa5
