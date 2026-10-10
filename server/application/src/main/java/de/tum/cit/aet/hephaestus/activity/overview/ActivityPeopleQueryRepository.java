@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEvent;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityBreakdownDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityContributorKind;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityCountsDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityCoverageDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityRepositoryDTO;
@@ -123,8 +124,7 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                     AND (e.event_type IN ('PULL_REQUEST_OPENED', 'ISSUE_CREATED')
                         OR (prr.pull_request_id IS NOT NULL AND e.event_type IN ('REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED')))
                     ORDER BY e.occurred_at LIMIT 1) END AS first_contribution,
-                (u.type = 'BOT' OR actor_machine.user_id IS NOT NULL) AS automation,
-                actor_machine.user_id IS NOT NULL AS treated_as_automation
+                u.type = 'BOT' AS bot, actor_machine.user_id IS NOT NULL AS classified
             FROM counts c JOIN "user" u ON u.id = c.actor_id
             LEFT JOIN activity_automation actor_machine ON actor_machine.workspace_id = :#{#scope.workspaceId()} AND actor_machine.user_id = u.id
             ORDER BY c.actor_id, c.all_repositories DESC, c.total DESC, c.week, c.repository_id
@@ -166,8 +166,7 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
         return findPerson(scope, range, person, own).stream()
                 .map(row -> new PersonCount(
                         row.person(),
-                        row.getAutomation(),
-                        row.getTreatedAsAutomation(),
+                        row.kind(),
                         row.getTotal() == 1 && row.getAllRepositories() == 1,
                         row.getAllRepositories() == 0 ? row.getRepositoryId() : null,
                         row.getWeek(),
@@ -179,8 +178,7 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
 
     @Query(value = """
             SELECT u.id, u.login, u.name, u.avatar_url, u.html_url,
-                (u.type = 'BOT' OR a.user_id IS NOT NULL) AS automation,
-                a.user_id IS NOT NULL AS treated_as_automation
+                u.type = 'BOT' AS bot, a.user_id IS NOT NULL AS classified
             FROM "user" u
             LEFT JOIN workspace_membership wm ON wm.workspace_id = :workspace AND wm.user_id = u.id
             LEFT JOIN activity_automation a ON a.workspace_id = :workspace AND a.user_id = u.id
@@ -198,7 +196,7 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
     default Contributor contributor(long workspace, long userId, boolean own) {
         var row = findContributor(workspace, userId, own)
                 .orElseThrow(() -> new EntityNotFoundException("Contributor", userId));
-        return new Contributor(row.person(), row.getAutomation(), row.getTreatedAsAutomation());
+        return new Contributor(row.person(), row.kind());
     }
 
     @Query(value = """
@@ -328,9 +326,13 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
 
         String getHtmlUrl();
 
-        boolean getAutomation();
+        boolean getBot();
 
-        boolean getTreatedAsAutomation();
+        boolean getClassified();
+
+        default ActivityContributorKind kind() {
+            return ActivityContributorKind.of(getBot(), getClassified());
+        }
 
         default UserInfoDTO person() {
             return new UserInfoDTO(
@@ -355,9 +357,13 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
 
         String getHtmlUrl();
 
-        boolean getAutomation();
+        boolean getBot();
 
-        boolean getTreatedAsAutomation();
+        boolean getClassified();
+
+        default ActivityContributorKind kind() {
+            return ActivityContributorKind.of(getBot(), getClassified());
+        }
 
         int getTotal();
 
@@ -434,12 +440,11 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
         }
     }
 
-    record Contributor(UserInfoDTO person, boolean automation, boolean treatedAsAutomation) {}
+    record Contributor(UserInfoDTO person, ActivityContributorKind kind) {}
 
     record PersonCount(
             UserInfoDTO person,
-            boolean automation,
-            boolean treatedAsAutomation,
+            ActivityContributorKind kind,
             boolean total,
             @Nullable Long repository,
             @Nullable Instant week,

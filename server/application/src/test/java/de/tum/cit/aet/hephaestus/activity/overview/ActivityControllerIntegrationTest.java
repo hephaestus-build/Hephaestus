@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.activity.ActivityEventRepository;
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
 import de.tum.cit.aet.hephaestus.activity.ActivityTargetType;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityActionDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityContributorKind;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDetailDTO;
@@ -242,13 +243,12 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             assertThat(classified.automation())
                     .filteredOn(p -> p.person().id().equals(machine.getId()))
                     .singleElement()
-                    .satisfies(p -> {
-                        assertThat(p.automation()).isTrue();
-                        assertThat(p.treatedAsAutomation()).isTrue();
-                    });
-            var detail = peopleService.person(workspace.getId(), machine.getId(), range, null, Set.of());
-            assertThat(detail.automation()).isTrue();
-            assertThat(detail.treatedAsAutomation()).isTrue();
+                    .extracting(ActivityPersonDTO::kind)
+                    .isEqualTo(ActivityContributorKind.AUTOMATION);
+            assertThat(peopleService
+                            .person(workspace.getId(), machine.getId(), range, null, Set.of())
+                            .kind())
+                    .isEqualTo(ActivityContributorKind.AUTOMATION);
             assertThat(jdbc.queryForList(
                             "SELECT entity_type FROM config_audit_event WHERE workspace_id=? AND entity_id=?",
                             String.class,
@@ -259,13 +259,10 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             assertThat(peopleService
                             .people(workspace.getId(), range, null, Set.of())
                             .people())
-                    .extracting(p -> p.person().id())
-                    .contains(machine.getId());
-            assertThat(peopleService
-                            .people(workspace.getId(), range, null, Set.of())
-                            .people())
-                    .extracting(p -> p.person().id())
-                    .contains(machine.getId());
+                    .filteredOn(p -> p.person().id().equals(machine.getId()))
+                    .singleElement()
+                    .extracting(ActivityPersonDTO::kind)
+                    .isEqualTo(ActivityContributorKind.PERSON);
         }
 
         @ParameterizedTest
@@ -386,15 +383,16 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             assertThat(people.automation())
                     .filteredOn(p -> p.person().id().equals(botId))
                     .singleElement()
-                    .satisfies(p -> {
-                        assertThat(p.automation()).isTrue();
-                        assertThat(p.treatedAsAutomation()).isFalse();
-                    });
+                    .extracting(ActivityPersonDTO::kind)
+                    .isEqualTo(ActivityContributorKind.BOT);
+            automationService.classify(workspace.getId(), botId, true);
             assertThat(peopleService
                             .people(workspace.getId(), range, null, Set.of())
-                            .people())
-                    .extracting(p -> p.person().id())
-                    .contains(outside.getId());
+                            .automation())
+                    .filteredOn(p -> p.person().id().equals(botId))
+                    .singleElement()
+                    .extracting(ActivityPersonDTO::kind)
+                    .isEqualTo(ActivityContributorKind.BOT);
         }
 
         @Test
@@ -656,8 +654,11 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         .getResponseBody());
                 assertThat(detail.person().id()).isEqualTo(contributor.getId());
                 assertThat(detail.counts().contributions()).isEqualTo(1);
-                assertThat(detail.automation()).isEqualTo(contributor.getType() == User.Type.BOT);
-                assertThat(detail.treatedAsAutomation()).isFalse();
+                assertThat(detail.kind())
+                        .isEqualTo(
+                                contributor.getType() == User.Type.BOT
+                                        ? ActivityContributorKind.BOT
+                                        : ActivityContributorKind.PERSON);
                 var page = Objects.requireNonNull(get(path + "/work", uri -> uri)
                         .isOk()
                         .expectBody(ActivityWorkPageDTO.class)

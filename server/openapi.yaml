@@ -10057,32 +10057,31 @@ components:
     ActivityPerson:
       type: object
       properties:
-        automation:
-          type: boolean
         counts:
           $ref: "#/components/schemas/ActivityCounts"
         firstContributionAt:
           type: string
           format: date-time
+        kind:
+          type: string
+          enum:
+          - PERSON
+          - BOT
+          - AUTOMATION
         person:
           $ref: "#/components/schemas/UserInfo"
-        treatedAsAutomation:
-          type: boolean
         weeks:
           type: array
           items:
             $ref: "#/components/schemas/ActivitySparklineWeek"
       required:
-      - automation
       - counts
+      - kind
       - person
-      - treatedAsAutomation
       - weeks
     ActivityPersonDetail:
       type: object
       properties:
-        automation:
-          type: boolean
         breakdown:
           $ref: "#/components/schemas/ActivityBreakdown"
         counts:
@@ -10093,6 +10092,12 @@ components:
         from:
           type: string
           format: date-time
+        kind:
+          type: string
+          enum:
+          - PERSON
+          - BOT
+          - AUTOMATION
         person:
           $ref: "#/components/schemas/UserInfo"
         repositories:
@@ -10102,21 +10107,18 @@ components:
         to:
           type: string
           format: date-time
-        treatedAsAutomation:
-          type: boolean
         weeks:
           type: array
           items:
             $ref: "#/components/schemas/ActivityWeek"
       required:
-      - automation
       - breakdown
       - counts
       - from
+      - kind
       - person
       - repositories
       - to
-      - treatedAsAutomation
       - weeks
     ActivityRepository:
       type: object

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityBreakdownDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityContributorKind;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityCountsDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityHighlightsDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
@@ -59,13 +60,14 @@ public class ActivityPeopleService {
         List<ActivityPersonDTO> all = totals.values().stream()
                 .map(row -> new ActivityPersonDTO(
                         row.person(),
-                        row.getAutomation(),
-                        row.getTreatedAsAutomation(),
+                        row.kind(),
                         row.counts(),
                         row.getFirstContribution(),
                         List.copyOf(weeks.getOrDefault(row.getActorId(), List.of()))))
                 .toList();
-        var people = all.stream().filter(row -> !row.automation()).toList();
+        var people = all.stream()
+                .filter(row -> row.kind() == ActivityContributorKind.PERSON)
+                .toList();
         long mostHelped = people.stream()
                 .mapToLong(row -> row.counts().peopleHelped())
                 .max()
@@ -90,8 +92,10 @@ public class ActivityPeopleService {
         return new ActivityPeopleDTO(
                 range.from(),
                 range.to(),
-                all.stream().filter(row -> !row.automation()).toList(),
-                all.stream().filter(ActivityPersonDTO::automation).toList(),
+                people,
+                all.stream()
+                        .filter(row -> row.kind() != ActivityContributorKind.PERSON)
+                        .toList(),
                 coverage,
                 highlights,
                 repositories,
@@ -116,8 +120,7 @@ public class ActivityPeopleService {
                 .findFirst()
                 .orElseGet(() -> new ActivityPeopleQueryRepository.PersonCount(
                         contributor.person(),
-                        contributor.automation(),
-                        contributor.treatedAsAutomation(),
+                        contributor.kind(),
                         true,
                         null,
                         null,
@@ -142,8 +145,7 @@ public class ActivityPeopleService {
                 range.from(),
                 range.to(),
                 total.person(),
-                total.automation(),
-                total.treatedAsAutomation(),
+                total.kind(),
                 total.counts(),
                 total.firstContribution(),
                 total.breakdown(),

@@ -95,24 +95,22 @@ export type ActivityPeople = {
 };
 
 export type ActivityPerson = {
-    automation: boolean;
     counts: ActivityCounts;
     firstContributionAt?: Date;
+    kind: 'PERSON' | 'BOT' | 'AUTOMATION';
     person: UserInfo;
-    treatedAsAutomation: boolean;
     weeks: Array<ActivitySparklineWeek>;
 };
 
 export type ActivityPersonDetail = {
-    automation: boolean;
     breakdown: ActivityBreakdown;
     counts: ActivityCounts;
     firstContributionAt?: Date;
     from: Date;
+    kind: 'PERSON' | 'BOT' | 'AUTOMATION';
     person: UserInfo;
     repositories: Array<ActivityRepositoryCounts>;
     to: Date;
-    treatedAsAutomation: boolean;
     weeks: Array<ActivityWeek>;
 };
 
