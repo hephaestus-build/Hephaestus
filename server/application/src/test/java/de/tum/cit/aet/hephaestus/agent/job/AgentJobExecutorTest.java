@@ -1490,6 +1490,14 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             true,
                             "provider preparation is asynchronous"),
                     Arguments.of(
+                            new IllegalStateException("This review attempt is no longer admitted"),
+                            false,
+                            "an attempt that lost its claim during capture is not retried"),
+                    Arguments.of(
+                            new IllegalStateException("An evidence capture is already active"),
+                            false,
+                            "a capture still active on this thread is a defect, not contention"),
+                    Arguments.of(
                             new SandboxException("path traversal detected"),
                             false,
                             "a plain SandboxException is validation/config/unexpected, deterministic across retries"),
@@ -1509,8 +1517,9 @@ class AgentJobExecutorTest extends BaseUnitTest {
         }
 
         @ParameterizedTest
-        @ValueSource(booleans = {true, false})
-        void shouldRequeueInfrastructureOrPendingSourceWithBackoffAndTheOriginalJob(boolean sourcePending) {
+        @ValueSource(strings = {"source pending", "evidence folder held", "infrastructure"})
+        void shouldRequeueInfrastructureOrPendingSourceWithBackoffAndTheOriginalJob(String failure) {
+            boolean beforeSandbox = !failure.equals("infrastructure");
             executor = new AgentJobExecutor(
                     AGENT_PROPS,
                     jobRepository,
@@ -1548,18 +1557,22 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .put("commit_sha", HEAD_SHA)
                     .put("signal", "scm.pull_request.opened"));
             var metadata = requireNonNull(job.getMetadata()).deepCopy();
-            if (sourcePending) {
+            if (beforeSandbox) {
                 var handler = mock(JobTypeHandler.class);
                 when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW))
                         .thenReturn(handler);
-                when(handler.prepareInputs(any())).thenThrow(new ReviewSourceNotReadyException("range pending"));
+                when(handler.prepareInputs(any()))
+                        .thenThrow(new ReviewSourceNotReadyException(
+                                failure.equals("source pending")
+                                        ? "range pending"
+                                        : "Another attempt still holds this evidence folder"));
             } else {
                 setupFullExecutionWithException(new SandboxInfrastructureException("image pull failed"));
             }
 
             executor.processJob(jobId);
             assertThat(job.getMetadata()).isEqualTo(metadata);
-            if (sourcePending) {
+            if (beforeSandbox) {
                 verify(sandboxManager, never()).execute(any());
                 verify(usageRecorder, never()).record(any(), any());
                 verify(usageRecorder, never()).recordUnverifiable(any(), any());
