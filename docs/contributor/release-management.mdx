@@ -84,21 +84,22 @@ A rejected release leaves no draft or tag, so cleanup is unnecessary.
 A draft itself creates no tag.
 
 Recovery uses a forward fix.
-`scripts/plan-release.ts` cuts the version carried by `main` whenever it has **no published release**, from whichever commit carries it.
-Thus, landing the fix completes recovery.
-The next successful `main` CI run recuts that version from the fixed commit.
+`scripts/plan-release.ts` cuts an unpublished version only when its validated source has no pending changesets.
+A shipped fix carries a changeset and waits for the Version PR to consume it.
+This keeps the fix's release note and version together.
+A fix with no pending changesets can recut the same unpublished version from its validated commit.
 
 Alternatively, merge the next Version PR.
 A release follows the latest *published* release, not the version its parent commit carried.
-Thus, an unpublished version is skipped.
-An ordinary merge carries an already-published version, the sole no-op.
+The upgrade seed skips unpublished intermediate versions.
+An ordinary merge of an already-published version does not cut a release.
 
 The resume path covers failures *after* draft creation: seeded-upgrade, supported-host, or publication failures.
 A workflow rerun at the same commit reuses the draft, regenerates evidence, and replaces assets.
 A draft pins its version to its commit.
 A later commit refuses to recut over it.
 If a draft can never pass, delete it manually.
-The version then recuts from the fixed commit.
+The fixed source must have no pending changesets before it can cut a release.
 
 Version-commit reverts are no longer part of recovery, but their exemption remains.
 `verify-changesets` normally freezes `MIGRATION.md` in feature PRs and prevents deletion of pending changesets or migration fragments.

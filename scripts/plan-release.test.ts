@@ -7,6 +7,7 @@ import { after, test } from "node:test";
 
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import {
+	hasPendingChangesets,
 	hasSchemaMigrations,
 	planRelease,
 	type ReleaseRef,
@@ -36,14 +37,14 @@ const RELEASED = [published("v0.73.2"), published("v0.74.0")];
 void test("cuts nothing on an ordinary feature merge", () => {
 	// The non-deferrable case: every push to main carries a version that is already published, and a
 	// planner that cut one here would cut a release on every merge.
-	const plan = planRelease(SHA, "0.74.0", RELEASED);
+	const plan = planRelease(SHA, "0.74.0", RELEASED, true);
 	assert.equal(plan.kind, "skip");
 	assert.match(plan.reason, /v0\.74\.0 is already published/u);
 	assert.deepEqual(releaseOutputs(plan), { released: "false" });
 });
 
 void test("cuts the version the Version PR merge introduced", () => {
-	const plan = planRelease(SHA, "0.75.0", RELEASED);
+	const plan = planRelease(SHA, "0.75.0", RELEASED, false);
 	assert.equal(plan.kind, "cut");
 	assert.equal(plan.previousVersion, "0.74.0");
 	assert.equal(plan.resumesDraft, false);
@@ -59,10 +60,9 @@ void test("cuts the version the Version PR merge introduced", () => {
 	});
 });
 
-void test("re-cuts an unpublished version from a later commit that did not change it", () => {
-	// The wedge this exists to remove: the version commit is consumed, the fix lands on top, and the
-	// same version cuts again from the commit that carries it.
-	const plan = planRelease(OTHER_SHA, "0.75.0", RELEASED);
+void test("re-cuts an unpublished version from a later commit without pending changesets", () => {
+	// A source with no new release notes can retry an unpublished version.
+	const plan = planRelease(OTHER_SHA, "0.75.0", RELEASED, false);
 	assert.equal(plan.kind, "cut");
 	assert.equal(plan.sha, OTHER_SHA);
 	assert.equal(plan.tag, "v0.75.0");
@@ -72,71 +72,98 @@ void test("re-cuts an unpublished version from a later commit that did not chang
 void test("follows the latest published release, not the version the parent commit carried", () => {
 	// On a re-cut the parent carries the same unpublished version; comparing against it would refuse
 	// the retry. 0.75.0 having failed, 0.75.1 follows 0.74.0.
-	const plan = planRelease(SHA, "0.75.1", RELEASED);
+	const plan = planRelease(SHA, "0.75.1", RELEASED, false);
 	assert.equal(plan.kind, "cut");
 	assert.equal(plan.previousVersion, "0.74.0");
 });
 
 void test("resumes a draft that targets this commit", () => {
-	const plan = planRelease(SHA, "0.75.0", [...RELEASED, draft("v0.75.0", SHA)]);
+	const plan = planRelease(SHA, "0.75.0", [...RELEASED, draft("v0.75.0", SHA)], false);
 	assert.equal(plan.kind, "cut");
 	assert.equal(plan.resumesDraft, true);
 	assert.equal(plan.previousVersion, "0.74.0");
 });
 
 void test("refuses a draft that targets another commit", () => {
-	const plan = planRelease(SHA, "0.75.0", [...RELEASED, draft("v0.75.0", OTHER_SHA)]);
+	const plan = planRelease(SHA, "0.75.0", [...RELEASED, draft("v0.75.0", OTHER_SHA)], false);
 	assert.equal(plan.kind, "refuse");
 	assert.match(plan.reason, /delete the draft to re-cut v0\.75\.0 here/u);
 });
 
 void test("cuts nothing once the release publishes, whatever it targets", () => {
 	// A re-run at the same commit after publication, and every merge after it.
-	const plan = planRelease(SHA, "0.75.0", [
-		...RELEASED,
-		{ isDraft: false, isPrerelease: false, tag: "v0.75.0", targetCommitish: OTHER_SHA },
-	]);
+	const plan = planRelease(
+		SHA,
+		"0.75.0",
+		[
+			...RELEASED,
+			{ isDraft: false, isPrerelease: false, tag: "v0.75.0", targetCommitish: OTHER_SHA },
+		],
+		false,
+	);
 	assert.equal(plan.kind, "skip");
 });
 
 void test("refuses a version that is not newer than the latest published release", () => {
 	// A rollback of package.json cannot promote X.Y and latest back onto older code.
-	const plan = planRelease(SHA, "0.73.5", RELEASED);
+	const plan = planRelease(SHA, "0.73.5", RELEASED, false);
 	assert.equal(plan.kind, "refuse");
 	assert.match(plan.reason, /not newer than the latest published release v0\.74\.0/u);
 });
 
 void test("refuses when nothing published exists to follow", () => {
-	const plan = planRelease(SHA, "0.75.0", [draft("v0.75.0", SHA)]);
+	const plan = planRelease(SHA, "0.75.0", [draft("v0.75.0", SHA)], false);
 	assert.equal(plan.kind, "refuse");
 	assert.match(plan.reason, /no published release to follow/u);
 });
 
 void test("refuses a version that is not a released version shape", () => {
-	const plan = planRelease(SHA, "0.75.0-rc.1", RELEASED);
+	const plan = planRelease(SHA, "0.75.0-rc.1", RELEASED, false);
 	assert.equal(plan.kind, "refuse");
 	assert.match(plan.reason, /is not major\.minor\.patch/u);
 });
 
 void test("ignores prereleases and drafts when picking the release to follow", () => {
-	const plan = planRelease(SHA, "0.75.0", [
-		published("v0.74.0"),
-		{ isDraft: false, isPrerelease: true, tag: "v0.74.1-rc.1", targetCommitish: "main" },
-		draft("v0.74.2", "main"),
-		published("not-a-version"),
-	]);
+	const plan = planRelease(
+		SHA,
+		"0.75.0",
+		[
+			published("v0.74.0"),
+			{ isDraft: false, isPrerelease: true, tag: "v0.74.1-rc.1", targetCommitish: "main" },
+			draft("v0.74.2", "main"),
+			published("not-a-version"),
+		],
+		false,
+	);
 	assert.equal(plan.kind, "cut");
 	assert.equal(plan.previousVersion, "0.74.0");
 });
 
 void test("orders the published releases by version, not by listing order", () => {
-	const plan = planRelease(SHA, "0.75.0", [
-		published("v0.9.1"),
-		published("v0.74.0"),
-		published("v0.10.6"),
-	]);
+	const plan = planRelease(
+		SHA,
+		"0.75.0",
+		[published("v0.9.1"), published("v0.74.0"), published("v0.10.6")],
+		false,
+	);
 	assert.equal(plan.kind, "cut");
 	assert.equal(plan.previousVersion, "0.74.0");
+});
+
+void test("holds an unpublished release until pending changesets are consumed", () => {
+	const plan = planRelease(SHA, "0.75.0", RELEASED, true);
+	assert.equal(plan.kind, "skip");
+	assert.match(plan.reason, /Version PR must consume/u);
+	assert.deepEqual(releaseOutputs(plan), { released: "false" });
+});
+
+void test("holds a same-source draft but preserves a different-source draft refusal", () => {
+	const sameSource = planRelease(SHA, "0.75.0", [...RELEASED, draft("v0.75.0", SHA)], true);
+	assert.equal(sameSource.kind, "skip");
+	assert.deepEqual(releaseOutputs(sameSource), { released: "false" });
+	const otherSource = planRelease(SHA, "0.75.0", [...RELEASED, draft("v0.75.0", OTHER_SHA)], true);
+	assert.equal(otherSource.kind, "refuse");
+	assert.match(otherSource.reason, /delete the draft to re-cut/u);
 });
 
 const repositories: string[] = [];
@@ -184,4 +211,54 @@ void test("reads schema migrations from the diff between the two releases", asyn
 	assert.equal(await hasSchemaMigrations("v0.74.0", "HEAD", repo), true);
 	// A git failure is an error, never a verdict: neither true nor false is stamped by accident.
 	await assert.rejects(hasSchemaMigrations("v0.99.0", "HEAD", repo));
+});
+
+void test("reads pending changesets from the exact commit through native git", async () => {
+	const repo = mkdtempSync(path.join(tmpdir(), "plan-release-pending-"));
+	repositories.push(repo);
+	const git = (...args: string[]): string =>
+		execFileSync("git", args, {
+			cwd: repo,
+			encoding: "utf8",
+			env: environmentForGitFixture(),
+			stdio: ["ignore", "pipe", "pipe"],
+		}).trim();
+	git("init", "--quiet", "--initial-branch=main");
+	git("config", "user.email", "test@example.invalid");
+	git("config", "user.name", "Test");
+	const directory = path.join(repo, ".changeset");
+	mkdirSync(path.join(directory, "nested"), { recursive: true });
+	writeFileSync(path.join(directory, "README.md"), "# Changesets\n");
+	writeFileSync(path.join(directory, "config.json"), "{}\n");
+	writeFileSync(path.join(directory, "nested", "ignored.md"), "Not a direct changeset\n");
+	git("add", "-A");
+	git("commit", "--quiet", "-m", "consumed release");
+	const consumed = git("rev-parse", "HEAD");
+	assert.equal(await hasPendingChangesets(consumed, repo), false);
+
+	writeFileSync(
+		path.join(directory, "release-note.md"),
+		'---\n"hephaestus": patch\n---\n\nFixed behavior.\n',
+	);
+	git("add", "-A");
+	git("commit", "--quiet", "-m", "pending release note");
+	assert.equal(await hasPendingChangesets("HEAD", repo), true);
+	assert.equal(await hasPendingChangesets(consumed, repo), false);
+
+	rmSync(path.join(directory, "release-note.md"));
+	writeFileSync(path.join(directory, "tooling.md"), "---\n---\n\nNo shipped change.\n");
+	git("add", "-A");
+	git("commit", "--quiet", "-m", "pending empty changeset");
+	assert.equal(await hasPendingChangesets("HEAD", repo), true);
+
+	rmSync(path.join(directory, "tooling.md"));
+	git("add", "-A");
+	git("commit", "--quiet", "-m", "consume pending changeset");
+	process.env.GIT_DIR = path.join(repo, "not-a-git-directory");
+	try {
+		assert.equal(await hasPendingChangesets("HEAD", repo), false);
+	} finally {
+		delete process.env.GIT_DIR;
+	}
+	await assert.rejects(hasPendingChangesets("missing-revision", repo));
 });
