@@ -16,6 +16,7 @@
         </preConditions>
         <comment>Old labels can name infrastructure or fail DNS validation. Preserve their paths and reserve every retained label before assigning safe addresses.</comment>
         <sql splitStatements="false"><![CDATA[
+SET LOCAL lock_timeout = '1s';
 LOCK TABLE workspace, workspace_slug_history IN ACCESS EXCLUSIVE MODE;
 
 CREATE FUNCTION workspace_slug_assignable(label text) RETURNS boolean
@@ -79,8 +80,5 @@ CREATE TRIGGER trg_reserve_workspace_slug BEFORE INSERT OR UPDATE OF slug ON wor
     FOR EACH ROW EXECUTE FUNCTION reserve_workspace_slug();
         ]]></sql>
         <rollback><stop>Workspace addresses and reservations cannot be undone safely. Restore a verified pre-upgrade database backup.</stop></rollback>
-    </changeSet>
-    <changeSet id="1791582260680-3" author="hephaestus">
-        <dropColumn columnName="redirect_expires_at" tableName="workspace_slug_history"/>
     </changeSet>
 </databaseChangeLog>

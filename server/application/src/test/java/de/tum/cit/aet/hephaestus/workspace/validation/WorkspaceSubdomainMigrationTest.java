@@ -64,12 +64,22 @@ class WorkspaceSubdomainMigrationTest {
                            (997003, 'workspace-997002', 'historic-team', now(), now() - interval '2 days');
                     """);
             connection.commit();
-            liquibase.update(
-                    (int) pending.stream()
-                            .filter(c -> c.getFilePath().endsWith(CHANGELOG))
-                            .count(),
-                    CONTEXTS,
-                    LABELS);
+            liquibase.update(1, CONTEXTS, LABELS);
+            try (var oldServer = connect()) {
+                oldServer.setAutoCommit(false);
+                execute(oldServer, "SELECT slug FROM workspace WHERE id = 997003");
+                assertThatThrownBy(() -> liquibase.update(1, CONTEXTS, LABELS))
+                        .rootCause()
+                        .isInstanceOfSatisfying(
+                                SQLException.class,
+                                failure -> assertThat(failure.getSQLState()).isEqualTo("55P03"));
+                assertThat(strings(connection, "SELECT slug FROM workspace WHERE id = 997001"))
+                        .containsExactly("docs");
+                assertThat(strings(connection, "SELECT slug FROM workspace_slug_reservation"))
+                        .isEmpty();
+                oldServer.rollback();
+            }
+            liquibase.update(CONTEXTS, LABELS);
         }
     }
 
@@ -107,7 +117,7 @@ class WorkspaceSubdomainMigrationTest {
                             strings(
                                     connection,
                                     "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'workspace_slug_history' AND column_name = 'redirect_expires_at'"))
-                    .isEmpty();
+                    .containsExactly("redirect_expires_at");
         }
     }
 
@@ -158,6 +168,30 @@ class WorkspaceSubdomainMigrationTest {
             assertThatThrownBy(() -> insert(connection, 997103, "historic-team"))
                     .isInstanceOf(SQLException.class);
             assertThatThrownBy(() -> insert(connection, 997104, "docs")).isInstanceOf(SQLException.class);
+        }
+    }
+
+    @Test
+    void shouldSupportOldServerHistoryReadsAndWritesDuringRollingUpgrade() throws Exception {
+        try (var connection = connect()) {
+            insert(connection, 997300, "rolling-original");
+            execute(connection, "UPDATE workspace SET slug = 'rolling-renamed' WHERE id = 997300");
+            execute(connection, """
+                    INSERT INTO workspace_slug_history(workspace_id, old_slug, new_slug, changed_at, redirect_expires_at)
+                    VALUES (997300, 'rolling-original', 'rolling-renamed', now(), now() + interval '30 days')
+                    """);
+            assertThat(strings(connection, """
+                    SELECT old_slug FROM workspace_slug_history
+                    WHERE old_slug = 'rolling-original' AND (redirect_expires_at IS NULL OR redirect_expires_at > now())
+                    """)).containsExactly("rolling-original");
+            assertThatThrownBy(() -> insert(connection, 997301, "rolling-original"))
+                    .isInstanceOfSatisfying(
+                            SQLException.class,
+                            failure -> assertThat(failure.getSQLState()).isEqualTo("23505"));
+            assertThatThrownBy(() -> insert(connection, 997302, "invalid--rolling"))
+                    .isInstanceOfSatisfying(
+                            SQLException.class,
+                            failure -> assertThat(failure.getSQLState()).isEqualTo("23514"));
         }
     }
 

@@ -1754,6 +1754,7 @@ erDiagram
         TIMESTAMPTZ changed_at "NOT NULL"
         VARCHAR(64) new_slug "NOT NULL"
         VARCHAR(64) old_slug "NOT NULL"
+        TIMESTAMPTZ redirect_expires_at
         BIGINT workspace_id FK "NOT NULL"
     }
 
