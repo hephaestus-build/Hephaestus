@@ -40,10 +40,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient;
+import org.springframework.graphql.client.GraphQlTransportException;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -103,7 +105,33 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"RATE_LIMITED, true", "UNAUTHORIZED, true", "NOT_FOUND, true", "NOT_FOUND, false"})
+    @ValueSource(ints = {403, 404, 429})
+    void shouldDistinguishRepositoryAccessLossFromRateLimits(int status) {
+        var webClient = WebClient.builder()
+                .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.valueOf(status))
+                        .body("unavailable")
+                        .build()))
+                .build();
+        when(graphQlClientProvider.forScope(1L))
+                .thenReturn(HttpGraphQlClient.builder(webClient)
+                        .documentSource(name -> Mono.just("query { project(fullPath: \"course/project\") { id } }"))
+                        .build());
+        assertThatThrownBy(() -> service.fetchProject(1L, "course/project"))
+                .isInstanceOf(
+                        status == 429
+                                ? GraphQlTransportException.class
+                                : RepositoryNotFoundOnGitProviderException.class);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "RATE_LIMITED, true",
+        "UNAUTHORIZED, true",
+        "FORBIDDEN, true",
+        "FORBIDDEN, false",
+        "NOT_FOUND, true",
+        "NOT_FOUND, false"
+    })
     void shouldClassifyFieldErrorsBeforeTreatingProjectAsUnavailable(String errorType, boolean projectMissing) {
         var webClient = WebClient.builder()
                 .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
@@ -124,7 +152,10 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.fetchProject(1L, "course/project"))
                 .isInstanceOf(
-                        errorType.equals("NOT_FOUND") && projectMissing
+                        (errorType.equals("NOT_FOUND")
+                                                || errorType.equals("FORBIDDEN")
+                                                || errorType.equals("UNAUTHORIZED"))
+                                        && projectMissing
                                 ? RepositoryNotFoundOnGitProviderException.class
                                 : GitLabSyncException.class);
     }

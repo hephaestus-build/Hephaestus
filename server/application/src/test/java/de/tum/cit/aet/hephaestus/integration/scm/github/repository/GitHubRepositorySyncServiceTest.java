@@ -31,6 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.graphql.support.ResourceDocumentSource;
@@ -78,13 +79,13 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 mock(RepositoryRepository.class),
                 mock(OrganizationRepository.class),
                 properties,
-                mock(GitHubExceptionClassifier.class),
+                new GitHubExceptionClassifier(new SimpleMeterRegistry()),
                 mock(GitHubGraphQlSyncCoordinator.class),
                 webClient);
     }
 
     @ParameterizedTest
-    @CsvSource({"RATE_LIMITED, true", "FORBIDDEN, true", "NOT_FOUND, true", "NOT_FOUND, false"})
+    @CsvSource({"RATE_LIMITED, true", "FORBIDDEN, true", "FORBIDDEN, false", "NOT_FOUND, true", "NOT_FOUND, false"})
     void shouldClassifyFieldErrorsBeforeTreatingRepositoryAsUnavailable(String errorType, boolean repositoryMissing) {
         String body = """
                 {"data":{"repository":%s},"errors":[{"message":"Unavailable",
@@ -95,7 +96,7 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                         errorType);
         var service = graphQlService(body, mock(RepositoryRepository.class), mock(OrganizationRepository.class));
 
-        if (errorType.equals("NOT_FOUND") && repositoryMissing) {
+        if ((errorType.equals("NOT_FOUND") || errorType.equals("FORBIDDEN")) && repositoryMissing) {
             assertThatThrownBy(() -> service.syncRepository(7L, "course/project", new IdentityProvider(), null))
                     .isInstanceOf(RepositoryNotFoundOnGitProviderException.class);
         } else {
@@ -177,12 +178,13 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
         assertThat(service.resolveRepositoryNameById(7L, 123L)).isEqualTo("course/renamed");
     }
 
-    @Test
-    void shouldReportUnavailableWithoutClaimingDeletionWhenIdCannotBeRead() {
-        var service = service(HttpStatus.NOT_FOUND, "{}");
+    @ParameterizedTest
+    @ValueSource(ints = {403, 404})
+    void shouldReportUnavailableWithoutClaimingDeletionWhenIdCannotBeRead(int status) {
+        var service = service(HttpStatus.valueOf(status), "{}");
         assertThatThrownBy(() -> service.resolveRepositoryNameById(7L, 123L))
                 .isInstanceOf(RepositoryNotFoundOnGitProviderException.class)
-                .hasCauseInstanceOf(WebClientResponseException.NotFound.class);
+                .hasCauseInstanceOf(WebClientResponseException.class);
     }
 
     @Test

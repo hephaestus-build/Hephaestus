@@ -9,5 +9,6 @@ The replacement public activity page defaults to off for each workspace, includi
 Set `HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED=true` only when public activity pages are appropriate for this instance.
 An instance administrator can override this default in the public activity settings API.
 A workspace administrator must then enable each page explicitly.
+Run a repository sync to confirm current provider visibility. Existing sync watermarks do not supply this confirmation.
 Verify repaired activity history before publication and keep course workspaces private.
 See the public activity administration guide for privacy controls, objections, and API paths.

@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -274,6 +275,18 @@ class GitLabRouteAdmissionTest {
             // The monitor learns the project's id where it is; the shared boundary moves it to the reported path.
             verify(syncTargets).reconcileSyncTargetIdentity(55L, PROJECT_A, GROUP + "/old");
             verify(repositoryMonitors).monitorAllowed(workspace, List.of(stored));
+        }
+
+        @Test
+        void shouldStopPublicationWhenProjectEventConfirmsAccessLoss() {
+            var own = monitor(60L);
+            own.setNativeId(PROJECT_A);
+            when(monitors.findByWorkspaceIdAndNativeId(WORKSPACE_ID, PROJECT_A)).thenReturn(List.of(own));
+            when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A))
+                    .thenThrow(new RepositoryNotFoundOnGitProviderException("course/project"));
+            assertProjectNotAdmitted(projectEvent("project_update", PROJECT_A, GROUP + "/a"));
+            verify(syncTargets).recordRepositoryUnavailable(WORKSPACE_ID, 60L);
+            verify(projectSync, never()).persistProject(any());
         }
 
         @Test

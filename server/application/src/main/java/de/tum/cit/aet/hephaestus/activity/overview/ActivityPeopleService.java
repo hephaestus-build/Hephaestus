@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ActivityPeopleService {
     private final ActivityPeopleQueryRepository queries;
     private final Clock clock;
+    private final PublicRepositoryVisibility visibility;
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ActivityPeopleDTO people(
@@ -47,7 +48,7 @@ public class ActivityPeopleService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
     public ActivityPeopleDTO publicPeople(long workspace, ActivityPeopleRangeParams params) {
-        var repositories = queries.publicRepositories(workspace);
+        var repositories = queries.publicRepositories(workspace, visibility.confirmedAfter());
         var scope = new ActivityScope(
                 workspace,
                 Set.of(),

@@ -72,4 +72,9 @@ ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type
     <changeSet id="1791603152317-10" author="hephaestus">
         <dropNotNullConstraint columnDataType="bigint" columnName="seen_revision" tableName="workspace_member_onboarding"/>
     </changeSet>
+    <changeSet id="1791603152317-11" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="repository_visibility_confirmed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

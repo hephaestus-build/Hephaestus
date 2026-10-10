@@ -81,7 +81,7 @@ A page client can use this state for a one-time Show me / Hide me step.
 
 Only `GET` and `HEAD /public/workspaces/{slug}/activity` publish workspace data without sign-in.
 It accepts the activity range presets and custom dates.
-Each query requires stored public visibility and a recent successful repository sync for this workspace.
+Each query requires stored public visibility and a recent successful repository metadata read for this workspace.
 A missing confirmation, an expired confirmation, or a known unavailable repository excludes the repository,
 its contributions, and its coverage from the public response.
 A sync that reports repository access loss (404 or authorization failure) marks that workspace's monitor unavailable immediately.
@@ -97,10 +97,11 @@ This is twice the default daily `hephaestus.sync.cron` interval (03:00 server ti
 Use twice your configured metadata sync interval when you change the cadence.
 The limit is enforced during each public query, without a cleanup job.
 If sync is disabled, credentials stop working, or metadata fetches keep failing,
-publication stops no later than this limit after the last successful repository sync.
-A failed sync does not renew the confirmation.
-Repositories that have never completed a successful sync are not published.
-GitLab requires a complete successful repository sync; partial resource failures can therefore hide a repository earlier.
+publication stops no later than this limit after the last successful repository metadata read.
+A failed metadata fetch does not renew the confirmation.
+The separate visibility confirmation does not advance when only issues, pull requests, or other resources sync.
+Repositories without a successful metadata confirmation after this upgrade are not published.
+Run a repository sync before enabling a page.
 
 GitLab project create, rename, transfer and update events refresh stored visibility.
 A system hook supplies `project_update`; normal project and group webhooks do not supply visibility-change events.

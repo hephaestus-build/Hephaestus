@@ -43,6 +43,9 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
             r.visibility = 'PUBLIC' AND NOT r.is_private
                 AND EXISTS (SELECT 1 FROM identity_provider p WHERE p.id = r.provider_id AND p.type IN ('GITHUB', 'GITLAB'))
             """;
+    String PUBLIC_MONITOR = """
+            m.unavailable_since IS NULL AND m.repository_visibility_confirmed_at > :visibilityConfirmedAfter
+            """;
     String PUBLIC_REPOSITORY = " AND (:#{#scope.publicOnly()} = false OR (" + PUBLIC_REPOSITORY_CONDITION + ")) ";
     String PUBLIC_PEOPLE = """
             WITH public_people AS (SELECT u.id FROM "user" u WHERE true
@@ -280,23 +283,26 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                 SELECT r.id, r.name_with_owner AS key, r.name FROM repository_to_monitor m
                 JOIN repository r ON r.name_with_owner = m.name_with_owner
                 WHERE m.workspace_id = :workspace AND (:publicOnly = false OR (
-                """ + PUBLIC_REPOSITORY_CONDITION + """
+                """ + PUBLIC_REPOSITORY_CONDITION + " AND " + PUBLIC_MONITOR + """
                 )) AND (EXISTS (
                     SELECT 1 FROM workspace w JOIN organization o ON o.id = w.organization_id
                     WHERE w.id = :workspace AND o.provider_id = r.provider_id) OR EXISTS (
                     SELECT 1 FROM activity_event e WHERE e.workspace_id = :workspace AND e.repository_id = r.id))
                 ORDER BY r.name_with_owner
                 """, nativeQuery = true)
-    List<RepositoryRow> findRepositories(@Param("workspace") long workspace, @Param("publicOnly") boolean publicOnly);
+    List<RepositoryRow> findRepositories(
+            @Param("workspace") long workspace,
+            @Param("publicOnly") boolean publicOnly,
+            @Param("visibilityConfirmedAfter") Instant visibilityConfirmedAfter);
 
     default List<ActivityRepositoryDTO> repositories(long workspace) {
-        return findRepositories(workspace, false).stream()
+        return findRepositories(workspace, false, Instant.EPOCH).stream()
                 .map(row -> new ActivityRepositoryDTO(row.getId(), row.getKey(), row.getName()))
                 .toList();
     }
 
-    default List<ActivityRepositoryDTO> publicRepositories(long workspace) {
-        return findRepositories(workspace, true).stream()
+    default List<ActivityRepositoryDTO> publicRepositories(long workspace, Instant visibilityConfirmedAfter) {
+        return findRepositories(workspace, true, visibilityConfirmedAfter).stream()
                 .map(row -> new ActivityRepositoryDTO(row.getId(), row.getKey(), row.getName()))
                 .toList();
     }
@@ -413,7 +419,10 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
         LEFT JOIN workspace_membership wm ON wm.workspace_id = :workspace AND wm.user_id = u.id
         WHERE u.type = 'USER' AND
         """ + PUBLIC_REPOSITORY_CONDITION + """
-          AND EXISTS (SELECT 1 FROM repository_to_monitor m WHERE m.workspace_id = :workspace AND m.name_with_owner = r.name_with_owner)
+          AND EXISTS (SELECT 1 FROM repository_to_monitor m WHERE m.workspace_id = :workspace AND m.name_with_owner = r.name_with_owner
+          AND
+          """ + PUBLIC_MONITOR + """
+          )
           AND NOT EXISTS (SELECT 1 FROM activity_automation a WHERE a.workspace_id = :workspace AND a.user_id = u.id)
           AND NOT EXISTS (SELECT 1 FROM person_suppression s WHERE s.provider_id = u.provider_id
               AND s.subject = CAST(u.native_id AS text) AND s.team_key = '')
@@ -428,7 +437,8 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
             OR EXISTS (SELECT 1 FROM identity_link l JOIN account a ON a.id = l.account_id
                 WHERE l.provider_id = u.provider_id AND l.subject = CAST(u.native_id AS text) AND NOT a.public_activity_visible))
         """, nativeQuery = true)
-    long countPublicHiddenPeople(@Param("workspace") long workspace);
+    long countPublicHiddenPeople(
+            @Param("workspace") long workspace, @Param("visibilityConfirmedAfter") Instant visibilityConfirmedAfter);
 
     interface RepositoryRow {
         long getId();

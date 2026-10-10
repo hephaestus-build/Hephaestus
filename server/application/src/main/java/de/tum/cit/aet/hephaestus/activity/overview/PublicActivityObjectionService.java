@@ -24,13 +24,14 @@ class PublicActivityObjectionService {
     private final WorkspaceRepository workspaces;
     private final WorkspaceMembershipService memberVisibility;
     private final ActivityPeopleQueryRepository people;
+    private final PublicRepositoryVisibility visibility;
     private final ConfigAuditPort audit;
     private final PersonDataCopyFence copyFence;
     private final PersonDataWriteFence writeFence;
 
     @Transactional(readOnly = true)
     public long hiddenPeople(long workspaceId) {
-        return people.countPublicHiddenPeople(workspaceId);
+        return people.countPublicHiddenPeople(workspaceId, visibility.confirmedAfter());
     }
 
     @Transactional

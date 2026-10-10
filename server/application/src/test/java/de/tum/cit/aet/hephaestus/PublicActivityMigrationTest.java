@@ -40,6 +40,8 @@ class PublicActivityMigrationTest {
                 statement.execute("""
                     INSERT INTO workspace (id,account_login,account_type,display_name,is_publicly_viewable,slug,status)
                     VALUES (993001,'public-cutover','ORG','Public cutover',true,'public-cutover','ACTIVE');
+                    INSERT INTO repository_to_monitor(id,workspace_id,name_with_owner,repository_synced_at,generated_paths)
+                    VALUES (993004,993001,'public-cutover/project',now(),'[]');
                     INSERT INTO account(id,display_name,app_role,status,created_at,updated_at,version)
                     VALUES (993002,'Public person','USER','ACTIVE',now(),now(),0);
                     INSERT INTO workspace_member_onboarding(workspace_id,account_id,seen_revision,updated_at)
@@ -66,6 +68,12 @@ class PublicActivityMigrationTest {
                 assertThat(rows.getBoolean(4)).isFalse();
                 assertThat(rows.getLong(5)).isEqualTo(5);
                 assertThat(rows.getBoolean(6)).isFalse();
+            }
+            try (var statement = connection.createStatement();
+                    var rows = statement.executeQuery(
+                            "SELECT repository_visibility_confirmed_at IS NULL FROM repository_to_monitor WHERE id=993004")) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getBoolean(1)).isTrue();
             }
             try (var statement = connection.createStatement()) {
                 statement.execute("""

@@ -148,6 +148,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                                 case DISCUSSIONS -> rtm.setDiscussionsSyncedAt(syncedAt);
                                 case COLLABORATORS -> rtm.setCollaboratorsSyncedAt(syncedAt);
                                 case FULL_REPOSITORY -> rtm.setRepositorySyncedAt(syncedAt);
+                                case REPOSITORY_VISIBILITY -> rtm.setRepositoryVisibilityConfirmedAt(syncedAt);
                                 default -> {}
                             }
                             repositoryToMonitorRepository.save(rtm);

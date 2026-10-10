@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -213,6 +214,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private PublicActivityObjectionService publicObjections;
 
     @Autowired
+    private SyncTargetProvider syncTargets;
+
+    @Autowired
     private PersonDataRegistry personDataRegistry;
 
     @Nested
@@ -225,7 +229,59 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             monitored.setPrivate(false);
             repositoryRepository.save(monitored);
             jdbc.update(
+                    "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now() WHERE workspace_id=?",
+                    workspace.getId());
+            jdbc.update(
                     "INSERT INTO instance_settings (id, silent_mode_engaged, version, public_activity_allowed) VALUES (1,true,0,true) ON CONFLICT (id) DO UPDATE SET public_activity_allowed=true");
+        }
+
+        @Test
+        void shouldExcludeUnconfirmedExpiredAndUnavailableRepositoriesAndRestoreAfterSync() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+            for (String state : List.of(
+                    "repository_visibility_confirmed_at=NULL",
+                    "repository_synced_at=now(), repository_visibility_confirmed_at=now()-interval '49 hours'",
+                    "unavailable_since=now()")) {
+                jdbc.update("UPDATE repository_to_monitor SET " + state + " WHERE workspace_id=?", workspace.getId());
+                var excluded = page();
+                assertThat(excluded.people()).isEmpty();
+                assertThat(excluded.repositories()).isEmpty();
+                assertThat(excluded.highlights().firstContributors()).isEmpty();
+                assertThat(excluded.highlights().mostPeopleHelped()).isEmpty();
+                assertThat(excluded.coverage().totalRepositories()).isZero();
+                assertThat(excluded.from()).isNotEqualTo(DAY);
+                jdbc.update(
+                        "UPDATE workspace_membership SET hidden=true WHERE workspace_id=? AND user_id=?",
+                        workspace.getId(),
+                        ada.getId());
+                assertThat(publicObjections.hiddenPeople(workspace.getId())).isZero();
+                jdbc.update(
+                        "UPDATE workspace_membership SET hidden=false WHERE workspace_id=? AND user_id=?",
+                        workspace.getId(),
+                        ada.getId());
+                jdbc.update(
+                        "UPDATE repository_to_monitor SET repository_visibility_confirmed_at=now(), unavailable_since=NULL WHERE workspace_id=?",
+                        workspace.getId());
+                assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
+                assertThat(page().coverage().totalRepositories()).isEqualTo(1);
+            }
+        }
+
+        @Test
+        void shouldStopPublicationAtOnceWhenTheSyncProviderRecordsAccessLoss() {
+            record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            var monitor = repositoryToMonitorRepository
+                    .findByWorkspaceIdAndNameWithOwner(workspace.getId(), monitored.getNameWithOwner())
+                    .orElseThrow();
+            assertThat(page().people()).hasSize(1);
+            syncTargets.recordRepositoryUnavailable(workspace.getId(), monitor.getId());
+            assertThat(page().people()).isEmpty();
+            assertThat(page().repositories()).isEmpty();
+            syncTargets.clearRepositoryUnavailable(workspace.getId(), monitor.getId());
+            syncTargets.updateSyncTimestamp(
+                    monitor.getId(), SyncTargetProvider.SyncType.REPOSITORY_VISIBILITY, Instant.now());
+            assertThat(page().people()).extracting(p -> p.login()).containsExactly(ada.getLogin());
         }
 
         @Test
@@ -255,7 +311,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             var sharedMonitor = new RepositoryToMonitor();
             sharedMonitor.setWorkspace(other);
             sharedMonitor.setNameWithOwner(monitored.getNameWithOwner());
-            repositoryToMonitorRepository.save(sharedMonitor);
+            sharedMonitor = repositoryToMonitorRepository.save(sharedMonitor);
+            syncTargets.recordRepositoryUnavailable(other.getId(), sharedMonitor.getId());
             UUID otherEvent = UUID.randomUUID();
             activityEventRepository.insertIfAbsent(
                     otherEvent,

@@ -627,6 +627,7 @@ public class GitLabDataSyncScheduler {
                 reportWarning(handle);
                 continue;
             }
+            Instant metadataRequestedAt = Instant.now();
             try {
                 var metadata = repo.getNativeId() != null
                         ? projectSyncService.fetchProjectById(session.scopeId(), repo.getNativeId())
@@ -646,6 +647,7 @@ public class GitLabDataSyncScheduler {
                 repo = refreshed.get();
                 syncTargetProvider.reconcileSyncTargetIdentity(rtmId, repo.getNativeId(), repo.getNameWithOwner());
                 syncTargetProvider.clearRepositoryUnavailable(session.scopeId(), rtmId);
+                syncTargetProvider.updateSyncTimestamp(rtmId, SyncType.REPOSITORY_VISIBILITY, metadataRequestedAt);
                 availableRepos.add(repo);
                 availableTargetIds.put(repo.getId(), rtmId);
             } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {

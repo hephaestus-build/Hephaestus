@@ -244,6 +244,7 @@ public class GitHubDataSyncService {
         if (syncTargetProvider.deferUnavailableRepository(scopeId, syncTarget.id())) {
             return false;
         }
+        Instant metadataRequestedAt = Instant.now();
         boolean repositoryCreatedDuringSync = false;
 
         // PAT workspaces start with only a RepositoryToMonitor entry — fetch and create the
@@ -260,7 +261,7 @@ public class GitHubDataSyncService {
                 syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
                 return false;
             } catch (InstallationNotFoundException e) {
-                syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
+                syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
                 throw e;
             } catch (Exception e) {
                 syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
@@ -309,6 +310,8 @@ public class GitHubDataSyncService {
             repositoryId = repository.getId();
             syncTargetProvider.reconcileSyncTargetIdentity(
                     syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
+            syncTargetProvider.updateSyncTimestamp(
+                    syncTarget.id(), SyncType.REPOSITORY_VISIBILITY, metadataRequestedAt);
             syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.FULL_REPOSITORY, Instant.now());
 
             // Backfill commits from local git clone. Uses local git, not the GitHub API, so
@@ -459,7 +462,7 @@ public class GitHubDataSyncService {
             syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, error);
             return error == null;
         } catch (InstallationNotFoundException e) {
-            syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
+            syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
             throw e;
         } catch (Exception e) {
             ClassificationResult classification = e instanceof RepositoryNotFoundOnGitProviderException
