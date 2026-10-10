@@ -147,6 +147,64 @@ export interface SessionSummary {
 	toolCalls: Record<string, number>;
 	toolErrors: number;
 	compactions: number;
+	/** Failed or aborted calls by the adapter's closed failure kind. */
+	modelFailures: Record<string, number>;
+	/** The adapter's time of the latest of them, in epoch milliseconds, when it stated one. */
+	lastModelFailureAt: number | null;
+	/** The failure the session's last call ended on; null once a later call succeeded. */
+	finalModelFailure: ModelFailure | null;
+}
+
+/**
+ * The patched OpenAI-completions adapter's failure diagnostic (patches/@earendil-works__pi-ai@1.0.0.patch). The
+ * runner reads the same contract in its own tree (server/application/src/main/resources/agent/pi-model-failure.ts):
+ * this image and that staged runner are delivered separately, so neither can import the other.
+ */
+interface ModelFailure {
+	kind: string;
+	phase: string | null;
+	status: number | null;
+	at: number | null;
+}
+const MODEL_FAILURE_KINDS = new Set([
+	"HTTP_ERROR",
+	"CONNECTION_TIMEOUT",
+	"CONNECTION_ERROR",
+	"STREAM_INCOMPLETE",
+	"FINISH_REASON_ERROR",
+	"ABORTED",
+	"UNKNOWN",
+]);
+const MAX_EPOCH_MS = 8_640_000_000_000_000;
+
+/** A failed message's own diagnostic as closed values; anything malformed is UNKNOWN and claims nothing more. */
+function modelFailure(diagnostics: unknown): ModelFailure {
+	const unknown: ModelFailure = { kind: "UNKNOWN", phase: null, status: null, at: null };
+	const list: unknown[] = Array.isArray(diagnostics) ? diagnostics : [];
+	const diagnostic = list.findLast(
+		(entry) => isRecord(entry) && entry.type === "openai_completions_failure",
+	);
+	if (!isRecord(diagnostic) || !isRecord(diagnostic.details)) {
+		return unknown;
+	}
+	const { kind, phase, status } = diagnostic.details;
+	if (typeof kind !== "string" || !MODEL_FAILURE_KINDS.has(kind)) {
+		return unknown;
+	}
+	const at = diagnostic.timestamp;
+	return {
+		kind,
+		phase: phase === "request" || phase === "response_body" ? phase : null,
+		status:
+			kind === "HTTP_ERROR" &&
+			Number.isInteger(status) &&
+			Number(status) >= 400 &&
+			Number(status) <= 599
+				? Number(status)
+				: null,
+		at:
+			Number.isSafeInteger(at) && Number(at) >= 0 && Number(at) <= MAX_EPOCH_MS ? Number(at) : null,
+	};
 }
 
 export interface TraceManifest {
@@ -233,6 +291,9 @@ export function summarize(entries: FileEntry[]): SessionSummary {
 		toolCalls: {},
 		toolErrors: 0,
 		compactions: 0,
+		modelFailures: {},
+		lastModelFailureAt: null,
+		finalModelFailure: null,
 	};
 	for (const entry of entries) {
 		if (entry.type === "custom" && entry.customType === REVIEW_SESSION_ENTRY) {
@@ -253,6 +314,14 @@ export function summarize(entries: FileEntry[]): SessionSummary {
 				addUsage(summary.usage, message.usage);
 				for (const name of toolNames(message.content)) {
 					count(summary.toolCalls, name);
+				}
+				if (reason === "error" || reason === "aborted") {
+					const failure = modelFailure(message.diagnostics);
+					count(summary.modelFailures, failure.kind);
+					summary.lastModelFailureAt = failure.at ?? summary.lastModelFailureAt;
+					summary.finalModelFailure = failure;
+				} else {
+					summary.finalModelFailure = null;
 				}
 			} else if (message.role === "toolResult" && message.isError) {
 				summary.toolErrors += 1;

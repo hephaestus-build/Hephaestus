@@ -804,6 +804,19 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 "report_feedback",
                 "report_review",
                 "other");
+        /** The provider adapter's closed failure diagnostic (docker/agents/pi/patches), as the collector keeps it. */
+        private static final Set<String> MODEL_FAILURE_KINDS = Set.of(
+                "HTTP_ERROR",
+                "CONNECTION_TIMEOUT",
+                "CONNECTION_ERROR",
+                "STREAM_INCOMPLETE",
+                "FINISH_REASON_ERROR",
+                "ABORTED",
+                "UNKNOWN");
+
+        private static final Set<String> MODEL_FAILURE_PHASES = Set.of("request", "response_body");
+        /** The largest time a JavaScript Date can hold, in epoch milliseconds. */
+        private static final long MAX_EPOCH_MS = 8_640_000_000_000_000L;
 
         private TraceSummary() {}
 
@@ -843,8 +856,22 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 }
                 putCounts(facts.putObject("stopReasons"), summary.path("stopReasons"), STOP_REASONS);
                 putCounts(facts.putObject("toolCalls"), summary.path("toolCalls"), TOOL_NAMES);
+                putCounts(facts.putObject("modelFailures"), summary.path("modelFailures"), MODEL_FAILURE_KINDS);
+                putBounded(facts, "lastModelFailureAt", summary.path("lastModelFailureAt"), MAX_EPOCH_MS);
+                putModelFailure(facts, summary.path("finalModelFailure"));
             }
             return sessions;
+        }
+
+        /** Only an owned kind keeps a final failure; its phase, status (HTTP_ERROR only) and time each on their own. */
+        private static void putModelFailure(ObjectNode facts, JsonNode failure) {
+            JsonNode kind = failure.path("kind");
+            if (!kind.isString() || !MODEL_FAILURE_KINDS.contains(kind.asString())) return;
+            ObjectNode kept = facts.putObject("finalModelFailure");
+            kept.put("kind", kind.asString());
+            putOwned(kept, "phase", failure.path("phase"), MODEL_FAILURE_PHASES);
+            if ("HTTP_ERROR".equals(kind.asString())) putBetween(kept, "status", failure.path("status"), 400, 599);
+            putBounded(kept, "at", failure.path("at"), MAX_EPOCH_MS);
         }
 
         static boolean scanTruncated(byte @Nullable [] manifest) {
@@ -862,7 +889,14 @@ public class JobEvidenceFiles implements SandboxResultListener {
         }
 
         private static void putBounded(ObjectNode target, String field, JsonNode value, long max) {
-            if (value.isIntegralNumber() && value.canConvertToLong() && value.asLong() >= 0 && value.asLong() <= max) {
+            putBetween(target, field, value, 0, max);
+        }
+
+        private static void putBetween(ObjectNode target, String field, JsonNode value, long min, long max) {
+            if (value.isIntegralNumber()
+                    && value.canConvertToLong()
+                    && value.asLong() >= min
+                    && value.asLong() <= max) {
                 target.put(field, value.asLong());
             }
         }
