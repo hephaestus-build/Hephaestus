@@ -143,6 +143,7 @@ function announce({
 		return;
 	}
 	toast.success("The public activity page is off", {
-		description: "A page that is already open stays visible until it reloads.",
+		description:
+			"Visitors see the change when they load the page again, at most about a minute later.",
 	});
 }
