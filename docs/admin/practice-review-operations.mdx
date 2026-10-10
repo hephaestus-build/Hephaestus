@@ -26,26 +26,32 @@ Each workspace enables practice review and selects its own coverage.
 3. Give every server and worker container its own storage under `HEPHAESTUS_FABRIC_ROOT` for repository mirrors and attempt inputs.
 4. Set campaign, request-rate, retry, and retention limits appropriate to the deployment's budget and governance policy.
 
-A review processes one practice group at a time.
-Work, not time, bounds each group.
-`PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 12) and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` (default 16000) set each practice's budget.
-A group of five practices can make 60 model calls and write 80,000 output tokens.
-A group never gets less than three practices' worth.
+A review measures one practice group at a time.
+By default, groups with more than six practices are split into smaller sets.
+Each set has a separate work budget.
+Within a set, each practice gets a fresh model session, in order.
+Work, not time, bounds the set.
 
-The defaults cap excessive work at several times a group's normal use.
+`PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 12) and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` (default 16000) determine each set's budget.
+Each value is multiplied by the number of practices in the set, with a minimum of three.
+A set of five practices can make 60 model calls and write 80,000 output tokens.
+
+The defaults cap excessive work at several times a set's normal use.
 A review spends what its practices need, and no more.
-Each group has its own budget, independent of previous groups' spend.
+Each set has its own budget, independent of previous sets' spend.
 Near the budget limit, the model receives a request to record its current results.
-The group ends after the call that spends the budget.
-Composition gets at most one full group's worth.
+The set ends after the call that spends the budget.
+
+Each composition pass gets at most one full set's work budget.
+All passes share the remaining whole-run safety ceiling.
 
 1. For a model that reasons at length, raise the output tokens.
 
 The workspace's practice-review model binding timeout is the whole-run safety ceiling.
 It can stop a productive review and leave later practices `NOT_REACHED`.
-Independent group budgets do not reserve time for every group.
-If a group has no streamed token or tool progress for five minutes, it stops.
-Two consecutive stalls end the review with its recorded results.
+Independent set budgets do not reserve time for every set.
+If a set has no streamed token or tool progress for five minutes, it stops.
+Two consecutive stalls end measurement with its recorded results.
 
 `PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review model calls, not mentor calls.
 If unset, the provider default applies.
