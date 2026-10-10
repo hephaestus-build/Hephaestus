@@ -96,7 +96,7 @@ function WorkspaceSettingsPage() {
 					: "Public activity pages are off",
 				data.allowed
 					? undefined
-					: { description: "A copy already loaded can stay visible for up to a minute." },
+					: { description: "A page that is already open stays visible until it reloads." },
 			);
 		},
 		onError: (error) => {

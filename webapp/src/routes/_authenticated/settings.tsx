@@ -237,10 +237,6 @@ function RouteComponent() {
 	const publicActivityQuery = useQuery(getPublicActivityChoiceOptions({}));
 	const publicActivityMutation = useMutation({
 		...updatePublicActivityChoiceMutation(),
-		onMutate: async ({ body }) => {
-			await queryClient.cancelQueries({ queryKey: getPublicActivityChoiceQueryKey({}) });
-			queryClient.setQueryData(getPublicActivityChoiceQueryKey({}), body);
-		},
 		onSuccess: (data) => {
 			queryClient.setQueryData(getPublicActivityChoiceQueryKey({}), data);
 		},

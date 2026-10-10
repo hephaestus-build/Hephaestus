@@ -141,6 +141,6 @@ function announce({
 		return;
 	}
 	toast.success("The public activity page is off", {
-		description: "A copy already loaded can stay visible for up to a minute.",
+		description: "A page that is already open stays visible until it reloads.",
 	});
 }
