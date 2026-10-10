@@ -193,6 +193,8 @@ val testSelection = providers.gradleProperty("testSelection").map(String::toBool
 val testJvmArgs = providers.gradleProperty("testJvmArgs").orElse("")
 val integrationShard = providers.environmentVariable("HEPHAESTUS_INTEGRATION_SHARD").orElse("")
 val packagedServer = providers.gradleProperty("packagedServer").map(String::toBoolean).orElse(false)
+// Stable catalogue case IDs for live checks and their credential-free staging proof.
+val criteriaCases = providers.gradleProperty("criteriaCases")
 val testInventories =
     mapOf(
         "testInventory" to "",
@@ -276,7 +278,28 @@ for ((taskName, tag) in
             if (tag != "live") excludeTags("live")
         }
         shouldRunAfter(tasks.test)
-        if (tag == "integration") selectIntegrationShard(integrationShard.get())
+        if (tag == "integration") {
+            require(!criteriaCases.isPresent || integrationShard.get().isEmpty()) {
+                "criteriaCases cannot be combined with HEPHAESTUS_INTEGRATION_SHARD"
+            }
+            selectIntegrationShard(integrationShard.get())
+        }
+        if (tag in setOf("live", "integration") && criteriaCases.isPresent) {
+            // Validate the selected inputs before live credentials or model setup are reached.
+            if (tag == "live") dependsOn("integrationTest")
+            systemProperty("hephaestus.live.criteriaCases", criteriaCases.get())
+            val criteriaMethod =
+                if (tag == "live") {
+                    "PracticeRunnerLiveLlmTest.shouldApplyCatalogueBoundaryWhenEvidenceMatchesCase"
+                } else {
+                    "PracticeCriteriaCaseStagingIntegrationTest.shouldStageCompleteSourcesAndShippedCriteriaWithoutReferenceAnswers"
+                }
+            filter {
+                includeTestsMatching(
+                    "de.tum.cit.aet.hephaestus.agent.practice.live.$criteriaMethod"
+                )
+            }
+        }
     }
 }
 
