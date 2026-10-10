@@ -241,6 +241,7 @@ paths:
             - LOGIN_PROVIDER_UPDATED
             - LOGIN_PROVIDER_DELETED
             - SILENT_MODE_CHANGED
+            - PUBLIC_ACTIVITY_CHANGED
       - in: query
         name: result
         required: false
@@ -328,6 +329,7 @@ paths:
             - LOGIN_PROVIDER_UPDATED
             - LOGIN_PROVIDER_DELETED
             - SILENT_MODE_CHANGED
+            - PUBLIC_ACTIVITY_CHANGED
       - in: query
         name: result
         required: false
@@ -2031,6 +2033,37 @@ paths:
       summary: Get instance settings
       tags:
       - Instance Settings
+  /admin/settings/public-activity:
+    get:
+      operationId: getPublicActivityPolicy
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicActivityPolicy"
+          description: OK
+      summary: Get the instance public activity policy
+      tags:
+      - public-activity-settings
+    put:
+      operationId: updatePublicActivityPolicy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicActivityPolicy"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicActivityPolicy"
+          description: OK
+      summary: Allow or stop public activity pages
+      tags:
+      - public-activity-settings
   /admin/settings/silent-mode:
     patch:
       operationId: adminUpdateSilentMode
@@ -2509,6 +2542,50 @@ paths:
       summary: Send instance-scoped product feedback
       tags:
       - instance-feedback
+  /public/workspaces/{slug}/activity:
+    get:
+      operationId: getPublicActivity
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      - description: Activity range
+        in: query
+        name: range
+        required: false
+        schema:
+          type: string
+          enum:
+          - 30d
+          - 90d
+          - 1y
+          - all
+          - custom
+      - in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicActivity"
+          description: OK
+      security: []
+      summary: Read human contributions to public repositories
+      tags:
+      - public-activity
   /user:
     delete:
       operationId: deleteCurrentUser
@@ -2801,6 +2878,80 @@ paths:
       summary: Update your email subscriptions
       tags:
       - notification-preferences
+  /user/public-activity:
+    get:
+      operationId: getPublicActivityChoice
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicActivityChoice"
+          description: OK
+      summary: Get your account-wide public activity choice
+      tags:
+      - account-public-activity
+    put:
+      operationId: updatePublicActivityChoice
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicActivityChoice"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicActivityChoice"
+          description: OK
+      summary: Show or hide your activity on all public pages
+      tags:
+      - account-public-activity
+  /user/public-activity/workspaces/{slug}/onboarding:
+    get:
+      operationId: getPublicActivityOnboarding
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicActivityOnboarding"
+          description: OK
+      summary: Check your public-workspace onboarding
+      tags:
+      - public-activity-onboarding
+    put:
+      operationId: answerPublicActivityOnboarding
+      parameters:
+      - in: path
+        name: slug
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicActivityOnboardingRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicActivityOnboarding"
+          description: OK
+      summary: Show or hide yourself and finish this workspace's onboarding
+      tags:
+      - public-activity-onboarding
   /user/sessions:
     delete:
       operationId: revokeOtherSessions
@@ -3009,7 +3160,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Workspace"
           description: Workspace returned
-      security: []
       summary: Fetch a workspace by slug
       tags:
       - workspace
@@ -3264,6 +3414,50 @@ paths:
       summary: "Treat a contributor as automation, or reset the classification"
       tags:
       - Activity
+  /workspaces/{workspaceSlug}/activity/people/{userId}/public-visibility:
+    patch:
+      operationId: updatePublicActivityObjection
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: hidden
+        required: true
+        schema:
+          type: boolean
+      responses:
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A request parameter is not valid
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Workspace, contributor, team or repository not found"
+      summary: "Honor a contributor publication objection, or restore workspace visibility"
+      tags:
+      - Activity
   /workspaces/{workspaceSlug}/activity/people/{userId}/work:
     get:
       operationId: getActivityPersonWork
@@ -3379,6 +3573,39 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: "Workspace, contributor, team or repository not found"
       summary: List a contributor's work one page at a time
+      tags:
+      - Activity
+  /workspaces/{workspaceSlug}/activity/public-hidden-count:
+    get:
+      operationId: getPublicActivityHiddenCount
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: A request parameter is not valid
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The caller is not a member of the workspace
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Workspace, contributor, team or repository not found"
+      summary: Count hidden public contributors without identifying them
       tags:
       - Activity
   /workspaces/{workspaceSlug}/activity/work:
@@ -4748,7 +4975,6 @@ paths:
                 items:
                   $ref: "#/components/schemas/WorkspaceMembership"
           description: OK
-      security: []
       tags:
       - workspace-membership
   /workspaces/{workspaceSlug}/members/assign:
@@ -4797,7 +5023,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceMembership"
           description: OK
-      security: []
       summary: "One representative membership, with the account's effective workspace\
         \ role."
       tags:
@@ -4847,7 +5072,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceMembership"
           description: OK
-      security: []
       tags:
       - workspace-membership
   /workspaces/{workspaceSlug}/members/{userId}/hidden:
@@ -8604,9 +8828,29 @@ paths:
       summary: Submit a survey response once
       tags:
       - feedback
-  /workspaces/{workspaceSlug}/public-visibility:
+  /workspaces/{workspaceSlug}/public-activity:
+    get:
+      operationId: getWorkspacePublicActivitySettings
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicActivityWorkspaceSettings"
+          description: OK
+      summary: Get public activity and search indexing settings
+      tags:
+      - workspace
     patch:
-      operationId: updatePublicVisibility
+      operationId: updatePublicActivity
       parameters:
       - description: Workspace slug
         in: path
@@ -8619,16 +8863,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateWorkspacePublicVisibilityRequest"
+              $ref: "#/components/schemas/UpdateWorkspacePublicActivityRequest"
         required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Workspace"
+                $ref: "#/components/schemas/PublicActivityWorkspaceSettings"
           description: Workspace updated
-      summary: Toggle public visibility for a workspace
+      summary: Turn the public activity page and search indexing on or off
       tags:
       - workspace
   /workspaces/{workspaceSlug}/repositories:
@@ -8672,7 +8916,6 @@ paths:
                 items:
                   type: string
           description: Repository list
-      security: []
       summary: List repositories monitored by a workspace
       tags:
       - workspace
@@ -8934,7 +9177,6 @@ paths:
                 items:
                   $ref: "#/components/schemas/TeamInfo"
           description: list of teams with their members and permissions
-      security: []
       summary: List teams
       tags:
       - Teams
@@ -9110,7 +9352,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceTeamSettings"
           description: Team settings returned
-      security: []
       summary: Get team settings
       tags:
       - Team Settings
@@ -9183,7 +9424,6 @@ paths:
                 items:
                   $ref: "#/components/schemas/LabelInfo"
           description: Label filters returned
-      security: []
       summary: Get team label filters
       tags:
       - Team Settings
@@ -9288,7 +9528,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/WorkspaceTeamRepositorySettings"
           description: Repository settings returned
-      security: []
       summary: Get repository settings
       tags:
       - Team Settings
@@ -9460,7 +9699,6 @@ paths:
                 items:
                   $ref: "#/components/schemas/UserTeams"
           description: OK
-      security: []
       summary: List workspace users and the teams they belong to
       tags:
       - workspace
@@ -16693,6 +16931,143 @@ components:
           format: int32
       required:
       - content
+    PublicActivity:
+      type: object
+      description: "The public contract excludes account details, teams, automation\
+        \ and private activity."
+      properties:
+        coverage:
+          $ref: "#/components/schemas/ActivityCoverage"
+        from:
+          type: string
+          format: date-time
+        highlights:
+          $ref: "#/components/schemas/ActivityHighlights"
+        people:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicActivityPerson"
+        repositories:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityRepository"
+        to:
+          type: string
+          format: date-time
+        workspaceName:
+          type: string
+      required:
+      - coverage
+      - from
+      - highlights
+      - people
+      - repositories
+      - to
+      - workspaceName
+    PublicActivityChoice:
+      type: object
+      properties:
+        visible:
+          type: boolean
+      required:
+      - visible
+    PublicActivityCounts:
+      type: object
+      properties:
+        activeWeeks:
+          type: integer
+          format: int64
+        contributions:
+          type: integer
+          format: int64
+        issuesOpened:
+          type: integer
+          format: int64
+        peopleHelped:
+          type: integer
+          format: int64
+        pullRequestsMerged:
+          type: integer
+          format: int64
+        pullRequestsOpened:
+          type: integer
+          format: int64
+        pullRequestsReviewed:
+          type: integer
+          format: int64
+      required:
+      - activeWeeks
+      - contributions
+      - issuesOpened
+      - peopleHelped
+      - pullRequestsMerged
+      - pullRequestsOpened
+      - pullRequestsReviewed
+    PublicActivityOnboarding:
+      type: object
+      properties:
+        seen:
+          type: boolean
+        visible:
+          type: boolean
+      required:
+      - seen
+      - visible
+    PublicActivityOnboardingRequest:
+      type: object
+      properties:
+        visible:
+          type: boolean
+      required:
+      - visible
+    PublicActivityPerson:
+      type: object
+      properties:
+        avatarUrl:
+          type: string
+        counts:
+          $ref: "#/components/schemas/PublicActivityCounts"
+        firstContributionAt:
+          type: string
+          format: date-time
+        id:
+          type: integer
+          format: int64
+        login:
+          type: string
+        name:
+          type: string
+        profileUrl:
+          type: string
+        weeks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivitySparklineWeek"
+      required:
+      - avatarUrl
+      - counts
+      - id
+      - login
+      - name
+      - profileUrl
+      - weeks
+    PublicActivityPolicy:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+      required:
+      - allowed
+    PublicActivityWorkspaceSettings:
+      type: object
+      properties:
+        allowSearchEngines:
+          type: boolean
+        enabled:
+          type: boolean
+      required:
+      - allowSearchEngines
+      - enabled
     Question:
       type: object
       properties:
@@ -20039,15 +20414,16 @@ components:
           - HIGH
           - XHIGH
           - MAX
-    UpdateWorkspacePublicVisibilityRequest:
+    UpdateWorkspacePublicActivityRequest:
       type: object
-      description: Request to update workspace public visibility setting
       properties:
-        isPubliclyViewable:
+        allowSearchEngines:
           type: boolean
-          description: Whether the workspace should be publicly viewable without authentication
+        publicActivityEnabled:
+          type: boolean
       required:
-      - isPubliclyViewable
+      - allowSearchEngines
+      - publicActivityEnabled
     UpdateWorkspaceStatusRequest:
       type: object
       description: Request to update the workspace lifecycle status
@@ -20296,9 +20672,6 @@ components:
           type: string
           format: date-time
           description: Timestamp when the GitHub App installation was linked
-        isPubliclyViewable:
-          type: boolean
-          description: Whether the workspace is publicly viewable without authentication
         kind:
           type: string
           description: Integration kind backing this workspace (GITHUB or GITLAB)
@@ -20322,6 +20695,9 @@ components:
           - GITLAB
           - SLACK
           - OUTLINE
+        publicActivityEnabled:
+          type: boolean
+          description: Whether this workspace has enabled its public activity page
         serverUrl:
           type: string
           description: Custom server URL for self-hosted instances (null for cloud
@@ -20351,10 +20727,10 @@ components:
       - hasPersonalAccessToken
       - hasSlackToken
       - id
-      - isPubliclyViewable
       - practiceReviewAutoTriggerEnabled
       - practiceReviewManualTriggerEnabled
       - practicesEnabled
+      - publicActivityEnabled
       - status
       - updatedAt
       - workspaceSlug

@@ -1,0 +1,90 @@
+---
+id: public-activity
+title: Public activity pages
+description: Publication settings and privacy controls for public repository activity.
+---
+
+# Public activity pages
+
+A public activity page shows human contributions to public GitHub and GitLab repositories.
+It includes pull requests, reviews, and issues from workspace members and outside contributors.
+It excludes private repositories, automation, practices, feedback, Slack, Outline, and AI content.
+Keep course workspaces private.
+Before publication, verify the activity repair described in the [activity history runbook](./activity-history-repair.mdx).
+
+## Instance setting
+
+**Allow public activity pages** defaults to off.
+Set `HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED=true` to supply an instance default.
+An instance administrator can read and replace this default with `GET` and `PUT /admin/settings/public-activity`.
+The PUT body is `{"allowed": true}` or `{"allowed": false}`.
+The stored choice takes precedence over the configured default and is audited.
+Turning the setting off stops all public activity pages on the next request.
+
+## Workspace settings
+
+A workspace administrator can read `GET /workspaces/{slug}/public-activity` and change
+`PATCH /workspaces/{slug}/public-activity`.
+The PATCH body is `{"publicActivityEnabled": true, "allowSearchEngines": false}`.
+Both fields are required.
+Changes are audited.
+The page is available only when the instance allows it and the active workspace enables it.
+The old whole-workspace public flag no longer grants anonymous access.
+
+**Allow search engines** defaults to off.
+The public response then carries `X-Robots-Tag: noindex`.
+This asks compliant search engines not to index the response; it is not access control.
+See [Google's robots header contract](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag).
+
+## Personal choice and objections
+
+Each account defaults to visible on public activity pages.
+A signed-in person can read and change `GET` and `PUT /user/public-activity` with `{"visible": false}`
+or `{"visible": true}`.
+The choice applies to all linked provider identities in every workspace.
+Hidden people do not contribute to public totals.
+An administrator can read only the count through `GET /workspaces/{slug}/activity/public-hidden-count`.
+This endpoint does not identify the hidden people.
+
+For an objection from a person without an account, the workspace administrator can use
+`PATCH /workspaces/{slug}/activity/people/{userId}/public-visibility?hidden=true`.
+Use `hidden=false` to restore visibility.
+The action reuses workspace activity hiding and therefore also hides that contributor from member activity.
+It does not erase source work, block provider synchronization, or grant workspace access.
+Restoring workspace visibility never overrides an account-wide opt-out.
+The audit entry records the workspace and change, not the contributor's identity.
+An objection with broader scope belongs in the existing person-data request process.
+
+Workspace administrators handle this action because their workspace publishes the activity.
+Instance administrators can use the existing audited workspace elevation when they handle the privacy contact.
+Do not use the permanent erasure suppression mechanism for a reversible publication objection.
+
+## Onboarding contract
+
+A signed-in visitor can read `GET /user/public-activity/workspaces/{slug}/onboarding`.
+The response gives `seen` and the account-wide `visible` choice.
+`PUT` with `{"visible": true}` or `{"visible": false}` applies the choice and marks this workspace as seen
+in one transaction.
+The public-workspace visitor needs no workspace membership.
+The account always comes from the authenticated session.
+The public webapp owns the notice and the Show me / Hide me step.
+
+## Anonymous responses
+
+Only `GET /public/workspaces/{slug}/activity` publishes workspace data without sign-in.
+It accepts the activity range presets and custom dates.
+Repository visibility is checked during the query, not remembered when the page is enabled.
+Unknown, inactive, and disabled pages return the same not-found problem.
+Other workspace endpoints require sign-in and workspace access.
+
+Successful anonymous responses carry `Cache-Control: public, max-age=60`.
+Signed-in responses carry `no-store`.
+The response varies by Cookie and Authorization.
+The existing shared rate limiter allows 60 requests per minute per client IP across workspace slugs.
+It refuses requests if its rate-limit backend is unavailable.
+Proxy trust comes from the servlet container, not a second parser for forwarded headers.
+
+Publication changes apply to new server requests.
+A browser or shared cache can retain an earlier anonymous response for up to 60 seconds.
+The server cannot recall a response already delivered.
+See [Spring Security's cache header contract](https://docs.spring.io/spring-security/reference/servlet/exploits/headers.html).

@@ -14,9 +14,8 @@ import lombok.NoArgsConstructor;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A member who was hidden from workspace activity when the provider's roster stopped granting them the workspace.
- * Hiding is a preference, not access, so the membership goes; this row keeps the preference until a membership
- * for the same actor is created again, which takes it back.
+ * A workspace activity hide preference for a contributor who has no membership.
+ * Hiding is a preference, not access. A new membership for the same contributor takes back this preference.
  */
 @Entity
 @Table(name = "workspace_hidden_former_member")

@@ -111,7 +111,7 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
     void togglingPublicVisibilityIsRecorded() {
         Workspace workspace = workspace("audit-producer-visibility");
 
-        settingsService.updatePublicVisibility(workspace.getId(), true);
+        settingsService.updatePublicActivity(workspace.getId(), true, false);
 
         assertThat(actionsFor(workspace, ConfigAuditEntityType.WORKSPACE_VISIBILITY))
                 .containsExactly(ConfigAuditAction.UPDATED);
@@ -121,9 +121,9 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
     @Transactional
     void aNoOpVisibilityUpdateIsNotRecorded() {
         Workspace workspace = workspace("audit-producer-noop");
-        settingsService.updatePublicVisibility(workspace.getId(), true);
+        settingsService.updatePublicActivity(workspace.getId(), true, false);
 
-        settingsService.updatePublicVisibility(workspace.getId(), true);
+        settingsService.updatePublicActivity(workspace.getId(), true, false);
 
         assertThat(actionsFor(workspace, ConfigAuditEntityType.WORKSPACE_VISIBILITY))
                 .as("re-submitting a form unchanged must not add a row that says nothing")

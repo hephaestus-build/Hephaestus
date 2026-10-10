@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -68,6 +69,31 @@ public class ActivityController {
     private final OpenWorkService openWorkService;
     private final ActivityPeopleService peopleService;
     private final ActivityAutomationService automationService;
+    private final PublicActivityObjectionService publicObjections;
+
+    public record PublicActivityHiddenCountDTO(
+            @Schema(requiredMode = RequiredMode.REQUIRED) long hiddenPeople) {}
+
+    @GetMapping("/public-hidden-count")
+    @RequireAtLeastWorkspaceAdmin
+    @Operation(
+            operationId = "getPublicActivityHiddenCount",
+            summary = "Count hidden public contributors without identifying them")
+    public PublicActivityHiddenCountDTO getPublicActivityHiddenCount(WorkspaceContext workspaceContext) {
+        return new PublicActivityHiddenCountDTO(publicObjections.hiddenPeople(workspaceContext.id()));
+    }
+
+    @PatchMapping("/people/{userId}/public-visibility")
+    @RequireAtLeastWorkspaceAdmin
+    @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_VISIBILITY")
+    @Operation(
+            operationId = "updatePublicActivityObjection",
+            summary = "Honor a contributor publication objection, or restore workspace visibility")
+    public ResponseEntity<Void> updatePublicActivityObjection(
+            WorkspaceContext workspaceContext, @PathVariable long userId, @RequestParam boolean hidden) {
+        publicObjections.hide(workspaceContext.id(), userId, hidden);
+        return ResponseEntity.noContent().build();
+    }
 
     @PatchMapping("/people/{userId}/automation")
     @RequireAtLeastWorkspaceAdmin

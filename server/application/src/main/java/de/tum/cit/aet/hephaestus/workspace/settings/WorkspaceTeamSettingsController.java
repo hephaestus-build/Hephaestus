@@ -16,7 +16,6 @@ import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -78,7 +77,6 @@ public class WorkspaceTeamSettingsController {
             responseCode = "200",
             description = "Team settings returned",
             content = @Content(schema = @Schema(implementation = WorkspaceTeamSettingsDTO.class)))
-    @SecurityRequirements
     public ResponseEntity<WorkspaceTeamSettingsDTO> getTeamSettings(
             WorkspaceContext workspaceContext, @PathVariable Long teamId) {
         log.info("Getting team settings: teamId={}, workspaceSlug={}", teamId, workspaceContext.slug());
@@ -147,7 +145,6 @@ public class WorkspaceTeamSettingsController {
             responseCode = "200",
             description = "Repository settings returned",
             content = @Content(schema = @Schema(implementation = WorkspaceTeamRepositorySettingsDTO.class)))
-    @SecurityRequirements
     public ResponseEntity<WorkspaceTeamRepositorySettingsDTO> getRepositorySettings(
             WorkspaceContext workspaceContext, @PathVariable Long teamId, @PathVariable Long repositoryId) {
         log.info(
@@ -223,7 +220,6 @@ public class WorkspaceTeamSettingsController {
             responseCode = "200",
             description = "Label filters returned",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = LabelInfoDTO.class))))
-    @SecurityRequirements
     public ResponseEntity<List<LabelInfoDTO>> getLabelFilters(
             WorkspaceContext workspaceContext, @PathVariable Long teamId) {
         log.info("Getting label filters: teamId={}, workspaceSlug={}", teamId, workspaceContext.slug());

@@ -15,11 +15,11 @@ import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 /**
- * One account's first-visit setup in one workspace: the settings revision it finished or skipped
- * at. The AI choice itself is the account's ({@link AccountAiChoice}); this row only keeps the setup
- * page from returning until the owner changes what it asks for.
+ * One account's independent first-visit steps in one workspace. The revision records AI setup;
+ * publicActivitySeen records the public activity notice. Neither field grants membership or access.
  */
 @Entity
 @Table(
@@ -47,6 +47,10 @@ class WorkspaceMemberOnboarding {
 
     @Column(name = "seen_revision", nullable = false)
     private long seenRevision;
+
+    @Column(name = "public_activity_seen", nullable = false)
+    @ColumnDefault("false")
+    private boolean publicActivitySeen;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;

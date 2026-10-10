@@ -123,7 +123,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
         testWorkspace.setWorkspaceSlug("test-workspace");
         testWorkspace.setDisplayName("Test Workspace");
         testWorkspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
-        testWorkspace.setIsPubliclyViewable(true);
+        testWorkspace.setPublicActivityEnabled(true);
         testWorkspace.setOrganization(org);
         testWorkspace.setAccountLogin(TEST_ORG_LOGIN);
         testWorkspace.setAccountType(AccountType.ORG);

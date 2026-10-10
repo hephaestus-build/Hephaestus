@@ -729,11 +729,8 @@ feedback text through ordinary administration. Ratings and other private respons
 Instance-admin **View as user** is a separate read-only, reasoned and audited access path. External
 feedback follows the destination's audience.
 
-Every workspace page needs sign-in. The opt-out public activity page described above is the only
-public view of a workspace. It replaces an older public flag that a workspace admin can set only
-through the API. With that flag, anonymous API reads see the workspace's members, teams, repositories
-and practices, never Activity, practice profiles, feedback or conversations. ADR 0052 removes the flag
-before the first public activity page goes live.
+The opt-out public activity page described above is the only public view of a workspace.
+Other workspace pages need sign-in.
 
 Disputes hold back the same point in later reviews while they stand. Withdrawal of the dispute
 allows it again, with the committed-secret exception. Admin withdrawal preserves feedback and its

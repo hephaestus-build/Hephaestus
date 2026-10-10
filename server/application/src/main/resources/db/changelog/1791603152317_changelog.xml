@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1791603152317-1" author="hephaestus">
+        <addColumn tableName="instance_settings">
+            <column name="public_activity_allowed" type="BOOLEAN"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791603152317-2" author="hephaestus">
+        <addColumn tableName="workspace">
+            <column defaultValueBoolean="false" name="public_activity_enabled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791603152317-3" author="hephaestus">
+        <addColumn tableName="workspace">
+            <column defaultValueBoolean="false" name="public_activity_search_engines" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791603152317-4" author="hephaestus">
+        <addColumn tableName="workspace_member_onboarding">
+            <column defaultValueBoolean="false" name="public_activity_seen" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791603152317-5" author="hephaestus">
+        <addColumn tableName="account">
+            <column defaultValueBoolean="true" name="public_activity_visible" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791603152317-6" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="workspace" columnName="is_publicly_viewable"/>
+        </preConditions>
+        <comment>Public activity needs a new publication choice. The broad anonymous-read flag is not carried over.</comment>
+        <dropColumn columnName="is_publicly_viewable" tableName="workspace"/>
+        <rollback>
+            <stop>Restore a verified backup taken before the public activity cutover.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

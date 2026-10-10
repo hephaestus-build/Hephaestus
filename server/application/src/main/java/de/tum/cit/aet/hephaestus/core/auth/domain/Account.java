@@ -87,6 +87,10 @@ public class Account {
     @Nullable
     private Instant deletedAt;
 
+    @Column(name = "public_activity_visible", nullable = false)
+    @ColumnDefault("true")
+    private boolean publicActivityVisible = true;
+
     @Version
     @Column(nullable = false)
     @ColumnDefault("0")

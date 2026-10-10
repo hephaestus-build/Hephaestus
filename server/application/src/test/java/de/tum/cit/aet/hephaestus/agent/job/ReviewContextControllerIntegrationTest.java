@@ -447,9 +447,9 @@ class ReviewContextControllerIntegrationTest extends AbstractWorkspaceIntegratio
     class Capabilities {
 
         @Test
-        void shouldRefuseAnAnonymousCallerWhenTheWorkspaceIsPubliclyViewable() {
+        void shouldRefuseAnAnonymousCallerWhenPublicActivityIsEnabled() {
             Workspace stored = workspaceRepository.findById(workspace.getId()).orElseThrow();
-            stored.setIsPubliclyViewable(true);
+            stored.setPublicActivityEnabled(true);
             workspaceRepository.save(stored);
 
             webTestClient
@@ -457,9 +457,8 @@ class ReviewContextControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .uri(CONTEXT, workspace.getWorkspaceSlug(), CONNECTED + "/top/sub/project/-/merge_requests/5")
                     .exchange()
                     .expectStatus()
-                    .isForbidden()
-                    .expectBody(String.class)
-                    .value(body -> assertThat(body).doesNotContain("Merge request five"));
+                    .isUnauthorized()
+                    .expectBody(Void.class);
         }
 
         @Test

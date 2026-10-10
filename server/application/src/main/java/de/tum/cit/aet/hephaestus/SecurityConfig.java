@@ -10,8 +10,12 @@ import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.observability.ReplicaIdentityFilter;
 import de.tum.cit.aet.hephaestus.observability.RequestCorrelationFilter;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -56,6 +60,7 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
 
 @Configuration
@@ -269,6 +274,7 @@ public class SecurityConfig {
             http.addFilterBefore(staleAuthCookieFilter, BearerTokenAuthenticationFilter.class);
         }
 
+        http.addFilterBefore(new PublicActivityReadFilter(), CsrfFilter.class);
         http.csrf(csrf -> csrf.spa()
                 .csrfTokenRepository(csrfTokenRepository())
                 // A JWT request validates an existing session; it is not a new sign-in. Resetting
@@ -343,11 +349,8 @@ public class SecurityConfig {
             requests.requestMatchers(CLIENT_SESSION_MATCHER).permitAll();
             // Public workspace provider discovery (workspace creation UI)
             requests.requestMatchers(HttpMethod.GET, "/workspaces/providers").permitAll();
-            // Heph is never public, even in a publicly viewable workspace, so this MUST precede the generic
-            // `/workspaces/*/**` permitAll below; the controllers decide who may use it.
-            requests.requestMatchers("/workspaces/*/mentor/**").authenticated();
-            // Public read for slugged workspace paths (filter enforces membership/public visibility).
-            requests.requestMatchers(HttpMethod.GET, "/workspaces/*/**").permitAll();
+            requests.requestMatchers(HttpMethod.GET, "/public/workspaces/*/activity")
+                    .permitAll();
             // Registry/listing stays authenticated to avoid leaking tenant directory.
             requests.requestMatchers(HttpMethod.GET, "/workspaces", "/workspaces/")
                     .authenticated();
@@ -362,6 +365,22 @@ public class SecurityConfig {
         });
 
         return http.build();
+    }
+
+    /** The cacheable read must not publish a per-client SPA CSRF cookie. */
+    private static final class PublicActivityReadFilter extends OncePerRequestFilter {
+        private final RequestMatcher reads = new OrRequestMatcher(
+                PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/public/workspaces/*/activity"),
+                PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.HEAD, "/public/workspaces/*/activity"));
+
+        @Override
+        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+                throws ServletException, IOException {
+            if (reads.matches(request)) {
+                CsrfFilter.skipRequest(request);
+            }
+            chain.doFilter(request, response);
+        }
     }
 
     /**

@@ -21,17 +21,44 @@ import org.springframework.data.repository.query.Param;
 
 @org.springframework.stereotype.Repository
 interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> {
-    String MONITORED = """
-            WITH monitored AS (
+    String PUBLIC_PERSON = """
+                  AND u.type = 'USER'
+                  AND EXISTS (SELECT 1 FROM identity_provider p WHERE p.id = u.provider_id AND p.type IN ('GITHUB', 'GITLAB'))
+                  AND NOT EXISTS (SELECT 1 FROM workspace_membership m
+                      WHERE m.workspace_id = :#{#scope.workspaceId()} AND m.user_id = u.id AND m.hidden)
+                  AND NOT EXISTS (SELECT 1 FROM workspace_hidden_former_member h
+                      WHERE h.workspace_id = :#{#scope.workspaceId()} AND h.user_id = u.id)
+                  AND NOT EXISTS (SELECT 1 FROM activity_automation a
+                      WHERE a.workspace_id = :#{#scope.workspaceId()} AND a.user_id = u.id)
+                  AND NOT EXISTS (SELECT 1 FROM person_suppression s
+                      WHERE s.provider_id = u.provider_id AND s.subject = CAST(u.native_id AS text) AND s.team_key = '')
+                  AND NOT EXISTS (SELECT 1 FROM identity_link l JOIN account a ON a.id = l.account_id
+                      WHERE l.provider_id = u.provider_id AND l.subject = CAST(u.native_id AS text)
+                          AND (NOT a.public_activity_visible OR a.status IN ('DELETING', 'DELETED')))
+            """;
+    String PUBLIC_REPOSITORY_CONDITION = """
+            r.visibility = 'PUBLIC' AND NOT r.is_private
+                AND EXISTS (SELECT 1 FROM identity_provider p WHERE p.id = r.provider_id AND p.type IN ('GITHUB', 'GITLAB'))
+            """;
+    String PUBLIC_REPOSITORY = " AND (:#{#scope.publicOnly()} = false OR (" + PUBLIC_REPOSITORY_CONDITION + ")) ";
+    String PUBLIC_PEOPLE = """
+            WITH public_people AS (SELECT u.id FROM "user" u WHERE true
+            """ + PUBLIC_PERSON + """
+            )
+            """;
+    String MONITORED = PUBLIC_PEOPLE + """
+            , monitored AS (
                 SELECT DISTINCT r.id, r.provider_id FROM repository_to_monitor m
                 JOIN repository r ON r.name_with_owner = m.name_with_owner
                 WHERE m.workspace_id = :#{#scope.workspaceId()}
+            """ + PUBLIC_REPOSITORY + """
             ), normalized AS (
                 SELECT DISTINCT ON (e.actor_id, e.event_type, e.target_id)
                     e.actor_id, e.repository_id, e.event_type, e.target_id, e.occurred_at,
                     date_trunc('week', e.occurred_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS week,
                     prr.pull_request_id AS reviewed_id,
                     CASE WHEN author.type = 'USER' AND author_machine.user_id IS NULL
+                        AND (:#{#scope.publicOnly()} = false OR author.id IN (SELECT id FROM public_people))
                         THEN pr.author_id END AS helped_id
             """;
     String SOURCE = """
@@ -45,6 +72,8 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                 LEFT JOIN activity_automation author_machine ON author_machine.workspace_id = :#{#scope.workspaceId()} AND author_machine.user_id = pr.author_id
                 WHERE e.workspace_id = :#{#scope.workspaceId()}
                   AND u.type IN ('USER', 'BOT')
+                  AND (:#{#scope.publicOnly()} = false OR u.id IN (SELECT id FROM public_people))
+                  AND (:#{#scope.publicOnly()} = false OR e.event_type IN ('PULL_REQUEST_OPENED', 'PULL_REQUEST_MERGED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED', 'ISSUE_CREATED'))
                   AND (:own = true OR (NOT coalesce(wm.hidden, false)
                       AND NOT EXISTS (SELECT 1 FROM workspace_hidden_former_member h
                           WHERE h.workspace_id = :#{#scope.workspaceId()} AND h.user_id = e.actor_id)))
@@ -201,16 +230,24 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
     @Query(value = """
                 SELECT r.id, r.name_with_owner AS key, r.name FROM repository_to_monitor m
                 JOIN repository r ON r.name_with_owner = m.name_with_owner
-                WHERE m.workspace_id = :workspace AND (EXISTS (
+                WHERE m.workspace_id = :workspace AND (:publicOnly = false OR (
+                """ + PUBLIC_REPOSITORY_CONDITION + """
+                )) AND (EXISTS (
                     SELECT 1 FROM workspace w JOIN organization o ON o.id = w.organization_id
                     WHERE w.id = :workspace AND o.provider_id = r.provider_id) OR EXISTS (
                     SELECT 1 FROM activity_event e WHERE e.workspace_id = :workspace AND e.repository_id = r.id))
                 ORDER BY r.name_with_owner
                 """, nativeQuery = true)
-    List<RepositoryRow> findRepositories(@Param("workspace") long workspace);
+    List<RepositoryRow> findRepositories(@Param("workspace") long workspace, @Param("publicOnly") boolean publicOnly);
 
     default List<ActivityRepositoryDTO> repositories(long workspace) {
-        return findRepositories(workspace).stream()
+        return findRepositories(workspace, false).stream()
+                .map(row -> new ActivityRepositoryDTO(row.getId(), row.getKey(), row.getName()))
+                .toList();
+    }
+
+    default List<ActivityRepositoryDTO> publicRepositories(long workspace) {
+        return findRepositories(workspace, true).stream()
                 .map(row -> new ActivityRepositoryDTO(row.getId(), row.getKey(), row.getName()))
                 .toList();
     }
@@ -234,10 +271,14 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                 .toList();
     }
 
-    @Query(value = """
-                SELECT min(e.occurred_at) AS start FROM activity_event e JOIN repository r ON r.id = e.repository_id
+    @Query(value = PUBLIC_PEOPLE + """
+                SELECT min(e.occurred_at) FROM activity_event e JOIN repository r ON r.id = e.repository_id
+                JOIN "user" u ON u.id = e.actor_id
                 WHERE e.workspace_id = :#{#scope.workspaceId()} AND e.repository_id IN (:#{#scope.repositoryIds()}) AND EXISTS (
                     SELECT 1 FROM repository_to_monitor m WHERE m.workspace_id = :#{#scope.workspaceId()} AND m.name_with_owner = r.name_with_owner)
+            """ + PUBLIC_REPOSITORY + """
+                AND (:#{#scope.publicOnly()} = false OR (u.id IN (SELECT id FROM public_people)
+                    AND e.event_type IN ('PULL_REQUEST_OPENED', 'ISSUE_CREATED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED')))
                 """, nativeQuery = true)
     @Nullable
     Instant findEarliest(@Param("scope") ActivityScope scope);
@@ -246,20 +287,24 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
         return Objects.requireNonNullElse(findEarliest(scope), fallback);
     }
 
-    @Query(value = """
-                WITH monitors AS (
+    @Query(value = PUBLIC_PEOPLE + """
+                , monitors AS (
                     SELECT m.*, (issue_backfill_high_water_mark IS NOT NULL
                         AND pull_request_backfill_high_water_mark IS NOT NULL
                         AND (issue_backfill_high_water_mark = 0 OR issue_backfill_checkpoint <= 0)
                         AND (pull_request_backfill_high_water_mark = 0 OR pull_request_backfill_checkpoint <= 0)) AS complete
                     FROM repository_to_monitor m WHERE workspace_id = :#{#scope.workspaceId()}
                         AND EXISTS (SELECT 1 FROM repository r WHERE r.name_with_owner = m.name_with_owner
-                            AND r.id IN (:#{#scope.repositoryIds()}))
+                            AND r.id IN (:#{#scope.repositoryIds()})
+            """ + PUBLIC_REPOSITORY + """
+                        )
                 )
                 SELECT count(*) AS total, count(*) FILTER (WHERE complete) AS complete,
                     (SELECT min(e.occurred_at) FROM activity_event e JOIN repository r ON r.id = e.repository_id
                         WHERE e.workspace_id = :#{#scope.workspaceId()} AND e.repository_id IN (:#{#scope.repositoryIds()}) AND EXISTS (SELECT 1 FROM monitors m
-                            WHERE m.complete AND m.name_with_owner = r.name_with_owner)) AS since
+                            WHERE m.complete AND m.name_with_owner = r.name_with_owner)
+                        AND (:#{#scope.publicOnly()} = false OR (e.actor_id IN (SELECT id FROM public_people)
+                            AND e.event_type IN ('PULL_REQUEST_OPENED', 'ISSUE_CREATED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED')))) AS since
                 FROM monitors
                 """, nativeQuery = true)
     CoverageRow findCoverage(@Param("scope") ActivityScope scope);
@@ -290,6 +335,28 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
             OR EXISTS (SELECT 1 FROM workspace_membership m WHERE m.workspace_id = :workspace AND m.user_id = :person)
         """, nativeQuery = true)
     boolean canClassify(@Param("workspace") long workspace, @Param("person") long userId);
+
+    @Query(value = """
+        SELECT count(DISTINCT u.id) FROM "user" u
+        JOIN activity_event e ON e.actor_id = u.id AND e.workspace_id = :workspace
+        JOIN repository r ON r.id = e.repository_id AND r.provider_id = u.provider_id
+        LEFT JOIN workspace_membership wm ON wm.workspace_id = :workspace AND wm.user_id = u.id
+        WHERE u.type = 'USER' AND
+        """ + PUBLIC_REPOSITORY_CONDITION + """
+          AND EXISTS (SELECT 1 FROM repository_to_monitor m WHERE m.workspace_id = :workspace AND m.name_with_owner = r.name_with_owner)
+          AND NOT EXISTS (SELECT 1 FROM activity_automation a WHERE a.workspace_id = :workspace AND a.user_id = u.id)
+          AND NOT EXISTS (SELECT 1 FROM person_suppression s WHERE s.provider_id = u.provider_id
+              AND s.subject = CAST(u.native_id AS text) AND s.team_key = '')
+          AND NOT EXISTS (SELECT 1 FROM identity_link l JOIN account a ON a.id = l.account_id
+              WHERE l.provider_id = u.provider_id AND l.subject = CAST(u.native_id AS text)
+                  AND a.status IN ('DELETING', 'DELETED'))
+          AND e.event_type IN ('PULL_REQUEST_OPENED', 'ISSUE_CREATED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED')
+          AND (coalesce(wm.hidden, false)
+            OR EXISTS (SELECT 1 FROM workspace_hidden_former_member h WHERE h.workspace_id = :workspace AND h.user_id = u.id)
+            OR EXISTS (SELECT 1 FROM identity_link l JOIN account a ON a.id = l.account_id
+                WHERE l.provider_id = u.provider_id AND l.subject = CAST(u.native_id AS text) AND NOT a.public_activity_visible))
+        """, nativeQuery = true)
+    long countPublicHiddenPeople(@Param("workspace") long workspace);
 
     interface RepositoryRow {
         long getId();

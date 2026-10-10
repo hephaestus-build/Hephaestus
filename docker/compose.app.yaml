@@ -188,6 +188,7 @@ services:
     ports:
       - "8080"
     environment:
+      HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED: ${HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED:-false}
       # Compose preserves the placeholder; Spring resolves it on shared-network, not sandbox interfaces.
       MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       # The buildpack's 10M MaxDirectMemorySize sits below this role's steady NIO

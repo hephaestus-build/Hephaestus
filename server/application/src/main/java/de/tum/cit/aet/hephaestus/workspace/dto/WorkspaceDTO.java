@@ -22,8 +22,8 @@ public record WorkspaceDTO(
         @NonNull @Schema(description = "Human-readable name of the workspace")
         String displayName,
 
-        @NonNull @Schema(description = "Whether the workspace is publicly viewable without authentication")
-        Boolean isPubliclyViewable,
+        @NonNull @Schema(description = "Whether this workspace has enabled its public activity page")
+        Boolean publicActivityEnabled,
 
         @NonNull @Schema(description = "Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)")
         String status,
@@ -117,7 +117,7 @@ public record WorkspaceDTO(
                 workspaceId,
                 workspace.getWorkspaceSlug(),
                 workspace.getDisplayName(),
-                workspace.getIsPubliclyViewable(),
+                workspace.getPublicActivityEnabled(),
                 workspace.getStatus().name(),
                 workspace.getAccountLogin(),
                 installationId,

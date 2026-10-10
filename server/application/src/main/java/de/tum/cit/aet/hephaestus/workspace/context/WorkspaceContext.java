@@ -17,7 +17,7 @@ import org.jspecify.annotations.Nullable;
  * @param installationId GitHub App installation ID (nullable; pulled from the active
  *                       {@code GITHUB} Connection by the resolver — Workspace no longer
  *                       carries the column directly)
- * @param publiclyViewable Whether the workspace allows public read access
+ * @param publicActivityEnabled Whether the workspace has enabled its public activity page
  * @param roles Set of workspace roles for the current user
  */
 public record WorkspaceContext(
@@ -26,7 +26,7 @@ public record WorkspaceContext(
         String displayName,
         @Nullable AccountType accountType,
         @Nullable Long installationId,
-        boolean publiclyViewable,
+        boolean publicActivityEnabled,
         Set<WorkspaceRole> roles) {
     /**
      * Builds a context from a {@link Workspace} plus a pre-resolved
@@ -42,7 +42,7 @@ public record WorkspaceContext(
                 workspace.getDisplayName(),
                 workspace.getAccountType(),
                 installationId,
-                Boolean.TRUE.equals(workspace.getIsPubliclyViewable()),
+                Boolean.TRUE.equals(workspace.getPublicActivityEnabled()),
                 roles != null ? roles : Set.of());
     }
 

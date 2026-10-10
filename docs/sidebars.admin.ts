@@ -43,6 +43,7 @@ const sidebars: SidebarsConfig = {
 				"runtime-roles",
 				"production-operations-runbook",
 				"activity-history-repair",
+				"public-activity",
 				"observability",
 				"webhook-ingestion-operations",
 				"backup-restore",

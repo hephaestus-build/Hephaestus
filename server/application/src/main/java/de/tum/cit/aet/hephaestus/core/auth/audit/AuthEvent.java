@@ -150,6 +150,7 @@ public class AuthEvent {
         LOGIN_PROVIDER_DELETED,
         // Instance emergency brake: GLOBAL, so the workspace-scoped config trail cannot carry it.
         SILENT_MODE_CHANGED,
+        PUBLIC_ACTIVITY_CHANGED,
     }
 
     public enum Result {

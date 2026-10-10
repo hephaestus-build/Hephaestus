@@ -92,8 +92,10 @@ public class ExportBundleAssembler {
                 .preferencesForAccount(accountId)
                 .map(AccountPreferencesQuery.PreferencesView::practiceFeedbackDeliveryEnabled)
                 .orElse(AccountPreferencesQuery.PreferencesView.PRACTICE_FEEDBACK_DELIVERY_ENABLED_BY_DEFAULT);
-        ExportBundle.Preferences preferences =
-                new ExportBundle.Preferences(researchParticipation.participates(accountId), practiceFeedbackDelivery);
+        ExportBundle.Preferences preferences = new ExportBundle.Preferences(
+                researchParticipation.participates(accountId),
+                practiceFeedbackDelivery,
+                account.isPublicActivityVisible());
 
         // Real calendar months (not 30-day approximations) so this window matches the partition
         // retention (pg_partman, 12 months), which is also 12 calendar months.

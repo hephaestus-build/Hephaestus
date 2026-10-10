@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -56,6 +57,27 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
 
     private AuthRateLimitFilter filter(AuthRateLimitProperties props) {
         return new AuthRateLimitFilter(props, resolver, objectMapper, metrics);
+    }
+
+    @Test
+    void shouldShareThePublicActivityLimitAcrossWorkspaceSlugsButNotClientIps() throws Exception {
+        var limited = filter(props());
+        for (int i = 0; i < 60; i++) {
+            var request = new MockHttpServletRequest("GET", "/public/workspaces/alpha/activity");
+            request.setRemoteAddr("192.0.2.1");
+            limited.doFilter(request, new MockHttpServletResponse(), mock(FilterChain.class));
+        }
+        var request = new MockHttpServletRequest("GET", "/public/workspaces/bravo/activity");
+        request.setRemoteAddr("192.0.2.1");
+        var blocked = new MockHttpServletResponse();
+        limited.doFilter(request, blocked, mock(FilterChain.class));
+        assertThat(blocked.getStatus()).isEqualTo(429);
+        assertThat(blocked.getHeader("Retry-After")).isNotBlank();
+        assertThat(blocked.getContentType()).startsWith("application/problem+json");
+        request.setRemoteAddr("192.0.2.2");
+        var independent = new MockHttpServletResponse();
+        limited.doFilter(request, independent, mock(FilterChain.class));
+        assertThat(independent.getStatus()).isEqualTo(200);
     }
 
     private double blockedCount(String bucket) {
@@ -400,14 +422,15 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         verify(mockMetrics, times(1)).recordRateLimitBackendError();
     }
 
-    @Test
-    void costlyRequestFailsClosedWhenBucketBackendThrows() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"POST,/workspaces/demo/mentor/chat", "GET,/public/workspaces/demo/activity"})
+    void costlyRequestFailsClosedWhenBucketBackendThrows(String method, String path) throws Exception {
         authenticateAs("42");
         BucketResolver throwing = (key, config) -> {
             throw new RuntimeException("bucket store down");
         };
         AuthRateLimitFilter f = new AuthRateLimitFilter(props(), throwing, objectMapper, metrics);
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/workspaces/demo/mentor/chat");
+        MockHttpServletRequest request = new MockHttpServletRequest(method, path);
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 

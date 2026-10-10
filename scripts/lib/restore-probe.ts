@@ -4,7 +4,7 @@
  * one to turn off.
  */
 export const seedRestoreProbe = `
-INSERT INTO workspace(account_login, account_type, display_name, is_publicly_viewable, slug, status)
+INSERT INTO workspace(account_login, account_type, display_name, public_activity_enabled, slug, status)
 VALUES ('restore-probe', 'USER', 'Restore probe', FALSE, 'restore-probe', 'ACTIVE');
 
 INSERT INTO llm_connection(slug, display_name, base_url, api_protocol, created_at)

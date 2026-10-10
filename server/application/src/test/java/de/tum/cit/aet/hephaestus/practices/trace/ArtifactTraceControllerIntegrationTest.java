@@ -138,11 +138,10 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                     .expectBody(Void.class);
         }
 
-        /** A public-read workspace admits an anonymous read at the filter chain; membership still stops it. */
         @Test
         void refusesAnAnonymousCallerOnAPublicWorkspace() {
             AgentJob job = reviewObserving(member, READY_AT);
-            workspace.setIsPubliclyViewable(true);
+            workspace.setPublicActivityEnabled(true);
             workspaceRepository.save(workspace);
 
             webTestClient
@@ -155,7 +154,7 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                             job.getId())
                     .exchange()
                     .expectStatus()
-                    .isForbidden()
+                    .isUnauthorized()
                     .expectBody(Void.class);
         }
 

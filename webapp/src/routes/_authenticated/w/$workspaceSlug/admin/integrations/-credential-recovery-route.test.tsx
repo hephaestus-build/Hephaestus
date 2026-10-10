@@ -31,7 +31,7 @@ function mockConnection(kind: "GITHUB" | "GITLAB", installationId?: number) {
 		gitlabWebhookRegistered: false,
 		hasPersonalAccessToken: installationId == null,
 		hasSlackToken: false,
-		isPubliclyViewable: false,
+		publicActivityEnabled: false,
 		practiceReviewAutoTriggerEnabled: false,
 		practiceReviewManualTriggerEnabled: false,
 		updatedAt: listed.createdAt,

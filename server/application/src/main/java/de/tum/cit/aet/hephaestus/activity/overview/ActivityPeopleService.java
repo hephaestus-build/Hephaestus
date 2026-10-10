@@ -41,6 +41,26 @@ public class ActivityPeopleService {
         var teams = queries.teams(workspace);
         var repositories = queries.repositories(workspace);
         var scope = select(workspace, team, repositoryKeys, teams, repositories);
+        return aggregate(scope, params, teams, repositories);
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
+    public ActivityPeopleDTO publicPeople(long workspace, ActivityPeopleRangeParams params) {
+        var repositories = queries.publicRepositories(workspace);
+        var scope = new ActivityScope(
+                workspace,
+                Set.of(),
+                Set.of(),
+                repositories.stream().map(ActivityRepositoryDTO::id).collect(Collectors.toSet()),
+                true);
+        return aggregate(scope, params, List.of(), repositories);
+    }
+
+    private ActivityPeopleDTO aggregate(
+            ActivityScope scope,
+            ActivityPeopleRangeParams params,
+            List<ActivityTeamDTO> teams,
+            List<ActivityRepositoryDTO> repositories) {
         var historyStart = queries.findEarliest(scope);
         var range = params.resolve(clock, Objects.requireNonNullElse(historyStart, clock.instant()));
         var rows = queries.findPeople(scope, range, 0, false);

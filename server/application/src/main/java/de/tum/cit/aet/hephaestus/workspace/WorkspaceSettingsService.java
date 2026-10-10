@@ -65,25 +65,20 @@ public class WorkspaceSettingsService {
         return workspace;
     }
 
-    /**
-     * Update public visibility for a workspace.
-     *
-     * @param workspaceId the workspace ID
-     * @param isPubliclyViewable whether the workspace is publicly viewable
-     * @return the updated workspace
-     */
     @Transactional
-    public Workspace updatePublicVisibility(Long workspaceId, Boolean isPubliclyViewable) {
+    public Workspace updatePublicActivity(Long workspaceId, Boolean publicActivityEnabled, boolean allowSearchEngines) {
         Workspace workspace = requireWorkspace(workspaceId);
-        var beforeVis = new WorkspaceAuditSnapshots.VisibilitySnapshot(workspace.getIsPubliclyViewable());
-        workspace.setIsPubliclyViewable(isPubliclyViewable);
+        var beforeVis = new WorkspaceAuditSnapshots.VisibilitySnapshot(
+                workspace.getPublicActivityEnabled(), workspace.isPublicActivitySearchEngines());
+        workspace.setPublicActivityEnabled(publicActivityEnabled);
+        workspace.setPublicActivitySearchEngines(allowSearchEngines);
         configAudit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_VISIBILITY,
                 workspaceId,
                 workspaceId,
                 beforeVis,
-                new WorkspaceAuditSnapshots.VisibilitySnapshot(isPubliclyViewable)));
-        log.info("Updated workspace visibility: workspaceId={}, isPublic={}", workspaceId, isPubliclyViewable);
+                new WorkspaceAuditSnapshots.VisibilitySnapshot(publicActivityEnabled, allowSearchEngines)));
+        log.info("Updated public activity: workspaceId={}, enabled={}", workspaceId, publicActivityEnabled);
         return workspaceRepository.save(workspace);
     }
 

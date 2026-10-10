@@ -444,7 +444,7 @@ class DeliveredWorkFeedbackControllerIntegrationTest extends AbstractWorkspaceIn
 
     @Test
     void shouldRefuseAnonymousAndNonMemberReadsEvenWhenTheWorkspaceIsPublic() {
-        workspace.setIsPubliclyViewable(true);
+        workspace.setPublicActivityEnabled(true);
         workspaces.save(workspace);
         client.get()
                 .uri(ENDPOINT, workspace.getWorkspaceSlug(), workUrl(work))

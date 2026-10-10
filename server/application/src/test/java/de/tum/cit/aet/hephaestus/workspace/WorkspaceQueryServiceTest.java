@@ -43,7 +43,6 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
     void findAccessibleWorkspacesSortsByDisplayNameAndDeduplicatesMemberships() {
         Workspace alphaWorkspace = workspace(1L, "alpha-space", "Alpha Workspace", true);
         Workspace bravoWorkspace = workspace(2L, "bravo-space", "Bravo Workspace", false);
-        Workspace zuluWorkspace = workspace(3L, "zulu-space", "Zulu Workspace", true);
 
         User currentUser = new User();
         currentUser.setId(42L);
@@ -53,32 +52,22 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
 
         WorkspaceQueryService service = newService();
 
-        when(workspaceRepository.findByStatusAndIsPubliclyViewableTrue(Workspace.WorkspaceStatus.ACTIVE))
-                .thenReturn(List.of(zuluWorkspace, alphaWorkspace));
         when(workspaceMembershipRepository.findByUser_IdIn(Set.of(42L)))
                 .thenReturn(List.of(bravoMembership, alphaMembership));
         when(workspaceRepository.findAllById(List.of(2L, 1L))).thenReturn(List.of(bravoWorkspace, alphaWorkspace));
 
         List<Workspace> workspaces = service.findAccessibleWorkspaces(List.of(currentUser));
 
-        assertThat(workspaces)
-                .extracting(Workspace::getWorkspaceSlug)
-                .containsExactly("alpha-space", "bravo-space", "zulu-space");
+        assertThat(workspaces).extracting(Workspace::getWorkspaceSlug).containsExactly("alpha-space", "bravo-space");
     }
 
     @Test
-    void findAccessibleWorkspacesSortsPublicWorkspacesForAnonymousUsers() {
-        Workspace zuluWorkspace = workspace(3L, "zulu-space", "Zulu Workspace", true);
-        Workspace alphaWorkspace = workspace(1L, "alpha-space", "Alpha Workspace", true);
-
+    void shouldReturnNoWorkspacesForAnonymousUsers() {
         WorkspaceQueryService service = newService();
-
-        when(workspaceRepository.findByStatusAndIsPubliclyViewableTrue(Workspace.WorkspaceStatus.ACTIVE))
-                .thenReturn(List.of(zuluWorkspace, alphaWorkspace));
 
         List<Workspace> workspaces = service.findAccessibleWorkspaces(List.<User>of());
 
-        assertThat(workspaces).extracting(Workspace::getWorkspaceSlug).containsExactly("alpha-space", "zulu-space");
+        assertThat(workspaces).isEmpty();
     }
 
     @Test
@@ -95,8 +84,6 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
         WorkspaceQueryService service = newService();
 
         when(currentAccountUsers.resolve()).thenReturn(List.of(gitlabIdentity, githubIdentity));
-        when(workspaceRepository.findByStatusAndIsPubliclyViewableTrue(Workspace.WorkspaceStatus.ACTIVE))
-                .thenReturn(List.of());
         when(workspaceMembershipRepository.findByUser_IdIn(Set.of(103L, 2L)))
                 .thenReturn(List.of(membership(githubWorkspace)));
         when(workspaceRepository.findAllById(List.of(1L))).thenReturn(List.of(githubWorkspace));
@@ -111,7 +98,7 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
         workspace.setId(id);
         workspace.setWorkspaceSlug(slug);
         workspace.setDisplayName(displayName);
-        workspace.setIsPubliclyViewable(publiclyViewable);
+        workspace.setPublicActivityEnabled(publiclyViewable);
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
         return workspace;
     }

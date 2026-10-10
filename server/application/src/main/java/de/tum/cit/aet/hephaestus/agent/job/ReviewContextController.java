@@ -26,9 +26,6 @@ import org.springframework.web.bind.annotation.RequestParam;
  * returned kind and id address the trace, observations and feedback endpoints, so work that is mirrored but
  * was never reviewed still resolves, and "nothing recorded" stays the trace's own answer.
  *
- * <p>A GET under {@code /workspaces/**} is {@code permitAll} at the filter chain and a public-read workspace
- * admits anonymous callers, so the membership check has to be made here or it is not made: public visibility
- * must not become a way to learn which work a workspace mirrors.
  */
 @WorkspaceScopedController
 @RequestMapping("/practices/review-context")

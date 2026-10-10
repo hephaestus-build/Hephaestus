@@ -25,7 +25,7 @@ public final class WorkspaceTestFixtures {
         workspace.setDisplayName("Workspace " + slug);
         workspace.setAccountLogin(slug + "-org");
         workspace.setAccountType(AccountType.ORG);
-        workspace.setIsPubliclyViewable(true);
+        workspace.setPublicActivityEnabled(true);
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
         return workspace;
     }
@@ -113,7 +113,7 @@ public final class WorkspaceTestFixtures {
             workspace.setAccountLogin(login);
             workspace.setAccountType(AccountType.ORG);
             workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
-            workspace.setIsPubliclyViewable(false);
+            workspace.setPublicActivityEnabled(false);
         }
 
         public WorkspaceBuilder withStatus(Workspace.WorkspaceStatus status) {
@@ -155,7 +155,7 @@ public final class WorkspaceTestFixtures {
             workspace.setAccountLogin(groupPath);
             workspace.setAccountType(AccountType.ORG);
             workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
-            workspace.setIsPubliclyViewable(false);
+            workspace.setPublicActivityEnabled(false);
         }
 
         public GitLabWorkspaceBuilder withSlug(String slug) {

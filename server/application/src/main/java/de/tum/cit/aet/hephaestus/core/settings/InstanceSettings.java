@@ -28,6 +28,9 @@ public class InstanceSettings {
     @Id
     private Long id;
 
+    @Column(name = "public_activity_allowed")
+    private @Nullable Boolean publicActivityAllowed;
+
     @Version
     @Column(name = "version", nullable = false)
     @ColumnDefault("0")

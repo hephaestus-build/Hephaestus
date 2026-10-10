@@ -1,6 +1,6 @@
 BEGIN;
 
-INSERT INTO workspace (id, account_login, account_type, created_at, display_name, is_publicly_viewable, slug, status,
+INSERT INTO workspace (id, account_login, account_type, created_at, display_name, public_activity_enabled, slug, status,
   practices_enabled, practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled)
 VALUES (1, 'hephaestustest', 'ORG', now(), 'E2E Practice Review', false, 'e2e', 'ACTIVE',
   true, true, true)

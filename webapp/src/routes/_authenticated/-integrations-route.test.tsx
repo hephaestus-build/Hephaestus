@@ -31,7 +31,7 @@ function mockSlackPage() {
 		gitlabWebhookRegistered: false,
 		hasPersonalAccessToken: false,
 		hasSlackToken: false,
-		isPubliclyViewable: false,
+		publicActivityEnabled: false,
 		practiceReviewAutoTriggerEnabled: false,
 		practiceReviewManualTriggerEnabled: false,
 		updatedAt: listed.createdAt,

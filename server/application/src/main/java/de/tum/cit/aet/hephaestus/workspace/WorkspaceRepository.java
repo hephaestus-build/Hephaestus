@@ -157,11 +157,13 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
 
     List<Workspace> findByStatusNot(Workspace.WorkspaceStatus status);
 
-    List<Workspace> findByStatusNotAndIsPubliclyViewableTrue(Workspace.WorkspaceStatus status);
-
     List<Workspace> findByStatus(Workspace.WorkspaceStatus status);
 
-    List<Workspace> findByStatusAndIsPubliclyViewableTrue(Workspace.WorkspaceStatus status);
+    @Query("""
+        SELECT w FROM Workspace w WHERE w.workspaceSlug = :slug AND w.publicActivityEnabled = true
+            AND w.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE
+        """)
+    Optional<Workspace> findPublicActivityWorkspace(@Param("slug") String slug);
 
     /**
      * Resolves the workspace id from a repository id via the {@code RepositoryToMonitor} join.

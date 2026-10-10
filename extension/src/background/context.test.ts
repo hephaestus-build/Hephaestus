@@ -48,7 +48,7 @@ function workspace(slug: string, serverUrl: string | undefined): Workspace {
 		hasPersonalAccessToken: false,
 		hasSlackToken: false,
 		id: slug.length,
-		isPubliclyViewable: false,
+		publicActivityEnabled: false,
 		practiceReviewAutoTriggerEnabled: true,
 		practiceReviewManualTriggerEnabled: true,
 		practicesEnabled: true,
