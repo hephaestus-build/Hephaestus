@@ -5,6 +5,7 @@ import java.util.Set;
 final class AnonymousEndpointAllowlist {
     static final Set<String> HANDLERS = Set.of(
             "PublicActivityController.getPublicActivity",
+            "CsrfController.token",
             "ContributorController.listGlobalContributors",
             "WorkspaceRegistryController.getProviders",
             "EmailUnsubscribeController.unsubscribe",

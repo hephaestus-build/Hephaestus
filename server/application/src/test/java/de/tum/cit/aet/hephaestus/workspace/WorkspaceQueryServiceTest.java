@@ -36,6 +36,8 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
                 currentAccountUsers,
                 connectionService,
                 new WorkspaceProperties(false, null, false, null, WorkspaceProperties.CreationPolicy.ADMIN_ONLY),
+                new WorkspaceSubdomainProperties(false, ""),
+                "http://localhost:4200",
                 List.of());
     }
 

@@ -175,7 +175,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void seedWorkspace() {
         User caller = persistUser("mentor");
         User owner = persistUser("activity-owner");
-        workspace = createWorkspace("activity", "Activity", "activity-org", AccountType.ORG, owner);
+        workspace = createWorkspace("activity-workspace", "Activity", "activity-org", AccountType.ORG, owner);
         ensureWorkspaceMembership(workspace, caller, WorkspaceRole.MEMBER);
         ada = member("z-ada", "Ada");
         zoe = member("a-zoe", "Zoe");
@@ -356,7 +356,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             webTestClient
                     .get()
                     .uri(
-                            "/workspaces/activity/config-audit?entityType=WORKSPACE_VISIBILITY&changedKey=contributorHidden")
+                            "/workspaces/{slug}/config-audit?entityType=WORKSPACE_VISIBILITY&changedKey=contributorHidden",
+                            workspace.getWorkspaceSlug())
                     .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
                     .exchange()
                     .expectStatus()
@@ -381,7 +382,10 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             assertThat(page().people()).extracting(p -> p.login()).containsExactly(outside.getLogin());
             webTestClient
                     .patch()
-                    .uri("/workspaces/activity/activity/people/{id}/public-visibility?hidden=true", outside.getId())
+                    .uri(
+                            "/workspaces/{slug}/activity/people/{id}/public-visibility?hidden=true",
+                            workspace.getWorkspaceSlug(),
+                            outside.getId())
                     .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
                     .exchange()
                     .expectStatus()
@@ -389,7 +393,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(Void.class);
             webTestClient
                     .get()
-                    .uri("/workspaces/activity/activity/public-hidden-count")
+                    .uri("/workspaces/{slug}/activity/public-hidden-count", workspace.getWorkspaceSlug())
                     .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
                     .exchange()
                     .expectStatus()
@@ -401,7 +405,10 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .isEqualTo(1);
             webTestClient
                     .patch()
-                    .uri("/workspaces/activity/activity/people/{id}/public-visibility?hidden=true", outside.getId())
+                    .uri(
+                            "/workspaces/{slug}/activity/people/{id}/public-visibility?hidden=true",
+                            workspace.getWorkspaceSlug(),
+                            outside.getId())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
@@ -409,7 +416,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(Void.class);
             webTestClient
                     .get()
-                    .uri("/workspaces/activity/activity/public-hidden-count")
+                    .uri("/workspaces/{slug}/activity/public-hidden-count", workspace.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
@@ -450,7 +457,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .isEqualTo(false);
             webTestClient
                     .get()
-                    .uri("/user/public-activity/workspaces/activity/onboarding")
+                    .uri("/user/public-activity/workspaces/{slug}/onboarding", workspace.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
@@ -526,7 +533,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(Void.class);
             webTestClient
                     .patch()
-                    .uri("/workspaces/activity/public-activity")
+                    .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .bodyValue(Map.of("publicActivityEnabled", false, "allowSearchEngines", false))
                     .exchange()
@@ -535,7 +542,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(Void.class);
             webTestClient
                     .patch()
-                    .uri("/workspaces/activity/public-activity")
+                    .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
                     .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
                     .bodyValue(Map.of("publicActivityEnabled", true, "allowSearchEngines", true))
                     .exchange()
@@ -544,7 +551,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(Void.class);
             webTestClient
                     .get()
-                    .uri("/public/workspaces/activity/activity")
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
                     .isOk()
@@ -560,7 +567,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectStatus()
                     .isOk()
                     .expectBody(Void.class);
-            error("activity");
+            error(workspace.getWorkspaceSlug());
             webTestClient
                     .put()
                     .uri("/admin/settings/public-activity")
@@ -572,21 +579,21 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(Void.class);
             webTestClient
                     .patch()
-                    .uri("/workspaces/activity/public-activity")
+                    .uri("/workspaces/{slug}/public-activity", workspace.getWorkspaceSlug())
                     .headers(headers -> headers.setBearerAuth("mock-jwt-token-for-admin-user"))
                     .bodyValue(Map.of("publicActivityEnabled", false, "allowSearchEngines", false))
                     .exchange()
                     .expectStatus()
                     .isOk()
                     .expectBody(Void.class);
-            error("activity");
+            error(workspace.getWorkspaceSlug());
         }
 
         @Test
         void shouldCacheOnlyAnonymousSuccessAndDefaultToNoIndex() {
             webTestClient
                     .get()
-                    .uri("/public/workspaces/activity/activity")
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
                     .isOk()
@@ -599,7 +606,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(Void.class);
             webTestClient
                     .get()
-                    .uri("/public/workspaces/activity/activity")
+                    .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
@@ -609,7 +616,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(Void.class);
             webTestClient
                     .get()
-                    .uri("/workspaces/activity/activity/people")
+                    .uri("/workspaces/{slug}/activity/people", workspace.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
@@ -618,7 +625,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .value("Cache-Control", value -> assertThat(value).doesNotContain("public"))
                     .expectBody(Void.class);
             jdbc.update("UPDATE instance_settings SET public_activity_allowed=false WHERE id=1");
-            error("activity");
+            error(workspace.getWorkspaceSlug());
         }
 
         private String error(String slug) {
@@ -638,7 +645,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         private PublicActivityDTO page() {
             return Objects.requireNonNull(webTestClient
                     .get()
-                    .uri("/public/workspaces/activity/activity?range=all&to=" + TO)
+                    .uri("/public/workspaces/{slug}/activity?range=all&to=" + TO, workspace.getWorkspaceSlug())
                     .exchange()
                     .expectStatus()
                     .isOk()

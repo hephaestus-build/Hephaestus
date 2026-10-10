@@ -94,6 +94,7 @@ class PersonalDataMapArchTest {
             "workspace_llm_connection",
             "workspace_llm_model",
             "workspace_slug_history",
+            "workspace_slug_reservation", // Namespace labels only, with no account or contributor reference
             "workspace_team_label_filter",
             "workspace_team_repository_settings",
             "workspace_team_settings");

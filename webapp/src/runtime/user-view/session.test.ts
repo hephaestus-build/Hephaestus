@@ -40,6 +40,19 @@ describe("user view request context", () => {
 		expect(request.headers.get("X-User-View-User")).toBe("11");
 	});
 
+	it.each(["abc", "123", "a".repeat(51)])("accepts the workspace slug %s", (workspaceSlug) => {
+		storeUserView({ workspaceSlug });
+		expect(getUserViewSession()?.workspaceSlug).toBe(workspaceSlug);
+	});
+
+	it.each(["a", "ab", "a".repeat(52), "team-", "a--b", "xn--test"])(
+		"rejects the invalid workspace slug %s",
+		(workspaceSlug) => {
+			storeUserView({ workspaceSlug });
+			expect(getUserViewSession()).toBeUndefined();
+		},
+	);
+
 	it("ignores invalid stored identities", () => {
 		storeUserView({ userId: -1 });
 

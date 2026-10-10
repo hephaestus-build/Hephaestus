@@ -61,10 +61,10 @@ tags:
   name: Practice review trace
 - description: Instance-wide operator settings
   name: Instance Settings
-- description: Current instance definitions visible to workspace administrators
-  name: Practice Catalog
 - description: Session lifecycle
   name: Auth
+- description: Current instance definitions visible to workspace administrators
+  name: Practice Catalog
 - description: Workspace-scoped practice-review policy
   name: Practice Review Settings
 - description: Instance-admin-only read-only access to users
@@ -2359,6 +2359,23 @@ paths:
       summary: Redeem a sign-in handoff code with its PKCE verifier
       tags:
       - Client session
+  /auth/csrf:
+    get:
+      description: "Fetch with credentials before any other credentialed request at\
+        \ startup and after sign-in or sign-out. Wait for this response before starting\
+        \ other requests. Send the token in the returned header on unsafe requests.\
+        \ On a CSRF 403, refetch once and retry the rejected request once."
+      operationId: getCsrfToken
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsrfToken"
+          description: OK
+      summary: Get the raw CSRF token for the current browser
+      tags:
+      - Auth
   /auth/logout:
     post:
       description: An installed-client access token ends its whole session.
@@ -3136,7 +3153,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "204":
           description: Workspace purged
@@ -3152,7 +3171,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -3175,7 +3196,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: The member's login
         in: path
         name: login
@@ -3220,7 +3243,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: Activity range
         in: query
         name: range
@@ -3296,7 +3321,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: userId
         required: true
@@ -3378,7 +3405,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: userId
         required: true
@@ -3424,7 +3453,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: userId
         required: true
@@ -3468,7 +3499,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: userId
         required: true
@@ -3585,7 +3618,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "400":
           content:
@@ -3622,7 +3657,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: login
         required: false
@@ -3739,7 +3776,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -3762,7 +3801,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: Filter by job status
         in: query
         name: status
@@ -3810,7 +3851,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: jobId
         required: true
@@ -3839,7 +3882,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: jobId
         required: true
@@ -3870,7 +3915,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: jobId
         required: true
@@ -3901,7 +3948,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: purpose
         required: true
@@ -3935,7 +3984,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: purpose
         required: true
@@ -3985,7 +4036,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: page
         required: false
@@ -4091,7 +4144,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -4112,7 +4167,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -4138,7 +4195,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -4166,7 +4225,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -4189,7 +4250,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: connectionId
         required: true
@@ -4216,7 +4279,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: connectionId
         required: true
@@ -4259,7 +4324,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: connectionId
         required: true
@@ -4324,7 +4391,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: connectionId
         required: true
@@ -4381,7 +4450,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: connectionId
         required: true
@@ -4410,7 +4481,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: id
         required: true
@@ -4436,7 +4509,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: id
         required: true
@@ -4470,7 +4545,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: id
         required: true
@@ -4505,7 +4582,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -4532,7 +4611,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -4555,7 +4636,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -4578,7 +4661,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -4600,7 +4685,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -4629,7 +4716,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: connectionId
         required: true
@@ -4667,7 +4756,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: id
         required: true
@@ -4694,7 +4785,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: id
         required: true
@@ -4722,7 +4815,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: id
         required: true
@@ -4757,7 +4852,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: id
         required: true
@@ -4784,7 +4881,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -4807,7 +4906,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: id
         required: true
@@ -4833,7 +4934,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: id
         required: true
@@ -4861,7 +4964,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: id
         required: true
@@ -4899,7 +5004,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -4920,7 +5027,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: month
         required: false
@@ -4947,7 +5056,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: Zero-based page index
         in: query
         name: page
@@ -4987,7 +5098,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -5015,7 +5128,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -5037,7 +5152,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: userId
         required: true
@@ -5058,7 +5175,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: userId
         required: true
@@ -5084,7 +5203,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: userId
         required: true
@@ -5116,7 +5237,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "202":
           description: Accepted; the sandbox starts unless it is already warm or Heph
@@ -5134,7 +5257,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -5157,7 +5282,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: threadId
         required: true
@@ -5181,7 +5308,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: threadId
         required: true
@@ -5210,7 +5339,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: threadId
         required: true
@@ -5240,7 +5371,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: threadId
         required: true
@@ -5281,7 +5414,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -5302,7 +5437,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -5329,7 +5466,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -5350,7 +5489,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -5370,7 +5511,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -5397,7 +5540,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -5420,7 +5565,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -5444,7 +5591,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -5488,7 +5637,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -5520,7 +5671,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: collectionId
         required: true
@@ -5545,7 +5698,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: collectionId
         required: true
@@ -5576,7 +5731,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: collectionId
         required: true
@@ -5612,7 +5769,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -5641,7 +5800,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: slug
         required: true
@@ -5666,7 +5827,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: slug
         required: true
@@ -5697,7 +5860,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: slug
         required: true
@@ -5738,7 +5903,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: slug
         required: true
@@ -5795,7 +5962,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: slug
         required: true
@@ -5822,7 +5991,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: Return only groups shown in practice dashboards
         in: query
         name: visibleInPracticeDashboardsOnly
@@ -5850,7 +6021,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -5881,7 +6054,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -5916,7 +6091,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -5941,7 +6118,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: groupSlug
         required: true
@@ -5970,7 +6149,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: groupSlug
         required: true
@@ -5997,7 +6178,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: groupSlug
         required: true
@@ -6038,7 +6221,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: groupSlug
         required: true
@@ -6075,7 +6260,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: groupSlug
         required: true
@@ -6155,7 +6342,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: groupSlug
         required: true
@@ -6188,7 +6377,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -6214,7 +6405,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: "Zero-based page, at most 100"
         in: query
         name: page
@@ -6276,7 +6469,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: "The review, as the list names it"
         in: path
         name: reviewId
@@ -6315,7 +6510,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: "Keep only the practices whose autonomy IN FORCE is exactly this\
           \ one, inherited or not"
         in: query
@@ -6348,7 +6545,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -6391,7 +6590,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -6412,7 +6613,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -6436,7 +6639,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -6475,7 +6680,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: runId
         required: true
@@ -6510,7 +6717,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: runId
         required: true
@@ -6551,7 +6760,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -6578,7 +6789,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -6608,7 +6821,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: url
         required: true
@@ -6636,7 +6851,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -6657,7 +6874,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: feedbackId
         required: true
@@ -6681,7 +6900,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: feedbackId
         required: true
@@ -6713,7 +6934,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: feedbackId
         required: true
@@ -6754,7 +6977,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: Filter by practice slug
         in: query
         name: practiceSlug
@@ -6881,7 +7106,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -6904,7 +7131,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: observationId
         required: true
@@ -6933,7 +7162,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -6956,7 +7187,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: slug
         required: true
@@ -6982,7 +7215,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: slug
         required: true
@@ -7007,7 +7242,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: slug
         required: true
@@ -7046,7 +7283,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -7086,7 +7325,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: "The provider page's address, as the browser shows it"
         in: query
         name: url
@@ -7137,7 +7378,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -7184,7 +7427,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -7204,7 +7449,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: header
         name: If-Match
         required: false
@@ -7236,7 +7483,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -7265,7 +7514,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -7290,7 +7541,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: "Kind of reviewed work, e.g. scm.pull_request"
         in: path
         name: artifactKind
@@ -7348,7 +7601,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: page
         required: false
@@ -7437,7 +7692,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -7463,7 +7720,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: page
         required: false
@@ -7631,7 +7890,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: feedbackId
         required: true
@@ -7664,7 +7925,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: feedbackId
         required: true
@@ -7690,7 +7953,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: feedbackId
         required: true
@@ -7727,7 +7992,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: feedbackId
         required: true
@@ -7775,7 +8042,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: page
         required: false
@@ -7937,7 +8206,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: observationId
         required: true
@@ -7973,7 +8244,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: observationId
         required: true
@@ -8024,7 +8297,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: Inclusive lower bound; defaults to seven days before to. A range
           spans at most 400 days.
         in: query
@@ -8076,7 +8351,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -8099,7 +8376,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -8123,7 +8402,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -8165,7 +8446,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: scheduleId
         required: true
@@ -8195,7 +8478,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: scheduleId
         required: true
@@ -8237,7 +8522,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: page
         required: false
@@ -8301,7 +8588,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: "Kind of work, e.g. scm.pull_request"
         in: path
         name: artifactKind
@@ -8355,7 +8644,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: artifactKind
         required: true
@@ -8402,7 +8693,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -8426,7 +8719,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: window
         required: true
@@ -8457,7 +8752,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: practiceSlug
         required: true
@@ -8484,7 +8781,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: practiceSlug
         required: true
@@ -8515,7 +8814,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: practiceSlug
         required: true
@@ -8560,7 +8861,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: practiceSlug
         required: true
@@ -8608,7 +8911,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: practiceSlug
         required: true
@@ -8648,7 +8953,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: practiceSlug
         required: true
@@ -8694,7 +9001,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -8717,7 +9026,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -8741,7 +9052,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: surveyId
         required: true
@@ -8763,7 +9076,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: surveyId
         required: true
@@ -8786,7 +9101,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: surveyId
         required: true
@@ -8809,7 +9126,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: surveyId
         required: true
@@ -8838,7 +9157,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -8858,7 +9179,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -8885,7 +9208,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: nameWithOwner
         required: true
@@ -8906,7 +9231,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -8928,7 +9255,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: nameWithOwner
         required: true
@@ -8950,7 +9279,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -8973,7 +9304,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -9001,7 +9334,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -9024,7 +9359,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: slackChannelId
         required: true
@@ -9057,7 +9394,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: slackChannelId
         required: true
@@ -9085,7 +9424,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -9112,7 +9453,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -9139,7 +9482,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -9167,7 +9512,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -9191,7 +9538,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: the team ID
         in: path
         name: id
@@ -9227,7 +9576,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: teamId
         required: true
@@ -9265,7 +9616,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: teamId
         required: true
@@ -9298,7 +9651,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: teamId
         required: true
@@ -9337,7 +9692,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: the team ID
         in: path
         name: teamId
@@ -9365,7 +9722,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: the team ID
         in: path
         name: teamId
@@ -9407,7 +9766,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: the team ID
         in: path
         name: teamId
@@ -9438,7 +9799,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: the team ID
         in: path
         name: teamId
@@ -9471,7 +9834,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: the team ID
         in: path
         name: teamId
@@ -9506,7 +9871,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: the team ID
         in: path
         name: teamId
@@ -9542,7 +9909,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - description: the team ID
         in: path
         name: teamId
@@ -9590,7 +9959,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       requestBody:
         content:
           application/json:
@@ -9617,7 +9988,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
         name: page
         required: false
@@ -9655,7 +10028,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
         name: userId
         required: true
@@ -9689,7 +10064,9 @@ paths:
         required: true
         schema:
           type: string
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       responses:
         "200":
           content:
@@ -12265,16 +12642,28 @@ components:
           example: https://gitlab.example.com
         workspaceSlug:
           type: string
-          description: URL-friendly identifier for the workspace
+          description: Non-reserved lowercase ASCII DNS label. Consecutive hyphens
+            are prohibited.
           example: my-workspace
-          minLength: 1
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       required:
       - accountLogin
       - accountType
       - displayName
       - kind
       - workspaceSlug
+    CsrfToken:
+      type: object
+      properties:
+        headerName:
+          type: string
+        token:
+          type: string
+      required:
+      - headerName
+      - token
     CuratedCatalog:
       type: object
       properties:
@@ -17302,10 +17691,12 @@ components:
       properties:
         newSlug:
           type: string
-          description: New URL-friendly identifier for the workspace
+          description: Non-reserved lowercase ASCII DNS label. Consecutive hyphens
+            are prohibited.
           example: new-workspace-slug
-          minLength: 1
-          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       required:
       - newSlug
     ReorderPracticeGroupsRequest:
@@ -20715,6 +21106,10 @@ components:
           type: string
           format: date-time
           description: Timestamp when the workspace was last updated
+        workspaceAddress:
+          type: string
+          description: Canonical workspace address. Uses the apex path when subdomains
+            are off.
         workspaceSlug:
           type: string
           description: URL-friendly identifier for the workspace
@@ -20733,6 +21128,7 @@ components:
       - publicActivityEnabled
       - status
       - updatedAt
+      - workspaceAddress
       - workspaceSlug
     WorkspaceAiModel:
       type: object
@@ -20882,6 +21278,10 @@ components:
           type: string
           description: "Current lifecycle status of the workspace (PENDING, ACTIVE,\
             \ ARCHIVED)"
+        workspaceAddress:
+          type: string
+          description: Canonical workspace address. Uses the apex path when subdomains
+            are off.
         workspaceSlug:
           type: string
           description: URL-friendly identifier for the workspace
@@ -20893,6 +21293,7 @@ components:
       - id
       - practicesEnabled
       - status
+      - workspaceAddress
       - workspaceSlug
     WorkspaceLlmConnection:
       type: object

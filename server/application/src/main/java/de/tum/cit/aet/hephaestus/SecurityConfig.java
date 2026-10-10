@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.observability.ReplicaIdentityFilter;
 import de.tum.cit.aet.hephaestus.observability.RequestCorrelationFilter;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceOriginPolicy;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -69,6 +70,7 @@ public class SecurityConfig {
 
     private final CorsProperties corsProperties;
     private final ObjectProvider<InstalledClientRegistry> installedClients;
+    private final ObjectProvider<WorkspaceOriginPolicy> workspaceOrigins;
     private final boolean devTriggerEnabled;
     private final boolean devLoginEnabled;
     private final boolean cookieSecure;
@@ -77,6 +79,7 @@ public class SecurityConfig {
     public SecurityConfig(
             CorsProperties corsProperties,
             ObjectProvider<InstalledClientRegistry> installedClients,
+            ObjectProvider<WorkspaceOriginPolicy> workspaceOrigins,
             Environment environment,
             @Value("${hephaestus.dev.trigger-enabled:false}") boolean devTriggerEnabled,
             @Value("${hephaestus.auth.dev-login-enabled:false}") boolean devLoginEnabled,
@@ -88,6 +91,7 @@ public class SecurityConfig {
         }
         this.corsProperties = corsProperties;
         this.installedClients = installedClients;
+        this.workspaceOrigins = workspaceOrigins;
         this.devTriggerEnabled = devTriggerEnabled;
         this.devLoginEnabled = devLoginEnabled;
         this.cookieSecure = cookieSecure;
@@ -340,7 +344,8 @@ public class SecurityConfig {
             // login UI plus OIDC issuer metadata + JWKS. The OAuth login kickoff/callback paths
             // (/auth/login, /auth/error, /oauth2/authorization/**, /login/oauth2/code/**) are owned
             // by AuthSecurityConfig's higher-precedence chain and never reach this one.
-            requests.requestMatchers(HttpMethod.GET, "/identity-providers").permitAll();
+            requests.requestMatchers(HttpMethod.GET, "/identity-providers", "/auth/csrf")
+                    .permitAll();
             requests.requestMatchers(HttpMethod.GET, "/.well-known/**").permitAll();
             // Installed-client sessions authenticate with a secret in the body (a handoff code with its
             // PKCE verifier, or a refresh secret), never with a cookie; see ClientSessionController.
@@ -390,7 +395,8 @@ public class SecurityConfig {
      * forged {@code XSRF-TOKEN} cookie onto this host and defeat the double-submit check — matching the
      * un-tossable {@code __Host-} access cookie ({@link AuthProperties#DEFAULT_COOKIE_NAME}).
      */
-    private CookieCsrfTokenRepository csrfTokenRepository() {
+    @Bean
+    CookieCsrfTokenRepository csrfTokenRepository() {
         CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         repository.setCookieName(csrfCookieName(cookieSecure));
         repository.setCookieCustomizer(
@@ -509,6 +515,16 @@ public class SecurityConfig {
         configuration.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-        return source;
+        return request -> {
+            CorsConfiguration selected = source.getCorsConfiguration(request);
+            String origin = request.getHeader(HttpHeaders.ORIGIN);
+            WorkspaceOriginPolicy policy = workspaceOrigins.getIfAvailable();
+            if (selected != null && origin != null && policy != null && policy.isTenantOrigin(origin)) {
+                CorsConfiguration tenant = new CorsConfiguration(selected);
+                tenant.setAllowedOrigins(policy.allows(origin) ? List.of(origin) : List.of());
+                return tenant;
+            }
+            return selected;
+        };
     }
 }

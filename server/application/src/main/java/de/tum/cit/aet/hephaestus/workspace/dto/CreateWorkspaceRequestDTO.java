@@ -3,11 +3,12 @@ package de.tum.cit.aet.hephaestus.workspace.dto;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.validation.ScmServerUrl;
+import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlug;
+import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.jspecify.annotations.Nullable;
 
@@ -22,11 +23,13 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "Request to create a new workspace")
 public record CreateWorkspaceRequestDTO(
         @NotBlank(message = "Workspace slug is required")
-        @Pattern(
-                regexp = "^[a-z0-9][a-z0-9-]{2,50}$",
-                message =
-                        "Slug must be 3 to 51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens")
-        @Schema(description = "URL-friendly identifier for the workspace", example = "my-workspace")
+        @WorkspaceSlug
+        @Schema(
+                description = "Non-reserved lowercase ASCII DNS label. Consecutive hyphens are prohibited.",
+                pattern = WorkspaceSlugValidator.LABEL_PATTERN,
+                minLength = WorkspaceSlugValidator.MIN_LENGTH,
+                maxLength = WorkspaceSlugValidator.MAX_LENGTH,
+                example = "my-workspace")
         @Nullable
         String workspaceSlug,
 

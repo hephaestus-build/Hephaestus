@@ -125,7 +125,7 @@ hephaestus:
         # server-only (gated off worker/webhook), but the CDS build binds this @ConfigurationProperties
         # record eagerly on every role — without a default the worker/webhook crash on the bare
         # ${...} placeholder. The server always sets the env var, so it gets the real issuer.
-        issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:8080}
+        issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:${SERVER_PORT:8080}}
         state-cookie-key: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY}
         # Traefik strips /api before the request reaches the app (see docker/compose.app.yaml), and
         # native forward-headers can't restore the prefix — re-add it to the browser-facing OAuth URLs.

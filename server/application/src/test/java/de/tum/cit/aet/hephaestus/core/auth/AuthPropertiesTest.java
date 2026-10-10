@@ -102,6 +102,29 @@ class AuthPropertiesTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
+    @CsvSource({"8080, http://localhost:8080", "8097, http://localhost:8097"})
+    void shouldPinLocalCallbackToConfiguredServerPortWhenIssuerIsUnset(String port, String expected)
+            throws IOException {
+        var sources = new MutablePropertySources();
+        sources.addFirst(new SystemEnvironmentPropertySource(
+                "test-env",
+                Map.of(
+                        "SERVER_PORT",
+                        port,
+                        "HEPHAESTUS_AUTH_COOKIE_SECURE",
+                        "false",
+                        "HEPHAESTUS_AUTH_COOKIE_NAME",
+                        "HEPHAESTUS_AT")));
+        new YamlPropertySourceLoader()
+                .load("application", new ClassPathResource("application.yml"))
+                .forEach(sources::addLast);
+        var binder = new Binder(
+                ConfigurationPropertySources.from(sources), new PropertySourcesPlaceholdersResolver(sources));
+        var configured = binder.bindOrCreate("hephaestus.auth", Bindable.of(AuthProperties.class));
+        assertThat(configured.oauthCallbackBase()).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
     @CsvSource(
             value = {
                 "/api | /api",

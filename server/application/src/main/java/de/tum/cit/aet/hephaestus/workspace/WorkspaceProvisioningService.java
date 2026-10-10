@@ -44,6 +44,7 @@ public class WorkspaceProvisioningService {
     private final WorkspaceRepository workspaceRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final WorkspaceService workspaceService;
+    private final WorkspaceSlugService workspaceSlugs;
     private final UserRepository userRepository;
     private final IdentityProviderRepository gitProviderRepository;
     private final WorkspaceMembershipRepository workspaceMembershipRepository;
@@ -64,6 +65,7 @@ public class WorkspaceProvisioningService {
             WorkspaceRepository workspaceRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             WorkspaceService workspaceService,
+            WorkspaceSlugService workspaceSlugs,
             UserRepository userRepository,
             IdentityProviderRepository gitProviderRepository,
             WorkspaceMembershipRepository workspaceMembershipRepository,
@@ -76,6 +78,7 @@ public class WorkspaceProvisioningService {
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.workspaceService = workspaceService;
+        this.workspaceSlugs = workspaceSlugs;
         this.userRepository = userRepository;
         this.gitProviderRepository = gitProviderRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
@@ -125,11 +128,11 @@ public class WorkspaceProvisioningService {
 
         Long ownerUserId = syncGitHubUserForPAT(token, accountLogin);
 
-        String rawSlug = accountLogin;
+        String slug = workspaceSlugs.allocate(accountLogin, "github-pat-" + accountLogin);
         String displayName = accountLogin;
 
         Workspace workspace =
-                workspaceService.createWorkspace(rawSlug, displayName, accountLogin, AccountType.ORG, ownerUserId);
+                workspaceService.createWorkspace(slug, displayName, accountLogin, AccountType.ORG, ownerUserId);
 
         workspace.setRepositorySelection(RepositorySelection.SELECTED);
         Workspace savedWorkspace = workspaceRepository.save(workspace);
@@ -218,7 +221,7 @@ public class WorkspaceProvisioningService {
         String serverUrl = resolveGitLabServerUrl(config.serverUrl());
         Long ownerUserId = syncGitLabUserForPAT(token, serverUrl, groupPath);
 
-        String slug = groupPath.replace("/", "-");
+        String slug = workspaceSlugs.allocate(groupPath, "gitlab-pat-" + serverUrl + "-" + groupPath);
         String displayName = groupPath.contains("/") ? groupPath.substring(groupPath.lastIndexOf('/') + 1) : groupPath;
 
         Workspace workspace =

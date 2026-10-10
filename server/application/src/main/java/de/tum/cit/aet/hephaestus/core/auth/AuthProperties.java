@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Authentication configuration. Operator guidance: {@code docs/admin/configuration-readiness.mdx}.
@@ -56,6 +57,14 @@ public record AuthProperties(
         @DefaultValue("true") boolean cookieSecure,
         @DefaultValue List<String> browserExtensionIds) {
     public AuthProperties {
+        if (!("http".equals(issuer.getScheme()) || "https".equals(issuer.getScheme()))
+                || issuer.getHost() == null
+                || issuer.getUserInfo() != null
+                || issuer.getQuery() != null
+                || issuer.getFragment() != null) {
+            throw new IllegalArgumentException(
+                    "The auth issuer must be an HTTP(S) URL without credentials, query, or fragment.");
+        }
         if (!cookieSecure && !"http".equalsIgnoreCase(issuer.getScheme())) {
             throw new IllegalArgumentException(
                     "hephaestus.auth.cookie-secure must be true unless the issuer uses HTTP.");
@@ -71,6 +80,16 @@ public record AuthProperties(
                         .filter(id -> !id.isEmpty())
                         .toList();
         apiBasePath = normalizeApiBasePath(apiBasePath);
+    }
+
+    /** OAuth callbacks use the configured API origin, never a request Host or forwarded host. */
+    public String oauthCallbackBase() {
+        return UriComponentsBuilder.fromUri(issuer)
+                .replacePath(apiBasePath)
+                .replaceQuery(null)
+                .fragment(null)
+                .build()
+                .toUriString();
     }
 
     /** Normalizes a proxy prefix to a leading slash without trailing slashes; blank means root. */

@@ -41,6 +41,7 @@ const sidebars: SidebarsConfig = {
 			items: [
 				"instance-admin",
 				"runtime-roles",
+				"workspace-subdomains",
 				"production-operations-runbook",
 				"activity-history-repair",
 				"public-activity",

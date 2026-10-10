@@ -18,6 +18,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Workspace is the tenant root - queries manage workspaces themselves")
 public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
+
     Optional<Workspace> findFirstByOrderByIdAsc();
 
     /**
