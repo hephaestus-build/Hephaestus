@@ -1,6 +1,6 @@
 # ADR 0005: Two-role runtime topology via `@ConditionalOnProperty`
 
-**Status:** Accepted (amended 2026-05-20 #1110 — webhook role wired; 2026-07-20 #1368 — proxy capability flag removed; 2026-07-21 #1368 — agent queue moved to PostgreSQL; 2026-07-22 #1368 — what the worker gate covers; 2026-08-22 — role-scoped settings gate; 2026-09-03 #1719 — role deferral superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md))
+**Status:** Accepted (amended 2026-05-20 #1110 — webhook role wired; 2026-07-20 #1368 — proxy capability flag removed; 2026-07-21 #1368 — agent queue moved to PostgreSQL; 2026-07-22 #1368 — what the worker gate covers; 2026-08-22 — role-scoped settings gate; 2026-09-03 #1719 — role deferral superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-01 #1158 — server-only application server; 2026-10-09 — Heph host on the worker, [ADR 0055](0055-one-heph-conversation-per-developer.md))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -189,3 +189,11 @@ needs. The shipped Compose stacks now set it there: `application-worker` is the 
 the worker role and the only one given the Docker socket, and the `gate:env` check fails a container
 that mounts the socket without that role. That is the server-only deployment the 2026-07-22 update
 called unbuilt; it needed no new role.
+
+## Update — 2026-10-09 (Heph host, [ADR 0055](0055-one-heph-conversation-per-developer.md))
+
+The 2026-10-01 update's "Heph sessions run on connected workers" now means one stateless Heph host per
+worker. A worker claims a queued turn from PostgreSQL and runs it in that host. The server role keeps
+the mentor HTTP API and the live stream (`GET …/mentor/events`), which reads PostgreSQL notifications.
+The "mentor SSE" of the Context and Decision sections is that stream. No mentor process state lives on
+the server role, so no request affinity between server replicas exists.

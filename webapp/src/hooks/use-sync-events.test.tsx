@@ -14,63 +14,13 @@ import {
 	listSlackChannelsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 
+import { FakeEventSource } from "@/test/fake-event-source";
+
 import { useSyncEvents } from "./use-sync-events";
 
 const WORKSPACE = "test-workspace";
 const CONNECTION_ID = 42;
 const HINT_DEBOUNCE_MS = 300;
-
-/**
- * Extends `EventTarget`, so listener bookkeeping — including `{ signal }` removal, which the hook
- * relies on to detach a connection — is the platform's rather than this double's.
- */
-class FakeEventSource extends EventTarget {
-	static readonly CONNECTING = 0;
-	static readonly OPEN = 1;
-	static readonly CLOSED = 2;
-	static instances: FakeEventSource[] = [];
-
-	readyState = 1;
-	closed = false;
-
-	readonly url: string;
-	readonly options?: EventSourceInit;
-
-	constructor(url: string, options?: EventSourceInit) {
-		super();
-		this.url = url;
-		this.options = options;
-		FakeEventSource.instances.push(this);
-	}
-
-	close() {
-		this.closed = true;
-	}
-
-	open() {
-		this.dispatchEvent(new Event("open"));
-	}
-
-	emit(scope: string, connectionId = CONNECTION_ID) {
-		this.emitRaw(JSON.stringify({ scope, connectionId }));
-	}
-
-	/** Deliver a raw (possibly non-JSON) payload, to exercise the malformed-hint guard. */
-	emitRaw(data: string) {
-		this.dispatchEvent(new MessageEvent("sync", { data }));
-	}
-
-	/** An `error` event without moving `readyState` — a CONNECTING stream the browser is retrying. */
-	error() {
-		this.dispatchEvent(new Event("error"));
-	}
-
-	/** The spec's "fail the connection" path: any non-200 or wrong Content-Type. No browser retry. */
-	fail() {
-		this.readyState = FakeEventSource.CLOSED;
-		this.error();
-	}
-}
 
 function wrapper(queryClient: QueryClient) {
 	return function QueryWrapper({ children }: { children: ReactNode }) {
@@ -99,6 +49,10 @@ function runReconnectBackoff() {
 	});
 }
 
+function emitHint(scope: string) {
+	latestSource().emit("sync", { scope, connectionId: CONNECTION_ID });
+}
+
 function flushHintDebounce() {
 	act(() => {
 		vi.advanceTimersByTime(HINT_DEBOUNCE_MS);
@@ -107,14 +61,11 @@ function flushHintDebounce() {
 
 describe("useSyncEvents", () => {
 	beforeEach(() => {
-		FakeEventSource.instances = [];
-		vi.stubGlobal("EventSource", FakeEventSource);
 		vi.useFakeTimers();
 	});
 
 	afterEach(() => {
 		vi.useRealTimers();
-		vi.unstubAllGlobals();
 	});
 
 	it("opens one credentialed workspace stream", () => {
@@ -122,7 +73,7 @@ describe("useSyncEvents", () => {
 
 		expect(FakeEventSource.instances).toHaveLength(1);
 		expect(latestSource().url).toBe(`http://localhost:8080/workspaces/${WORKSPACE}/sync/events`);
-		expect(latestSource().options).toStrictEqual({ withCredentials: true });
+		expect(latestSource().withCredentials).toBe(true);
 	});
 
 	it("does not resync on the first open, because that would cancel the page's own mount fetches", () => {
@@ -254,7 +205,6 @@ describe("useSyncEvents", () => {
 		const source = latestSource();
 		act(() => source.open());
 
-		source.readyState = FakeEventSource.CONNECTING;
 		act(() => source.error());
 		runReconnectBackoff();
 
@@ -281,12 +231,29 @@ describe("useSyncEvents", () => {
 		expect(result.current).toBe(false);
 	});
 
+	it("reports live push as unavailable while the browser's own retries keep failing, and clears it on recovery", () => {
+		const { result } = renderHook(() => useSyncEvents(WORKSPACE), {
+			wrapper: wrapper(new QueryClient()),
+		});
+		const source = latestSource();
+		act(() => source.open());
+
+		act(() => source.error());
+		expect(result.current).toBe(false);
+		act(() => source.error());
+		expect(result.current).toBe(true);
+		expect(FakeEventSource.instances).toHaveLength(1);
+
+		act(() => source.open());
+		expect(result.current).toBe(false);
+	});
+
 	it("maps a job hint to the status and history of that connection", () => {
 		const queryClient = new QueryClient();
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 		renderHook(() => useSyncEvents(WORKSPACE), { wrapper: wrapper(queryClient) });
 
-		act(() => latestSource().emit("job"));
+		act(() => emitHint("job"));
 		flushHintDebounce();
 
 		expect(invalidate).toHaveBeenCalledWith({
@@ -308,7 +275,7 @@ describe("useSyncEvents", () => {
 
 		act(() => {
 			for (let i = 0; i < 5; i += 1) {
-				latestSource().emit("job");
+				emitHint("job");
 			}
 		});
 		flushHintDebounce();
@@ -329,7 +296,7 @@ describe("useSyncEvents", () => {
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 		renderHook(() => useSyncEvents(WORKSPACE), { wrapper: wrapper(queryClient) });
 
-		act(() => latestSource().emit("resources"));
+		act(() => emitHint("resources"));
 		flushHintDebounce();
 
 		expect(invalidate).toHaveBeenCalledWith({
@@ -351,7 +318,7 @@ describe("useSyncEvents", () => {
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 		renderHook(() => useSyncEvents(WORKSPACE), { wrapper: wrapper(queryClient) });
 
-		act(() => latestSource().emit("resources"));
+		act(() => emitHint("resources"));
 		flushHintDebounce();
 
 		expect(invalidate).toHaveBeenCalledWith({
@@ -369,7 +336,7 @@ describe("useSyncEvents", () => {
 
 		// A connect/disconnect moves the catalog, the workspace record and the connection list together,
 		// so this hint invalidates the whole integration section via the scoped predicate.
-		act(() => latestSource().emit("connection"));
+		act(() => emitHint("connection"));
 		flushHintDebounce();
 
 		const predicate = invalidate.mock.calls[0]?.[0]?.predicate;
@@ -388,7 +355,7 @@ describe("useSyncEvents", () => {
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 		renderHook(() => useSyncEvents(WORKSPACE), { wrapper: wrapper(queryClient) });
 
-		act(() => latestSource().emit("activity"));
+		act(() => emitHint("activity"));
 		flushHintDebounce();
 
 		expect(invalidate).toHaveBeenCalledWith({
@@ -411,7 +378,7 @@ describe("useSyncEvents", () => {
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 		renderHook(() => useSyncEvents(WORKSPACE), { wrapper: wrapper(queryClient) });
 
-		act(() => latestSource().emitRaw(JSON.stringify({ scope: "job", connectionId: "42" })));
+		act(() => latestSource().emitRaw("sync", JSON.stringify({ scope: "job", connectionId: "42" })));
 		flushHintDebounce();
 
 		expect(invalidate).not.toHaveBeenCalled();
@@ -422,12 +389,12 @@ describe("useSyncEvents", () => {
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 		renderHook(() => useSyncEvents(WORKSPACE), { wrapper: wrapper(queryClient) });
 
-		act(() => latestSource().emitRaw("}{ not json"));
+		act(() => latestSource().emitRaw("sync", "}{ not json"));
 		flushHintDebounce();
 
 		expect(invalidate).not.toHaveBeenCalled();
 
-		act(() => latestSource().emit("activity"));
+		act(() => emitHint("activity"));
 		flushHintDebounce();
 
 		expect(invalidate).toHaveBeenCalledWith({

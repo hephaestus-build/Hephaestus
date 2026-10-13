@@ -47,7 +47,8 @@ class SlackMentorIdentityResolverTest extends BaseUnitTest {
         when(providers.resolveProviderId("SLACK", "https://slack.com")).thenReturn(5L);
         when(identities.resolveActiveAccountId(5L, "U1", "T1")).thenReturn(Optional.of(7L));
         when(memberships.membershipsForAccount(7L))
-                .thenReturn(List.of(new WorkspaceMembershipView(42L, "workspace", "Workspace", "MEMBER", 314L)));
+                .thenReturn(List.of(
+                        new WorkspaceMembershipView(42L, "workspace", "Workspace", "MEMBER", 314L, List.of(314L))));
         var actor = new User();
         actor.setLogin("renamed-login");
         when(users.findById(314L)).thenReturn(Optional.of(actor));
@@ -110,7 +111,7 @@ class SlackMentorIdentityResolverTest extends BaseUnitTest {
     void shouldNotAdmitMentorInteractionForInactiveAccount() {
         when(providers.resolveProviderId("SLACK", "https://slack.com")).thenReturn(5L);
         when(identities.resolveActiveAccountId(5L, "U1", "T1")).thenReturn(Optional.empty());
-        assertThat(resolver.resolveActiveMemberId(42L, "T1", "U1")).isEmpty();
+        assertThat(resolver.resolveActiveMember(42L, "T1", "U1")).isEmpty();
         verifyNoInteractions(memberships, users);
     }
 
@@ -118,7 +119,7 @@ class SlackMentorIdentityResolverTest extends BaseUnitTest {
         when(providers.resolveProviderId("SLACK", "https://slack.com")).thenReturn(5L);
         when(identities.resolveAccountId(5L, "U1", "T1")).thenReturn(Optional.of(7L));
         when(memberships.membershipsForAccount(7L))
-                .thenReturn(
-                        List.of(new WorkspaceMembershipView(workspaceId, "workspace", "Workspace", "MEMBER", 314L)));
+                .thenReturn(List.of(new WorkspaceMembershipView(
+                        workspaceId, "workspace", "Workspace", "MEMBER", 314L, List.of(314L))));
     }
 }

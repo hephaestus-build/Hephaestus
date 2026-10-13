@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,12 +68,75 @@ class PracticeCatalogContentSourceTest extends BaseUnitTest {
         when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(List.of(awaiting, off));
 
         Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        provider.contribute(new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID()), files);
 
         // A chat turn is read on request: approval gates only what is pushed onto the work.
         JsonNode root = objectMapper.readTree(files.get("inputs/context/practice_catalog.json"));
         assertThat(root.get("practices").valueStream().map(p -> p.get("slug").asString()))
                 .containsExactly("awaiting-approval");
+    }
+
+    @Test
+    void shouldListWholePracticesUpToTheBoundAndNameEveryOneLeftOut() {
+        Workspace ws = new Workspace();
+        ws.setWorkspaceSlug("acme");
+        when(workspaceRepository.findById(eq(1L))).thenReturn(Optional.of(ws));
+        List<Practice> many = new ArrayList<>();
+        for (int i = 0; i < 25; i++) {
+            many.add(practice("p-%02d".formatted(i), "c"));
+        }
+        when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(many);
+
+        JsonNode byCount = provider.buildPayload(1L);
+
+        assertThat(byCount.get("totalPractices").asInt()).isEqualTo(25);
+        assertThat(byCount.get("practices")).hasSize(20);
+        assertThat(byCount.get("omittedPractices").valueStream().map(JsonNode::asString))
+                .containsExactly("p-20", "p-21", "p-22", "p-23", "p-24");
+        assertThat(byCount.get("truncated").asBoolean()).isTrue();
+
+        String longCriteria = "x".repeat(30_000);
+        when(practiceRepository.findByWorkspaceId(eq(1L)))
+                .thenReturn(
+                        List.of(practice("a", longCriteria), practice("b", longCriteria), practice("c", longCriteria)));
+
+        JsonNode bySize = provider.buildPayload(1L);
+
+        assertThat(bySize.get("practices")
+                        .valueStream()
+                        .map(p -> p.get("criteria").asString()))
+                .as("never a practice cut inside its criterion")
+                .containsOnly(longCriteria)
+                .hasSize(2);
+        assertThat(bySize.get("omittedPractices").valueStream().map(JsonNode::asString))
+                .containsExactly("c");
+        assertThat(bySize.get("truncated").asBoolean()).isTrue();
+    }
+
+    @Test
+    void shouldShortenTheOnePracticeLeftWhenItAloneIsTooLargeAndNameWhatItShortened() {
+        Workspace ws = new Workspace();
+        ws.setWorkspaceSlug("acme");
+        when(workspaceRepository.findById(eq(1L))).thenReturn(Optional.of(ws));
+        when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(List.of(practice("huge", "z".repeat(200_000))));
+
+        JsonNode catalog = provider.buildPayload(1L);
+
+        assertThat(objectMapper.writeValueAsString(catalog)).hasSizeLessThanOrEqualTo(64_000);
+        JsonNode only = catalog.get("practices").get(0);
+        assertThat(only.get("slug").asString()).isEqualTo("huge");
+        assertThat(only.get("shortenedFields").valueStream().map(JsonNode::asString))
+                .containsExactly("criteria");
+        assertThat(catalog.get("truncated").asBoolean()).isTrue();
+    }
+
+    private static Practice practice(String slug, String criteria) {
+        Practice practice = new Practice();
+        practice.setSlug(slug);
+        practice.setName(slug);
+        practice.setCriteria(criteria);
+        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
+        return practice;
     }
 
     @Test
@@ -89,7 +153,7 @@ class PracticeCatalogContentSourceTest extends BaseUnitTest {
         when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(List.of(practice));
 
         Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        provider.contribute(new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID()), files);
 
         byte[] bytes = files.get("inputs/context/practice_catalog.json");
         assertThat(bytes).isNotNull();
@@ -124,7 +188,7 @@ class PracticeCatalogContentSourceTest extends BaseUnitTest {
         when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(List.of(practice));
 
         Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        provider.contribute(new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID()), files);
 
         JsonNode entry = objectMapper
                 .readTree(files.get("inputs/context/practice_catalog.json"))
@@ -152,7 +216,7 @@ class PracticeCatalogContentSourceTest extends BaseUnitTest {
         when(workspaceRepository.findById(eq(1L))).thenReturn(Optional.of(ws));
         when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(List.of());
 
-        var request = new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID());
+        var request = new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID());
         provider.contribute(request, new HashMap<>());
         provider.contribute(request, new HashMap<>());
 
@@ -179,7 +243,7 @@ class PracticeCatalogContentSourceTest extends BaseUnitTest {
         when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(List.of());
 
         Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        provider.contribute(new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID()), files);
 
         JsonNode root = objectMapper.readTree(files.get("inputs/context/practice_catalog.json"));
         assertThat(root.get("workspace").get("slug").asString()).isEqualTo("acme");

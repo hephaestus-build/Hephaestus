@@ -9,5 +9,6 @@ public interface NotificationPreferencesExportQuery {
             boolean productSurveys,
             boolean researchSurveys,
             boolean workspaceAlerts,
-            boolean surveySummaries) {}
+            boolean surveySummaries,
+            boolean weeklyDigest) {}
 }

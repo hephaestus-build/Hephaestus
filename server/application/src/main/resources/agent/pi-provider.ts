@@ -67,7 +67,7 @@ export function reasoningSetting(effort: ReasoningEffort | undefined): Reasoning
 		: REASONING_SETTINGS[effort];
 }
 
-function asReasoningEffort(value: unknown): ReasoningEffort | undefined {
+export function asReasoningEffort(value: unknown): ReasoningEffort | undefined {
 	return REASONING_EFFORTS.find((effort) => effort === value);
 }
 
@@ -122,11 +122,16 @@ export function loadProviderConfig(cwd = DEFAULT_WORKSPACE_ROOT): ProviderConfig
 /** A provider config complete enough to register: it names the protocol and the model. */
 export type RegisteredProviderConfig = ProviderConfig & { apiProtocol: string; modelId: string };
 
-/** True once the provider is registered, which needs a complete config and the proxy credentials. */
+/**
+ * True once the provider is registered, which needs a complete config and the proxy credentials. A runner that
+ * holds one credential for its process names it by its variable; the Heph host passes each turn's credential as
+ * `apiKey`, so one turn's calls never carry another's.
+ */
 export function registerHephaestusProvider(
 	modelRuntime: Pick<ModelRuntime, "registerProvider">,
 	config: ProviderConfig | null,
 	env: Record<string, string | undefined> = process.env,
+	apiKey = "$LLM_PROXY_TOKEN",
 ): config is RegisteredProviderConfig {
 	const baseUrl = env.LLM_PROXY_URL;
 	if (
@@ -166,7 +171,7 @@ export function registerHephaestusProvider(
 	modelRuntime.registerProvider("hephaestus", {
 		name: "Hephaestus Gateway",
 		baseUrl,
-		apiKey: "$LLM_PROXY_TOKEN",
+		apiKey,
 		authHeader: true,
 		headers: hasText(env.TRACEPARENT) ? { traceparent: env.TRACEPARENT } : undefined,
 		api: config.apiProtocol,

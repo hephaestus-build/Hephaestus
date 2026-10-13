@@ -17,9 +17,6 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 1.0.0
         version: 1.0.0(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.3)(ws@8.21.3)
-      ws:
-        specifier: 8.21.3
-        version: 8.21.3
 
 packages:
 

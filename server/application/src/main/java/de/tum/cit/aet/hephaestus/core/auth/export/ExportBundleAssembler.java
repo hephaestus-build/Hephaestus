@@ -74,6 +74,7 @@ public class ExportBundleAssembler {
                 Objects.requireNonNull(account.getId()),
                 account.getDisplayName(),
                 account.getPrimaryEmail(),
+                account.getTimeZone(),
                 // appRole deliberately not disclosed here — see ExportBundle.Profile (Art. 20(1) scope).
                 account.getStatus().name(),
                 Objects.requireNonNull(account.getCreatedAt()));

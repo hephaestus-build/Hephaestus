@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
@@ -10,11 +11,13 @@ import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.UserContentSourc
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -31,11 +34,19 @@ class UserContentSourceTest extends BaseUnitTest {
     @Mock
     MentorContextQueryRepository queryRepository;
 
+    @Mock
+    WorkspaceActorSelector actorSelector;
+
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     UserContentSource provider;
+
+    @BeforeEach
+    void connectedInstance() {
+        lenient().when(actorSelector.connectedProviderId(1L)).thenReturn(Optional.of(5L));
+    }
 
     @Test
     void writesUserJson() throws Exception {
@@ -44,7 +55,7 @@ class UserContentSourceTest extends BaseUnitTest {
         user.setName("Octo Cat");
         when(userRepository.findById(eq(2L))).thenReturn(Optional.of(user));
         when(queryRepository.fetchUserCounts(
-                        eq(1L), eq(2L), any(Instant.class), any(Instant.class), any(Instant.class)))
+                        eq(1L), eq(5L), eq(2L), any(Instant.class), any(Instant.class), any(Instant.class)))
                 .thenReturn(new MentorUserCounts(
                         /* openPRs */ 2L,
                         /* mergedThisWeek */ 5L,
@@ -57,7 +68,7 @@ class UserContentSourceTest extends BaseUnitTest {
                         /* unresolvedThreads */ 1L));
 
         Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        provider.contribute(new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID()), files);
 
         byte[] bytes = files.get("inputs/context/user.json");
         assertThat(bytes).isNotNull();

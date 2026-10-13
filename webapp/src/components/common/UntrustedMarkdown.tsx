@@ -4,6 +4,7 @@ import {
 	Fragment,
 	type HTMLAttributes,
 	type ImgHTMLAttributes,
+	type InputHTMLAttributes,
 	type OlHTMLAttributes,
 	type ReactNode,
 	useContext,
@@ -32,12 +33,16 @@ function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnch
 	);
 }
 
+/** Carries {@link UntrustedMarkdownProps.headingLevel} to the headings. */
+const HeadingLevelContext = createContext<3 | 4>(4);
+
 /**
- * Every heading in the body becomes an `h4`, so a composed message cannot outrank the page heading
+ * Every heading in the body takes one level, so a composed message cannot outrank the page heading
  * or the heading of the section it sits under. The visual size comes from the prose classes below.
  */
 function DemotedHeading({ children, className }: HTMLAttributes<HTMLHeadingElement>) {
-	return <h4 className={className}>{children}</h4>;
+	const Heading = useContext(HeadingLevelContext) === 3 ? "h3" : "h4";
+	return <Heading className={className}>{children}</Heading>;
 }
 
 /**
@@ -87,12 +92,21 @@ function OrderedList({ children, start }: OlHTMLAttributes<HTMLOListElement>) {
 	return <ol start={start}>{children}</ol>;
 }
 
+/** A task list's checkbox: the renderer gives it no label, and its checked state is announced already. */
+function TaskCheckbox(props: InputHTMLAttributes<HTMLInputElement>) {
+	return <input {...props} aria-label="Task" />;
+}
+
+/** The library names its code-block button in title case; every other control here uses sentence case. */
+const TRANSLATIONS = { copyCode: "Copy code" };
+
 const UNTRUSTED_MARKDOWN_COMPONENTS = {
 	a: SafeAnchor,
 	ul: UnorderedList,
 	ol: OrderedList,
 	code: MarkdownCode,
 	img: ChosenImage,
+	input: TaskCheckbox,
 	h1: DemotedHeading,
 	h2: DemotedHeading,
 	h3: DemotedHeading,
@@ -142,6 +156,9 @@ const RENDERED_TEXT_COMPONENTS = {
  * `scrollable-region-focusable`, and a real problem on a phone, where the end of the line needs a
  * horizontal drag inside a vertically scrolling page.
  */
+/** Each word that arrives gets `data-sd-animate` and a `--sd-delay` that staggers it after the last. */
+const NEW_WORDS = { animation: "fadeIn", sep: "word" } as const;
+
 export const UNTRUSTED_MARKDOWN_PROSE =
 	"prose prose-sm dark:prose-invert max-w-none break-words prose-headings:mt-4 prose-headings:mb-1.5 prose-headings:text-sm prose-headings:font-semibold prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-pre:overflow-x-visible prose-pre:whitespace-pre-wrap prose-pre:break-words prose-code:before:content-none prose-code:after:content-none first:prose-headings:mt-0";
 
@@ -157,6 +174,14 @@ export interface UntrustedMarkdownProps {
 	 * for draws nothing. Without it no image renders at all.
 	 */
 	renderImage?: (image: UntrustedMarkdownImage) => ReactNode;
+	/**
+	 * The words are still arriving, each version longer than the last. An unfinished construct, such
+	 * as an open `**`, renders as if it were closed, and each new word carries `data-sd-animate` for
+	 * the caller to fade in.
+	 */
+	streaming?: boolean;
+	/** The level of every heading in the body: one below the heading of the section it sits under. */
+	headingLevel?: 3 | 4;
 }
 
 /**
@@ -168,19 +193,31 @@ export interface UntrustedMarkdownProps {
  * <p>Brings no wrapper of its own. Callers put {@link UNTRUSTED_MARKDOWN_PROSE} on whichever element
  * they already have, so the prose scope cannot end up nested inside itself.
  */
-export function UntrustedMarkdown({ children, renderText, renderImage }: UntrustedMarkdownProps) {
+export function UntrustedMarkdown({
+	children,
+	renderText,
+	renderImage,
+	streaming = false,
+	headingLevel = 4,
+}: UntrustedMarkdownProps) {
 	return (
-		<RenderTextContext.Provider value={renderText ?? plainText}>
-			<RenderImageContext.Provider value={renderImage ?? noImage}>
-				<Streamdown
-					mode="static"
-					rehypePlugins={[]}
-					remarkRehypeOptions={{ allowDangerousHtml: false }}
-					components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
-				>
-					{children}
-				</Streamdown>
-			</RenderImageContext.Provider>
-		</RenderTextContext.Provider>
+		<HeadingLevelContext.Provider value={headingLevel}>
+			<RenderTextContext.Provider value={renderText ?? plainText}>
+				<RenderImageContext.Provider value={renderImage ?? noImage}>
+					<Streamdown
+						mode={streaming ? "streaming" : "static"}
+						isAnimating={streaming}
+						// Marks each new word while the text streams; the caller decides whether and how it fades.
+						animated={streaming ? NEW_WORDS : false}
+						rehypePlugins={[]}
+						remarkRehypeOptions={{ allowDangerousHtml: false }}
+						components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
+						translations={TRANSLATIONS}
+					>
+						{children}
+					</Streamdown>
+				</RenderImageContext.Provider>
+			</RenderTextContext.Provider>
+		</HeadingLevelContext.Provider>
 	);
 }

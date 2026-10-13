@@ -17,12 +17,19 @@ public interface AccountWorkspaceMembershipQuery {
      * the principal already owns (the workspace they belong to + their role + the id of their own
      * member row). {@code memberId} is the SCM {@code User} id the membership hangs off — the handle
      * integration resolvers need to attribute provider-native activity to a workspace member without
-     * reaching into the SCM schema themselves.
+     * reaching into the SCM schema themselves. {@code memberIds} are every actor of the account that is a member of
+     * the workspace, the selected {@code memberId} included: what the account owns through any of them stays its own.
      */
     record WorkspaceMembershipView(
             Long workspaceId,
             String workspaceSlug,
             String workspaceName,
             @Nullable String role,
-            @Nullable Long memberId) {}
+            @Nullable Long memberId,
+            List<Long> memberIds) {
+
+        public WorkspaceMembershipView {
+            memberIds = List.copyOf(memberIds);
+        }
+    }
 }

@@ -21,7 +21,6 @@ import org.springframework.test.context.TestPropertySource;
     TestAsyncConfiguration.class,
     RecordingScmEventListener.class,
     StubInstallationRepositoryEnumerator.class,
-    StubMentorChatStarter.class,
     SharedTestDoubles.class,
     AgentHandlerTestDoubles.class,
     WorkspaceEchoControllers.ScopedEchoController.class,

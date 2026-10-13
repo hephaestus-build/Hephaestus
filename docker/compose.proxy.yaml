@@ -99,8 +99,6 @@ x-traefik-start: &traefik-start |
 
 services:
   reverse-proxy:
-    # Keep at >=3.3: below it the app-server sticky.cookie.path label (workspace replica affinity)
-    # fails to parse and Traefik silently drops the whole router. Pin a current 3.x.
     image: ${HEPHAESTUS_IMAGE_TRAEFIK:?verified release lock required}
     restart: unless-stopped
     networks:
@@ -139,11 +137,7 @@ services:
       - "--entryPoints.http.http2.maxConcurrentStreams=50"
       - "--entrypoints.https.http.encodequerysemicolons=true"
       - "--entryPoints.https.http2.maxConcurrentStreams=50"
-      # Mentor chat is a long-running SSE stream (10-minute SseEmitter timeout). Traefik's
-      # default idleTimeout (180s) would close it mid-turn during long Pi LLM calls; the app
-      # server emits a comment-only SSE keep-alive every 20s of silence (MentorChatService
-      # HEARTBEAT_QUIET_NS) so the proxy sees regular traffic. 300s here is the safety margin
-      # above the 20s heartbeat — if heartbeats stop, the proxy reaps within 5 minutes.
+      # Must exceed the ping interval of the Heph live stream: docs/admin/runtime-roles.mdx § Live answers.
       - "--entryPoints.http.transport.respondingTimeouts.idleTimeout=300s"
       - "--entryPoints.https.transport.respondingTimeouts.idleTimeout=300s"
       # Backend timeouts belong in static configuration: a serversTransport is definable only by the

@@ -40,8 +40,17 @@ export function baseUrl() {
 	return required("BASE_URL").replace(/\/$/u, "");
 }
 
+/**
+ * The deployed stacks serve the API under `/api`, which their proxy strips. A server reached directly,
+ * such as a local one, serves it at the root: `API_PREFIX=` (empty) addresses that.
+ * @returns {string}
+ */
 export function apiBaseUrl() {
-	return `${baseUrl()}/api`;
+	const prefix = __ENV.API_PREFIX ?? "/api";
+	if (prefix !== "" && !/^\/[\w-]+$/u.test(prefix)) {
+		abort("API_PREFIX must be empty or one path segment such as /api");
+	}
+	return `${baseUrl()}${prefix}`;
 }
 
 export function authHeaders() {

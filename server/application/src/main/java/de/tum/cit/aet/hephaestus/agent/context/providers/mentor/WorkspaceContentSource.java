@@ -2,44 +2,37 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.HephTurnRequest;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Optional;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Materialises {@code inputs/context/workspace.json} for {@link MentorChatRequest}.
+ * Materialises {@code inputs/context/workspace.json} for {@link HephTurnRequest}.
  *
- * <p>Port of {@code session.tool.ts} (recent threads + first message preview) plus
- * {@code assigned-work.tool.ts} (open assigned issues + pending review requests with
- * {@code waitingDays}). The workspace-shape lives in this single context so the agent has
- * the per-tenant context it needs in one read.
+ * <p>Open assigned issues and pending review requests with the age of each pull request, in one document so that Heph reads
+ * them with one call.
  *
  * <p>Personal context is read for each turn, not retained in a formatted-content cache.
  */
@@ -47,23 +40,25 @@ import tools.jackson.databind.node.ObjectNode;
 @RequiredArgsConstructor
 public class WorkspaceContentSource implements ContentSource {
 
+    /** The most assigned issues and the most review requests listed; a longer list is marked truncated. */
+    private static final int MAX_LISTED = 30;
+
     private static final Logger log = LoggerFactory.getLogger(WorkspaceContentSource.class);
 
     /** Workspace-relative output key. Whitelisted in {@code MentorContextKeys#ALLOWED_OUTPUT_KEYS}. */
     public static final String OUTPUT_KEY = OUTPUT_PREFIX + "workspace.json";
 
-    private static final int MAX_RECENT_SESSIONS = 10;
-    private static final int MESSAGE_PREVIEW_LENGTH = 200;
     private static final int REVIEW_WAIT_URGENCY_DAYS = 3;
 
     private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
     private final MentorContextQueryRepository queryRepository;
+    private final WorkspaceActorSelector actorSelector;
     private final ObjectMapper objectMapper;
 
     @Override
     public boolean supports(ContextRequest request) {
-        return request instanceof MentorChatRequest;
+        return request instanceof HephTurnRequest;
     }
 
     @Override
@@ -75,7 +70,7 @@ public class WorkspaceContentSource implements ContentSource {
     @Override
     @Transactional(readOnly = true)
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
-        MentorChatRequest req = (MentorChatRequest) request;
+        HephTurnRequest req = (HephTurnRequest) request;
         ObjectNode payload = buildPayload(req.workspaceId(), req.developerId());
         try {
             files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(payload));
@@ -103,14 +98,22 @@ public class WorkspaceContentSource implements ContentSource {
         // Each sub-context is independent and best-effort: a failing query degrades only its own
         // section to an empty array, never blanking the whole workspace context. The real cause is
         // logged here so an unavailable section does not hide the cause.
-        guarded(
-                "recentSessions",
-                () -> addRecentSessions(root, workspaceId, developerId),
-                () -> root.putArray("recentSessions"));
-        List<PullRequest> reviewPrs = guardedQuery(
-                "pendingReviewRequests", () -> queryRepository.findPendingReviewRequestPrs(workspaceId, developerId));
-        List<Issue> assigned =
-                guardedQuery("assignedIssues", () -> queryRepository.findAssignedOpenIssues(workspaceId, developerId));
+        // A repository path names a repository only on one instance: no lists without the connected one.
+        Optional<Long> provider = actorSelector.connectedProviderId(workspaceId);
+        if (provider.isEmpty()) {
+            root.put("status", "UNAVAILABLE");
+            root.put("reason", "The workspace has no connected GitHub or GitLab instance.");
+        }
+        List<PullRequest> reviewPrs = provider.isEmpty()
+                ? List.of()
+                : guardedQuery(
+                        "pendingReviewRequests",
+                        () -> queryRepository.findPendingReviewRequestPrs(workspaceId, provider.get(), developerId));
+        List<Issue> assigned = provider.isEmpty()
+                ? List.of()
+                : guardedQuery(
+                        "assignedIssues",
+                        () -> queryRepository.findAssignedOpenIssues(workspaceId, provider.get(), developerId));
         guarded("assignedIssues", () -> addAssignedIssues(root, assigned), () -> root.putArray("assignedIssues"));
         guarded(
                 "pendingReviewRequests",
@@ -148,85 +151,13 @@ public class WorkspaceContentSource implements ContentSource {
         }
     }
 
-    private void addRecentSessions(ObjectNode root, Long workspaceId, Long developerId) {
-        // DB-side LIMIT via Pageable: the cap ships as SQL so a power user with hundreds of threads
-        // returns at most MAX_RECENT_SESSIONS rows rather than being trimmed in-memory.
-        List<ChatThread> threads =
-                queryRepository.findRecentChatThreads(workspaceId, developerId, PageRequest.of(0, MAX_RECENT_SESSIONS));
-        ArrayNode arr = root.putArray("recentSessions");
-        if (threads.isEmpty()) {
-            return;
-        }
-        Map<UUID, String> firstMessages = loadFirstUserMessages(workspaceId, threads);
-        for (ChatThread thread : threads) {
-            ObjectNode node = arr.addObject();
-            node.put("id", thread.getId().toString());
-            node.put("title", thread.getTitle() != null ? thread.getTitle() : "Untitled");
-            if (thread.getCreatedAt() != null) {
-                node.put("createdAt", thread.getCreatedAt().toString());
-            }
-            node.put("firstMessage", firstMessages.getOrDefault(thread.getId(), ""));
-        }
-    }
-
-    /**
-     * Single round-trip: pull the earliest user message for every capped thread in one query,
-     * keyed by thread id — avoids an N+1 per-thread fetch.
-     */
-    private Map<UUID, String> loadFirstUserMessages(Long workspaceId, List<ChatThread> threads) {
-        List<UUID> ids = new ArrayList<>(threads.size());
-        for (ChatThread t : threads) ids.add(t.getId());
-        List<Object[]> rows = queryRepository.findFirstUserMessagePartsByThreadIds(workspaceId, ids);
-        Map<UUID, String> out = new HashMap<>(rows.size() * 2);
-        for (Object[] row : rows) {
-            UUID threadId = (UUID) row[0];
-            String partsJson = row[1] != null ? row[1].toString() : null;
-            String preview = partsJson == null ? "" : extractPreviewFromPartsJson(partsJson);
-            out.put(threadId, preview);
-        }
-        return out;
-    }
-
-    private String extractPreviewFromPartsJson(String partsJson) {
-        try {
-            JsonNode parts = objectMapper.readTree(partsJson);
-            String text = extractText(parts);
-            if (text == null) return "";
-            if (text.length() <= MESSAGE_PREVIEW_LENGTH) {
-                return text;
-            }
-            // Don't split a surrogate pair (e.g. an emoji straddling the cut): a lone high surrogate
-            // would serialise as an isolated U+D8xx — malformed for downstream consumers. Trim it off.
-            int end = MESSAGE_PREVIEW_LENGTH;
-            if (Character.isHighSurrogate(text.charAt(end - 1))) {
-                end--;
-            }
-            return text.substring(0, end);
-        } catch (JacksonException e) {
-            // Malformed parts JSON: degrade silently rather than poison the context.
-            return "";
-        }
-    }
-
-    /** Extracts the first text part from a UIMessage parts JSON array. */
-    private static @Nullable String extractText(@Nullable JsonNode parts) {
-        if (parts == null || !parts.isArray()) {
-            return null;
-        }
-        Iterator<JsonNode> it = parts.values().iterator();
-        while (it.hasNext()) {
-            JsonNode part = it.next();
-            if (part.has("type") && "text".equals(part.get("type").asString()) && part.has("text")) {
-                return part.get("text").asString();
-            }
-        }
-        return null;
-    }
-
     private void addAssignedIssues(ObjectNode root, List<Issue> issues) {
         ArrayNode arr = root.putArray("assignedIssues");
-        for (Issue issue : issues) {
+        root.put("assignedIssuesTruncated", issues.size() > MAX_LISTED);
+        for (Issue issue : issues.subList(0, Math.min(issues.size(), MAX_LISTED))) {
             ObjectNode node = arr.addObject();
+            node.put("artifactId", issue.getId());
+            node.put("resource", IssueDetailSource.resourceOf(issue.getId()));
             node.put("number", issue.getNumber());
             node.put("title", issue.getTitle());
             node.put("url", issue.getHtmlUrl());
@@ -239,13 +170,16 @@ public class WorkspaceContentSource implements ContentSource {
                     node.put("milestoneDueOn", issue.getMilestone().getDueOn().toString());
                 }
             }
+            RecentAuthoredWorkContentSource.putDates(node, issue);
+            RecentAuthoredWorkContentSource.putLabels(node, issue);
         }
     }
 
     private void addPendingReviewRequests(ObjectNode root, List<PullRequest> prs) {
         ArrayNode arr = root.putArray("pendingReviewRequests");
+        root.put("pendingReviewRequestsTruncated", prs.size() > MAX_LISTED);
         Instant now = Instant.now();
-        for (PullRequest pr : prs) {
+        for (PullRequest pr : prs.subList(0, Math.min(prs.size(), MAX_LISTED))) {
             ObjectNode node = arr.addObject();
             node.put("prNumber", pr.getNumber());
             node.put("prTitle", pr.getTitle());
@@ -253,10 +187,14 @@ public class WorkspaceContentSource implements ContentSource {
             if (pr.getAuthor() != null) {
                 node.put("author", pr.getAuthor().getLogin());
             }
-            long days = pr.getCreatedAt() != null
-                    ? Duration.between(pr.getCreatedAt(), now).toDays()
-                    : 0;
-            node.put("waitingDays", days);
+            if (pr.getRepository() != null) {
+                node.put("repository", pr.getRepository().getNameWithOwner());
+            }
+            // When the review was requested is not stored; the pull request's age is.
+            if (pr.getCreatedAt() != null) {
+                node.put("prCreatedAt", pr.getCreatedAt().toString());
+                node.put("prOpenDays", Duration.between(pr.getCreatedAt(), now).toDays());
+            }
         }
     }
 

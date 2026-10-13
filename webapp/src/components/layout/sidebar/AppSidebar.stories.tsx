@@ -1,9 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, within } from "storybook/test";
 
-import type { ChatThreadSummary } from "@/api/types.gen";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { minutesBefore, STORY_NOW } from "@/stories/story-clock";
 
 import { AppSidebar } from "./AppSidebar";
 
@@ -92,15 +90,10 @@ export const ReadOnlyUserView: Story = {
 		isAdmin: false,
 		isAppAdmin: false,
 		readOnly: true,
-		context: "mentor",
-		mentorThreads: [
-			{ id: "1", title: "React Hooks Best Practices", createdAt: new Date(STORY_NOW) },
-		] satisfies ChatThreadSummary[],
-		mentorThreadsLoading: false,
+		context: "main",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("React Hooks Best Practices")).toBeVisible();
-		await expect(canvas.queryByText("New chat")).not.toBeInTheDocument();
+		await expect(canvas.getByRole("link", { name: /AI mentor/u })).toBeVisible();
 		await expect(canvas.queryByText("User settings")).not.toBeInTheDocument();
 	},
 };
@@ -132,39 +125,6 @@ export const AdminContextNoWorkspace: Story = {
 		canvas.getByText("Instance administration");
 		canvas.getByText("Back to app");
 		await expect(canvas.queryByText(/no workspace/iu)).not.toBeInTheDocument();
-	},
-};
-
-export const MentorContext: Story = {
-	args: {
-		isAdmin: false,
-		context: "mentor",
-		mentorThreads: [
-			{
-				id: "1",
-				title: "React Hooks Best Practices",
-				createdAt: new Date(STORY_NOW),
-			},
-			{
-				id: "2",
-				title: "TypeScript Generic Types",
-				createdAt: new Date(STORY_NOW),
-			},
-			{
-				id: "3",
-				title: "API Architecture Review",
-				createdAt: minutesBefore(24 * 60 + 1),
-			},
-		] satisfies ChatThreadSummary[],
-		mentorThreadsLoading: false,
-	},
-};
-
-export const MentorLoading: Story = {
-	args: {
-		isAdmin: false,
-		context: "mentor",
-		mentorThreadsLoading: true,
 	},
 };
 

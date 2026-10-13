@@ -308,7 +308,8 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
      */
     @Query(value = """
         SELECT j.id AS "reviewId", i.issue_type AS "workType", i.id AS "artifactId", i.number AS "number",
-               i.html_url AS "url", i.state AS "state", j.created_at AS "createdAt", j.completed_at AS "completedAt"
+               i.title AS "title", i.html_url AS "url", i.state AS "state", j.created_at AS "createdAt",
+               j.completed_at AS "completedAt"
         FROM agent_job j
         JOIN issue i ON
         """ + PRACTICE_REVIEW_OF_WORK + """
@@ -334,7 +335,7 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
      */
     @Query(value = """
         SELECT attempt.id AS "reviewId", i.issue_type AS "workType", i.id AS "artifactId", i.number AS "number",
-               i.html_url AS "url", i.state AS "state", attempt.created_at AS "createdAt",
+               i.title AS "title", i.html_url AS "url", i.state AS "state", attempt.created_at AS "createdAt",
                attempt.completed_at AS "completedAt"
         FROM issue i
         JOIN repository r ON r.id = i.repository_id
@@ -374,6 +375,9 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
         Long getArtifactId();
 
         Integer getNumber();
+
+        @Nullable
+        String getTitle();
 
         @Nullable
         String getUrl();

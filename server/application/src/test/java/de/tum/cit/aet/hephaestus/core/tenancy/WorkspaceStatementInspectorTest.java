@@ -213,8 +213,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
     void optimisticLockUpdateIsAllowed() {
         // Hibernate appends "AND version = ?" to UPDATEs for entities with @Version.
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
-        inspector.inspect(
-                "update chat_message set metadata=?,parts=?,role=?,status=?,thread_id=?,version=? where id=? and version=?");
+        inspector.inspect("update notification_subscription set enabled=?,kind=?,version=? where id=? and version=?");
         verifyNoInteractions(reporter, scopedTables);
     }
 

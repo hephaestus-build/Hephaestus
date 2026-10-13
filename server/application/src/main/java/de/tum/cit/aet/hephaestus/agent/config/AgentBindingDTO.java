@@ -17,7 +17,6 @@ public record AgentBindingDTO(
         @Nullable Long workspaceModelId,
         int timeoutSeconds,
         int maxConcurrentJobs,
-        boolean allowInternet,
         @NonNull Boolean enabled,
 
         @NonNull @Schema(description = "True when the bound model is available to run right now")
@@ -34,7 +33,6 @@ public record AgentBindingDTO(
                         : binding.getWorkspaceModel().getId(),
                 binding.getTimeoutSeconds(),
                 binding.getMaxConcurrentJobs(),
-                binding.isAllowInternet(),
                 binding.isEnabled(),
                 ready);
     }

@@ -1,0 +1,81 @@
+{
+  "outcome": "DONE",
+  "entries": [
+    {
+      "type": "message",
+      "id": "q0a1b2c3",
+      "parentId": "p0a1b2c3",
+      "timestamp": "2026-10-08T07:00:00.000Z",
+      "message": {
+        "role": "user",
+        "content": "[Thu 2026-10-08 09:12 UTC · app] How should I pin the deployment image?",
+        "timestamp": 1791529200000
+      }
+    },
+    {
+      "type": "message",
+      "id": "c0a1b2c3",
+      "parentId": "q0a1b2c3",
+      "timestamp": "2026-10-08T07:00:01.000Z",
+      "message": {
+        "role": "assistant",
+        "content": [
+          { "type": "text", "text": "Let me look at the workspace." },
+          { "type": "toolCall", "id": "call-fetch", "name": "fetch_context", "arguments": { "path": "workspace.json" } },
+          { "type": "toolCall", "id": "call-search", "name": "search_conversation", "arguments": { "query": "pin" } }
+        ],
+        "api": "openai-responses",
+        "provider": "hephaestus",
+        "model": "test-model",
+        "stopReason": "toolUse",
+        "timestamp": 1791529201000
+      }
+    },
+    {
+      "type": "message",
+      "id": "f0a1b2c3",
+      "parentId": "c0a1b2c3",
+      "timestamp": "2026-10-08T07:00:02.000Z",
+      "message": {
+        "role": "toolResult",
+        "toolCallId": "call-fetch",
+        "toolName": "fetch_context",
+        "content": [{ "type": "text", "text": "Workspace acme" }],
+        "isError": false,
+        "timestamp": 1791529202000
+      }
+    },
+    {
+      "type": "message",
+      "id": "s0a1b2c3",
+      "parentId": "f0a1b2c3",
+      "timestamp": "2026-10-08T07:00:03.000Z",
+      "message": {
+        "role": "toolResult",
+        "toolCallId": "call-search",
+        "toolName": "search_conversation",
+        "content": [{ "type": "text", "text": "None" }],
+        "isError": false,
+        "timestamp": 1791529203000
+      }
+    },
+    {
+      "type": "message",
+      "id": "a0a1b2c3",
+      "parentId": "s0a1b2c3",
+      "timestamp": "2026-10-08T07:00:04.000Z",
+      "message": {
+        "role": "assistant",
+        "content": [{ "type": "text", "text": "Pin it by digest." }],
+        "api": "openai-responses",
+        "provider": "hephaestus",
+        "model": "test-model",
+        "usage": { "input": 120, "output": 40, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 160 },
+        "stopReason": "stop",
+        "timestamp": 1791529204000
+      }
+    }
+  ],
+  "reason": null,
+  "detail": null
+}

@@ -707,7 +707,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             case ContextRequest.IssueReviewRequest ignored -> authorOfIssue(job);
             case ContextRequest.DocumentReviewRequest ignored -> metadataSubject(job);
             case ContextRequest.ConversationReviewRequest ignored -> metadataSubject(job);
-            case ContextRequest.MentorChatRequest ignored -> null;
+            case ContextRequest.HephTurnRequest ignored -> null;
         };
     }
 
@@ -773,7 +773,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             case ContextRequest.IssueReviewRequest r -> r.job();
             case ContextRequest.DocumentReviewRequest r -> r.job();
             case ContextRequest.ConversationReviewRequest r -> r.job();
-            case ContextRequest.MentorChatRequest ignored -> null;
+            case ContextRequest.HephTurnRequest ignored -> null;
         };
     }
 }

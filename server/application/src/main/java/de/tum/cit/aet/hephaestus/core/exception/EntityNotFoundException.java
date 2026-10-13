@@ -19,10 +19,11 @@ public class EntityNotFoundException extends RuntimeException {
 
     private static final Map<String, String> NOUNS = Map.ofEntries(
             Map.entry("AgentJob", "review"),
-            Map.entry("ChatMessage", "message"),
-            Map.entry("ChatThread", "conversation"),
             Map.entry("LlmConnection", "AI provider"),
             Map.entry("LlmModel", "AI model"),
+            Map.entry("MentorConversation", "conversation"),
+            Map.entry("MentorEntry", "message"),
+            Map.entry("MentorTurn", "message"),
             Map.entry("Outline collection", "Outline collection"),
             Map.entry("Outline connection", "Outline connection"),
             Map.entry("PracticeGroup", "practice group"),

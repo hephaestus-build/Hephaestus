@@ -164,6 +164,41 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     @WithAdminUser
+    @DisplayName("Heph refuses a model whose context window is too small, and says what it needs")
+    void bindingAModelWithASmallContextWindowToHephIsRefused() {
+        Workspace workspace = setupWorkspace("binding-small");
+        LlmModel model = seedInstanceModel("binding-small");
+        model.setContextWindow(12_000);
+        llmModelRepository.save(model);
+
+        webTestClient
+                .put()
+                .uri("/workspaces/{slug}/agents/{purpose}", workspace.getWorkspaceSlug(), "MENTOR")
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("instanceModelId", model.getId(), "enabled", true))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.detail")
+                .isEqualTo(
+                        "Heph needs a model with a context window of at least 32,768 tokens. This model has 12,000.");
+
+        webTestClient
+                .put()
+                .uri("/workspaces/{slug}/agents/{purpose}", workspace.getWorkspaceSlug(), "PRACTICE_REVIEW")
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("instanceModelId", model.getId(), "enabled", true))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    @WithAdminUser
     @DisplayName("a tier row refuses a model declared as another tier and names that tier for the client")
     void bindingAModelDeclaredAsAnotherTierIsRefusedWithTheDeclaredTier() {
         Workspace workspace = setupWorkspace("binding-slot");

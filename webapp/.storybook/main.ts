@@ -45,12 +45,26 @@ const config: StorybookConfig = {
 			}
 			handler(level, log);
 		};
+		// The story index lists every story with its preload dependencies, so it grows with each story.
+		// It is application code: its own chunk keeps it out of the preview runtime's tooling budget.
+		viteConfig.build.rolldownOptions.output ??= {};
+		const { output } = viteConfig.build.rolldownOptions;
+		if (Array.isArray(output)) {
+			throw new TypeError("Storybook builds one Rolldown output");
+		}
+		const splitting = typeof output.codeSplitting === "object" ? output.codeSplitting : {};
+		output.codeSplitting = {
+			...splitting,
+			groups: [
+				...(splitting.groups ?? []),
+				{ name: "storybook-stories", test: /storybook-stories\.js$/u },
+			],
+		};
 		viteConfig.plugins ??= [];
 		viteConfig.plugins.push(storybookChunkBudgets());
 		viteConfig.optimizeDeps ??= {};
 		viteConfig.optimizeDeps.include = [
 			...(viteConfig.optimizeDeps.include ?? []),
-			"@ai-sdk/react",
 			"@dnd-kit/core",
 			"@dnd-kit/modifiers",
 			"@dnd-kit/sortable",
@@ -58,8 +72,6 @@ const config: StorybookConfig = {
 			"@sentry/react",
 			"@tanstack/react-query-devtools",
 			"@tanstack/react-router-devtools",
-			"ai",
-			"uuid",
 		];
 		return viteConfig;
 	},

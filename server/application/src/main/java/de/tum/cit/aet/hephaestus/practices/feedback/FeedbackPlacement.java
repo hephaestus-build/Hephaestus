@@ -136,14 +136,14 @@ public class FeedbackPlacement {
     private @Nullable String postedCommentUrl;
 
     /**
-     * Link to the mentor assistant {@code chat_message} that delivered this placement — set only for a
+     * The Heph {@code mentor_entry} whose answer delivered this placement — set only for a
      * {@code CONVERSATION_TURN} placement, NULL otherwise. Kept as a raw scalar (not a {@code @ManyToOne})
-     * because {@code chat_message} lives in the {@code mentor} module; the DB carries a scalar FK
+     * because {@code mentor_entry} lives in the {@code mentor} module; the DB carries a scalar FK
      * (ADR 0017 {@code sfk_*} naming) with {@code ON DELETE SET NULL}, so the placement survives the
-     * message being deleted.
+     * entry being deleted.
      */
-    @Column(name = "chat_message_id", columnDefinition = "UUID")
-    private UUID chatMessageId;
+    @Column(name = "mentor_entry_id", columnDefinition = "UUID")
+    private @Nullable UUID mentorEntryId;
 
     @NotNull
     @Column(name = "created_at", nullable = false, updatable = false)

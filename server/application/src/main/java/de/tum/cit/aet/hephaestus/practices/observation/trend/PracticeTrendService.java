@@ -43,6 +43,13 @@ public class PracticeTrendService {
                 OpportunityBundler.opportunities(evidence, since, true).reversed(), window, decay);
     }
 
+    /** How many pieces of requested and backfilled work reached a verdict: the support of {@link #selfSelectedMetShare}. */
+    public int selfSelectedDecidedWork(List<Observation> evidence, Instant since) {
+        return (int) OpportunityBundler.opportunities(evidence, since, true).stream()
+                .filter(EvidenceOpportunity::decided)
+                .count();
+    }
+
     public PracticeTrend calculateGroup(
             String groupSlug, Collection<String> eligiblePracticeSlugs, Collection<PracticeTrend> practiceTrends) {
         return GroupTrendAggregator.aggregate(groupSlug, eligiblePracticeSlugs, practiceTrends, properties);

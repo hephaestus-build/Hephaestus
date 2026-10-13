@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorSlackThreadService;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -30,7 +29,6 @@ public class SlackUninstallService {
     private final SlackWorkspaceResolver workspaceResolver;
     private final ConnectionService connectionService;
     private final SlackWorkspacePurgeAdapter purgeAdapter;
-    private final MentorSlackThreadService mentorSlackThreadService;
     private final ConversationFeedbackErasure conversationFeedbackErasure;
     private final SlackMessageService messageService;
     private final IntegrationAttentionService attention;
@@ -39,14 +37,12 @@ public class SlackUninstallService {
             SlackWorkspaceResolver workspaceResolver,
             ConnectionService connectionService,
             SlackWorkspacePurgeAdapter purgeAdapter,
-            MentorSlackThreadService mentorSlackThreadService,
             ConversationFeedbackErasure conversationFeedbackErasure,
             SlackMessageService messageService,
             IntegrationAttentionService attention) {
         this.workspaceResolver = workspaceResolver;
         this.connectionService = connectionService;
         this.purgeAdapter = purgeAdapter;
-        this.mentorSlackThreadService = mentorSlackThreadService;
         this.conversationFeedbackErasure = conversationFeedbackErasure;
         this.messageService = messageService;
         this.attention = attention;
@@ -82,16 +78,14 @@ public class SlackUninstallService {
         });
         int erasedConversationRows = conversationFeedbackErasure.eraseAllConversationForWorkspace(workspaceId);
         purgeAdapter.deleteWorkspaceData(workspaceId);
-        int purgedThreads = mentorSlackThreadService.purgeSlackThreads(workspaceId);
         // A later reconnect may install a different Slack app; the cached bot user id must not survive teardown.
-        messageService.evictBotUserId(workspaceId);
+        messageService.evictBot(workspaceId);
         log.info(
-                "Slack {} for team {} → workspace {} torn down (connection UNINSTALLED, content purged, {} conversation-derived practice rows erased, {} mentor DM threads erased)",
+                "Slack {} for team {} → workspace {} torn down (connection UNINSTALLED, content purged, Heph Slack messages redacted, {} conversation-derived practice rows erased)",
                 eventType,
                 teamId,
                 workspaceId,
-                erasedConversationRows,
-                purgedThreads);
+                erasedConversationRows);
     }
 
     private static String uninstallCorrelationId(String teamId, String eventType, String eventId) {

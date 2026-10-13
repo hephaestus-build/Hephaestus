@@ -9,7 +9,10 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelSlugConflictException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUpstreamIdConflictException;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingSlotMismatchException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStateConflictException;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
+import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
+import de.tum.cit.aet.hephaestus.mentor.MentorRejectedException;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.net.URI;
 import java.util.Optional;
@@ -103,6 +106,34 @@ public class AgentControllerAdvice {
     ProblemDetail handleModelUpstreamIdConflict(LlmModelUpstreamIdConflictException exception) {
         return problem(
                 HttpStatus.CONFLICT, "llm-model-upstream-id-conflict", "LLM model upstream id conflict", exception);
+    }
+
+    /** Heph declines the member; {@code reason} lets the app point at the setting that changes it. */
+    @ExceptionHandler(MentorRefusedException.class)
+    ProblemDetail handleMentorRefused(MentorRefusedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, exception.reason().userMessage());
+        problem.setType(URI.create("/problems/mentor-refused"));
+        problem.setTitle("Heph cannot reply");
+        problem.setProperty("reason", exception.reason().name());
+        return problem;
+    }
+
+    /** The ledger refused a write that conflicts with its state; the detail is worded for the developer. */
+    @ExceptionHandler(MentorRejectedException.class)
+    ProblemDetail handleMentorRejected(MentorRejectedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, exception.reason().userMessage());
+        problem.setType(URI.create("/problems/mentor-rejected"));
+        problem.setTitle("Heph conversation conflict");
+        problem.setProperty("reason", exception.reason().name());
+        return problem;
+    }
+
+    /** A Heph host wrote for a turn attempt that lost its lease. */
+    @ExceptionHandler(MentorLeaseLostException.class)
+    ProblemDetail handleMentorLeaseLost(MentorLeaseLostException exception) {
+        return problem(HttpStatus.CONFLICT, "mentor-lease-lost", "Turn lease lost", exception);
     }
 
     /** The {@code type} slug is API surface clients match on — renaming one is a breaking change. */

@@ -46,7 +46,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "ActivityEvent", // has Workspace field
             "RepositoryToMonitor", // has Workspace field
             "WorkspaceMembership", // has Workspace field
-            "ChatThread", // has Workspace field
             // Through repository -> Workspace.organization (JOIN)
             "PullRequest",
             "Issue",
@@ -63,9 +62,10 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // Practice catalog entities
             "Practice", // has direct Workspace field
             "Observation", // through Practice.workspace
-            // Through chat thread -> workspace
-            "ChatMessage", // through ChatThread.workspace
-            "ChatMessageVote", // through ChatMessage (via messageId) -> ChatThread.workspace
+            // Heph conversation ledger — every table carries a direct workspace_id scalar
+            "MentorConversation",
+            "MentorEntry",
+            "MentorTurn",
             // Through Workspace.organization (ID-based relationship via JOIN)
             "OrganizationMembership", // organizationId -> Workspace.organization
             // Through project owner (ID-based: ownerId -> Organization/Repository/User)
@@ -94,7 +94,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "SlackMessage", // direct workspace_id scalar
             "SlackThread", // direct workspace_id scalar
             "SlackMonitoredChannel", // direct workspace_id scalar
-            "MentorSlackThread", // direct workspace_id scalar
             // Grant allowlist: workspace_id lives inside the composite @EmbeddedId, so the direct-field
             // probe below cannot see it. Scoped, not global — the row names the tenant it grants.
             "LlmModelWorkspaceGrant");
@@ -208,15 +207,14 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
         /**
          * Targeted tenancy proof for the Slack integration tables.
          *
-         * <p>The four {@code slack_*}/{@code mentor_slack_thread} entities are workspace-scoped by a direct
+         * <p>The {@code slack_*} entities are workspace-scoped by a direct
          * {@code workspace_id} scalar column (no FK chain); each must resolve to a real {@code workspaceId}
          * field so {@code WorkspaceScopedTables} classifies it scoped and the {@code StatementInspector}
          * rides a tenancy predicate on every query.
          */
         @Test
         void slackEntitiesCarryDirectWorkspaceId() {
-            Set<String> slackEntities =
-                    Set.of("SlackMessage", "SlackThread", "SlackMonitoredChannel", "MentorSlackThread");
+            Set<String> slackEntities = Set.of("SlackMessage", "SlackThread", "SlackMonitoredChannel");
             ArchCondition<JavaClass> haveWorkspaceIdField = new ArchCondition<>("carry a direct workspaceId field") {
                 @Override
                 public void check(JavaClass javaClass, ConditionEvents events) {

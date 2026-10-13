@@ -47,18 +47,22 @@ Before publication, each release passes qualification on both matrix cells.
 
 Only the listed native hosts and the unmodified self-hosted Compose topology are supported. Other hosts, runtimes, and topologies are outside release qualification.
 
-- **4 vCPUs, 16 GB RAM, 40 GB SSD** is a conservative initial budget for one concurrent review sandbox.
+- **4 vCPUs, 24 GB RAM, 40 GB SSD** is a conservative initial budget for one concurrent review sandbox.
   It is not a measured requirement.
   It covers these memory limits, which are ceilings, not reservations:
 
-  | Container                      | Memory limit | Setting                                                      |
-  | ------------------------------ | ------------ | ------------------------------------------------------------ |
-  | `application-server`           | 5 GB         | `APPLICATION_SERVER_MEM_LIMIT`                               |
-  | `application-worker`           | 3 GB         | `APPLICATION_WORKER_MEM_LIMIT`                               |
-  | `webhook-server`               | 2 GB         | `WEBHOOK_SERVER_MEM_LIMIT`                                   |
-  | each concurrent review sandbox | 4 GiB        | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (default 1) |
+  | Container                      | Memory limit | Setting                                                                                     |
+  | ------------------------------ | ------------ | ------------------------------------------------------------------------------------------- |
+  | `application-server`           | 5 GiB        | `APPLICATION_SERVER_MEM_LIMIT`                                                              |
+  | `application-worker`           | 3 GiB        | `APPLICATION_WORKER_MEM_LIMIT`                                                              |
+  | `webhook-server`               | 2 GiB        | `WEBHOOK_SERVER_MEM_LIMIT`                                                                  |
+  | each concurrent review sandbox | 4 GiB        | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (default 1)                                |
+  | the Heph host, one per worker  | 2 GiB        | Fixed. [Runtime roles](./runtime-roles.mdx#the-heph-host) gives the limits of the Heph host |
 
+  With the defaults, these limits add up to 16 GiB, about 17.2 GB.
   PostgreSQL, NATS, Traefik, and the webapp have no limit.
+  The rest of the 24 GB is for them and the operating system.
+
   A limit caps a container but reserves nothing.
   Each JVM sizes its heap from its own limit and can grow toward it.
   The host must hold simultaneous use by all containers and sandboxes, plus the operating system and spare capacity.
@@ -68,7 +72,7 @@ Only the listed native hosts and the unmodified self-hosted Compose topology are
   To use a smaller memory budget, lower the limits in `.env` before the first start.
 
 - These are deployment limits, not a claim that all workloads fit. Before raising webhook volume,
-  mentor concurrency, or `SANDBOX_MAX_CONCURRENT`, reproduce the release's
+  Heph turn capacity (`HEPHAESTUS_WORKER_MENTOR_MAX`), or `SANDBOX_MAX_CONCURRENT`, reproduce the release's
   [Compose capacity qualification](https://github.com/hephaestus-build/Hephaestus/tree/main/load-tests) on
   your host shape. A release baseline is valid only with the raw k6 and container-resource evidence described there.
   Without that evidence, keep the conservative defaults above.
@@ -330,10 +334,10 @@ Each has a variable reference in [Integrations & Reference Deployment](./product
 | Add-on             | What it gives you                                                                                             | Where                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | GitLab             | GitLab login, workspaces, and sync (webhooks auto-register here)                                              | [GitLab bundle](./production-setup#gitlab-rollout-bundle)     |
-| Slack              | Mentor in Slack, channel ingestion                                                                            | [Slack app setup](./production-setup#slack-app-configuration) |
+| Slack              | Heph in Slack DMs, channel ingestion                                                                          | [Slack app setup](./production-setup#slack-app-configuration) |
 | Outline            | Wiki as a content source for reviews                                                                          | [Outline integration](./production-setup#outline-integration) |
 | AI practice review | Automated PR feedback from the coding agent                                                                   | [Practice review](./practice-review#deployment)               |
-| Email              | Optional invitations, summaries, and connection alerts. Configure `SPRING_MAIL_*` and `HEPHAESTUS_EMAIL_FROM` | [Email setup](./production-setup#email)                       |
+| Email              | Optional invitations, summaries, weekly digest notes, and connection alerts. Configure `SPRING_MAIL_*` and `HEPHAESTUS_EMAIL_FROM` | [Email setup](./production-setup#email)                       |
 | An AI provider     | The model everything AI runs on — required by the row above                                                   | [Connect an AI Provider](./ai-providers)                      |
 
 AI practice review requires both the environment bundle above and a model that the workspace can run on.

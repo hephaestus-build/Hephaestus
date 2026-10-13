@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtInvalidException;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.servlet.FilterChain;
@@ -26,6 +28,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -58,17 +62,20 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @Mock
     private WorkerJwtVerifier jwtVerifier;
 
-    private MentorProxyCredentialRegistry mentorRegistry;
+    @Mock
+    private MentorTurnRepository turnRepository;
+
+    private SandboxGatewaySessions gatewaySessions;
     private JobTokenAuthenticationFilter filter;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private static final String JOB_JWT = "job-jwt";
+    private static final String JOB_JWT = "job.jwt.signature";
 
     @BeforeEach
     void setUp() {
-        mentorRegistry = new MentorProxyCredentialRegistry();
+        gatewaySessions = new SandboxGatewaySessions();
         filter = new JobTokenAuthenticationFilter(
-                agentJobRepository, jwtVerifier, mentorRegistry, objectMapper, "worker-1");
+                agentJobRepository, turnRepository, gatewaySessions, jwtVerifier, objectMapper, "worker-1");
         SecurityContextHolder.clearContext();
     }
 
@@ -204,7 +211,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             assertThat(authCapture.get()).isInstanceOf(JobTokenAuthentication.class);
             ProxyRouting routing = ((JobTokenAuthentication) authCapture.get()).getPrincipal();
             assertThat(routing.principalDescription()).isEqualTo("job:" + job.getId());
-            assertThat(Objects.requireNonNull(routing.attempt()).workerId()).isEqualTo("worker-1");
+            assertThat(routing.attempt().workerId()).isEqualTo("worker-1");
             assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
 
@@ -223,11 +230,11 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
 
         @Test
         void shouldReturn401ForMalformedToken() throws Exception {
-            when(jwtVerifier.verify("not a valid base64!!!"))
+            when(jwtVerifier.verify("not.valid.base64!!!"))
                     .thenThrow(new WorkerJwtInvalidException("invalid token", "decode"));
             var request = new MockHttpServletRequest();
             request.setRemoteAddr("10.0.0.2");
-            request.addHeader("Authorization", "Bearer not a valid base64!!!");
+            request.addHeader("Authorization", "Bearer not.valid.base64!!!");
             var response = new MockHttpServletResponse();
 
             filter.doFilterInternal(request, response, filterChain);
@@ -410,7 +417,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             assertThat(installed).isInstanceOf(JobTokenAuthentication.class);
             ProxyRouting routing = ((JobTokenAuthentication) installed).getPrincipal();
             assertThat(routing.principalDescription()).isEqualTo("job:" + job.getId());
-            assertThat(Objects.requireNonNull(routing.attempt()).workerId()).isEqualTo("worker-1");
+            assertThat(routing.attempt().workerId()).isEqualTo("worker-1");
             assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
 
@@ -478,52 +485,66 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     }
 
     @Nested
-    @DisplayName("Mentor credentials")
-    class MentorTokenFallback {
+    @DisplayName("Heph host session token")
+    class GatewaySessionToken {
 
-        @Test
-        void authenticatesValidMentorCredential() throws Exception {
-            String mentorToken = mentorRegistry.mint(
-                    UUID.randomUUID(),
-                    new MentorProxyCredentialRegistry.Route(
-                            "openai-completions", "https://api.openai.com", null, null, null, null));
-
-            var authCapture = new AtomicReference<Authentication>();
-            doAnswer(invocation -> {
-                        authCapture.set(Objects.requireNonNull(
-                                SecurityContextHolder.getContext().getAuthentication()));
-                        return null;
-                    })
-                    .when(filterChain)
-                    .doFilter(any(), any());
-
-            var request = new MockHttpServletRequest();
+        private MockHttpServletResponse request(String method, String path, String token) throws Exception {
+            var request = new MockHttpServletRequest(method, path);
             request.setRemoteAddr("10.0.0.2");
-            request.addHeader("Authorization", "Bearer " + mentorToken);
+            request.addHeader("Authorization", "Bearer " + token);
             var response = new MockHttpServletResponse();
-
             filter.doFilterInternal(request, response, filterChain);
-
-            assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-            Authentication authentication = authCapture.get();
-            assertThat(authentication).isNotNull();
-            assertInstanceOf(JobTokenAuthentication.class, authentication);
-            ProxyRouting routing = ((JobTokenAuthentication) authentication).getPrincipal();
-            assertThat(routing.apiProtocol()).isEqualTo("openai-completions");
+            return response;
         }
 
         @Test
-        void aTokenMatchingNeitherJobNorMentorRegistryIsRefused() throws Exception {
-            when(jwtVerifier.verify(JOB_JWT)).thenThrow(new WorkerJwtInvalidException("invalid token", "decode"));
+        void shouldAuthenticateTheHostTokenOnItsOwnRuntimePathsWhenItReadsThem() throws Exception {
+            UUID hostId = UUID.randomUUID();
+            String token = AgentJob.generateJobToken();
+            Path archive = Files.createTempFile("host-", ".tar");
+            try (var session = gatewaySessions.register(hostId, token, archive, "out")) {
+                assertThat(session.id()).isEqualTo(hostId);
+                var authCapture = new AtomicReference<Authentication>();
+                doAnswer(invocation -> {
+                            authCapture.set(Objects.requireNonNull(
+                                    SecurityContextHolder.getContext().getAuthentication()));
+                            return null;
+                        })
+                        .when(filterChain)
+                        .doFilter(any(), any());
 
-            var request = new MockHttpServletRequest();
-            request.setRemoteAddr("10.0.0.2");
-            request.addHeader("Authorization", "Bearer " + JOB_JWT);
-            var response = new MockHttpServletResponse();
+                assertThat(request("GET", "/internal/llm/runtime/" + hostId + "/commands", token)
+                                .getStatus())
+                        .isEqualTo(HttpServletResponse.SC_OK);
+                assertThat(authCapture.get()).isInstanceOf(GatewaySessionAuthentication.class);
+            }
+        }
 
-            filter.doFilterInternal(request, response, filterChain);
+        @Test
+        void shouldRefuseTheHostTokenWhenItCallsAModelOrAnotherSession() throws Exception {
+            UUID hostId = UUID.randomUUID();
+            String token = AgentJob.generateJobToken();
+            Path archive = Files.createTempFile("host-", ".tar");
+            try (var session = gatewaySessions.register(hostId, token, archive, "out")) {
+                assertThat(session.id()).isEqualTo(hostId);
+                assertThat(request("POST", "/internal/llm/chat/completions", token)
+                                .getStatus())
+                        .isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+                assertThat(request("GET", "/internal/llm/runtime/" + UUID.randomUUID(), token)
+                                .getStatus())
+                        .isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+                assertThat(request("POST", "/internal/llm/runtime/" + hostId + "/result", token)
+                                .getStatus())
+                        .isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+                verify(filterChain, never()).doFilter(any(), any());
+            }
+        }
 
-            assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+        @Test
+        void shouldRefuseABareTokenWhenNothingOwnsIt() throws Exception {
+            assertThat(request("GET", "/internal/llm/runtime/" + UUID.randomUUID(), "unknown")
+                            .getStatus())
+                    .isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
             verify(filterChain, never()).doFilter(any(), any());
         }
     }
@@ -617,7 +638,6 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 null,
                 null,
                 600,
-                false,
                 price,
                 null);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));

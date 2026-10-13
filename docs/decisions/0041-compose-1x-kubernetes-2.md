@@ -1,6 +1,6 @@
 # ADR 0041: Compose for 1.x; Kubernetes only for 2.0
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0055](0055-one-heph-conversation-per-developer.md))
 **Date:** 2026-09-03
 **Authors:** Hephaestus maintainers
 **Amends:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md),
@@ -372,3 +372,13 @@ The [workspace ABI](../contributor/agent/workspace-abi.mdx#session-transcripts) 
 - [Git local clone and hard-link behavior](https://git-scm.com/docs/git-clone#Documentation/git-clone.txt---local)
 - [Cursor Continuity: Git at any scale](https://cursor.com/blog/git-at-any-scale)
 - [Cloudflare Code Mode](https://blog.cloudflare.com/code-mode/)
+
+## Update — 2026-10-09 (Heph host, [ADR 0055](0055-one-heph-conversation-per-developer.md))
+
+Supersedes the interactive parts of this decision. Heph has no per-developer session to keep warm or
+resume, so the driver "interactive mentor sessions need stable identity, warm capacity, and
+suspend/resume" no longer holds. Each worker runs one stateless Heph host, and every turn rebuilds its
+session from PostgreSQL. Gateway capability 4 is now the Heph host's command channel
+(`/internal/llm/runtime/{hostId}/commands`) and its turn endpoints (`/internal/llm/turn/{id}/…`), not
+interactive frames. WSS carries no mentor frames. Heph no longer needs the Agent Sandbox CRD or its
+warm pools.

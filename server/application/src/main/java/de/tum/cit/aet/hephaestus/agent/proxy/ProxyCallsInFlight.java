@@ -1,0 +1,158 @@
+package de.tum.cit.aet.hephaestus.agent.proxy;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
+
+/**
+ * The model calls this worker's proxy has in flight for each billed attempt. The proxy records a call's usage after it
+ * relayed the whole response, but a Heph host reads the end of an answer from the stream and can end its turn first.
+ * The fence on the turn row then drops the call as late. Thus, a turn's end seals its attempt and waits here for its
+ * calls. A turn that ends without its answer also cancels them: a provider that sends nothing would otherwise hold the
+ * end.
+ */
+@Component
+@ConditionalOnWorkerRole
+public class ProxyCallsInFlight {
+
+    /**
+     * How long an attempt stays sealed. A call authenticated while its attempt still held the lease reaches
+     * {@link #begin} within moments; later calls fail authentication, because the end released the lease.
+     */
+    private static final Duration SEALED_FOR = Duration.ofMinutes(10);
+
+    /** How long an attempt's end waits for its calls to record their usage. */
+    public static final Duration SETTLE_WAIT = Duration.ofSeconds(10);
+
+    private record Attempt(UUID sourceId, int number) {}
+
+    /** One call in flight; closing it records that the call's usage is written. */
+    public interface Call extends AutoCloseable {
+        /** Completes when the attempt's end cancels the call. */
+        Mono<Void> cancelled();
+
+        /** Whether the attempt's end cancelled the call, or had sealed the attempt before the call began. */
+        boolean isCancelled();
+
+        @Override
+        void close();
+    }
+
+    /** One call's cancellation: the signal the proxy's upstream read stops on, and whether it was sent. */
+    private static final class Cancellation {
+        final Sinks.Empty<Void> signal = Sinks.empty();
+        volatile boolean sent;
+
+        void send() {
+            sent = true;
+            signal.tryEmitEmpty();
+        }
+    }
+
+    /** Guards {@link #sealed} as well. */
+    private final Map<Attempt, List<Cancellation>> calls = new HashMap<>();
+
+    /** Attempts whose end began: a call of one of them is cancelled before it reaches the provider. */
+    private final Cache<Attempt, Boolean> sealed =
+            Caffeine.newBuilder().expireAfterWrite(SEALED_FOR).build();
+
+    public Call begin(ProxyRouting.BilledAttempt billed) {
+        Attempt attempt = new Attempt(billed.sourceId(), billed.number());
+        Cancellation cancel = new Cancellation();
+        synchronized (calls) {
+            if (sealed.getIfPresent(attempt) != null) {
+                cancel.send();
+                return call(attempt, cancel);
+            }
+            calls.computeIfAbsent(attempt, key -> new ArrayList<>()).add(cancel);
+        }
+        return call(attempt, cancel);
+    }
+
+    private Call call(Attempt attempt, Cancellation cancel) {
+        return new Call() {
+            @Override
+            public Mono<Void> cancelled() {
+                return cancel.signal.asMono();
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return cancel.sent;
+            }
+
+            @Override
+            public void close() {
+                synchronized (calls) {
+                    List<Cancellation> open = calls.get(attempt);
+                    if (open != null && open.remove(cancel) && open.isEmpty()) {
+                        calls.remove(attempt);
+                    }
+                    calls.notifyAll();
+                }
+            }
+        };
+    }
+
+    /**
+     * Seals the attempt, at once for every call: a call that begins after this is cancelled before it reaches the
+     * provider. With {@code cancel}, the calls already in flight are cancelled too; each still records what it
+     * received.
+     */
+    public void seal(UUID sourceId, int number, boolean cancel) {
+        Attempt attempt = new Attempt(sourceId, number);
+        List<Cancellation> open;
+        synchronized (calls) {
+            sealed.put(attempt, Boolean.TRUE);
+            open = cancel ? List.copyOf(calls.getOrDefault(attempt, List.of())) : List.of();
+        }
+        open.forEach(Cancellation::send);
+    }
+
+    /**
+     * The end of an attempt, whoever ends it: seals it, cancels the calls in flight when {@code cancel}, and waits up
+     * to {@link #SETTLE_WAIT} for each call to record the usage it received.
+     *
+     * @return {@code false} when a call was still in flight after the wait; its usage may go unbilled
+     */
+    public boolean settle(UUID sourceId, int number, boolean cancel) {
+        seal(sourceId, number, cancel);
+        return awaitNone(sourceId, number, SETTLE_WAIT);
+    }
+
+    /**
+     * Waits until no call of the attempt is in flight.
+     *
+     * @return {@code false} when a call was still in flight after {@code timeout}
+     */
+    public boolean awaitNone(UUID sourceId, int number, Duration timeout) {
+        Attempt attempt = new Attempt(sourceId, number);
+        long until = System.nanoTime() + timeout.toNanos();
+        synchronized (calls) {
+            long remaining;
+            while (calls.containsKey(attempt)) {
+                remaining = until - System.nanoTime();
+                if (remaining <= 0) {
+                    return false;
+                }
+                try {
+                    TimeUnit.NANOSECONDS.timedWait(calls, remaining);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+}

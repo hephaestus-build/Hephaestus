@@ -65,7 +65,7 @@ class WorkerControlClientInboundTest extends BaseUnitTest {
 
     @Test
     void reportsEachFrameOnlyAWorkerSends() {
-        client.handleInbound(new CapacityReport(2, 0, 1, 0, 2, 1));
+        client.handleInbound(new CapacityReport(2, 0, 2));
         client.handleInbound(new WorkerHello("w", List.of(1), "0.0-test"));
 
         assertThat(warnings()).hasSize(2);

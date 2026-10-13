@@ -133,30 +133,6 @@ void test("every pin of one toolchain version moves in a single pull request", (
 	}
 });
 
-void test("Vercel AI SDK packages move together", async () => {
-	assert.ok(Array.isArray(config.packageRules));
-	const rules = config.packageRules.filter(isRecord);
-	const ruleIndex = rules.findLastIndex((rule) => rule.groupName === "Vercel AI SDK");
-	assert.ok(ruleIndex > rules.findLastIndex((rule) => rule.groupName === null));
-	const rule = rules[ruleIndex];
-	assert.ok(rule);
-	assert.deepEqual(rule.matchManagers, ["npm"]);
-	assert.deepEqual(rule.matchFileNames, ["webapp/package.json"]);
-	assert.deepEqual(rule.matchPackageNames, ["ai", "@ai-sdk/react"]);
-	assert.equal(rule.matchUpdateTypes, undefined);
-	// Renovate creates no branch at all below `minimumGroupSize`, so a floor above the number of
-	// pins the rule can match would hold every update in the group back, security ones included.
-	const manifest: unknown = parseJson(await readFile("webapp/package.json", "utf8"));
-	assert.ok(isRecord(manifest));
-	const dependencies: unknown = manifest.dependencies;
-	assert.ok(isRecord(dependencies));
-	assert.ok(Array.isArray(rule.matchPackageNames));
-	const pinned = rule.matchPackageNames.filter(
-		(name) => typeof name === "string" && name in dependencies,
-	);
-	assert.equal(rule.minimumGroupSize, pinned.length);
-});
-
 void test("routine update groups preserve repository boundaries", () => {
 	assert.ok(Array.isArray(config.packageRules));
 	const rules = config.packageRules.filter(isRecord);

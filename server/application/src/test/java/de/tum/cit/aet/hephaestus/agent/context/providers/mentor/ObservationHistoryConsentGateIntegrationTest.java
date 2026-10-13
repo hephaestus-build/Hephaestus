@@ -336,7 +336,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
     private String contributed(long developerId) {
         Map<String, byte[]> files = new HashMap<>();
         contentSource.contribute(
-                new ContextRequest.MentorChatRequest(workspace.getId(), developerId, UUID.randomUUID()), files);
+                new ContextRequest.HephTurnRequest(workspace.getId(), developerId, UUID.randomUUID()), files);
         return new String(files.get(ObservationHistoryContentSource.OUTPUT_KEY), StandardCharsets.UTF_8);
     }
 

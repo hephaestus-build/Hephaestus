@@ -9,7 +9,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,16 +31,11 @@ public class SandboxWorkspaceController {
 
     @GetMapping
     public Capabilities capabilities(@PathVariable UUID id, @RequestHeader("Authorization") String authorization) {
-        var session = sessions.require(id, authorization);
-        return new Capabilities(
-                3, sessions.workspaceByteBudget(), SandboxOutputArchive.MAX_OUTPUT_BYTES, session.frameByteBudget());
+        sessions.require(id, authorization);
+        return new Capabilities(3, sessions.workspaceByteBudget(), SandboxOutputArchive.MAX_OUTPUT_BYTES);
     }
 
-    public record Capabilities(
-            int protocolVersion,
-            long workspaceByteBudget,
-            long resultByteBudget,
-            @Nullable Integer frameByteBudget) {}
+    public record Capabilities(int protocolVersion, long workspaceByteBudget, long resultByteBudget) {}
 
     @GetMapping("/workspace")
     public void workspace(

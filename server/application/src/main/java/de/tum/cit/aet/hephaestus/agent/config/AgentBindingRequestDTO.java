@@ -27,8 +27,5 @@ public record AgentBindingRequestDTO(
         @Nullable @Min(1) @Schema(description = "Maximum concurrent runs for this purpose")
         Integer maxConcurrentJobs,
 
-        @Nullable @Schema(description = "Whether the sandbox may reach the public internet")
-        Boolean allowInternet,
-
         @Nullable @Schema(description = "Whether this purpose is active (paused when false)")
         Boolean enabled) {}

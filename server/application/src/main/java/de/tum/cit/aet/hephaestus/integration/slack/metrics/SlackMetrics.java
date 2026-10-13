@@ -5,6 +5,7 @@ public final class SlackMetrics {
     public static final String SLACK_API_RATELIMIT_THROTTLED_UNTIL_SECONDS =
             "slack.api.ratelimit.throttled_until_seconds";
     public static final String SLACK_API_RATELIMIT_THROTTLES = "slack.api.ratelimit.throttles";
+    public static final String MENTOR_SLACK_REPLY = "mentor.slack.reply";
 
     private SlackMetrics() {}
 }

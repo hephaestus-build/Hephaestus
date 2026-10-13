@@ -2,16 +2,19 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Resolves the workspace that owns the ACTIVE Slack {@code Connection} for a given team.
@@ -29,9 +32,11 @@ public class SlackWorkspaceResolver {
     private static final Limit AMBIGUITY_PROBE = Limit.of(2);
 
     private final ConnectionRepository connectionRepository;
+    private final TransactionTemplate transactions;
 
-    public SlackWorkspaceResolver(ConnectionRepository connectionRepository) {
+    public SlackWorkspaceResolver(ConnectionRepository connectionRepository, TransactionTemplate transactions) {
         this.connectionRepository = connectionRepository;
+        this.transactions = transactions;
     }
 
     /**
@@ -48,5 +53,31 @@ public class SlackWorkspaceResolver {
             return Optional.empty();
         }
         return workspaceIds.stream().findFirst();
+    }
+
+    /**
+     * Runs {@code work} in one transaction that holds the lifecycle lock of the workspace's Slack connection, if the
+     * connection is still ACTIVE for {@code teamId} once the lock is held. A disconnect takes the same lock before it
+     * erases the workspace's Slack content. So either the disconnect committed first and {@code work} does not run, or
+     * the disconnect waits and then erases what {@code work} wrote.
+     *
+     * @return what {@code work} returned; empty when the connection ended
+     */
+    public <T> Optional<T> whileConnected(long workspaceId, String teamId, Supplier<T> work) {
+        return Optional.ofNullable(transactions.execute(status -> lockActive(workspaceId, teamId) ? work.get() : null));
+    }
+
+    private boolean lockActive(long workspaceId, String teamId) {
+        Optional<Long> connectionId = connectionRepository
+                .findActive(workspaceId, IntegrationKind.SLACK)
+                .map(Connection::getId);
+        if (connectionId.isEmpty()) {
+            return false;
+        }
+        connectionRepository.acquireLifecycleLock(connectionId.get(), workspaceId);
+        return connectionRepository
+                .findWorkspaceIdsByKindAndInstanceKeyAndState(
+                        IntegrationKind.SLACK, teamId, IntegrationState.ACTIVE, AMBIGUITY_PROBE)
+                .equals(List.of(workspaceId));
     }
 }

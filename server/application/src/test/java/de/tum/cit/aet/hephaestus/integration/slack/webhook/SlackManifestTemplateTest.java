@@ -5,7 +5,6 @@ import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackAssistantEventHandler;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelJoinNoticeHandler;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelLifecycleService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
@@ -35,7 +34,9 @@ class SlackManifestTemplateTest extends BaseUnitTest {
                 .contains("agent_view:")
                 .contains("agent_description:")
                 .contains("- app_home_opened")
-                .contains("- app_context_changed")
+                .doesNotContain("agent_session_stopped")
+                .contains("- reactions:write")
+                .doesNotContain("app_context_changed")
                 .contains("- message.im")
                 .doesNotContain("- message.app_home")
                 .doesNotContain("assistant_view:")
@@ -80,13 +81,8 @@ class SlackManifestTemplateTest extends BaseUnitTest {
                 new SlackChannelMessageHandler(
                         mock(SlackIngestService.class), deserializer, mock(TransactionTemplate.class)),
                 new SlackMentorDmMessageHandler(mock(SlackMentorService.class), deserializer),
-                new SlackAppHomeOpenedMessageHandler(
-                        mock(SlackAppHomeService.class),
-                        mock(SlackAssistantEventHandler.class),
-                        mock(SlackMentorService.class),
-                        deserializer),
+                new SlackAppHomeOpenedMessageHandler(mock(SlackAppHomeService.class), deserializer),
                 new SlackMemberJoinedChannelMessageHandler(mock(SlackChannelJoinNoticeHandler.class), deserializer),
-                new SlackAppContextChangedMessageHandler(deserializer),
                 new SlackAppUninstalledMessageHandler(uninstall, deserializer),
                 new SlackTokensRevokedMessageHandler(uninstall, deserializer),
                 new SlackChannelLeftMessageHandler(lifecycle, deserializer),

@@ -28,12 +28,12 @@ A switch cannot recall a request that a provider already accepted.
 
 | Control and location                                                                                                                | What it stops                                                                                                                                                                                                                                                                                | What it does not stop                                                                                                            |
 | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Silent mode**, instance settings                                                                                                  | New SCM, Slack, and email writes through the egress gateway. This includes edits, inline comments, approvals, reactions, mentor replies, reminders, and retries. It covers all email from the notification module. Withheld email is final and does not send when silent mode is turned off. | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, and operator-alert exemptions |
-| `AGENT_ENABLED=false`, deployment environment on submitting servers and claiming workers                                            | Queued review runtime. Recreate affected containers to apply it                                                                                                                                                                                                                              | Already-running sandboxes, interactive mentor, sync, or every external write. Not a runtime global AI stop                       |
+| **Silent mode**, instance settings                                                                                                  | New SCM, Slack, and email writes through the egress gateway. This includes edits, inline comments, approvals, reactions, Heph replies, weekly digest notes, and retries. It covers all email from the notification module. Withheld email is final and does not send when silent mode is turned off. | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, and operator-alert exemptions |
+| `AGENT_ENABLED=false`, deployment environment on submitting servers and claiming workers                                            | Queued review runtime. Recreate affected containers to apply it                                                                                                                                                                                                                              | Already-running sandboxes, Heph turns, sync, or every external write. Not a runtime global AI stop                               |
 | Workspace **Review settings** controls: **Start from work activity**, **Start requested reviews**                                   | Their respective review entry points                                                                                                                                                                                                                                                         | Other workspaces, existing work, or external delivery already in progress                                                        |
 | Workspace/group/practice autonomy **Off**                                                                                           | Reviewing those practices under the effective inherited policy                                                                                                                                                                                                                               | Other practices and other AI features. A workspace default does not override explicit group/practice choices                     |
 | Workspace **Sending feedback → Send feedback** off                                                                                  | External practice feedback and mentor delivery for that workspace                                                                                                                                                                                                                            | Measurement and in-app feedback. Not an instance restore boundary                                                                |
-| Recipient **Comments and Slack reminders** off                                                                                      | Covered feedback comments and related reminders for that recipient                                                                                                                                                                                                                           | All other recipients, integration plumbing, or all mentor activity                                                               |
+| Recipient **Comments on your work** off                                                                                             | Covered feedback comments for that recipient                                                                                                                                                                                                                                                 | All other recipients, integration plumbing, or all mentor activity                                                               |
 | Every **Heph** row turned off under the workspace's **AI models**. `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on applicable roles | Respective mentor/Slack features                                                                                                                                                                                                                                                             | SCM writes, other AI work, or restored database credentials                                                                      |
 | Model/connection disabled. Each funding source's budget set to zero                                                                 | Work using that model/connection or budget                                                                                                                                                                                                                                                   | Other funding sources. Already-incurred costs. Budgets are not strict reservations                                               |
 
@@ -559,19 +559,29 @@ Deleting in-app data does not delete a provider comment. If external copies must
    ```sql
    SELECT f.id, f.agent_job_id, f.artifact_kind, f.artifact_id,
           f.delivery_state, f.replaces_id, p.id AS placement_id,
-          p.placement_type, p.posted_comment_ref, p.chat_message_id
+          p.placement_type, p.posted_comment_ref, p.mentor_entry_id
    FROM feedback f
    LEFT JOIN feedback_placement p ON p.feedback_id = f.id
    WHERE f.workspace_id = :'workspace_id'::bigint
      AND f.id = :'feedback_id'::uuid;
    ```
 
-8. For conversational placements, follow `chat_message_id` through `chat_message.thread_id` to the workspace-scoped `mentor_slack_thread.chat_thread_id` mapping.
+8. For conversational placements, follow `mentor_entry_id` to the `mentor_entry` row of the Heph message that showed the feedback.
 
-   That mapping identifies the Slack conversation.
-   The thread root is **not** the outgoing reply's deletion ID.
-   Some mentor replies and reminders have no feedback placement or durable outgoing timestamp.
-   The ledger query alone cannot establish complete Slack removal.
+   Read its `conversation_id`, `turn_id`, and `surface`.
+   A message with the surface `APP` has no Slack copy.
+   For a thread, follow `mentor_conversation.parent_conversation_id` to the main conversation.
+   The main conversation's `slack_team_id`, `slack_user_id`, and `slack_channel_id` identify the Slack DM.
+
+   One Slack message shows all Heph messages of a turn.
+   The question of the turn records the state of that Slack reply: it is the `mentor_entry` row with the same `turn_id` and the kind `USER`.
+   Read its `slack_delivery` and `slack_stream_ts`.
+   Then read `slack_ts` of the last `HEPH` row of the turn.
+
+   If `slack_delivery` is `DELIVERED`, that `slack_ts` is the `ts` of the Slack reply.
+   A reply in a Slack thread is a stream, and its `ts` is also in `slack_stream_ts`.
+   An `UNCERTAIN` or `PENDING` reply can have a Slack copy without a recorded `slack_ts`.
+   Thus, the ledger query alone cannot establish complete Slack removal.
 
 9. Use the provider's paginated [conversation replies](https://docs.slack.dev/reference/methods/conversations.replies/) API to find each exact bot-authored reply and its `ts`.
 10. If provider inventory is inaccessible or ambiguous, record the gap.
@@ -591,7 +601,7 @@ Deleting in-app data does not delete a provider comment. If external copies must
     | GitHub inline review comment                 | `DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}` — [review comments](https://docs.github.com/en/rest/pulls/comments#delete-a-review-comment-for-a-pull-request)           |
     | GitLab issue or merge-request note           | `DELETE /projects/:id/issues/:issue_iid/notes/:note_id` or `DELETE /projects/:id/merge_requests/:merge_request_iid/notes/:note_id` — [notes](https://docs.gitlab.com/api/notes/)    |
     | GitLab discussion/diff note                  | Use its discussion and note IDs — [discussions](https://docs.gitlab.com/api/discussions/#delete-a-merge-request-discussion-note)                                                    |
-    | Slack feedback or mentor reply               | `chat.delete` with the exact channel and message `ts`, using a token permitted to delete that author's message — [Slack API](https://docs.slack.dev/reference/methods/chat.delete/) |
+    | Slack feedback or Heph answer                | `chat.delete` with the exact channel and message `ts`, using a token permitted to delete that author's message — [Slack API](https://docs.slack.dev/reference/methods/chat.delete/) |
     | Outline                                      | No current external feedback destination. Do not delete source documents as a substitute for removing feedback                                                                      |
 
     A submitted GitHub review/approval is not an issue comment.

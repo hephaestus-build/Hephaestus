@@ -46,6 +46,10 @@ In the practice editor, shorten **practice visual** to **Visual** and **practice
 | **Contributor**                     | A repository role relevant to review eligibility                                                                                                           | user, when the role matters                                          |
 | **Heph**                            | The conversational assistant                                                                                                                               | agent, bot                                                           |
 | **Mentor**                          | The product area for conversations with Heph                                                                                                               |                                                                      |
+| **Heph conversation** | The one conversation a developer has with Heph in a workspace. The app shows all of it. The Slack direct message shows what was asked there ([ADR 0055](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0055-one-heph-conversation-per-developer.md)) | chat, session, chat history |
+| **Heph thread** | A thread on one top-level message of the Heph conversation: one level deep, one per message. A Heph thread started in Slack also appears in Slack. One started in the app stays in the app. UI and user docs say *thread*. Contributor docs say *Heph thread* or *Slack thread* in full. The review glossary owns the [feedback thread key](./practice-review-glossary.mdx#thread-key-and-supersession) | fork, branch, sub-chat |
+| **Message** (Heph) | One question, answer or weekly digest in a Heph conversation, as UI and user docs name it. The code word is *entry* (`mentor_entry`). Neither word counts feedback | entry (in UI), chat message, turn (in UI) |
+| **Weekly digest** | An entry Hephaestus writes into a developer's Heph conversation at most once a week, when they turned it on. It links to practice feedback that reached them and says what changed on their Practice profile. It is not a channel and delivers no feedback. *Digest* alone means a hash elsewhere in the repository | summary, report, newsletter, recap, digest message |
 | **Practice profile**                | The developer's own page: how their reviewed work stands across practice groups, how it developed, and one next step from Heph. A surface, not a channel   | practice dashboard, standings page                                   |
 | **Standing**                        | Where a developer stands in one practice or practice group: Needs attention, Mixed feedback, or Going well. It is read from the newest decided pieces of work, up to four, and the latest piece counts most. [Which reviews it reads](./practice-review-glossary.mdx#how-a-review-was-occasioned) is a review rule | score, grade, rating |
 | **Early read**                      | A standing from fewer than three decided pieces of work. Its sentence says how little work it rests on, not a pattern of reviews | preliminary score, provisional grade |
@@ -93,6 +97,9 @@ A card that still shows retired words is wrong wording, and is [withdrawn](./pra
 A sorted Workspace activity shows a **position**, never a *rank* ([ADR 0052](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0052-activity-sorts-by-contributions-and-can-be-public.md)).
 
 **Feedback is the countable unit, and there is no other word for it.** Do not reach for *message*, *item*, *note*, or *entry* to get a noun that pluralises.
+
+A Heph *message* (code word *entry*) is a different thing: one question, answer or weekly digest in a Heph conversation.
+
 *Feedback* is uncountable.
 Phrase the count so the noun is not needed.
 Do not invent a second word for the same thing.
@@ -138,9 +145,12 @@ On an operator surface, the channel reads **On their practice pages**.
 
 **Feedback waiting for a mentor conversation is *prepared*, never *queued*.** A queue implies somebody has to work it.
 Nothing works this queue.
-`FeedbackDeliveryState.PREPARED` advances to `DELIVERED` when a completed chat turn shows the developer feedback about it.
+`FeedbackDeliveryState.PREPARED` advances to `DELIVERED` when a Heph answer shows the developer feedback about it, on the surface where Heph answered.
 The mentor's `link_observation` call carries the words.
-The reply renders them in the app and in Slack.
+The answer renders them in the app, and in Slack when the question came from Slack.
+
+At most one piece of feedback advances for each turn.
+[Heph runtime](./unified-pi-runtime.mdx#delivery-of-shown-feedback) is the home of the delivery rule.
 
 The label is **Prepared for conversation**.
 
@@ -168,7 +178,7 @@ Unconfirmed is a family of its own because counting it as prepared would promise
 
 **Observation, not finding**, for the measurement — in copy, URLs, API schema, field names, and Java.
 Delivery uses `FeedbackAnchor` and `InlineFeedbackChannel`.
-The mentor uses `link_observation` and `data-observation`.
+The mentor uses `link_observation`, and a Heph answer lists the observations it linked (`MentorObservationLink`).
 The schema, wire protocol and web routes have no aliases for the retired vocabulary, and no address redirects from a retired word.
 
 Everything else is an observation, including the read APIs and the reviews UI.

@@ -16,6 +16,8 @@ import org.springframework.stereotype.Repository;
 public interface FeedbackPlacementRepository extends JpaRepository<FeedbackPlacement, UUID> {
     List<FeedbackPlacement> findByFeedbackId(UUID feedbackId);
 
+    List<FeedbackPlacement> findByFeedbackIdInAndPlacementType(Collection<UUID> feedbackIds, PlacementType type);
+
     /** A comment the provider confirmed without returning its id is recorded once per anchor, like any other. */
     @Modifying
     @Query(value = """

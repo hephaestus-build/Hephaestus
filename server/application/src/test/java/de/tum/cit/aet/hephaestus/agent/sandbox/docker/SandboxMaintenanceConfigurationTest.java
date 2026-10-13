@@ -4,25 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxRegistry;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.StdinWriteWatchdog;
 import de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,12 +33,10 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
     private final SandboxContainerManager containers = mock(SandboxContainerManager.class);
     private final SandboxNetworkManager networks = mock(SandboxNetworkManager.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
-    private final StdinWriteWatchdog watchdog = new StdinWriteWatchdog();
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withUserConfiguration(
                     SandboxMaintenanceConfiguration.class, PropertiesConfiguration.class, ServerSchedulingConfig.class)
-            .withBean(StdinWriteWatchdog.class, () -> watchdog)
             .withBean(
                     SandboxReconciler.class,
                     () -> new SandboxReconciler(
@@ -57,15 +46,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
                             mock(SandboxVolumeManager.class),
                             mock(SandboxCreator.class),
                             meters,
-                            Clock.systemUTC()))
-            .withBean(
-                    InteractiveSandboxRegistry.class,
-                    () -> new InteractiveSandboxRegistry(
-                            new InteractiveSandboxProperties(300, 1, 1, 512, 5000, 64, 64, 30, 3, 50, 1048576),
-                            containers,
-                            watchdog,
-                            meters,
-                            mock(SandboxCreator.class)));
+                            Clock.systemUTC()));
 
     @AfterEach
     void closeMeters() {
@@ -91,16 +72,13 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    void shouldInterruptStalledWritesWithOrWithoutTheServerRole(boolean serverEnabled) {
-        var interrupted = new AtomicBoolean();
-        watchdog.register(UUID.randomUUID(), stalledTarget(interrupted));
+    void shouldScheduleReconciliationWhenTheServerRoleIsOnOrOff(boolean serverEnabled) {
         runner.withPropertyValues("hephaestus.runtime.server.enabled=" + serverEnabled)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values().stream()
                                     .flatMap(holder -> holder.getScheduledTasks().stream()))
-                            .hasSize(3);
-                    await().atMost(Duration.ofSeconds(3)).untilTrue(interrupted);
+                            .hasSize(1);
                 });
     }
 
@@ -117,28 +95,6 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
                                             .counter()
                                             .count())
                                     .isPositive());
-                });
-    }
-
-    @Test
-    void shouldKeepTheWatchdogRunningWhileDockerReconciliationBlocks() {
-        var entered = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
-        when(containers.listManagedContainers()).thenAnswer(invocation -> {
-            entered.countDown();
-            release.await();
-            return List.of();
-        });
-        runner.withPropertyValues("hephaestus.sandbox.reconciliation-initial-delay-seconds=0")
-                .run(context -> {
-                    try {
-                        assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
-                        var interrupted = new AtomicBoolean();
-                        watchdog.register(UUID.randomUUID(), stalledTarget(interrupted));
-                        await().atMost(Duration.ofSeconds(3)).untilTrue(interrupted);
-                    } finally {
-                        release.countDown();
-                    }
                 });
     }
 
@@ -168,25 +124,11 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
                 .values()
                 .forEach(registrar -> tasks.addAll(registrar.getScheduledTasks())));
         assertThat(tasks)
-                .hasSize(3)
+                .hasSize(1)
                 .allSatisfy(task -> assertThat(task.nextExecution()).isNull());
     }
 
-    private static StdinWriteWatchdog.StallTarget stalledTarget(AtomicBoolean interrupted) {
-        return new StdinWriteWatchdog.StallTarget() {
-            @Override
-            public boolean writeStalled(long nowNanos) {
-                return !interrupted.get();
-            }
-
-            @Override
-            public void onWriteTimeout() {
-                interrupted.set(true);
-            }
-        };
-    }
-
     @Configuration(proxyBeanMethods = false)
-    @EnableConfigurationProperties({SandboxProperties.class, InteractiveSandboxProperties.class})
+    @EnableConfigurationProperties(SandboxProperties.class)
     static class PropertiesConfiguration {}
 }

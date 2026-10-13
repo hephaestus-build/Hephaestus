@@ -1,6 +1,0 @@
-{
-  "type": "tool_execution_start",
-  "toolCallId": "call-real-1",
-  "toolName": "fetch_context",
-  "args": {"path": "inputs/context/workspace.json"}
-}

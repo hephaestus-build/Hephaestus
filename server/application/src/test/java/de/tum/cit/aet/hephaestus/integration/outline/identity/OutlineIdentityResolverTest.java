@@ -51,7 +51,7 @@ class OutlineIdentityResolverTest extends BaseUnitTest {
     private static AccountWorkspaceMembershipQuery.WorkspaceMembershipView membership(
             long workspaceId, @Nullable Long memberId) {
         return new AccountWorkspaceMembershipQuery.WorkspaceMembershipView(
-                workspaceId, "ws", "Workspace", "MEMBER", memberId);
+                workspaceId, "ws", "Workspace", "MEMBER", memberId, memberId == null ? List.of() : List.of(memberId));
     }
 
     @Test

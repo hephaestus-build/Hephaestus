@@ -24,6 +24,22 @@ class ProxyTokenUsageTest extends BaseUnitTest {
         assertThat(ProxyTokenUsage.from(body, false)).isEqualTo(new ProxyTokenUsage(50, 2, 0, 20, 30));
     }
 
+    /** Two identical gpt-oss requests to a vLLM endpoint with prefix caching: the first fills the cache. */
+    @Test
+    void keepsOnlyTheUncachedPromptAsInputWhenAPrefixCacheHoldsTheRest() throws Exception {
+        var first = MAPPER.readTree("""
+                {"usage":{"prompt_tokens":1277,"completion_tokens":40,
+                "prompt_tokens_details":{"cached_tokens":0,"created_cache_tokens":1264}}}
+                """);
+        var second = MAPPER.readTree("""
+                {"usage":{"prompt_tokens":1277,"completion_tokens":40,
+                "prompt_tokens_details":{"cached_tokens":1264,"created_cache_tokens":0}}}
+                """);
+
+        assertThat(ProxyTokenUsage.from(first, false)).isEqualTo(new ProxyTokenUsage(13, 40, 0, 0, 1264));
+        assertThat(ProxyTokenUsage.from(second, false)).isEqualTo(new ProxyTokenUsage(13, 40, 0, 1264, 0));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"prompt_cache_hit_tokens", "cached_tokens"})
     void readsSupportedChatCacheReadFields(String field) throws Exception {

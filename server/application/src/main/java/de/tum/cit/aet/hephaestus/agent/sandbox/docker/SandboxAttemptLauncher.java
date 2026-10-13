@@ -15,7 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The launch steps the batch and the interactive adapter share: bind the attempt to the credential
+ * The launch steps a practice review's sandbox and the Heph host share: bind the attempt to the credential
  * its sandbox will present, create the attempt volumes, and run the workspace initializer to
  * completion before the runtime container is created on the same volumes.
  */
@@ -45,9 +45,11 @@ public final class SandboxAttemptLauncher {
     /**
      * Registers the gateway session for the credential and creates the attempt volumes, or neither. A review attempt
      * with a declared attempt number is bound to that attempt and image before anything can upload for it.
+     *
+     * @param id the agent job, or the Heph host, the session serves
      */
     public Attempt open(
-            @Nullable UUID jobId,
+            UUID id,
             @Nullable Integer attemptNumber,
             @Nullable String image,
             @Nullable NetworkPolicy policy,
@@ -60,13 +62,9 @@ public final class SandboxAttemptLauncher {
         }
         SandboxGatewaySessions.Session session;
         try {
-            if (jobId == null) {
-                session = gatewaySessions.register(token, inputTar, "out");
-            } else if (attemptNumber == null || image == null) {
-                session = gatewaySessions.register(jobId, token, inputTar, "out");
-            } else {
-                session = gatewaySessions.registerAttempt(jobId, attemptNumber, image, token, inputTar, "out");
-            }
+            session = attemptNumber == null || image == null
+                    ? gatewaySessions.register(id, token, inputTar, "out")
+                    : gatewaySessions.registerAttempt(id, attemptNumber, image, token, inputTar, "out");
         } catch (IOException | RuntimeException exception) {
             try {
                 Files.deleteIfExists(inputTar);

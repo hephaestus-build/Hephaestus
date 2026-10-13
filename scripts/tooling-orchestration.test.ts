@@ -9,6 +9,13 @@ import { duplicatePorts } from "./check-ports.ts";
 import { withDisposableDatabase } from "./db-utils.ts";
 import { loadConfig } from "./e2e-setup.ts";
 import { updateEnv } from "./jean-setup.ts";
+import {
+	type Api,
+	type E2eLlmRoute,
+	provisionLlmConnection,
+	provisionLlmModel,
+	readLlmRoute,
+} from "./lib/e2e-llm.ts";
 import { isHostname, isSet, positivePort, readEnvFile } from "./lib/env.ts";
 
 await describe("environment parsing", async () => {
@@ -152,7 +159,7 @@ await describe("E2E setup trust boundaries", async () => {
 	await test("accepts credentials only from the environment", () => {
 		const config = loadConfig(valid, []);
 		assert.equal(config.pat, "pat-secret");
-		assert.equal(config.llmKey, "llm-secret");
+		assert.equal(config.llm.key, "llm-secret");
 		assert.throws(() => loadConfig(valid, ["--llm-key", "leak"]), /invalid argument/u);
 	});
 
@@ -182,5 +189,138 @@ await describe("E2E setup trust boundaries", async () => {
 			assert.ok(!diagnostic.includes("pat-secret"));
 			assert.ok(!diagnostic.includes("llm-secret"));
 		}
+	});
+});
+
+/** Only the required model variables; everything else takes its default. */
+function minimalSetting(_flag: string, name: string, fallback = ""): string {
+	return (
+		(
+			{ E2E_LLM_BASE_URL: "https://models.example/v1/", E2E_MODEL: "model" } as Record<
+				string,
+				string
+			>
+		)[name] ?? fallback
+	);
+}
+
+await describe("E2E model connection", async () => {
+	const route: E2eLlmRoute = {
+		baseUrl: "https://models.example/v1",
+		key: "rotated-key",
+		model: "model",
+		protocol: "openai-responses",
+		authMode: "BEARER",
+	};
+	const stored = {
+		id: 7,
+		slug: "e2e-live-llm",
+		baseUrl: route.baseUrl,
+		apiProtocol: route.protocol,
+		authMode: route.authMode,
+	};
+
+	/** An admin API holding `connections` and `models`, which records every write. */
+	function fakeApi(connections: unknown[], models: unknown[] = []): { api: Api; writes: string[] } {
+		const writes: string[] = [];
+		const api: Api = async (method, requestPath, body) => {
+			if (method === "GET") {
+				return requestPath.endsWith("/models") ? models : connections;
+			}
+			writes.push(`${method} ${requestPath} ${JSON.stringify(body ?? null)}`);
+			if (requestPath.endsWith("/probe")) {
+				return { reachable: true };
+			}
+			return method === "POST" ? { ...stored, id: 9 } : stored;
+		};
+		return { api, writes };
+	}
+
+	await test("reads the same defaults for every caller", () => {
+		assert.deepEqual(readLlmRoute(minimalSetting, { E2E_LLM_KEY: "key" }), {
+			baseUrl: "https://models.example/v1",
+			key: "key",
+			model: "model",
+			protocol: "openai-responses",
+			authMode: "BEARER",
+		});
+	});
+
+	await test("sets the key of a connection from an earlier run, so a rotated key takes effect", async () => {
+		const { api, writes } = fakeApi([stored]);
+		assert.equal(
+			await provisionLlmConnection(
+				api,
+				"/admin/llm",
+				{ slug: "e2e-live-llm", displayName: "E2E" },
+				route,
+			),
+			7,
+		);
+		assert.deepEqual(writes, [
+			'PATCH /admin/llm/connections/7 {"apiKey":"rotated-key"}',
+			"POST /admin/llm/connections/7/probe null",
+			'PATCH /admin/llm/connections/7 {"enabled":true}',
+		]);
+	});
+
+	await test("refuses a connection whose route changed instead of calling the old provider", async () => {
+		for (const changed of [
+			{ baseUrl: "https://other.example/v1" },
+			{ apiProtocol: "openai-completions" },
+			{ authMode: "API_KEY" },
+		]) {
+			const { api, writes } = fakeApi([{ ...stored, ...changed }]);
+			await assert.rejects(
+				provisionLlmConnection(
+					api,
+					"/admin/llm",
+					{ slug: "e2e-live-llm", displayName: "E2E" },
+					route,
+				),
+				/different base URL, protocol or auth mode/u,
+			);
+			assert.deepEqual(writes, []);
+		}
+	});
+
+	await test("creates the connection on a first run", async () => {
+		const { api, writes } = fakeApi([]);
+		assert.equal(
+			await provisionLlmConnection(
+				api,
+				"/admin/llm",
+				{ slug: "e2e-live-llm", displayName: "E2E" },
+				route,
+			),
+			9,
+		);
+		assert.match(
+			writes[0] ?? "",
+			/^POST \/admin\/llm\/connections \{.*"apiProtocol":"openai-responses"/u,
+		);
+		assert.equal(writes[1], 'PATCH /admin/llm/connections/9 {"apiKey":"rotated-key"}');
+	});
+	await test("repairs a model that a partial earlier run left disabled and unpriced", async () => {
+		const leftOver = { id: 3, connectionId: 7, upstreamModelId: "model", enabled: false };
+		const setup = {
+			connection: { slug: "e2e-live-llm", displayName: "E2E" },
+			modelDisplayName: "model",
+			pricing: { pricingMode: "NO_CHARGE", note: "E2E test model" },
+		} as const;
+
+		const instance = fakeApi([stored], [leftOver]);
+		assert.equal(await provisionLlmModel(instance.api, "/admin/llm", setup, route), 3);
+		assert.deepEqual(instance.writes.slice(3), [
+			'PUT /admin/llm/models/3/price {"pricingMode":"NO_CHARGE","note":"E2E test model"}',
+			'PATCH /admin/llm/models/3 {"enabled":true}',
+			'PUT /admin/llm/models/3/sharing {"visibility":"PUBLIC"}',
+		]);
+
+		const workspace = fakeApi([stored], [leftOver]);
+		assert.equal(await provisionLlmModel(workspace.api, "/workspaces/e2e/llm", setup, route), 3);
+		assert.deepEqual(workspace.writes.slice(3), [
+			'PATCH /workspaces/e2e/llm/models/3 {"enabled":true,"pricingMode":"NO_CHARGE","priceNote":"E2E test model"}',
+		]);
 	});
 });

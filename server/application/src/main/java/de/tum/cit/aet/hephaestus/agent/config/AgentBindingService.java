@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -71,19 +72,14 @@ public class AgentBindingService {
 
         applyModel(binding, workspaceId, request.instanceModelId(), request.workspaceModelId());
         requireModelFillsSlot(binding);
+        if (purpose == AgentPurpose.MENTOR) {
+            requireModelFitsHeph(binding);
+        }
         if (request.timeoutSeconds() != null) {
             binding.setTimeoutSeconds(request.timeoutSeconds());
         }
         if (request.maxConcurrentJobs() != null) {
             binding.setMaxConcurrentJobs(request.maxConcurrentJobs());
-        }
-        if (request.allowInternet() != null) {
-            // PracticePiAdapter enforces an internal network regardless of stored configuration.
-            if (request.allowInternet() && purpose == AgentPurpose.PRACTICE_REVIEW) {
-                throw new IllegalArgumentException(
-                        "Practice reviews run on an internal network. Only Heph can have internet access.");
-            }
-            binding.setAllowInternet(request.allowInternet());
         }
         if (request.enabled() != null) {
             binding.setEnabled(request.enabled());
@@ -150,6 +146,19 @@ public class AgentBindingService {
         if (!llmModelResolver.isAvailable(binding)) {
             throw new IllegalArgumentException("This model is not available to this workspace.");
         }
+    }
+
+    private static void requireModelFitsHeph(WorkspaceAgentBinding binding) {
+        LlmModel instance = binding.getInstanceModel();
+        WorkspaceLlmModel own = binding.getWorkspaceModel();
+        Optional<String> tooSmall = instance != null
+                ? AgentBindingLimits.tooSmallForHeph(instance.getContextWindow(), instance.getMaxOutputTokens())
+                : own != null
+                        ? AgentBindingLimits.tooSmallForHeph(own.getContextWindow(), own.getMaxOutputTokens())
+                        : Optional.empty();
+        tooSmall.ifPresent(reason -> {
+            throw new IllegalArgumentException(reason);
+        });
     }
 
     private static DataHandlingTier declaredTier(WorkspaceAgentBinding binding) {

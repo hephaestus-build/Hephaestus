@@ -85,9 +85,10 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/webhooks/gitlab") {
             @Override
             public long getContentLengthLong() {
-                return -1; // chunked transfer encoding or no Content-Length
+                return -1;
             }
         };
+        request.addHeader("Transfer-Encoding", "chunked");
         request.setContentType("application/json");
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);

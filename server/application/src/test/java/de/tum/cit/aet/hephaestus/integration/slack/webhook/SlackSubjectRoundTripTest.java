@@ -83,10 +83,6 @@ class SlackSubjectRoundTripTest extends BaseUnitTest {
                         "slack.T1.U1.app_home_opened",
                         new EventTypeKey(IntegrationKind.SLACK, "app_home_opened")),
                 Arguments.of(
-                        "{\"type\":\"event_callback\",\"team_id\":\"T1\",\"event\":{\"type\":\"app_context_changed\",\"user\":\"U1\",\"context\":{\"entities\":[{\"type\":\"slack#/types/channel_id\",\"value\":\"C1\"}]}}}",
-                        "slack.T1.C1.app_context_changed",
-                        new EventTypeKey(IntegrationKind.SLACK, "app_context_changed")),
-                Arguments.of(
                         "{\"type\":\"event_callback\",\"team_id\":\"T1\",\"event\":{\"type\":\"member_joined_channel\",\"channel\":\"C1\",\"user\":\"U1\"}}",
                         "slack.T1.C1.member_joined_channel",
                         new EventTypeKey(IntegrationKind.SLACK, "member_joined_channel")),

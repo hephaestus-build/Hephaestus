@@ -126,7 +126,6 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
                         1L,
                         null,
                         600,
-                        false,
                         null,
                         null)
                 .withPriceSnapshot(new LlmPriceSnapshot(

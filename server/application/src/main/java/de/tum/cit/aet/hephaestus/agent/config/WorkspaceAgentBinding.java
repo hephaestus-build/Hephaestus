@@ -91,10 +91,6 @@ public class WorkspaceAgentBinding implements ModelBindingSource {
     @Column(name = "max_concurrent_jobs", nullable = false)
     private int maxConcurrentJobs = 3;
 
-    @ColumnDefault("false")
-    @Column(name = "allow_internet", nullable = false)
-    private boolean allowInternet = false;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "instance_model_id",

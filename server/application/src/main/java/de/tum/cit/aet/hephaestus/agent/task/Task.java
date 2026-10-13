@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.task;
 
 import java.util.Objects;
 
-/** Instructions for a practice review. Interactive mentor sessions do not use task.json. */
+/** Instructions for a practice review. The Heph host does not use task.json. */
 public record Task(String prompt, int pullRequestNumber, String repositoryFullName) {
     public Task {
         Objects.requireNonNull(prompt, "prompt");

@@ -69,7 +69,7 @@ class ConversationThreadContentSourceTest extends BaseUnitTest {
     void supportsOnlyConversationReviewRequests() {
         assertThat(source.supports(new ContextRequest.ConversationReviewRequest(conversationJob())))
                 .isTrue();
-        assertThat(source.supports(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID())))
+        assertThat(source.supports(new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID())))
                 .isFalse();
     }
 

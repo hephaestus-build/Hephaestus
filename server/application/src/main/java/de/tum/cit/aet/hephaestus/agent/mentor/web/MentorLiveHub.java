@@ -1,0 +1,375 @@
+package de.tum.cit.aet.hephaestus.agent.mentor.web;
+
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountWorkspaceMembershipQuery;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
+import de.tum.cit.aet.hephaestus.mentor.MentorReadDTO;
+import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PreDestroy;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * The live streams of developers' Heph conversations on this replica ({@code docs/contributor/unified-pi-runtime.mdx}
+ * § Live updates). Changes arrive with ids only, through the replica's one {@link MentorLedgerNotifications}
+ * connection. One reader thread loads each change once and hands the same event to every stream of its developer in
+ * the order it read them, so a stream never receives an older state after a newer one. A stream that falls too far
+ * behind, or missed notifications, gets a new snapshot instead.
+ */
+@Component
+@ConditionalOnServerRole
+public class MentorLiveHub implements MentorLedgerNotifications.Listener {
+
+    static final String SNAPSHOT = "snapshot";
+    static final String TURN = "turn";
+    static final String ENTRY = "entry";
+    static final String READ = "read";
+
+    private static final Logger log = LoggerFactory.getLogger(MentorLiveHub.class);
+
+    private static final long TIMEOUT_MS = Duration.ofMinutes(30).toMillis();
+    private static final long HEARTBEAT_INTERVAL_MS = 20_000L;
+
+    /** Limits the streams one developer holds open; CORS does not prevent opening a stream. */
+    public static final int MAX_STREAMS_PER_DEVELOPER = 10;
+
+    private static final int QUEUE_CAPACITY = 256;
+
+    private final MentorLedgerNotifications notifications;
+    private final MentorTimeline timeline;
+    private final AccountWorkspaceMembershipQuery memberships;
+    private final ObjectMapper mapper;
+    private final Supplier<SseEmitter> emitters;
+    private final int queueCapacity;
+
+    /** Each stream under every actor id of its account: a conversation is found by any of them. */
+    private final Map<Developer, Set<Stream>> streams = new ConcurrentHashMap<>();
+
+    private final ExecutorService reader = Executors.newSingleThreadExecutor(
+            Thread.ofVirtual().name("mentor-live-reader").factory());
+    private final ExecutorService writers = Executors.newVirtualThreadPerTaskExecutor();
+    private final AtomicBoolean listening = new AtomicBoolean();
+
+    @Autowired
+    public MentorLiveHub(
+            MentorLedgerNotifications notifications,
+            MentorTimeline timeline,
+            AccountWorkspaceMembershipQuery memberships,
+            ObjectMapper mapper,
+            MeterRegistry meters) {
+        this(notifications, timeline, memberships, mapper, meters, () -> new SseEmitter(TIMEOUT_MS), QUEUE_CAPACITY);
+    }
+
+    MentorLiveHub(
+            MentorLedgerNotifications notifications,
+            MentorTimeline timeline,
+            AccountWorkspaceMembershipQuery memberships,
+            ObjectMapper mapper,
+            MeterRegistry meters,
+            Supplier<SseEmitter> emitters,
+            int queueCapacity) {
+        this.notifications = notifications;
+        this.timeline = timeline;
+        this.memberships = memberships;
+        this.mapper = mapper;
+        this.emitters = emitters;
+        this.queueCapacity = queueCapacity;
+        Gauge.builder(AgentMetrics.MENTOR_LIVE_STREAMS, streams, MentorLiveHub::count)
+                .description("Live Heph streams open on this server")
+                .register(meters);
+    }
+
+    private record Developer(long workspaceId, long userId) {}
+
+    /** One server-sent event, already written. */
+    private record Event(Set<ResponseBodyEmitter.DataWithMediaType> data) {}
+
+    /**
+     * Opens a stream of the account's conversation in a workspace.
+     *
+     * @param accountId the account that opens the stream, whose membership every delivery checks again
+     * @param selectedActorId the actor whose stream count is capped
+     * @param accountActorIds every actor of the account in the workspace
+     */
+    public SseEmitter subscribe(long workspaceId, long accountId, long selectedActorId, Set<Long> accountActorIds) {
+        if (listening.compareAndSet(false, true)) {
+            notifications.subscribe(this);
+        }
+        SseEmitter emitter = emitters.get();
+        Stream stream = new Stream(workspaceId, accountId, Set.copyOf(accountActorIds), emitter);
+        emitter.onCompletion(() -> remove(stream));
+        emitter.onTimeout(() -> close(stream));
+        emitter.onError(failure -> remove(stream));
+        synchronized (streams) {
+            Set<Stream> own = streams.get(new Developer(workspaceId, selectedActorId));
+            if (own != null && own.size() >= MAX_STREAMS_PER_DEVELOPER) {
+                throw new ResponseStatusException(
+                        HttpStatus.TOO_MANY_REQUESTS, "Too many live Heph streams are open. Close one and try again.");
+            }
+            for (long actorId : stream.actorIds) {
+                streams.computeIfAbsent(new Developer(workspaceId, actorId), key -> ConcurrentHashMap.newKeySet())
+                        .add(stream);
+            }
+        }
+        read(() -> snapshot(stream));
+        return emitter;
+    }
+
+    @Override
+    public void turnChanged(MentorLedgerEvents.TurnChanged change) {
+        if (watches(change.workspaceId())) {
+            read(() -> timeline.liveTurn(change.workspaceId(), change.turnId())
+                    .ifPresent(turn -> fanOut(change.workspaceId(), turn.developerId(), TURN, turn.value())));
+        }
+    }
+
+    @Override
+    public void entryChanged(MentorLedgerEvents.EntryChanged change) {
+        if (watches(change.workspaceId())) {
+            change.entryIds()
+                    .forEach(entryId -> read(() -> timeline.liveEntry(change.workspaceId(), entryId)
+                            .ifPresent(
+                                    entry -> fanOut(change.workspaceId(), entry.developerId(), ENTRY, entry.value()))));
+        }
+    }
+
+    /** Another device of the developer moved the read marker. */
+    @Override
+    public void readChanged(MentorLedgerEvents.ReadChanged change) {
+        if (watches(change.workspaceId())) {
+            read(() -> fanOut(change.workspaceId(), change.userId(), READ, new MentorReadDTO(change.lastReadAt())));
+        }
+    }
+
+    /** Changes made while the notification connection was down were missed: every stream starts over. */
+    @Override
+    public void resync() {
+        allStreams().forEach(stream -> read(() -> snapshot(stream)));
+    }
+
+    /** Keeps quiet streams open through proxies' idle timeouts, and closes those whose account left the workspace. */
+    @Scheduled(fixedRate = HEARTBEAT_INTERVAL_MS, initialDelay = HEARTBEAT_INTERVAL_MS)
+    @WorkspaceAgnostic("Writes transport heartbeats to streams whose account is still a member")
+    void heartbeat() {
+        Event ping = new Event(SseEmitter.event().comment("ping").build());
+        allStreams()
+                .forEach(stream -> read(() -> {
+                    if (admitted(stream)) {
+                        send(stream, ping);
+                    }
+                }));
+    }
+
+    private boolean watches(long workspaceId) {
+        return streams.keySet().stream().anyMatch(developer -> developer.workspaceId() == workspaceId);
+    }
+
+    private List<Stream> allStreams() {
+        return streams.values().stream().flatMap(Set::stream).distinct().toList();
+    }
+
+    private static double count(Map<Developer, Set<Stream>> streams) {
+        return streams.values().stream().flatMap(Set::stream).distinct().count();
+    }
+
+    private void read(Runnable read) {
+        try {
+            reader.execute(() -> {
+                try {
+                    read.run();
+                } catch (RuntimeException e) {
+                    log.warn("Could not read a Heph conversation change for its live streams", e);
+                }
+            });
+        } catch (RejectedExecutionException shuttingDown) {
+            // The replica stops; its streams close with it.
+        }
+    }
+
+    private void snapshot(Stream stream) {
+        if (!stream.closed.get() && admitted(stream)) {
+            send(stream, event(SNAPSHOT, timeline.conversation(stream.workspaceId, stream.actorIds)));
+        }
+    }
+
+    private void fanOut(long workspaceId, long developerId, String name, Object value) {
+        Set<Stream> watching = streams.get(new Developer(workspaceId, developerId));
+        if (watching == null || watching.isEmpty()) {
+            return;
+        }
+        Event event = event(name, value);
+        // One membership read for each account of this delivery, never reused for a later one.
+        Map<Long, List<AccountWorkspaceMembershipQuery.WorkspaceMembershipView>> read = new HashMap<>();
+        List.copyOf(watching).forEach(stream -> {
+            if (admitted(stream, read.computeIfAbsent(stream.accountId, memberships::membershipsForAccount))) {
+                send(stream, event);
+            }
+        });
+    }
+
+    /**
+     * Whether the stream's account is still a member of its workspace through one of the stream's actors, read now.
+     * Closes the stream when it is not. Every delivery reads it again: a removed member receives nothing after the
+     * removal commits. Runs on the reader thread.
+     */
+    private boolean admitted(Stream stream) {
+        return admitted(stream, memberships.membershipsForAccount(stream.accountId));
+    }
+
+    private boolean admitted(
+            Stream stream, List<AccountWorkspaceMembershipQuery.WorkspaceMembershipView> accountMemberships) {
+        boolean member = accountMemberships.stream()
+                .anyMatch(membership -> membership.workspaceId() == stream.workspaceId
+                        && membership.memberIds().stream().anyMatch(stream.actorIds::contains));
+        if (!member) {
+            close(stream);
+        }
+        return member;
+    }
+
+    /** Built once, sent to many streams: a built event is immutable, a builder is not. */
+    private Event event(String name, Object value) {
+        return new Event(SseEmitter.event()
+                .name(name)
+                .data(mapper.writeValueAsString(value))
+                .build());
+    }
+
+    private void send(Stream stream, Event event) {
+        boolean drain;
+        synchronized (stream.queue) {
+            if (stream.closed.get()) {
+                return;
+            }
+            if (stream.queue.size() >= queueCapacity) {
+                stream.queue.clear();
+                read(() -> snapshot(stream));
+                return;
+            }
+            stream.queue.addLast(event);
+            drain = !stream.draining;
+            stream.draining = true;
+        }
+        if (drain) {
+            try {
+                writers.execute(() -> drain(stream));
+            } catch (RejectedExecutionException shuttingDown) {
+                close(stream);
+            }
+        }
+    }
+
+    private void drain(Stream stream) {
+        while (true) {
+            Event event;
+            synchronized (stream.queue) {
+                event = stream.queue.pollFirst();
+                if (event == null) {
+                    stream.draining = false;
+                    return;
+                }
+            }
+            try {
+                stream.emitter.send(event.data());
+            } catch (IOException | RuntimeException gone) {
+                log.debug("Heph live stream closed while sending: {}", gone.toString());
+                close(stream);
+                return;
+            }
+        }
+    }
+
+    private void close(Stream stream) {
+        remove(stream);
+        try {
+            stream.emitter.complete();
+        } catch (RuntimeException alreadyComplete) {
+            // The client went away or the container timed the request out.
+        }
+    }
+
+    private void remove(Stream stream) {
+        if (!stream.closed.compareAndSet(false, true)) {
+            return;
+        }
+        synchronized (streams) {
+            for (long actorId : stream.actorIds) {
+                Developer developer = new Developer(stream.workspaceId, actorId);
+                Optional.ofNullable(streams.get(developer)).ifPresent(own -> {
+                    own.remove(stream);
+                    if (own.isEmpty()) {
+                        streams.remove(developer);
+                    }
+                });
+            }
+        }
+        synchronized (stream.queue) {
+            stream.queue.clear();
+        }
+    }
+
+    @PreDestroy
+    void shutdown() {
+        new ArrayList<>(allStreams()).forEach(this::close);
+        reader.shutdownNow();
+        writers.shutdown();
+        try {
+            if (!writers.awaitTermination(5, TimeUnit.SECONDS)) {
+                writers.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            writers.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static final class Stream {
+
+        final long workspaceId;
+        final long accountId;
+        final Set<Long> actorIds;
+        final SseEmitter emitter;
+        final Deque<Event> queue = new ArrayDeque<>();
+        final AtomicBoolean closed = new AtomicBoolean();
+
+        /** Guarded by {@link #queue}: a writer is sending this stream's queue. */
+        boolean draining;
+
+        Stream(long workspaceId, long accountId, Set<Long> actorIds, SseEmitter emitter) {
+            this.workspaceId = workspaceId;
+            this.accountId = accountId;
+            this.actorIds = actorIds;
+            this.emitter = emitter;
+        }
+    }
+}

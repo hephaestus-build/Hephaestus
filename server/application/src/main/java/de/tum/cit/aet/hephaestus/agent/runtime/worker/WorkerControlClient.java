@@ -7,8 +7,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.ForceReconnect;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameCodec;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameEnvelope;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.Heartbeat;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionCommand;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerHello;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerWelcome;
@@ -40,7 +38,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,13 +93,6 @@ public class WorkerControlClient {
     private volatile @Nullable BiConsumer<UUID, String> cancelHandler;
 
     private volatile String controlSessionId = "";
-    private volatile Consumer<MentorSessionCommand> mentorHandler = ignored -> {};
-    private volatile Runnable mentorDisconnectHandler = () -> {};
-
-    public void setMentorHandlers(Consumer<MentorSessionCommand> handler, Runnable disconnected) {
-        mentorHandler = handler;
-        mentorDisconnectHandler = disconnected;
-    }
 
     public WorkerControlClient(
             WorkerProperties properties, FrameCodec codec, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
@@ -267,8 +257,6 @@ public class WorkerControlClient {
                     forceReconnect("server-requested:" + r.reason());
                 }
                 case CancelJob c -> handleCancelJob(c);
-                case MentorSessionCommand command -> mentorHandler.accept(command);
-                case MentorSessionEvent event -> warnSourceMismatch(event);
                 // Empty on purpose. Arrival is the whole signal — see Heartbeat — and the transport
                 // stamped lastInboundAt before dispatch, so there is nothing left to do here.
                 case Heartbeat ignored -> {}
@@ -453,7 +441,6 @@ public class WorkerControlClient {
         while ((queued = outbound.poll()) != null) outboundBytes.addAndGet(-queued.bytes());
         InboundFrame received;
         while ((received = inbound.poll()) != null) inboundBytes.addAndGet(-received.bytes());
-        mentorDisconnectHandler.run();
     }
 
     private static String httpBaseFrom(URI wsUri) {

@@ -115,7 +115,6 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                         1L,
                         null,
                         timeoutSeconds,
-                        false,
                         null,
                         null)
                 .withPriceSnapshot(new LlmPriceSnapshot(
@@ -250,7 +249,6 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                             snapshot.modelId(),
                             snapshot.workspaceId(),
                             snapshot.timeoutSeconds(),
-                            snapshot.allowInternet(),
                             null // the point of the fixture: an orphan frozen before admission pricing existed
                             ,
                             null)

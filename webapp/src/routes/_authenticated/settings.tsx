@@ -1,4 +1,10 @@
-import { type DefaultError, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	type DefaultError,
+	type UseQueryResult,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -34,7 +40,9 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { Options } from "@/api/sdk.gen";
 import type {
+	NotificationPreferences,
 	SlackUserPreferences,
+	UpdateNotificationPreferences,
 	UpdateUserSettingsData,
 	UpdateUserSettingsResponse,
 	UserSettings,
@@ -46,8 +54,10 @@ import type { PublicActivitySectionProps } from "@/components/settings/PublicAct
 import type { SessionsSectionProps } from "@/components/settings/SessionsSection";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
+import type { WeeklyDigestSectionProps } from "@/components/settings/WeeklyDigestSection";
 import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
+import { browserTimeZone, TIME_ZONES } from "@/lib/dates";
 import { pageHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { announcePublicActivityChoice } from "@/lib/public-activity-choice";
@@ -87,8 +97,8 @@ function RouteComponent() {
 		retry: 1,
 	});
 
-	const emailPreferencesQuery = useQuery(getNotificationPreferencesOptions());
-	const emailPreferencesMutation = useMutation({
+	const preferencesQuery = useQuery(getNotificationPreferencesOptions());
+	const preferencesMutation = useMutation({
 		...updateNotificationPreferencesMutation(),
 		onMutate: async () => {
 			await queryClient.cancelQueries({ queryKey: getNotificationPreferencesQueryKey() });
@@ -101,35 +111,55 @@ function RouteComponent() {
 			await queryClient.invalidateQueries({ queryKey: getNotificationPreferencesQueryKey() });
 			toast.error(
 				problemStatusOf(error) === 412
-					? "Email choices changed elsewhere. Review the updated choices and try again."
-					: problemDetailOf(error, "We could not update your email choices. Try again."),
+					? "Your choices changed elsewhere. Review the updated choices and try again."
+					: problemDetailOf(error, "We could not update your choices. Try again."),
 			);
 		},
 	});
-	const preferences = emailPreferencesQuery.data;
+	// The one writer of the notification preferences: the email choices and the weekly digest share
+	// one ETag, so a second writer would send a stale one.
+	const updatePreferences = (patch: Partial<UpdateNotificationPreferences>) => {
+		const current = preferencesQuery.data;
+		if (current === undefined || preferencesMutation.isPending) {
+			return;
+		}
+		const {
+			productFeedback,
+			productSurveys,
+			researchSurveys,
+			surveySummaries,
+			weeklyDigest,
+			workspaceAlerts,
+		} = current;
+		preferencesMutation.mutate({
+			headers: { "If-Match": current.etag },
+			body: {
+				productFeedback,
+				productSurveys,
+				researchSurveys,
+				surveySummaries,
+				weeklyDigest,
+				workspaceAlerts,
+				...patch,
+			},
+		});
+	};
+	const preferences = preferencesQuery.data;
 	let emailPreferencesState: EmailPreferencesSectionProps["state"] = { status: "loading" };
-	if (emailPreferencesQuery.isError) {
+	if (preferencesQuery.isError) {
 		emailPreferencesState = {
 			status: "error",
-			error: emailPreferencesQuery.error,
+			error: preferencesQuery.error,
 			onRetry: () => {
-				void emailPreferencesQuery.refetch();
+				void preferencesQuery.refetch();
 			},
 		};
 	} else if (preferences !== undefined) {
 		emailPreferencesState = {
 			status: "ready",
 			preferences,
-			isPending: emailPreferencesMutation.isPending,
-			onChange: (choices) => {
-				if (emailPreferencesMutation.isPending) {
-					return;
-				}
-				emailPreferencesMutation.mutate({
-					headers: { "If-Match": preferences.etag },
-					body: choices,
-				});
-			},
+			isPending: preferencesMutation.isPending,
+			onChange: updatePreferences,
 		};
 	}
 	const emailPreferencesProps: EmailPreferencesSectionProps = {
@@ -178,18 +208,22 @@ function RouteComponent() {
 	});
 
 	// Spread-based helper: reads latest cache to avoid stale-closure race under rapid toggling
-	const updateSetting = (patch: Partial<UserSettings>) => {
+	const updateSetting = (patch: Partial<UserSettings>, options?: { onSuccess: () => void }) => {
 		const current = queryClient.getQueryData<UserSettings>(userSettingsQueryKey);
 		if (!current) {
 			return;
 		}
-		updateSettingsMutation.mutate({
-			body: { ...current, ...patch },
-		});
+		updateSettingsMutation.mutate({ body: { ...current, ...patch } }, options);
 	};
 
 	const handlePracticeFeedbackToggle = (checked: boolean) =>
 		updateSetting({ practiceFeedbackDeliveryEnabled: checked });
+
+	const weeklyDigestState = weeklyDigestStateOf(preferencesQuery, settings, {
+		updatePreferences,
+		updateSetting,
+		isPending: preferencesMutation.isPending || updateSettingsMutation.isPending,
+	});
 
 	const researchConsentMutation = useMutation({
 		...updateResearchConsentMutation(),
@@ -433,6 +467,7 @@ function RouteComponent() {
 	return (
 		<SettingsPage
 			emailPreferencesProps={emailPreferencesProps}
+			weeklyDigestProps={{ state: weeklyDigestState }}
 			isLoading={isLoading}
 			settingsError={settingsError}
 			onRetrySettings={() => {
@@ -482,4 +517,53 @@ function RouteComponent() {
 			onAccountDeleted={handleAccountDeleted}
 		/>
 	);
+}
+
+/**
+ * The weekly digest choice: one more subscription on the notification preferences, and the
+ * account's time zone, which decides when the digest arrives.
+ */
+function weeklyDigestStateOf(
+	preferencesQuery: UseQueryResult<NotificationPreferences>,
+	settings: UserSettings | undefined,
+	writes: {
+		updatePreferences: (patch: Partial<UpdateNotificationPreferences>) => void;
+		updateSetting: (patch: Partial<UserSettings>, options?: { onSuccess: () => void }) => void;
+		isPending: boolean;
+	},
+): WeeklyDigestSectionProps["state"] {
+	const preferences = preferencesQuery.data;
+	if (preferencesQuery.isError) {
+		return {
+			status: "error",
+			error: preferencesQuery.error,
+			onRetry: () => {
+				void preferencesQuery.refetch();
+			},
+		};
+	}
+	if (preferences === undefined || settings === undefined) {
+		return { status: "loading" };
+	}
+	return {
+		status: "ready",
+		enabled: preferences.weeklyDigest,
+		available: preferences.weeklyDigestAvailable,
+		...(settings.timeZone === undefined ? {} : { timeZone: settings.timeZone }),
+		zones: TIME_ZONES,
+		isPending: writes.isPending,
+		onToggle: (enabled) => {
+			// The digest arrives by the reader's zone, so turning it on first saves the browser's when
+			// the account has none. A zone the server refuses leaves the digest off.
+			if (enabled && settings.timeZone === undefined) {
+				writes.updateSetting(
+					{ timeZone: browserTimeZone() },
+					{ onSuccess: () => writes.updatePreferences({ weeklyDigest: true }) },
+				);
+				return;
+			}
+			writes.updatePreferences({ weeklyDigest: enabled });
+		},
+		onChangeTimeZone: (timeZone) => writes.updateSetting({ timeZone }),
+	};
 }

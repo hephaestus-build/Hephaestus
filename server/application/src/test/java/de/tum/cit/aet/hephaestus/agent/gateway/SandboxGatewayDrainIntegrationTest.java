@@ -64,7 +64,6 @@ class SandboxGatewayDrainIntegrationTest {
                 new WorkerCapacityState(properties),
                 properties,
                 Optional.of(executor),
-                Optional.empty(),
                 mock(ApplicationEventPublisher.class),
                 new SimpleMeterRegistry());
 

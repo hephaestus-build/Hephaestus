@@ -18,7 +18,7 @@ public final class DockerAttemptWorkspace implements AutoCloseable {
         this.volumes = volumes;
         var volumeLabels = new HashMap<>(labels);
         volumeLabels.put(SandboxLabels.KIND, SandboxLabels.KIND_ATTEMPT_WORKSPACE);
-        volumeLabels.putIfAbsent(SandboxLabels.JOB_ID, labels.getOrDefault(SandboxLabels.SESSION_ID, id.toString()));
+        volumeLabels.putIfAbsent(SandboxLabels.JOB_ID, id.toString());
         volumeLabels.put(SandboxLabels.CREATED_AT, Instant.now().toString());
         try {
             for (int index = 0; index < TARGETS.size(); index++) {

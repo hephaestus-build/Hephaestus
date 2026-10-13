@@ -86,7 +86,7 @@ public class AgentImageContractVerifier {
         if (!declared.equals(Integer.toString(expected))) {
             log.error(
                     "Agent image {} implements runtime contract v{} but this server stages for v{} (image node={}, pi={}). "
-                            + "Practice reviews and mentor sessions in this image will fail. See docs/admin/release-image-lock.md.",
+                            + "Practice reviews and the Heph host in this image will fail. See docs/admin/release-image-lock.md.",
                     image,
                     declared,
                     expected,

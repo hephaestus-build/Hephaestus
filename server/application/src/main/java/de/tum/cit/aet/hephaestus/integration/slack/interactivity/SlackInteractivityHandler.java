@@ -1,14 +1,22 @@
 package de.tum.cit.aet.hephaestus.integration.slack.interactivity;
 
+import static com.slack.api.model.block.Blocks.section;
+import static com.slack.api.model.block.composition.BlockCompositions.markdownText;
+
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
+import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
+import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackWeeklyDigestPointer;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import jakarta.annotation.PreDestroy;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,6 +49,8 @@ public class SlackInteractivityHandler {
     private final SlackParticipantConsentService participantConsentService;
     private final SlackPersonErasureService personErasureService;
     private final SlackMessageService messageService;
+    private final SlackMentorService mentorService;
+    private final WeeklyDigestSubscriptions weeklyDigests;
 
     @Autowired
     public SlackInteractivityHandler(
@@ -49,7 +59,9 @@ public class SlackInteractivityHandler {
             SlackAppHomeService appHomeService,
             SlackParticipantConsentService participantConsentService,
             SlackPersonErasureService personErasureService,
-            SlackMessageService messageService) {
+            SlackMessageService messageService,
+            SlackMentorService mentorService,
+            WeeklyDigestSubscriptions weeklyDigests) {
         this(
                 workspaceResolver,
                 identityResolver,
@@ -57,6 +69,8 @@ public class SlackInteractivityHandler {
                 participantConsentService,
                 personErasureService,
                 messageService,
+                mentorService,
+                weeklyDigests,
                 Executors.newVirtualThreadPerTaskExecutor());
     }
 
@@ -67,6 +81,8 @@ public class SlackInteractivityHandler {
             SlackParticipantConsentService participantConsentService,
             SlackPersonErasureService personErasureService,
             SlackMessageService messageService,
+            SlackMentorService mentorService,
+            WeeklyDigestSubscriptions weeklyDigests,
             ExecutorService followUpExecutor) {
         this.workspaceResolver = workspaceResolver;
         this.identityResolver = identityResolver;
@@ -74,6 +90,8 @@ public class SlackInteractivityHandler {
         this.participantConsentService = participantConsentService;
         this.personErasureService = personErasureService;
         this.messageService = messageService;
+        this.mentorService = mentorService;
+        this.weeklyDigests = weeklyDigests;
         this.followUpExecutor = followUpExecutor;
     }
 
@@ -96,6 +114,11 @@ public class SlackInteractivityHandler {
                     handleChannelMessageOptIn(workspaceId, teamId, slackUserId);
                 case SlackConsentBlocks.ACTION_PARTICIPANT_OPT_OUT ->
                     handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, false);
+                case SlackMentorPosts.FEEDBACK_ACTION ->
+                    mentorService.handleFeedback(
+                            teamId, channelId, slackUserId, action.path("value").asString(""));
+                case SlackWeeklyDigestPointer.TURN_OFF_ACTION ->
+                    turnOffWeeklyDigest(workspaceId, teamId, slackUserId, channelId);
                 default -> log.debug("slack.interactivity: unhandled action_id {}", actionId);
             }
         }
@@ -127,6 +150,33 @@ public class SlackInteractivityHandler {
             }
             if (refreshHome) {
                 refreshHomeBestEffort(teamId, slackUserId);
+            }
+        });
+    }
+
+    /**
+     * Turns the weekly digest off for the account of the Slack user who pressed the button, before the ack, then
+     * tells only them.
+     */
+    private void turnOffWeeklyDigest(long workspaceId, String teamId, String slackUserId, String channelId) {
+        Optional<Long> accountId = identityResolver.resolveAccountId(teamId, slackUserId);
+        if (accountId.isEmpty()) {
+            return;
+        }
+        weeklyDigests.turnOff(accountId.get());
+        if (channelId.isBlank()) {
+            return;
+        }
+        followUpExecutor.execute(() -> {
+            try {
+                messageService.sendEphemeralForWorkspace(
+                        workspaceId,
+                        channelId,
+                        slackUserId,
+                        List.of(section(s -> s.text(markdownText(SlackWeeklyDigestPointer.TURNED_OFF)))),
+                        SlackWeeklyDigestPointer.TURNED_OFF);
+            } catch (SlackSendException e) {
+                log.debug("slack.interactivity: weekly digest turn-off confirmation failed: {}", e.slackError());
             }
         });
     }

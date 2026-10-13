@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
@@ -12,8 +13,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -30,11 +33,19 @@ class RecentAuthoredWorkContentSourceTest extends BaseUnitTest {
     @Mock
     MentorContextQueryRepository queryRepository;
 
+    @Mock
+    WorkspaceActorSelector actorSelector;
+
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     RecentAuthoredWorkContentSource source;
+
+    @BeforeEach
+    void connectedInstance() {
+        lenient().when(actorSelector.connectedProviderId(1L)).thenReturn(Optional.of(5L));
+    }
 
     @Test
     void shouldPublishMergedPullRequestResourceUsingItsArtifactId() {
@@ -46,14 +57,14 @@ class RecentAuthoredWorkContentSourceTest extends BaseUnitTest {
         merged.setNumber(9);
         merged.setTitle("Add the simulator note");
         merged.setState(Issue.State.MERGED);
-        when(queryRepository.findRecentAuthoredPullRequests(eq(1L), eq(2L), any(Pageable.class)))
+        when(queryRepository.findRecentAuthoredPullRequests(eq(1L), eq(5L), eq(2L), any(Pageable.class)))
                 .thenReturn(List.of(merged));
         Issue issue = new Issue();
         issue.setId(77L);
         issue.setNumber(14);
         issue.setTitle("Follow up on the runtime check");
         issue.setState(Issue.State.OPEN);
-        when(queryRepository.findRecentAuthoredIssues(eq(1L), eq(2L), any(Pageable.class)))
+        when(queryRepository.findRecentAuthoredIssues(eq(1L), eq(5L), eq(2L), any(Pageable.class)))
                 .thenReturn(List.of(issue));
 
         JsonNode payload = source.buildPayload(1L, 2L);
@@ -61,7 +72,7 @@ class RecentAuthoredWorkContentSourceTest extends BaseUnitTest {
         String resource = payload.get("pullRequests").get(0).get("resource").asString();
         assertThat(resource).isEqualTo("inputs/context/merge_readiness/4009553323.json");
         assertThat(MergeReadinessContentSource.artifactIdOf(resource)).contains(4009553323L);
-        assertThat(payload.get("issues").get(0).has("resource")).isFalse();
+        assertThat(payload.get("issues").get(0).get("resource").asString()).isEqualTo("inputs/context/issue/77.json");
 
         String pullRequestReviews =
                 payload.get("pullRequests").get(0).get("reviewsResource").asString();

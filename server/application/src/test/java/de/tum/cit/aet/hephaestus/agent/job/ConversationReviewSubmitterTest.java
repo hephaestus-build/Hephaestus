@@ -172,7 +172,7 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
     }
 
     @Test
-    void theKindItSpeaksForIsTheChatThread() {
+    void shouldSpeakForTheConversationThreadKindWhenItSubmitsAReview() {
         assertThat(submitter.artifactKind()).isEqualTo(ChatSignals.CONVERSATION_THREAD);
     }
 

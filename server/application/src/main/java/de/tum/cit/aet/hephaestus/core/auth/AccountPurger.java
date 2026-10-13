@@ -74,6 +74,7 @@ public class AccountPurger {
         account.setDisplayName(TOMBSTONE_DISPLAY_NAME);
         account.setPrimaryEmail(null);
         account.setPrimaryEmailVerifiedAt(null);
+        account.setTimeZone(null);
         accountRepository.save(account);
         log.info("auth.account: hard-deleted accountId={} (purged account-owned rows, status=DELETED)", accountId);
     }

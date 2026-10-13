@@ -11,10 +11,18 @@ export const k6Image =
 	"grafana/k6:1.2.3@sha256:4f82892217f3110cb233e2b2622bcc97fabc70f14bd241fbfbfe7305105c68aa";
 const dockerUser =
 	process.getuid && process.getgid ? ["--user", `${process.getuid()}:${process.getgid()}`] : [];
+/** The scenarios under `load-tests/`, each run by `vp run test:load:<name>`. */
+export const loadScenarios = ["webhook-burst", "detection-mentor", "heph"] as const;
+
+function isLoadScenario(value: unknown): value is (typeof loadScenarios)[number] {
+	return loadScenarios.some((known) => known === value);
+}
 const inputs = [
 	"BASE_URL",
+	"API_PREFIX",
 	"WEBHOOK_SECRET",
 	"AUTH_TOKEN",
+	"AUTH_TOKENS",
 	"WORKSPACE_SLUG",
 	"ARTIFACT_IDS",
 	"WEBHOOK_RATE",
@@ -23,31 +31,48 @@ const inputs = [
 	"MAX_VUS",
 	"WEBHOOK_PADDING_BYTES",
 	"MENTOR_VUS",
+	"MENTOR_TIMEOUT_SECONDS",
 	"REVIEW_VUS",
 	"REVIEW_REQUESTS",
 	"REVIEW_MAX_DURATION",
 	"REVIEW_START_TIME",
 	"REVIEW_TIMEOUT_SECONDS",
+	"STAGES",
+	"THREADS_PER_DEVELOPER",
+	"POLL_MS",
+	"TURN_TIMEOUT_SECONDS",
+	"TURN_P95_MS",
+	"FIRST_PARTIAL_P95_MS",
+	"QUESTION",
 ];
-const secrets = new Set(["WEBHOOK_SECRET", "AUTH_TOKEN"]);
+const secrets = new Set(["WEBHOOK_SECRET", "AUTH_TOKEN", "AUTH_TOKENS"]);
 const limits = ["SANDBOX_API_MAX_REQUEST_BYTES", "SANDBOX_API_REQUESTS_PER_MINUTE"];
 
 // Only the detection+mentor workload reaches the sandbox gateway, so only its result depends on the
 // gateway's deployed limits.
 const gatewayLimits = (scenario: string) => (scenario === "detection-mentor" ? limits : []);
 
+/** What a scenario cannot run without, beyond the base URL and the gateway limits it records. */
+function workloadInputs(
+	scenario: (typeof loadScenarios)[number],
+	env: NodeJS.ProcessEnv,
+): string[] {
+	if (scenario === "webhook-burst") {
+		return ["WEBHOOK_SECRET"];
+	}
+	if (scenario === "heph") {
+		// One token for every simulated developer, or one shared token.
+		return ["WORKSPACE_SLUG", isSet(env.AUTH_TOKENS?.trim()) ? "AUTH_TOKENS" : "AUTH_TOKEN"];
+	}
+	return ["AUTH_TOKEN", "WORKSPACE_SLUG", "ARTIFACT_IDS"];
+}
+
 export function configuration(scenario: string, env: NodeJS.ProcessEnv) {
-	if (scenario !== "webhook-burst" && scenario !== "detection-mentor") {
+	if (!isLoadScenario(scenario)) {
 		throw new Error("Unknown load scenario");
 	}
 	const recorded = gatewayLimits(scenario);
-	const required = [
-		"BASE_URL",
-		...recorded,
-		...(scenario === "webhook-burst"
-			? ["WEBHOOK_SECRET"]
-			: ["AUTH_TOKEN", "WORKSPACE_SLUG", "ARTIFACT_IDS"]),
-	];
+	const required = ["BASE_URL", ...recorded, ...workloadInputs(scenario, env)];
 	for (const name of required) {
 		const value = env[name]?.trim();
 		if (!isSet(value)) {
@@ -80,6 +105,21 @@ export function configuration(scenario: string, env: NodeJS.ProcessEnv) {
 	};
 }
 
+/**
+ * k6 runs on Docker's default bridge, which reaches a remote stack. A server on this machine listens on its
+ * loopback, which only the host network reaches: `LOAD_TEST_NETWORK=host` (Linux).
+ */
+export function dockerNetwork(network: string | undefined): string[] {
+	const name = network?.trim() ?? "";
+	if (name === "") {
+		return [];
+	}
+	if (!/^[\w.-]+$/u.test(name)) {
+		throw new Error("LOAD_TEST_NETWORK must be a Docker network name such as host");
+	}
+	return [`--network=${name}`];
+}
+
 function docker(args: string[], capture = false) {
 	const result = spawnSync("docker", args, {
 		encoding: "utf8",
@@ -102,6 +142,8 @@ async function checkScenarios(root: string) {
 		"-v",
 		`${root}/load-tests:/tests:ro`,
 		"-v",
+		`${root}/server/openapi.yaml:/openapi.yaml:ro`,
+		"-v",
 		`${directory}:/results`,
 		k6Image,
 	];
@@ -118,7 +160,7 @@ async function checkScenarios(root: string) {
 		"ARTIFACT_IDS=1,2",
 	];
 	try {
-		for (const scenario of ["webhook-burst", "detection-mentor"]) {
+		for (const scenario of loadScenarios) {
 			if (docker([...container, "inspect", ...env, `/tests/${scenario}.js`], true).status !== 0) {
 				throw new Error(`Cannot inspect ${scenario}`);
 			}
@@ -260,7 +302,7 @@ export function renderBaseline(summary: unknown, metadata: unknown, template: st
 	const metrics = asRecord(asRecord(summary, "summary").metrics, "metrics");
 	const run = asRecord(metadata, "run");
 	const config = asRecord(run.inputs, "inputs");
-	if (run.scenario !== "webhook-burst" && run.scenario !== "detection-mentor") {
+	if (!isLoadScenario(run.scenario)) {
 		throw new Error("Invalid run scenario");
 	}
 	// A recorded run stays renderable after the checkout moves its pin, so the image only has to prove
@@ -350,6 +392,7 @@ async function main() {
 	const args = [
 		"run",
 		"--rm",
+		...dockerNetwork(process.env.LOAD_TEST_NETWORK),
 		...dockerUser,
 		...inputs.filter((key) => process.env[key] !== undefined).flatMap((key) => ["-e", key]),
 		"-v",

@@ -357,9 +357,9 @@ hephaestus:
             export:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_EXPORT_CAPACITY:10}
                 period: ${HEPHAESTUS_AUTH_RATE_LIMIT_EXPORT_PERIOD:1h}
-            mentor-chat:
-                capacity: ${HEPHAESTUS_RATE_LIMIT_MENTOR_CHAT_CAPACITY:20}
-                period: ${HEPHAESTUS_RATE_LIMIT_MENTOR_CHAT_PERIOD:10m}
+            mentor-turns:
+                capacity: ${HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY:20}
+                period: ${HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_PERIOD:10m}
             review-request:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_REVIEW_REQUEST_CAPACITY:10}
                 period: ${HEPHAESTUS_RATE_LIMIT_REVIEW_REQUEST_PERIOD:1h}
@@ -576,8 +576,7 @@ hephaestus:
 
 
     sandbox:
-        # The LLM proxy controller/security chain follows the worker/sandbox capability. It serves
-        # both queued jobs and interactive mentor sandboxes, so AGENT_ENABLED must not gate it.
+        # The LLM proxy's gate: docs/admin/runtime-roles.mdx § Worker pod env vars.
         docker:
             host: ${SANDBOX_DOCKER_HOST:unix:///var/run/docker.sock}
             tls-verify: ${SANDBOX_DOCKER_TLS_VERIFY:false}
@@ -597,8 +596,8 @@ hephaestus:
             cpus: ${SANDBOX_CPUS:2.0}
             pids-limit: ${SANDBOX_PIDS_LIMIT:256}
 
-    # Mentor sandbox resource knobs (idleTtlSeconds, maxFrameBytes, queue capacities, …) bind
-    # to hephaestus.mentor.* via InteractiveSandboxProperties. Per-workspace readiness is the Heph model binding.
+    # Per-workspace readiness of Heph is the Heph model binding. hephaestus.worker.capacity.mentor-max and the
+    # hephaestus.mentor.turn.* keys keep their code defaults: docs/admin/runtime-roles.mdx § Tunables.
 
     # Dev-only actuator for manually triggering PR reviews (never enable in production).
     # Layered safety: (1) this flag, (2) not in endpoint exposure list, (3) Spring Security auth.

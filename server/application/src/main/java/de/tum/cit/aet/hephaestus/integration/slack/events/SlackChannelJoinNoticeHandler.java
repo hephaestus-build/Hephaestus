@@ -75,7 +75,8 @@ public class SlackChannelJoinNoticeHandler {
         // Adding the app to a channel is Slack-native discovery. Register PENDING only; an admin still has to
         // activate the channel before anything is read.
         if (messageService
-                .resolveBotUserId(workspaceId)
+                .resolveBot(workspaceId)
+                .map(SlackMessageService.BotIdentity::userId)
                 .filter(joinerUserId::equals)
                 .isPresent()) {
             consentService.register(workspaceId, channelId, null);

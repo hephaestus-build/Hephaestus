@@ -623,8 +623,8 @@ Thus, `open && !mounted` — the branch that sets `starting` — cannot run on t
 The popup gets no `data-starting-style` frame. Anything mounted by URL state hits
 this.
 
-Mount it closed and open it a frame later (`DetailDrawerStack`'s `useArrived`). An effect is
-not enough, because a passive effect can be flushed before the browser paints the closed state.
+Mount it closed and open it one layout effect later.
+`useArrived` (`src/components/layout/detail-drawer/use-arrived.ts`) does this and explains why.
 
 ## Search params that are UI state
 

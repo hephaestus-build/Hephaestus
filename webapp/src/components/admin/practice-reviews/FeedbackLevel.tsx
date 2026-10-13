@@ -368,7 +368,7 @@ export function feedbackHistory(feedback: FeedbackRecord): SheetEvent[] {
 		});
 	}
 	const posted = feedback.placements.filter(
-		(placement) => hasText(placement.postedCommentRef) || placement.chatMessageId !== undefined,
+		(placement) => hasText(placement.postedCommentRef) || placement.mentorEntryId !== undefined,
 	);
 	const commentLinked = feedback.placements.some((placement) =>
 		hasText(placement.postedCommentUrl),
@@ -604,7 +604,7 @@ function feedbackTechnical(feedback: FeedbackRecord): TechnicalFact[] {
 		});
 	}
 	for (const placement of feedback.placements) {
-		const ref = placement.postedCommentRef ?? placement.chatMessageId;
+		const ref = placement.postedCommentRef ?? placement.mentorEntryId;
 		if (hasText(ref)) {
 			facts.push({
 				label: `${PLACEMENT_DEFS[placement.placementType].label} reference`,

@@ -1,8 +1,16 @@
 const APP_NAME = "Hephaestus";
 
+const SEPARATOR = " · ";
+
 /** `"AI usage · Instance admin · Hephaestus"` — page name first, because a narrow tab truncates from the end. */
 export function pageTitle(...parts: string[]): string {
-	return [...parts, APP_NAME].join(" · ");
+	return [...parts, APP_NAME].join(SEPARATOR);
+}
+
+/** A title without the app's name: `"Practice profile · Hephaestus"` becomes `"Practice profile"`. */
+export function withoutAppName(title: string): string {
+	const suffix = `${SEPARATOR}${APP_NAME}`;
+	return title.endsWith(suffix) ? title.slice(0, -suffix.length) : title;
 }
 
 export function instanceAdminHead(page: string) {

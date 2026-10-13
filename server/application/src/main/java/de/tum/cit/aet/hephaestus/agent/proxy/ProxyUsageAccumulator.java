@@ -40,8 +40,8 @@ public class ProxyUsageAccumulator {
 
     /** Never throws, so accounting can never break the proxied response. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void accumulate(@Nullable BilledAttempt attempt, @Nullable ProxyTokenUsage usage) {
-        if (attempt == null || usage == null) {
+    public void accumulate(BilledAttempt attempt, @Nullable ProxyTokenUsage usage) {
+        if (usage == null) {
             return;
         }
         UUID jobId = attempt.sourceId();

@@ -52,6 +52,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -101,6 +102,9 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
 
     @Autowired
     private FeedbackRepository feedbackRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private FeedbackPlacementRepository feedbackPlacementRepository;
@@ -244,7 +248,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
                 .isEmpty();
         assertThat(feedbackPlacementRepository.findAll())
                 .singleElement()
-                .extracting(FeedbackPlacement::getChatMessageId)
+                .extracting(FeedbackPlacement::getMentorEntryId)
                 .isEqualTo(reply);
     }
 
@@ -340,11 +344,10 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
     /**
      * The composer's notes have to reach the mentor's sandbox in all four parts, and they have to arrive as
      * {@code notes} rather than as anything a prompt could read as text to paste - the mentor reads the key
-     * before it reads the values. The fallback is a missing key, not an empty object, so "nothing was
-     * composed" cannot read as "the composer had nothing to say".
+     * before it reads the values.
      */
     @Test
-    @DisplayName("composed notes reach the mentor as notes, and an uncomposed unit carries none")
+    @DisplayName("composed notes reach the mentor as notes")
     void stagesTheComposedNotes() {
         PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
@@ -403,6 +406,39 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
         JsonNode both = contribute().get("preparedConversationFeedback");
         assertThat(both).hasSize(1);
         assertThat(both.get(0).has("notes")).isTrue();
+    }
+
+    @Test
+    @DisplayName("a prepared unit without notes is withheld with a reason, and the others still reach Heph")
+    void aPreparedUnitWithoutNotesIsWithheldAndTheOthersStillReachHeph() {
+        long threadId = seedThread("C-active", "100.0", ConsentState.ACTIVE);
+        AgentJob broken = conversationJob(threadId);
+        saveConversationObservation(broken, "occ-no-body", threadId);
+        prepareFor(broken);
+        AgentJob intact = conversationJob(threadId);
+        Observation shown = saveConversationObservation(intact, "occ-with-body", threadId);
+        prepareFor(intact);
+        UUID withoutBody = feedbackObservationRepository
+                .findPreparedConversationFactsForRecipient(workspace.getId(), recipient.getId(), PageRequest.of(0, 10))
+                .stream()
+                .filter(fact -> !fact.getObservationId().equals(shown.getId()))
+                .findFirst()
+                .orElseThrow()
+                .getFeedbackId();
+        jdbcTemplate.update("UPDATE feedback SET body = NULL WHERE id = ?", withoutBody);
+
+        JsonNode prepared = contribute().get("preparedConversationFeedback");
+
+        assertThat(prepared).hasSize(1);
+        assertThat(prepared.get(0).get("observationId").asString())
+                .isEqualTo(shown.getId().toString());
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT delivery_state, suppression_reason FROM feedback WHERE id = ?", withoutBody))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.get("delivery_state")).isEqualTo("SUPPRESSED");
+                    assertThat(row.get("suppression_reason")).isEqualTo("EMPTY_AFTER_SANITIZE");
+                });
     }
 
     private AgentJob conversationJob(long threadId) {
@@ -473,7 +509,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
     private JsonNode contribute() {
         Map<String, byte[]> files = new HashMap<>();
         contentSource.contribute(
-                new ContextRequest.MentorChatRequest(workspace.getId(), recipient.getId(), UUID.randomUUID()), files);
+                new ContextRequest.HephTurnRequest(workspace.getId(), recipient.getId(), UUID.randomUUID()), files);
         return objectMapper.readTree(files.get(PreparedConversationFeedbackContentSource.OUTPUT_KEY));
     }
 

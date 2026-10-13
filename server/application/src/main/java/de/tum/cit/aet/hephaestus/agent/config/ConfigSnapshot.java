@@ -44,7 +44,6 @@ public record ConfigSnapshot(
         @Nullable Long modelId,
         @Nullable Long workspaceId,
         int timeoutSeconds,
-        boolean allowInternet,
         @Nullable LlmPriceSnapshot priceSnapshot,
         // The slot the job was routed to; null in older rows reads as UNDECLARED.
         @Nullable DataHandlingTier dataHandlingTier) {
@@ -52,7 +51,7 @@ public record ConfigSnapshot(
      * Bump only for a reshape (field removal, type change, semantic reinterpretation). Adding a
      * nullable field is compatible both ways and needs no bump.
      */
-    public static final int SCHEMA_VERSION = 6;
+    public static final int SCHEMA_VERSION = 7;
 
     /**
      * Oldest persisted version that already uses this record's shape: at or above it a payload
@@ -94,7 +93,6 @@ public record ConfigSnapshot(
                 ref.modelId(),
                 ref.workspaceId(),
                 source.getTimeoutSeconds(),
-                source.isAllowInternet(),
                 null,
                 source.getDataHandlingTier());
     }
@@ -114,7 +112,6 @@ public record ConfigSnapshot(
                 modelId,
                 workspaceId,
                 timeoutSeconds,
-                allowInternet,
                 price,
                 dataHandlingTier);
     }
@@ -161,7 +158,6 @@ public record ConfigSnapshot(
                 modelId,
                 workspaceId,
                 timeoutSeconds,
-                allowInternet,
                 priceSnapshot,
                 dataHandlingTier);
     }
@@ -193,7 +189,6 @@ public record ConfigSnapshot(
         String modelName = node.path("modelName").asString(null);
         String modelVersion = node.path("modelVersion").asString(null);
         int timeoutSeconds = node.path("timeoutSeconds").asInt(600);
-        boolean allowInternet = node.path("allowInternet").asBoolean(false);
         return new ConfigSnapshot(
                 node.path("schemaVersion").asInt(0),
                 apiProtocol,
@@ -208,7 +203,6 @@ public record ConfigSnapshot(
                 null,
                 null,
                 timeoutSeconds,
-                allowInternet,
                 null,
                 DataHandlingTier.UNDECLARED);
     }

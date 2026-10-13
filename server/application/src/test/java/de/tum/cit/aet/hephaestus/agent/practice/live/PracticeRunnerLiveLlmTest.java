@@ -67,11 +67,10 @@ import tools.jackson.databind.node.ObjectNode;
  * {@code report_observation} tool, and the result schema the runner emits — all without Docker.
  * The {@code DockerSandboxLiveTest} covers the sandbox SPI separately.
  *
- * <p>Mirrors {@code MentorLiveLlmTest} for the Pi SDK install and the custom provider
- * extension that bends Pi's built-in {@code openai} provider toward the configured endpoint (Pi does not
- * read {@code OPENAI_BASE_URL} natively).
+ * <p>Covers the Pi SDK install and the custom provider extension that bends Pi's built-in {@code openai} provider
+ * toward the configured endpoint (Pi does not read {@code OPENAI_BASE_URL} natively).
  *
- * <p>Workspace staging differs from the mentor test: the practice runner hardcodes
+ * <p>Workspace staging: the practice runner hardcodes
  * {@code /workspace} as CWD and reads/writes via async fs (read tool) and {@code spawn} (bash
  * tool). Patching every fs entry point in a Node shim is fragile, so we stage at {@code
  * /workspace} directly. The harness runs as root and the directory is cleaned between tests.

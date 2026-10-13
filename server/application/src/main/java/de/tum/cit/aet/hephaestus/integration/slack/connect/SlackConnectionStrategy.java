@@ -45,6 +45,7 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
             "channels:read",
             "channels:join",
             "groups:read",
+            "reactions:write",
             "users:read");
 
     private final OAuthStateService oauthStateService;

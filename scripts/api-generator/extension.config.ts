@@ -10,11 +10,4 @@ export default defineConfig({
 	input: "../../server/openapi.yaml",
 	output: "../../extension/src/api",
 	plugins: ["@hey-api/typescript", "@hey-api/client-fetch", "@hey-api/sdk"],
-	parser: {
-		filters: {
-			operations: {
-				exclude: ["POST /workspaces/{workspaceSlug}/mentor/chat"],
-			},
-		},
-	},
 });

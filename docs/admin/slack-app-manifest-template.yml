@@ -35,6 +35,7 @@ oauth_config:
       - channels:read
       - channels:join
       - groups:read
+      - reactions:write
       - users:read
     user:
       - openid
@@ -57,7 +58,6 @@ settings:
       - group_left
       - group_rename
       - app_home_opened
-      - app_context_changed
       - app_uninstalled
       - tokens_revoked
   interactivity:

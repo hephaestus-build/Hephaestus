@@ -9,7 +9,9 @@ import { toast } from "sonner";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
 import { client } from "@/api/client.gen";
+import { clearDrafts } from "@/lib/composer-drafts";
 import { server } from "@/mocks/server";
+import { FakeEventSource } from "@/test/fake-event-source";
 import { ObserverStub } from "@/test/observers";
 
 // The generated hey-api client resolves request paths against `baseUrl` (it does
@@ -72,6 +74,12 @@ if (typeof Element.prototype.getAnimations !== "function") {
 	Element.prototype.getAnimations = () => [];
 }
 
+// jsdom has no EventSource; the Heph conversation opens one wherever it shows. A test that drives
+// the stream reads `FakeEventSource.latest()`.
+if (typeof globalThis.EventSource !== "function") {
+	vi.stubGlobal("EventSource", FakeEventSource);
+}
+
 beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
 afterEach(() => {
 	server.resetHandlers();
@@ -80,8 +88,11 @@ afterEach(() => {
 	// in the next one's DOM and answers its queries. Dismissing marks them all inactive, which is
 	// what the replay reads.
 	toast.dismiss();
+	// Drafts live for the tab; each test is a new tab.
+	clearDrafts();
 	// Session storage outlives a test too, such as the overview's remembered range: each test starts
 	// as a fresh browser tab.
 	sessionStorage.clear();
+	FakeEventSource.instances = [];
 });
 afterAll(() => server.close());

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.account;
 
+import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.integration.core.connection.identity.AuthenticatedGitProviderUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,7 +43,7 @@ public class AccountController {
     @Operation(summary = "Get user settings", operationId = "getUserSettings")
     public ResponseEntity<UserSettingsDTO> getUserSettings(@AuthenticationPrincipal JwtAuthenticationToken auth) {
         return resolveOrProvisionCurrentUser(auth)
-                .map(value -> ResponseEntity.ok(preferencesService.getUserSettings(value)))
+                .map(value -> ResponseEntity.ok(preferencesService.getUserSettings(value, CurrentAccount.requireId())))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -54,7 +55,8 @@ public class AccountController {
         if (user.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(preferencesService.updateUserSettings(user.get(), userSettings));
+        return ResponseEntity.ok(
+                preferencesService.updateUserSettings(user.get(), CurrentAccount.requireId(), userSettings));
     }
 
     private @Nullable JwtAuthenticationToken resolveAuthentication(@Nullable JwtAuthenticationToken injectedToken) {

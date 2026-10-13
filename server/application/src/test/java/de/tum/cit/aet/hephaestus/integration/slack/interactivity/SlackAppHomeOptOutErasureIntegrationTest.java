@@ -10,25 +10,25 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
-import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
-import de.tum.cit.aet.hephaestus.mentor.ThreadSurface;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -91,7 +92,10 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private ChatThreadRepository chatThreadRepository;
+    private MentorConversationService mentorConversations;
+
+    @Autowired
+    private MentorConversationRepository mentorConversationRepository;
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
@@ -139,7 +143,7 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
                 .thenReturn(Optional.empty());
         when(identityResolver.resolveMemberId(workspaceId, TEAM, OPTING_OUT_SLACK_USER))
                 .thenReturn(Optional.of(meMemberId));
-        when(identityResolver.resolveActiveMemberId(any(Long.class), any(), any()))
+        when(identityResolver.resolveActiveMember(any(Long.class), any(), any()))
                 .thenReturn(Optional.empty());
 
         handler = new SlackInteractivityHandler(
@@ -148,7 +152,9 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
                 mock(SlackAppHomeService.class),
                 new SlackParticipantConsentService(participantConsentRepository),
                 new SlackPersonErasureService(messageRepository, threadRepository, conversationFeedbackErasure),
-                mock(SlackMessageService.class));
+                mock(SlackMessageService.class),
+                mock(SlackMentorService.class),
+                mock(WeeklyDigestSubscriptions.class));
     }
 
     @Test
@@ -187,7 +193,7 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
 
         assertThat(observationRepository.findById(prObs)).isPresent();
 
-        assertThat(chatThreadRepository.findById(myDmId)).isPresent();
+        assertThat(mentorConversationRepository.findById(myDmId)).isPresent();
     }
 
     @Test
@@ -209,15 +215,10 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private UUID seedOwnMentorDm() {
-        User me = userRepository.findById(meMemberId).orElseThrow();
-        Workspace ws = workspaceRepository.findById(workspaceId).orElseThrow();
-        ChatThread myDm = new ChatThread();
-        myDm.setId(UUID.randomUUID());
-        myDm.setTitle("My Slack DM");
-        myDm.setUser(me);
-        myDm.setWorkspace(ws);
-        myDm.setSurface(ThreadSurface.SLACK_DM);
-        return chatThreadRepository.save(myDm).getId();
+        var main = mentorConversations.findOrCreateMain(workspaceId, meMemberId, Set.of(meMemberId));
+        return mentorConversations
+                .bindSlackIdentity(workspaceId, main.getId(), TEAM, OPTING_OUT_SLACK_USER, "D-MY-DM")
+                .getId();
     }
 
     private ObjectNode optOut(String slackUserId) {

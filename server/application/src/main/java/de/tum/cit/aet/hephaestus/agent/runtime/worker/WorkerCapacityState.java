@@ -4,60 +4,20 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.CapacityReport;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Per-worker in-flight counts for review jobs and mentor sessions. Read by the capacity
- * reporter, drain coordinator, and {@code AgentJobExecutor}; resolved maxes come from
- * {@link WorkerProperties}.
+ * Per-worker in-flight count of review jobs. Read by the capacity reporter, drain coordinator, and
+ * {@code AgentJobExecutor}; the resolved max comes from {@link WorkerProperties}.
  */
 public final class WorkerCapacityState {
 
     private final AtomicInteger inFlightReview = new AtomicInteger();
-    private final AtomicInteger inFlightMentor = new AtomicInteger();
     private final int reviewMax;
-    private final int mentorMax;
 
     public WorkerCapacityState(WorkerProperties properties) {
         this.reviewMax = properties.capacity().resolveReviewMax();
-        this.mentorMax = properties.capacity().resolveMentorMax();
     }
 
     public void claimReview() {
         inFlightReview.incrementAndGet();
-    }
-
-    public void releaseReview() {
-        decrementIfPositive(inFlightReview);
-    }
-
-    /** Atomic; returns {@code false} when at capacity (caller rejects the session). */
-    public boolean tryClaimMentor() {
-        while (true) {
-            int current = inFlightMentor.get();
-            if (current >= mentorMax) {
-                return false;
-            }
-            if (inFlightMentor.compareAndSet(current, current + 1)) {
-                return true;
-            }
-        }
-    }
-
-    public void releaseMentor() {
-        decrementIfPositive(inFlightMentor);
-    }
-
-    public CapacityReport snapshot() {
-        int review = inFlightReview.get();
-        int mentor = inFlightMentor.get();
-        return new CapacityReport(
-                reviewMax, mentorMax, review, mentor, Math.max(0, reviewMax - review), Math.max(0, mentorMax - mentor));
-    }
-
-    public int reviewMax() {
-        return reviewMax;
-    }
-
-    public int mentorMax() {
-        return mentorMax;
     }
 
     /**
@@ -65,15 +25,24 @@ public final class WorkerCapacityState {
      * paths fire from defensive code (e.g. {@code AgentJobExecutor.releaseCapacity}) that can't
      * tolerate an exception, and the early-shutdown / double-release window is real but harmless.
      */
-    private static void decrementIfPositive(AtomicInteger counter) {
+    public void releaseReview() {
         while (true) {
-            int current = counter.get();
+            int current = inFlightReview.get();
             if (current <= 0) {
                 return;
             }
-            if (counter.compareAndSet(current, current - 1)) {
+            if (inFlightReview.compareAndSet(current, current - 1)) {
                 return;
             }
         }
+    }
+
+    public CapacityReport snapshot() {
+        int review = inFlightReview.get();
+        return new CapacityReport(reviewMax, review, Math.max(0, reviewMax - review));
+    }
+
+    public int reviewMax() {
+        return reviewMax;
     }
 }

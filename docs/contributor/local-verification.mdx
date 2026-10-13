@@ -87,8 +87,11 @@ raw and gzip budgets in `webapp/.storybook/chunk-budgets.ts`:
 
 | Upstream module                                                      | Raw bytes | Gzip bytes |
 | -------------------------------------------------------------------- | --------: | ---------: |
-| [Storybook preview runtime](https://www.npmjs.com/package/storybook) | 1,350,000 |    375,000 |
+| [Storybook preview runtime](https://www.npmjs.com/package/storybook) | 1,185,000 |    339,000 |
 | [axe-core](https://www.npmjs.com/package/axe-core)                   |   600,000 |    165,000 |
+
+The story index lists every story with its preload dependencies, so it grows with each story.
+It is application code, so it has its own ordinary chunk and does not count against the preview runtime budget.
 
 The build prints the actual sizes against these budgets. It fails on an unknown oversized chunk or
 when either limit is exceeded, rather than repeating Vite's undifferentiated size warning. Module

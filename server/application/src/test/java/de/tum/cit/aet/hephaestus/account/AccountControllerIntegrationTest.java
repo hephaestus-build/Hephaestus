@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -16,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,6 +53,9 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private HephaestusJwtIssuer jwtIssuer;
+
+    @Autowired
+    private AccountPreferencesQuery accountPreferences;
 
     @Test
     void getUserSettingsProvisionsGitLabUserWhenMissing() {
@@ -115,10 +120,57 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
                 .uri("/user/settings")
                 .headers(headers -> headers.setBearerAuth(seeded.token()))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UserSettingsDTO(false))
+                .bodyValue(new UserSettingsDTO(false, "Europe/Berlin"))
                 .exchange()
                 .expectStatus()
-                .isOk();
+                .isOk()
+                .expectBody()
+                .jsonPath("$.timeZone")
+                .isEqualTo("Europe/Berlin");
+
+        webTestClient
+                .get()
+                .uri("/user/settings")
+                .headers(headers -> headers.setBearerAuth(seeded.token()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.timeZone")
+                .isEqualTo("Europe/Berlin");
+        assertThat(accountPreferences.timeZoneForUserId(actorId)).contains(ZoneId.of("Europe/Berlin"));
+        assertThat(accountPreferences.timeZoneForUserId(namesakeId)).isEmpty();
+
+        webTestClient
+                .post()
+                .uri("/user/settings")
+                .headers(headers -> headers.setBearerAuth(seeded.token()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UserSettingsDTO(false, "Mars/Olympus"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        webTestClient
+                .post()
+                .uri("/user/settings")
+                .headers(headers -> headers.setBearerAuth(seeded.token()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UserSettingsDTO(false, null))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        webTestClient
+                .get()
+                .uri("/user/settings")
+                .headers(headers -> headers.setBearerAuth(seeded.token()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.timeZone")
+                .doesNotExist();
 
         assertThat(preferencesRepository.findByUserId(actorId)).get().satisfies(preferences -> {
             assertThat(preferences.isPracticeFeedbackDeliveryEnabled()).isFalse();

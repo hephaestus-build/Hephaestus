@@ -35,8 +35,8 @@ public record ReviewPlacementDTO(
         @Schema(description = "Permalink of the posted provider comment; null when the provider gave none") @Nullable
         String postedCommentUrl,
 
-        @Schema(description = "Mentor chat-message identifier") @Nullable
-        UUID chatMessageId) {
+        @Schema(description = "Heph conversation entry that delivered this placement") @Nullable
+        UUID mentorEntryId) {
     public static ReviewPlacementDTO from(FeedbackPlacement placement) {
         return new ReviewPlacementDTO(
                 placement.getId(),
@@ -48,6 +48,6 @@ public record ReviewPlacementDTO(
                 placement.getAnchorSide(),
                 placement.getPostedCommentRef(),
                 placement.getPostedCommentUrl(),
-                placement.getChatMessageId());
+                placement.getMentorEntryId());
     }
 }

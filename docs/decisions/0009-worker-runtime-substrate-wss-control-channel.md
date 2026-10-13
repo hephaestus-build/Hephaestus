@@ -1,6 +1,6 @@
 # ADR 0009: Worker runtime substrate + WSS-over-443 control channel
 
-**Status:** Accepted (amended 2026-07-21 #1368 — drain requeues in-flight jobs; 2026-09-03 #1719 — remote-worker premise superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — frame type names corrected)
+**Status:** Accepted (amended 2026-07-21 #1368 — drain requeues in-flight jobs; 2026-09-03 #1719 — remote-worker premise superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — frame type names corrected; 2026-10-09 — mentor frames removed, correction of the 2026-09-05 note, [ADR 0055](0055-one-heph-conversation-per-developer.md))
 **Date:** 2026-05-21
 
 ## Context
@@ -87,3 +87,12 @@ Corrects three names above. `WorkerControlFrame` permits `WorkerHello`, `WorkerW
 `Heartbeat`, `CapacityReport`, `ForceReconnect` and `CancelJob`, not the mentor session quartet the
 Protocol row of § Decision lists; the `HubSessionInbox` bridge of § Consequences and the
 `WorkerControlPublisher` seam of § Considered options exist nowhere in the repository.
+
+## Update — 2026-10-09 (mentor frames removed, [ADR 0055](0055-one-heph-conversation-per-developer.md))
+
+Corrects the 2026-09-05 update. The mentor session frames did ship: `MentorSessionCommand` and
+`MentorSessionEvent` were `WorkerControlFrame` permits, with `WorkerMentorSessions` on the worker and
+`WorkerMentorSessionEvent` on the hub. ADR 0055 deletes them. `FrameEnvelope.CURRENT_VERSION` is 4, and
+`CapacityReport` counts review slots only. The drain sequence of § Decision no longer closes mentor
+sessions. It stops Heph turn claims and removes the worker's Heph host. The Protocol row and the
+§ Consequences paragraph about the mentor session bridge are superseded.

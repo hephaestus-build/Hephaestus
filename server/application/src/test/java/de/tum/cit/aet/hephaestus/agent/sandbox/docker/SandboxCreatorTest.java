@@ -9,9 +9,13 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxCreator.Liveness;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 
 class SandboxCreatorTest extends BaseUnitTest {
@@ -106,5 +110,23 @@ class SandboxCreatorTest extends BaseUnitTest {
                         Map.of(SandboxLabels.CREATOR_CONTAINER, FULL_ID, SandboxLabels.CREATOR_STARTED_AT, "")))
                 .isEqualTo(Liveness.UNRECORDED);
         verify(containers, never()).inspectContainerIdentity(any());
+    }
+
+    @Test
+    void shouldBeInAContainerWhenTheRuntimeLeftItsMarkerEvenIfTheContainerCannotBeIdentified(@TempDir Path root)
+            throws IOException {
+        assertThat(SandboxCreator.outsideContainer(root)).isTrue();
+
+        Files.createFile(root.resolve(".dockerenv"));
+
+        assertThat(SandboxCreator.outsideContainer(root)).isFalse();
+    }
+
+    @Test
+    void shouldBeInAContainerWhenPodmanStartedThisProcess(@TempDir Path root) throws IOException {
+        Files.createDirectories(root.resolve("run"));
+        Files.createFile(root.resolve("run/.containerenv"));
+
+        assertThat(SandboxCreator.outsideContainer(root)).isFalse();
     }
 }

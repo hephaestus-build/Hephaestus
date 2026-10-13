@@ -17,6 +17,8 @@ const ready = {
 		researchSurveys: false,
 		emailAvailable: true,
 		deliveryConfigured: true,
+		weeklyDigest: false,
+		weeklyDigestAvailable: true,
 	},
 	isPending: false,
 	onChange: fn(),

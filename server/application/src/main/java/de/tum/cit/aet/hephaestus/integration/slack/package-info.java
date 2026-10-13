@@ -28,7 +28,7 @@
             // PURGE cascades into a bulk delete of every Slack-owned table.
             "workspace::spi",
             "integration.scm",
-            // Runtime-role gate (@ConditionalOnServerRole) on the connection-OAuth strategy.
+            // Runtime-role gate (@ConditionalOnServerRole) on the Slack beans that run only in the server role.
             "core::runtime",
             // Shared core infra: @WorkspaceAgnostic on the inbound Slack-events controller (this path resolves the
             // workspace from the payload's team_id, not the URL).
@@ -42,12 +42,16 @@
             // auth SPI ports only (GitProviderRegistry + AccountIdentityQuery + AccountWorkspaceMembershipQuery) —
             // never core.auth domain types.
             "core::auth-spi",
-            // The Slack mentor adapter (integration.slack.mentor) runs a turn via the narrow MentorTurnRunner
-            // port and streams through MentorChannel (propagate pulls in UIMessageChunk + MentorTurnRequest).
-            "agent::mentor-chat",
-            // SlackConversationNudgeService listens to the agent-published ConversationFeedbackPreparedEvent (a
-            // type-level named interface: only the event record is exposed).
-            "agent::conversation-nudge",
+            // Heph's Slack surface asks Heph's admission (MentorAdmission, MentorReadinessQuery) before it
+            // writes a question, and its projector reports what reached the developer (MentorTurnCompletion).
+            "agent::mentor-turn",
+            // The weekly digest's Slack note: the event it answers, the digest it names and the account's choice,
+            // which its Turn off button changes.
+            "agent::weekly-digest",
+            // Heph's Slack surface writes questions, edits, deletions, stops and votes into the developer's
+            // conversation ledger, projects Slack turns into the DM, and erases Slack-written entries on a disconnect,
+            // an uninstall or a revoked token.
+            "mentor",
             // integration.slack.conversation implements the agent-owned conversation-source SPIs: Slack owns the
             // slack_thread/slack_message/slack_monitored_channel tables and projects them through these ports, so the
             // agent's read path carries no raw SQL against the Slack schema. One-way integration.slack -> agent edge,

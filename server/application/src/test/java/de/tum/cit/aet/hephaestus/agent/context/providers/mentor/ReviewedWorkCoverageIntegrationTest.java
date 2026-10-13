@@ -210,6 +210,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
                 consentGate,
                 visibilityPolicy,
                 new ReviewedWorkCoverage(agentJobRepository, queryRepository, actorSelector, coreDenied, objectMapper),
+                actorSelector,
                 objectMapper);
 
         assertThat(history()
@@ -449,7 +450,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
     private JsonNode history() {
         Map<String, byte[]> files = new HashMap<>();
         historySource.contribute(
-                new ContextRequest.MentorChatRequest(workspace.getId(), student.getId(), UUID.randomUUID()), files);
+                new ContextRequest.HephTurnRequest(workspace.getId(), student.getId(), UUID.randomUUID()), files);
         return objectMapper.readTree(files.get(ObservationHistoryContentSource.OUTPUT_KEY));
     }
 

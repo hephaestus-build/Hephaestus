@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackAssistantEventHandler;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelJoinNoticeHandler;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackUninstallService;
@@ -37,9 +36,6 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     private SlackAppHomeService appHomeService;
 
     @Mock
-    private SlackAssistantEventHandler assistantEventHandler;
-
-    @Mock
     private SlackChannelJoinNoticeHandler joinNoticeHandler;
 
     @Mock
@@ -54,8 +50,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         dmHandler = new SlackMentorDmMessageHandler(mentorService, deserializer);
-        appHomeHandler = new SlackAppHomeOpenedMessageHandler(
-                appHomeService, assistantEventHandler, mentorService, deserializer);
+        appHomeHandler = new SlackAppHomeOpenedMessageHandler(appHomeService, deserializer);
         joinHandler = new SlackMemberJoinedChannelMessageHandler(joinNoticeHandler, deserializer);
         appUninstalledHandler = new SlackAppUninstalledMessageHandler(uninstallService, deserializer);
         tokensRevokedHandler = new SlackTokensRevokedMessageHandler(uninstallService, deserializer);
@@ -112,18 +107,60 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                 nats("{\"team_id\":\"T1\",\"event\":{\"type\":\"app_home_opened\",\"tab\":\"home\",\"user\":\"U1\"}}"));
 
         verify(appHomeService).onHomeOpened("T1", "U1");
-        verify(mentorService).prepare("T1", "U1");
     }
 
     @Test
-    void appHomeOpenedMessagesTabRoutesToAgentMessagesLifecycle() {
+    void shouldIgnoreTheMessagesTabWhenTheDeveloperOpensIt() {
         appHomeHandler.onMessage(
                 nats(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"app_home_opened\",\"tab\":\"messages\",\"user\":\"U1\",\"channel\":\"D1\"}}"));
 
-        verify(assistantEventHandler).onMessagesOpened(eq("T1"), any(JsonNode.class));
         verify(appHomeService, never()).onHomeOpened(anyString(), anyString());
-        verify(mentorService).prepare("T1", "U1");
+    }
+
+    @Test
+    void shouldRouteAnEditOfTheDevelopersDmWhenSlackReportsMessageChanged() {
+        dmHandler.onMessage(
+                nats(
+                        "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_changed\",\"channel_type\":\"im\",\"channel\":\"D1\",\"message\":{\"user\":\"U1\",\"text\":\"new words\",\"ts\":\"100.2\",\"edited\":{\"user\":\"U1\",\"ts\":\"100.9\"}}}}"));
+
+        verify(mentorService).handleEdit("T1", "D1", "U1", "100.2", "new words");
+    }
+
+    @Test
+    void shouldIgnoreMessageChangedWhenOnlyTheThreadSummaryChanged() {
+        dmHandler.onMessage(
+                nats(
+                        "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_changed\",\"channel_type\":\"im\",\"channel\":\"D1\",\"message\":{\"user\":\"U1\",\"text\":\"same\",\"ts\":\"100.2\",\"reply_count\":1}}}"));
+
+        verify(mentorService, never()).handleEdit(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldIgnoreMessageChangedWhenTheAppChangedItsOwnMessage() {
+        dmHandler.onMessage(
+                nats(
+                        "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_changed\",\"channel_type\":\"im\",\"channel\":\"D1\",\"message\":{\"bot_id\":\"B1\",\"text\":\"streamed\",\"ts\":\"100.3\",\"edited\":{\"user\":\"B1\",\"ts\":\"100.9\"}}}}"));
+
+        verify(mentorService, never()).handleEdit(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldRouteADeletionOfTheDevelopersDmWhenSlackReportsMessageDeleted() {
+        dmHandler.onMessage(
+                nats(
+                        "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_deleted\",\"channel_type\":\"im\",\"channel\":\"D1\",\"deleted_ts\":\"100.2\",\"previous_message\":{\"user\":\"U1\",\"text\":\"old\",\"ts\":\"100.2\"}}}"));
+
+        verify(mentorService).handleDelete("T1", "D1", "U1", "100.2");
+    }
+
+    @Test
+    void shouldIgnoreBotMessageSubtypesWhenTheyArriveAsDms() {
+        dmHandler.onMessage(
+                nats(
+                        "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"bot_message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"bot_id\":\"B1\",\"text\":\"hi\",\"ts\":\"100.4\"}}"));
+
+        verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
     }
 
     @Test

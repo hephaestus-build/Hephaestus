@@ -9,14 +9,7 @@ import static com.slack.api.model.block.element.BlockElements.asElements;
 import static com.slack.api.model.block.element.BlockElements.button;
 
 import com.slack.api.model.block.LayoutBlock;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import java.util.List;
-import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -29,52 +22,17 @@ import org.springframework.stereotype.Service;
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true", matchIfMissing = false)
 public class SlackOnboardingService {
 
-    private static final Logger log = LoggerFactory.getLogger(SlackOnboardingService.class);
-
     /** Distinct from the interactivity action_ids: this button only opens a URL, it posts no payload. */
     private static final String LINK_ACTION_ID = "link_slack_identity";
 
-    private static final String FALLBACK_TEXT = "Check your Hephaestus account access";
-
-    private final SlackWorkspaceResolver workspaceResolver;
-    private final SlackMentorIdentityResolver identityResolver;
-    private final SlackMessageService messageService;
     private final String hostUrl;
     private final String authBasePath;
 
     public SlackOnboardingService(
-            SlackWorkspaceResolver workspaceResolver,
-            SlackMentorIdentityResolver identityResolver,
-            SlackMessageService messageService,
             @Value("${hephaestus.webapp.url:}") String hostUrl,
             @Value("${hephaestus.auth.api-base-path:}") String authBasePath) {
-        this.workspaceResolver = workspaceResolver;
-        this.identityResolver = identityResolver;
-        this.messageService = messageService;
         this.hostUrl = hostUrl;
         this.authBasePath = authBasePath;
-    }
-
-    public void onHomeOpened(String teamId, String slackUserId) {
-        if (teamId == null || teamId.isBlank() || slackUserId == null || slackUserId.isBlank()) {
-            return;
-        }
-        Optional<Long> workspaceId = workspaceResolver.resolveWorkspaceId(teamId);
-        if (workspaceId.isEmpty()) {
-            log.debug("slack.onboarding: app_home_opened for team={} with no active connection — skipping CTA", teamId);
-            return;
-        }
-        long ws = workspaceId.get();
-        if (identityResolver.resolveDeveloper(ws, teamId, slackUserId).isPresent()) {
-            log.debug("slack.onboarding: member={} has account access in workspace={} — no CTA", slackUserId, ws);
-            return;
-        }
-        try {
-            messageService.sendForWorkspace(ws, slackUserId, linkCtaBlocks(), FALLBACK_TEXT);
-        } catch (SlackSendException e) {
-            log.warn(
-                    "slack.onboarding: failed to surface link CTA for workspace={}, slackError={}", ws, e.slackError());
-        }
     }
 
     public List<LayoutBlock> linkCtaBlocks() {

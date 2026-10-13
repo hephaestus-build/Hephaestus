@@ -15,8 +15,8 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChatService;
-import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
@@ -47,10 +47,14 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessage;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
-import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
-import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryDraft;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
+import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
@@ -126,7 +130,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
     private PersonProcessingSuppression suppression;
 
     @Autowired
-    private MentorChatService mentor;
+    private MentorAdmission mentor;
 
     @Autowired
     private ObservationInvalidationRepository invalidations;
@@ -180,10 +184,16 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
     private SlackThreadRepository slackThreads;
 
     @Autowired
-    private ChatThreadRepository chatThreadRepository;
+    private MentorConversationService mentorConversations;
 
     @Autowired
-    private ChatMessageRepository chatMessageRepository;
+    private MentorEntryService mentorEntries;
+
+    @Autowired
+    private MentorEntryRepository mentorEntryRepository;
+
+    @Autowired
+    private MentorTimeline mentorTimeline;
 
     @Autowired
     private PracticeRepository practiceRepository;
@@ -209,7 +219,8 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
             "person_suppression", "the permanent native-identity processing control",
             "person_data_request", "the re-resolution preview request itself",
             "agent_job_evidence_copy", "frozen job ids still name the redacted job rows",
-            "slack_thread", "frozen thread ids still name the shared thread without the person");
+            "slack_thread", "frozen thread ids still name the shared thread without the person",
+            "mentor_entry_tool_result_copy", "frozen thread and job ids still name the workspaces, not any entry");
 
     @BeforeEach
     void clearRows() {
@@ -597,41 +608,23 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(counts.get("observation")).isEqualTo(4L);
         assertThat(counts.get("observation_invalidation")).isEqualTo(2L);
         assertThat(counts.get("config_audit_event_membership_subject")).isEqualTo(2L);
-        assertThat(counts.get("chat_thread")).isEqualTo(2L);
-        assertThat(counts.get("chat_message_feedback_copy")).isEqualTo(2L);
-        assertThat(counts.get("chat_thread_feedback_runtime_copy")).isEqualTo(2L);
-        assertThat(counts.get("chat_thread_runtime_journal")).isEqualTo(2L);
-        assertThat(export.path("stores").path("chat_message_feedback_copy").toString())
+        assertThat(counts.get("mentor_conversation")).isEqualTo(2L);
+        assertThat(counts.get("mentor_entry")).isEqualTo(2L);
+        assertThat(counts.get("mentor_entry_feedback_copy")).isEqualTo(2L);
+        assertThat(counts.get("mentor_entry_tool_result_copy")).isEqualTo(2L);
+        assertThat(export.path("stores").path("mentor_entry_feedback_copy").toString())
                 .contains("Target guidance copied into another conversation")
-                .doesNotContain("Other reply to erased feedback", "user_id", "inputTokens");
+                .doesNotContain("Other reply to erased feedback", "user_id", "credential-canary");
         assertThat(counts.get("slack_message")).isEqualTo(2L);
         counts.forEach((store, count) -> assertThat(
                         (long) export.path("stores").path(store).size())
                 .as("Frozen preview/export parity for %s", store)
-                // Another member's hidden runtime journal is cleared, never exported.
-                .isEqualTo(store.equals("chat_thread_runtime_journal") ? 0L : count));
-        assertThat(export.path("stores").path("chat_thread").toString()).doesNotContain("session_jsonl");
-        assertThat(export.path("stores")
-                        .path("chat_message")
-                        .get(0)
-                        .path("parts")
-                        .size())
-                .isEqualTo(1);
-        assertThat(export.path("stores")
-                        .path("chat_message")
-                        .get(0)
-                        .path("parts")
-                        .get(0)
-                        .path("text")
-                        .asString())
-                .isEqualTo("Delivered guidance");
-        assertThat(export.path("stores")
-                        .path("chat_message")
-                        .get(0)
-                        .path("metadata")
-                        .path("inputTokens")
-                        .asLong())
-                .isEqualTo(12L);
+                // Tool results in another member's conversation are redacted, never exported.
+                .isEqualTo(store.equals("mentor_entry_tool_result_copy") ? 0L : count));
+        assertThat(export.path("stores").path("mentor_entry"))
+                .allSatisfy(row -> assertThat(row.path("text").asString()).isEqualTo("Delivered guidance"));
+        assertThat(export.path("stores").path("mentor_entry").toString())
+                .doesNotContain("payload", "runtime-credential-canary");
         assertThat(export.toString())
                 .doesNotContain(
                         "Unrelated conversation",
@@ -736,16 +729,16 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                     .isEqualTo(1);
         }
         for (var copy : copiedFeedback) {
-            assertThat(jdbc.queryForObject(
-                            "SELECT parts::text FROM chat_message WHERE id=?", String.class, copy.messageId()))
-                    .contains("This feedback was erased.")
-                    .doesNotContain("Target guidance");
-            assertThat(jdbc.queryForObject(
-                            "SELECT parts::text FROM chat_message WHERE id=?", String.class, copy.replyId()))
-                    .contains("Other reply to erased feedback");
-            assertThat(jdbc.queryForObject(
-                            "SELECT parent_message_id FROM chat_message WHERE id=?", UUID.class, copy.replyId()))
-                    .isEqualTo(copy.messageId());
+            MentorEntry erased =
+                    mentorEntryRepository.findById(copy.messageId()).orElseThrow();
+            assertThat(erased.isRedacted()).isTrue();
+            assertThat(erased.getText()).isEmpty();
+            assertThat(String.valueOf(erased.getPayload())).doesNotContain("Target guidance");
+            assertThat(mentorEntryRepository
+                            .findById(copy.replyId())
+                            .orElseThrow()
+                            .getText())
+                    .isEqualTo("Other reply to erased feedback");
         }
         for (var contributor : registry.stores()) {
             // A shared thread's aggregate changes; the other person's participant projection does not.
@@ -781,8 +774,10 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("different workspace")
                 .hasMessageContaining("exact delivery reference");
-        assertThat(jdbc.queryForObject(
-                        "SELECT parts::text FROM chat_message WHERE id=?", String.class, copied.messageId()))
+        assertThat(mentorEntryRepository
+                        .findById(copied.messageId())
+                        .orElseThrow()
+                        .getText())
                 .contains("Target guidance copied");
     }
 
@@ -901,7 +896,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(export.path("stores").path("observation")).isEmpty();
         assertThat(export.path("stores").path("feedback")).isEmpty();
         assertThat(export.path("stores").path("feedback_placement")).isEmpty();
-        assertThat(export.path("stores").path("chat_message_feedback_copy")).isEmpty();
+        assertThat(export.path("stores").path("mentor_entry_feedback_copy")).isEmpty();
         assertThat(export.path("stores").path("person_evidence_copy")).hasSize(2);
         Map<String, Long> counts = mapper.readValue(preview.request().getCountsJson(), new TypeReference<>() {});
         assertThat(counts.get("agent_job_evidence_copy")).isEqualTo(2L);
@@ -910,17 +905,19 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 .doesNotContain("ORIGINAL-BASIS-CANARY");
         assertThat(export.path("stores").path("agent_job")).isEmpty();
         assertThat(export.path("stores").path("agent_job_evidence_copy")).isEmpty();
-        assertThat(export.path("stores").path("chat_thread_runtime_journal")).isEmpty();
+        assertThat(export.path("stores").path("mentor_entry_tool_result_copy")).isEmpty();
         assertThat(export.toString())
                 .doesNotContain(
                         "OTHER-PROFILE-CANARY",
                         "credential-canary",
                         "Practice guidance for developer",
                         "context/conversation.json");
-        // The frozen selection names workspaces, so a journal written after the preview is cleared too.
-        UUID laterThread = seedJournal(
-                        workspaces.findById(affected.getFirst().workspaceId()).orElseThrow(), other)
-                .getId();
+        // The frozen selection names workspaces, so a tool result written after the preview is redacted too.
+        Workspace firstAffected =
+                workspaces.findById(affected.getFirst().workspaceId()).orElseThrow();
+        UUID laterToolResult = seedToolResult(firstAffected, other);
+        UUID linkedAnswer = seedLinkedAnswer(
+                firstAffected, other, affected.getFirst().observationIds().getFirst());
         personData.requestErasure(requestId, administratorId, true);
         personData.run(requestId);
         assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
@@ -934,26 +931,31 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                     .hasSize(2);
             assertThat(feedbackRepository.findById(derived.preparedId())).isPresent();
             assertThat(feedbackRepository.findById(derived.deliveredId())).isPresent();
-            assertThat(chatMessageRepository
+            assertThat(mentorEntryRepository
                             .findById(derived.messageId())
                             .orElseThrow()
-                            .getParts()
-                            .toString())
-                    .contains("Delivered guidance");
+                            .getText())
+                    .isEqualTo("Delivered guidance");
             assertThat(agentJobRepository
                             .findById(derived.jobId())
                             .orElseThrow()
                             .getEvidenceSnapshot())
                     .isNull();
-            assertThat(jdbc.queryForObject(
-                            "SELECT length(session_jsonl) = 0 FROM chat_thread t JOIN chat_message m ON m.thread_id=t.id WHERE m.id=?",
-                            Boolean.class,
-                            derived.messageId()))
+            assertThat(mentorEntryRepository
+                            .findById(derived.toolResultId())
+                            .orElseThrow()
+                            .isRedacted())
                     .isTrue();
         }
-        assertThat(jdbc.queryForObject(
-                        "SELECT length(session_jsonl) = 0 FROM chat_thread WHERE id=?", Boolean.class, laterThread))
+        assertThat(mentorEntryRepository.findById(laterToolResult).orElseThrow().isRedacted())
                 .isTrue();
+        // A tool result that copies no one's data stays, so the other developer still sees the feedback Heph showed.
+        assertThat(mentorTimeline
+                        .entries(firstAffected.getId(), Set.of(other.getId()), null, MentorTimeline.MAX_PAGE)
+                        .entries())
+                .filteredOn(entry -> entry.id().equals(linkedAnswer))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.observations()).isNotEmpty());
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM person_evidence_copy WHERE payload<>'{}'::jsonb", Long.class))
                 .isZero();
@@ -964,11 +966,11 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         Integer.class,
                         unrelated.jobId()))
                 .isEqualTo(1);
-        assertThat(jdbc.queryForObject(
-                        "SELECT length(session_jsonl) > 0 FROM chat_thread t JOIN chat_message m ON m.thread_id=t.id WHERE m.id=?",
-                        Boolean.class,
-                        unrelated.messageId()))
-                .isTrue();
+        assertThat(mentorEntryRepository
+                        .findById(unrelated.toolResultId())
+                        .orElseThrow()
+                        .isRedacted())
+                .isFalse();
         assertThat(users.findById(other.getId()).orElseThrow().getLogin()).isEqualTo("OTHER-PROFILE-CANARY");
         assertThat(suppression.isUserSuppressed(Objects.requireNonNull(target.getId())))
                 .isTrue();
@@ -1035,7 +1037,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
 
     private List<JsonNode> withoutErasedCopies(
             String store, List<JsonNode> rows, List<ConversationFeedbackCopy> copies) {
-        if (!store.equals("chat_message")) return rows;
+        if (!store.equals("mentor_entry")) return rows;
         var copiedIds = copies.stream().map(copy -> copy.messageId().toString()).collect(Collectors.toSet());
         return rows.stream()
                 .filter(row -> !copiedIds.contains(row.path("id").asString()))
@@ -1043,28 +1045,23 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private ConversationFeedbackCopy seedFeedbackCopy(DerivedConversation target, DerivedConversation other) {
-        var thread =
-                chatMessageRepository.findById(other.messageId()).orElseThrow().getThread();
-        ChatMessage copied = new ChatMessage();
-        copied.setId(UUID.randomUUID());
-        copied.setThread(thread);
-        copied.setRole(ChatMessage.Role.ASSISTANT);
-        copied.setStatus(ChatMessage.Status.completed);
-        copied.setParts(mapper.valueToTree(
-                List.of(Map.of("type", "text", "text", "Target guidance copied into another conversation"))));
-        chatMessageRepository.saveAndFlush(copied);
-        ChatMessage reply = new ChatMessage();
-        reply.setId(UUID.randomUUID());
-        reply.setThread(thread);
-        reply.setParentMessage(copied);
-        reply.setRole(ChatMessage.Role.USER);
-        reply.setStatus(ChatMessage.Status.completed);
-        reply.setParts(mapper.valueToTree(List.of(Map.of("type", "text", "text", "Other reply to erased feedback"))));
-        chatMessageRepository.saveAndFlush(reply);
+        MentorEntry otherAnswer =
+                mentorEntryRepository.findById(other.messageId()).orElseThrow();
+        MentorEntry copied = mentorEntries.append(
+                otherAnswer.getWorkspaceId(),
+                otherAnswer.getConversationId(),
+                entry(
+                        MentorEntry.Kind.HEPH,
+                        "Target guidance copied into another conversation",
+                        piAnswer("Target guidance copied into another conversation")));
+        MentorEntry reply = mentorEntries.append(
+                otherAnswer.getWorkspaceId(),
+                otherAnswer.getConversationId(),
+                entry(MentorEntry.Kind.USER, "Other reply to erased feedback", null));
         feedbackPlacementRepository.saveAndFlush(FeedbackPlacement.builder()
                 .feedback(feedbackRepository.findById(target.deliveredId()).orElseThrow())
                 .placementType(PlacementType.CONVERSATION_TURN)
-                .chatMessageId(copied.getId())
+                .mentorEntryId(copied.getId())
                 .createdAt(Instant.now())
                 .build());
         return new ConversationFeedbackCopy(copied.getId(), reply.getId());
@@ -1102,46 +1099,90 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
             UUID preparedId,
             UUID deliveredId,
             UUID messageId,
+            UUID toolResultId,
             UUID jobId,
             long workspaceId) {}
 
-    private ChatThread seedJournal(Workspace workspace, User owner) {
-        ChatThread chatThread = new ChatThread();
-        chatThread.setSessionJsonl(
-                "{\"type\":\"toolResult\",\"body\":\"runtime-credential-canary unrelated-profile-canary\"}"
-                        .getBytes(StandardCharsets.UTF_8));
-        chatThread.setId(UUID.randomUUID());
-        chatThread.setWorkspace(workspace);
-        chatThread.setUser(owner);
-        return chatThreadRepository.save(chatThread);
+    private static MentorEntryDraft entry(MentorEntry.Kind kind, String text, @Nullable JsonNode payload) {
+        return new MentorEntryDraft(kind, MentorEntry.Surface.APP, text, payload, null, null, null);
+    }
+
+    /** Heph's answer as the end of its turn stores it, with a tool call whose arguments hold a credential. */
+    private JsonNode piAnswer(String text) {
+        return MentorLedgerFixtures.toolCall(
+                MentorLedgerFixtures.piId(),
+                "context-call",
+                "fetch_context",
+                mapper.createObjectNode().put("authorization", "credential-canary " + text));
+    }
+
+    /** A tool result in the owner's conversation that read data without recording whose. */
+    private UUID seedToolResult(Workspace workspace, User owner) {
+        MentorConversation conversation =
+                mentorConversations.findOrCreateMain(workspace.getId(), owner.getId(), Set.of(owner.getId()));
+        return mentorEntries
+                .append(
+                        workspace.getId(),
+                        conversation.getId(),
+                        entry(
+                                MentorEntry.Kind.TOOL_RESULT,
+                                "runtime-credential-canary unrelated-profile-canary",
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(),
+                                        "context-call",
+                                        "fetch_context",
+                                        "runtime-credential-canary unrelated-profile-canary",
+                                        false)))
+                .getId();
+    }
+
+    /**
+     * A Heph message in the owner's conversation that showed feedback on an observation, with its successful
+     * {@code link_observation} result, which copies no one's data.
+     */
+    private UUID seedLinkedAnswer(Workspace workspace, User owner, UUID observationId) {
+        MentorConversation conversation =
+                mentorConversations.findOrCreateMain(workspace.getId(), owner.getId(), Set.of(owner.getId()));
+        UUID turnId = UUID.randomUUID();
+        MentorEntry answer = mentorEntries.append(
+                workspace.getId(),
+                conversation.getId(),
+                new MentorEntryDraft(
+                        MentorEntry.Kind.HEPH,
+                        MentorEntry.Surface.APP,
+                        "",
+                        MentorLedgerFixtures.linkObservations(
+                                MentorLedgerFixtures.piId(), Map.of("link-call", observationId), "Linked guidance"),
+                        turnId,
+                        null,
+                        null));
+        mentorEntries.append(
+                workspace.getId(),
+                conversation.getId(),
+                new MentorEntryDraft(
+                        MentorEntry.Kind.TOOL_RESULT,
+                        MentorEntry.Surface.APP,
+                        "",
+                        MentorLedgerFixtures.toolResult(
+                                MentorLedgerFixtures.piId(),
+                                "link-call",
+                                "link_observation",
+                                "Shown to the developer: feedback on observation " + observationId,
+                                false),
+                        turnId,
+                        null,
+                        null));
+        return answer.getId();
     }
 
     private DerivedConversation seedDerivedConversation(Workspace workspace, long threadId, User owner) {
-        ChatThread chatThread = seedJournal(workspace, owner);
-        ChatMessage message = new ChatMessage();
-        message.setId(UUID.randomUUID());
-        message.setThread(chatThread);
-        message.setRole(ChatMessage.Role.ASSISTANT);
-        message.setStatus(ChatMessage.Status.completed);
-        message.setParts(mapper.valueToTree(List.of(
-                Map.of("type", "text", "text", "Delivered guidance", "privateCredential", "credential-canary"),
-                Map.of(
-                        "type",
-                        "tool-fetchContext",
-                        "toolCallId",
-                        "context-call",
-                        "input",
-                        Map.of("authorization", "credential-canary"),
-                        "output",
-                        Map.of("profile", "unrelated-profile-canary")))));
-        message.setMetadata(mapper.valueToTree(Map.of(
-                "inputTokens",
-                12,
-                "error",
-                Map.of("secret", "credential-canary"),
-                "toolCalls",
-                List.of(Map.of("profile", "unrelated-profile-canary")))));
-        chatMessageRepository.save(message);
+        UUID toolResult = seedToolResult(workspace, owner);
+        MentorConversation conversation =
+                mentorConversations.findOrCreateMain(workspace.getId(), owner.getId(), Set.of(owner.getId()));
+        MentorEntry message = mentorEntries.append(
+                workspace.getId(),
+                conversation.getId(),
+                entry(MentorEntry.Kind.HEPH, "Delivered guidance", piAnswer("Delivered guidance")));
 
         Practice practice = new Practice();
         PracticeTestEvidence.configure(practice, ArtifactKinds.CONVERSATION_THREAD);
@@ -1229,7 +1270,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         feedbackPlacementRepository.save(FeedbackPlacement.builder()
                 .feedback(delivered)
                 .placementType(PlacementType.CONVERSATION_TURN)
-                .chatMessageId(message.getId())
+                .mentorEntryId(message.getId())
                 .createdAt(Instant.now())
                 .build());
         Feedback posted = feedbackRepository.save(Feedback.builder()
@@ -1258,6 +1299,12 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 .createdAt(Instant.now())
                 .build());
         return new DerivedConversation(
-                observationIds, prepared.getId(), delivered.getId(), message.getId(), job.getId(), workspace.getId());
+                observationIds,
+                prepared.getId(),
+                delivered.getId(),
+                message.getId(),
+                toolResult,
+                job.getId(),
+                workspace.getId());
     }
 }

@@ -8,8 +8,6 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import org.junit.jupiter.api.Nested;
@@ -87,11 +85,11 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
     }
 
     /**
-     * Rules pass trivially when the matched package is empty; the positive fixture tests below prove the rules
-     * actually catch violations.
+     * Rules pass trivially when the matched package is empty; the positive fixture test below proves the rule
+     * actually catches a violation.
      */
     @Nested
-    class InteractiveIsolation {
+    class HostIsolation {
 
         @Test
         void mentorMustNotInvokeSandboxManagerExecute() {
@@ -100,21 +98,8 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
                     .resideInAPackage("..agent.mentor..")
                     .should()
                     .callMethod(SandboxManager.class, "execute", SandboxSpec.class)
-                    .because(
-                            "The mentor flow is interactive by definition; SandboxManager.execute is the one-shot path. "
-                                    + "Use InteractiveSandboxService.attach instead.")
-                    .check(classes);
-        }
-
-        @Test
-        void practiceMustNotInvokeInteractiveAttach() {
-            noClasses()
-                    .that()
-                    .resideInAPackage("..agent.practice..")
-                    .should()
-                    .callMethod(InteractiveSandboxService.class, "attach", InteractiveSandboxSpec.class)
-                    .because(
-                            "Practice review is a one-shot agent run; the interactive sandbox is reserved for tutoring.")
+                    .because("Heph turns run in the worker's long-lived Heph host; SandboxManager.execute is the "
+                            + "one-shot path of a practice review.")
                     .check(classes);
         }
 
@@ -128,21 +113,6 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
                     .resideInAPackage("..agent.mentor..")
                     .should()
                     .callMethod(SandboxManager.class, "execute", SandboxSpec.class);
-
-            assertThatThrownBy(() -> rule.check(fixtureClasses))
-                    .as("Rule must reject the deliberate violation fixture")
-                    .isInstanceOf(AssertionError.class);
-        }
-
-        @Test
-        void practicePositiveFixtureCatchesViolation() {
-            JavaClasses fixtureClasses = importTestFixture("de.tum.cit.aet.hephaestus.agent.practice");
-
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("..agent.practice..")
-                    .should()
-                    .callMethod(InteractiveSandboxService.class, "attach", InteractiveSandboxSpec.class);
 
             assertThatThrownBy(() -> rule.check(fixtureClasses))
                     .as("Rule must reject the deliberate violation fixture")

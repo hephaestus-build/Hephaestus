@@ -110,7 +110,7 @@ The feedback is advisory: it does not approve a change for merge or grade anyone
 
 - **Try the hosted app:** open the [TUM deployment](https://hephaestus.build).
 - **Learn how it works:** read the [user guide](https://docs.hephaestus.build/user/overview).
-- **Run your own deployment.** Start with one 64-bit Linux host: 4 vCPUs / 16 GB RAM / 40 GB SSD.
+- **Run your own deployment.** Start with one 64-bit Linux host: 4 vCPUs / 24 GB RAM / 40 GB SSD.
 
   ```bash
   VERSION=0.92.2   # the release you are installing, without the leading "v"

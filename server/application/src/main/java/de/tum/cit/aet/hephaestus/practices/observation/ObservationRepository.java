@@ -44,6 +44,9 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
           ) AS "occasionAt" FROM observation f
         """;
 
+    boolean existsByWorkspaceIdAndAboutUserIdAndObservedAtGreaterThanAndObservedAtLessThanEqual(
+            Long workspaceId, Long aboutUserId, Instant since, Instant until);
+
     /** Lock the issue while publishing so a later mirror transition must retire these rows. */
     @Query(value = """
         SELECT i.review_snapshot_id FROM issue i

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 
+import { TIME_ZONES } from "@/lib/dates";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 import { withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -25,9 +26,23 @@ const meta = {
 					researchSurveys: false,
 					emailAvailable: true,
 					deliveryConfigured: true,
+					weeklyDigest: false,
+					weeklyDigestAvailable: true,
 				},
 				isPending: false,
 				onChange: fn(),
+			},
+		},
+		weeklyDigestProps: {
+			state: {
+				status: "ready",
+				enabled: true,
+				available: true,
+				timeZone: "Europe/Berlin",
+				zones: TIME_ZONES,
+				isPending: false,
+				onToggle: fn(),
+				onChangeTimeZone: fn(),
 			},
 		},
 		sessionsProps: {

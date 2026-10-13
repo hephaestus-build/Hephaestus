@@ -1,10 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import com.github.dockerjava.api.DockerClient;
-import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxRegistry;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.StdinWriteWatchdog;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,36 +22,20 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 public class SandboxMaintenanceConfiguration {
 
     @Bean
-    ScheduledTaskRegistrar sandboxWatchdogTasks(StdinWriteWatchdog watchdog) {
-        var tasks = new ScheduledTaskRegistrar();
-        // Docker reconciliation can block on RPCs; stalled-write protection needs its own thread.
-        tasks.addFixedDelayTask(new FixedDelayTask(watchdog::tick, Duration.ofMillis(100), Duration.ZERO));
-        return tasks;
-    }
-
-    @Bean
     ScheduledTaskRegistrar sandboxMaintenanceTasks(
             SandboxReconciler reconciler,
-            InteractiveSandboxRegistry sessions,
             SandboxProperties sandboxProperties,
-            InteractiveSandboxProperties mentorProperties,
             @Value("${hephaestus.sandbox.reconciliation-initial-delay-seconds:10}") long initialDelaySeconds) {
         var tasks = new ScheduledTaskRegistrar();
         tasks.addFixedDelayTask(new FixedDelayTask(
                 reconciler::periodicReconciliation,
                 Duration.ofSeconds(sandboxProperties.reconciliationIntervalSeconds()),
                 Duration.ofSeconds(initialDelaySeconds)));
-        tasks.addFixedDelayTask(new FixedDelayTask(
-                sessions::reap, Duration.ofSeconds(mentorProperties.reapIntervalSeconds()), Duration.ZERO));
         return tasks;
     }
 
     @Bean
-    ApplicationListener<ApplicationReadyEvent> sandboxStartupMaintenance(
-            SandboxReconciler reconciler, InteractiveSandboxRegistry sessions) {
-        return event -> {
-            reconciler.onStartup();
-            sessions.onStartup();
-        };
+    ApplicationListener<ApplicationReadyEvent> sandboxStartupMaintenance(SandboxReconciler reconciler) {
+        return event -> reconciler.onStartup();
     }
 }

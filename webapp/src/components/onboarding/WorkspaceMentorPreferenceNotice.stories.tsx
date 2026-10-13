@@ -45,12 +45,23 @@ export const ChoiceRequired: Story = {
 	},
 };
 
-/** Nothing the member chooses brings Heph here, so the notice offers no choice to change. */
+/** No Heph model serves a member who has made no AI choice; only a workspace owner can change that. */
 export const NotSetUp: Story = {
 	args: { notice: { reason: "not-set-up" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent(
 			"Heph is not set up in this workspace yet",
+		);
+		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
+	},
+};
+
+/** The member's personal data was erased, so Heph does not answer them and nothing they choose changes it. */
+export const Erased: Story = {
+	args: { notice: { reason: "erased" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent(
+			"Heph cannot reply to you",
 		);
 		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
 	},

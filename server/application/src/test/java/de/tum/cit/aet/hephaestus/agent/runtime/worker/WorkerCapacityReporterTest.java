@@ -41,7 +41,6 @@ class WorkerCapacityReporterTest extends BaseUnitTest {
         verify(client).send(frame.capture());
         CapacityReport report = (CapacityReport) frame.getValue();
         assertThat(report.reviewMax()).isEqualTo(3);
-        assertThat(report.mentorMax()).isEqualTo(2);
         assertThat(report.inFlightReview()).isEqualTo(1);
         assertThat(report.spareReview()).isEqualTo(2);
         assertThat(registry.counter("worker.heartbeats.sent").count()).isEqualTo(1.0);

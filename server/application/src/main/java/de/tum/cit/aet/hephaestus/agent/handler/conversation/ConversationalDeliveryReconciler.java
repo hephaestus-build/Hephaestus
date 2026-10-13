@@ -65,7 +65,7 @@ public class ConversationalDeliveryReconciler {
         return observation != null && Long.valueOf(recipientUserId).equals(observation.getAboutUserId());
     }
 
-    public int reconcile(long workspaceId, long recipientUserId, UUID chatMessageId, List<UUID> linkedObservationIds) {
+    public int reconcile(long workspaceId, long recipientUserId, UUID mentorEntryId, List<UUID> linkedObservationIds) {
         Instant now = Instant.now();
         for (Observation observation :
                 admitted(workspaceId, linkedObservationIds).values()) {
@@ -86,13 +86,13 @@ public class ConversationalDeliveryReconciler {
                 feedbackPlacementRepository.save(FeedbackPlacement.builder()
                         .feedback(unit)
                         .placementType(PlacementType.CONVERSATION_TURN)
-                        .chatMessageId(chatMessageId)
+                        .mentorEntryId(mentorEntryId)
                         .createdAt(now)
                         .build());
                 log.info(
-                        "Conversational feedback delivered: feedbackId={}, chatMessageId={}, recipient={}",
+                        "Conversational feedback delivered: feedbackId={}, mentorEntryId={}, recipient={}",
                         feedbackId,
-                        chatMessageId,
+                        mentorEntryId,
                         recipientUserId);
                 return 1;
             }
@@ -118,7 +118,7 @@ public class ConversationalDeliveryReconciler {
      * still settled, by {@link ConversationFeedbackTtlSweeper} at the end of its window.
      *
      * <p>Each check is one batch for the whole turn, not one query per linked id — nothing caps how many
-     * observations a mentor turn links (the reply stores a part per {@code link_observation} tool call).
+     * observations a Heph turn links (one per successful {@code link_observation} tool call).
      */
     private Map<UUID, Observation> admitted(long workspaceId, List<UUID> linkedObservationIds) {
         if (linkedObservationIds == null || linkedObservationIds.isEmpty()) {

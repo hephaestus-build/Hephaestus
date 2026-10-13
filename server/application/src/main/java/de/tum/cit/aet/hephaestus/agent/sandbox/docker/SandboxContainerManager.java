@@ -167,18 +167,6 @@ public class SandboxContainerManager {
         containerOps.stopContainer(containerId, properties.containerStopTimeoutSeconds());
     }
 
-    /**
-     * Stop a running container with an explicit grace timeout (SIGTERM → {@code graceSeconds} →
-     * SIGKILL).
-     *
-     * <p>Used by the interactive sandbox where each session may pick its own grace deadline (the
-     * issue's contract: "wait up to {@code graceTimeout} for the in-flight turn to finish"). The
-     * argument-less overload uses the global {@code hephaestus.sandbox.container-stop-timeout-seconds}.
-     */
-    public void stopContainer(String containerId, int graceSeconds) {
-        containerOps.stopContainer(containerId, graceSeconds);
-    }
-
     /** Check if the Docker daemon is reachable. */
     public boolean ping() {
         return containerOps.ping();

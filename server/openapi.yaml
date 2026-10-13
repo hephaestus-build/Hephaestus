@@ -34,16 +34,12 @@ tags:
   name: LLM Usage
 - description: Practice group trends and review runs for the current developer
   name: Practice Group Detail
-- description: Workspace-scoped mentor chat threads
-  name: Mentor Threads
 - description: Running release identity and update checks
   name: Instance Release
 - description: The current developer's standing in each practice
   name: Practice Standings
 - description: Recipient responses to delivered practice feedback
   name: Feedback Response
-- description: Heph conversations and the sandbox they run in
-  name: Mentor Chat
 - description: "User account management (settings, deletion)"
   name: Account
 - description: Instance-admin account management
@@ -71,8 +67,6 @@ tags:
   name: User view
 - description: Workspace integration connection management
   name: Connections
-- description: Up/down votes on mentor assistant messages
-  name: Mentor Votes
 - description: "Workspace-admin access to review runs, observations, and feedback\
     \ delivery history"
   name: Practice reviews
@@ -116,6 +110,8 @@ tags:
   name: Agent Jobs
 - description: The current developer's standing in each practice group
   name: Practice Group Standings
+- description: The developer's conversation with Heph
+  name: Mentor
 - description: Asking for a review of a piece of work by hand
   name: Practice review requests
 - description: Current account transparency and research consent
@@ -5513,29 +5509,9 @@ paths:
           description: OK
       tags:
       - workspace-membership
-  /workspaces/{workspaceSlug}/mentor/sandbox:
-    post:
-      operationId: prepareMentorSandbox
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      responses:
-        "202":
-          description: Accepted; the sandbox starts unless it is already warm or Heph
-            could not answer anyway
-      summary: Prepare the current member's Heph sandbox in the background
-      tags:
-      - Mentor Chat
-  /workspaces/{workspaceSlug}/mentor/threads:
+  /workspaces/{workspaceSlug}/mentor/conversation:
     get:
-      operationId: listThreads
+      operationId: getMentorConversation
       parameters:
       - description: Workspace slug
         in: path
@@ -5551,16 +5527,85 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ChatThreadSummary"
-          description: "Threads returned, newest first"
-      summary: List the current user's mentor threads in this workspace
+                $ref: "#/components/schemas/MentorConversation"
+          description: OK
+      summary: "The developer's conversation: what runs now, its threads and how far\
+        \ it reached"
       tags:
-      - Mentor Threads
-  /workspaces/{workspaceSlug}/mentor/threads/{threadId}:
+      - Mentor
+  /workspaces/{workspaceSlug}/mentor/conversation/read:
+    put:
+      description: "Records how far the developer read, for every device. The marker\
+        \ keeps the latest time: an earlier one changes nothing."
+      operationId: markMentorConversationRead
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MentorReadRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentorRead"
+          description: "The marker after the request: this time or a later one"
+      summary: Mark the conversation read
+      tags:
+      - Mentor
+  /workspaces/{workspaceSlug}/mentor/entries:
+    get:
+      operationId: listMentorEntries
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: query
+        name: before
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentorEntryPage"
+          description: OK
+      summary: "A page of top-level messages, oldest first; pass before=<seq> for\
+        \ older ones"
+      tags:
+      - Mentor
+  /workspaces/{workspaceSlug}/mentor/entries/{entryId}:
     delete:
-      operationId: deleteThread
+      description: Erases its text and every summary that read it. A question Heph
+        has not answered yet is not answered.
+      operationId: deleteMentorEntry
       parameters:
       - description: Workspace slug
         in: path
@@ -5572,21 +5617,26 @@ paths:
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
-        name: threadId
+        name: entryId
         required: true
         schema:
           type: string
           format: uuid
       responses:
         "204":
-          description: Thread deleted
-        "404":
-          description: Thread not found OR not owned by current user
-      summary: "Delete a mentor thread (cascades to messages, votes, parts)"
+          description: The message is deleted
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: Only the developer's own questions can be deleted
+      summary: Delete a message the developer wrote
       tags:
-      - Mentor Threads
+      - Mentor
+  /workspaces/{workspaceSlug}/mentor/entries/{entryId}/thread:
     get:
-      operationId: getThread
+      operationId: getMentorThread
       parameters:
       - description: Workspace slug
         in: path
@@ -5598,7 +5648,56 @@ paths:
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
-        name: threadId
+        name: entryId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: before
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 50
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentorThread"
+          description: The thread; a message without replies has no conversation
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: No top-level message of the developer has this id
+      summary: "The thread on a top-level message: the message and a page of replies,\
+        \ oldest first"
+      tags:
+      - Mentor
+  /workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote:
+    delete:
+      operationId: clearMentorVote
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: entryId
         required: true
         schema:
           type: string
@@ -5608,16 +5707,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChatThreadDetail"
-          description: "Thread, messages and the owner's votes returned"
-        "404":
-          description: Thread not found OR not owned by current user
-      summary: Get a mentor thread with its full message history
+                $ref: "#/components/schemas/MentorEntry"
+          description: OK
+      summary: Clear the vote on one of Heph's messages
       tags:
-      - Mentor Threads
-  /workspaces/{workspaceSlug}/mentor/threads/{threadId}/messages/{messageId}/vote:
-    delete:
-      operationId: removeVote
+      - Mentor
+    put:
+      operationId: setMentorVote
       parameters:
       - description: Workspace slug
         in: path
@@ -5629,45 +5725,7 @@ paths:
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: path
-        name: threadId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - in: path
-        name: messageId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "204":
-          description: Vote removed or did not exist
-        "404":
-          description: Thread or message not found (or not owned by current user)
-      summary: Remove a vote on an assistant message (idempotent)
-      tags:
-      - Mentor Votes
-    post:
-      operationId: vote
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: threadId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - in: path
-        name: messageId
+        name: entryId
         required: true
         schema:
           type: string
@@ -5676,20 +5734,102 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ChatMessageVoteRequest"
+              $ref: "#/components/schemas/MentorVoteRequest"
         required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChatMessageVote"
-          description: Vote recorded
-        "404":
-          description: Thread or message not found (or not owned by current user)
-      summary: Upsert a vote on an assistant message
+                $ref: "#/components/schemas/MentorEntry"
+          description: The message with its vote
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: The message is not one of Heph's
+      summary: Rate one of Heph's messages as helpful or not helpful
       tags:
-      - Mentor Votes
+      - Mentor
+  /workspaces/{workspaceSlug}/mentor/turns:
+    post:
+      description: Stores the question before anything is shown and queues a turn.
+        A question while Heph answers waits as a follow-up. Repeating a requestId
+        returns the first submission.
+      operationId: submitMentorTurn
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MentorTurnRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentorSubmission"
+          description: The stored question and its turn
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Heph declines the developer (mentor-refused), too many follow-ups\
+            \ wait, the requestId was used for another message, or the parent cannot\
+            \ have a thread (mentor-rejected)"
+      summary: Ask Heph
+      tags:
+      - Mentor
+  /workspaces/{workspaceSlug}/mentor/turns/{turnId}/status:
+    patch:
+      description: A queued turn never runs and keeps its question. A running turn
+        keeps what Heph already wrote. Stopping an ended turn changes nothing. A turn
+        asked in Slack can be stopped here.
+      operationId: updateMentorTurnStatus
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: turnId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MentorTurnStatusRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentorTurn"
+          description: OK
+      summary: Stop a turn
+      tags:
+      - Mentor
   /workspaces/{workspaceSlug}/onboarding/me:
     get:
       operationId: getMemberOnboarding
@@ -11816,8 +11956,6 @@ components:
       type: object
       description: A workspace's agent binding for one purpose
       properties:
-        allowInternet:
-          type: boolean
         dataHandlingTier:
           type: string
           enum:
@@ -11855,9 +11993,6 @@ components:
       type: object
       description: Bind a model and execution limits to an agent purpose
       properties:
-        allowInternet:
-          type: boolean
-          description: Whether the sandbox may reach the public internet
         enabled:
           type: boolean
           description: Whether this purpose is active (paused when false)
@@ -12672,85 +12807,6 @@ components:
       - availability
       - name
       - slug
-    ChatMessage:
-      type: object
-      description: Mentor chat message in AI SDK UIMessage shape.
-      properties:
-        createdAt:
-          type: string
-          format: date-time
-        id:
-          type: string
-          format: uuid
-        metadata:
-          type: object
-          additionalProperties: {}
-          description: "Per-turn metadata: status, model, costUsd, usage, …"
-        parentMessageId:
-          type: string
-          format: uuid
-        parts:
-          type: array
-          items:
-            description: AI SDK UIMessage part (text / data-observation).
-        role:
-          type: string
-    ChatMessageVote:
-      type: object
-      description: User vote on a mentor assistant message.
-      properties:
-        isUpvoted:
-          type: boolean
-        messageId:
-          type: string
-          format: uuid
-        updatedAt:
-          type: string
-          format: date-time
-    ChatMessageVoteRequest:
-      type: object
-      description: Upsert a vote on a mentor assistant message
-      properties:
-        isUpvoted:
-          type: boolean
-          description: "true = upvote (helpful), false = downvote"
-      required:
-      - isUpvoted
-    ChatThreadDetail:
-      type: object
-      description: Mentor chat thread with all messages and the owner's votes on them.
-      properties:
-        createdAt:
-          type: string
-          format: date-time
-        id:
-          type: string
-          format: uuid
-        messages:
-          type: array
-          items:
-            $ref: "#/components/schemas/ChatMessage"
-        title:
-          type: string
-        votes:
-          type: object
-          additionalProperties:
-            type: boolean
-    ChatThreadSummary:
-      type: object
-      description: Mentor chat thread summary (no messages).
-      properties:
-        createdAt:
-          type: string
-          format: date-time
-        id:
-          type: string
-          format: uuid
-        title:
-          type: string
-      required:
-      - createdAt
-      - id
     ClientRefreshRequest:
       type: object
       properties:
@@ -16064,6 +16120,400 @@ components:
           - CLOUD
       required:
       - choice
+    MentorConversation:
+      type: object
+      description: The developer's Heph conversation in a workspace at one moment
+      properties:
+        activeTurns:
+          type: array
+          description: "Queued and running turns in the conversation and its threads,\
+            \ oldest first"
+          items:
+            $ref: "#/components/schemas/MentorTurn"
+        id:
+          type: string
+          format: uuid
+          description: The main conversation; absent until the developer writes to
+            Heph or gets a weekly digest
+        lastAnswerAt:
+          type: string
+          format: date-time
+          description: When Heph's newest shown answer in the conversation or any
+            of its threads was written; absent before the first. Compare it with the
+            newest answer the client has seen.
+        lastReadAt:
+          type: string
+          format: date-time
+          description: How far the developer read the conversation on any device;
+            absent before the first read. Heph has an unread answer when lastAnswerAt
+            is later.
+        latestSeq:
+          type: integer
+          format: int64
+          description: Sequence number of the newest top-level message shown; 0 when
+            there is none
+        threads:
+          type: array
+          description: "The newest threads, latest activity first"
+          items:
+            $ref: "#/components/schemas/MentorThreadSummary"
+      required:
+      - activeTurns
+      - latestSeq
+      - threads
+    MentorEntry:
+      type: object
+      description: One message of a Heph conversation
+      properties:
+        conversationId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        deleted:
+          type: boolean
+          description: The message was deleted; its text is gone
+        digest:
+          $ref: "#/components/schemas/WeeklyDigest"
+          description: The weekly digest as it reads now; only on a weekly digest
+            that was not erased
+        editedAt:
+          type: string
+          format: date-time
+          description: Set when the developer edited the message in Slack
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - USER
+          - HEPH
+          - DIGEST
+        observations:
+          type: array
+          description: "Feedback Heph showed in this message, in order"
+          items:
+            $ref: "#/components/schemas/MentorObservationLink"
+        parentEntryId:
+          type: string
+          format: uuid
+          description: "Set when the message is in a thread: the top-level message\
+            \ the thread replies to"
+        requestId:
+          type: string
+          description: The submission that wrote the message; the app matches its
+            own optimistic message by it
+        seq:
+          type: integer
+          format: int64
+          description: Order within its conversation
+        surface:
+          type: string
+          description: Where the message was written; SYSTEM for a weekly digest
+          enum:
+          - APP
+          - SLACK
+          - SYSTEM
+        text:
+          type: string
+          description: "The developer's words or Heph's answer; for a weekly digest,\
+            \ the note that points Heph to it; empty when the message was deleted"
+        thread:
+          $ref: "#/components/schemas/MentorThreadSummary"
+          description: The thread on this message; only on top-level messages that
+            have one
+        turnError:
+          type: string
+          description: "Why the turn this question asked failed, in words for the\
+            \ developer; only when it FAILED"
+        turnId:
+          type: string
+          format: uuid
+          description: The turn the message asked or answered
+        turnStatus:
+          type: string
+          description: The status of the turn this question asked; only on the developer's
+            messages
+          enum:
+          - QUEUED
+          - RUNNING
+          - DONE
+          - FAILED
+          - STOPPED
+        vote:
+          type: string
+          description: The developer's vote; only on Heph's messages
+          enum:
+          - HELPFUL
+          - NOT_HELPFUL
+      required:
+      - conversationId
+      - createdAt
+      - deleted
+      - id
+      - kind
+      - observations
+      - seq
+      - surface
+      - text
+    MentorEntryPage:
+      type: object
+      description: "One page of a conversation's messages, oldest first"
+      properties:
+        earlierBefore:
+          type: integer
+          format: int64
+          description: Pass as before to read the older messages; absent when there
+            are none
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/MentorEntry"
+      required:
+      - entries
+    MentorObservationLink:
+      type: object
+      description: Feedback that Heph showed in a message
+      properties:
+        observationId:
+          type: string
+          format: uuid
+        practiceName:
+          type: string
+          description: The practice's name; absent when the observation is gone
+        practiceSlug:
+          type: string
+          description: The practice the observation is about; absent when the observation
+            is gone
+        text:
+          type: string
+        work:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: "The reviewed work the observation was seen on: the app links\
+            \ to the developer's feedback on it. Absent when the observation is gone"
+      required:
+      - observationId
+      - text
+    MentorRead:
+      type: object
+      description: How far the developer read their Heph conversation
+      properties:
+        lastReadAt:
+          type: string
+          format: date-time
+          description: The read marker; absent when the developer has no conversation
+            yet
+    MentorReadRequest:
+      type: object
+      description: How far the developer read their Heph conversation
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: The time of the newest answer the developer saw
+      required:
+      - at
+    MentorSubmission:
+      type: object
+      description: A stored question and the turn that answers it
+      properties:
+        question:
+          $ref: "#/components/schemas/MentorEntry"
+        turn:
+          $ref: "#/components/schemas/MentorTurn"
+      required:
+      - question
+      - turn
+    MentorThread:
+      type: object
+      description: "A thread: the message it replies to and one page of its replies,\
+        \ oldest first"
+      properties:
+        conversationId:
+          type: string
+          format: uuid
+          description: The thread's conversation; absent until the first reply opens
+            it
+        earlierBefore:
+          type: integer
+          format: int64
+          description: Pass as before to read the older replies; absent when there
+            are none
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/MentorEntry"
+        parent:
+          $ref: "#/components/schemas/MentorEntry"
+      required:
+      - entries
+      - parent
+    MentorThreadSummary:
+      type: object
+      description: The thread on a top-level message
+      properties:
+        conversationId:
+          type: string
+          format: uuid
+          description: The thread's own conversation
+        lastReplyAt:
+          type: string
+          format: date-time
+        latestSeq:
+          type: integer
+          format: int64
+          description: Sequence number of the thread's newest shown message; 0 when
+            it has none
+        parentEntryId:
+          type: string
+          format: uuid
+          description: The message the thread replies to
+        replyCount:
+          type: integer
+          format: int64
+          description: Messages in the thread; can count a Heph message without text
+            whose feedback is no longer shown
+      required:
+      - conversationId
+      - latestSeq
+      - parentEntryId
+      - replyCount
+    MentorTurn:
+      type: object
+      description: One question to Heph and the work to answer it
+      properties:
+        attempt:
+          type: integer
+          format: int32
+          description: "Attempts started so far; 0 while the turn waits for its first\
+            \ start. A lost lease queues the turn again with the same attempt, and\
+            \ the next start counts up. Thus, with the same attempt, RUNNING comes\
+            \ before QUEUED or an end."
+        conversationId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        error:
+          type: string
+          description: "Why the turn failed, worded for the developer; only on a failed\
+            \ turn"
+        finishedAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        parentEntryId:
+          type: string
+          format: uuid
+          description: "Set when the turn runs in a thread: the top-level message\
+            \ the thread replies to"
+        partial:
+          $ref: "#/components/schemas/MentorTurnPartial"
+          description: Heph's answer in progress; only while the turn runs
+        requestId:
+          type: string
+          description: The submission that asked; the question's entry carries the
+            same value
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - DONE
+          - FAILED
+          - STOPPED
+        surface:
+          type: string
+          enum:
+          - APP
+          - SLACK
+      required:
+      - attempt
+      - conversationId
+      - createdAt
+      - id
+      - requestId
+      - status
+      - surface
+    MentorTurnPartial:
+      type: object
+      description: What Heph is doing in a running turn
+      properties:
+        activity:
+          type: string
+          enum:
+          - THINKING
+          - WRITING
+          - TOOL
+        stage:
+          type: string
+          description: "What Heph is doing, in the developer's words, for example\
+            \ \"Reading your practice feedback…\""
+        text:
+          type: string
+          description: The text Heph has written in this turn so far
+        tool:
+          type: string
+          description: "The tool Heph runs, while the activity is TOOL"
+      required:
+      - activity
+      - stage
+      - text
+    MentorTurnRequest:
+      type: object
+      description: A question to Heph from the app
+      properties:
+        pageContext:
+          type: string
+          description: "The page the developer asks from, for example \"Pull request\
+            \ #421 in acme/web\""
+          maxLength: 500
+          minLength: 0
+        parentEntryId:
+          type: string
+          format: uuid
+          description: Ask in the thread on this top-level message; the first reply
+            opens the thread
+        requestId:
+          type: string
+          format: uuid
+          description: "Chosen by the app for each message. Sending the same id again\
+            \ returns the first submission, so a retried request never asks twice."
+        text:
+          type: string
+          description: The developer's words
+          minLength: 1
+      required:
+      - requestId
+      - text
+    MentorTurnStatusRequest:
+      type: object
+      description: A status change the developer asks for on a turn
+      properties:
+        status:
+          type: string
+          description: STOPPED stops a queued or running turn. Heph keeps what it
+            already wrote.
+          enum:
+          - STOPPED
+      required:
+      - status
+    MentorVoteRequest:
+      type: object
+      description: The developer's vote on one of Heph's messages
+      properties:
+        vote:
+          type: string
+          enum:
+          - HELPFUL
+          - NOT_HELPFUL
+      required:
+      - vote
     NotificationPreferences:
       type: object
       properties:
@@ -16083,6 +16533,13 @@ components:
           type: boolean
         surveySummaries:
           type: boolean
+        weeklyDigest:
+          type: boolean
+          description: The weekly digest is on
+        weeklyDigestAvailable:
+          type: boolean
+          description: "Heph can answer in at least one of your workspaces, so a weekly\
+            \ digest can be written"
         workspaceAlerts:
           type: boolean
       required:
@@ -16093,6 +16550,8 @@ components:
       - productSurveys
       - researchSurveys
       - surveySummaries
+      - weeklyDigest
+      - weeklyDigestAvailable
       - workspaceAlerts
     ObservationDetail:
       type: object
@@ -21074,13 +21533,13 @@ components:
           type: integer
           format: int32
           description: First anchored line (1-based)
-        chatMessageId:
-          type: string
-          format: uuid
-          description: Mentor chat-message identifier
         id:
           type: string
           format: uuid
+        mentorEntryId:
+          type: string
+          format: uuid
+          description: Heph conversation entry that delivered this placement
         placementType:
           type: string
           enum:
@@ -22987,6 +23446,10 @@ components:
           type: boolean
         surveySummaries:
           type: boolean
+        weeklyDigest:
+          type: boolean
+          description: "The weekly digest in your Heph conversation, with one note\
+            \ in Slack or email that it is ready"
         workspaceAlerts:
           type: boolean
       required:
@@ -22994,6 +23457,7 @@ components:
       - productSurveys
       - researchSurveys
       - surveySummaries
+      - weeklyDigest
       - workspaceAlerts
     UpdateObservationValidityRequest:
       type: object
@@ -23572,8 +24036,13 @@ components:
         practiceFeedbackDeliveryEnabled:
           type: boolean
           description: "Whether new practice-feedback comments may be delivered on\
-            \ issues, pull requests, and merge requests authored by the user, together\
-            \ with related Slack reminders"
+            \ issues, pull requests, and merge requests authored by the user"
+        timeZone:
+          type: string
+          description: "The account's IANA time zone, such as Europe/Berlin. The weekly\
+            \ digest follows the developer's week in it. Absent means UTC."
+          maxLength: 64
+          minLength: 0
       required:
       - practiceFeedbackDeliveryEnabled
     UserTeams:
@@ -23621,6 +24090,108 @@ components:
       required:
       - login
       - userId
+    WeeklyDigest:
+      type: object
+      description: "A weekly digest as it reads now, from the live facts"
+      properties:
+        changes:
+          type: array
+          description: "What changed on the Practice profile in the week; never new\
+            \ feedback, which the feedback list covers"
+          items:
+            $ref: "#/components/schemas/ProfileChange"
+        feedback:
+          type: array
+          description: "Feedback that reached the developer in the week, by practice\
+            \ group and practice order"
+          items:
+            $ref: "#/components/schemas/WeeklyDigestFeedback"
+        timeZone:
+          type: string
+          description: The IANA time zone the week was read in
+        waiting:
+          type: integer
+          format: int32
+          description: Pieces of feedback that wait unread on the Practice profile
+            now
+        weekStart:
+          type: string
+          format: date
+          description: "The Monday the week starts on, in the developer's time zone"
+        windowEnd:
+          type: string
+          format: date-time
+          description: The next Monday 00:00 in the developer's time zone
+        windowStart:
+          type: string
+          format: date-time
+          description: Monday 00:00 of the week in the developer's time zone
+      required:
+      - changes
+      - feedback
+      - timeZone
+      - waiting
+      - weekStart
+      - windowEnd
+      - windowStart
+    WeeklyDigestFeedback:
+      type: object
+      description: "One piece of feedback that reached the developer in the week,\
+        \ and where it landed"
+      properties:
+        channel:
+          type: string
+          description: "Where it landed: on the reviewed work (IN_CONTEXT), on the\
+            \ Practice profile (IN_APP) or in the conversation with Heph (IN_CHAT)"
+          enum:
+          - IN_CONTEXT
+          - IN_CHAT
+          - IN_APP
+        deliveredAt:
+          type: string
+          format: date-time
+        feedbackId:
+          type: string
+          format: uuid
+        groupName:
+          type: string
+        groupSlug:
+          type: string
+        mentorEntryId:
+          type: string
+          format: uuid
+          description: The Heph message it appeared in; only for IN_CHAT
+        mentorParentEntryId:
+          type: string
+          format: uuid
+          description: "The top-level message whose thread holds that Heph message;\
+            \ only for IN_CHAT, and absent when the message is not in a thread"
+        practiceName:
+          type: string
+        practiceSlug:
+          type: string
+        replaced:
+          type: boolean
+          description: Newer feedback replaced it since; the link opens the current
+            feedback
+        title:
+          type: string
+          description: "The card's title on the Practice profile; only for IN_APP,\
+            \ and never when withdrawn"
+        withdrawn:
+          type: boolean
+          description: A workspace admin withdrew it; only the practice is shown
+        work:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: The reviewed work it landed on; only for IN_CONTEXT
+      required:
+      - channel
+      - deliveredAt
+      - feedbackId
+      - practiceName
+      - practiceSlug
+      - replaced
+      - withdrawn
     WorkItem:
       type: object
       description: A pull request or issue
@@ -24363,7 +24934,7 @@ components:
       description: |-
         One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
          every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
-         what differs between workspaces.
+         what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Heph's admission.
       properties:
         aiChoice:
           type: string
@@ -24383,6 +24954,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WorkspaceOnboardingLink"
+        mentorRefusal:
+          type: string
+          description: "Why Heph declines this member here, by the rule that admits\
+            \ each question; null when Heph can answer"
+          enum:
+          - PERSON_ERASED
+          - NO_AI
+          - CHOICE_REQUIRED
+          - UNAVAILABLE
         needsSetup:
           type: boolean
         workspaceName:

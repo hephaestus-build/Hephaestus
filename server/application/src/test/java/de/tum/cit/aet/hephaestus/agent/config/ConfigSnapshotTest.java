@@ -47,7 +47,6 @@ class ConfigSnapshotTest extends BaseUnitTest {
         model.setId(20L);
         binding.setInstanceModel(model);
         binding.setTimeoutSeconds(600);
-        binding.setAllowInternet(false);
         binding.setMaxConcurrentJobs(5);
         return binding;
     }
@@ -84,7 +83,6 @@ class ConfigSnapshotTest extends BaseUnitTest {
             assertThat(snapshot.connectionScope()).isEqualTo(FundingSource.INSTANCE);
             assertThat(snapshot.connectionId()).isEqualTo(7L);
             assertThat(snapshot.timeoutSeconds()).isEqualTo(600);
-            assertThat(snapshot.allowInternet()).isFalse();
         }
     }
 
@@ -260,7 +258,6 @@ class ConfigSnapshotTest extends BaseUnitTest {
             // A v4 snapshot of a reasoning model ran at Pi's default thinking level, which sends medium.
             assertThat(snapshot.reasoningEffort()).isEqualTo(ReasoningEffort.MEDIUM);
             assertThat(snapshot.timeoutSeconds()).isEqualTo(900);
-            assertThat(snapshot.allowInternet()).isTrue();
         }
 
         @Test
@@ -332,7 +329,6 @@ class ConfigSnapshotTest extends BaseUnitTest {
                     null,
                     null,
                     timeoutSeconds,
-                    false,
                     null,
                     null);
         }

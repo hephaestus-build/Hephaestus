@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.notification.preferences;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -43,6 +44,9 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
     private WebTestClient web;
 
     @Autowired
+    private WeeklyDigestSubscriptions weeklyDigests;
+
+    @Autowired
     private ObjectMapper mapper;
 
     @Test
@@ -71,7 +75,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri(path)
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + first))
                 .header(HttpHeaders.IF_MATCH, etag)
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false, false, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false, false, false, false))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -116,7 +120,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri("/user/notification-preferences")
                 .headers(TestAuthUtils.withCsrf(csrf))
                 .header(HttpHeaders.IF_MATCH, "*")
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false, false, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false, false, false, false))
                 .exchange()
                 .expectStatus()
                 .isUnauthorized()
@@ -126,7 +130,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRejectMissingAndStaleHttpPreconditionsWithoutOverwritingChoices() {
         long account = account();
-        var enable = new UpdateNotificationPreferencesDTO(false, true, false, false, false);
+        var enable = new UpdateNotificationPreferencesDTO(false, true, false, false, false, false);
         String etag = Objects.requireNonNull(web.get()
                 .uri("/user/notification-preferences")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
@@ -160,7 +164,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri("/user/notification-preferences")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
                 .header(HttpHeaders.IF_MATCH, etag)
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, false, false, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, false, false, false, false))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(HttpStatus.PRECONDITION_FAILED)
@@ -178,7 +182,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri("/user/notification-preferences")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
                 .header(HttpHeaders.IF_MATCH, subscriptions.get(account).etag())
-                .bodyValue(new UpdateNotificationPreferencesDTO(!summary, false, false, false, summary))
+                .bodyValue(new UpdateNotificationPreferencesDTO(!summary, false, false, false, summary, false))
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -235,7 +239,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .header(
                         HttpHeaders.IF_MATCH,
                         Objects.requireNonNull(initial.getResponseHeaders().getETag()))
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false, false, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false, false, false, false))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(HttpStatus.CONFLICT)
@@ -256,7 +260,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri("/user/notification-preferences")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
                 .header(HttpHeaders.IF_MATCH, subscriptions.get(account).etag())
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, true, false, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, true, false, false, false))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -275,7 +279,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .header(
                         HttpHeaders.IF_MATCH,
                         Objects.requireNonNull(saved.getResponseHeaders().getETag()))
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, true, false, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, true, false, false, false))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(HttpStatus.CONFLICT)
@@ -348,7 +352,8 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 kind == NotificationSubscriptionKind.PRODUCT_SURVEYS,
                 kind == NotificationSubscriptionKind.RESEARCH_SURVEYS,
                 kind == NotificationSubscriptionKind.WORKSPACE_ALERTS,
-                kind == NotificationSubscriptionKind.SURVEY_SUMMARIES);
+                kind == NotificationSubscriptionKind.SURVEY_SUMMARIES,
+                kind == NotificationSubscriptionKind.MENTOR_DIGEST);
         subscriptions.update(
                 account,
                 choices,
@@ -394,7 +399,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         long second = account();
         update(first, true, false);
         update(second, false, true);
-        assertThat(export.preferences(first)).isEqualTo(new Preferences(false, true, false, false, false));
+        assertThat(export.preferences(first)).isEqualTo(new Preferences(false, true, false, false, false, false));
         String token = subscriptions
                 .unsubscribeToken(first, NotificationSubscriptionKind.PRODUCT_SURVEYS)
                 .orElseThrow();
@@ -405,10 +410,58 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .isTrue();
     }
 
+    @Test
+    void shouldTurnTheWeeklyDigestOnAndOffThroughItsPortWhenTheAccountHasNoEmailAddress() {
+        var row = new Account("Digest " + UUID.randomUUID());
+        long account = Objects.requireNonNull(accounts.save(row).getId());
+
+        var turnedOn = subscriptions.update(
+                account,
+                new UpdateNotificationPreferencesDTO(false, false, false, false, false, true),
+                EntityTagPrecondition.parse(subscriptions.get(account).etag()),
+                false);
+
+        assertThat(turnedOn.weeklyDigest()).isTrue();
+        assertThat(turnedOn.emailAvailable()).isFalse();
+        assertThat(weeklyDigests.subscribedAccountIds()).contains(account);
+        assertThat(weeklyDigests.enabledSince(account)).isPresent();
+        assertThat(export.preferences(account).weeklyDigest()).isTrue();
+
+        weeklyDigests.turnOff(account);
+
+        assertThat(subscriptions.get(account).weeklyDigest()).isFalse();
+        assertThat(weeklyDigests.enabledSince(account)).isEmpty();
+        assertThat(weeklyDigests.subscribedAccountIds()).doesNotContain(account);
+    }
+
+    @Test
+    void shouldTurnTheWeeklyDigestOffWhenItsEmailUnsubscribeLinkIsUsed() {
+        long account = account();
+        subscriptions.update(
+                account,
+                new UpdateNotificationPreferencesDTO(false, false, false, false, false, true),
+                EntityTagPrecondition.parse(subscriptions.get(account).etag()),
+                false);
+        String token = subscriptions
+                .unsubscribeToken(account, NotificationSubscriptionKind.MENTOR_DIGEST)
+                .orElseThrow();
+
+        web.post()
+                .uri("/notifications/unsubscribe/{token}", token)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .bodyValue("List-Unsubscribe=One-Click")
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        assertThat(subscriptions.get(account).weeklyDigest()).isFalse();
+    }
+
     private void update(long account, boolean product, boolean research) {
         subscriptions.update(
                 account,
-                new UpdateNotificationPreferencesDTO(false, product, research, false, false),
+                new UpdateNotificationPreferencesDTO(false, product, research, false, false, false),
                 EntityTagPrecondition.parse(subscriptions.get(account).etag()),
                 false);
     }

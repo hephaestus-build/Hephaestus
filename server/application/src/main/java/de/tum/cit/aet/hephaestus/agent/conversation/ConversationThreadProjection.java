@@ -28,7 +28,7 @@ public interface ConversationThreadProjection {
      * The Slack threads the requesting developer participated in, from channels whose consent is
      * {@code ACTIVE}, non-tombstoned messages only. Wrapped in the untrusted-content quarantine envelope.
      *
-     * @param developerId the mentor-chat requester's SCM user id — the participant-firewall audience
+     * @param developerId the Heph turn's developer's SCM user id — the participant-firewall audience
      */
     ObjectNode buildPayload(long workspaceId, long developerId);
 

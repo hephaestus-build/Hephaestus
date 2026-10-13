@@ -29,7 +29,7 @@ import org.jspecify.annotations.Nullable;
  * budget cap are computed from. Never update a row.
  *
  * <p>{@code sourceId} is a soft reference (no FK) to the originating {@code agent_job.id} or
- * {@code chat_message.id}: accounting must survive source-row deletion. Source kind, id, and attempt
+ * {@code mentor_turn.id}: accounting must survive source-row deletion. Source kind, id, and attempt
  * form the idempotency key, so retries are billed once each without collapsing distinct provider calls.
  */
 @Entity

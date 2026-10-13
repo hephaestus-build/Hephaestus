@@ -12,6 +12,7 @@ public class WorkerJwtIssuer {
 
     static final String WORKER_TOKEN_TYPE = "worker-session+jwt";
     static final String JOB_TOKEN_TYPE = "job+jwt";
+    static final String TURN_TOKEN_TYPE = "turn+jwt";
 
     private final WorkerKeyRing keyRing;
     private final WorkerTokenProperties properties;
@@ -58,6 +59,29 @@ public class WorkerJwtIssuer {
                 .withAudience(properties.audience())
                 .withClaim("job_id", jobId.toString())
                 .withClaim("workspace_id", workspaceId)
+                .withClaim("attempt", attempt)
+                .withClaim("scope", List.of("llm_proxy"))
+                .withJWTId(UUID.randomUUID().toString())
+                .withIssuedAt(now)
+                .withNotBefore(now)
+                .withExpiresAt(expiresAt)
+                .sign(Algorithm.RSA256(active.publicKey(), active.privateKey()));
+    }
+
+    /** A Heph turn attempt's credential; it expires at {@code expiresAt}, which the caller derives from the deadline. */
+    public String issueForTurn(
+            UUID turnId, Long workspaceId, Long userId, UUID conversationId, int attempt, Instant expiresAt) {
+        WorkerSigningKey active = keyRing.active();
+        Instant now = Instant.now();
+        if (!expiresAt.isAfter(now)) throw new IllegalArgumentException("expiresAt must be in the future");
+        return JWT.create()
+                .withHeader(Map.of("kid", active.kid(), "typ", TURN_TOKEN_TYPE))
+                .withIssuer(properties.issuer())
+                .withAudience(properties.audience())
+                .withClaim("turn_id", turnId.toString())
+                .withClaim("workspace_id", workspaceId)
+                .withClaim("user_id", userId)
+                .withClaim("conversation_id", conversationId.toString())
                 .withClaim("attempt", attempt)
                 .withClaim("scope", List.of("llm_proxy"))
                 .withJWTId(UUID.randomUUID().toString())

@@ -47,8 +47,8 @@ services:
       - "--entrypoints.http.http.redirections.entrypoint.scheme=https"
       - "--entrypoints.http.http.encodequerysemicolons=true"
       - "--entrypoints.https.http.encodequerysemicolons=true"
-      # Mentor chat is a long-lived SSE stream kept alive by a 20s heartbeat;
-      # 300s leaves margin above Traefik's 180s default.
+      # The Heph live stream is a long-lived SSE stream that the app server pings well inside this
+      # idle timeout (MentorLiveHub).
       - "--entryPoints.http.transport.respondingTimeouts.idleTimeout=300s"
       - "--entryPoints.https.transport.respondingTimeouts.idleTimeout=300s"
       # Backend timeouts, same as the reference. `command:` is !override, so nothing here is

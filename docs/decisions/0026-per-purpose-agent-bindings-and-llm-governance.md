@@ -1,6 +1,6 @@
 # ADR 0026: Per-purpose agent bindings and governed OpenAI-compatible LLM catalog
 
-**Status:** Accepted, amended 2026-07-26 (named-agent-config model deleted) and 2026-09-22 (member AI choice is per account, and the tiers collapse to in-house and cloud from one declared fact)
+**Status:** Accepted, amended 2026-07-26 (named-agent-config model deleted) and 2026-09-22 (member AI choice is per account, and the tiers collapse to in-house and cloud from one declared fact), and 2026-10-09 (Heph turn accounting, [ADR 0055](0055-one-heph-conversation-per-developer.md))
 **Date:** 2026-07-24
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md) (in-app LLM proxy as the sole credential path), [ADR 0025](0025-agent-job-queue-on-postgresql.md) (PostgreSQL agent job queue)
@@ -216,3 +216,13 @@ or a purpose needs more than one model (fallback chains, per-job-type routing), 
 `UNIQUE(workspace_id, purpose)` is the constraint that has to give; or provider contracts beyond the
 OpenAI Chat Completions and Responses shapes become load-bearing, which would move protocol out of
 the connection row and into its own negotiation.
+
+## Update — 2026-10-09 (Heph turn accounting, [ADR 0055](0055-one-heph-conversation-per-developer.md))
+
+Supersedes the mentor parts of § How tight the cap is and § Current runtime boundary. A Heph turn's
+spend so far is read from its own `mentor_turn` row counters, priced at the rates frozen in
+`mentor_turn.admission`. `MentorTurnMeter` and `chat_message` no longer exist. The last bullet of
+§ What the bound does not cover now reads: a turn whose worker lost its lease is billed by
+`MentorTurnLeaseReaper` once the lease expires (default lease one minute). For Heph turns, N in the
+concurrency bullet is the number of Heph conversations and Heph threads that run a turn at once. The server retains
+Heph submission and the ledger. The worker admits the turn when it claims it.

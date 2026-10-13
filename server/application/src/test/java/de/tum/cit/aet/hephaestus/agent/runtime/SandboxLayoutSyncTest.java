@@ -65,28 +65,21 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName(
-            "pi-mentor-runner.ts pins MENTOR_SYSTEM_PROMPT_PATH, SESSIONS_DIR, PI_AGENT_DIR, and the envelope exit")
-    void mentorRunnerLiteralsMatchAbi() throws IOException {
-        Path runner = resolveResource("agent/pi-mentor-runner.ts");
-        assertThat(runner).isRegularFile();
-        String body = Files.readString(runner, StandardCharsets.UTF_8);
+    @DisplayName("heph-host.ts pins MENTOR_SYSTEM_PROMPT_PATH, WORKSPACE_ROOT and PI_AGENT_DIR")
+    void shouldMatchTheAbiWhenTheHostNamesSandboxPaths() throws IOException {
+        Path host = resolveResource("agent/heph-host.ts");
+        assertThat(host).isRegularFile();
+        String body = Files.readString(host, StandardCharsets.UTF_8);
 
         assertThat(body)
-                .as("mentor runner references SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH literally")
+                .as("the host reads Heph's system prompt at SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH")
                 .contains("\"" + SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH + "\"");
-
         assertThat(body)
-                .as("mentor runner references SandboxLayout.SESSIONS_DIR dir name (.sessions)")
-                .contains("/" + SandboxLayout.SESSIONS_DIR);
-
+                .as("the host runs in SandboxLayout.WORKSPACE_ROOT")
+                .contains("\"" + SandboxLayout.WORKSPACE_ROOT + "\"");
         assertThat(body)
-                .as("mentor runner falls back to SandboxLayout.PI_AGENT_DIR when PI_CODING_AGENT_DIR is unset")
+                .as("the host falls back to SandboxLayout.PI_AGENT_DIR when PI_CODING_AGENT_DIR is unset")
                 .contains("\"" + SandboxLayout.PI_AGENT_DIR + "\"");
-
-        assertThat(body)
-                .as("mentor runner pins ENVELOPE_MISMATCH_EXIT to SandboxLayout.EXIT_ENVELOPE_MISMATCH")
-                .contains("ENVELOPE_MISMATCH_EXIT = " + SandboxLayout.EXIT_ENVELOPE_MISMATCH);
     }
 
     private static Path resolveResource(String relativePath) {

@@ -1,129 +1,525 @@
 ---
 id: unified-pi-runtime
 sidebar_position: 3
-title: Unified Pi Runtime
-description: Mentor replica affinity, conversation checkpoints, and how to disable affinity for debugging.
+title: Heph runtime
+description: How a Heph turn runs, from the ledger in PostgreSQL to the Heph host on a worker, and how each turn rebuilds and limits its context.
 ---
 
-## Heph session ownership
+# Heph runtime
 
-`DockerInteractiveSandboxAdapter.attach` attaches the worker to the interactive sandbox.
-The runner connects to the worker gateway over WebSocket.
-Attachment is not a `docker exec -i` process handle.
+Use this page to change how a Heph turn runs.
+[ADR 0055](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0055-one-heph-conversation-per-developer.md) records the decisions.
+[Runtime roles](/admin/runtime-roles#heph-turns) gives the operator settings.
 
-Web chat and Slack DMs retain their front ends on the server.
-The server also retains admission, budget checks, persistence, and `fetch_context`. `WorkerInteractiveSandboxService` places a session on a connected worker with spare mentor capacity.
-The worker hub carries bounded session commands, acknowledgements, runner frames and terminal session events.
-The runner itself opens an outbound WebSocket to the worker's Sandbox Gateway.
+## The ledger
 
-The worker owns attachment, idle eviction, Docker resources and session metrics.
-No server-side Docker fallback exists.
+PostgreSQL holds all Heph state in three workspace-scoped tables:
 
-Each live developer/workspace session stays on its worker.
-The server transfers only a scoped proxy credential and its non-secret route.
-The worker resolves provider keys and binds each turn before sending the prompt.
-Proxy usage is committed to PostgreSQL, not reconstructed from runner claims.
+| Table | Holds |
+| --- | --- |
+| `mentor_conversation` | One main conversation per developer and workspace, and one row for each Heph thread. A main conversation can carry the Slack team, user, and channel of the direct message. |
+| `mentor_entry` | Each question, answer, tool result, system entry, summary, and weekly digest. The column `seq` orders the entries of one conversation. |
+| `mentor_turn` | One question's run: status, lease, attempt, partial answer, usage, and error. |
 
-Drain and control-connection loss retire sessions.
-The next turn restores `session_jsonl` on an available worker.
-Absence of spare capacity is a retryable “Heph is busy” result.
+A Heph thread is a `mentor_conversation` row with `parent_conversation_id` and `parent_entry_id`.
+It forks the main conversation at that entry.
+The `mentor` module owns these tables, their services, and the path builder.
+The `agent.mentor` packages own admission, dispatch, the host, and the web API.
 
-A prepare acknowledgement or `runner_ready` does not prove SDK readiness.
-The server records `mentor.turn.runtime_ready` only after `open_thread` completes, at the real runtime boundary.
+An entry that Pi wrote keeps the Pi session entry verbatim in `payload`.
+The server derives the kind from the Pi entry (`MentorPiEntries.kind`).
+`text` holds only the developer's words or Heph's text.
+Thus, export, search, and erasure read one column.
 
-## Why mentor traffic is sticky
+## Turn lifecycle
 
-A Heph runtime container opens its gateway frames WebSocket to the **owning worker**, not to the application server.
-The worker owns the sandbox registry and idle eviction.
-The server relays JSON-RPC frames through the authenticated hub and retains `chat_thread.session_jsonl` in PostgreSQL.
-A saved session travels with `open_thread`, so the next turn can restore it after worker eviction, drain or restart.
+1. The server writes the question entry and a `QUEUED` turn in one transaction (`MentorTurnService.submit`). The client `requestId` makes a repeat return the same rows.
+2. A worker claims the oldest queued turn of a conversation that has no running turn (`MentorTurnStarter.startNext`). The turn becomes `RUNNING` with a lease.
+3. The worker admits the turn (`MentorAdmission.admit`) and freezes the model and price in `mentor_turn.admission`. A refusal ends the turn `FAILED` with the refusal text.
+4. The worker sends `start` to its Heph host. The host reads the context and runs Pi. While Pi works, the host reports the partial answer.
+5. The host ends the turn as `DONE`, `STOPPED`, or `FAILED` (`MentorTurnCompletion.end`). The end carries all Pi entries of the turn, and the worker stores them in one transaction.
+   A model call that Pi retried or recovered stays out, with the `context_edit` that leaves it out of the model's view (`heph-host.ts` `withoutOmitted`). The worker bills the attempt from the proxy's row counters.
 
-Preparation and a following web turn keep the same server affinity and worker placement.
-Slack preparation and a DM handled by different server replicas may still open separate placements.
-The reference single-server deployment avoids that case.
+A conversation has at most one running turn.
+The partial unique index `ux_mentor_turn_running` enforces this.
+The main conversation and its Heph threads are separate conversations, so they run at the same time.
 
-Traefik pins workspace traffic to the originating replica through a cookie scoped to `/api/workspaces`.
-This scope is narrower than the full `/api` router.
-Auth and public endpoints stay round-robin.
-The scope covers the actual mentor URL `/api/workspaces/{slug}/mentor/chat`.
+A question for a busy conversation waits as `QUEUED`.
+A conversation holds at most `hephaestus.mentor.turn.max-follow-ups` queued turns.
+The next question gets `409` with the reason `FOLLOW_UPS_FULL`.
 
-Labels live on the `https-application-server` service in `docker/compose.app.yaml`.
-Inspect with `curl -i`:
+### Leases and retries
 
-- Cookie: `__Secure-hep_workspace_aff` — `Secure`, `HttpOnly`, `SameSite=Lax`.
-  `maxAge` follows `hephaestus.mentor.idle-ttl-seconds` (900 s default). Traefik writes the cookie only when it picks a replica.
-  Thus, affinity lasts that long from the first request, not from the last request.
-- Response header: `X-Hephaestus-Replica: <container-id-prefix>` — emitted by `ReplicaIdentityFilter` from `$HOSTNAME`, CORS-exposed for the webapp.
+The worker renews the lease every third of `hephaestus.mentor.turn.lease`, while the turn runs on a live host.
+Each host call checks that the attempt runs on this worker (`MentorLeaseLostException`).
+The worker knows that without a read: a lost lease, the end, and a lost host remove the attempt.
+Each write of the attempt is also conditional on the lease, the attempt, and the worker.
 
-Labels are HTTPS-only.
-The HTTP router redirects to HTTPS, so pinning it would just double-issue cookies.
-The `cookie.path` attribute requires Traefik >= 3.3.
-Previews (`docker/preview/compose.app.yaml`) are single-replica and omit the labels.
+The end is the only write of the turn's entries.
+An attempt that crashes or loses its lease stores no entries.
+Thus, its retry starts from the same path as the first attempt.
 
-## Conversation size and checkpoints
+The worker can fail to answer a context read or an end, with a network error or a `5xx`.
+Then the host sends the call again, after 1, 2, and 4 seconds.
+The end releases the lease, so the worker answers a repeated end with `409` and stores nothing twice.
 
-Heph keeps the model's real context window.
-Pi's own settings supply a mentor-only working policy.
-Pi compacts once the conversation passes 49,152 estimated tokens.
-A smaller window reduces this trigger.
+`MentorTurnLeaseReaper` (server role) takes back an expired lease:
 
-Pi keeps its native target for recent messages that stay unsummarized: 20,000 tokens by default.
-On a small window, the target is half the trigger to leave nominal summary headroom.
-The target is neither a bound nor a promise about any message.
-Pi cuts at a message boundary.
+- A running turn on its first attempt returns to `QUEUED` with the same key. Its partial answer is cleared.
+- A running turn that loses its second lease ends `FAILED`.
+- A stopped turn whose host did not end it stays `STOPPED`, without an answer.
 
-It keeps a tool call with its results and can split a long active turn.
-Thus, the current question and its fetched context are more likely to stay verbatim.
-But Pi can still summarize them.
-Pi compacts between tool batches on that trigger.
+The reaper bills the lost attempt from the proxy's record.
 
-Before a prompt, the runner checks the restored conversation by Pi's estimate.
-Unlike Pi's own check, this counts what came after the last reply.
-The runner compacts the conversation inside the accepted turn.
-Thus, the summary is billed to that turn and spends its budget.
+The reaper can return a turn to the queue.
+Its `QUEUED` notification names the attempt that lost the lease.
+A worker acts on that notification only when it runs that attempt.
+Then the worker sends `stop` with the reason `lease` for that attempt, before it starts the retry.
 
-If compaction fails or leaves the conversation past the trigger, the turn ends with an error.
-It does not send the history.
-Pi never cuts inside a tool batch, so a tool result larger than the retention target stays whole.
-Context resources stay small for that reason. `observations_history.json` lists observations without their evidence. `observations_history/<id>.json` reads one listed observation's evidence on demand.
+Each command to the host names the attempt.
+A host that gets `start` for a later attempt of a turn that it runs stops the earlier attempt first.
+The earlier attempt then ends without a call to the worker.
 
-Each resource has a size bound.
-The trigger also caps Pi's summary output at the model's own output limit.
-Thus, compaction does not guarantee that the conversation stays under the trigger.
-The system prompt and tool definitions add to the conversation.
+### Stop and deadline
 
-The server stores only what the runner sent before a turn's outcome (`session_persisted`).
-The runner sends the session after every completed compaction.
-When the watchdog ends a turn, it sends the session after the abort settles and before the failure.
-A failed or aborted compaction sends none, so the stored session stays the last good one.
+A developer stops a turn with `PATCH …/mentor/turns/{turnId}/status`.
 
-A timed-out turn still fails if its abort has not settled after ten seconds.
-The runner refuses a new prompt until Pi settles.
-If an abort fails outright, the runner refuses every later prompt.
-Its refusal code tells the server to discard the sandbox.
+- A queued turn becomes `STOPPED` and never runs. The question stays without an answer.
+- A running turn becomes `STOPPED` at once, but it keeps its lease. The host aborts Pi and ends the turn with the cut-off answer.
 
-A turn that compacted uses the proxy's call record for accounting.
-Pi reports summary calls for a compaction as one total.
-It reports nothing for a compaction that failed partway.
-The reply's Finish, its stored row, and its ledger entry carry that one account.
+The next queued turn of that conversation starts after the host ends the stopped turn, or after the lease expires.
+An abort can leave a tool call without its result.
+The host stores no result for it.
+In the stopped turn, Pi gives each open tool call a result when it builds a request (`transformMessages`).
+For later turns, the path builder removes the tool calls from the cut-off answer (`MentorContextPathBuilder.keepCutOffAnswer`).
 
-The account is read once the row is no longer in flight.
+The deadline of a turn is the LLM timeout of the Heph model binding.
+At the deadline, the worker sends `stop` with the reason `deadline`.
+If the host does not end the turn within `HephTurnDispatcher.STOP_GRACE` after a `developer` or `deadline` stop, the worker ends it.
+A turn that the developer stopped then stays `STOPPED`.
+A `lease` stop has no such wait: the worker no longer counts the attempt, and the reaper decides about the turn.
 
-## Known limitations
+### How a turn fails
 
-- **Two browsers, same user.** Two browsers can pin to two replicas.
-  Each replica starts its own `(userId, workspaceId)` sandbox.
-  `InteractiveSandboxRegistry` is per-JVM.
-- **Slack has no affinity.** Slack events reach the server through shared durable NATS consumers.
-  With multiple application-server replicas, `app_home_opened` and the next DM can reach different replicas.
-  `app_home_opened` prepares a sandbox. The DM then starts its own. A single replica, the reference topology, always reuses it.
-- **Rolling deploys.** A worker drain ends its Heph sessions with a terminal stream result. The next turn restores the saved thread on an available worker. The `SseEmitter` timeout remains 10 minutes (`MentorChatController.EMITTER_TIMEOUT_MS`). It is not the worker-drain deadline.
+A failed turn stores no entries.
+Its question stays in the path with a marker ([The path](#the-path)), and the developer reads the text in this table.
 
-## Disabling affinity for debugging
+| Cause | Who ends the turn | Text for the developer |
+| --- | --- | --- |
+| Admission refuses the turn: no model, no AI choice, budget, unpriced usage, or a model below Heph's smallest model ([Limits](#limits)). | The worker, before the host runs (`MentorTurnStarter`). | The refusal text. |
+| The host does not start, or its channel does not open within `HephTurnDispatcher.HOST_READY_TIMEOUT`. | The worker. | "Heph could not start. Try again in a moment." |
+| The deadline passes. | The host, with the reason `DEADLINE`. If the host is silent for `STOP_GRACE`, the worker. | "Heph took too long to reply and stopped. Try again." |
+| The provider of a model call sends no response headers within `hephaestus.mentor.turn.model-first-byte-timeout`, or its stream sends no byte for `model-idle-timeout`, or its breaker refuses the call. The proxy answers with the code `upstream_stalled` or `upstream_paused`. | The host, with the reason `STALLED`. | "Heph's AI model stopped responding, so Heph could not finish this reply. Try again in a moment." |
+| The provider breaker of the admitted model's connection is open ([Runtime roles](/admin/runtime-roles#provider-breaker)). | The worker, before the host runs (`MentorTurnStarter`). | "Heph's AI model is not responding right now, so Heph did not start this reply. Try again in a few minutes." |
+| Pi writes no answer, or the model call fails. | The host, with the reason `ERROR` and a `detail`. | "Heph could not finish this reply. Try again." |
+| The conversation stays too long after compaction. | The host, with the reason `ERROR` and a `detail`. | "Heph could not finish this reply. Try again." |
+| The worker refuses the end with `400`, for example for too many entries. | The host, with the reason `ERROR` and a `detail`. | "Heph could not finish this reply. Try again." |
+| The worker refuses the end with `413` again, after the host replaced its documents with read notes. | The host, with the reason `ERROR` and a `detail`. | "Heph could not finish this reply. Try again." |
+| The second attempt loses its lease. | `MentorTurnLeaseReaper`. | "Heph could not finish this reply. Try again." |
 
-Delete the `traefik.http.services.https-application-server.loadbalancer.sticky.*` labels from `docker/compose.app.yaml`.
-Redeploy.
-Existing sessions stay pinned until the cookie expires.
-New sessions round-robin.
+An attempt that loses its lease does not fail by itself.
+The host stops it without a call to the worker, and the reaper decides (see [Leases and retries](#leases-and-retries)).
 
-Expect transient 5xx on reconnects that land on a cold replica.
+The worker logs each attempt that fails on it at `WARN`, with the reason and the host's detail.
+It logs an admission refusal at `INFO`.
+The reaper on the server role logs a lost second attempt at `INFO`.
+[Observability](/admin/observability#heph-turn-metrics) names the log lines.
+
+### Delivery of shown feedback
+
+Heph shows prepared conversational feedback through `link_observation`.
+The worker admits each call with `ConversationalDeliveryReconciler.admits`.
+When the turn ends, the reconciler checks every gate again, because authorization can change during the turn.
+It marks feedback `DELIVERED` only when the surface showed it:
+
+- App turn: when the turn ends `DONE` or `STOPPED`.
+  A failed or lost attempt stores no answer, so it delivers nothing.
+- Slack turn: only the feedback whose quoted text the Slack post or stream showed (`MentorTurnCompletion.recordDelivery`).
+  [Slack replies](#slack-replies) tells which part of a reply Slack showed.
+- Silent Mode in a Slack turn: first, the feedback whose text the stream already showed is delivered.
+  Then `ConversationalDeliveryReconciler` suppresses feedback of the answer for Silent Mode (`MentorTurnCompletion.recordSilenced`).
+
+Each of these steps acts on at most one piece of feedback for each turn.
+It is the first observation, in the order that Heph linked them, that passes every gate and has prepared `IN_CHAT` feedback.
+Thus, at most one piece becomes `DELIVERED`.
+Under Silent Mode, at most one more piece becomes `SUPPRESSED`.
+
+Other feedback that the answer showed stays `PREPARED`.
+A later turn can deliver it.
+Otherwise, `ConversationFeedbackTtlSweeper` suppresses it after 14 days.
+
+`feedback_placement.mentor_entry_id` records the Heph message that showed the feedback.
+The weekly digest links to that message.
+
+## Slack replies
+
+`SlackMentorProjector` (server role) sends the reply to each turn that the developer asked in Slack.
+A turn asked in the app never reaches Slack.
+The reply is what the app shows for the turn: each message that Heph wrote, followed by the feedback that it showed (`SlackMentorPosts.reply`).
+
+One server projects a turn: the server whose `MentorSlackDelivery.claim` sets the question's `slack_delivery` from empty to `PENDING`.
+The question's `slack_delivery` is the state of the whole reply: `PENDING`, `DELIVERED`, `UNCERTAIN`, or `FAILED`.
+Heph's answer entry carries only `slack_ts`, the message that shows it, so that a Slack thread on that message finds it.
+Every post carries Slack metadata with the entry id (event type `heph_entry`).
+A notice to the developer, such as a refusal, carries the event type `heph_notice`.
+Thus, only a stream that no server ended is a Heph message without metadata.
+
+| Where the developer asked | While the turn runs | When the turn ends |
+| --- | --- | --- |
+| The top level of the direct message | Heph reacts with 👀. | One post with the reply, then Heph removes 👀. Slack shows at most 12,000 characters. A longer reply is cut and ends with "… The full answer is in Hephaestus." |
+| A Slack thread | Heph reacts with 👀, and the partial answer streams (`chat.startStream`, then `chat.appendStream`). The question's `slack_stream_ts` holds the stream's `ts`. | The rest of the answer, then `chat.stopStream` with the Helpful and Not helpful buttons, then Heph removes 👀. |
+
+A failed turn gets its reason as the reply.
+A stopped turn's reply is what Heph wrote before the stop.
+If Heph wrote nothing, nothing is posted.
+A developer stops a turn in the app, also a turn asked in Slack.
+
+A retried attempt starts its answer again, in a new message.
+If Slack still streams the lost attempt's stream, it ends with "… Heph had to start again. The answer follows below."
+
+A stream appends at most once each second.
+`chat.appendStream` is Tier 4: Slack allows 100 calls each minute for each workspace.
+On one server, the appends of running turns in one workspace are at least 600 ms apart (`SlackMentorProjector.WORKSPACE_APPEND_SPACING`).
+Server replicas do not share this spacing, and the rest of an answer at the end of its turn is not spaced.
+For these appends, Slack's rate limit applies: the server waits for the `Retry-After` time, then tries again.
+
+The table gives what the end of the turn does with the stream.
+It applies to a refused append and to an answer that no longer starts with what the stream shows.
+The same rules apply to the append and `chat.stopStream` at the end of the turn.
+A stream that takes no more text gets no more text until the turn ends.
+Slack documents no way to keep a stream open while it gets no text.
+
+| Cause | The stream | When the turn ends |
+| --- | --- | --- |
+| `stopped_by_user`: the developer stopped the stream in Slack. | Takes no more text. | The stream ends where it is. |
+| `message_not_in_streaming_state`: Slack ended the stream, for example after a timeout that it does not document. | Takes no more text. | `chat.update` replaces the message with the whole reply. |
+| A transport failure or a Slack server error. Slack can show the text already, so the append is not sent again. | Takes no more text. | `chat.stopStream`, then `chat.update` with the whole reply. If this error answered `chat.startStream`, the server does not know the stream's `ts`. It reads the thread for a message with the app's `bot_id` (from `auth.test`) and without metadata, from within 2 seconds of the refused start. It replaces that message only if exactly one matches. Otherwise, it posts the whole reply. |
+| A rate limit, or any other error. | Takes the text again a second later. After 8 refused appends in a row, it takes no more text. | As for a transport failure. |
+| No error, but Heph's answer no longer starts with what the stream shows, for example after a retried model call. | Takes no more text. | `chat.stopStream`, then `chat.update` with the whole reply. |
+| An error in `SlackMentorProjector.STREAM_GONE`, for example a deleted message. | Takes no more text. | The server clears `slack_stream_ts` and posts the whole reply as a new message. |
+
+For a stopped turn, the stream ends where it is, unless it shows text that the stored answer does not start with.
+For a failed turn, the reason replaces the message instead of the whole reply.
+A message that `chat.update` replaced delivers the feedback that the reply shows.
+
+A Slack error decides the state of the reply (`SlackMentorPoster`):
+
+- A transport failure or a Slack server error leaves `UNCERTAIN`. The server cannot tell whether Slack stored the post.
+- A rate limit after the retry budget also leaves `UNCERTAIN`. Every try got a 429, so Slack stored nothing. The reconciler still looks for the post in the history before it posts again, which is the conservative choice.
+- Any other error that Slack answered is final: `FAILED`.
+- Silent Mode is `FAILED`. A stream delivers the feedback that it already showed ([Delivery of shown feedback](#delivery-of-shown-feedback)).
+
+`SlackMentorReconciler` (server role, every minute) finishes each reply that no server settled.
+The projecting server died, missed the end of the turn, or left the reply `UNCERTAIN`.
+The reconciler takes a reply 2 minutes after the turn ended, and up to 1 day after.
+It takes at most 5 replies of each workspace in one run.
+A run stops taking replies after 5 minutes.
+Each try doubles the wait before the next, and after 8 tries the reply is `FAILED`.
+
+The reconciler never posts a streamed reply again.
+The shown part of the stream is unknown.
+For a turn that ended `DONE`, the reconciler ends the stream with "… The full answer is in Hephaestus." and delivers no feedback.
+If Slack already ended that stream, the reconciler replaces the message with the whole reply (`chat.update`).
+It then delivers the feedback that the reply shows.
+
+For a stopped turn, the reconciler ends the stream where it is.
+For a failed turn, it ends the stream with the reason, or replaces the message with the reason if Slack already ended the stream.
+Before it posts any other reply again, it looks for the reply in the history of the direct message, by its metadata.
+
+A Slack disconnect, an uninstall of the app, or a revoked token erases every Heph entry of the workspace that was written in Slack.
+It also stops their running turns (`SlackWorkspaceContentEraser`).
+A disconnect takes the lifecycle lock of the Slack connection before it erases.
+A Slack question is stored in one transaction that takes the same lock and checks that the connection is still active for the Slack team (`SlackWorkspaceResolver.whileConnected`).
+Thus, a question that arrives during a disconnect is either not stored or erased by it.
+
+## The Heph host
+
+Each worker runs one Heph host container (`HephHost`, `HephHostSpec`).
+The worker starts it when it claims its first turn.
+The host is ready when it opens its command channel.
+
+| Property | Value |
+| --- | --- |
+| Image | The agent image of the release, runtime contract 5. |
+| Process | `node --max-old-space-size=1024 --permission`, with no child-process grant. |
+| Writable paths | Pi's agent directory and the temporary directory only. |
+| Limits | `HephHostSpec.LIMITS`. [Runtime roles](/admin/runtime-roles#the-heph-host) gives the values. |
+| Network | Its own internal network. It reaches only the worker's Sandbox Gateway. [Runtime roles](/admin/runtime-roles#the-heph-host) gives the exception for a worker that runs outside a container. |
+| Docker label | Kind `heph-host`. `SESSION_ID` is the host id. |
+| Tools | `fetch_context`, `link_observation`, `search_conversation`. No shell or file tools. |
+
+The sandbox SPI `agent.sandbox.spi.HostSandbox` launches the host.
+`DockerHostSandbox` is its Docker implementation.
+It reuses `SandboxContainerManager`, `ContainerSecurityPolicy`, and `SandboxNetworkManager`.
+
+A host that does not open its channel in time fails the claimed turn ([How a turn fails](#how-a-turn-fails)).
+[Runtime roles](/admin/runtime-roles#the-heph-host) gives the timeouts and the ping interval of the host.
+
+A closed channel means that the host is gone.
+The worker pings the channel on each dispatcher tick, and the WebSocket client of the host answers each ping.
+A host that leaves `HephHost.UNANSWERED_PINGS` pings in a row without an answer is also gone, and the worker closes its channel (`HephHost.ping`).
+The worker removes a gone host and leaves its turns to their leases.
+The next turn starts a new host.
+`SandboxReconciler` removes a host whose worker is gone.
+
+Before the worker removes a host, it writes the end of the host's output to its own log at `WARN`.
+The host writes its diagnostics to that output, for example why it could not start.
+
+On drain, the worker stops claiming turns.
+It waits up to `HephTurnDispatcher.DRAIN_TIMEOUT` for running turns, then removes the host.
+
+### Command channel
+
+The host opens one WebSocket to its worker: `GET /internal/llm/runtime/{hostId}/commands` on the gateway port.
+It authenticates with the gateway-session token of the host.
+The worker accepts that token once, and only for the current host id.
+
+The worker sends WebSocket pings and two JSON frames.
+`heph-host-protocol.ts` parses them and ignores any other frame.
+
+- `{"type":"start","turnId","attempt","token"}`. The token is the attempt's `TurnJwt`.
+- `{"type":"stop","turnId","attempt","reason"}`. The reason is `developer`, `deadline`, or `lease`.
+
+### Turn endpoints
+
+The host calls the worker over HTTP with the turn's `TurnJwt` (`HephTurnController`, hidden from OpenAPI).
+All paths start with `/internal/llm/turn/{turnId}/`.
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET context` | The session id, the stored path, the prompt, the model, and the situation. |
+| `POST fetch-context` | One context document. An unknown path gets `422`. |
+| `POST link-observation` | Admits one observation for the answer. A refused observation gets `422`. |
+| `POST search` | Full-text search in the conversation tree. |
+| `PUT partial` | The partial answer: the text and the `link_observation` calls of each assistant message of the turn so far, the last one maybe unfinished, and the stage. The gateway rate limit does not apply. A lost snapshot is not sent again. |
+| `POST end` | Ends the turn with `DONE`, `STOPPED`, or `FAILED`, with the Pi entries that the turn appended ([Limits](#limits)). A failed end carries a `detail` for the worker log. The end first waits up to 10 seconds for the proxy to record the attempt's model calls (`ProxyCallsInFlight`). An end without an answer cancels them first. |
+
+An end larger than the gateway's request bound gets `413`.
+The host then sends the end again, with each `fetch_context` result replaced by its read note (see [Tool results](#tool-results)).
+The next turn reads the notes instead of this turn's documents, and fetches again what it needs.
+
+The worker builds the context documents of an attempt once, when the host reads the context.
+`fetch-context` reads from that build, so one turn sees one set of documents.
+The end drops the build.
+A build that no call reads for 15 minutes expires, and a later read builds it again for the same question.
+
+`JobTokenAuthenticationFilter` accepts a turn token on model calls and on its own turn paths only.
+On a model call, the turn row must be leased by this worker with the same attempt, workspace, and conversation.
+On a turn path, the filter reads no row, and the endpoint checks that the attempt runs on this worker.
+A lost lease gets `409`.
+The token also bills model calls to the turn (`BilledAttempt` with `MENTOR_TURN`).
+
+The LLM proxy cuts a Heph model call whose provider stays silent (`LlmProxyService.Bounds`).
+Before the response headers, the first-byte bound applies, and the proxy answers `504`.
+In a stream, the idle bound applies, and the proxy ends the stream with an error event.
+The proxy relays only whole server-sent events, so this error event never joins half an event that the provider left unfinished.
+
+Lines can end with LF, CRLF or CR.
+An unfinished event longer than 1 MiB fails the stream.
+Both carry an error whose message starts with `upstream_stalled`.
+A call that the connection's breaker refuses gets `503` with `upstream_paused` (`LlmConnectionHealth`).
+
+The host fails the turn on either code and does not let Pi retry the call.
+An end without an answer cancels the attempt's calls in flight (`ProxyCallsInFlight.cancel`), so a silent provider cannot hold it.
+
+A partial answer is one conditional `UPDATE … RETURNING` and its `NOTIFY`, in one short transaction (`MentorTurnService.updatePartial`).
+A snapshot equal to the one that the attempt stored last is not written.
+The proxy records a model call's usage after it relayed the whole response.
+The host can read the end of the answer earlier and end the turn.
+Thus, the end waits for the attempt's calls, or the fence on the turn row would drop the last call as late.
+
+### Dispatch
+
+`HephTurnDispatcher` runs on the worker role.
+It claims turns while fewer than `hephaestus.worker.capacity.mentor-max` turns run on this worker.
+A `mentor_ledger` notification from PostgreSQL wakes it, with a timed backstop.
+`MentorLedgerNotifications` sends `NOTIFY` before commit, so PostgreSQL delivers it only on commit.
+
+## Live updates
+
+The server role serves `GET /workspaces/{slug}/mentor/events` as server-sent events (`MentorLiveHub`).
+The browser authenticates the stream with its cookie, and a native client with `Authorization: Bearer`.
+
+- On each connect, the stream sends a `snapshot` of the conversation.
+- Then it sends `turn` and `entry` events. Each event carries the full DTO that the server reads after the notification.
+- The end of a turn sends one `entry` notification with the ids of the messages that it appended.
+  Tool results, summaries, and system entries are never shown, so the notification does not list them.
+- An erasure sends one notification for each conversation that shows a changed message.
+- A large end or erasure splits its notification, so that each payload stays below the 8000-byte limit of PostgreSQL.
+  The app does not show tool results and summaries, so their erasure sends no notification.
+- A comment `ping` keeps a quiet stream open through the proxy ([Runtime roles](/admin/runtime-roles#live-answers)).
+- A stream belongs to the account that opened it.
+  Before each snapshot, each event, and each `ping`, the server checks that the account is still a member of the workspace.
+  If it is not, the server closes the stream without the content.
+  Each server checks its own streams, so a removed member gets no more content on any server.
+
+The stream has no replay log and ignores `Last-Event-ID`.
+The snapshot on each connect is the resume.
+After each snapshot, the client reads every loaded page of the conversation and of its threads again.
+An edit, a deletion, or the end of a turn does not change `latestSeq`, so the client cannot use it to find what changed.
+The client applies the events and the answers to its own writes that arrive during this read after the read completes.
+Thus, an older response cannot replace them.
+
+The snapshot carries `lastAnswerAt` and `lastReadAt`.
+The conversation has an unread answer when `lastAnswerAt` is later than `lastReadAt`.
+`PUT /workspaces/{slug}/mentor/conversation/read` moves `lastReadAt` of the main conversation forward.
+An earlier time changes nothing, so each device of the developer can send its own time.
+When the marker moves, the developer's other open streams get a `read` event with the new `lastReadAt` (`MentorRead`).
+
+One `LISTEN` connection serves each server replica.
+`MentorLiveHub` limits the streams of each developer ([Runtime roles](/admin/runtime-roles#live-answers)).
+A stream whose queue of 256 events overflows gets a new snapshot.
+
+## Context of a turn
+
+The host rebuilds the Pi session of a turn from rows.
+Nothing about a conversation stays in the host after the turn.
+The request has four parts, in this order:
+
+1. The system prompt `agent/mentor/system.md`. It is the same for each turn.
+2. The three tools. They are the same for each turn.
+3. The path from the server (`MentorContextPathBuilder`). It is the same bytes for each turn of one conversation, until it changes.
+4. The situation (`MentorSituation`). The host adds it as the last message and never stores it.
+
+The first three parts form a stable prefix for the prompt cache.
+The Anthropic cache breakpoint sits on the last stored message, before the situation.
+The Pi session id is the conversation id, so each Heph thread has its own cache key.
+
+### The path
+
+The server groups entries by turn and orders the groups by their first `seq`.
+A Heph thread's path is the main conversation up to and including its parent entry, then the thread's own entries.
+
+The path starts at the newest summary at or before the leaf.
+For a Heph thread, that is the newest summary at or before the parent.
+The path leaves out erased entries.
+An erased answer or tool result keeps a Pi skeleton, so no tool call loses its result.
+An erased question keeps its Pi entry id, so a summary that keeps the conversation from that question still finds its start.
+
+The server renders each question and weekly digest as a Pi user message with a prefix, for example `[Thu 2026-10-08 09:12 Europe/Berlin · Slack]`.
+The time zone is the developer's `account.time_zone`, or UTC.
+A stopped answer ends with `[stopped by the developer]`.
+A failed turn adds `[no answer: the turn failed]` to its question.
+`forTurn` returns the prompt that the host must pass to `session.prompt()` unchanged.
+
+### The situation
+
+The situation message gives these facts:
+
+- The time now and the surface of the question.
+- The time since the last message.
+- For a Heph thread, its parent and the main entries since the Heph thread started.
+- For the main conversation, up to 10 open Heph threads.
+- The page of the floating Heph panel, if the client sent one.
+- Who the developer is: their name and their handle in each connected system (`HephSituation`).
+  Context files mark the developer's own words with these handles, for example `byYou` on a Slack message.
+- The days of today, yesterday, this week and last week in the developer's time zone (`HephSituation`).
+  Heph uses these days and does not calculate dates.
+- An index of what the turn can read (`MentorTurnEvidence`): the number or practice, title, state, date and `resource` of each row.
+  It has a limit of 7,000 characters, about 2,000 tokens.
+  It contains no content of the work, so Heph must read a document before it answers about the work.
+
+### Context documents
+
+`fetch_context` reads one context document of the turn.
+A `ContentSource` under `agent/context/providers/mentor/` builds each fixed document.
+`MentorContextKeys` lists the fixed keys and `heph-host-protocol.ts` mirrors them.
+`FETCH_CONTEXT_INDEX` in `heph-host.ts` gives Heph one line about each key in the tool description.
+That index is the only description of the documents.
+An item key, for example the detail of one issue, comes only from a `resource` field in a document.
+
+Each document obeys these rules:
+
+- It covers the developer's own or assigned work and the developer's activity on it.
+  Where the work needs them, it also has the names and words of other people on that work.
+  Examples are review comments on a pull request and comments on an issue.
+- Slack messages come only from threads that the developer took part in, in monitored channels whose consent is active (`ConversationThreadProjection`).
+  Other members' messages in those threads are included and marked as untrusted content.
+- It reads only repositories that the workspace monitors on its connected instance.
+- It reads no repository that a team hides from contributions.
+- It reads a related item, such as the parent of an issue, under the scope of that issue.
+- It dates each item and names its repository.
+- The host writes each time in the developer's time zone with its offset, for example `2026-10-12 14:41 +02:00` (`ContextTimes`).
+- Each item whose web page Hephaestus stores carries that whole `url`: work, reviews, comments, commits and documents. Heph copies a link and never builds one. Slack messages and delivered feedback have no stored page.
+- It fits its own size limit. When it leaves something out, it says so (`truncated`, `omittedThreads`, `omittedPractices`, `omittedForSize`).
+- It keeps Hephaestus practice reviews apart from reviews by people.
+- It lists practice standings by practice group and name, never by standing.
+- It never contains the diff of a pull request. It gives the files, their line counts, and `filesCoverage` when file changes were not captured.
+
+### The stage
+
+The host sets the `stage` of each partial answer from the tool call in progress.
+`turnStage` in `heph-host.ts` is the only place that holds the labels.
+A `fetch_context` call gets the label of the document it reads, for example "Reading your practice feedback…".
+A `search_conversation` call gets "Looking back through this conversation…".
+At all other times the stage is "Thinking…".
+A tool's stage holds for the partial-answer window in which the tool started, so a fast read is shown at least once.
+
+The app shows the stage of a running turn (`MentorTurnPartialDTO.stage`).
+Slack shows 👀 and the streamed text, not the stage.
+
+### Tool results
+
+When a turn settles, the host appends Pi `context_edit` entries.
+They replace each older `fetch_context` result with a reference: the tool, its arguments, the read time, and a hint to fetch again.
+Only the latest turn's `fetch_context` results stay verbatim.
+`link_observation` results stay, because they record what Heph showed.
+
+### Compaction
+
+Heph uses Pi's own compaction, with Pi's default summary prompt.
+
+- **Before the prompt.** Above the working trigger, the host compacts the stored conversation before it sends the question. The trigger is 49,152 tokens, or less for a small window. The status line shows *Thinking…* while the host compacts, and the summary call counts against the turn. If the conversation stays too long, the turn fails.
+- **Thinking off.** Every summary call runs with thinking off. A reasoning model would otherwise spend Pi's summary output limit on thinking and leave the summary unfinished. The host sets the level on the agent state for the summary only, so the conversation stores no level change. Pi maps the level to each API's standard reasoning control and sends no provider-specific field. A model server that thinks by default keeps thinking ([AI providers](/admin/ai-providers#models-that-think-by-default)).
+- **A failed summary.** If Pi cannot write the summary, the history stays whole. The question goes out while the conversation fits the model's window, and the next turn compacts again. Thus, one failed summary never fails every later question of the conversation.
+- **The trigger.** `mentorCompaction` starts with a reserve of min(16,384, a quarter of the window). The trigger is the smaller of 49,152 tokens and the window less that reserve. Pi's reserve is then the window less the trigger. For a window of 128,000 tokens, it is 78,848 tokens. The reserve also caps the summary's output.
+- **Recent messages.** Pi keeps recent messages up to a target. The target is the smallest of 20,000 tokens, half the trigger and a sixth of the window. It is not a bound. Pi keeps a message whole and a tool call with its results. Thus, one long message can exceed the target.
+- **Room to answer.** After a summary, the host estimates the messages and the fixed prompt. The answer needs min(output limit, an eighth of the window). If that does not fit the window, the turn fails with "still too long after shortening it".
+- **A repeat.** A conversation that stays past the trigger after its summary is shortened again on the next turn. Nothing guarantees that one summary is enough.
+- **A kept summary.** A turn that fails after its summary still stores that summary. The next turn starts from it. It summarises again only if the conversation is still past the trigger.
+- **During the turn.** Pi's own check between tool batches is the fallback.
+
+Pi's own check before a prompt reads only the usage of its last answer.
+The host also counts what the ledger holds after that answer, for example the question of a failed turn.
+The summary is one of the turn's entries, so the end of the turn stores it.
+The server stores it as a `SUMMARY` entry, with `fromSeq` and `toSeq` of the entries that it covers.
+
+Erasure of an entry erases every summary that covers it.
+An edit of a Slack message keeps the message, but erases every summary that covers it and every `search_conversation` result that quotes it.
+A turn that ran during an erasure or an edit erases the same copies when it ends (`MentorRedaction.eraseStaleCopies`).
+The next turn then pays for one new compaction.
+
+An erasure locks the main conversation row of each tree that it changes before it changes an entry.
+The context read shares that row, and the end of a turn locks it before it stores entries.
+Thus, a context read either omits an erased entry, or it ran before the erasure started.
+In the second case, the end of the turn erases each summary and search result that it stores from that read.
+
+### Search
+
+`search_conversation` finds entries with PostgreSQL full-text search (`simple` configuration, `ix_mentor_entry_text_search`).
+It searches the main conversation, this Heph thread, or the whole tree.
+It returns questions, answers, and weekly digests only, never tool results, summaries, or erased entries.
+It returns a bounded number of hits ([Limits](#limits)), each with an entry id that Heph can cite.
+
+## Limits
+
+This table gives the fixed limits that only contributors change.
+[Runtime roles](/admin/runtime-roles#heph-turns) gives the operator settings and their defaults, the limits and timeouts of the host, and the stream limits.
+[Runtime roles](/admin/runtime-roles#configuration-cheatsheet) gives the request bound of the gateway (`SANDBOX_API_MAX_REQUEST_BYTES`).
+
+| Limit | Value | Where |
+| --- | --- | --- |
+| Attempts per turn | 2 | `MentorTurnService.MAX_ATTEMPTS` |
+| One context document | 200,000 characters | `MentorContextKeys.FETCH_CONTEXT_MAX_CHARS` |
+| Partial answer interval | 250 ms | `heph-host.ts` |
+| Wait of an end for the attempt's model calls | 10 seconds | `HephTurnController.USAGE_WAIT` |
+| Smallest Heph model | 32,768 tokens of context, 4,096 tokens of output | `AgentBindingLimits` |
+| Entries per end | 500 | `HephTurnController` |
+| Search hits | 20 | `MentorEntryService.search` |
+
+## Billing
+
+The host reports no usage.
+The worker bills each attempt from the LLM proxy's counters on the `mentor_turn` row, priced at the frozen admission rates.
+The ledger row in `llm_usage_event` has the turn id and the attempt number.
+A summary call during the turn counts against the turn's budget.

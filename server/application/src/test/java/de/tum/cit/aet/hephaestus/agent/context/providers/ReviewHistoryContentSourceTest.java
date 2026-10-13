@@ -668,7 +668,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     @Test
     void doesNotSupportTheMentorChat() {
-        assertThat(provider.supports(new ContextRequest.MentorChatRequest(WORKSPACE_ID, AUTHOR_ID, UUID.randomUUID())))
+        assertThat(provider.supports(new ContextRequest.HephTurnRequest(WORKSPACE_ID, AUTHOR_ID, UUID.randomUUID())))
                 .isFalse();
         assertThat(provider.supports(prRequest())).isTrue();
     }

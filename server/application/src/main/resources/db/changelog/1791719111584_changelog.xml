@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1791719111584-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="chat_thread"/>
+            <tableExists tableName="chat_message"/>
+            <tableExists tableName="chat_message_vote"/>
+            <tableExists tableName="mentor_slack_thread"/>
+            <columnExists tableName="feedback_placement" columnName="chat_message_id"/>
+        </preConditions>
+        <comment>Drop the Heph chat tables. Conversational placements keep their feedback without the message.</comment>
+        <dropForeignKeyConstraint baseTableName="feedback_placement" constraintName="sfk_feedback_placement_chat_message"/>
+        <sql>UPDATE feedback_placement SET chat_message_id = NULL WHERE chat_message_id IS NOT NULL</sql>
+        <renameColumn tableName="feedback_placement" oldColumnName="chat_message_id" newColumnName="mentor_entry_id" columnDataType="UUID"/>
+        <dropTable tableName="mentor_slack_thread" cascadeConstraints="true"/>
+        <dropTable tableName="chat_message_vote" cascadeConstraints="true"/>
+        <dropTable tableName="chat_message" cascadeConstraints="true"/>
+        <dropTable tableName="chat_thread" cascadeConstraints="true"/>
+        <rollback>
+            <stop>Restore the verified pre-upgrade backup; this migration does not keep the earlier Heph chat history.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1791719111584-2" author="hephaestus">
+        <createTable tableName="mentor_conversation">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="mentor_conversationPK"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_activity_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="parent_conversation_id" type="UUID"/>
+            <column name="parent_entry_id" type="UUID"/>
+            <column name="slack_channel_id" type="VARCHAR(32)"/>
+            <column name="slack_team_id" type="VARCHAR(32)"/>
+            <column name="slack_user_id" type="VARCHAR(32)"/>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1791719111584-3" author="hephaestus">
+        <createTable tableName="mentor_entry">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="mentor_entryPK"/>
+            </column>
+            <column name="conversation_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="edited_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="kind" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload" type="JSONB"/>
+            <column name="redacted_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="request_id" type="VARCHAR(200)"/>
+            <column name="seq" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueNumeric="0" name="slack_attempts" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="slack_delivery" type="VARCHAR(16)"/>
+            <column name="slack_stream_ts" type="VARCHAR(32)"/>
+            <column name="slack_ts" type="VARCHAR(32)"/>
+            <column name="surface" type="VARCHAR(8)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="text" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="turn_id" type="UUID"/>
+            <column name="vote" type="VARCHAR(16)"/>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1791719111584-4" author="hephaestus">
+        <createTable tableName="mentor_turn">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="mentor_turnPK"/>
+            </column>
+            <column name="admission" type="JSONB"/>
+            <column defaultValueNumeric="0" name="attempt" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueNumeric="0" name="cache_write_tokens" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueNumeric="0" name="cached_tokens" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="conversation_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cost_usd" type="numeric(19, 9)"/>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="error" type="TEXT"/>
+            <column name="finished_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column defaultValueNumeric="0" name="input_tokens" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="leased_until" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column defaultValueNumeric="0" name="llm_calls" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueNumeric="0" name="output_tokens" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="partial" type="JSONB"/>
+            <column defaultValueNumeric="0" name="reasoning_tokens" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="request_id" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="status" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="surface" type="VARCHAR(8)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="worker_id" type="VARCHAR(128)"/>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1791719111584-5" author="hephaestus">
+        <addColumn tableName="account">
+            <column name="time_zone" type="VARCHAR(64)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791719111584-6" author="hephaestus">
+        <addUniqueConstraint columnNames="parent_entry_id" constraintName="uk_mentor_conversation_parent_entry" tableName="mentor_conversation"/>
+    </changeSet>
+    <changeSet id="1791719111584-7" author="hephaestus">
+        <addUniqueConstraint columnNames="conversation_id, seq" constraintName="uk_mentor_entry_conversation_seq" tableName="mentor_entry"/>
+    </changeSet>
+    <changeSet id="1791719111584-8" author="hephaestus">
+        <addUniqueConstraint columnNames="conversation_id, slack_ts" constraintName="uk_mentor_entry_conversation_slack_ts" tableName="mentor_entry"/>
+    </changeSet>
+    <changeSet id="1791719111584-9" author="hephaestus">
+        <addUniqueConstraint columnNames="request_id" constraintName="uk_mentor_turn_request" tableName="mentor_turn"/>
+    </changeSet>
+    <changeSet id="1791719111584-10" author="hephaestus">
+        <createIndex indexName="idx_mentor_conversation_parent" tableName="mentor_conversation">
+            <column name="parent_conversation_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791719111584-11" author="hephaestus">
+        <createIndex indexName="idx_mentor_conversation_workspace_user" tableName="mentor_conversation">
+            <column name="workspace_id"/>
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791719111584-12" author="hephaestus">
+        <createIndex indexName="idx_mentor_entry_turn" tableName="mentor_entry">
+            <column name="turn_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791719111584-13" author="hephaestus">
+        <createIndex indexName="idx_mentor_turn_conversation_status" tableName="mentor_turn">
+            <column name="conversation_id"/>
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791719111584-14" author="hephaestus">
+        <createIndex indexName="idx_mentor_turn_status_created" tableName="mentor_turn">
+            <column name="status"/>
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791719111584-15" author="hephaestus">
+        <comment>Value and shape rules of the Heph ledger that JPA does not express.</comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE mentor_conversation ADD CONSTRAINT chk_mentor_conversation_thread
+                CHECK ((parent_conversation_id IS NULL) = (parent_entry_id IS NULL));
+            ALTER TABLE mentor_conversation ADD CONSTRAINT chk_mentor_conversation_slack
+                CHECK ((slack_team_id IS NULL AND slack_user_id IS NULL AND slack_channel_id IS NULL)
+                    OR (slack_team_id IS NOT NULL AND slack_user_id IS NOT NULL AND slack_channel_id IS NOT NULL
+                        AND parent_conversation_id IS NULL));
+            ALTER TABLE mentor_entry ADD CONSTRAINT chk_mentor_entry_kind
+                CHECK (kind IN ('USER', 'HEPH', 'TOOL_RESULT', 'SYSTEM', 'SUMMARY', 'DIGEST'));
+            ALTER TABLE mentor_entry ADD CONSTRAINT chk_mentor_entry_surface
+                CHECK (surface IN ('APP', 'SLACK', 'SYSTEM'));
+            ALTER TABLE mentor_entry ADD CONSTRAINT chk_mentor_entry_slack_delivery
+                CHECK (slack_delivery IS NULL OR slack_delivery IN ('PENDING', 'DELIVERED', 'UNCERTAIN', 'FAILED'));
+            ALTER TABLE mentor_entry ADD CONSTRAINT chk_mentor_entry_vote
+                CHECK (vote IS NULL OR vote IN ('HELPFUL', 'NOT_HELPFUL'));
+            ALTER TABLE mentor_entry ADD CONSTRAINT chk_mentor_entry_payload_shape
+                CHECK (payload IS NULL OR jsonb_typeof(payload) = 'object');
+            ALTER TABLE mentor_turn ADD CONSTRAINT chk_mentor_turn_status
+                CHECK (status IN ('QUEUED', 'RUNNING', 'DONE', 'FAILED', 'STOPPED'));
+            ALTER TABLE mentor_turn ADD CONSTRAINT chk_mentor_turn_surface
+                CHECK (surface IN ('APP', 'SLACK'));
+        ]]></sql>
+    </changeSet>
+    <changeSet id="1791719111584-16" author="hephaestus">
+        <comment>Partial indexes and storage settings of the Heph ledger and its feedback placements that JPA does not express.</comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            CREATE UNIQUE INDEX ux_mentor_conversation_main ON mentor_conversation (workspace_id, user_id)
+                WHERE parent_conversation_id IS NULL;
+            CREATE INDEX idx_mentor_conversation_slack ON mentor_conversation (slack_user_id, slack_team_id)
+                WHERE slack_user_id IS NOT NULL;
+            CREATE UNIQUE INDEX ux_mentor_entry_request ON mentor_entry (request_id) WHERE request_id IS NOT NULL;
+            CREATE INDEX ix_mentor_entry_text_search ON mentor_entry USING gin (to_tsvector('simple'::regconfig, text))
+                WHERE kind IN ('USER', 'HEPH', 'DIGEST');
+            CREATE INDEX ix_mentor_entry_slack_question_unsettled ON mentor_entry (turn_id)
+                WHERE kind = 'USER' AND surface = 'SLACK'
+                    AND (slack_delivery IS NULL OR slack_delivery IN ('PENDING', 'UNCERTAIN'));
+            CREATE INDEX ix_mentor_entry_digest_unsettled ON mentor_entry (created_at)
+                WHERE kind = 'DIGEST' AND slack_delivery IN ('PENDING', 'UNCERTAIN');
+            CREATE INDEX ix_feedback_placement_mentor_entry ON feedback_placement (mentor_entry_id)
+                WHERE mentor_entry_id IS NOT NULL;
+            CREATE UNIQUE INDEX ux_mentor_turn_running ON mentor_turn (conversation_id) WHERE status = 'RUNNING';
+            CREATE INDEX idx_mentor_turn_leased_until ON mentor_turn (leased_until) WHERE leased_until IS NOT NULL;
+            ALTER TABLE mentor_turn SET (fillfactor = 50);
+        ]]></sql>
+    </changeSet>
+    <changeSet id="1791719111584-17" author="hephaestus">
+        <comment>Workspace, conversation and turn ownership of the Heph ledger, and the Heph answer that delivered a conversational placement.</comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE mentor_conversation ADD CONSTRAINT sfk_mentor_conversation_workspace
+                FOREIGN KEY (workspace_id) REFERENCES workspace (id) ON DELETE CASCADE;
+            ALTER TABLE mentor_conversation ADD CONSTRAINT sfk_mentor_conversation_user
+                FOREIGN KEY (user_id) REFERENCES "user" (id) ON DELETE CASCADE;
+            ALTER TABLE mentor_conversation ADD CONSTRAINT sfk_mentor_conversation_parent
+                FOREIGN KEY (parent_conversation_id) REFERENCES mentor_conversation (id) ON DELETE CASCADE;
+            ALTER TABLE mentor_entry ADD CONSTRAINT sfk_mentor_entry_workspace
+                FOREIGN KEY (workspace_id) REFERENCES workspace (id) ON DELETE CASCADE;
+            ALTER TABLE mentor_entry ADD CONSTRAINT sfk_mentor_entry_conversation
+                FOREIGN KEY (conversation_id) REFERENCES mentor_conversation (id) ON DELETE CASCADE;
+            ALTER TABLE mentor_conversation ADD CONSTRAINT sfk_mentor_conversation_parent_entry
+                FOREIGN KEY (parent_entry_id) REFERENCES mentor_entry (id) ON DELETE CASCADE;
+            ALTER TABLE mentor_turn ADD CONSTRAINT sfk_mentor_turn_workspace
+                FOREIGN KEY (workspace_id) REFERENCES workspace (id) ON DELETE CASCADE;
+            ALTER TABLE mentor_turn ADD CONSTRAINT sfk_mentor_turn_conversation
+                FOREIGN KEY (conversation_id) REFERENCES mentor_conversation (id) ON DELETE CASCADE;
+            ALTER TABLE mentor_entry ADD CONSTRAINT sfk_mentor_entry_turn
+                FOREIGN KEY (turn_id) REFERENCES mentor_turn (id) ON DELETE SET NULL;
+            ALTER TABLE feedback_placement ADD CONSTRAINT sfk_feedback_placement_mentor_entry
+                FOREIGN KEY (mentor_entry_id) REFERENCES mentor_entry (id) ON DELETE SET NULL;
+        ]]></sql>
+    </changeSet>
+    <changeSet id="1791719111584-18" author="hephaestus">
+        <addColumn tableName="mentor_turn">
+            <column name="page_context" type="VARCHAR(500)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1791719111584-19" author="hephaestus">
+        <createIndex indexName="idx_mentor_entry_workspace_surface" tableName="mentor_entry">
+            <column name="workspace_id"/>
+            <column name="surface"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791719111584-20" author="hephaestus">
+        <createIndex indexName="idx_mentor_turn_workspace_surface" tableName="mentor_turn">
+            <column name="workspace_id"/>
+            <column name="surface"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1791719111584-21" author="hephaestus">
+        <dropColumn columnName="allow_internet" tableName="workspace_agent_binding"/>
+        <rollback>
+            <addColumn tableName="workspace_agent_binding">
+                <column name="allow_internet" type="BOOLEAN" defaultValueBoolean="false">
+                    <constraints nullable="false"/>
+                </column>
+            </addColumn>
+        </rollback>
+    </changeSet>
+    <changeSet id="1791719111584-22" author="hephaestus">
+        <addColumn tableName="mentor_conversation">
+            <column name="last_read_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

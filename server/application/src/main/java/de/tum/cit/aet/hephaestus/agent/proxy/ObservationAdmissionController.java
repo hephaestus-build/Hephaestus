@@ -93,18 +93,12 @@ public class ObservationAdmissionController {
         if (!(authentication.getPrincipal() instanceof ProxyRouting routing)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Agent-job credential required");
         }
-        UUID jobId = routing.sourceId();
-        if (jobId == null
-                || routing.attempt() == null
-                || routing.attempt().sourceType() != LlmUsageSourceType.AGENT_JOB
-                || routing.workspaceId() == null
-                || routing.attempt().workerId() == null) {
+        ProxyRouting.BilledAttempt attempt = routing.attempt();
+        Long workspaceId = routing.workspaceId();
+        if (attempt.sourceType() != LlmUsageSourceType.AGENT_JOB || workspaceId == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Agent-job credential required");
         }
         return new ObservationAdmissionService.AdmissionIdentity(
-                jobId,
-                routing.workspaceId(),
-                routing.attempt().number(),
-                routing.attempt().workerId());
+                attempt.sourceId(), workspaceId, attempt.number(), attempt.workerId());
     }
 }

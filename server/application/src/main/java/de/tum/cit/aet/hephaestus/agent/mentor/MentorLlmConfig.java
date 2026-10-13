@@ -12,7 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Slim projection of the LLM fields that {@link MentorPiAdapter} needs to build a sandbox spec — the
+ * Slim projection of the LLM fields a Heph turn runs with — the
  * same resolved, non-secret shape the practice-review path freezes into {@code ConfigSnapshot}.
  */
 public record MentorLlmConfig(
@@ -27,7 +27,6 @@ public record MentorLlmConfig(
         @Nullable Long modelId,
         @Nullable Long workspaceId,
         @Nullable LlmPriceSnapshot priceSnapshot,
-        boolean allowInternet,
         int timeoutSeconds) {
     public MentorLlmConfig {
         // Reserve shutdown time even for bindings persisted below the runnable floor or above the API ceiling.
@@ -50,7 +49,6 @@ public record MentorLlmConfig(
                 ref.modelId(),
                 ref.workspaceId(),
                 admitted.price(),
-                config.isAllowInternet(),
                 config.getTimeoutSeconds());
     }
 }

@@ -96,7 +96,7 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
         when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID)).thenReturn(List.of(slackLink, gitLabLink));
         when(membershipQuery.membershipsForAccount(ACCOUNT_ID))
                 .thenReturn(List.of(new AccountWorkspaceMembershipQuery.WorkspaceMembershipView(
-                        1L, "acme", "Hephaestus", "MEMBER", 314L)));
+                        1L, "acme", "Hephaestus", "MEMBER", 314L, List.of(314L))));
         Connection visible = slackConnection(1L, "acme", "Hephaestus", "T1", "acme-slack");
         Connection inaccessible = slackConnection(2L, "other", "Other", "T1", "acme-slack");
         when(connectionRepository.findAllByKindAndInstanceKeyInAndState(

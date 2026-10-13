@@ -26,7 +26,7 @@ const FeatureList: FeatureItem[] = [
 		cta: { label: "How practice feedback works", to: "/user/ai-code-review" },
 	},
 	{
-		title: "Chat with Heph",
+		title: "Talk with Heph",
 		kicker: "Talk through feedback and recent work",
 		description: "Heph can use recent project activity and feedback you have received as context.",
 		bullets: [

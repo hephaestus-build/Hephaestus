@@ -156,21 +156,20 @@ public class OutlineDocumentProjector implements DocumentProjection {
 
     /** Maps a mirrored row to the agent view; a tombstoned/evicted document serves a null body. */
     private ProjectedDocument project(OutlineDocument doc, AuthorContext authors, Map<String, String> collectionNames) {
-        connectionService
-                .findInWorkspace(doc.getWorkspaceId(), doc.getConnectionId())
-                .ifPresent(connection -> {
-                    if (connection.getConfig() instanceof ConnectionConfig.OutlineConfig config
-                            && config.serverUrl() != null) {
-                        var subjects = new LinkedHashSet<String>();
-                        if (doc.getCreatedBySubject() != null) subjects.add(doc.getCreatedBySubject());
-                        if (doc.getUpdatedBySubject() != null) subjects.add(doc.getUpdatedBySubject());
-                        if (doc.getCollaboratorSubjects() != null) subjects.addAll(doc.getCollaboratorSubjects());
-                        subjects.stream()
-                                .filter(subject -> !subject.isBlank())
-                                .forEach(subject -> personCopies.recordIdentity(new PersonCopyIdentity(
-                                        "OUTLINE", config.serverUrl(), subject, connection.getInstanceKey())));
-                    }
-                });
+        Optional<Connection> source = connectionService.findInWorkspace(doc.getWorkspaceId(), doc.getConnectionId());
+        String url = source.map(connection -> documentUrl(connection, doc)).orElse(null);
+        source.ifPresent(connection -> {
+            if (connection.getConfig() instanceof ConnectionConfig.OutlineConfig config && config.serverUrl() != null) {
+                var subjects = new LinkedHashSet<String>();
+                if (doc.getCreatedBySubject() != null) subjects.add(doc.getCreatedBySubject());
+                if (doc.getUpdatedBySubject() != null) subjects.add(doc.getUpdatedBySubject());
+                if (doc.getCollaboratorSubjects() != null) subjects.addAll(doc.getCollaboratorSubjects());
+                subjects.stream()
+                        .filter(subject -> !subject.isBlank())
+                        .forEach(subject -> personCopies.recordIdentity(new PersonCopyIdentity(
+                                "OUTLINE", config.serverUrl(), subject, connection.getInstanceKey())));
+            }
+        });
         boolean deleted = doc.isDeleted();
         String body = deleted ? null : doc.getBodyMarkdown();
         return new ProjectedDocument(
@@ -191,7 +190,21 @@ public class OutlineDocumentProjector implements DocumentProjection {
                 doc.isArchived(),
                 collectionNames.get(doc.getCollectionId()),
                 doc.getLastMaterializedAt(),
-                doc.getDocumentId());
+                doc.getDocumentId(),
+                url);
+    }
+
+    /** Outline links a document as {@code <server>/doc/<slug>}; the mirrored slug is that last path segment. */
+    private static @Nullable String documentUrl(Connection connection, OutlineDocument doc) {
+        if (!(connection.getConfig() instanceof ConnectionConfig.OutlineConfig config)
+                || config.serverUrl() == null
+                || config.serverUrl().isBlank()
+                || doc.getSlug() == null
+                || doc.getSlug().isBlank()
+                || doc.isDeleted()) {
+            return null;
+        }
+        return config.serverUrl().replaceAll("/+$", "") + "/doc/" + doc.getSlug();
     }
 
     /**

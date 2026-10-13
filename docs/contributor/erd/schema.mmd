@@ -21,6 +21,7 @@ erDiagram
         TIMESTAMPTZ deleted_at
         BIGINT version "NOT NULL"
         BOOLEAN public_activity_visible "NOT NULL"
+        VARCHAR(64) time_zone
     }
 
     AccountAiChoice {
@@ -152,41 +153,6 @@ erDiagram
         VARCHAR(255) id PK
         BYTEA state
         BIGINT expires_at
-    }
-
-    ChatMessage {
-        UUID id PK
-        TIMESTAMPTZ created_at "NOT NULL"
-        JSONB metadata
-        VARCHAR(16) role "NOT NULL"
-        UUID parent_message_id FK
-        UUID thread_id FK "NOT NULL"
-        JSONB parts "NOT NULL"
-        BIGINT version "NOT NULL"
-        VARCHAR(16) status "NOT NULL"
-        INTEGER llm_total_calls "NOT NULL"
-        BIGINT llm_total_input_tokens "NOT NULL"
-        BIGINT llm_total_output_tokens "NOT NULL"
-        BIGINT llm_total_reasoning_tokens "NOT NULL"
-        BIGINT llm_cache_read_tokens "NOT NULL"
-        BIGINT llm_cache_write_tokens "NOT NULL"
-    }
-
-    ChatMessageVote {
-        UUID message_id PK,FK
-        TIMESTAMPTZ created_at "NOT NULL"
-        BOOLEAN is_upvoted "NOT NULL"
-        TIMESTAMPTZ updated_at "NOT NULL"
-    }
-
-    ChatThread {
-        UUID id PK
-        TIMESTAMPTZ created_at "NOT NULL"
-        TEXT title
-        BIGINT user_id FK
-        BIGINT workspace_id FK "NOT NULL"
-        BYTEA session_jsonl
-        VARCHAR(16) surface "NOT NULL"
     }
 
     ClientSession {
@@ -532,7 +498,7 @@ erDiagram
         VARCHAR(8) anchor_side
         TEXT posted_comment_ref UK
         TIMESTAMPTZ created_at "NOT NULL"
-        UUID chat_message_id FK
+        UUID mentor_entry_id FK
         TEXT posted_comment_url
     }
 
@@ -853,15 +819,65 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
     }
 
-    MentorSlackThread {
+    MentorConversation {
         UUID id PK
-        BIGINT workspace_id FK,UK "NOT NULL"
-        UUID chat_thread_id FK "NOT NULL"
-        VARCHAR(32) slack_team_id "NOT NULL"
-        VARCHAR(32) slack_channel_id UK "NOT NULL"
-        VARCHAR(32) slack_thread_ts UK "NOT NULL"
-        VARCHAR(32) slack_user_id "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ last_activity_at "NOT NULL"
+        UUID parent_conversation_id FK
+        UUID parent_entry_id FK,UK
+        VARCHAR(32) slack_channel_id
+        VARCHAR(32) slack_team_id
+        VARCHAR(32) slack_user_id
+        BIGINT user_id FK "NOT NULL"
+        BIGINT workspace_id FK "NOT NULL"
+        TIMESTAMPTZ last_read_at
+    }
+
+    MentorEntry {
+        UUID id PK
+        UUID conversation_id FK,UK "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ edited_at
+        VARCHAR(16) kind "NOT NULL"
+        JSONB payload
+        TIMESTAMPTZ redacted_at
+        VARCHAR(200) request_id
+        BIGINT seq UK "NOT NULL"
+        INTEGER slack_attempts "NOT NULL"
+        VARCHAR(16) slack_delivery
+        VARCHAR(32) slack_stream_ts
+        VARCHAR(32) slack_ts UK
+        VARCHAR(8) surface "NOT NULL"
+        TEXT text "NOT NULL"
+        UUID turn_id FK
+        VARCHAR(16) vote
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
+    MentorTurn {
+        UUID id PK
+        JSONB admission
+        INTEGER attempt "NOT NULL"
+        BIGINT cache_write_tokens "NOT NULL"
+        BIGINT cached_tokens "NOT NULL"
+        UUID conversation_id FK "NOT NULL"
+        NUMERIC(19,9) cost_usd
+        TIMESTAMPTZ created_at "NOT NULL"
+        TEXT error
+        TIMESTAMPTZ finished_at
+        BIGINT input_tokens "NOT NULL"
+        TIMESTAMPTZ leased_until
+        INTEGER llm_calls "NOT NULL"
+        BIGINT output_tokens "NOT NULL"
+        JSONB partial
+        BIGINT reasoning_tokens "NOT NULL"
+        VARCHAR(200) request_id UK "NOT NULL"
+        TIMESTAMPTZ started_at
+        VARCHAR(16) status "NOT NULL"
+        VARCHAR(8) surface "NOT NULL"
+        VARCHAR(128) worker_id
+        BIGINT workspace_id FK "NOT NULL"
+        VARCHAR(500) page_context
     }
 
     Milestone {
@@ -1706,7 +1722,6 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         INTEGER timeout_seconds "NOT NULL"
         INTEGER max_concurrent_jobs "NOT NULL"
-        BOOLEAN allow_internet "NOT NULL"
         BIGINT instance_model_id FK
         BIGINT workspace_model_id FK
         TIMESTAMPTZ created_at "NOT NULL"
@@ -1820,8 +1835,8 @@ erDiagram
     %% Relationships
     %% One-to-One relationships
     Account ||--|| AccountAiChoice : has
-    ChatMessage ||--|| ChatMessageVote : has
     DiscussionComment ||--|| Discussion : references
+    MentorEntry ||--|| MentorConversation : references
     PracticeRevision ||--|| Practice : references
     Workspace ||--|| PracticeCatalogInstallation : has
     WorkspaceMembership ||--|| PracticeReviewPersonTarget : reviewed
@@ -1847,10 +1862,6 @@ erDiagram
     IdentityLink ||--o{ AuthEvent : has
     User ||--o{ AuthEvent : has
     Workspace ||--o{ AuthEvent : has
-    ChatThread ||--o{ ChatMessage : has
-    ChatMessage ||--o{ ChatMessage : references
-    User ||--o{ ChatThread : has
-    Workspace ||--o{ ChatThread : has
     Account ||--o{ ClientSession : has
     Account ||--o{ ClientSignInHandoff : has
     GitCommit ||--o{ CommitContributor : has
@@ -1886,7 +1897,7 @@ erDiagram
     AgentJob ||--o{ FeedbackDispatch : references
     Workspace ||--o{ FeedbackDispatch : has
     Feedback ||--o{ FeedbackPlacement : has
-    ChatMessage ||--o{ FeedbackPlacement : has
+    MentorEntry ||--o{ FeedbackPlacement : has
     Feedback ||--o{ FeedbackWithdrawal : references
     Account ||--o{ FeedbackWithdrawal : restored_by_account_id
     Account ||--o{ FeedbackWithdrawal : withdrawn_by_account_id
@@ -1915,8 +1926,14 @@ erDiagram
     LlmConnection ||--o{ LlmModel : has
     LlmModel ||--o{ LlmModelPrice : has
     Workspace ||--o{ LlmUsageEvent : has
-    ChatThread ||--o{ MentorSlackThread : has
-    Workspace ||--o{ MentorSlackThread : has
+    MentorConversation ||--o{ MentorConversation : references
+    User ||--o{ MentorConversation : has
+    Workspace ||--o{ MentorConversation : has
+    MentorConversation ||--o{ MentorEntry : has
+    MentorTurn ||--o{ MentorEntry : has
+    Workspace ||--o{ MentorEntry : has
+    MentorConversation ||--o{ MentorTurn : has
+    Workspace ||--o{ MentorTurn : has
     IdentityProvider ||--o{ Milestone : references
     Repository ||--o{ Milestone : has
     User ||--o{ Milestone : created_by

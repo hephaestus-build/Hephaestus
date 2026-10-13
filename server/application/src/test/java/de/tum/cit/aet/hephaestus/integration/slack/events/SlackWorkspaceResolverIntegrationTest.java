@@ -13,6 +13,8 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** The test schema is Hibernate-generated, so the one-active-Slack-per-team index is absent here. */
 class SlackWorkspaceResolverIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -47,8 +49,11 @@ class SlackWorkspaceResolverIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(resolver().resolveWorkspaceId(team)).isEmpty();
     }
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     private SlackWorkspaceResolver resolver() {
-        return new SlackWorkspaceResolver(connectionRepository);
+        return new SlackWorkspaceResolver(connectionRepository, new TransactionTemplate(transactionManager));
     }
 
     private static String uniqueTeam() {

@@ -20,6 +20,9 @@ class InAppChannelProducerArchTest extends HephaestusArchitectureTest {
 
     private static final String COMPOSITION_PACKAGE = "..agent.handler.composition..";
 
+    /** The weekly digest lists the recipient's own delivered cards, by the practice page's rules. */
+    private static final String WEEKLY_DIGEST_READER = "..practices.weeklydigest..";
+
     @Test
     void onlyApprovedPackagesAccessPrivateInAppFeedback() {
         ArchRule rule = noClasses()
@@ -29,6 +32,8 @@ class InAppChannelProducerArchTest extends HephaestusArchitectureTest {
                 .resideOutsideOfPackage(READER_PACKAGE)
                 .and()
                 .resideOutsideOfPackage(COMPOSITION_PACKAGE)
+                .and()
+                .resideOutsideOfPackage(WEEKLY_DIGEST_READER)
                 .and()
                 .haveNameNotMatching(FeedbackChannel.class.getName() + "(\\$.*)?")
                 .and()

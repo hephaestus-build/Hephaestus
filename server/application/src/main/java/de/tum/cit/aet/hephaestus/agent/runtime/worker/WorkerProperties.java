@@ -11,8 +11,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
  * Bound to {@code hephaestus.worker.*}. {@code capacity.{review,mentor}Max} accept an integer or
- * the literal {@code "auto"}; resolution lives on {@link Capacity}. {@code toString()} redacts
- * the registration token.
+ * the literal {@code "auto"}; resolution lives on {@link Capacity}. {@code capacity.mentorMax} is the
+ * number of Heph turns this worker's Heph host runs at once. {@code toString()} redacts the
+ * registration token.
  */
 @ConfigurationProperties(prefix = "hephaestus.worker")
 public record WorkerProperties(
@@ -74,8 +75,9 @@ public record WorkerProperties(
             return resolve(reviewMax, Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
         }
 
+        /** A Heph turn mostly waits for its model, so its default does not follow the processor count. */
         public int resolveMentorMax() {
-            return resolve(mentorMax, Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
+            return resolve(mentorMax, 8);
         }
 
         private static int resolve(String configured, int autoDefault) {

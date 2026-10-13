@@ -84,7 +84,8 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
     void sweepNow_pastCooldown_purgesChildrenClearsPiiAndFlipsToDeleted() {
         // Arrange: an account soft-deleted well before the cutoff, with one row in every child table.
         Account account = newAccount("Ada Lovelace", "ada@example.com");
-        Long id = persistedId(account.getId());
+        account.setTimeZone("Europe/Berlin");
+        Long id = persistedId(accountRepository.save(account).getId());
         seedChildRows(id);
         // deleted_at = now - (cooldown + 1h) → strictly older than the cutoff → must be swept.
         markDeleting(id, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofHours(1)));
@@ -110,6 +111,7 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
         assertThat(tombstone.getPrimaryEmailVerifiedAt())
                 .as("email-verified PII cleared")
                 .isNull();
+        assertThat(tombstone.getTimeZone()).as("time zone cleared").isNull();
 
         assertThat(childRowCounts(id))
                 .as(

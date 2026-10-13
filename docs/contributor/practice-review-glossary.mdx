@@ -194,7 +194,7 @@ Recipient preferences, workspace controls, artifact validity, suppression and th
 | `AUTOMATIC`      | yes         | yes                  | the system, subject to delivery policy | delivered                |
 
 At `HUMAN_APPROVAL`, feedback **pushed** onto the work needs approval before release.
-Feedback on a practice page or in a mentor turn is **pulled** by the developer and does not need comment approval.
+Feedback on a practice page or in a Heph turn is **pulled** by the developer and does not need comment approval.
 It remains subject to channel access controls, the origin rule and delivery rules such as attribution, corroboration and cooldown.
 The rule has one home, `PracticeAutonomy.delivers(channel)` over `FeedbackChannel.pushed()`.
 
@@ -405,6 +405,8 @@ And `chat.conversation_thread` is a kind of work Hephaestus *reviews*, not the p
 ### Thread key and supersession
 
 A **thread** is a chain of feedback about one thing to one person on one channel, identified by a hash (`FeedbackThreadKey`) rather than by prose.
+It is not a Heph thread or a Slack thread. Outside this section, write *feedback thread key* in full.
+
 The longitudinal channels key on the *practice*, because a claim about a way of working is about the practice and not about one merge request.
 The in-context channel keys on the artifact. `thread_key` groups related feedback.
 It does not enforce a unique `PREPARED` item.

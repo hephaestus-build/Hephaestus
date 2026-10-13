@@ -12,6 +12,7 @@ import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.UUID;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
@@ -41,7 +42,7 @@ class SandboxWorkspaceControllerTest {
             tar.write("quote".getBytes(StandardCharsets.UTF_8));
             tar.closeArchiveEntry();
         }
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             var request = new MockHttpServletRequest();
             request.setQueryString("area=docs");
             request.addParameter("area", "docs");
@@ -71,7 +72,7 @@ class SandboxWorkspaceControllerTest {
     @Test
     void shouldAdvertiseAndTransferOnlyTheAuthenticatedRuntimeWorkspace() throws Exception {
         var archive = Files.writeString(temporary.resolve("input.tar"), "trusted input");
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             var request = new MockHttpServletRequest();
             var response = new MockHttpServletResponse();
             assertThat(controller.capabilities(session.id(), "Bearer token").protocolVersion())
@@ -91,7 +92,7 @@ class SandboxWorkspaceControllerTest {
     @Test
     void shouldRefuseAnUnadvertisedAreaOrRepository() throws Exception {
         var archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             for (String query : List.of("area=private", "repo=other")) {
                 var request = new MockHttpServletRequest();
                 request.setQueryString(query);
@@ -107,7 +108,7 @@ class SandboxWorkspaceControllerTest {
     @Test
     void shouldRejectMalformedResults() throws Exception {
         var archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             var request = new MockHttpServletRequest();
             var response = new MockHttpServletResponse();
             request.setContent(new byte[] {1});
@@ -138,7 +139,7 @@ class SandboxWorkspaceControllerTest {
         byte[] hash = MessageDigest.getInstance("SHA-256").digest(result);
         String digest = "sha-256=:" + Base64.getEncoder().encodeToString(hash) + ":";
         String etag = '"' + HexFormat.of().formatHex(hash) + '"';
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             var first = new MockHttpServletResponse();
             var request = new MockHttpServletRequest();
             request.setContent(result);
@@ -158,7 +159,7 @@ class SandboxWorkspaceControllerTest {
     @Test
     void shouldRefuseACredentialThatIsNotABearerToken() throws Exception {
         var archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register("token", archive, "out")) {
+        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
             assertThatThrownBy(() -> controller.capabilities(session.id(), "Basic token"))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,

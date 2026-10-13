@@ -6,11 +6,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
+import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
+import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackWeeklyDigestPointer;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -32,11 +36,13 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
 
     private static final long WORKSPACE_ID = 42L;
     private static final long RATER_ID = 7L;
+    private static final long ACCOUNT_ID = 11L;
     private static final String TEAM = "T1";
     private static final String USER = "U1";
     private static final String CHANNEL = "D9";
     private static final String MESSAGE_TS = "100.5";
     private static final String TRIGGER = "trig-123";
+    private static final String ANSWER_ID = "0b6f7f6e-4b7e-4b55-9d1e-1f1e8f0c2a11";
 
     private final JsonMapper mapper = JsonMapper.builder().build();
 
@@ -58,6 +64,12 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     @Mock
     private SlackMessageService messageService;
 
+    @Mock
+    private SlackMentorService mentorService;
+
+    @Mock
+    private WeeklyDigestSubscriptions weeklyDigests;
+
     private SlackInteractivityHandler handler;
 
     @BeforeEach
@@ -69,6 +81,8 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
                 participantConsentService,
                 personErasureService,
                 messageService,
+                mentorService,
+                weeklyDigests,
                 directExecutor());
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE_ID));
     }
@@ -130,6 +144,34 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
                 .sendEphemeralForWorkspace(
                         eq(WORKSPACE_ID), eq(CHANNEL), eq(USER), anyList(), eq(SlackConsentBlocks.confirmationText()));
         verifyNoInteractions(appHomeService);
+    }
+
+    @Test
+    void shouldPassTheVoteToHephWhenTheDeveloperPressesAFeedbackButton() {
+        handler.handleBlockActions(blockActions(SlackMentorPosts.FEEDBACK_ACTION, "HELPFUL:" + ANSWER_ID));
+
+        verify(mentorService).handleFeedback(TEAM, CHANNEL, USER, "HELPFUL:" + ANSWER_ID);
+    }
+
+    @Test
+    void shouldTurnTheWeeklyDigestOffAndSayItOnlyToThemWhenTheDeveloperPressesTurnOff() {
+        when(identityResolver.resolveAccountId(TEAM, USER)).thenReturn(Optional.of(ACCOUNT_ID));
+
+        handler.handleBlockActions(blockActions(SlackWeeklyDigestPointer.TURN_OFF_ACTION, ""));
+
+        verify(weeklyDigests).turnOff(ACCOUNT_ID);
+        verify(messageService)
+                .sendEphemeralForWorkspace(
+                        eq(WORKSPACE_ID), eq(CHANNEL), eq(USER), anyList(), eq(SlackWeeklyDigestPointer.TURNED_OFF));
+    }
+
+    @Test
+    void shouldTurnNothingOffWhenTheSlackUserHasNoAccount() {
+        when(identityResolver.resolveAccountId(TEAM, USER)).thenReturn(Optional.empty());
+
+        handler.handleBlockActions(blockActions(SlackWeeklyDigestPointer.TURN_OFF_ACTION, ""));
+
+        verifyNoInteractions(weeklyDigests, messageService);
     }
 
     @Test

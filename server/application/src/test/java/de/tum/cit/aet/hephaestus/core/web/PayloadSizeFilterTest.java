@@ -38,14 +38,25 @@ class PayloadSizeFilterTest extends BaseUnitTest {
 
     /** A body whose size is only knowable after reading it is the case the limit exists to avoid. */
     @Test
-    void shouldRefuseARequestThatDeclaresNoLength() throws Exception {
+    void shouldRefuseAChunkedBodyThatDeclaresNoLength() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/any");
+        request.addHeader("Transfer-Encoding", "chunked");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         filter.doFilter(request, response, this::serve);
 
         assertThat(served).hasValue(0);
         assertThat(response.getStatus()).isEqualTo(411);
+    }
+
+    @Test
+    void shouldServeARequestWithoutABodyWhenItDeclaresNoLength() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(new MockHttpServletRequest("GET", "/any"), response, this::serve);
+
+        assertThat(served).hasValue(1);
+        assertThat(response.getStatus()).isEqualTo(200);
     }
 
     private static MockHttpServletRequest requestOf(String body) {

@@ -66,12 +66,12 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
         if (selected.rows().isEmpty()) return List.of();
         return jdbc.query(
                 """
-                SELECT DISTINCT f.workspace_id, p.chat_message_id
+                SELECT DISTINCT f.workspace_id, p.mentor_entry_id
                 FROM feedback_placement p JOIN feedback f ON f.id=p.feedback_id
-                WHERE p.chat_message_id IS NOT NULL AND EXISTS (
+                WHERE p.mentor_entry_id IS NOT NULL AND EXISTS (
                     SELECT 1 FROM jsonb_populate_recordset(NULL::feedback_placement,CAST(:keys AS jsonb)) selected
                     WHERE selected.id=p.id)
-                ORDER BY f.workspace_id,p.chat_message_id
+                ORDER BY f.workspace_id,p.mentor_entry_id
                 """,
                 Map.of(
                         "keys",
@@ -120,7 +120,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                         "feedback_placement",
                         "feedback_placement",
                         "t.feedback_id IN (" + FEEDBACK_IDS + ")",
-                        "id,feedback_id,placement_type,anchor_kind,anchor_path,anchor_start_line,anchor_end_line,anchor_side,posted_comment_ref,posted_comment_url,created_at,chat_message_id",
+                        "id,feedback_id,placement_type,anchor_kind,anchor_path,anchor_start_line,anchor_end_line,anchor_side,posted_comment_ref,posted_comment_url,created_at,mentor_entry_id",
                         "id",
                         "",
                         -200),

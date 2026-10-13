@@ -104,7 +104,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
 
     @Override
     public boolean supports(ContextRequest request) {
-        return !(request instanceof ContextRequest.MentorChatRequest);
+        return !(request instanceof ContextRequest.HephTurnRequest);
     }
 
     @Override
@@ -152,7 +152,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
                     case ContextRequest.IssueReviewRequest r -> r.job();
                     case ContextRequest.ConversationReviewRequest r -> r.job();
                     case ContextRequest.DocumentReviewRequest r -> r.job();
-                    case ContextRequest.MentorChatRequest mentor ->
+                    case ContextRequest.HephTurnRequest mentor ->
                         throw new IllegalArgumentException(
                                 "No review job for mentor workspace " + mentor.workspaceId());
                 };

@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.core.runtime.hub.auth;
 
 import java.time.Instant;
 
-public sealed interface WorkerJwt permits WorkerSessionJwt, JobJwt {
+public sealed interface WorkerJwt permits WorkerSessionJwt, JobJwt, TurnJwt {
     String jti();
 
     Instant issuedAt();

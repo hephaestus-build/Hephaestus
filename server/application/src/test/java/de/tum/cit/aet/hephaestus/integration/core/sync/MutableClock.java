@@ -6,20 +6,20 @@ import java.time.Instant;
 import java.time.ZoneId;
 
 /**
- * Mutable {@link Clock} test double for the sync package — advances only when {@link #advance(Duration)}
- * is called, so write-throttle windows can be exercised deterministically without sleeping real time.
+ * Mutable {@link Clock} test double — advances only when {@link #advance(Duration)} is called, so time windows can be
+ * exercised deterministically without sleeping real time. Safe to read from another thread.
  */
-final class MutableClock extends Clock {
+public final class MutableClock extends Clock {
 
-    private Instant instant;
+    private volatile Instant instant;
     private final ZoneId zone;
 
-    MutableClock(Instant instant, ZoneId zone) {
+    public MutableClock(Instant instant, ZoneId zone) {
         this.instant = instant;
         this.zone = zone;
     }
 
-    static MutableClock atFixedInstant() {
+    public static MutableClock atFixedInstant() {
         return new MutableClock(Instant.parse("2026-07-14T10:00:00Z"), ZoneId.of("UTC"));
     }
 
@@ -38,7 +38,7 @@ final class MutableClock extends Clock {
         return instant;
     }
 
-    void advance(Duration duration) {
+    public void advance(Duration duration) {
         instant = instant.plus(duration);
     }
 }

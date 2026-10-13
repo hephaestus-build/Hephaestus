@@ -213,7 +213,23 @@ The annotations use `Execution(SAME_THREAD)`. Gradle also runs one test JVM at a
    Do not reuse one with a misleading name.
 2. Put the test under `server/application/src/test/java/.../live/`. The directory marker keeps live and non-live tests in different code-review buckets.
 3. Read credentials from `LiveLlmCredentials.fromEnv()` or the provider helpers. Never inline secrets or commit local credential files.
-4. Per-test wall-clock timeouts: 90s is reasonable for a single mentor turn. 5 minutes for a full practice run.
+4. Per-test wall-clock timeouts: 90s is reasonable for a single Heph turn on a warm host. The first turn also
+   starts the Heph host. 5 minutes for a full practice run.
+
+### Heph turn live test
+
+`HephTurnLiveTest` runs one Heph turn through the real path: the ask endpoint, the worker's claim, the Heph host
+container, the LLM proxy and a model. It needs Docker and the agent image built from `docker/agents/pi`:
+
+```bash
+docker buildx build -f docker/agents/pi/Dockerfile -t hephaestus-agent-pi:local --load docker/agents
+HEPHAESTUS_AGENT_IMAGE_REFERENCE=hephaestus-agent-pi:local \
+HEPHAESTUS_LIVE_LLM_BASE_URL=... HEPHAESTUS_LIVE_LLM_API_KEY=... HEPHAESTUS_LIVE_LLM_MODEL=... \
+  ./gradlew :application:liveTest --tests HephTurnLiveTest
+```
+
+The host reaches the test's sandbox gateway at `host.docker.internal`. If a host firewall admits containers to
+one port only, set `SANDBOX_API_PORT` to that port.
 
 ### GitHub live API tests
 

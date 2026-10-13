@@ -40,7 +40,6 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.context.ApplicationEventPublisher;
 
 class ConversationalFeedbackPreparerTest extends BaseUnitTest {
 
@@ -58,19 +57,13 @@ class ConversationalFeedbackPreparerTest extends BaseUnitTest {
     private final FeedbackRepository feedbackRepository = mock(FeedbackRepository.class);
     private final FeedbackObservationRepository feedbackObservationRepository =
             mock(FeedbackObservationRepository.class);
-    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final OutboundEgressGuard egressGuard = mock(OutboundEgressGuard.class);
 
     private final ObservationRepository observationRepository = mock(ObservationRepository.class);
     private final FeedbackSupersession supersession = mock(FeedbackSupersession.class);
 
     private final ConversationalFeedbackPreparer preparer = new ConversationalFeedbackPreparer(
-            feedbackRepository,
-            feedbackObservationRepository,
-            observationRepository,
-            supersession,
-            eventPublisher,
-            egressGuard);
+            feedbackRepository, feedbackObservationRepository, observationRepository, supersession, egressGuard);
     private final Map<UUID, String> practiceSlugByObservation = new HashMap<>();
 
     @BeforeEach
@@ -306,7 +299,6 @@ class ConversationalFeedbackPreparerTest extends BaseUnitTest {
 
         assertThat(prepared).isZero();
         verify(feedbackRepository, never()).save(any());
-        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -329,7 +321,6 @@ class ConversationalFeedbackPreparerTest extends BaseUnitTest {
 
         assertThat(prepared).isZero();
         verify(feedbackRepository, never()).save(any());
-        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -352,7 +343,6 @@ class ConversationalFeedbackPreparerTest extends BaseUnitTest {
 
         assertThat(prepared).isZero();
         verify(feedbackRepository, never()).save(any());
-        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test

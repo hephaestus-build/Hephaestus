@@ -1,0 +1,6 @@
+{
+  "outcome": "FAILED",
+  "entries": [],
+  "reason": "DEADLINE",
+  "detail": "the worker stopped the turn at its deadline"
+}

@@ -121,6 +121,15 @@ export function formatDayTime(date: Date, today: Date): string {
 	return `${isSameYear(date, today) ? formatDay(date) : formatDate(date)}, ${formatTime(date)}`;
 }
 
+/**
+ * Every IANA time zone this browser knows, with UTC first. Chromium and Node list no "UTC", and a
+ * choice whose default is UTC must be able to return to it.
+ */
+export const TIME_ZONES: readonly string[] = [
+	"UTC",
+	...Intl.supportedValuesOf("timeZone").filter((zone) => zone !== "UTC"),
+];
+
 /** The browser's IANA time zone, whose midnights start a summary's days, weeks and months. */
 export function browserTimeZone(): string {
 	return Intl.DateTimeFormat().resolvedOptions().timeZone;

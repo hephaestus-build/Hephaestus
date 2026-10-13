@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (amended 2026-09-17 — the image installs the SDK with pnpm). Supersedes
+Accepted (amended 2026-09-17 — the image installs the SDK with pnpm; 2026-10-09 — Heph host replaces the mentor runner, [ADR 0055](0055-one-heph-conversation-per-developer.md)). Supersedes
 [ADR 0030](0030-agent-runtime-is-typescript-on-bun.md) for the sandbox image. Repository tooling is
 governed by [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md), which superseded
 [ADR 0033](0033-bun-is-the-javascript-runtime-and-package-manager.md).
@@ -71,3 +71,11 @@ runtime stage, which removes npm, npx, Corepack, Yarn and pnpm and fails the bui
 survives on the filesystem; the shipped image carries Node and no package manager. The other build
 checks, the runner flags and the runtime-contract label (`SandboxLayout.RUNTIME_CONTRACT_VERSION = 2`)
 are as decided.
+
+## Update — 2026-10-09 (Heph host, [ADR 0055](0055-one-heph-conversation-per-developer.md))
+
+The mentor runner is replaced by the Heph host, one long-lived process per worker. It runs with
+`--max-old-space-size=1024` under `--permission`, without `--expose-gc`. It may read `/workspace`,
+`/opt/pi-sdk` and its empty home, and write only Pi's agent directory and its temporary directory. It
+receives no child-process grant. The container has 2 GiB of memory, 2 CPUs and 256 processes. The
+runtime contract is 5. The practice runner and precompute rules above are unchanged.

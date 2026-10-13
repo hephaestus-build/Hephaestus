@@ -1,6 +1,6 @@
 # ADR 0008: Webhook as a third runtime role (`webhook-server` container)
 
-**Status:** Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected)
+**Status:** Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected; 2026-09-26 — the loss counter is withdrawn; 2026-10-09 — mentor schedulers, [ADR 0055](0055-one-heph-conversation-per-developer.md))
 **Date:** 2026-05-20
 **Authors:** Webhook substrate epic (#1110)
 
@@ -469,3 +469,10 @@ Corrects § Decision and § Consequences on the receiver's code and routes; the 
   `integration.slack.webhook`, not 0.95.
 - The container runs `ghcr.io/hephaestus-build/application-server`, pinned by the release lock as
   `HEPHAESTUS_IMAGE_APPLICATION_SERVER` ([ADR 0034](0034-signed-release-image-lock.md)).
+
+## Update — 2026-10-09 (mentor schedulers, [ADR 0055](0055-one-heph-conversation-per-developer.md))
+
+The "mentor in-flight reaper" of § Consequences is now `MentorTurnLeaseReaper`. It is still a
+server-role scheduled task with a ShedLock lock, so the webhook role does not run it. The same applies
+to the new `WeeklyDigestSchedulingJob` and `SlackMentorReconciler`. The sticky cookie that § Revisit
+trigger names is removed: no mentor state needs request affinity.

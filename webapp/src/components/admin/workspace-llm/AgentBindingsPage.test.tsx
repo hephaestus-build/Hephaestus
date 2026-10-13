@@ -31,7 +31,6 @@ const inHouseBinding: AgentBinding = {
 	ready: true,
 	timeoutSeconds: 600,
 	maxConcurrentJobs: 1,
-	allowInternet: false,
 };
 
 function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {

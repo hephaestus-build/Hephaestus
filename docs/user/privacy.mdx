@@ -110,7 +110,7 @@ Hephaestus records **observations and practice feedback**, including observation
 It also lists your open work, such as review requests and assigned issues.
 Workspace activity can sort people by these counts and never scores them.
 
-Your sign-in details, connected accounts, memberships, preferences, chats, and feedback reactions support your account and conversations.
+Your sign-in details, connected accounts, memberships, preferences, Heph conversations, and feedback reactions support your account and conversations.
 Product-feedback submissions support product improvement, as do survey invitations, answers, and declines.
 Submissions include the page path and browser identification you choose to attach, plus the Hephaestus release that received them.
 A **Research** survey is available only while you allow research use for the organization your instance names.
@@ -134,7 +134,7 @@ That host receives network metadata, such as your IP address and the image addre
 This also occurs on pages that do not need sign-in.
 The host’s retention is separate from Hephaestus.
 
-1. Do not include secrets or unnecessary personal or sensitive information in chats, source content, or feedback.
+1. Do not include secrets or unnecessary personal or sensitive information in messages to Heph, source content, or feedback.
 
 ## Your AI choice
 
@@ -188,14 +188,39 @@ Access differs by role and destination:
 
 ## Your choices and right to object
 
-### Comments and Slack reminders
+### Comments on your work
 
 1. Open **User settings → Practice feedback**.
-2. Turn off **Comments and Slack reminders** to stop new comments on your work and related Slack reminders.
-3. To allow new deliveries again, turn it on.
+2. Turn off **Comments on your work** to stop new comments on your work.
+3. To allow new comments again, turn it on.
 
 **Reviews still run and admins can still see observations.**
 Neither action removes existing comments.
+
+### Weekly digest
+
+The [weekly digest](./ai-mentor#weekly-digest) is off until you turn it on in **User settings → Weekly digest**.
+When you turn it on, Hephaestus stores your time zone to know when your digest is due.
+The digest itself stays in your Heph conversation.
+Its Slack or email note carries no feedback content, counts, or practice names.
+You can turn the digest off in User settings, from the Slack note, or with the link in the email.
+
+### Your Heph conversation
+
+Hephaestus keeps your conversation with Heph in each workspace.
+This includes your messages, Heph’s answers, and the context Heph read to answer you.
+It also keeps the page you asked from, if you sent it with your message.
+
+1. To erase one of your messages, select **Delete message** under it in the app.
+2. To erase a message you wrote in Slack, delete it in Slack.
+
+Deleting a message erases its text in Hephaestus, also from Heph’s memory of the conversation.
+If a workspace admin removes the Slack app or disconnects Slack, Hephaestus erases the messages written in Slack in that workspace.
+
+The upgrade that gave you one Heph conversation per workspace deleted all earlier Heph conversations.
+This covers conversations in the app and Slack direct messages stored in Hephaestus.
+Slack keeps its own copy of those direct messages.
+This removal is separate from an erasure request.
 
 ### Slack channel messages
 
@@ -204,7 +229,7 @@ Neither action removes existing comments.
 
 The first action stops collection and erases collected channel messages and related conversation observations and feedback.
 The second does not restore deleted data.
-Neither erases mentor DMs, unrelated repository feedback, Slack’s copy, or [separately retained copies](#copies-outside-active-records).
+Neither erases your Heph conversation, unrelated repository feedback, Slack’s copy, or [separately retained copies](#copies-outside-active-records).
 
 ### Research participation
 
@@ -239,6 +264,10 @@ Optional invitations, connection alerts, and admin updates start off where offer
 
 1. Choose each category in **User settings → Email notifications**.
 2. To unsubscribe without sign-in, use the unsubscribe link in an email.
+
+If you turn on the weekly digest and have not connected your Slack account, its note arrives by email.
+Without an email address, the digest is only in your Heph conversation.
+The link in that email turns off the weekly digest.
 
 **Research survey invitations** also require that you allow research use.
 Turning them off stops the emails, but it does not end your research participation.
@@ -302,7 +331,7 @@ The privacy contact handles requests for these additional records:
 
 An instance admin can resolve your exact provider identities, preview the scope, and download one JSON file for the wider request.
 It includes selected source content mirrored locally.
-It excludes credentials, other people’s profiles, raw Git objects, and hidden runtime journals.
+It excludes credentials, other people’s profiles, raw Git objects, and the context documents that Heph read for an answer.
 Access and portability are different rights.
 Statutory portability depends on the applicable consent or contract basis and other conditions.
 
@@ -374,9 +403,9 @@ The sections above describe account and export timing.
 
   An unavailable repository, or one that loses access, keeps stored work while monitored. A removed GitLab note leaves live context only after successful reconciliation. Historical review copies do not change automatically.
 
-- **Slack channel threads:** retention uses a rolling period measured from the latest message. An active thread can still contain much older messages. This period does not apply to mentor DMs.
+- **Slack channel threads:** retention uses a rolling period measured from the latest message. An active thread can still contain much older messages. This period does not apply to your Heph conversation.
 - **Outline:** selected content stays while its collection and connection stay active.
-- **Web chats, Slack mentor DMs, and memberships:** records stay with the workspace. Workspace removal or verified person erasure removes them.
+- **Heph conversations and memberships:** records stay with the workspace. Workspace removal or verified person erasure removes them. Deleting one of your messages erases it sooner.
 - **League points and XP from the retired leaderboard:** the upgrade that retired the leaderboard deleted them. The operator may have exported a copy before the upgrade. That copy stays outside Hephaestus for as long as the operator decides.
 - **Product-feedback and survey submissions:** there is no automatic expiry by age. Account deletion, applicable workspace removal, or verified erasure removes them.
 
@@ -394,7 +423,3 @@ The sections above describe account and export timing.
 - **Buffered integration events:** supplied limits expire Slack and Outline events within hours, and GitHub and GitLab events within months. Storage limits can shorten retention. Individual erasure cannot selectively remove these copies.
 - **Logs, support bundles, and backups:** container logs rotate by size, not age. The operator controls support-bundle and backup retention. These copies do not support immediate selective erasure. The operator can explain expiry and treatment of erased data after a restore.
 - **AI-provider copies and posted feedback:** provider policies apply. Completed AI requests cannot be recalled. Posted feedback follows the separate removal process above.
-
-The upgrade that introduced person-data controls reset hidden Heph memory once.
-Visible conversations, titles, and times stayed, but you may need to repeat context from before that upgrade.
-This historical reset is separate from an erasure request.

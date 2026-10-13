@@ -17,8 +17,10 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.mentor.ChatThread;
-import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
+import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
@@ -27,10 +29,10 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -52,7 +54,10 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
     private AccountWorkspaceMembershipQuery memberships;
 
     @Autowired
-    private ChatThreadRepository threadRepository;
+    private MentorConversationService mentorConversations;
+
+    @Autowired
+    private MentorTurnService mentorTurns;
 
     @Test
     void shouldReadAWorkspaceAsTheActorOnItsActiveProviderWhenAnotherProviderWasLinkedFirst() {
@@ -93,50 +98,40 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
     }
 
     @Test
-    void shouldKeepTheAccountsConversationsWhenTheWorkspaceReadsItAsAnotherActor() {
+    void shouldKeepTheAccountsConversationWhenTheWorkspaceReadsItAsAnotherActor() {
         User gitlabActor = userRepository.saveAndFlush(
-                TestUserFactory.createUser(264_583_886L, "felix-gitlab-threads", ensureGitLabProvider()));
-        User githubActor = persistUser("felix-github-threads");
-        User colleague = persistUser("colleague-threads");
-        Account account = persistAccount("Two providers with conversations");
+                TestUserFactory.createUser(264_583_886L, "felix-gitlab-heph", ensureGitLabProvider()));
+        User githubActor = persistUser("felix-github-heph");
+        User colleague = persistUser("colleague-heph");
+        Account account = persistAccount("Two providers with a conversation");
         link(account, gitlabActor);
         link(account, githubActor);
 
-        Workspace workspace = createWorkspace("actor-threads", "Threads", "acme", AccountType.ORG, gitlabActor);
+        Workspace workspace = createWorkspace("actor-heph", "Heph", "acme", AccountType.ORG, gitlabActor);
         ensureWorkspaceMembership(workspace, githubActor, WorkspaceMembership.WorkspaceRole.MEMBER);
         ensureWorkspaceMembership(workspace, colleague, WorkspaceMembership.WorkspaceRole.MEMBER);
         connect(workspace, IntegrationKind.GITHUB, new ConnectionConfig.GitHubPatConfig("acme", null, Set.of()));
-        UUID earlier = persistThread(workspace, gitlabActor, "Started as the GitLab actor");
-        UUID current = persistThread(workspace, githubActor, "Started as the GitHub actor");
-        UUID colleagues = persistThread(workspace, colleague, "A colleague's conversation");
-        Workspace elsewhere = createWorkspace("actor-threads-other", "Other", "other", AccountType.ORG, githubActor);
-        UUID otherWorkspace = persistThread(elsewhere, githubActor, "Another workspace");
+        UUID earlier = question(workspace, gitlabActor, "Asked as the GitLab actor");
+        UUID colleagues = question(workspace, colleague, "A colleague's question");
+        Workspace elsewhere = createWorkspace("actor-heph-other", "Other", "other", AccountType.ORG, githubActor);
+        UUID otherWorkspace = question(elsewhere, githubActor, "Another workspace");
 
         String token = "mock-jwt-member-" + account.getId();
-        String threads = "/workspaces/actor-threads/mentor/threads";
-        read(token, threads)
-                .jsonPath("$[*].id")
-                .value(ids -> assertThat(ids)
-                        .asInstanceOf(InstanceOfAssertFactories.LIST)
-                        .contains(earlier.toString(), current.toString())
-                        .doesNotContain(colleagues.toString(), otherWorkspace.toString()));
-        read(token, threads + "/" + earlier).jsonPath("$.id").isEqualTo(earlier.toString());
-        webTestClient
-                .get()
-                .uri(threads + "/" + colleagues)
-                .headers(headers -> headers.setBearerAuth(token))
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
-        webTestClient
-                .get()
-                .uri(threads + "/" + otherWorkspace)
-                .headers(headers -> headers.setBearerAuth(token))
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
+        String mentor = "/workspaces/actor-heph/mentor";
+        read(token, mentor + "/entries").jsonPath("$.entries[*].id").isEqualTo(List.of(earlier.toString()));
+        read(token, mentor + "/entries/" + earlier + "/thread")
+                .jsonPath("$.parent.id")
+                .isEqualTo(earlier.toString());
+        for (UUID foreign : List.of(colleagues, otherWorkspace)) {
+            webTestClient
+                    .get()
+                    .uri(mentor + "/entries/" + foreign + "/thread")
+                    .headers(headers -> headers.setBearerAuth(token))
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound()
+                    .expectBody(Void.class);
+        }
     }
 
     @Test
@@ -216,13 +211,18 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
         identities.saveAndFlush(link);
     }
 
-    private UUID persistThread(Workspace workspace, User owner, String title) {
-        ChatThread thread = new ChatThread();
-        thread.setId(UUID.randomUUID());
-        thread.setWorkspace(workspace);
-        thread.setUser(owner);
-        thread.setTitle(title);
-        return threadRepository.saveAndFlush(thread).getId();
+    /** The id of a question {@code author} asked Heph in {@code workspace}. */
+    private UUID question(Workspace workspace, User author, String text) {
+        MentorConversation main =
+                mentorConversations.findOrCreateMain(workspace.getId(), author.getId(), Set.of(author.getId()));
+        return mentorTurns
+                .submit(
+                        workspace.getId(),
+                        main.getId(),
+                        new MentorTurnService.Question(
+                                MentorTurn.Surface.APP, text, UUID.randomUUID().toString(), null, null))
+                .question()
+                .getId();
     }
 
     private void connect(Workspace workspace, IntegrationKind kind, ConnectionConfig config) {

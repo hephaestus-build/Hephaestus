@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -48,6 +49,8 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
+
+    private static final UUID REVIEW = UUID.fromString("00000000-0000-0000-0000-00000000a11a");
 
     private static final Instant AT = Instant.parse("2026-06-17T08:30:00Z");
 
@@ -133,6 +136,9 @@ class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
         assertThat(only.get("artifactKind").asString()).isEqualTo("scm.pull_request");
         assertThat(only.get("artifactId").asLong()).isEqualTo(575L);
         assertThat(only.get("body").asString()).isEqualTo("Nice work scoping this PR.");
+        assertThat(only.get("practiceSlugs")).extracting(JsonNode::asString).containsExactly("describe-why");
+        assertThat(only.get("reviewIds")).extracting(JsonNode::asString).containsExactly(REVIEW.toString());
+        assertThat(only.get("observationIds")).hasSize(1);
         JsonNode blankState = root.get("feedbackStates").get(1);
         assertThat(blankState.get("status").asString()).isEqualTo("DELIVERED");
         assertThat(blankState.has("artifactKind")).isFalse();
@@ -216,7 +222,7 @@ class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
 
     private JsonNode contribute() throws Exception {
         Map<String, byte[]> files = new HashMap<>();
-        provider.contribute(new ContextRequest.MentorChatRequest(1L, 2L, UUID.randomUUID()), files);
+        provider.contribute(new ContextRequest.HephTurnRequest(1L, 2L, UUID.randomUUID()), files);
         return objectMapper.readTree(files.get("inputs/context/delivered_feedback.json"));
     }
 
@@ -248,7 +254,11 @@ class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
     private static FeedbackObservationVisibility binding(Row row) {
         Observation observation = mock(Observation.class);
         when(observation.getId()).thenReturn(UUID.randomUUID());
-        when(observation.getPractice()).thenReturn(new Practice());
+        // Only a usable piece reads its review and practice; a withheld one never does.
+        lenient().when(observation.getAgentJobId()).thenReturn(REVIEW);
+        Practice practice = new Practice();
+        practice.setSlug("describe-why");
+        lenient().when(observation.getPractice()).thenReturn(practice);
         FeedbackObservationVisibility binding = mock(FeedbackObservationVisibility.class);
         when(binding.getFeedbackId()).thenReturn(row.getId());
         when(binding.getObservation()).thenReturn(observation);

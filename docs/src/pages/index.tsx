@@ -21,7 +21,7 @@ const guides = [
 			{ label: "Practice profile", to: "/user/practice-profile" },
 			{ label: "Activity", to: "/user/activity" },
 			{ label: "Practice feedback", to: "/user/ai-code-review" },
-			{ label: "Chat with Heph", to: "/user/ai-mentor" },
+			{ label: "Talk with Heph", to: "/user/ai-mentor" },
 		],
 	},
 	{

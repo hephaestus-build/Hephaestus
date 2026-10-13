@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -68,10 +69,6 @@ public class SandboxGatewaySessions {
     private static final String BEARER_PREFIX = "Bearer ";
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
 
-    public Session register(String token, Path inputTar, String outputRoot) throws IOException {
-        return register(UUID.randomUUID(), token, inputTar, outputRoot);
-    }
-
     public Session register(UUID id, String token, Path inputTar, String outputRoot) throws IOException {
         return register(id, token, inputTar, outputRoot, List.of());
     }
@@ -116,6 +113,18 @@ public class SandboxGatewaySessions {
         return session;
     }
 
+    /**
+     * The session a bare token was registered for. A practice review authenticates with its signed job token; the
+     * Heph host, which no {@code agent_job} row backs, presents the random token its session was registered with.
+     */
+    public Optional<UUID> sessionFor(String token) {
+        byte[] hash = tokenHash(token);
+        return sessions.values().stream()
+                .filter(session -> MessageDigest.isEqual(session.tokenHash, hash))
+                .map(Session::id)
+                .findFirst();
+    }
+
     private static @Nullable String bearerToken(String authorization) {
         if (!authorization.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) return null;
         String token = authorization.substring(BEARER_PREFIX.length()).trim();
@@ -141,7 +150,6 @@ public class SandboxGatewaySessions {
         private long downloadedBytes;
         private boolean closed;
         private boolean uploading;
-        private @Nullable GatewayInteractiveChannel interactive;
         private @Nullable Map<String, byte[]> result;
         private byte @Nullable [] resultDigest;
         private final List<Consumer<Map<String, byte[]>>> admitted;
@@ -165,25 +173,6 @@ public class SandboxGatewaySessions {
 
         public long inputBytes() {
             return inputBytes;
-        }
-
-        public synchronized GatewayInteractiveChannel enableInteractive(int maxFrameBytes) throws IOException {
-            if (interactive != null || closed) {
-                throw new IllegalStateException("Interactive session already initialized or closed");
-            }
-            interactive = new GatewayInteractiveChannel(maxFrameBytes);
-            return interactive;
-        }
-
-        public synchronized GatewayInteractiveChannel interactive() {
-            if (interactive == null || closed) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-            }
-            return interactive;
-        }
-
-        public synchronized @Nullable Integer frameByteBudget() {
-            return interactive == null ? null : interactive.maxFrameBytes();
         }
 
         public synchronized InputStream download() throws IOException {
@@ -347,15 +336,9 @@ public class SandboxGatewaySessions {
             closed = true;
             sessions.remove(id, this);
             try {
-                if (interactive != null) {
-                    interactive.close();
-                }
+                for (Path selection : selections.values()) Files.deleteIfExists(selection);
             } finally {
-                try {
-                    for (Path selection : selections.values()) Files.deleteIfExists(selection);
-                } finally {
-                    Files.deleteIfExists(inputTar);
-                }
+                Files.deleteIfExists(inputTar);
             }
         }
     }

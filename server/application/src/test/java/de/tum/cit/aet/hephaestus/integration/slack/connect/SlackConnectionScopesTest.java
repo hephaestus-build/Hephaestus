@@ -22,6 +22,7 @@ class SlackConnectionScopesTest extends BaseUnitTest {
                         "channels:read",
                         "channels:join",
                         "groups:read",
+                        "reactions:write",
                         "users:read");
     }
 

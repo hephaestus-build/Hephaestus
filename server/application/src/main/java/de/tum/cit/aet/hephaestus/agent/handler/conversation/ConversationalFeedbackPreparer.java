@@ -32,7 +32,6 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,7 +55,6 @@ public class ConversationalFeedbackPreparer {
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final ObservationRepository observationRepository;
     private final FeedbackSupersession supersession;
-    private final ApplicationEventPublisher eventPublisher;
     private final OutboundEgressGuard egressGuard;
 
     public ConversationalFeedbackPreparer(
@@ -64,13 +62,11 @@ public class ConversationalFeedbackPreparer {
             FeedbackObservationRepository feedbackObservationRepository,
             ObservationRepository observationRepository,
             FeedbackSupersession supersession,
-            ApplicationEventPublisher eventPublisher,
             OutboundEgressGuard egressGuard) {
         this.feedbackRepository = feedbackRepository;
         this.feedbackObservationRepository = feedbackObservationRepository;
         this.observationRepository = observationRepository;
         this.supersession = supersession;
-        this.eventPublisher = eventPublisher;
         this.egressGuard = egressGuard;
     }
 
@@ -121,8 +117,6 @@ public class ConversationalFeedbackPreparer {
         // whether that caller happened to hold a session.
         Map<UUID, String> practiceSlugs = practiceSlugsOf(ordered, workspaceId);
         Map<Long, Integer> perRecipientCount = new HashMap<>();
-        // Newly CREATED units only (re-run no-ops excluded) — feeds the per-recipient prepared event.
-        Map<Long, Integer> newlyPreparedByRecipient = new HashMap<>();
         // One message per practice per recipient: several loci of the same practice are one thing to raise,
         // and the composer already named the others in prose inside the move it wrote.
         Set<String> raisedPractices = new HashSet<>();
@@ -223,7 +217,6 @@ public class ConversationalFeedbackPreparer {
             feedbackObservationRepository.insertIfAbsent(
                     unit.getId(), observation.getId(), EvidenceRole.PRIMARY.name(), 0);
             if (!overCap) {
-                newlyPreparedByRecipient.merge(recipient, 1, Integer::sum);
                 prepared++;
             }
         }
@@ -244,10 +237,6 @@ public class ConversationalFeedbackPreparer {
                         "Composed conversational move dropped, no admitted locus for its practice: jobId={}, practice={}",
                         agentJobId,
                         slug));
-        // Published inside this REQUIRES_NEW transaction so AFTER_COMMIT listeners (the Slack nudge) fire
-        // exactly when the units are durably visible — and not at all on a pure re-run.
-        newlyPreparedByRecipient.forEach((recipient, count) ->
-                eventPublisher.publishEvent(new ConversationFeedbackPreparedEvent(workspaceId, recipient, count)));
         return prepared;
     }
 

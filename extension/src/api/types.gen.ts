@@ -287,7 +287,6 @@ export type AdminWorkspaceView = {
  * A workspace's agent binding for one purpose
  */
 export type AgentBinding = {
-    allowInternet?: boolean;
     dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
     enabled: boolean;
     instanceModelId?: number;
@@ -305,10 +304,6 @@ export type AgentBinding = {
  * Bind a model and execution limits to an agent purpose
  */
 export type AgentBindingRequest = {
-    /**
-     * Whether the sandbox may reach the public internet
-     */
-    allowInternet?: boolean;
     /**
      * Whether this purpose is active (paused when false)
      */
@@ -810,64 +805,6 @@ export type CatalogPracticeSummary = {
      * the practice's rationale, so a row is triageable without opening it
      */
     whyItMatters?: string;
-};
-
-/**
- * Mentor chat message in AI SDK UIMessage shape.
- */
-export type ChatMessage = {
-    createdAt?: string;
-    id?: string;
-    /**
-     * Per-turn metadata: status, model, costUsd, usage, …
-     */
-    metadata?: {
-        [key: string]: unknown;
-    };
-    parentMessageId?: string;
-    parts?: Array<unknown>;
-    role?: string;
-};
-
-/**
- * User vote on a mentor assistant message.
- */
-export type ChatMessageVote = {
-    isUpvoted?: boolean;
-    messageId?: string;
-    updatedAt?: string;
-};
-
-/**
- * Upsert a vote on a mentor assistant message
- */
-export type ChatMessageVoteRequest = {
-    /**
-     * true = upvote (helpful), false = downvote
-     */
-    isUpvoted: boolean;
-};
-
-/**
- * Mentor chat thread with all messages and the owner's votes on them.
- */
-export type ChatThreadDetail = {
-    createdAt?: string;
-    id?: string;
-    messages?: Array<ChatMessage>;
-    title?: string;
-    votes?: {
-        [key: string]: boolean;
-    };
-};
-
-/**
- * Mentor chat thread summary (no messages).
- */
-export type ChatThreadSummary = {
-    createdAt: string;
-    id: string;
-    title?: string;
 };
 
 export type ClientRefreshRequest = {
@@ -2853,6 +2790,290 @@ export type MemberAiChoiceRequest = {
     choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
 };
 
+/**
+ * The developer's Heph conversation in a workspace at one moment
+ */
+export type MentorConversation = {
+    /**
+     * Queued and running turns in the conversation and its threads, oldest first
+     */
+    activeTurns: Array<MentorTurn>;
+    /**
+     * The main conversation; absent until the developer writes to Heph or gets a weekly digest
+     */
+    id?: string;
+    /**
+     * When Heph's newest shown answer in the conversation or any of its threads was written; absent before the first. Compare it with the newest answer the client has seen.
+     */
+    lastAnswerAt?: string;
+    /**
+     * How far the developer read the conversation on any device; absent before the first read. Heph has an unread answer when lastAnswerAt is later.
+     */
+    lastReadAt?: string;
+    /**
+     * Sequence number of the newest top-level message shown; 0 when there is none
+     */
+    latestSeq: number;
+    /**
+     * The newest threads, latest activity first
+     */
+    threads: Array<MentorThreadSummary>;
+};
+
+/**
+ * One message of a Heph conversation
+ */
+export type MentorEntry = {
+    conversationId: string;
+    createdAt: string;
+    /**
+     * The message was deleted; its text is gone
+     */
+    deleted: boolean;
+    /**
+     * The weekly digest as it reads now; only on a weekly digest that was not erased
+     */
+    digest?: WeeklyDigest;
+    /**
+     * Set when the developer edited the message in Slack
+     */
+    editedAt?: string;
+    id: string;
+    kind: 'USER' | 'HEPH' | 'DIGEST';
+    /**
+     * Feedback Heph showed in this message, in order
+     */
+    observations: Array<MentorObservationLink>;
+    /**
+     * Set when the message is in a thread: the top-level message the thread replies to
+     */
+    parentEntryId?: string;
+    /**
+     * The submission that wrote the message; the app matches its own optimistic message by it
+     */
+    requestId?: string;
+    /**
+     * Order within its conversation
+     */
+    seq: number;
+    /**
+     * Where the message was written; SYSTEM for a weekly digest
+     */
+    surface: 'APP' | 'SLACK' | 'SYSTEM';
+    /**
+     * The developer's words or Heph's answer; for a weekly digest, the note that points Heph to it; empty when the message was deleted
+     */
+    text: string;
+    /**
+     * The thread on this message; only on top-level messages that have one
+     */
+    thread?: MentorThreadSummary;
+    /**
+     * Why the turn this question asked failed, in words for the developer; only when it FAILED
+     */
+    turnError?: string;
+    /**
+     * The turn the message asked or answered
+     */
+    turnId?: string;
+    /**
+     * The status of the turn this question asked; only on the developer's messages
+     */
+    turnStatus?: 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED' | 'STOPPED';
+    /**
+     * The developer's vote; only on Heph's messages
+     */
+    vote?: 'HELPFUL' | 'NOT_HELPFUL';
+};
+
+/**
+ * One page of a conversation's messages, oldest first
+ */
+export type MentorEntryPage = {
+    /**
+     * Pass as before to read the older messages; absent when there are none
+     */
+    earlierBefore?: number;
+    entries: Array<MentorEntry>;
+};
+
+/**
+ * Feedback that Heph showed in a message
+ */
+export type MentorObservationLink = {
+    observationId: string;
+    /**
+     * The practice's name; absent when the observation is gone
+     */
+    practiceName?: string;
+    /**
+     * The practice the observation is about; absent when the observation is gone
+     */
+    practiceSlug?: string;
+    text: string;
+    /**
+     * The reviewed work the observation was seen on: the app links to the developer's feedback on it. Absent when the observation is gone
+     */
+    work?: ReviewedWorkRef;
+};
+
+/**
+ * How far the developer read their Heph conversation
+ */
+export type MentorRead = {
+    /**
+     * The read marker; absent when the developer has no conversation yet
+     */
+    lastReadAt?: string;
+};
+
+/**
+ * How far the developer read their Heph conversation
+ */
+export type MentorReadRequest = {
+    /**
+     * The time of the newest answer the developer saw
+     */
+    at: string;
+};
+
+/**
+ * A stored question and the turn that answers it
+ */
+export type MentorSubmission = {
+    question: MentorEntry;
+    turn: MentorTurn;
+};
+
+/**
+ * A thread: the message it replies to and one page of its replies, oldest first
+ */
+export type MentorThread = {
+    /**
+     * The thread's conversation; absent until the first reply opens it
+     */
+    conversationId?: string;
+    /**
+     * Pass as before to read the older replies; absent when there are none
+     */
+    earlierBefore?: number;
+    entries: Array<MentorEntry>;
+    parent: MentorEntry;
+};
+
+/**
+ * The thread on a top-level message
+ */
+export type MentorThreadSummary = {
+    /**
+     * The thread's own conversation
+     */
+    conversationId: string;
+    lastReplyAt?: string;
+    /**
+     * Sequence number of the thread's newest shown message; 0 when it has none
+     */
+    latestSeq: number;
+    /**
+     * The message the thread replies to
+     */
+    parentEntryId: string;
+    /**
+     * Messages in the thread; can count a Heph message without text whose feedback is no longer shown
+     */
+    replyCount: number;
+};
+
+/**
+ * One question to Heph and the work to answer it
+ */
+export type MentorTurn = {
+    /**
+     * Attempts started so far; 0 while the turn waits for its first start. A lost lease queues the turn again with the same attempt, and the next start counts up. Thus, with the same attempt, RUNNING comes before QUEUED or an end.
+     */
+    attempt: number;
+    conversationId: string;
+    createdAt: string;
+    /**
+     * Why the turn failed, worded for the developer; only on a failed turn
+     */
+    error?: string;
+    finishedAt?: string;
+    id: string;
+    /**
+     * Set when the turn runs in a thread: the top-level message the thread replies to
+     */
+    parentEntryId?: string;
+    /**
+     * Heph's answer in progress; only while the turn runs
+     */
+    partial?: MentorTurnPartial;
+    /**
+     * The submission that asked; the question's entry carries the same value
+     */
+    requestId: string;
+    status: 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED' | 'STOPPED';
+    surface: 'APP' | 'SLACK';
+};
+
+/**
+ * What Heph is doing in a running turn
+ */
+export type MentorTurnPartial = {
+    activity: 'THINKING' | 'WRITING' | 'TOOL';
+    /**
+     * What Heph is doing, in the developer's words, for example "Reading your practice feedback…"
+     */
+    stage: string;
+    /**
+     * The text Heph has written in this turn so far
+     */
+    text: string;
+    /**
+     * The tool Heph runs, while the activity is TOOL
+     */
+    tool?: string;
+};
+
+/**
+ * A question to Heph from the app
+ */
+export type MentorTurnRequest = {
+    /**
+     * The page the developer asks from, for example "Pull request #421 in acme/web"
+     */
+    pageContext?: string;
+    /**
+     * Ask in the thread on this top-level message; the first reply opens the thread
+     */
+    parentEntryId?: string;
+    /**
+     * Chosen by the app for each message. Sending the same id again returns the first submission, so a retried request never asks twice.
+     */
+    requestId: string;
+    /**
+     * The developer's words
+     */
+    text: string;
+};
+
+/**
+ * A status change the developer asks for on a turn
+ */
+export type MentorTurnStatusRequest = {
+    /**
+     * STOPPED stops a queued or running turn. Heph keeps what it already wrote.
+     */
+    status: 'STOPPED';
+};
+
+/**
+ * The developer's vote on one of Heph's messages
+ */
+export type MentorVoteRequest = {
+    vote: 'HELPFUL' | 'NOT_HELPFUL';
+};
+
 export type NotificationPreferences = {
     /**
      * This instance has an email transport and sender configured
@@ -2867,6 +3088,14 @@ export type NotificationPreferences = {
     productSurveys: boolean;
     researchSurveys: boolean;
     surveySummaries: boolean;
+    /**
+     * The weekly digest is on
+     */
+    weeklyDigest: boolean;
+    /**
+     * Heph can answer in at least one of your workspaces, so a weekly digest can be written
+     */
+    weeklyDigestAvailable: boolean;
     workspaceAlerts: boolean;
 };
 
@@ -5879,11 +6108,11 @@ export type ReviewPlacement = {
      * First anchored line (1-based)
      */
     anchorStartLine?: number;
-    /**
-     * Mentor chat-message identifier
-     */
-    chatMessageId?: string;
     id: string;
+    /**
+     * Heph conversation entry that delivered this placement
+     */
+    mentorEntryId?: string;
     placementType: 'SUMMARY' | 'INLINE' | 'CONVERSATION_TURN' | 'LOCATION_COMMENT';
     /**
      * Provider-native comment identifier
@@ -7146,6 +7375,10 @@ export type UpdateNotificationPreferences = {
     productSurveys: boolean;
     researchSurveys: boolean;
     surveySummaries: boolean;
+    /**
+     * The weekly digest in your Heph conversation, with one note in Slack or email that it is ready
+     */
+    weeklyDigest: boolean;
     workspaceAlerts: boolean;
 };
 
@@ -7573,9 +7806,13 @@ export type UserInfo = {
  */
 export type UserSettings = {
     /**
-     * Whether new practice-feedback comments may be delivered on issues, pull requests, and merge requests authored by the user, together with related Slack reminders
+     * Whether new practice-feedback comments may be delivered on issues, pull requests, and merge requests authored by the user
      */
     practiceFeedbackDeliveryEnabled: boolean;
+    /**
+     * The account's IANA time zone, such as Europe/Berlin. The weekly digest follows the developer's week in it. Absent means UTC.
+     */
+    timeZone?: string;
 };
 
 export type UserTeams = {
@@ -7594,6 +7831,80 @@ export type UserViewUser = {
     login: string;
     name?: string;
     userId: number;
+};
+
+/**
+ * A weekly digest as it reads now, from the live facts
+ */
+export type WeeklyDigest = {
+    /**
+     * What changed on the Practice profile in the week; never new feedback, which the feedback list covers
+     */
+    changes: Array<ProfileChange>;
+    /**
+     * Feedback that reached the developer in the week, by practice group and practice order
+     */
+    feedback: Array<WeeklyDigestFeedback>;
+    /**
+     * The IANA time zone the week was read in
+     */
+    timeZone: string;
+    /**
+     * Pieces of feedback that wait unread on the Practice profile now
+     */
+    waiting: number;
+    /**
+     * The Monday the week starts on, in the developer's time zone
+     */
+    weekStart: string;
+    /**
+     * The next Monday 00:00 in the developer's time zone
+     */
+    windowEnd: string;
+    /**
+     * Monday 00:00 of the week in the developer's time zone
+     */
+    windowStart: string;
+};
+
+/**
+ * One piece of feedback that reached the developer in the week, and where it landed
+ */
+export type WeeklyDigestFeedback = {
+    /**
+     * Where it landed: on the reviewed work (IN_CONTEXT), on the Practice profile (IN_APP) or in the conversation with Heph (IN_CHAT)
+     */
+    channel: 'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP';
+    deliveredAt: string;
+    feedbackId: string;
+    groupName?: string;
+    groupSlug?: string;
+    /**
+     * The Heph message it appeared in; only for IN_CHAT
+     */
+    mentorEntryId?: string;
+    /**
+     * The top-level message whose thread holds that Heph message; only for IN_CHAT, and absent when the message is not in a thread
+     */
+    mentorParentEntryId?: string;
+    practiceName: string;
+    practiceSlug: string;
+    /**
+     * Newer feedback replaced it since; the link opens the current feedback
+     */
+    replaced: boolean;
+    /**
+     * The card's title on the Practice profile; only for IN_APP, and never when withdrawn
+     */
+    title?: string;
+    /**
+     * A workspace admin withdrew it; only the practice is shown
+     */
+    withdrawn: boolean;
+    /**
+     * The reviewed work it landed on; only for IN_CONTEXT
+     */
+    work?: ReviewedWorkRef;
 };
 
 /**
@@ -8132,7 +8443,7 @@ export type WorkspaceMembership = {
 /**
  * One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
  * every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
- * what differs between workspaces.
+ * what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Heph's admission.
  */
 export type WorkspaceOnboarding = {
     aiChoice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
@@ -8140,6 +8451,10 @@ export type WorkspaceOnboarding = {
     aiOptions: Array<WorkspaceAiOption>;
     enabled: boolean;
     links: Array<WorkspaceOnboardingLink>;
+    /**
+     * Why Heph declines this member here, by the rule that admits each question; null when Heph can answer
+     */
+    mentorRefusal?: 'PERSON_ERASED' | 'NO_AI' | 'CHOICE_REQUIRED' | 'UNAVAILABLE';
     needsSetup: boolean;
     workspaceName: string;
 };
@@ -12541,7 +12856,7 @@ export type UpdateMemberVisibilityResponses = {
 
 export type UpdateMemberVisibilityResponse = UpdateMemberVisibilityResponses[keyof UpdateMemberVisibilityResponses];
 
-export type PrepareMentorSandboxData = {
+export type GetMentorConversationData = {
     body?: never;
     path: {
         /**
@@ -12550,18 +12865,20 @@ export type PrepareMentorSandboxData = {
         workspaceSlug: string;
     };
     query?: never;
-    url: '/workspaces/{workspaceSlug}/mentor/sandbox';
+    url: '/workspaces/{workspaceSlug}/mentor/conversation';
 };
 
-export type PrepareMentorSandboxResponses = {
+export type GetMentorConversationResponses = {
     /**
-     * Accepted; the sandbox starts unless it is already warm or Heph could not answer anyway
+     * OK
      */
-    202: unknown;
+    200: MentorConversation;
 };
 
-export type ListThreadsData = {
-    body?: never;
+export type GetMentorConversationResponse = GetMentorConversationResponses[keyof GetMentorConversationResponses];
+
+export type MarkMentorConversationReadData = {
+    body: MentorReadRequest;
     path: {
         /**
          * Workspace slug
@@ -12569,135 +12886,211 @@ export type ListThreadsData = {
         workspaceSlug: string;
     };
     query?: never;
-    url: '/workspaces/{workspaceSlug}/mentor/threads';
+    url: '/workspaces/{workspaceSlug}/mentor/conversation/read';
 };
 
-export type ListThreadsResponses = {
+export type MarkMentorConversationReadResponses = {
     /**
-     * Threads returned, newest first
+     * The marker after the request: this time or a later one
      */
-    200: Array<ChatThreadSummary>;
+    200: MentorRead;
 };
 
-export type ListThreadsResponse = ListThreadsResponses[keyof ListThreadsResponses];
+export type MarkMentorConversationReadResponse = MarkMentorConversationReadResponses[keyof MarkMentorConversationReadResponses];
 
-export type DeleteThreadData = {
+export type ListMentorEntriesData = {
     body?: never;
     path: {
         /**
          * Workspace slug
          */
         workspaceSlug: string;
-        threadId: string;
+    };
+    query?: {
+        before?: number;
+        limit?: number;
+    };
+    url: '/workspaces/{workspaceSlug}/mentor/entries';
+};
+
+export type ListMentorEntriesResponses = {
+    /**
+     * OK
+     */
+    200: MentorEntryPage;
+};
+
+export type ListMentorEntriesResponse = ListMentorEntriesResponses[keyof ListMentorEntriesResponses];
+
+export type DeleteMentorEntryData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        entryId: string;
     };
     query?: never;
-    url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}';
+    url: '/workspaces/{workspaceSlug}/mentor/entries/{entryId}';
 };
 
-export type DeleteThreadErrors = {
+export type DeleteMentorEntryErrors = {
     /**
-     * Thread not found OR not owned by current user
+     * Only the developer's own questions can be deleted
      */
-    404: unknown;
+    409: ProblemDetail;
 };
 
-export type DeleteThreadResponses = {
+export type DeleteMentorEntryError = DeleteMentorEntryErrors[keyof DeleteMentorEntryErrors];
+
+export type DeleteMentorEntryResponses = {
     /**
-     * Thread deleted
+     * The message is deleted
      */
     204: void;
 };
 
-export type DeleteThreadResponse = DeleteThreadResponses[keyof DeleteThreadResponses];
+export type DeleteMentorEntryResponse = DeleteMentorEntryResponses[keyof DeleteMentorEntryResponses];
 
-export type GetThreadData = {
+export type GetMentorThreadData = {
     body?: never;
     path: {
         /**
          * Workspace slug
          */
         workspaceSlug: string;
-        threadId: string;
+        entryId: string;
     };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}';
+    query?: {
+        before?: number;
+        limit?: number;
+    };
+    url: '/workspaces/{workspaceSlug}/mentor/entries/{entryId}/thread';
 };
 
-export type GetThreadErrors = {
+export type GetMentorThreadErrors = {
     /**
-     * Thread not found OR not owned by current user
+     * No top-level message of the developer has this id
      */
-    404: unknown;
+    404: ProblemDetail;
 };
 
-export type GetThreadResponses = {
+export type GetMentorThreadError = GetMentorThreadErrors[keyof GetMentorThreadErrors];
+
+export type GetMentorThreadResponses = {
     /**
-     * Thread, messages and the owner's votes returned
+     * The thread; a message without replies has no conversation
      */
-    200: ChatThreadDetail;
+    200: MentorThread;
 };
 
-export type GetThreadResponse = GetThreadResponses[keyof GetThreadResponses];
+export type GetMentorThreadResponse = GetMentorThreadResponses[keyof GetMentorThreadResponses];
 
-export type RemoveVoteData = {
+export type ClearMentorVoteData = {
     body?: never;
     path: {
         /**
          * Workspace slug
          */
         workspaceSlug: string;
-        threadId: string;
-        messageId: string;
+        entryId: string;
     };
     query?: never;
-    url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}/messages/{messageId}/vote';
+    url: '/workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote';
 };
 
-export type RemoveVoteErrors = {
+export type ClearMentorVoteResponses = {
     /**
-     * Thread or message not found (or not owned by current user)
+     * OK
      */
-    404: unknown;
+    200: MentorEntry;
 };
 
-export type RemoveVoteResponses = {
-    /**
-     * Vote removed or did not exist
-     */
-    204: void;
-};
+export type ClearMentorVoteResponse = ClearMentorVoteResponses[keyof ClearMentorVoteResponses];
 
-export type RemoveVoteResponse = RemoveVoteResponses[keyof RemoveVoteResponses];
-
-export type VoteData = {
-    body: ChatMessageVoteRequest;
+export type SetMentorVoteData = {
+    body: MentorVoteRequest;
     path: {
         /**
          * Workspace slug
          */
         workspaceSlug: string;
-        threadId: string;
-        messageId: string;
+        entryId: string;
     };
     query?: never;
-    url: '/workspaces/{workspaceSlug}/mentor/threads/{threadId}/messages/{messageId}/vote';
+    url: '/workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote';
 };
 
-export type VoteErrors = {
+export type SetMentorVoteErrors = {
     /**
-     * Thread or message not found (or not owned by current user)
+     * The message is not one of Heph's
      */
-    404: unknown;
+    409: ProblemDetail;
 };
 
-export type VoteResponses = {
+export type SetMentorVoteError = SetMentorVoteErrors[keyof SetMentorVoteErrors];
+
+export type SetMentorVoteResponses = {
     /**
-     * Vote recorded
+     * The message with its vote
      */
-    200: ChatMessageVote;
+    200: MentorEntry;
 };
 
-export type VoteResponse = VoteResponses[keyof VoteResponses];
+export type SetMentorVoteResponse = SetMentorVoteResponses[keyof SetMentorVoteResponses];
+
+export type SubmitMentorTurnData = {
+    body: MentorTurnRequest;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/mentor/turns';
+};
+
+export type SubmitMentorTurnErrors = {
+    /**
+     * Heph declines the developer (mentor-refused), too many follow-ups wait, the requestId was used for another message, or the parent cannot have a thread (mentor-rejected)
+     */
+    409: ProblemDetail;
+};
+
+export type SubmitMentorTurnError = SubmitMentorTurnErrors[keyof SubmitMentorTurnErrors];
+
+export type SubmitMentorTurnResponses = {
+    /**
+     * The stored question and its turn
+     */
+    200: MentorSubmission;
+};
+
+export type SubmitMentorTurnResponse = SubmitMentorTurnResponses[keyof SubmitMentorTurnResponses];
+
+export type UpdateMentorTurnStatusData = {
+    body: MentorTurnStatusRequest;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        turnId: string;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/mentor/turns/{turnId}/status';
+};
+
+export type UpdateMentorTurnStatusResponses = {
+    /**
+     * OK
+     */
+    200: MentorTurn;
+};
+
+export type UpdateMentorTurnStatusResponse = UpdateMentorTurnStatusResponses[keyof UpdateMentorTurnStatusResponses];
 
 export type GetMemberOnboardingData = {
     body?: never;

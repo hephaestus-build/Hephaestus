@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "re
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 
 import { type DetailStackEntry, detailStackKey } from "./detail-stack";
+import { useArrived } from "./use-arrived";
 
 export interface DetailDrawerLevel {
 	depth: number;
@@ -201,22 +202,6 @@ function pressedDepth(event: MouseEvent | PointerEvent | TouchEvent): number {
 				: [],
 		);
 	return depths.length > 0 ? Math.max(...depths) + 1 : 0;
-}
-
-/**
- * False on the first render, true from the commit onwards. Base UI's `useTransitionStatus` seeds
- * `mounted` from `open`, so a drawer that mounts already open never runs the branch that sets
- * `starting`, gets no `data-starting-style` frame, and appears at rest. Levels mount from the URL,
- * so all of them do.
- *
- * A layout effect, not a frame: `requestAnimationFrame` can land after a caller has looked for the
- * panel and found nothing.
- */
-function useArrived(): boolean {
-	const [arrived, setArrived] = useState(false);
-	// oxlint-disable-next-line react/set-state-in-effect -- The extra render is the point: the closed frame has to be committed before the level opens, which is the only way Base UI runs its enter transition.
-	useLayoutEffect(() => setArrived(true), []);
-	return arrived;
 }
 
 /**

@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.HephTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationThreadProjection;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -26,7 +26,7 @@ public class SlackConversationContentSource implements ContentSource {
 
     @Override
     public boolean supports(ContextRequest request) {
-        return request instanceof MentorChatRequest;
+        return request instanceof HephTurnRequest;
     }
 
     @Override
@@ -37,7 +37,7 @@ public class SlackConversationContentSource implements ContentSource {
     @Override
     @Transactional(readOnly = true)
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
-        MentorChatRequest req = (MentorChatRequest) request;
+        HephTurnRequest req = (HephTurnRequest) request;
         ObjectNode payload = projection.buildPayload(req.workspaceId(), req.developerId());
         try {
             files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(payload));

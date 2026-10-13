@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayWebSocketConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxWorkspaceController;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -9,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
-import org.apache.tomcat.websocket.server.WsSci;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.FileSystemUtils;
@@ -17,7 +15,7 @@ import org.springframework.web.context.support.AnnotationConfigWebApplicationCon
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.config.annotation.DelegatingWebMvcConfiguration;
 
-/** Runs the production transfer controllers and WebSocket channel for Docker transport tests. */
+/** Runs the production transfer controllers for Docker transport tests. */
 public final class LiveSandboxGateway implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(LiveSandboxGateway.class);
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
@@ -30,16 +28,12 @@ public final class LiveSandboxGateway implements AutoCloseable {
         tomcat.setPort(0);
         tomcat.getConnector();
         var context = tomcat.addContext("", directory.toString());
-        context.addServletContainerInitializer(new WsSci(), null);
         var spring = new AnnotationConfigWebApplicationContext();
         spring.addBeanFactoryPostProcessor(factory -> factory.registerSingleton("gatewaySessions", sessions));
         // Registered directly rather than through a nested @Configuration: the application's component
         // scan covers the test tree, and a scannable @EnableWebMvc would replace Boot's MVC setup in
         // every integration context.
-        spring.register(
-                DelegatingWebMvcConfiguration.class,
-                SandboxWorkspaceController.class,
-                SandboxGatewayWebSocketConfiguration.class);
+        spring.register(DelegatingWebMvcConfiguration.class, SandboxWorkspaceController.class);
         context.addServletContainerInitializer(
                 (classes, servletContext) -> {
                     var servlet = servletContext.addServlet("gateway", new DispatcherServlet(spring));
