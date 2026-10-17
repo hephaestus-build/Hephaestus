@@ -85,8 +85,9 @@ Classic tokens and the GitHub App also read it with each sync.
    **Only on this account** restricts it to its owner.
    Installation and repository selection remain required.
 8. Select **Identifying and authorizing users → Request user authorization (OAuth) during installation**.
-9. Set **Callback URL** to `https://<APP_HOSTNAME>/oauth/callback/github`.
-   GitHub then returns to Hephaestus after installation and hides **Setup URL**.
+9. Set **Callback URL** to `https://<APP_HOSTNAME>/api/oauth/callback/github`.
+   The standard deployment routes `/api` to the server. GitHub then returns to Hephaestus after
+   installation and hides **Setup URL**.
 
 ### Connecting an installation to a workspace
 
@@ -289,7 +290,7 @@ Hephaestus does not implement GitHub's manifest registration flow.
   "url": "https://<APP_HOSTNAME>/webhooks/github",
   "active": true
  },
- "callback_urls": ["https://<APP_HOSTNAME>/oauth/callback/github"],
+ "callback_urls": ["https://<APP_HOSTNAME>/api/oauth/callback/github"],
  "request_oauth_on_install": true,
  "default_permissions": {
   "metadata": "read",
