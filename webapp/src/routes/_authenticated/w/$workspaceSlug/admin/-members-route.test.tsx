@@ -9,6 +9,7 @@ import type {
 	WorkspaceMembership,
 } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
@@ -405,4 +406,29 @@ describe("workspace members route", () => {
 		await screen.findByText("We could not change the role");
 		screen.getByText("Ada Lovelace", { selector: "div" });
 	});
+});
+
+it("renders the verified nonmember target's members without adding that target to the member list", async () => {
+	const requests: string[] = [];
+	mockMembersRoute();
+	server.use(
+		http.get("*/user", () => HttpResponse.json(currentUser)),
+		http.get("*/workspaces/tutors", () =>
+			HttpResponse.json({ ...WORKSPACE, workspaceSlug: "tutors", displayName: "Tutors" }),
+		),
+		http.get("*/workspaces/tutors/members/me", () =>
+			HttpResponse.json({ status: 403 }, { status: 403 }),
+		),
+		http.get("*/workspaces/tutors/members", ({ request }) => {
+			requests.push(new URL(request.url).pathname);
+			return HttpResponse.json(membershipPage([SAM]));
+		}),
+	);
+	const { router } = renderRouteAtWithRouter("/w/tutors/admin/members");
+	await screen.findByText("Sam Unclaimed", { selector: "div" }, ROUTE_RENDER_WAIT);
+	expect(router.state.location.pathname).toBe("/w/tutors/admin/members");
+	screen.getByText("Tutors administration");
+	expect(requests).toHaveLength(1);
+	expect(requests[0]).toMatch(/\/workspaces\/tutors\/members$/u);
+	expect(screen.queryByText("Ada Lovelace", { selector: "div" })).toBeNull();
 });

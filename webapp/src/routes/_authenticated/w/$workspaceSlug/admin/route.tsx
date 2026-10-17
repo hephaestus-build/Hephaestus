@@ -6,6 +6,9 @@ import { resolveWorkspaceMembership } from "@/runtime/auth/guard";
 /** Workspace-admin gate: a directory layout, so every route under `admin/` inherits it. */
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin")({
 	beforeLoad: async ({ context, params }) => {
+		if (context.administrationWorkspace !== undefined) {
+			return;
+		}
 		const membership = await resolveWorkspaceMembership(context.queryClient, params.workspaceSlug);
 		if (!hasMinimumWorkspaceRole(membership?.role, "ADMIN")) {
 			throw redirect({

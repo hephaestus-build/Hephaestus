@@ -200,3 +200,57 @@ export const HephHidden: Story = {
 		await expect(canvas.getByRole("link", { name: "Activity" })).toBeVisible();
 	},
 };
+
+export const InstanceWorkspaceAdministration: Story = {
+	args: {
+		isAppAdmin: true,
+		isAdmin: true,
+		showMentor: false,
+		activeWorkspace: undefined,
+		administrationWorkspaceSlug: "tutors",
+		administrationWorkspace: {
+			displayName: "Tutors",
+			providerType: "GITLAB",
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Tutors administration")).toBeVisible();
+		await expect(canvas.getByRole("link", { name: "Settings" })).toHaveAttribute(
+			"href",
+			"/w/tutors/admin/settings",
+		);
+		await expect(canvas.queryByRole("link", { name: "Activity" })).not.toBeInTheDocument();
+		await expect(canvas.queryByText("AET")).not.toBeInTheDocument();
+	},
+};
+
+export const InstanceAdministrationLoading: Story = {
+	args: {
+		isAppAdmin: true,
+		showMentor: false,
+		activeWorkspace: undefined,
+		administrationWorkspaceSlug: "tutors",
+		workspacesLoading: true,
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Workspace administration")).toBeVisible();
+		await expect(canvas.getByRole("link", { name: "Back to instance workspaces" })).toBeVisible();
+		await expect(canvas.queryByText("Workspace details are unavailable.")).not.toBeInTheDocument();
+		await expect(canvas.queryByText("AET")).not.toBeInTheDocument();
+	},
+};
+
+export const InstanceAdministrationUnavailable: Story = {
+	args: {
+		isAppAdmin: true,
+		showMentor: false,
+		activeWorkspace: undefined,
+		administrationWorkspaceSlug: "tutors",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Workspace details are unavailable.")).toBeVisible();
+		await expect(canvas.getByRole("link", { name: "Back to instance workspaces" })).toBeVisible();
+		await expect(canvas.queryByText("AET")).not.toBeInTheDocument();
+		await expect(canvas.queryByText("No workspace")).not.toBeInTheDocument();
+	},
+};

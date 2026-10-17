@@ -6,10 +6,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	getPublicActivityHiddenCountQueryKey,
+	getWorkspaceQueryKey,
+	getPublicActivityPolicyQueryKey,
+	listWorkspacesQueryKey,
 	getWorkspacePublicActivitySettingsQueryKey,
 	listHiddenContributorsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { UpdateWorkspacePublicActivityRequest } from "@/api/types.gen";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
@@ -85,6 +89,13 @@ function recordShowAgain() {
 
 describe("workspace settings route", () => {
 	it("says practice reviews are on from the workspace list and offers no feature switches", async () => {
+		let policyReads = 0;
+		server.use(
+			http.get("*/admin/settings/public-activity", () => {
+				policyReads += 1;
+				return HttpResponse.json({ allowed: true });
+			}),
+		);
 		renderSettingsRoute(true);
 
 		await screen.findByRole("heading", { name: "Capabilities" }, ROUTE_RENDER_WAIT);
@@ -95,6 +106,7 @@ describe("workspace settings route", () => {
 		expect(screen.getByRole("link", { name: /Review settings/u }).getAttribute("href")).toBe(
 			"/w/acme/admin/practices/review",
 		);
+		expect(policyReads).toBe(0);
 	});
 
 	it("says practice reviews are off when the workspace has not turned them on", async () => {
@@ -758,5 +770,117 @@ describe("workspace settings lifetime", () => {
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
 		await screen.findByRole("switch", { name: "Publish the page" }, ROUTE_RENDER_WAIT);
 		expect(changes).toStrictEqual([]);
+	});
+});
+
+function serveTarget(status = "ACTIVE") {
+	const target = {
+		...workspaceListItem("tutors", { displayName: "Tutors", practicesEnabled: true, status }),
+		publicActivityEnabled: true,
+	};
+	server.use(
+		http.get("*/user", () => HttpResponse.json(currentUser)),
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+		http.get("*/workspaces/tutors", () => HttpResponse.json(target)),
+		http.get("*/workspaces/tutors/members/me", () =>
+			HttpResponse.json({ status: 403 }, { status: 403 }),
+		),
+		http.get("*/workspaces/tutors/connections/catalog", () => HttpResponse.json([])),
+		http.get("*/workspaces/tutors/public-activity", () =>
+			HttpResponse.json({ enabled: true, allowSearchEngines: false }),
+		),
+		http.get("*/admin/settings/public-activity", () => HttpResponse.json({ allowed: true })),
+	);
+	return target;
+}
+
+describe("instance administrator workspace settings", () => {
+	it("renders verified nonmember settings and observes native workspace cache updates without a membership", async () => {
+		const target = serveTarget();
+		const { queryClient } = renderRouteAtWithRouter("/w/tutors/admin/settings");
+		await screen.findByRole("heading", { name: "Capabilities" }, ROUTE_RENDER_WAIT);
+		await screen.findByText("On. Anyone can see it at", { exact: false }, ROUTE_RENDER_WAIT);
+		expect(screen.getByRole("link", { name: /Review settings/u }).getAttribute("href")).toBe(
+			"/w/tutors/admin/practices/review",
+		);
+		expect(screen.queryByRole("button", { name: "Delete workspace" })).toBeNull();
+		await act(async () => {
+			queryClient.setQueryData(getWorkspaceQueryKey({ path: { workspaceSlug: "tutors" } }), {
+				...target,
+				displayName: "Tutors updated",
+				practicesEnabled: false,
+			});
+		});
+		await screen.findByText("Tutors updated administration");
+		within(screen.getByRole("region", { name: "Capabilities" })).getByText(/^Off\./u);
+		expect(queryClient.getQueryData(listWorkspacesQueryKey())).toStrictEqual([
+			workspaceListItem("acme"),
+		]);
+	});
+
+	it.each([
+		{ status: "ARCHIVED", allowed: true },
+		{ status: "ACTIVE", allowed: false },
+	])(
+		"does not claim public publication for $status with instance policy $allowed",
+		async ({ status, allowed }) => {
+			serveTarget(status);
+			server.use(
+				http.get("*/admin/settings/public-activity", () => HttpResponse.json({ allowed })),
+			);
+			renderRouteAt("/w/tutors/admin/settings");
+			await screen.findByText("On for this workspace.", undefined, ROUTE_RENDER_WAIT);
+			expect(screen.queryByText("On. Anyone can see it at", { exact: false })).toBeNull();
+		},
+	);
+
+	it("withdraws refused instance publication policy instead of showing cached public status", async () => {
+		serveTarget();
+		const policy = serveRead("*/admin/settings/public-activity", {
+			status: 200,
+			body: { allowed: true },
+		});
+		const { queryClient } = renderRouteAtWithRouter("/w/tutors/admin/settings");
+		await screen.findByText("On. Anyone can see it at", { exact: false }, ROUTE_RENDER_WAIT);
+		policy.answer = { status: 403 };
+		await act(async () => {
+			await queryClient.invalidateQueries({ queryKey: getPublicActivityPolicyQueryKey() });
+		});
+		await screen.findByText("You do not have access to the public activity page settings");
+		expect(screen.queryByText("On. Anyone can see it at", { exact: false })).toBeNull();
+		policy.answer = { status: 503 };
+		await reread(queryClient, getPublicActivityPolicyQueryKey());
+		expect(screen.queryByText("On. Anyone can see it at", { exact: false })).toBeNull();
+	});
+	it("keeps a refused administration target separate from a failed member-list refresh", async () => {
+		serveTarget();
+		const { queryClient } = renderRouteAtWithRouter("/w/tutors/admin/settings");
+		await screen.findByRole("heading", { name: "Capabilities" }, ROUTE_RENDER_WAIT);
+		const otherRequests: string[] = [];
+		server.use(
+			http.get("*/workspaces", () => HttpResponse.json({ status: 503 }, { status: 503 })),
+			http.get("*/workspaces/tutors", () => HttpResponse.json({ status: 403 }, { status: 403 })),
+			http.all("*/workspaces/acme/*", ({ request }) => {
+				otherRequests.push(new URL(request.url).pathname);
+				return HttpResponse.json({ status: 503 }, { status: 503 });
+			}),
+		);
+		await act(async () => {
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() }),
+				queryClient.invalidateQueries({
+					queryKey: getWorkspaceQueryKey({ path: { workspaceSlug: "tutors" } }),
+				}),
+			]);
+		});
+		await screen.findByText("You do not have access to workspace settings");
+		screen.getByRole("link", { name: "Back to instance workspaces" });
+		expect(screen.queryByRole("heading", { name: "Capabilities" })).toBeNull();
+		expect(screen.queryByRole("link", { name: /Review settings/u })).toBeNull();
+		expect(screen.queryByRole("link", { name: "Heph" })).toBeNull();
+		expect(otherRequests).toStrictEqual([]);
+		expect(queryClient.getQueryData(listWorkspacesQueryKey())).toStrictEqual([
+			workspaceListItem("acme"),
+		]);
 	});
 });

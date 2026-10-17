@@ -2,6 +2,7 @@ import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tan
 import { toast } from "sonner";
 
 import {
+	getPublicActivityPolicyOptions,
 	getPublicActivityHiddenCountOptions,
 	getPublicActivityHiddenCountQueryKey,
 	getWorkspacePublicActivitySettingsOptions,
@@ -12,7 +13,7 @@ import {
 	updatePublicActivityMutation,
 	updatePublicActivityObjectionMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { UpdateWorkspacePublicActivityRequest } from "@/api/types.gen";
+import type { UpdateWorkspacePublicActivityRequest, Workspace } from "@/api/types.gen";
 import type { WorkspacePublicActivityState } from "@/components/admin/settings/WorkspacePublicActivitySettings";
 import { panelState } from "@/components/common/panel-state";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
@@ -24,15 +25,25 @@ import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-ref
  * A workspace's public activity page as its admin settings show it: whether it is on, whether search
  * engines may list it, how many people it leaves out, and the two changes. `live` is the
  * server-computed publication status from the workspace list.
+ * An instance administrator outside that list reads the existing instance policy instead.
  */
 export function useWorkspacePublicActivity({
 	workspaceSlug,
 	live,
+	workspaceStatus,
 }: {
 	workspaceSlug: string | undefined;
-	live: boolean;
+	live: boolean | undefined;
+	workspaceStatus?: Workspace["status"];
 }) {
 	const queryClient = useQueryClient();
+	const policyOptions = getPublicActivityPolicyOptions();
+	const policyQuery = useQuery({
+		...policyOptions,
+		enabled: workspaceSlug !== undefined && live === undefined && workspaceStatus !== undefined,
+	});
+	useQueryReadRefusal(policyOptions.queryKey, policyQuery.isError, policyQuery.error);
+	const publicationPolicy = lastRead(policyQuery);
 	const path = { workspaceSlug: workspaceSlug ?? "" };
 	const settingsOptions = getWorkspacePublicActivitySettingsOptions({ path });
 	const settings = useQuery({ ...settingsOptions, enabled: workspaceSlug !== undefined });
@@ -122,26 +133,38 @@ export function useWorkspacePublicActivity({
 				};
 
 	let state: WorkspacePublicActivityState = { status: "loading" };
-	if (current.data !== undefined) {
+	const publication =
+		live ??
+		(publicationPolicy.data !== undefined &&
+		current.data !== undefined &&
+		workspaceStatus !== undefined
+			? publicationPolicy.data.allowed && workspaceStatus === "ACTIVE" && current.data.enabled
+			: undefined);
+	if (current.data !== undefined && publication !== undefined) {
 		const pendingBody = update.isPending ? update.variables.body : undefined;
 		state = {
 			status: "ready",
 			enabled: current.data.enabled,
 			allowSearchEngines: current.data.allowSearchEngines,
-			refreshFailure: current.refreshFailure,
-			live,
+			refreshFailure:
+				current.refreshFailure ??
+				(live === undefined ? publicationPolicy.refreshFailure : undefined),
+			live: publication,
 			// A count that did not load is left out rather than shown from an earlier read.
 			hiddenPeople: hidden.isError ? undefined : hidden.data?.hiddenPeople,
 			hiddenContributors: hiddenContributorsState,
 			restoring: showAgain.isPending ? showAgain.variables.path.userId : undefined,
 			pending: pendingBody && pendingChange(pendingBody, current.data.enabled),
 		};
-	} else if (settings.isError) {
+	} else if (settings.isError || (live === undefined && policyQuery.isError)) {
 		state = {
 			status: "error",
-			error: settings.error,
+			error: settings.error ?? policyQuery.error,
 			onRetry: () => {
 				void settings.refetch();
+				if (live === undefined) {
+					void policyQuery.refetch();
+				}
 			},
 		};
 	}

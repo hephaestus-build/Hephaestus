@@ -4,9 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type HttpResponseResolver } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { getAllTeamsQueryKey } from "@/api/@tanstack/react-query.gen";
+import { getAllTeamsQueryKey, getWorkspaceQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { RepositoryInfo, TeamInfo } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
@@ -503,4 +504,39 @@ describe("a read of a workspace's teams", () => {
 		await screen.findByRole("heading", { name: "Frontend Team" }, SETTLE);
 		expect(screen.queryByText("We could not load teams")).toBeNull();
 	});
+});
+
+it("renders verified nonmember target teams and withdraws them when its workspace read is refused", async () => {
+	const requests: string[] = [];
+	server.use(
+		http.get("*/user", () => HttpResponse.json(currentUser)),
+		http.get("*/workspaces", () => HttpResponse.json([ACME])),
+		http.get("*/workspaces/tutors", () =>
+			HttpResponse.json(workspaceListItem("tutors", { displayName: "Tutors" })),
+		),
+		http.get("*/workspaces/tutors/members/me", () =>
+			HttpResponse.json({ status: 403 }, { status: 403 }),
+		),
+		http.get("*/workspaces/tutors/connections/catalog", () => HttpResponse.json([])),
+		http.get("*/workspaces/tutors/team", ({ request }) => {
+			requests.push(new URL(request.url).pathname);
+			return HttpResponse.json([team(55, "Tutors Team")]);
+		}),
+	);
+	const { router, queryClient } = renderRouteAtWithRouter("/w/tutors/admin/teams");
+	await screen.findByRole("heading", { name: "Tutors Team" }, ROUTE_RENDER_WAIT);
+	expect(router.state.location.pathname).toBe("/w/tutors/admin/teams");
+	screen.getByText("Tutors administration");
+	expect(requests).toHaveLength(1);
+	expect(requests[0]).toMatch(/\/workspaces\/tutors\/team$/u);
+	server.use(
+		http.get("*/workspaces/tutors", () => HttpResponse.json({ status: 403 }, { status: 403 })),
+	);
+	await act(async () => {
+		await queryClient.invalidateQueries({
+			queryKey: getWorkspaceQueryKey({ path: { workspaceSlug: "tutors" } }),
+		});
+	});
+	await screen.findByRole("alert");
+	expect(screen.queryByRole("heading", { name: "Tutors Team" })).toBeNull();
 });

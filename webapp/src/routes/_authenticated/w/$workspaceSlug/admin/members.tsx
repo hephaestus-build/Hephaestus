@@ -21,7 +21,7 @@ import { WorkspaceMembersPage } from "@/components/admin/members/WorkspaceMember
 import type { WorkspaceMembersTableView } from "@/components/admin/members/WorkspaceMembersTable";
 import { accountName } from "@/components/admin/users/account-labels";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
@@ -51,10 +51,11 @@ function AdminMembersContainer() {
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
 	const {
-		workspaceSlug,
+		adminWorkspaceSlug: workspaceSlug,
 		isLoading: isWorkspaceLoading,
 		error: workspaceError,
-	} = useActiveWorkspaceSlug();
+		refetch: refetchWorkspace,
+	} = useWorkspaceAccess();
 
 	const view: WorkspaceMembersTableView = {
 		q: search.q ?? "",
@@ -146,7 +147,7 @@ function AdminMembersContainer() {
 	const members = workspaceMemberRows(membersQuery.data?.content ?? []);
 	const isLoading = isWorkspaceLoading || membersQuery.isPending;
 
-	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
+	if (!hasText(workspaceSlug) && !isWorkspaceLoading && workspaceError === undefined) {
 		return <NoWorkspace />;
 	}
 
@@ -158,8 +159,11 @@ function AdminMembersContainer() {
 			isLoading={isLoading || !hasText(workspaceSlug)}
 			error={workspaceError ?? membersQuery.error}
 			onRetry={() => {
-				void membersQuery.refetch();
-				void teamsQuery.refetch();
+				refetchWorkspace();
+				if (hasText(workspaceSlug)) {
+					void membersQuery.refetch();
+					void teamsQuery.refetch();
+				}
 			}}
 			teamsError={teamsQuery.error}
 			teamsRetrying={teamsQuery.isFetching}

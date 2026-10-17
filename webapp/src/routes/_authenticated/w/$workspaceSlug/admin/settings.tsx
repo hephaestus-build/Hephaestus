@@ -8,8 +8,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspacePublicActivity } from "@/hooks/use-workspace-public-activity";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
@@ -24,40 +23,48 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/set
 });
 
 function AdminSettings() {
-	const { workspaceSlug, isLoading: isWorkspaceLoading, workspaces } = useActiveWorkspaceSlug();
-	const featureState = useWorkspaceFeatures(workspaceSlug);
-	const workspace = workspaces.find((candidate) => candidate.workspaceSlug === workspaceSlug);
+	const {
+		adminWorkspaceSlug: workspaceSlug,
+		isLoading: isWorkspaceLoading,
+		administrationWorkspace,
+		administrationWorkspaceSlug,
+		chromeWorkspace,
+		error,
+		refetch,
+	} = useWorkspaceAccess();
+	const workspace =
+		administrationWorkspaceSlug === undefined ? chromeWorkspace : administrationWorkspace;
 	const publicActivity = useWorkspacePublicActivity({
 		workspaceSlug,
-		live: workspace?.publishesPublicActivity === true,
+		live:
+			administrationWorkspaceSlug === undefined
+				? chromeWorkspace?.publishesPublicActivity
+				: undefined,
+		workspaceStatus: administrationWorkspace?.status,
 	});
 
-	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
+	if (!hasText(workspaceSlug) && !isWorkspaceLoading && error === undefined) {
 		return <NoWorkspace />;
 	}
 
 	let settings: ReactNode;
-	if (featureState.isError) {
+	if (error !== undefined) {
 		settings = (
 			<div className="max-w-4xl">
 				<QueryErrorAlert
-					error={featureState.error}
+					error={error}
 					title="We could not load workspace settings"
-					onRetry={featureState.refetch}
+					onRetry={refetch}
 				/>
 			</div>
 		);
-	} else if (
-		!hasText(workspaceSlug) ||
-		workspace === undefined ||
-		featureState.practicesEnabled === undefined
-	) {
+	} else if (!hasText(workspaceSlug) || workspace === undefined) {
 		settings = <Skeleton className="h-64 max-w-4xl rounded-xl" />;
 	} else {
 		settings = (
 			<WorkspaceSettingsPage
 				workspaceSlug={workspaceSlug}
-				practicesEnabled={featureState.practicesEnabled}
+				practicesEnabled={workspace.practicesEnabled}
 				publicActivity={{
 					workspaceName: workspace.displayName,
 					providerType: toScmProviderType(workspace.providerType),

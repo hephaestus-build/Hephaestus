@@ -70,7 +70,6 @@ import {
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import environment from "@/environment";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
@@ -468,7 +467,10 @@ function UserViewConfirmAccess() {
  * activity page wears its own workspace's, whoever reads it, since a visitor has no workspace here.
  */
 function ProviderColors() {
-	const own = useActiveWorkspaceSlug().providerType;
+	const access = useWorkspaceAccess();
+	const own = toScmProviderType(
+		access.administrationWorkspace?.providerType ?? access.chromeWorkspace?.providerType,
+	);
 	const published = useMatch({
 		from: "/w/$workspaceSlug/",
 		shouldThrow: false,
@@ -484,7 +486,10 @@ function ProviderColors() {
  * the fallback. Context reaches portals, so drawers read it too.
  */
 function WorkProviderScope({ children }: { children: ReactNode }) {
-	const [workProvider] = scmKindOf(useActiveWorkspaceSlug().chromeWorkspace?.providerType);
+	const access = useWorkspaceAccess();
+	const [workProvider] = scmKindOf(
+		access.administrationWorkspace?.providerType ?? access.chromeWorkspace?.providerType,
+	);
 	return <WorkProviderContext value={workProvider}>{children}</WorkProviderContext>;
 }
 
@@ -512,11 +517,18 @@ function AppSidebarContainer() {
 	const navigate = useNavigate();
 	const switchWorkspace = useWorkspaceSwitcher();
 	const workspaceAccess = useWorkspaceAccess();
-	const { chromeWorkspaceSlug, chromeWorkspace, workspaces } = workspaceAccess;
+	const {
+		chromeWorkspaceSlug,
+		chromeWorkspace,
+		workspaces,
+		administrationWorkspace,
+		administrationWorkspaceSlug,
+	} = workspaceAccess;
+	const adminSlug = workspaceAccess.adminWorkspaceSlug;
 	const hasWorkspace = Boolean(chromeWorkspaceSlug);
 	const integrationCatalogQuery = useQuery({
-		...getIntegrationCatalogOptions({ path: { workspaceSlug: chromeWorkspaceSlug ?? "" } }),
-		enabled: workspaceAccess.isAdmin && Boolean(chromeWorkspaceSlug),
+		...getIntegrationCatalogOptions({ path: { workspaceSlug: adminSlug ?? "" } }),
+		enabled: workspaceAccess.isAdmin && Boolean(adminSlug),
 		placeholderData: (previousData) => previousData,
 	});
 	const integrationCatalog = Array.isArray(integrationCatalogQuery.data)
@@ -525,15 +537,15 @@ function AppSidebarContainer() {
 	const integrationKinds = [
 		...new Set([
 			...integrationCatalog.map((entry) => entry.kind),
-			...scmKindOf(chromeWorkspace?.providerType),
+			...scmKindOf(administrationWorkspace?.providerType ?? chromeWorkspace?.providerType),
 		]),
 	];
 
 	const sidebarContext = sidebarContextOf(pathname);
 	const awaitingApproval = useFeedbackAwaitingApproval(
-		chromeWorkspaceSlug,
+		adminSlug,
 		workspaceAccess.isAdmin &&
-			chromeWorkspace?.practicesEnabled === true &&
+			(administrationWorkspace?.practicesEnabled ?? chromeWorkspace?.practicesEnabled) === true &&
 			sidebarContext === "main",
 	);
 
@@ -586,6 +598,8 @@ function AppSidebarContainer() {
 			context={sidebarContext}
 			workspaces={workspaces}
 			activeWorkspace={chromeWorkspace}
+			administrationWorkspace={administrationWorkspace}
+			administrationWorkspaceSlug={administrationWorkspaceSlug}
 			onWorkspaceChange={handleWorkspaceChange}
 			onAddWorkspace={handleAddWorkspace}
 			workspacesLoading={workspaceAccess.isLoading}

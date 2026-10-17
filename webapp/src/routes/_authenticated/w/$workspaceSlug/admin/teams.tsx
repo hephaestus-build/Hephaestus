@@ -20,7 +20,7 @@ import type {
 import { WorkspaceTeamsTable } from "@/components/admin/teams/WorkspaceTeamsTable";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
@@ -38,7 +38,12 @@ function AdminTeamsContainer() {
 	const queryClient = useQueryClient();
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: Route.fullPath });
-	const { workspaceSlug, isLoading: isWorkspaceLoading } = useActiveWorkspaceSlug();
+	const {
+		adminWorkspaceSlug: workspaceSlug,
+		isLoading: isWorkspaceLoading,
+		error: workspaceError,
+		refetch: refetchWorkspace,
+	} = useWorkspaceAccess();
 	const slug = workspaceSlug ?? "";
 	const hasWorkspace = Boolean(workspaceSlug);
 
@@ -223,12 +228,15 @@ function AdminTeamsContainer() {
 		}
 	};
 
-	if (!hasWorkspace && !isWorkspaceLoading) {
+	if (!hasWorkspace && !isWorkspaceLoading && workspaceError === undefined) {
 		return <NoWorkspace />;
 	}
 
 	const retry = () => {
-		void teamsQuery.refetch();
+		refetchWorkspace();
+		if (hasWorkspace) {
+			void teamsQuery.refetch();
+		}
 	};
 	// A refresh that failed and may pass on retry keeps the teams; anything else is the read's error.
 	const refreshFailed =
@@ -238,7 +246,7 @@ function AdminTeamsContainer() {
 		<WorkspaceTeamsTable
 			teams={teamsQuery.data ?? []}
 			isLoading={isWorkspaceLoading || teamsQuery.isLoading || !hasText(workspaceSlug)}
-			error={refreshFailed ? undefined : teamsQuery.error}
+			error={workspaceError ?? (refreshFailed ? undefined : teamsQuery.error)}
 			refreshFailure={
 				refreshFailed
 					? { error: teamsQuery.error, pending: teamsQuery.isFetching, onRetry: retry }

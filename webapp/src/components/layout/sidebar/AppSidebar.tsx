@@ -6,6 +6,7 @@ import type {
 	ChatThreadSummary,
 	IntegrationCatalogEntry,
 	WorkspaceListItem,
+	Workspace,
 } from "@/api/types.gen";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
 import {
@@ -47,6 +48,10 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	context: SidebarContext;
 	workspaces: WorkspaceListItem[];
 	activeWorkspace?: WorkspaceListItem;
+	/** Verified server metadata for instance administration, never an entry in the membership switcher. */
+	/** The verified target identity remains even while its metadata is pending or refused. */
+	administrationWorkspaceSlug?: string;
+	administrationWorkspace?: Pick<Workspace, "displayName" | "providerType">;
 	onWorkspaceChange?: (workspace: WorkspaceListItem) => void;
 	onAddWorkspace?: () => void;
 	workspacesLoading?: boolean;
@@ -66,6 +71,8 @@ export function AppSidebar({
 	context,
 	workspaces,
 	activeWorkspace,
+	administrationWorkspace,
+	administrationWorkspaceSlug,
 	onWorkspaceChange,
 	onAddWorkspace,
 	workspacesLoading = false,
@@ -84,9 +91,32 @@ export function AppSidebar({
 	};
 	let contextHeader: ReactNode = null;
 	let sidebarContent: ReactNode;
+	if (administrationWorkspaceSlug !== undefined) {
+		contextHeader = (
+			<NavContextHeader
+				title="Workspace administration"
+				backLink={<Link to="/admin/workspaces" aria-label="Back to instance workspaces" />}
+			/>
+		);
+	}
 
 	if (context === "admin") {
 		sidebarContent = <NavSuperAdmin />;
+	} else if (administrationWorkspace && administrationWorkspaceSlug !== undefined) {
+		contextHeader = (
+			<NavContextHeader
+				title={`${administrationWorkspace.displayName} administration`}
+				backLink={<Link to="/admin/workspaces" aria-label="Back to instance workspaces" />}
+			/>
+		);
+		sidebarContent = (
+			<NavAdmin
+				workspaceSlug={administrationWorkspaceSlug}
+				integrationKinds={integrationKinds}
+				awaitingApproval={awaitingApproval}
+				scmProviderType={administrationWorkspace.providerType === "GITLAB" ? "GITLAB" : "GITHUB"}
+			/>
+		);
 	} else if (workspacesLoading) {
 		sidebarContent = (
 			<SidebarGroup>
@@ -97,6 +127,12 @@ export function AppSidebar({
 						</SidebarMenuItem>
 					))}
 				</SidebarMenu>
+			</SidebarGroup>
+		);
+	} else if (administrationWorkspaceSlug !== undefined) {
+		sidebarContent = (
+			<SidebarGroup>
+				<p className="text-sm text-muted-foreground">Workspace details are unavailable.</p>
 			</SidebarGroup>
 		);
 	} else if (!activeWorkspace) {
@@ -161,7 +197,7 @@ export function AppSidebar({
 		<Sidebar collapsible={context === "main" ? "icon" : "offcanvas"} {...props}>
 			<SidebarHeader onClick={handleSectionClick}>
 				{isMobile && <SidebarTrigger className="ml-auto" aria-label="Close navigation" />}
-				{context !== "admin" && (
+				{context !== "admin" && administrationWorkspaceSlug === undefined && (
 					<WorkspaceSwitcher
 						isLoading={workspacesLoading}
 						workspaces={workspaces}

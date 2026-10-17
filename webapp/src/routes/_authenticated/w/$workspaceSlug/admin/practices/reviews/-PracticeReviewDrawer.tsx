@@ -53,7 +53,6 @@ import { levelPathAt } from "@/components/layout/detail-drawer/level-path";
 import { RefusalFixLink } from "@/components/practice-trace/RefusalFixLink";
 import { TraceRefusalAlert } from "@/components/practice-trace/TraceRefusalAlert";
 import { isActiveReview } from "@/components/practice-vocabulary/review-status-defs";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import {
 	useApprovalQueue,
 	useFeedbackController,
@@ -63,6 +62,7 @@ import { useRequestPracticeReview } from "@/hooks/use-request-practice-review";
 import { useResultController } from "@/hooks/use-result-controller";
 import { useReviewController } from "@/hooks/use-review-controller";
 import { type ReviewLineageTarget, useReviewLineage } from "@/hooks/use-review-lineage";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useSearchState } from "@/lib/search-params";
 
 export interface PracticeReviewDrawerProps {
@@ -376,9 +376,11 @@ function TraceLevelRead({
 	const { itemId, traced, askChain } = useRecordedItem(workspaceSlug, record);
 	const target = askChain ? lineageTarget(record, newest?.id) : undefined;
 	const lineage = useReviewLineage(workspaceSlug, target);
-	const practicesEnabled = useActiveWorkspaceSlug().workspaces.find(
-		(workspace) => workspace.workspaceSlug === workspaceSlug,
-	)?.practicesEnabled;
+	const { administrationWorkspace, administrationWorkspaceSlug, workspaces } = useWorkspaceAccess();
+	const practicesEnabled =
+		administrationWorkspaceSlug === workspaceSlug
+			? administrationWorkspace?.practicesEnabled
+			: workspaces.find((workspace) => workspace.workspaceSlug === workspaceSlug)?.practicesEnabled;
 
 	let chain: TraceChainState = { status: "none" };
 	if (lineage !== undefined) {

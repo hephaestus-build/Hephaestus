@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
 import { assert, describe, expect, it, vi } from "vitest";
 
+import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
 import type {
 	PracticeGroup,
 	PracticeReviewSettings,
@@ -10,6 +11,7 @@ import type {
 	SetFeedbackModeRequest,
 	SetReviewScheduleEnabledRequest,
 	UpdatePracticeReviewSettingsRequest,
+	UpdateWorkspaceFeaturesRequest,
 	WorkspaceMembership,
 	WorkspaceReviewScope,
 } from "@/api/types.gen";
@@ -19,8 +21,10 @@ import {
 	reviewSchedule,
 	reviewSettings,
 } from "@/components/admin/practices/review/fixtures";
+import { currentUser } from "@/mocks/fixtures/auth";
+import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 20_000 });
 
@@ -170,6 +174,67 @@ async function openPractice(name: string): Promise<HTMLElement> {
 }
 
 describe("review route", () => {
+	it("keeps an instance administrator's target chrome and review origin changes scoped to that workspace", async () => {
+		const changes: { slug: string; body: unknown }[] = [];
+		let target = {
+			workspaceSlug: "tutors",
+			displayName: "Tutors",
+			providerType: "GITLAB",
+			practicesEnabled: true,
+			practiceReviewAutoTriggerEnabled: true,
+			practiceReviewManualTriggerEnabled: true,
+		};
+		stubWorkspace([
+			http.get("*/user", () => HttpResponse.json(currentUser)),
+			http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+			http.get("*/workspaces/tutors/members/me", () =>
+				HttpResponse.json({ status: 403 }, { status: 403 }),
+			),
+			http.get("*/workspaces/tutors", () => HttpResponse.json(target)),
+			http.patch<PathParams, UpdateWorkspaceFeaturesRequest>(
+				"*/workspaces/:workspaceSlug/features",
+				async ({ params, request }) => {
+					const body = await request.json();
+					changes.push({ slug: String(params.workspaceSlug), body });
+					target = { ...target, ...body };
+					return HttpResponse.json(target);
+				},
+			),
+		]);
+		const { router, queryClient } = renderRouteAtWithRouter(
+			"/w/tutors/admin/practices/review?section=automated-review",
+		);
+		await router.load();
+		expect(router.state.location.pathname).toBe("/w/tutors/admin/practices/review");
+		await screen.findByRole("heading", { name: "Review settings" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("link", { name: "Back to instance workspaces" }, ROUTE_RENDER_WAIT);
+		screen.getByText("Tutors administration");
+		expect(screen.queryByRole("link", { name: "Heph" })).toBeNull();
+		const sidebarSettings = screen.getByRole("link", { name: "Settings" });
+		expect(sidebarSettings.getAttribute("href")).toBe("/w/tutors/admin/settings");
+		const automatic = await screen.findByRole(
+			"switch",
+			{ name: "Start from work activity" },
+			ROUTE_RENDER_WAIT,
+		);
+		await userEvent.click(automatic);
+		await waitFor(() => expect(changes).toHaveLength(1));
+		expect(changes[0]).toStrictEqual({
+			slug: "tutors",
+			body: { practiceReviewAutoTriggerEnabled: false },
+		});
+		await userEvent.click(screen.getByRole("switch", { name: "Start requested reviews" }));
+		await waitFor(() => expect(changes).toHaveLength(2));
+		expect(changes[1]).toStrictEqual({
+			slug: "tutors",
+			body: { practiceReviewManualTriggerEnabled: false },
+		});
+		expect(target.practicesEnabled).toBe(true);
+		expect(queryClient.getQueryData(listWorkspacesQueryKey())).toStrictEqual([
+			workspaceListItem("acme"),
+		]);
+	});
+
 	it("answers 'what is this workspace doing' from the rollup rather than from the rows", async () => {
 		stubWorkspace([]);
 
