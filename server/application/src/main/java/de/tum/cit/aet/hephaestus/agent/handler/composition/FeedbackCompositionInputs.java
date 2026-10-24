@@ -39,6 +39,11 @@ public final class FeedbackCompositionInputs {
                 SandboxLayout.FEEDBACK_COMPOSITION_PATH, mapper.writeValueAsBytes(new Request(3, selected, 2, forms)));
     }
 
+    /** Whether a staged request asks for a review on the work. */
+    public static boolean requestsReviewOnTheWork(byte[] request, ObjectMapper mapper) {
+        return mapper.readTree(request).path("destinations").has(FeedbackDestination.ON_WORK.name());
+    }
+
     private record DestinationBounds(int maxPieces) {}
 
     @JsonInclude(JsonInclude.Include.ALWAYS)

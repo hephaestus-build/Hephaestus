@@ -63,11 +63,12 @@ class WorkerJwtTest extends BaseUnitTest {
         UUID jobId = UUID.randomUUID();
         Instant work = Instant.now().plusSeconds(300);
 
-        JobJwt jwt = (JobJwt) verifier.verify(issuer.issueForJobUntil(jobId, 42L, 0, work, work.plusSeconds(600)));
+        JobJwt jwt = (JobJwt) verifier.verify(
+                issuer.issueForJobUntil(jobId, 42L, 0, work, work.plusSeconds(600), JobCredentialScope.REVIEW));
 
         assertThat(jwt.jobId()).isEqualTo(jobId);
         assertThat(jwt.workspaceId()).isEqualTo(42L);
-        assertThat(jwt.scopes()).containsExactly("llm_proxy");
+        assertThat(jwt.scopes()).containsExactlyInAnyOrder("llm_proxy", "review");
         assertThat(jwt.issuedAt()).isNotNull();
         assertThat(jwt.jti()).isNotBlank();
     }
@@ -77,21 +78,23 @@ class WorkerJwtTest extends BaseUnitTest {
         Instant work = Instant.now().plusSeconds(900).truncatedTo(ChronoUnit.SECONDS);
         Instant expiry = work.plusSeconds(600);
 
-        JobJwt jwt = (JobJwt) verifier.verify(issuer.issueForJobUntil(UUID.randomUUID(), 42L, 0, work, expiry));
+        JobJwt jwt = (JobJwt) verifier.verify(
+                issuer.issueForJobUntil(UUID.randomUUID(), 42L, 0, work, expiry, JobCredentialScope.REVIEW));
 
         assertThat(jwt.workDeadline()).isEqualTo(work);
         assertThat(jwt.expiresAt()).isEqualTo(expiry);
-        assertThat(jwt.scopes()).containsExactly(WorkerJwtIssuer.LLM_PROXY_SCOPE);
+        assertThat(jwt.scopes()).containsExactlyInAnyOrder(WorkerJwtIssuer.LLM_PROXY_SCOPE, "review");
     }
 
     @Test
     void shouldNotIssueAJobTokenWhoseWorkOutlastsItOrHasAlreadyEnded() {
         Instant expiry = Instant.now().plusSeconds(600);
 
-        assertThatThrownBy(() -> issuer.issueForJobUntil(UUID.randomUUID(), 42L, 0, expiry.plusSeconds(1), expiry))
+        assertThatThrownBy(() -> issuer.issueForJobUntil(
+                        UUID.randomUUID(), 42L, 0, expiry.plusSeconds(1), expiry, JobCredentialScope.REVIEW))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> issuer.issueForJobUntil(
-                        UUID.randomUUID(), 42L, 0, Instant.now().minusSeconds(1), expiry))
+                        UUID.randomUUID(), 42L, 0, Instant.now().minusSeconds(1), expiry, JobCredentialScope.REVIEW))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -141,7 +144,8 @@ class WorkerJwtTest extends BaseUnitTest {
     @Test
     void shouldRefuseAJobTokenWhoseWorkDeadlineWasChangedAfterSigning() {
         Instant work = Instant.now().plusSeconds(300);
-        String[] parts = issuer.issueForJobUntil(UUID.randomUUID(), 42L, 0, work, work.plusSeconds(600))
+        String[] parts = issuer.issueForJobUntil(
+                        UUID.randomUUID(), 42L, 0, work, work.plusSeconds(600), JobCredentialScope.REVIEW)
                 .split("\\.", -1);
         String payload = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
         String later = payload.replace(

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -210,5 +211,16 @@ class PracticePiAdapterTest extends BaseUnitTest {
         var networkPolicy = spec.networkPolicy();
         assertThat(networkPolicy).isNotNull();
         assertThat(networkPolicy.llmProxyToken()).isEqualTo("job-token-123");
+    }
+
+    @Test
+    void shouldLeaveThePublicReviewLaunchOnlyTheTimeTheAttemptHasLeft() {
+        var review = Map.of("PI_COMPOSITION_PHASES", "PRIVATE_FEEDBACK", "AGENT_BUDGET_MS", "540000");
+
+        assertThat(PracticePiAdapter.publicReviewEnvironment(review, Duration.ofMinutes(3)))
+                .containsEntry("PI_COMPOSITION_PHASES", "PUBLIC_REVIEW")
+                .containsEntry("AGENT_BUDGET_MS", "120000");
+        assertThat(PracticePiAdapter.publicReviewEnvironment(review, Duration.ofSeconds(30)))
+                .containsEntry("AGENT_BUDGET_MS", "1");
     }
 }

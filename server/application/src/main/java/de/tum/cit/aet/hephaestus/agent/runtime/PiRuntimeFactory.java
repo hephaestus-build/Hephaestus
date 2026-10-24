@@ -36,6 +36,9 @@ public class PiRuntimeFactory {
     /** Time reserved for runner shutdown and sandbox teardown, outside the model's work budget. */
     public static final int TIMEOUT_BUFFER_SECONDS = 60;
 
+    /** The runner's safety ceiling, in milliseconds from its start. */
+    public static final String AGENT_BUDGET_ENV = "AGENT_BUDGET_MS";
+
     /** Turns the SDK repeats before a provider failure ends the session that hit it. */
     private static final int RETRY_MAX_ATTEMPTS = 5;
 
@@ -78,7 +81,7 @@ public class PiRuntimeFactory {
         inputFiles.putAll(spec.extraInputs());
 
         long agentTimeoutMs = (spec.timeoutSeconds() - TIMEOUT_BUFFER_SECONDS) * 1000L;
-        env.put("AGENT_BUDGET_MS", Long.toString(agentTimeoutMs));
+        env.put(AGENT_BUDGET_ENV, Long.toString(agentTimeoutMs));
 
         env.put("HOME", "/home/agent");
         env.put("XDG_CONFIG_HOME", "/home/agent/.local/config");

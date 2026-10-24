@@ -244,6 +244,7 @@ export async function runRunner(
 				PI_DIRECT_MODEL_TOKENS: "200000",
 				LLM_PROXY_URL: "https://unused.invalid",
 				LLM_PROXY_TOKEN: "job-token",
+				PI_COMPOSITION_PHASES: "PUBLIC_REVIEW,PRIVATE_FEEDBACK",
 				...env,
 			},
 			stdio: [

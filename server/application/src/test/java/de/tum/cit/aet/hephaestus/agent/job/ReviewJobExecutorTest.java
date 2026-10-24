@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -33,6 +34,8 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -40,6 +43,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobCredentialScope;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
@@ -353,6 +357,107 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .thenReturn(1);
     }
 
+    /** A review launch as the executor prepares it, whose composition request may ask for a review on the work. */
+    private static SandboxSpec reviewLaunch(ReviewJob job, boolean onWork) {
+        String destinations = onWork ? "{\"ON_WORK\":{\"maxPieces\":1}}" : "{\"PRACTICE_PAGE\":{\"maxPieces\":1}}";
+        return new SandboxSpec(
+                job.getId(),
+                "practice-runtime",
+                List.of("run"),
+                Map.of(
+                        "SANDBOX_WORK_DEADLINE_MS",
+                        Long.toString(Instant.now().plusSeconds(600).toEpochMilli()),
+                        "PI_COMPOSITION_PHASES",
+                        "PRIVATE_FEEDBACK"),
+                new NetworkPolicy(false, null, "review-token"),
+                ResourceLimits.DEFAULT,
+                null,
+                Map.of(
+                        SandboxLayout.FEEDBACK_COMPOSITION_PATH,
+                        ("{\"destinations\":" + destinations + "}").getBytes(StandardCharsets.UTF_8)),
+                Map.of(),
+                List.of(),
+                SandboxLayout.OUTPUT_PATH,
+                job.getAttempt());
+    }
+
+    private ReviewJobExecutor twoLaunchExecutor(ReviewJob job, ReviewCompositionContinuation kept) {
+        var completed = new SandboxResult(0, Map.of(), "done", false, Duration.ofSeconds(1));
+        when(sandbox.execute(any())).thenReturn(completed);
+        when(practiceAgent.parseResult(completed)).thenReturn(new AgentResult(true, Map.of(), RETURNED_USAGE));
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        lenient().when(kept.admittedResponse(job)).thenReturn("{\"admitted\":[]}".getBytes(StandardCharsets.UTF_8));
+        lenient()
+                .when(jwtIssuer.issueForJobUntil(
+                        eq(job.getId()),
+                        eq(job.getWorkspaceId()),
+                        eq(job.getAttempt()),
+                        any(),
+                        any(),
+                        eq(JobCredentialScope.PUBLIC_REVIEW)))
+                .thenReturn("public-review-token");
+        terminalWriteOf(job, ReviewJobStatus.COMPLETED);
+        var properties = mock(WorkerProperties.class);
+        when(properties.resolvedWorkerId()).thenReturn("worker-1");
+        worker = Optional.of(properties);
+        var executor = executor(mock(AsyncTaskExecutor.class));
+        executor.setCompositionContinuation(kept);
+        return executor;
+    }
+
+    @Test
+    void shouldComposeTheReviewOnTheWorkInALaunchOfItsOwnWithItsOwnCredential() {
+        var job = owedJob();
+        var kept = mock(ReviewCompositionContinuation.class);
+        var executor = twoLaunchExecutor(job, kept);
+        var review = reviewLaunch(job, true);
+
+        executor.executePrepared(job.getId(), job, review);
+
+        var launches = ArgumentCaptor.forClass(SandboxSpec.class);
+        verify(sandbox, times(2)).execute(launches.capture());
+        assertThat(launches.getAllValues().getFirst()).isSameAs(review);
+        var publicReview = launches.getAllValues().getLast();
+        assertThat(publicReview.environment()).containsEntry("PI_COMPOSITION_PHASES", "PUBLIC_REVIEW");
+        assertThat(Objects.requireNonNull(publicReview.networkPolicy()).llmProxyToken())
+                .isEqualTo("public-review-token");
+        assertThat(publicReview.inputFiles()).containsKey(ReviewCompositionContinuation.CONTINUATION_PATH);
+        // The attempt's ten minutes, less the runner's buffer: the second launch gets only what is left.
+        assertThat(Long.parseLong(
+                        Objects.requireNonNull(publicReview.environment().get("AGENT_BUDGET_MS"))))
+                .isBetween(1L, 540_000L);
+    }
+
+    @Test
+    void shouldComposeTheReviewOnTheWorkBeforePrivateFeedbackWhenTheAttemptContinuesAnAdmission() {
+        var job = owedJob();
+        job.setAttempt(1);
+        var kept = mock(ReviewCompositionContinuation.class);
+        var executor = twoLaunchExecutor(job, kept);
+        var review = reviewLaunch(job, true);
+
+        executor.executePrepared(job.getId(), job, review);
+
+        var launches = ArgumentCaptor.forClass(SandboxSpec.class);
+        verify(sandbox, times(2)).execute(launches.capture());
+        assertThat(launches.getAllValues().getFirst().environment())
+                .containsEntry("PI_COMPOSITION_PHASES", "PUBLIC_REVIEW");
+        assertThat(launches.getAllValues().getLast()).isSameAs(review);
+        // The continuing attempt was staged with its admission already.
+        verify(kept, never()).admittedResponse(any());
+    }
+
+    @Test
+    void shouldStartNoSecondLaunchWhenTheReviewAsksForNoFeedbackOnTheWork() {
+        var job = owedJob();
+        var executor = twoLaunchExecutor(job, mock(ReviewCompositionContinuation.class));
+
+        executor.executePrepared(job.getId(), job, reviewLaunch(job, false));
+
+        verify(sandbox, times(1)).execute(any());
+        verify(jwtIssuer, never()).issueForJobUntil(any(), any(), anyInt(), any(), any(), any());
+    }
+
     private ReviewJobExecutor runExecutor(ReviewCompositionContinuation kept, SandboxResult result, boolean success) {
         var properties = mock(WorkerProperties.class);
         when(properties.resolvedWorkerId()).thenReturn("worker-1");
@@ -436,7 +541,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         when(handler.prepareInputs(job)).thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
-        when(jwtIssuer.issueForJobUntil(eq(job.getId()), eq(job.getWorkspaceId()), eq(2), any(), any()))
+        when(jwtIssuer.issueForJobUntil(
+                        eq(job.getId()), eq(job.getWorkspaceId()), eq(2), any(), any(), eq(JobCredentialScope.REVIEW)))
                 .thenReturn("issued-job-token");
         when(practiceAgent.buildSandboxSpec(any()))
                 .thenReturn(new PracticeSandboxSpec(
@@ -472,7 +578,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         eq(job.getWorkspaceId()),
                         eq(2),
                         issuedDeadline.capture(),
-                        issuedExpiry.capture());
+                        issuedExpiry.capture(),
+                        eq(JobCredentialScope.REVIEW));
         var request = ArgumentCaptor.forClass(PracticeAgentRequest.class);
         verify(practiceAgent).buildSandboxSpec(request.capture());
         var execution = ArgumentCaptor.forClass(SandboxSpec.class);

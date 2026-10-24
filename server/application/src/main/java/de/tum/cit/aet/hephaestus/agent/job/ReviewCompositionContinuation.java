@@ -109,6 +109,11 @@ public class ReviewCompositionContinuation {
         }
     }
 
+    /** What the admitting attempt's public review launch composes from: the admission its review launch received. */
+    public byte[] admittedResponse(ReviewJob job) {
+        return mapper.writeValueAsBytes(admission.admittedResponse(job));
+    }
+
     @Transactional
     public void forget(ReviewJob job) {
         bases.deleteForJob(job.getWorkspaceId(), job.getId());

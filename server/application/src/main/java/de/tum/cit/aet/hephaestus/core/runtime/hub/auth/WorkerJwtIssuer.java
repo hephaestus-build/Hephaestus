@@ -54,7 +54,13 @@ public class WorkerJwtIssuer {
      * A job credential that stays valid until {@code expiresAt} and names {@code workDeadline}, the end of the
      * attempt's work. Both are whole seconds when signed; the deadline must not be later than the expiry.
      */
-    public String issueForJobUntil(UUID jobId, Long workspaceId, int attempt, Instant workDeadline, Instant expiresAt) {
+    public String issueForJobUntil(
+            UUID jobId,
+            Long workspaceId,
+            int attempt,
+            Instant workDeadline,
+            Instant expiresAt,
+            JobCredentialScope scope) {
         WorkerSigningKey active = keyRing.active();
         Instant now = Instant.now();
         if (!expiresAt.isAfter(now)) throw new IllegalArgumentException("expiresAt must be in the future");
@@ -68,7 +74,7 @@ public class WorkerJwtIssuer {
                 .withClaim("workspace_id", workspaceId)
                 .withClaim("attempt", attempt)
                 .withClaim(WORK_DEADLINE_CLAIM, workDeadline)
-                .withClaim("scope", List.of(LLM_PROXY_SCOPE))
+                .withClaim("scope", List.of(LLM_PROXY_SCOPE, scope.claim()))
                 .withJWTId(UUID.randomUUID().toString())
                 .withIssuedAt(now)
                 .withNotBefore(now)

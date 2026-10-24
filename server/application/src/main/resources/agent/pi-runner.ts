@@ -26,6 +26,7 @@ import {
 	preparePublicReview,
 	type PreparationOptions,
 	type ComposedFeedback,
+	type CompositionPhase,
 } from "./pi-composition-stage.ts";
 import { DIFF_SOURCE, TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 
@@ -229,6 +230,21 @@ function requiredEnv(name: string): string {
 		throw new Error(`${name} env var is required`);
 	}
 	return value;
+}
+
+/**
+ * The composition phases this launch runs, comma-separated. The server gives each launch one: the review on the work
+ * comes from a launch of its own, and only that launch's credential may prepare it.
+ */
+function compositionPhasesEnv(name: string): ReadonlySet<CompositionPhase> {
+	const named = requiredEnv(name).split(",");
+	const phases = named.filter(
+		(phase): phase is CompositionPhase => phase === "PUBLIC_REVIEW" || phase === "PRIVATE_FEEDBACK",
+	);
+	if (phases.length !== named.length) {
+		throw new Error(`${name} names an unknown composition phase`);
+	}
+	return new Set(phases);
 }
 
 /** What this run spent, in the buckets usage.json reports. */
@@ -734,6 +750,7 @@ export async function runReviewJob(): Promise<void> {
 	const AGENT_DIR = requiredEnv("PI_CODING_AGENT_DIR");
 	const LLM_PROXY_URL = requiredEnv("LLM_PROXY_URL");
 	const LLM_PROXY_TOKEN = requiredEnv("LLM_PROXY_TOKEN");
+	const COMPOSITION_PHASES = compositionPhasesEnv("PI_COMPOSITION_PHASES");
 	const DIRECT_MODEL_TOKENS = positiveIntegerEnv("PI_DIRECT_MODEL_TOKENS");
 	const PRACTICE_CONCURRENCY = positiveIntegerEnv("PI_PRACTICE_CONCURRENCY");
 	if (PRACTICE_CONCURRENCY > 32) {
@@ -2113,9 +2130,13 @@ export async function runReviewJob(): Promise<void> {
 	// after a review was composed or accepted earlier. The server's recorded preparation decides whether it is owed.
 	function compositionExit(): number {
 		if (
+			// A launch that composes one phase reports that phase as owed; the server decides whether it is.
 			!compositionOwed(composedFeedback, {
-				admitting: !continuing,
-				reviewOnWork: admission?.publicReviewed === true || composedFeedback.review !== null,
+				admitting: !continuing || !COMPOSITION_PHASES.has("PRIVATE_FEEDBACK"),
+				reviewOnWork:
+					!COMPOSITION_PHASES.has("PUBLIC_REVIEW") ||
+					admission?.publicReviewed === true ||
+					composedFeedback.review !== null,
 			})
 		) {
 			return 0;
@@ -3676,6 +3697,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			![...assignedInputs.values()].some((inputs) => inputs.scope.kind === "SCAN")
 		) {
 			await composeAdmittedFeedback({
+				phases: COMPOSITION_PHASES,
 				request: compositionRequest,
 				admission,
 				feedback: composedFeedback,
@@ -3744,6 +3766,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			persistComposedFeedback();
 			if (compositionRequest !== null) {
 				await composeAdmittedFeedback({
+					phases: COMPOSITION_PHASES,
 					request: compositionRequest,
 					admission,
 					feedback: composedFeedback,

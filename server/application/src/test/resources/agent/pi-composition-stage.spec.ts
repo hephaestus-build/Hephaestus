@@ -1071,6 +1071,7 @@ for (const failure of ["setup", "deadline"] as const) {
 			});
 		});
 		const run = composeAdmittedFeedback({
+			phases: new Set(["PUBLIC_REVIEW", "PRIVATE_FEEDBACK"]),
 			request: {
 				contractVersion: 3,
 				destinations: { ON_WORK: { maxPieces: 1 }, CONVERSATION: { maxPieces: 1 } },
@@ -1161,6 +1162,7 @@ void test("only changed public history composes again in fresh sessions, within 
 		let sessions = 0;
 		const phases: string[] = [];
 		await composeAdmittedFeedback({
+			phases: new Set(["PUBLIC_REVIEW", "PRIVATE_FEEDBACK"]),
 			request: {
 				contractVersion: 3,
 				destinations: { ON_WORK: { maxPieces: 1 } },
@@ -1194,6 +1196,109 @@ void test("only changed public history composes again in fresh sessions, within 
 		assert.deepEqual(phases, ["PUBLIC_REVIEW", "PRIVATE_FEEDBACK"]);
 	}
 });
+
+for (const launch of ["PRIVATE_FEEDBACK", "PUBLIC_REVIEW"] as const) {
+	void test(`a launch for ${launch} composes and prepares that phase only`, async () => {
+		const { composeAdmittedFeedback } =
+			await import("../../../main/resources/agent/pi-composition-stage.ts");
+		const admission = parseAdmission(
+			JSON.parse(readFileSync(new URL("admission-response.json", import.meta.url), "utf8")),
+		);
+		const feedback: ComposedFeedback = {
+			compositionFailures: [],
+			contractVersion: 3,
+			admissionDigest: admission.digest,
+			results: [],
+			preparedTargets: [],
+			feedback: [],
+			review: null,
+			preparation: null,
+		};
+		const composed: string[] = [];
+		const prepared: string[] = [];
+		await composeAdmittedFeedback({
+			phases: new Set([launch]),
+			request: {
+				contractVersion: 3,
+				destinations: { ON_WORK: { maxPieces: 1 }, CONVERSATION: { maxPieces: 1 } },
+				minDistinctItems: 2,
+				onWorkCopyForms: [],
+			},
+			admission,
+			feedback,
+			routes: null,
+			notReached: [],
+			remainingMs: 5000,
+			onDeadline: () => undefined,
+			stage: {
+				composeReview: async () => {
+					composed.push("PUBLIC_REVIEW");
+					return "DONE";
+				},
+				composePrivately: async () => {
+					composed.push("PRIVATE_FEEDBACK");
+				},
+			},
+			prepare: async (_safety, phase) => {
+				prepared.push(phase);
+			},
+			persist: () => undefined,
+			after: () => undefined,
+		});
+		assert.deepEqual(composed, [launch]);
+		assert.deepEqual(prepared, [launch]);
+	});
+
+	void test(`a launch for ${launch} at its ceiling owes the review on the work and only its own private feedback`, async () => {
+		const { composeAdmittedFeedback } =
+			await import("../../../main/resources/agent/pi-composition-stage.ts");
+		const admission = parseAdmission(
+			JSON.parse(readFileSync(new URL("admission-response.json", import.meta.url), "utf8")),
+		);
+		const feedback: ComposedFeedback = {
+			compositionFailures: [],
+			contractVersion: 3,
+			admissionDigest: admission.digest,
+			results: [],
+			preparedTargets: [],
+			feedback: [],
+			review: null,
+			preparation: null,
+		};
+		await composeAdmittedFeedback({
+			phases: new Set([launch]),
+			request: {
+				contractVersion: 3,
+				destinations: { ON_WORK: { maxPieces: 1 }, CONVERSATION: { maxPieces: 1 } },
+				minDistinctItems: 2,
+				onWorkCopyForms: [],
+			},
+			admission,
+			feedback,
+			routes: null,
+			notReached: [],
+			remainingMs: 0,
+			onDeadline: () => undefined,
+			stage: {
+				composeReview: async () => assert.fail("no time is left to compose"),
+				composePrivately: async () => assert.fail("no time is left to compose"),
+			},
+			prepare: async () => assert.fail("nothing was composed to prepare"),
+			persist: () => undefined,
+			after: () => undefined,
+		});
+		// The review on the work stays owed from either launch, so a later attempt can compose it in its own.
+		assert.deepEqual(
+			feedback.compositionFailures,
+			launch === "PRIVATE_FEEDBACK"
+				? [
+						{ phase: "PUBLIC_REVIEW", reason: "SAFETY" },
+						{ phase: "PRIVATE_FEEDBACK", reason: "SAFETY" },
+					]
+				: [{ phase: "PUBLIC_REVIEW", reason: "SAFETY" }],
+		);
+	});
+}
 
 const composedWithFailures = (
 	failures: ComposedFeedback["compositionFailures"],

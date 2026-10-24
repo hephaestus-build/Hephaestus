@@ -248,12 +248,13 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/internal/llm/public-feedback-history", "/internal/llm/prepare-feedback"})
-    void servesCompositionOnlyOnTheGatewayForTheAuthenticatedCurrentAttempt(String path) throws Exception {
+    @CsvSource({"/internal/llm/public-feedback-history,public_review", "/internal/llm/prepare-feedback,review"})
+    void servesCompositionOnlyOnTheGatewayForTheAuthenticatedCurrentAttempt(String path, String launch)
+            throws Exception {
         ReviewJob job = runningJobOnAttempt(1);
         when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
-        when(jwtVerifier.verify("dead-attempt")).thenReturn(jobJwt(job, 0));
+        when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1, "llm_proxy", launch));
+        when(jwtVerifier.verify("dead-attempt")).thenReturn(jobJwt(job, 0, "llm_proxy", launch));
         MockHttpServletRequest current = request("POST", path, GATEWAY_PORT);
         current.addHeader("Authorization", "Bearer current-attempt");
         assertThat(answerTo(current)).isEqualTo(200);
@@ -301,7 +302,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         "POST,/internal/llm/responses",
         "POST,/internal/llm/practice-script/chat/chat/completions",
         "POST,/internal/llm/admit-results",
-        "POST,/internal/llm/public-feedback-history",
         "GET,/internal/llm/runtime/{job}",
         "GET,/internal/llm/runtime/{job}/workspace",
         "POST,/internal/llm/runtime/{job}/result"
@@ -316,6 +316,42 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
 
         assertThat(answerTo(request)).isEqualTo(200);
         assertThat(servedAs.get()).isNotNull();
+    }
+
+    /** The public review launch reads, calls models and uploads; it never measures or admits. */
+    @ParameterizedTest
+    @CsvSource({
+        "POST,/internal/llm/chat/completions,200",
+        "POST,/internal/llm/responses,200",
+        "POST,/internal/llm/public-feedback-history,200",
+        "POST,/internal/llm/prepare-feedback,200",
+        "GET,/internal/llm/runtime/{job},200",
+        "GET,/internal/llm/runtime/{job}/workspace,200",
+        "POST,/internal/llm/runtime/{job}/result,200",
+        "POST,/internal/llm/practice-script/chat/chat/completions,403",
+        "POST,/internal/llm/admit-results,403"
+    })
+    void shouldServeThePublicReviewLaunchOnlyWhatItsCompositionNeeds(String method, String path, int status)
+            throws Exception {
+        ReviewJob job = runningJobOnAttempt(1);
+        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jwtVerifier.verify("public-review")).thenReturn(jobJwt(job, 1, "llm_proxy", "public_review"));
+
+        assertThat(answerTo(withToken(
+                        request(method, path.replace("{job}", job.getId().toString()), GATEWAY_PORT), "public-review")))
+                .isEqualTo(status);
+    }
+
+    @Test
+    void shouldRefuseThePublicFeedbackHistoryToTheReviewLaunch() throws Exception {
+        ReviewJob job = runningJobOnAttempt(1);
+        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jwtVerifier.verify("review")).thenReturn(jobJwt(job, 1));
+
+        assertThat(answerTo(
+                        withToken(request("POST", "/internal/llm/public-feedback-history", GATEWAY_PORT), "review")))
+                .isEqualTo(403);
+        assertThat(servedAs.get()).isNull();
     }
 
     @Test
@@ -655,17 +691,18 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         return job;
     }
 
+    /** The review launch's credential. */
     private static JobJwt jobJwt(ReviewJob job, int attempt) {
-        return jobJwt(job, attempt, "llm_proxy");
+        return jobJwt(job, attempt, "llm_proxy", "review");
     }
 
-    private static JobJwt jobJwt(ReviewJob job, int attempt, String scope) {
+    private static JobJwt jobJwt(ReviewJob job, int attempt, String... scopes) {
         Instant now = Instant.now();
         return new JobJwt(
                 job.getId(),
                 job.getWorkspaceId(),
                 attempt,
-                Set.of(scope),
+                Set.of(scopes),
                 UUID.randomUUID().toString(),
                 now,
                 now.plusSeconds(60),

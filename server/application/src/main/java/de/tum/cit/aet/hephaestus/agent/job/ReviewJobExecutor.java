@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
@@ -31,6 +33,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobCredentialScope;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
@@ -730,6 +733,9 @@ public class ReviewJobExecutor {
 
     @Nullable
     ReviewJobStatus executePrepared(UUID jobId, ReviewJob job, SandboxSpec sandboxSpec) {
+        // A continuing attempt composes private feedback only after the review on the work is accepted.
+        boolean continuation = ResultAdmissionService.isContinuation(job);
+        SandboxResult publicReview = continuation ? executePublicReview(jobId, job, sandboxSpec, false) : null;
         SandboxResult result = sandboxManager.execute(sandboxSpec);
         AgentResult agentResult = practiceAgent.parseResult(result);
 
@@ -747,12 +753,14 @@ public class ReviewJobExecutor {
                     job.getAttempt() + 1);
             return null;
         }
+        if (!continuation && !result.timedOut()) publicReview = executePublicReview(jobId, job, sandboxSpec, true);
         // An admitted run that stopped composing its feedback continues it as a new attempt when the locked job owes it
         // and its fences hold. A run the sandbox stopped at its time limit had no chance to say so; the same locked
-        // job,
-        // its recorded preparation and the same fences decide.
-        if ((result.exitCode() == SandboxLayout.EXIT_COMPOSITION_OWED || result.timedOut())
-                && continueComposition(job, agentResult, result)) {
+        // job, its recorded preparation and the same fences decide. The review on the work is the one a later attempt
+        // can still owe, so its launch's report decides first.
+        SandboxResult stopped =
+                compositionStopped(publicReview) ? publicReview : compositionStopped(result) ? result : null;
+        if (stopped != null && continueComposition(job, agentResult, stopped)) {
             log.warn(
                     "Requeuing job {}: feedback composition stopped before it finished (attempt {})",
                     jobId,
@@ -773,6 +781,86 @@ public class ReviewJobExecutor {
         }
 
         return terminalStatus;
+    }
+
+    private static boolean compositionStopped(@Nullable SandboxResult result) {
+        return result != null && (result.exitCode() == SandboxLayout.EXIT_COMPOSITION_OWED || result.timedOut());
+    }
+
+    /**
+     * Composes the review on the work in a launch of its own: its sessions have no shell, and only its credential may
+     * prepare that review. It runs while the attempt still owns its admitted job, before the work deadline, and only
+     * when the review asks for feedback on the work that no earlier attempt prepared. A launch that cannot start leaves
+     * the admitted results to end the attempt as they would without it.
+     *
+     * @param admitting whether the review launch admitted the results now, so this launch is staged with that admission
+     */
+    private @Nullable SandboxResult executePublicReview(
+            UUID jobId, ReviewJob claimed, SandboxSpec review, boolean admitting) {
+        ReviewCompositionContinuation staging = compositionContinuation;
+        ReviewJob current = jobRepository.findById(jobId).orElse(null);
+        if (staging == null
+                || current == null
+                || current.getStatus() != ReviewJobStatus.RUNNING
+                || current.getAttempt() != claimed.getAttempt()
+                || !Objects.equals(current.getWorkerId(), workerId)
+                || !ResultAdmissionService.isAdmitted(current)
+                || current.getPublicReviewDigest() != null
+                || !requestsReviewOnTheWork(review)) return null;
+        Instant workDeadline = Instant.ofEpochMilli(
+                Long.parseLong(Objects.requireNonNull(review.environment().get("SANDBOX_WORK_DEADLINE_MS"))));
+        if (!workDeadline.isAfter(Instant.now())) return null;
+        try {
+            String token = workerJwtIssuer.issueForJobUntil(
+                    jobId,
+                    current.getWorkspaceId(),
+                    current.getAttempt(),
+                    workDeadline,
+                    workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE),
+                    JobCredentialScope.PUBLIC_REVIEW);
+            Map<String, byte[]> inputs = new HashMap<>(review.inputFiles());
+            if (admitting)
+                inputs.put(ReviewCompositionContinuation.CONTINUATION_PATH, staging.admittedResponse(current));
+            NetworkPolicy network = Objects.requireNonNull(review.networkPolicy(), "A review launch has a gateway");
+            return sandboxManager.execute(new SandboxSpec(
+                    review.jobId(),
+                    review.image(),
+                    review.command(),
+                    PracticePiAdapter.publicReviewEnvironment(
+                            review.environment(), Duration.between(Instant.now(), workDeadline)),
+                    new NetworkPolicy(network.internetAccess(), network.llmProxyUrl(), token),
+                    review.resourceLimits(),
+                    review.securityProfile(),
+                    inputs,
+                    review.inputFilesOnDisk(),
+                    review.inputDirectories(),
+                    review.outputPath(),
+                    review.attempt()));
+        } catch (SandboxCancelledException cancelled) {
+            throw cancelled;
+        } catch (RuntimeException failed) {
+            log.warn(
+                    "The review on the work was not composed for job {}: {}",
+                    jobId,
+                    failed.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    private boolean requestsReviewOnTheWork(SandboxSpec review) {
+        String path = SandboxLayout.FEEDBACK_COMPOSITION_PATH;
+        try {
+            byte[] request = review.inputFiles().get(path);
+            if (request == null) {
+                Path staged = review.inputFilesOnDisk().get(path);
+                if (staged == null) return false;
+                request = Files.readAllBytes(staged);
+            }
+            return FeedbackCompositionInputs.requestsReviewOnTheWork(request, objectMapper);
+        } catch (IOException | RuntimeException unreadable) {
+            log.warn("The staged composition request of job {} is unreadable", review.jobId());
+            return false;
+        }
     }
 
     static String randomSpanId() {
@@ -831,7 +919,12 @@ public class ReviewJobExecutor {
                     Instant.now().plusSeconds(snapshot.timeoutSeconds()).truncatedTo(ChronoUnit.SECONDS);
             Instant tokenExpiry = workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE);
             String jobToken = workerJwtIssuer.issueForJobUntil(
-                    jobId, job.getWorkspaceId(), job.getAttempt(), workDeadline, tokenExpiry);
+                    jobId,
+                    job.getWorkspaceId(),
+                    job.getAttempt(),
+                    workDeadline,
+                    tokenExpiry,
+                    JobCredentialScope.REVIEW);
             stage.set(PreparationFailure.Stage.SPEC);
             PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
                     snapshot.model().apiProtocol().wire(),

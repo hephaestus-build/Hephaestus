@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobCredentialScope;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
@@ -208,7 +209,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         Instant work = Instant.now().plus(Duration.ofMinutes(5));
         AuthenticationResult result = authenticate(jwtIssuer.issueForJobUntil(
-                job.getId(), workspace.getId() + 1, job.getAttempt(), work, work.plus(Duration.ofMinutes(10))));
+                job.getId(),
+                workspace.getId() + 1,
+                job.getAttempt(),
+                work,
+                work.plus(Duration.ofMinutes(10)),
+                JobCredentialScope.REVIEW));
 
         assertThat(result.status()).isEqualTo(401);
         assertThat(result.authentication()).isNull();
@@ -302,7 +308,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isEqualTo("job:" + job.getId());
         assertThat(authentication.getAuthorities())
                 .extracting(GrantedAuthority::getAuthority)
-                .containsExactly("SCOPE_" + WorkerJwtIssuer.LLM_PROXY_SCOPE);
+                .containsExactlyInAnyOrder(
+                        "SCOPE_" + WorkerJwtIssuer.LLM_PROXY_SCOPE, "SCOPE_" + JobCredentialScope.REVIEW.claim());
     }
 
     @ParameterizedTest
@@ -354,7 +361,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
             Instant work = Instant.now().plusSeconds(1);
             String token = jwtIssuer.issueForJobUntil(
-                    job.getId(), workspace.getId(), job.getAttempt(), work, work.plus(Duration.ofMinutes(10)));
+                    job.getId(),
+                    workspace.getId(),
+                    job.getAttempt(),
+                    work,
+                    work.plus(Duration.ofMinutes(10)),
+                    JobCredentialScope.REVIEW);
             // Real time passes the signed work deadline; the token itself stays valid for the upload.
             while (!Instant.now().isAfter(work)) Thread.sleep(50);
 
@@ -834,7 +846,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private String tokenFor(ReviewJob job) {
         Instant work = Instant.now().plus(Duration.ofMinutes(5));
         return jwtIssuer.issueForJobUntil(
-                job.getId(), workspace.getId(), job.getAttempt(), work, work.plus(Duration.ofMinutes(10)));
+                job.getId(),
+                workspace.getId(),
+                job.getAttempt(),
+                work,
+                work.plus(Duration.ofMinutes(10)),
+                JobCredentialScope.REVIEW);
     }
 
     private ProxyRouting routingOf(AuthenticationResult result) {

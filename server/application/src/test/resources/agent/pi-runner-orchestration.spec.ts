@@ -4354,6 +4354,7 @@ if (scenario !== undefined && scenario !== "") {
 								PI_DIRECT_MODEL_TOKENS: "1000",
 								LLM_PROXY_URL: "https://unused.invalid",
 								LLM_PROXY_TOKEN: "test-token",
+								PI_COMPOSITION_PHASES: "PUBLIC_REVIEW,PRIVATE_FEEDBACK",
 							},
 							encoding: "utf8",
 							timeout: 10_000,

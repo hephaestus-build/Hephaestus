@@ -2531,6 +2531,8 @@ async function composePublicReview(
 }
 
 export async function composeAdmittedFeedback(options: {
+	/** The phases this launch composes; the review on the work comes from a launch of its own. */
+	phases: ReadonlySet<CompositionPhase>;
 	request: CompositionRequest;
 	admission: Admission;
 	feedback: ComposedFeedback;
@@ -2544,6 +2546,7 @@ export async function composeAdmittedFeedback(options: {
 	after: () => void;
 }): Promise<void> {
 	const {
+		phases,
 		request,
 		admission,
 		feedback,
@@ -2559,6 +2562,7 @@ export async function composeAdmittedFeedback(options: {
 	if (admission.results.length === 0) {
 		return;
 	}
+	// A stopped review on the work is recorded by every launch, so a later attempt can still compose it.
 	const markRemaining = (reason: CompositionFailureReason) => {
 		if (
 			!admission.publicReviewed &&
@@ -2569,6 +2573,7 @@ export async function composeAdmittedFeedback(options: {
 			recordCompositionFailure(feedback, "PUBLIC_REVIEW", reason);
 		}
 		if (
+			phases.has("PRIVATE_FEEDBACK") &&
 			PRIVATE_DESTINATIONS.some((destination) => request.destinations[destination] !== undefined) &&
 			undecidedPrivatePractices(admission, feedback, routes).length > 0
 		) {
@@ -2584,16 +2589,21 @@ export async function composeAdmittedFeedback(options: {
 	}
 	const safety = scheduleDeadline(remainingMs, onDeadline);
 	try {
-		const reviewable = publicResults(admission.results);
-		if (
-			!admission.publicReviewed &&
-			request.destinations.ON_WORK !== undefined &&
-			reviewable.length > 0
-		) {
-			await composePublicReview(stage, request, reviewable, notReached, safety, feedback);
+		if (phases.has("PUBLIC_REVIEW")) {
+			const reviewable = publicResults(admission.results);
+			if (
+				!admission.publicReviewed &&
+				request.destinations.ON_WORK !== undefined &&
+				reviewable.length > 0
+			) {
+				await composePublicReview(stage, request, reviewable, notReached, safety, feedback);
+			}
+			await prepare(safety, "PUBLIC_REVIEW");
 		}
-		await prepare(safety, "PUBLIC_REVIEW");
 		try {
+			if (!phases.has("PRIVATE_FEEDBACK")) {
+				return;
+			}
 			if (privatelyComposable(admission, routes).length > 0 && !safety.expired()) {
 				await stage.composePrivately(request, safety, notReached);
 			}

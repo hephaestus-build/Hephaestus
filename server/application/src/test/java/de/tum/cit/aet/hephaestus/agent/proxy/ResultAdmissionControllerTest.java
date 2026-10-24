@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
@@ -20,6 +22,7 @@ import java.util.stream.Stream;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.TestingAuthenticationToken;
@@ -60,7 +63,8 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
         var id = UUID.randomUUID();
         var request = new PrepareFeedbackRequestDTO(UUID.randomUUID(), id, 0, List.of(), List.of(), true, null);
         var now = Instant.now();
-        var jwt = new JobJwt(id, 1L, 0, Set.of("llm_proxy"), "test", now, now.plusSeconds(60), now.plusSeconds(30));
+        var jwt = new JobJwt(
+                id, 1L, 0, Set.of("llm_proxy", "public_review"), "test", now, now.plusSeconds(60), now.plusSeconds(30));
         var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt, "worker"), jwt.scopes(), null);
         when(admission.prepareFeedback(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, "worker"), request))
                 .thenThrow(new PublicationContextRefusedException(FeedbackStopReason.PUBLIC_HISTORY_CHANGED));
@@ -70,6 +74,25 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
                     Assertions.assertThat(error.getBody().getProperties())
                             .containsEntry("code", "PUBLIC_HISTORY_CHANGED");
                 });
+    }
+
+    @ParameterizedTest
+    @CsvSource({"review,true", "public_review,false"})
+    void shouldRefuseToPrepareTheFeedbackOfTheOtherLaunch(String launch, boolean publicComposition) {
+        var admission = mock(ResultAdmissionService.class);
+        var id = UUID.randomUUID();
+        var request =
+                new PrepareFeedbackRequestDTO(UUID.randomUUID(), id, 0, List.of(), List.of(), publicComposition, null);
+        var now = Instant.now();
+        var jwt = new JobJwt(
+                id, 1L, 0, Set.of("llm_proxy", launch), "test", now, now.plusSeconds(60), now.plusSeconds(30));
+        var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt, "worker"), jwt.scopes(), null);
+
+        assertThatThrownBy(() -> new ResultAdmissionController(admission).prepareFeedback(request, authentication))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        error -> assertThat(error.getStatusCode().value()).isEqualTo(403));
+        verifyNoInteractions(admission);
     }
 
     private static Stream<RuntimeException> attemptConflicts() {

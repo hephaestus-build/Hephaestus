@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PublicFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobCredentialScope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -60,6 +61,11 @@ public class ResultAdmissionController {
     public PrepareFeedbackResponseDTO prepareFeedback(
             @Valid @RequestBody PrepareFeedbackRequestDTO request, Authentication authentication) {
         var identity = attemptOf(authentication);
+        // The review on the work comes only from the launch that holds the public review scope, private feedback only
+        // from the review launch: neither credential prepares the other's feedback.
+        var required = request.publicComposition() ? JobCredentialScope.PUBLIC_REVIEW : JobCredentialScope.REVIEW;
+        if (!holds(authentication, required))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This credential cannot prepare that feedback");
         return checked(() -> admission.prepareFeedback(identity, request));
     }
 
@@ -91,6 +97,11 @@ public class ResultAdmissionController {
             refused.getBody().setProperty("code", stale.reason().name());
             throw refused;
         }
+    }
+
+    private static boolean holds(Authentication authentication, JobCredentialScope scope) {
+        String authority = "SCOPE_" + scope.claim();
+        return authentication.getAuthorities().stream().anyMatch(granted -> authority.equals(granted.getAuthority()));
     }
 
     private static ResultAdmissionService.AdmissionIdentity attemptOf(Authentication authentication) {

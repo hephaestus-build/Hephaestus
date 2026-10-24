@@ -51,6 +51,17 @@ The server returns allocated result and problem identities with verified citatio
 Composition can refer only to those admitted records.
 An ids-only admission response cannot authorize an invented problem reference.
 
+An admitting attempt runs in two sandbox launches.
+The review launch measures, admits the results and composes private feedback.
+After it, a public review launch composes only the review on the work, from the admission that the server stages.
+The sessions of the public review launch have no shell.
+A continuing attempt runs the public review launch first and then composes private feedback.
+
+Each launch has a credential with one job scope: `review` or `public_review`.
+The gateway refuses admission and practice script calls to a `public_review` credential.
+It refuses public history to a `review` credential.
+Each credential prepares only the feedback of its own launch.
+
 The [workspace ABI](./agent/workspace-abi.mdx) owns the exact result and history paths.
 A history refusal is not an empty result list.
 Source custody is checked before confirmed historical words enter the sandbox.

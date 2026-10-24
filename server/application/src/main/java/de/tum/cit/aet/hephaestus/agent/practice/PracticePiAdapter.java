@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -50,6 +51,12 @@ public class PracticePiAdapter {
     static final String DIRECT_MODEL_TOKENS_ENV = "PI_DIRECT_MODEL_TOKENS";
 
     /**
+     * The feedback composition phases one launch runs. The review launch composes private feedback only; the review on
+     * the work comes from a launch of its own whose sessions have no shell ({@link #publicReviewEnvironment}).
+     */
+    static final String COMPOSITION_PHASES_ENV = "PI_COMPOSITION_PHASES";
+
+    /**
      * The shortest job timeout: more than the runner's shutdown buffer, so the runner has work time at all. No
      * program stage is reserved; the programs run inside the runner's own budget.
      */
@@ -75,6 +82,7 @@ public class PracticePiAdapter {
         environment.put(PRACTICE_OUTPUT_TOKENS_ENV, Integer.toString(reviewProperties.practiceOutputTokens()));
         environment.put(PRACTICE_CONCURRENCY_ENV, Integer.toString(reviewProperties.practiceConcurrency()));
         environment.put(DIRECT_MODEL_TOKENS_ENV, Long.toString(reviewProperties.directModelTokensPerAttempt()));
+        environment.put(COMPOSITION_PHASES_ENV, "PRIVATE_FEEDBACK");
         Double temperature = reviewProperties.samplingTemperature();
         if (temperature != null) {
             environment.put(SAMPLING_TEMPERATURE_ENV, temperature.toString());
@@ -88,6 +96,18 @@ public class PracticePiAdapter {
                 null,
                 plan.networkPolicy(),
                 plan.promptDigest());
+    }
+
+    /**
+     * A review launch's environment for the launch that composes only the review on the work, within the time the
+     * attempt has left. With none left, its runner records that review as stopped, so a later attempt composes it.
+     */
+    public static Map<String, String> publicReviewEnvironment(Map<String, String> review, Duration left) {
+        Map<String, String> environment = new LinkedHashMap<>(review);
+        environment.put(COMPOSITION_PHASES_ENV, "PUBLIC_REVIEW");
+        long budget = left.minusSeconds(PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS).toMillis();
+        environment.put(PiRuntimeFactory.AGENT_BUDGET_ENV, Long.toString(Math.max(1, budget)));
+        return Map.copyOf(environment);
     }
 
     public AgentResult parseResult(SandboxResult sandboxResult) {

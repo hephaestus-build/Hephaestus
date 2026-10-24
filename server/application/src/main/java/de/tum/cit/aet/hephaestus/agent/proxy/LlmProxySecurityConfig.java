@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobCredentialScope;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.core.web.PayloadSizeFilter;
@@ -82,11 +83,11 @@ class LlmProxySecurityConfig {
         RequestMatcher models = new OrRequestMatcher(
                 paths.matcher(HttpMethod.POST, "/internal/llm/chat/completions"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/responses"));
-        RequestMatcher reviewCalls = new OrRequestMatcher(
-                practiceScriptCalls,
-                paths.matcher(HttpMethod.POST, "/internal/llm/admit-results"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/public-feedback-history"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/prepare-feedback"));
+        RequestMatcher measurementCalls = new OrRequestMatcher(
+                practiceScriptCalls, paths.matcher(HttpMethod.POST, "/internal/llm/admit-results"));
+        RequestMatcher publicHistory = paths.matcher(HttpMethod.POST, "/internal/llm/public-feedback-history");
+        RequestMatcher feedbackPreparation = paths.matcher(HttpMethod.POST, "/internal/llm/prepare-feedback");
+        RequestMatcher reviewCalls = new OrRequestMatcher(measurementCalls, publicHistory, feedbackPreparation);
         RequestMatcher modelCalls = new OrRequestMatcher(models, reviewCalls);
         RequestMatcher runtimeReads = new OrRequestMatcher(
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}"),
@@ -131,6 +132,16 @@ class LlmProxySecurityConfig {
                         .requestMatchers(turnEndpoints)
                         .access(AuthorizationManagers.allOf(
                                 hasScope(WorkerJwtIssuer.LLM_PROXY_SCOPE), caller(identity -> identity.turn() != null)))
+                        // Each review launch holds one job scope: ResultAdmissionController decides which kind of
+                        // feedback a preparation may carry.
+                        .requestMatchers(measurementCalls)
+                        .access(jobCall(hasScope(JobCredentialScope.REVIEW.claim())))
+                        .requestMatchers(publicHistory)
+                        .access(jobCall(hasScope(JobCredentialScope.PUBLIC_REVIEW.claim())))
+                        .requestMatchers(feedbackPreparation)
+                        .access(jobCall(AuthorizationManagers.anyOf(
+                                hasScope(JobCredentialScope.REVIEW.claim()),
+                                hasScope(JobCredentialScope.PUBLIC_REVIEW.claim()))))
                         .anyRequest()
                         .access(AuthorizationManagers.allOf(
                                 hasScope(WorkerJwtIssuer.LLM_PROXY_SCOPE), caller(identity -> identity.job() != null))))
@@ -166,6 +177,13 @@ class LlmProxySecurityConfig {
     @Order(Ordered.HIGHEST_PRECEDENCE + 3)
     SecurityFilterChain blockLlmProxyOnOtherConnectors(HttpSecurity http) throws Exception {
         return hidden(http, PathPatternRequestMatcher.withDefaults().matcher("/internal/llm/**"));
+    }
+
+    /** A review job's call that its credential's job scope permits. */
+    private static AuthorizationManager<RequestAuthorizationContext> jobCall(
+            AuthorizationManager<RequestAuthorizationContext> jobScope) {
+        return AuthorizationManagers.allOf(
+                hasScope(WorkerJwtIssuer.LLM_PROXY_SCOPE), caller(identity -> identity.job() != null), jobScope);
     }
 
     /** Admits an authenticated sandbox caller of one kind. */
