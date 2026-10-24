@@ -748,8 +748,9 @@ void test("a reused image skips only building, merging and attesting", async () 
 		workflow.getIn(["jobs", "merge", "if"]),
 		`\${{ inputs.publish && !cancelled() && (needs.reuse.outputs.digest != '' || needs.build.result == 'success') }}`,
 	);
-	// The queue run already scanned the image it built, and its verdict gated the merge.
-	assert.equal(workflow.getIn(["jobs", "scan", "needs"]), "build");
+	// The queue run already scanned the image it built, in the build this skips, and its verdict
+	// gated the merge.
+	assert.equal(workflow.hasIn(["jobs", "scan"]), false);
 	const steps = workflow.getIn(["jobs", "merge", "steps"]);
 	assert.ok(isSeq(steps));
 	const conditions = Object.fromEntries(

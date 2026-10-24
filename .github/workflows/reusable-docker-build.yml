@@ -160,7 +160,10 @@ jobs:
     needs: reuse
     if: ${{ !cancelled() && needs.reuse.outputs.digest == '' }}
     strategy:
-      fail-fast: true
+      # Each platform scans in its own build, so one platform's refusal must not cancel the other's
+      # scan and evidence. A broken build therefore lets its sibling finish; the merge still waits
+      # for every build to succeed.
+      fail-fast: false
       matrix:
         platform: ${{ fromJSON(inputs.platforms) }}
     timeout-minutes: 45
@@ -246,7 +249,7 @@ jobs:
           path: ${{ runner.temp }}/application
 
       - uses: ./.github/actions/setup-toolchain
-        if: inputs.use-buildpacks
+        if: inputs.use-buildpacks || (inputs.publish && inputs.scan-images)
         with:
           install: "none"
 
@@ -319,6 +322,60 @@ jobs:
             exit 1
           fi
           touch "$RUNNER_TEMP/digests/$PLATFORM_PAIR/${digest#sha256:}"
+
+      # The scan runs on the runner that built the platform, before its digest reaches the merge, so
+      # a refused image never enters an index. Re-running the job scans a fresh build of the platform.
+      - uses: ./.github/actions/setup-release-security-tools
+        if: inputs.publish && inputs.scan-images
+        with:
+          install-syft: "true"
+
+      - name: Resolve the platform subject
+        id: subject
+        if: inputs.publish && inputs.scan-images
+        env:
+          DIGEST_DIRECTORY: ${{ runner.temp }}/digests/${{ steps.prep.outputs.platform_pair }}
+          IMAGE_REPOSITORY: ${{ inputs.registry }}/${{ inputs.image-name }}
+          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
+          SCAN_PLATFORM: ${{ matrix.platform }}
+        run: node scripts/resolve-image-scan-subject.ts
+
+      # A blocking gate inherits Trivy's database availability as a hard dependency, so the
+      # retries and the mirror fallback live in one action rather than in each caller.
+      - uses: ./.github/actions/download-trivy-db
+        if: inputs.publish && inputs.scan-images
+        with:
+          database-artifact: ${{ inputs.database-artifact }}
+
+      # Trivy and Syft pull through the job's registry login, so the package-writing token is not
+      # also handed to them as environment variables.
+      - name: Enforce the release vulnerability policy
+        if: inputs.publish && inputs.scan-images
+        env:
+          IMAGE: ${{ steps.subject.outputs.image }}
+          REPOSITORY: ${{ inputs.registry }}/${{ inputs.image-name }}
+          SCAN_PLATFORM: ${{ matrix.platform }}
+          SUBJECT_DIGEST: ${{ steps.subject.outputs.digest }}
+          REPORT_STEM: ${{ steps.subject.outputs.report-stem }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          trivy image --skip-db-update --scanners vuln --format json \
+            --output "reports/$REPORT_STEM.json" "$REPOSITORY@$SUBJECT_DIGEST"
+          node scripts/check-release-vulnerabilities.ts "$IMAGE" "$SCAN_PLATFORM" "$SUBJECT_DIGEST" \
+            "$REPOSITORY" "reports/$REPORT_STEM.json" security/vulnerability-policy.json \
+            "reports/$REPORT_STEM.policy.json"
+
+      # The policy result names the CVEs; the gate's exit status alone cannot.
+      - name: Upload the vulnerability policy result
+        if: ${{ !cancelled() && steps.subject.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          # Per attempt, so re-running a refused build can record its result again.
+          name: vulnerability-policy-${{ steps.subject.outputs.report-stem }}-${{ github.run_attempt }}
+          path: reports
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload digest
         if: inputs.publish
@@ -413,8 +470,8 @@ jobs:
           docker buildx imagetools create "${args[@]}"
           merged=$(jq -er '."containerimage.descriptor".digest' "$RUNNER_TEMP/merged-image.json")
           [[ "$merged" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-          # The scans use these build artifacts while this job assembles and verifies the index.
-          # Refuse publication if its real platform leaves differ from the scanned subjects.
+          # Each build scanned the digest it handed over in these artifacts.
+          # Refuse publication if the index's real platform leaves differ from those scanned subjects.
           docker buildx imagetools inspect "$INPUTS_REGISTRY/$INPUTS_IMAGE_NAME@$merged" --raw |
             jq -e --argjson expected "$expected" '
               [.manifests[] | select(.platform.os != "unknown" or .platform.architecture != "unknown")
@@ -492,96 +549,3 @@ jobs:
             --metadata-file "$RUNNER_TEMP/published-image.json" "$IMAGE_REF"
           PUBLISHED_DIGEST=$(jq -er '."containerimage.descriptor".digest' "$RUNNER_TEMP/published-image.json")
           [[ "$PUBLISHED_DIGEST" = "${IMAGE_REF##*@}" ]]
-
-  scan:
-    name: Scan ${{ matrix.platform }} Image
-    needs: build
-    if: ${{ inputs.scan-images && inputs.publish && !cancelled() && needs.build.result == 'success' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: ${{ fromJSON(inputs.platforms) }}
-    timeout-minutes: 20
-    runs-on: ubuntu-24.04
-    env:
-      SCAN_PLATFORM: ${{ matrix.platform }}
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "none"
-
-      - uses: ./.github/actions/setup-release-security-tools
-        with:
-          install-syft: "true"
-
-      # Caller-selected registry, not GHCR-only; see ci-cd.mdx § Shared setup actions.
-      - name: Log in to Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ${{ inputs.registry }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Prepare digest artifact name
-        id: prep
-        env:
-          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
-        run: |
-          echo "image_name=${INPUT_IMAGE_NAME//\//-}" >> "$GITHUB_OUTPUT"
-          echo "platform_pair=${SCAN_PLATFORM//\//-}" >> "$GITHUB_OUTPUT"
-
-      - name: Download platform digest
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: digests-${{ steps.prep.outputs.image_name }}-${{ steps.prep.outputs.platform_pair }}
-          path: ${{ runner.temp }}/scan-digest
-
-      - name: Resolve the platform subject
-        id: subject
-        env:
-          DIGEST_DIRECTORY: ${{ runner.temp }}/scan-digest/${{ steps.prep.outputs.platform_pair }}
-          IMAGE_REPOSITORY: ${{ inputs.registry }}/${{ inputs.image-name }}
-          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
-        run: node scripts/resolve-image-scan-subject.ts
-
-      # A blocking gate inherits Trivy's database availability as a hard dependency, so the
-      # retries and the mirror fallback live in one action rather than in each caller.
-      - uses: ./.github/actions/download-trivy-db
-        with:
-          database-artifact: ${{ inputs.database-artifact }}
-
-      - name: Enforce the release vulnerability policy
-        env:
-          IMAGE: ${{ steps.subject.outputs.image }}
-          REPOSITORY: ${{ inputs.registry }}/${{ inputs.image-name }}
-          SUBJECT_DIGEST: ${{ steps.subject.outputs.digest }}
-          REPORT_STEM: ${{ steps.subject.outputs.report-stem }}
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p reports
-          trivy image --skip-db-update --scanners vuln --format json \
-            --output "reports/$REPORT_STEM.json" "$REPOSITORY@$SUBJECT_DIGEST"
-          node scripts/check-release-vulnerabilities.ts "$IMAGE" "$SCAN_PLATFORM" "$SUBJECT_DIGEST" \
-            "$REPOSITORY" "reports/$REPORT_STEM.json" security/vulnerability-policy.json \
-            "reports/$REPORT_STEM.policy.json"
-
-      # The policy result names the CVEs; the gate's exit status alone cannot.
-      - name: Upload the vulnerability policy result
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vulnerability-policy-${{ steps.subject.outputs.report-stem }}
-          path: reports
-          if-no-files-found: warn
-          retention-days: 7

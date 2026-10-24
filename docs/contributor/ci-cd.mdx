@@ -867,8 +867,15 @@ When release preflight is required, it owns image vulnerability scanning for bot
 The image-build workflows omit their duplicate scans. Other published builds scan every platform
 they built. Each platform retains its own report and policy result. The final gate rejects a required preflight that is skipped, canceled or unsuccessful.
 
-The build scan starts from its platform's build digest artifact without waiting for manifest signing.
-Before publishing verified tags, the manifest job checks that both final index leaves equal the scan subjects.
+Each platform's build job scans the digest it pushed, on its own runner, before it hands that digest to the manifest job.
+The manifest job needs every build, so only scanned digests reach an index.
+Before publishing verified tags, it checks that the final index leaves equal those scanned subjects.
+A scan therefore costs no job and no runner queue wait of its own.
+It does not run in the manifest job, because that job holds the signing token and runs no repository code.
+
+The build matrix does not fail fast, so one platform's refusal keeps the other platform's scan and evidence.
+A broken build thus lets its sibling finish, which costs a runner for that time.
+
 The scan resolves the immutable image reference through
 `scripts/resolve-image-scan-subject.ts`, using the same platform resolver in `scripts/lib/image-scan.ts` as scheduled rescans. An index must
 contain the requested platform. A missing platform or malformed index fails instead of falling back
@@ -884,8 +891,8 @@ A push that reuses its merge group's image publishes the same digest under that 
 Pull requests use their head SHA because `github.sha` is a merge commit with no image tag.
 
 Within a run, the vulnerability scan ignores tags.
-It reads its own platform build digest artifact.
-Thus, a scan-only rerun scans that build's artifact.
+It reads the digest that its own build job exported.
+Re-running a failed build job builds and scans the platform again, and the manifest job reads that new digest.
 
 `ci-contract.test.ts` asserts the whole contract.
 The build must publish every consumer-resolved tag for that consumer's event.
@@ -949,8 +956,10 @@ The provenance stays the queue run's, because that run built the image.
 A missing or unverifiable image is built and scanned as before.
 Examples are a direct push, an image that the merge group did not rebuild, and a lookup that failed.
 
-A merge group adds one arm64 build job per image that it rebuilds, which is four when it rebuilds all images.
-A push no longer rebuilds those images on either architecture, which more than offsets that cost.
+A merge group adds one arm64 build job, which also scans that platform, for each image that it rebuilds.
+That is four jobs when it rebuilds all images.
+The push reuses those images and no longer builds or scans them on either architecture.
+It still builds and scans both platforms of each image that the merge group did not rebuild, as before.
 The webapp records its branch at build time, so a merge group builds it with the default branch's name.
 Merge groups also write the Dockerfile layer cache, because the push no longer refreshes it for reused images.
 

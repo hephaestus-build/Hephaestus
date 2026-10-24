@@ -1164,7 +1164,7 @@ void describe("CI contract", () => {
 		const reusable = parseDocument(
 			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 		);
-		for (const name of ["build", "merge", "scan"]) {
+		for (const name of ["reuse", "build", "merge"]) {
 			const registry = step(reusable, ["jobs", name], "docker/login-action");
 			assert.equal(registry.get("registry"), `\${{ inputs.registry }}`);
 		}
@@ -1199,9 +1199,9 @@ void describe("CI contract", () => {
 		const docker = parseDocument(
 			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 		);
-		assert.match(
-			String(docker.getIn(["jobs", "scan", "if"])),
-			/inputs.scan-images && inputs.publish/u,
+		assert.equal(
+			namedStep(docker, ["jobs", "build"], "Enforce the release vulnerability policy").get("if"),
+			"inputs.publish && inputs.scan-images",
 		);
 	});
 
@@ -1934,13 +1934,11 @@ void describe("CI contract", () => {
 		assert.ok(isMap(declaration));
 		assert.equal(declaration.get("required"), true);
 		assert.equal(declaration.get("default"), undefined);
-		// One code path for every platform list: the build and scan matrices and the merge read it.
-		for (const name of ["build", "scan"]) {
-			assert.equal(
-				parsed.getIn(["jobs", name, "strategy", "matrix", "platform"]),
-				`\${{ fromJSON(inputs.platforms) }}`,
-			);
-		}
+		// One code path for every platform list: the build matrix, which scans, and the merge read it.
+		assert.equal(
+			parsed.getIn(["jobs", "build", "strategy", "matrix", "platform"]),
+			`\${{ fromJSON(inputs.platforms) }}`,
+		);
 		assert.equal(
 			namedStep(parsed, ["jobs", "merge"], "Create manifest and push").getIn(["env", "PLATFORMS"]),
 			`\${{ inputs.platforms }}`,
@@ -2062,9 +2060,11 @@ void describe("CI contract", () => {
 		assert.equal(inputs.has("load"), false);
 		assert.equal(inputs.has("tags"), false);
 		assert.match(String(inputs.get("outputs")), /inputs\.publish &&/u);
-		for (const gated of ["merge", "scan"]) {
-			assert.match(String(reusable.getIn(["jobs", gated, "if"])), /inputs\.publish/u);
-		}
+		assert.match(String(reusable.getIn(["jobs", "merge", "if"])), /inputs\.publish/u);
+		assert.match(
+			String(namedStep(reusable, build, "Resolve the platform subject").get("if")),
+			/inputs\.publish/u,
+		);
 
 		const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
 		assert.match(String(docker.getIn(["jobs", "tag-unchanged-images", "if"])), /inputs\.publish/u);
@@ -2322,46 +2322,60 @@ void describe("CI contract", () => {
 
 	void test("enforces the release vulnerability policy where images are built", async () => {
 		const reusable = await readFile(".github/workflows/reusable-docker-build.yml", "utf8");
-		const scan = job(reusable, "scan");
-		// Scans start from immutable platform build artifacts alongside manifest signing.
-		assert.match(scan, /needs: build/u);
-		assert.match(scan, /!cancelled\(\)/u);
-		assert.match(scan, /needs\.build\.result == 'success'/u);
+		const workflow = parseDocument(reusable);
+		// Each platform is scanned in the job that built it, so an image adds no scan job and no
+		// runner hop. The merge needs the build, so only scanned digests reach an index.
+		assert.equal(workflow.hasIn(["jobs", "scan"]), false);
+		// One platform's refusal must not cancel the other's scan or its evidence.
+		assert.equal(workflow.getIn(["jobs", "build", "strategy", "fail-fast"]), false);
+		const needs = workflow.getIn(["jobs", "merge", "needs"]);
+		assert.ok(isSeq(needs));
+		assert.deepEqual(needs.toJSON(), ["reuse", "build"]);
+		const build = ["jobs", "build"];
+		const steps = workflow.getIn([...build, "steps"]);
+		assert.ok(isSeq(steps));
+		const names = asArray(steps.toJSON(), "steps").map((item) => asRecord(item, "step").name);
+		const at = (name: string) => names.indexOf(name);
+		// Scanned after the digest is exported and before it is handed to the merge.
+		assert.ok(at("Export digest") < at("Resolve the platform subject"));
+		assert.ok(at("Enforce the release vulnerability policy") < at("Upload digest"));
+		const subject = namedStep(workflow, build, "Resolve the platform subject");
+		assert.equal(subject.get("run"), "node scripts/resolve-image-scan-subject.ts");
+		assert.equal(
+			subject.getIn(["env", "DIGEST_DIRECTORY"]),
+			`\${{ runner.temp }}/digests/\${{ steps.prep.outputs.platform_pair }}`,
+		);
+		assert.equal(subject.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
+		const enforce = namedStep(workflow, build, "Enforce the release vulnerability policy");
 		// The same script and the same policy file the release and the rescan call. A second
 		// copy of the policy is the failure this gate exists to prevent.
 		assert.match(
-			scan,
-			/node scripts\/check-release-vulnerabilities\.ts[\s\S]*security\/vulnerability-policy\.json/u,
-		);
-		assert.doesNotMatch(scan, /needs\.merge/u);
-		assert.match(scan, /DIGEST_DIRECTORY:/u);
-		assert.doesNotMatch(scan, /IMAGE_REF:/u);
-		assert.doesNotMatch(scan, /github\.(?:run_id|run_attempt)/u);
-		const workflow = parseDocument(reusable);
-		assert.equal(workflow.getIn(["jobs", "scan", "strategy", "fail-fast"]), false);
-		assert.equal(
-			workflow.getIn(["jobs", "scan", "strategy", "matrix", "platform"]),
-			`\${{ fromJSON(inputs.platforms) }}`,
-		);
-		const enforce = namedStep(
-			workflow,
-			["jobs", "scan"],
-			"Enforce the release vulnerability policy",
-		);
-		assert.match(
 			String(enforce.get("run")),
-			/check-release-vulnerabilities\.ts "\$IMAGE" "\$SCAN_PLATFORM"/u,
+			/node scripts\/check-release-vulnerabilities\.ts "\$IMAGE" "\$SCAN_PLATFORM"[\s\S]*security\/vulnerability-policy\.json/u,
 		);
-		assert.equal(
-			namedStep(workflow, ["jobs", "scan"], "Upload the vulnerability policy result").getIn([
-				"with",
-				"name",
-			]),
-			`vulnerability-policy-\${{ steps.subject.outputs.report-stem }}`,
-		);
+		assert.equal(enforce.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
+		assert.doesNotMatch(String(enforce.get("run")), /github\.(?:run_id|run_attempt)/u);
 		// A gate that cannot say what it rejected is not finished.
-		assert.match(scan, /uses: actions\/upload-artifact@/u);
-		assert.match(scan, /uses: \.\/\.github\/actions\/download-trivy-db/u);
+		const report = namedStep(workflow, build, "Upload the vulnerability policy result");
+		assert.equal(
+			report.getIn(["with", "name"]),
+			`vulnerability-policy-\${{ steps.subject.outputs.report-stem }}-\${{ github.run_attempt }}`,
+		);
+		assert.equal(report.get("if"), `\${{ !cancelled() && steps.subject.outcome == 'success' }}`);
+		assert.match(job(reusable, "build"), /uses: \.\/\.github\/actions\/download-trivy-db/u);
+		// The scanners pull through the registry login, not with the token in their environment.
+		assert.equal(enforce.hasIn(["env", "TRIVY_PASSWORD"]), false);
+		assert.equal(enforce.hasIn(["env", "TRIVY_USERNAME"]), false);
+		// The scan sits in the build because the manifest job holds the signing token and runs no
+		// repository code: no checkout, no local action, no repository script.
+		const merge = job(reusable, "merge");
+		assert.doesNotMatch(merge, /uses: actions\/checkout@/u);
+		assert.doesNotMatch(merge, /uses: \.\//u);
+		assert.doesNotMatch(merge, /node (?:\.\/)?scripts\//u);
+		// The tools are installed for the runner's own CPU, since arm64 scans on an arm64 runner.
+		const tools = await readFile(".github/actions/setup-release-security-tools/action.yml", "utf8");
+		assert.match(tools, /ARM64\) syft_arch=arm64 trivy_arch=ARM64/u);
+		assert.doesNotMatch(tools, /linux_amd64|Linux-64bit\.tar/u);
 
 		let callSites = 0;
 		for (const [file, source] of await workflowSources()) {
@@ -2385,7 +2399,7 @@ void describe("CI contract", () => {
 		// the advisory snapshot job does not.
 		const cicd = await readFile(".github/workflows/cicd.yml", "utf8");
 		const evaluatorJobs: [string, string][] = [
-			[".github/workflows/reusable-docker-build.yml", scan],
+			[".github/workflows/reusable-docker-build.yml", job(reusable, "build")],
 			[".github/workflows/cicd.yml", job(cicd, "upstream-images")],
 			[
 				".github/workflows/rescan-main-images.yml",
@@ -2399,7 +2413,7 @@ void describe("CI contract", () => {
 		for (const [file, section] of evaluatorJobs) {
 			assert.match(
 				section,
-				/setup-release-security-tools\n\s+with:\n\s+install-syft: "true"/u,
+				/setup-release-security-tools\n(?:\s+if: .*\n)?\s+with:\n\s+install-syft: "true"/u,
 				file,
 			);
 		}

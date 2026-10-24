@@ -347,16 +347,16 @@ void test("the image workflow shares the resolver and retains its immutable subj
 	const workflow = parseDocument(
 		readFileSync(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
-	const steps = workflow.getIn(["jobs", "scan", "steps"]);
+	const steps = workflow.getIn(["jobs", "build", "steps"]);
 	assert.ok(isSeq(steps));
-	assert.equal(workflow.getIn(["jobs", "scan", "env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
 	const subject = steps.items.find((item) => isMap(item) && item.get("id") === "subject");
 	assert.ok(isMap(subject));
+	assert.equal(subject.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
 	assert.equal(subject.get("run"), "node scripts/resolve-image-scan-subject.ts");
 	assert.equal(subject.getIn(["env", "INPUT_IMAGE_NAME"]), `\${{ inputs.image-name }}`);
 	assert.equal(
 		subject.getIn(["env", "DIGEST_DIRECTORY"]),
-		`\${{ runner.temp }}/scan-digest/\${{ steps.prep.outputs.platform_pair }}`,
+		`\${{ runner.temp }}/digests/\${{ steps.prep.outputs.platform_pair }}`,
 	);
 	assert.equal(
 		subject.getIn(["env", "IMAGE_REPOSITORY"]),
@@ -415,11 +415,9 @@ void test("every digest artifact carries its platform directory, however many a 
 		String(step("merge", "Create manifest and push").get("run")),
 		/files=\("linux-\$arch"\/\*\)/u,
 	);
-	assert.equal(workflow.getIn(["jobs", "scan", "needs"]), "build");
-	const scan = step("scan", "Download platform digest");
+	// The scan reads the same platform directory in the job that exported it.
 	assert.equal(
-		scan.getIn(["with", "name"]),
-		`digests-\${{ steps.prep.outputs.image_name }}-\${{ steps.prep.outputs.platform_pair }}`,
+		step("build", "Resolve the platform subject").getIn(["env", "DIGEST_DIRECTORY"]),
+		`\${{ runner.temp }}/digests/\${{ steps.prep.outputs.platform_pair }}`,
 	);
-	assert.equal(scan.getIn(["with", "path"]), `\${{ runner.temp }}/scan-digest`);
 });
