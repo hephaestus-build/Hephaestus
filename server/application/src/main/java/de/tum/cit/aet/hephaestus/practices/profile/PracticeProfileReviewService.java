@@ -14,12 +14,10 @@ import de.tum.cit.aet.hephaestus.practices.review.dto.OutcomeVectorDTO;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.trace.OwnItemTraceQueryService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,7 +57,10 @@ public class PracticeProfileReviewService {
             @Nullable String groupSlug,
             @Nullable Instant since,
             Pageable page) {
-        return list(ws, itemKind == null ? null : List.of(itemKind), itemId, groupSlug, null, since, false, page);
+        return list(
+                ws,
+                new OwnReviewFilter(itemKind == null ? null : List.of(itemKind), itemId, groupSlug, null, since, false),
+                page);
     }
 
     /**
@@ -67,15 +68,12 @@ public class PracticeProfileReviewService {
      * oldest first. Every narrowing applies before paging, so a page never comes back short of
      * reviews that a later page would have had.
      */
-    public Page<ProfileReviewDTO> list(
-            WorkspaceContext ws,
-            @Nullable Collection<String> itemKinds,
-            @Nullable Long itemId,
-            @Nullable String groupSlug,
-            @Nullable Collection<ReviewStatus> statuses,
-            @Nullable Instant since,
-            boolean oldestFirst,
-            Pageable page) {
+    public Page<ProfileReviewDTO> list(WorkspaceContext ws, OwnReviewFilter filter, Pageable page) {
+        var itemKinds = filter.itemKinds();
+        var itemId = filter.itemId();
+        var groupSlug = filter.groupSlug();
+        var statuses = filter.statuses();
+        var since = filter.since();
         var account = developer.currentDeveloperId();
         if (account.isEmpty()) return Page.empty(page);
         var rows = results.forDevelopersSince(
@@ -103,7 +101,7 @@ public class PracticeProfileReviewService {
                 .filter(v -> statuses == null
                         || statuses.isEmpty()
                         || statuses.contains(v.getFirst().review().getStatus()))
-                .sorted(oldestFirst ? OLDEST_FIRST : OLDEST_FIRST.reversed())
+                .sorted(filter.oldestFirst() ? OLDEST_FIRST : OLDEST_FIRST.reversed())
                 .toList();
         return new PageImpl<>(
                 ordered.stream()

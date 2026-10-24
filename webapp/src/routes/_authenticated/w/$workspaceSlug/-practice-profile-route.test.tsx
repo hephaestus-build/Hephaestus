@@ -537,7 +537,11 @@ describe("practice profile route", () => {
 		fireEvent.click(await openReviewsChip());
 
 		fireEvent.click(
-			await screen.findByRole("button", { name: "Request another review: #890" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole(
+				"button",
+				{ name: "Request another review: #890" },
+				ROUTE_RENDER_WAIT,
+			),
 		);
 
 		await screen.findByText(
@@ -1466,7 +1470,11 @@ describe("the way to a review an accepted ask created", () => {
 		const router = await renderProfile();
 		fireEvent.click(await openReviewsChip());
 		fireEvent.click(
-			await screen.findByRole("button", { name: "Request another review: #890" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole(
+				"button",
+				{ name: "Request another review: #890" },
+				ROUTE_RENDER_WAIT,
+			),
 		);
 
 		const note = await screen.findByRole("note", undefined, SETTLE_WAIT);
@@ -1537,7 +1545,9 @@ describe("practice profile in a user view", () => {
 		fireEvent.click(await openReviewsChip());
 
 		await screen.findByRole("button", { name: openReviewRowName }, ROUTE_RENDER_WAIT);
-		expect(screen.queryAllByRole("button", { name: /^Request (?:another )?review/u })).toHaveLength(0);
+		expect(screen.queryAllByRole("button", { name: /^Request (?:another )?review/u })).toHaveLength(
+			0,
+		);
 	});
 
 	it("offers an administrator viewing as the developer none of them", async () => {
