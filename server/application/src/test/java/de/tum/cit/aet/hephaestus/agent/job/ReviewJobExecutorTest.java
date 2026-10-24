@@ -440,14 +440,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .thenReturn("issued-job-token");
         when(practiceAgent.buildSandboxSpec(any()))
                 .thenReturn(new PracticeSandboxSpec(
-                        "practice-runtime",
-                        List.of(),
-                        Map.of(),
-                        Map.of(),
-                        SandboxLayout.OUTPUT_PATH,
-                        null,
-                        null,
-                        null));
+                        "practice-runtime", List.of(), Map.of(), Map.of(), "issued-job-token", null));
         when(jobs.updateCapture(any(), anyLong(), any(), anyInt(), any())).thenReturn(1);
         when(jobs.markExecutionStarted(eq(job.getId()), eq(null), any())).thenReturn(1);
         var result = new SandboxResult(0, Map.of(), "", false, Duration.ZERO);
@@ -478,8 +471,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var execution = ArgumentCaptor.forClass(SandboxSpec.class);
         verify(sandbox).execute(execution.capture());
         var spec = execution.getValue();
-        var sandboxDeadline = Instant.ofEpochMilli(
-                Long.parseLong(Objects.requireNonNull(spec.environment().get("SANDBOX_WORK_DEADLINE_MS"))));
+        var sandboxDeadline = Objects.requireNonNull(spec.workDeadline());
         assertThat(issuedDeadline.getValue()).isEqualTo(sandboxDeadline);
         assertThat(issuedExpiry.getValue()).isEqualTo(sandboxDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE));
         assertThat(request.getValue().jobToken()).isEqualTo("issued-job-token");

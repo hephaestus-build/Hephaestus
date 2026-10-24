@@ -1671,7 +1671,7 @@ async function main() {
 
 if (import.meta.main) {
 	process.on("unhandledRejection", (error) => log("unhandled rejection:", error));
-	// Node's own report would print the message; the worker copies this output into its log (DockerHostSandbox).
+	// Node's own report would print the message; log it in the host's own format instead.
 	process.on("uncaughtException", (error) => {
 		log("uncaught exception:", error);
 		process.exit(1);

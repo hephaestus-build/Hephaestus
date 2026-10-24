@@ -962,10 +962,6 @@ public class ReviewJobExecutor {
             ConfigSnapshot snapshot,
             Instant workDeadline,
             int attempt) {
-        Map<String, byte[]> allInputFiles = new HashMap<>(agentSpec.inputFiles());
-        Map<String, String> environment = new HashMap<>(agentSpec.environment());
-        environment.put("SANDBOX_WORK_DEADLINE_MS", Long.toString(workDeadline.toEpochMilli()));
-
         ResourceLimits limits = new ResourceLimits(
                 ResourceLimits.DEFAULT.memoryBytes(),
                 ResourceLimits.DEFAULT.cpus(),
@@ -974,17 +970,16 @@ public class ReviewJobExecutor {
 
         return new SandboxSpec(
                 jobId,
+                attempt,
                 agentSpec.image(),
                 agentSpec.command(),
-                environment,
-                agentSpec.networkPolicy(),
+                agentSpec.environment(),
+                agentSpec.gatewayToken(),
                 limits,
-                agentSpec.securityProfile(),
-                allInputFiles,
+                workDeadline,
+                agentSpec.inputFiles(),
                 handlerFilesOnDisk,
-                handlerDirectories,
-                agentSpec.outputPath(),
-                attempt);
+                handlerDirectories);
     }
 
     private boolean handleCancellation(UUID jobId, ReviewJob job) {

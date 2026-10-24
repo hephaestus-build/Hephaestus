@@ -8,6 +8,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -30,23 +32,13 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
 
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
-    private final SandboxContainerManager containers = mock(SandboxContainerManager.class);
-    private final SandboxNetworkManager networks = mock(SandboxNetworkManager.class);
+    private final SandboxBackend backend = mock(SandboxBackend.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withUserConfiguration(
                     SandboxMaintenanceConfiguration.class, PropertiesConfiguration.class, ServerSchedulingConfig.class)
-            .withBean(
-                    SandboxReconciler.class,
-                    () -> new SandboxReconciler(
-                            jobs,
-                            containers,
-                            networks,
-                            mock(SandboxVolumeManager.class),
-                            mock(SandboxCreator.class),
-                            meters,
-                            Clock.systemUTC()));
+            .withBean(SandboxReconciler.class, () -> new SandboxReconciler(jobs, backend, meters, Clock.systemUTC()));
 
     @AfterEach
     void closeMeters() {
@@ -105,7 +97,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
             assertThat(context).hasNotFailed().doesNotHaveBean(ScheduledTaskRegistrar.class);
             context.publishEvent(new ApplicationReadyEvent(
                     new SpringApplication(), new String[0], context.getSourceApplicationContext(), Duration.ZERO));
-            verifyNoInteractions(jobs, containers, networks);
+            verifyNoInteractions(jobs, backend);
         });
     }
 
@@ -113,7 +105,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
     void shouldNotScheduleMaintenanceWithoutTheWorkerRole() {
         runner.withPropertyValues("hephaestus.runtime.worker.enabled=false").run(context -> {
             assertThat(context).hasNotFailed().doesNotHaveBean(ScheduledTaskRegistrar.class);
-            verifyNoInteractions(jobs, containers, networks);
+            verifyNoInteractions(jobs, backend);
         });
     }
 

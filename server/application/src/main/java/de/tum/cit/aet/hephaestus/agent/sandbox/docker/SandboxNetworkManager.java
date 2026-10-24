@@ -167,8 +167,8 @@ public class SandboxNetworkManager {
         return true;
     }
 
-    /** List candidate networks owned by this installation. */
-    public List<DockerOperations.NetworkInfo> listOrphanedNetworks() {
+    /** The sandbox networks of this installation: the prefix, then a job's or a Heph host's id. */
+    public List<DockerOperations.NetworkInfo> listNetworks() {
         return networkOps.listNetworksByName(networkPrefix()).stream()
                 .filter(network -> network.name().startsWith(networkPrefix())
                         && network.name().length() == networkPrefix().length() + 36)

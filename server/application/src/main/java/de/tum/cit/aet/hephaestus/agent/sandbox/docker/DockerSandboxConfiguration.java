@@ -9,9 +9,14 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxHosts;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
@@ -206,49 +211,40 @@ public class DockerSandboxConfiguration {
     }
 
     @Bean
-    public SandboxManager dockerSandboxAdapter(
+    public SandboxBackend dockerSandboxBackend(
             SandboxNetworkManager networkManager,
-            SandboxWorkspaceManager workspaceManager,
             SandboxContainerManager containerManager,
             ContainerSecurityPolicy securityPolicy,
-            SandboxGatewayConnector gateway,
-            MeterRegistry meterRegistry,
-            SandboxGatewaySessions gatewaySessions,
-            DockerClientOperations volumeOperations) {
-        return new DockerSandboxAdapter(
+            DockerClientOperations volumeOperations,
+            SandboxCreator creator,
+            DockerSandboxProperties dockerProperties,
+            SandboxGatewayConnector gateway) {
+        return new DockerSandboxBackend(
                 networkManager,
-                workspaceManager,
                 containerManager,
                 securityPolicy,
-                gateway::port,
-                meterRegistry,
-                gatewaySessions,
-                volumeOperations);
+                volumeOperations,
+                creator,
+                dockerProperties.owner(),
+                gateway::port);
     }
 
     @Bean
-    public HostSandbox dockerHostSandbox(
-            SandboxNetworkManager networkManager,
+    public SandboxManager sandboxAttemptRunner(
+            SandboxBackend backend,
             SandboxWorkspaceManager workspaceManager,
-            SandboxContainerManager containerManager,
-            ContainerSecurityPolicy securityPolicy,
-            SandboxCreator creator,
             SandboxGatewaySessions gatewaySessions,
-            DockerClientOperations volumeOperations,
-            AgentImageProperties agentImageProperties,
-            DockerSandboxProperties dockerProperties,
-            SandboxGatewayConnector gateway) {
-        return new DockerHostSandbox(
-                networkManager,
-                workspaceManager,
-                containerManager,
-                securityPolicy,
-                creator,
-                gatewaySessions,
-                volumeOperations,
-                agentImageProperties.reference(),
-                dockerProperties.owner(),
-                gateway::port);
+            MeterRegistry meterRegistry) {
+        return new SandboxAttemptRunner(backend, workspaceManager, gatewaySessions, meterRegistry);
+    }
+
+    @Bean
+    public HostSandbox sandboxHosts(
+            SandboxBackend backend,
+            SandboxWorkspaceManager workspaceManager,
+            SandboxGatewaySessions gatewaySessions,
+            AgentImageProperties agentImageProperties) {
+        return new SandboxHosts(backend, workspaceManager, gatewaySessions, agentImageProperties.reference());
     }
 
     /**
@@ -275,20 +271,9 @@ public class DockerSandboxConfiguration {
     }
 
     @Bean
-    public SandboxVolumeManager sandboxVolumeManager(DockerClientOperations ops, DockerSandboxProperties properties) {
-        return new SandboxVolumeManager(ops, properties);
-    }
-
-    @Bean
     public SandboxReconciler sandboxReconciler(
-            ReviewJobRepository jobRepository,
-            SandboxContainerManager containerManager,
-            SandboxNetworkManager networkManager,
-            SandboxVolumeManager volumeManager,
-            SandboxCreator creator,
-            MeterRegistry meterRegistry) {
-        return new SandboxReconciler(
-                jobRepository, containerManager, networkManager, volumeManager, creator, meterRegistry, clock);
+            ReviewJobRepository jobRepository, SandboxBackend backend, MeterRegistry meterRegistry) {
+        return new SandboxReconciler(jobRepository, backend, meterRegistry, clock);
     }
 
     @Bean

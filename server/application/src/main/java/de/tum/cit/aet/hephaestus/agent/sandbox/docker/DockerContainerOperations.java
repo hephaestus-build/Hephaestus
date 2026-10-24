@@ -30,12 +30,12 @@ interface DockerContainerOperations {
     DockerOperations.WaitResult waitContainer(String containerId);
 
     /**
-     * Get the last N lines of container logs.
+     * Every line of the container's logs, bounded by the collector: the daemon applies a tail before the collector sees
+     * a line, so a tail would drop the transcript's beginning — what the run was asked and what it read.
      *
-     * @param tailLines number of lines from the end (0 = all)
      * @return combined stdout + stderr
      */
-    String getLogs(String containerId, int tailLines);
+    String getLogs(String containerId);
 
     /**
      * Stop a container with a grace period (SIGTERM → wait → SIGKILL).

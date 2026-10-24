@@ -11,4 +11,8 @@ public class SandboxCancelledException extends SandboxException {
     public SandboxCancelledException(String message) {
         super(message);
     }
+
+    public SandboxCancelledException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

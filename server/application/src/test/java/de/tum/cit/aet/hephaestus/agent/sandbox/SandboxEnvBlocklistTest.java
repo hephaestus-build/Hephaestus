@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
+package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

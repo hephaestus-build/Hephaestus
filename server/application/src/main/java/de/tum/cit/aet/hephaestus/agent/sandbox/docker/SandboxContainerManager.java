@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import java.time.Duration;
@@ -23,7 +24,6 @@ public class SandboxContainerManager {
 
     private static final Logger log = LoggerFactory.getLogger(SandboxContainerManager.class);
     private static final Duration POST_STOP_WAIT_TIMEOUT = Duration.ofSeconds(30);
-    private static final int SIGKILL_EXIT_CODE = 137;
 
     private final DockerContainerOperations containerOps;
     private final SandboxImageGuard imageGuard;
@@ -119,10 +119,10 @@ public class SandboxContainerManager {
             } catch (InterruptedException ex) {
                 waitFuture.cancel(true);
                 Thread.currentThread().interrupt();
-                return new WaitOutcome(SIGKILL_EXIT_CODE, true);
+                return new WaitOutcome(SandboxLayout.EXIT_KILLED, true);
             } catch (Exception ex) {
                 waitFuture.cancel(true);
-                return new WaitOutcome(SIGKILL_EXIT_CODE, true);
+                return new WaitOutcome(SandboxLayout.EXIT_KILLED, true);
             }
         } catch (CancellationException e) {
             throw new SandboxInfrastructureException("Wait cancelled for container: " + containerId, e);
@@ -135,16 +135,10 @@ public class SandboxContainerManager {
         }
     }
 
-    /**
-     * Get the last N lines of container logs.
-     *
-     * @param containerId the container
-     * @param tailLines number of lines (0 = all)
-     * @return combined stdout + stderr
-     */
-    public String getLogs(String containerId, int tailLines) {
+    /** The container's stdout and stderr, bounded as {@link BoundedTranscript} bounds it; empty when unreadable. */
+    public String getLogs(String containerId) {
         try {
-            return containerOps.getLogs(containerId, tailLines);
+            return containerOps.getLogs(containerId);
         } catch (Exception e) {
             log.warn(
                     "Failed to get logs for container {}: errorType={}",

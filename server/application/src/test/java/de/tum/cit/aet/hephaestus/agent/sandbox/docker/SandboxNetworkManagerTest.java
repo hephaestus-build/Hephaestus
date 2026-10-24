@@ -56,7 +56,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
                         new DockerOperations.NetworkInfo(
                                 "foreign", "hephaestus-sandbox-course--other--" + id, null, Map.of()),
                         new DockerOperations.NetworkInfo("legacy", "agent-net-" + id, null, Map.of())));
-        assertThat(manager.listOrphanedNetworks()).containsExactly(own);
+        assertThat(manager.listNetworks()).containsExactly(own);
     }
 
     @BeforeEach
@@ -320,7 +320,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
                     .thenReturn(List.of(new DockerOperations.NetworkInfo(
                             "n1", "hephaestus-sandbox-default--" + JOB_ID, null, Map.of())));
 
-            var networks = manager.listOrphanedNetworks();
+            var networks = manager.listNetworks();
 
             assertThat(networks).hasSize(1);
         }

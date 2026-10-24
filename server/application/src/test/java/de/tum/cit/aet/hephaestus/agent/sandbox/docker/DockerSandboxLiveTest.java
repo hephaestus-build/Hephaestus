@@ -7,12 +7,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.testconfig.LiveDockerTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,6 +31,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Integration tests for the Docker sandbox manager using a real Docker daemon.
@@ -45,9 +48,17 @@ class DockerSandboxLiveTest {
 
     private static final String AGENT_IMAGE =
             System.getenv().getOrDefault("HEPHAESTUS_AGENT_IMAGE_REFERENCE", "ghcr.io/hephaestus-build/agent-pi:dev");
+
+    /** The transcript manifest that the agent image's gateway runner adds to every result it uploads. */
+    private static final String TRACE_MANIFEST = "traces/manifest.json";
+
+    /** The runner's cap on a result's transcripts: {@code TRACE_BYTES} in {@code docker/agents/pi/gateway-run.ts}. */
+    private static final long TRACE_BYTES = 7L * 1024 * 1024;
+
+    private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private final String owner = "live-" + UUID.randomUUID();
     private LiveSandboxGateway gateway;
-    private DockerSandboxAdapter sandboxAdapter;
+    private SandboxAttemptRunner sandboxAdapter;
     private SandboxContainerManager containerManager;
     private SandboxNetworkManager networkManager;
     private SandboxWorkspaceManager workspaceManager;
@@ -83,15 +94,21 @@ class DockerSandboxLiveTest {
         workspaceManager = new SandboxWorkspaceManager();
         securityPolicy = new ContainerSecurityPolicy(dockerProperties, null);
 
-        sandboxAdapter = new DockerSandboxAdapter(
-                networkManager,
+        var meters = new SimpleMeterRegistry();
+        // The gateway runs in this process on the machine itself: the reviews get the route out to reach it.
+        sandboxAdapter = new SandboxAttemptRunner(
+                new DockerSandboxBackend(
+                        networkManager,
+                        containerManager,
+                        securityPolicy,
+                        dockerOps,
+                        new SandboxCreator(dockerOps),
+                        owner,
+                        gateway::port,
+                        true),
                 workspaceManager,
-                containerManager,
-                securityPolicy,
-                gateway::port,
-                new SimpleMeterRegistry(),
                 gateway.sessions(),
-                dockerOps);
+                meters);
     }
 
     @AfterEach
@@ -114,7 +131,7 @@ class DockerSandboxLiveTest {
         }
 
         try {
-            networkManager.listOrphanedNetworks().forEach(n -> {
+            networkManager.listNetworks().forEach(n -> {
                 try {
                     networkManager.removeNetwork(n.id());
                 } catch (Exception ignored) {
@@ -126,8 +143,22 @@ class DockerSandboxLiveTest {
         }
     }
 
-    private SecurityProfile testSecurityProfile() {
-        return new SecurityProfile(null, "private", List.of("ALL"), Map.of());
+    /**
+     * The runner's manifest of a result whose command started no model: its four fields exactly, a complete scan and no
+     * session. The budget is what the result had left, up to the runner's cap, so only its bounds are fixed.
+     */
+    private static void requireEmptyTraceManifest(Map<String, byte[]> outputFiles) {
+        JsonNode manifest = MAPPER.readTree(Objects.requireNonNull(outputFiles.get(TRACE_MANIFEST), TRACE_MANIFEST));
+        assertThat(manifest.propertyNames())
+                .containsExactlyInAnyOrder("schemaVersion", "budgetBytes", "sessionScanTruncated", "sessions");
+        assertThat(manifest.path("schemaVersion").longValue()).isEqualTo(1);
+        assertThat(manifest.path("budgetBytes").longValue()).isPositive().isLessThanOrEqualTo(TRACE_BYTES);
+        assertThat(manifest.path("sessionScanTruncated").isBoolean()).isTrue();
+        assertThat(manifest.path("sessionScanTruncated").booleanValue()).isFalse();
+        assertThat(manifest.path("sessions").isArray()).isTrue();
+        assertThat(manifest.path("sessions").size())
+                .as("no session: the command started no model")
+                .isZero();
     }
 
     @Nested
@@ -139,14 +170,16 @@ class DockerSandboxLiveTest {
 
             SandboxSpec spec = new SandboxSpec(
                     jobId,
+                    null,
                     AGENT_IMAGE,
                     List.of("sh", "-c", "exit 42"),
                     Map.of(),
-                    new NetworkPolicy(true, null, "live-gateway-token"),
+                    "live-gateway-token",
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
-                    testSecurityProfile(),
+                    null,
                     Map.of(),
-                    "/workspace/out");
+                    Map.of(),
+                    List.of());
 
             SandboxResult result = sandboxAdapter.execute(spec);
 
@@ -166,21 +199,24 @@ class DockerSandboxLiveTest {
 
             assertThat(result.timedOut()).isFalse();
             assertThat(result.duration()).isPositive();
-            assertThat(result.outputFiles()).containsOnlyKeys("result.json");
+            assertThat(result.outputFiles()).containsOnlyKeys("result.json", TRACE_MANIFEST);
             assertThat(result.outputFiles().get("result.json")).isEqualTo(written.getBytes(StandardCharsets.UTF_8));
+            requireEmptyTraceManifest(result.outputFiles());
         }
 
         private SandboxResult run(String script) {
             SandboxSpec spec = new SandboxSpec(
                     UUID.randomUUID(),
+                    null,
                     AGENT_IMAGE,
                     List.of("sh", "-c", "mkdir -p /workspace/out && " + script),
                     Map.of(),
-                    new NetworkPolicy(true, null, "live-gateway-token"),
+                    "live-gateway-token",
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
-                    testSecurityProfile(),
+                    null,
                     Map.of(),
-                    "/workspace/out");
+                    Map.of(),
+                    List.of());
             SandboxResult result = sandboxAdapter.execute(spec);
             assertThat(result.exitCode()).isZero();
             return result;
@@ -196,14 +232,16 @@ class DockerSandboxLiveTest {
 
             SandboxSpec spec = new SandboxSpec(
                     jobId,
+                    null,
                     AGENT_IMAGE,
                     List.of("sh", "-c", "printf partial > /workspace/out/partial.txt; sleep 300"),
                     Map.of(),
-                    new NetworkPolicy(true, null, "live-gateway-token"),
+                    "live-gateway-token",
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofSeconds(20)),
-                    testSecurityProfile(),
+                    null,
                     Map.of(),
-                    "/workspace/out");
+                    Map.of(),
+                    List.of());
 
             SandboxResult result = sandboxAdapter.execute(spec);
 
@@ -222,14 +260,16 @@ class DockerSandboxLiveTest {
 
             SandboxSpec spec = new SandboxSpec(
                     jobId,
+                    null,
                     AGENT_IMAGE,
                     List.of("sh", "-c", "mkdir -p /workspace/out && cat /workspace/.prompt > /workspace/out/echo.txt"),
                     Map.of(),
-                    new NetworkPolicy(true, null, "live-gateway-token"),
+                    "live-gateway-token",
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
-                    testSecurityProfile(),
+                    null,
                     Map.of(".prompt", "injected content".getBytes(UTF_8)),
-                    "/workspace/out");
+                    Map.of(),
+                    List.of());
 
             SandboxResult result = sandboxAdapter.execute(spec);
 
@@ -248,14 +288,16 @@ class DockerSandboxLiveTest {
 
             SandboxSpec spec = new SandboxSpec(
                     jobId,
+                    null,
                     AGENT_IMAGE,
                     List.of("sh", "-c", "mkdir -p /workspace/out && echo cleanup-test > /workspace/out/done.txt"),
                     Map.of(),
-                    new NetworkPolicy(true, null, "live-gateway-token"),
+                    "live-gateway-token",
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
-                    testSecurityProfile(),
+                    null,
                     Map.of(),
-                    "/workspace/out");
+                    Map.of(),
+                    List.of());
 
             sandboxAdapter.execute(spec);
 
@@ -264,7 +306,7 @@ class DockerSandboxLiveTest {
                             .toList())
                     .isEmpty();
 
-            assertThat(networkManager.listOrphanedNetworks().stream()
+            assertThat(networkManager.listNetworks().stream()
                             .filter(n -> n.name().contains(jobId.toString()))
                             .toList())
                     .isEmpty();
