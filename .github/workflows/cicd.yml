@@ -844,6 +844,9 @@ jobs:
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.test-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      # A stacked layer's own base published no image; the alias base is the nearest commit that did.
+      postgres_base_sha: ${{ needs.detect-changes.outputs.alias-base || github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+      postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
 
   Changesets:
     if: github.event_name == 'pull_request'

@@ -152,14 +152,22 @@ public final class PostgreSQLTestContainer {
 
     public record TestDatabase(String jdbcUrl, String username, String password) {}
 
+    // CI resolves the published image once per job; without it the Dockerfile is built in this JVM.
+    private static String image() {
+        String resolved = System.getProperty("hephaestus.test.postgres-image", "");
+        if (!resolved.isBlank()) {
+            return resolved;
+        }
+        return new ImageFromDockerfile()
+                .withDockerfile(Path.of(System.getProperty("basedir", "."), "../../docker/postgres/Dockerfile"))
+                .get();
+    }
+
     // Ryuk stops this singleton after JVM exit, keeping it available while Spring closes cached contexts.
     @SuppressWarnings("resource")
     private static PostgreSQLContainer createContainer() {
-        PostgreSQLContainer newContainer = new PostgreSQLContainer(DockerImageName.parse(new ImageFromDockerfile()
-                                .withDockerfile(
-                                        Path.of(System.getProperty("basedir", "."), "../../docker/postgres/Dockerfile"))
-                                .get())
-                        .asCompatibleSubstituteFor("postgres"))
+        PostgreSQLContainer newContainer = new PostgreSQLContainer(
+                        DockerImageName.parse(image()).asCompatibleSubstituteFor("postgres"))
                 .withDatabaseName(DEFAULT_TEST_DB)
                 .withUsername(DEFAULT_TEST_USER)
                 .withPassword(DEFAULT_TEST_PASSWORD)

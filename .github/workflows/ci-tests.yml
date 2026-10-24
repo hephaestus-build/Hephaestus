@@ -13,6 +13,15 @@ on:
         required: false
         type: string
         default: "true"
+      postgres_base_sha:
+        description: "Commit whose published PostgreSQL image the integration tests reuse"
+        required: true
+        type: string
+      postgres_image_changed:
+        description: "Whether this run changed the PostgreSQL image inputs"
+        required: false
+        type: string
+        default: "false"
 
 permissions: {}
 
@@ -83,9 +92,15 @@ jobs:
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
+      - uses: ./.github/actions/postgres-image
+        with:
+          base-sha: ${{ inputs.postgres_base_sha }}
+          image-changed: ${{ inputs.postgres_image_changed }}
+          tag: hephaestus-postgres:ci
       - name: Run integration tests
         env:
           HEPHAESTUS_INTEGRATION_SHARD: ${{ matrix.shard }}
+          HEPHAESTUS_TEST_POSTGRES_IMAGE: hephaestus-postgres:ci
         run: vp run test:server:integration
       - name: Upload test results
         if: always()

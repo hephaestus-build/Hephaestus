@@ -1165,6 +1165,27 @@ void describe("CI contract", () => {
 			/matrix\.shard/u,
 			"The shard's selector reaches the task as an environment value",
 		);
+		const steps = workflow.getIn([...jobPath, "steps"]);
+		assert.ok(isSeq(steps));
+		const postgres = steps.items.find(
+			(item) => isMap(item) && item.get("uses") === "./.github/actions/postgres-image",
+		);
+		assert.ok(isMap(postgres), "Integration shards resolve the published PostgreSQL image");
+		assert.equal(
+			environment.get("HEPHAESTUS_TEST_POSTGRES_IMAGE"),
+			stepInputs(postgres).get("tag"),
+			"Testcontainers starts the image that the job resolved",
+		);
+		// A broken hand-off would rebuild the Dockerfile in every shard and still pass.
+		const property = "hephaestus.test.postgres-image";
+		const gradle = await readFile("server/application/build.gradle.kts", "utf8");
+		assert.match(gradle, /providers\.environmentVariable\("HEPHAESTUS_TEST_POSTGRES_IMAGE"\)/u);
+		assert.ok(gradle.includes(`systemProperty("${property}", testPostgresImage.get())`));
+		const container = await readFile(
+			"server/application/src/test/java/de/tum/cit/aet/hephaestus/testconfig/PostgreSQLTestContainer.java",
+			"utf8",
+		);
+		assert.ok(container.includes(`System.getProperty("${property}"`));
 		assert.doesNotMatch(
 			runScript(workflow, jobPath, "Run integration tests"),
 			/\$\{\{/u,
