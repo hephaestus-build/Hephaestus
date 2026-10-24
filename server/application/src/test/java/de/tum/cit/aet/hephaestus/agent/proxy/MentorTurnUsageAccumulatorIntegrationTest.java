@@ -1,6 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
@@ -37,12 +42,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The accumulator bean is absent from the test context ({@code hephaestus.runtime.worker.enabled=false}),
- * so it is constructed directly here and its {@code REQUIRES_NEW} boundary supplied by
- * {@link TransactionTemplate}. Each attempt is admitted through {@link MentorAttemptUsageService#admit}, as the worker
+ * so it is constructed directly here, with the transaction manager that opens its own transaction. Each attempt is admitted through {@link MentorAttemptUsageService#admit}, as the worker
  * admits it, so its usage measurement exists before any call.
  */
 @Tag("integration")
@@ -79,6 +85,9 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     private SimpleMeterRegistry meters;
     private MentorTurnUsageAccumulator accumulator;
     private Workspace workspace;
@@ -87,7 +96,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     @BeforeEach
     void setUpFixture() {
         meters = new SimpleMeterRegistry();
-        accumulator = new MentorTurnUsageAccumulator(attemptUsage, meters);
+        accumulator = new MentorTurnUsageAccumulator(attemptUsage, transactionManager, meters);
 
         User owner = persistUser("mentor-usage-owner-" + UUID.randomUUID());
         workspace = createWorkspace(
@@ -195,13 +204,31 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
         return turn;
     }
 
+    @Test
+    @DisplayName("a settlement that fails inside its transaction is counted and never reaches the proxied response")
+    void shouldCountAndSwallowASettlementThatFailsInsideItsTransaction() {
+        var settlement = mock(MentorAttemptUsageService.class);
+        var mandatory = new TransactionTemplate(transactionManager);
+        mandatory.setPropagationBehavior(TransactionDefinition.PROPAGATION_MANDATORY);
+        // As the MANDATORY settlement fails: it marks the caller's transaction rollback-only, then throws.
+        when(settlement.settleCall(any(), anyInt(), any()))
+                .thenAnswer(call -> mandatory.execute(status -> {
+                    throw new IllegalStateException("lock timeout");
+                }));
+        var failing = new MentorTurnUsageAccumulator(settlement, transactionManager, meters);
+
+        assertThatCode(() -> failing.accumulate(attempt(runningTurn()), new ProxyTokenUsage(10, 1, 0, 0, 0)))
+                .doesNotThrowAnyException();
+        assertThat(meters.counter("llm.proxy.usage.mentor.failure").count()).isEqualTo(1.0);
+    }
+
     private ProxyRouting.BilledAttempt attempt(MentorTurn turn) {
         return new ProxyRouting.BilledAttempt(
                 UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, WORKER);
     }
 
     private void accumulate(ProxyRouting.BilledAttempt attempt, ProxyTokenUsage usage) {
-        transactionTemplate.executeWithoutResult(tx -> accumulator.accumulate(attempt, usage));
+        accumulator.accumulate(attempt, usage);
     }
 
     private void end(MentorTurn turn) {

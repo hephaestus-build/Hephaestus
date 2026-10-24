@@ -10,6 +10,7 @@ import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
@@ -80,7 +81,7 @@ class RepositoryTreeStagingLiveTest {
     @BeforeEach
     void setUp() throws Exception {
         gateway = new LiveSandboxGateway();
-        SandboxProperties properties = new SandboxProperties(5, 10, 300, null);
+        SandboxProperties properties = new SandboxProperties(5, 10, 300, SandboxTestLimits.REVIEW);
         var dockerProperties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, owner);
         var dockerClient = DockerClientImpl.getInstance(
                 DefaultDockerClientConfig.createDefaultConfigBuilder().build(),

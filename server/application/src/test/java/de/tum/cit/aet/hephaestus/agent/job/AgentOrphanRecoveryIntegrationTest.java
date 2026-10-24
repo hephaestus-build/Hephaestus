@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -1508,6 +1509,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 agent,
                 mock(WorkerJwtIssuer.class),
                 sandbox,
+                SandboxTestLimits.PROPERTIES,
                 mock(AsyncTaskExecutor.class),
                 transactionTemplate,
                 objectMapper,

@@ -12,8 +12,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -149,7 +149,7 @@ class DockerGatewayTransportTest extends BaseUnitTest {
                 List.of("sh", "-c", "run-review"),
                 Map.of(),
                 "token",
-                ResourceLimits.DEFAULT,
+                SandboxTestLimits.ATTEMPT,
                 null,
                 Map.of("task.json", "{}".getBytes(StandardCharsets.UTF_8)),
                 onDisk,

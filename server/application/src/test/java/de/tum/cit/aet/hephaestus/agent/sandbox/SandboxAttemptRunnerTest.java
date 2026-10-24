@@ -15,7 +15,6 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
@@ -91,7 +90,7 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
                 List.of("echo", "hello"),
                 environment,
                 "test-token",
-                ResourceLimits.DEFAULT,
+                SandboxTestLimits.ATTEMPT,
                 workDeadline,
                 files,
                 filesOnDisk,
@@ -137,6 +136,7 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
             List<String> command = new ArrayList<>(SandboxLayout.RUNTIME_COMMAND);
             command.addAll(List.of("echo", "hello"));
             assertThat(launch.command()).isEqualTo(command);
+            assertThat(launch.limits()).isEqualTo(SandboxTestLimits.ATTEMPT);
             long workDeadline = Long.parseLong(backend.environment.get("SANDBOX_WORK_DEADLINE_MS"));
             long uploadDeadline = Long.parseLong(backend.environment.get("SANDBOX_UPLOAD_DEADLINE_MS"));
             assertThat(uploadDeadline - workDeadline).isEqualTo(SandboxLayout.RESULT_UPLOAD_GRACE.toMillis());

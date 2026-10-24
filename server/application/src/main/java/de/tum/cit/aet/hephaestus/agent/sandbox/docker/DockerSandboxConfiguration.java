@@ -218,7 +218,10 @@ public class DockerSandboxConfiguration {
             DockerClientOperations volumeOperations,
             SandboxCreator creator,
             DockerSandboxProperties dockerProperties,
-            SandboxGatewayConnector gateway) {
+            SandboxGatewayConnector gateway,
+            SandboxProperties sandboxProperties) {
+        ContainerSecurityPolicy.requireRoomBesideTmpfs(
+                sandboxProperties.defaultResourceLimits().memoryBytes());
         return new DockerSandboxBackend(
                 networkManager,
                 containerManager,

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.util.List;
@@ -46,7 +47,7 @@ class SandboxSpecTest extends BaseUnitTest {
                 List.of(),
                 Map.of(),
                 token,
-                ResourceLimits.DEFAULT,
+                SandboxTestLimits.ATTEMPT,
                 null,
                 Map.of(),
                 Map.of(),
@@ -93,10 +94,10 @@ class SandboxSpecTest extends BaseUnitTest {
 
         @Test
         void shouldAcceptDefaults() {
-            assertThat(ResourceLimits.DEFAULT.memoryBytes()).isEqualTo(4L * 1024 * 1024 * 1024);
-            assertThat(ResourceLimits.DEFAULT.cpus()).isEqualTo(2.0);
-            assertThat(ResourceLimits.DEFAULT.pidsLimit()).isEqualTo(512);
-            assertThat(ResourceLimits.DEFAULT.maxRuntime()).isEqualTo(Duration.ofMinutes(10));
+            assertThat(SandboxTestLimits.ATTEMPT.memoryBytes()).isEqualTo(4L * 1024 * 1024 * 1024);
+            assertThat(SandboxTestLimits.ATTEMPT.cpus()).isEqualTo(2.0);
+            assertThat(SandboxTestLimits.ATTEMPT.pidsLimit()).isEqualTo(512);
+            assertThat(SandboxTestLimits.ATTEMPT.maxRuntime()).isEqualTo(Duration.ofMinutes(10));
         }
 
         @Test
