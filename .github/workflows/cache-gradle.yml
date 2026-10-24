@@ -1,0 +1,45 @@
+name: Warm Gradle caches
+
+# Main pushes reuse the merge group's packaged server and run no Gradle build, so this job is the
+# only producer of the Gradle state that server jobs restore. docs/contributor/ci-cd.mdx § Caches.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**/*.gradle.kts"
+      - "server/**/gradle.lockfile"
+      - "server/*-gradle.lockfile"
+      - "server/gradle.properties"
+      - "server/gradle/**"
+      - "server/generated-clients/**"
+      - ".java-version"
+      - ".github/actions/setup-caches/**"
+      - ".github/workflows/cache-gradle.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+# Cache warming is independent of release validation; a cold cache remains a valid build.
+concurrency:
+  group: cache-gradle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gradle:
+    name: Gradle build and dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-caches
+        with:
+          cache-write: "true"
+      # Every configuration, plus the tasks whose tools resolve outside them: the action's cache
+      # cleanup keeps only what this build used. The inventory is a dry run of the test runtime.
+      - name: Build what the server jobs restore
+        working-directory: server
+        run: ./gradlew resolveDependencies :application:bootJar :application:testClasses :application:testInventory :spotlessCheck :application:spotlessCheck :application:pmdMain

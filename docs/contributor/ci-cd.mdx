@@ -597,6 +597,7 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `ci-quality-gates.yml`                | Called by cicd.yml                                                            | Selects quality legs, clean-install verification and story tests                                                                                                                                                                 |
 | `ci-quality-leg.yml`                  | Called by ci-quality-gates.yml                                                | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg                                                                                                                                     |
 | `cache-toolchain.yml`                 | Main push changing install inputs or setup                                    | Seeds trusted Linux and Windows install caches without repeating quality gates                                                                                                                                                   |
+| `cache-gradle.yml`                    | Main push changing Gradle inputs, or dispatch                                 | The only Gradle cache producer: builds what the server jobs restore                                                                                                                                                              |
 | `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml                                                                                                                        |
 | `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, compiled from source                                                                                                                                                       |
 | `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                                             |
@@ -689,11 +690,23 @@ attestation verification, including rejection before alias publication. Signing 
 ### Caches
 
 A run restores caches from its own branch and from `main`, never from a sibling branch. Task-cache
-entries are content-addressed, so a pull request saves them for its own reruns. Gradle caches are
-published only by the server package job on trusted default-branch push, schedule and dispatch runs.
-Other jobs are read-only consumers.
-The Gradle action prefers an older same-job cache to a newer producer cache.
-Thus, consumers must not publish snapshots that become stale between their main-branch runs.
+entries are content-addressed, so a pull request saves them for its own reruns.
+
+`cache-gradle.yml` is the only Gradle cache producer. Every other job is a read-only consumer.
+The producer runs after a main push changes a Gradle input. The inputs are the build scripts, the
+lockfiles, the version catalog, the wrapper, the generated-client sources and the JDK pin.
+
+The producer resolves every dependency configuration of the server build. It also runs the Gradle work of the
+server jobs: packaging, the test classes, Spotless, PMD and a test inventory that does not execute tests.
+The Gradle action keeps only what a job used, so this producer uses everything a consumer can need.
+
+A main push does not build the server, because it reuses the merge group's packaged server (§ Build once).
+Thus, without this producer, nothing would refresh the dependencies that consumers restore.
+Consumers would download them from Maven Central in every job.
+
+The Gradle action prefers an older entry of the same job to a newer entry of another job
+([restore order](https://github.com/gradle/actions/blob/v6.3.0/docs/setup-gradle.md#finding-a-matching-cache-entry)).
+Thus, a second writer would pin consumers to its stale snapshot, even if it writes only when reuse fails.
 
 The pnpm executable cache also saves only from `main`. The JDK is pinned once, in `.java-version`.
 
