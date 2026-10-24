@@ -285,9 +285,13 @@ function stepInputs(declaration: YAMLMap): YAMLMap {
 	return map;
 }
 
-/** The shell a named `run` step ships. */
 /** A `detect-changes` tier output for one event, with the live `ci:full` read set or unreadable. */
-function evaluateTierOutput(source: string, event: string, full: string | undefined): string {
+function evaluateTierOutput(
+	source: string,
+	event: string,
+	full: string | undefined,
+	filter: Readonly<Record<string, string>> = {},
+): string {
 	const body = /^\$\{\{ (?<body>.+) \}\}$/u.exec(source)?.groups?.body;
 	assert.ok(isSet(body));
 	const parsed = new Parser(new Lexer(body).lex().tokens, ["github", "steps"], []).parse();
@@ -296,6 +300,7 @@ function evaluateTierOutput(source: string, event: string, full: string | undefi
 			github: { event_name: event },
 			steps: {
 				opt_in: { outputs: full === undefined ? {} : { full } },
+				filter: { outputs: filter },
 				skip_check: { outputs: { should_skip: "true" } },
 				release_candidate: { outputs: { "release-candidate": "false" } },
 			},
@@ -306,6 +311,7 @@ function evaluateTierOutput(source: string, event: string, full: string | undefi
 	return new Evaluator(parsed, context).evaluate().coerceString();
 }
 
+/** The shell a named `run` step ships. */
 function runScript(workflow: Document, jobPath: string[], name: string): string {
 	const shell = namedStep(workflow, jobPath, name).get("run");
 	assert.ok(typeof shell === "string", `${name} is not a run step`);
@@ -798,6 +804,14 @@ void describe("CI contract", () => {
 				evaluateTierOutput(skip, event, full),
 				skipped,
 				`duplicate skip, ${event} ${label}`,
+			);
+		}
+		// A change to the tier's own inputs runs it on the pull request, label or not.
+		for (const filter of ["queue-tier-inputs", "test-config", "build-config"]) {
+			assert.equal(
+				evaluateTierOutput(decision, "pull_request", "false", { [filter]: "true" }),
+				"true",
+				filter,
 			);
 		}
 		const optIn = namedStep(orchestrator, ["jobs", "detect-changes"], "Read the ci:full opt-in");

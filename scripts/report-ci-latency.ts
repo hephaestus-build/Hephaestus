@@ -189,11 +189,11 @@ if (import.meta.main) {
 	}
 	if (budget.status === "exceeded") {
 		process.stdout.write(
-			"::warning title=PR latency target exceeded::Historical PR latency exceeds the target; inspect the job summary and retained run timelines.\n",
+			"::warning title=Full-verification latency target exceeded::Historical full-verification latency exceeds the target; inspect the job summary and retained run timelines.\n",
 		);
 	} else if (budget.status === "insufficient-data") {
 		process.stdout.write(
-			"::notice title=PR latency baseline incomplete::Fewer than ten qualifying runs; no performance verdict yet.\n",
+			"::notice title=Full-verification latency baseline incomplete::Fewer than ten qualifying runs; no performance verdict yet.\n",
 		);
 	}
 }

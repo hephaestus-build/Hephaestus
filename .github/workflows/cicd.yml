@@ -81,10 +81,11 @@ jobs:
       # diff, which paths-filter reads for a group from `merge_group.base_sha..head_sha` without
       # being told.
       unfiltered: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-      # A pull request runs the fast tier unless it carries `ci:full`. A merge group, a push and a
-      # dispatch also run the queue tier: integration shards, database tests, PostgreSQL drills and
-      # browser suites. An unreadable label runs it too. ci-cd.mdx § Two verification tiers says why.
-      queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' }}
+      # A pull request runs the fast tier unless it carries `ci:full` or changes the queue tier's own
+      # inputs. A merge group, a push and a dispatch also run the queue tier: integration shards,
+      # database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
+      # ci-cd.mdx § Two verification tiers says why.
+      queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' || steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true' }}
       publishable: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
       previews: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
@@ -442,6 +443,15 @@ jobs:
               - '.github/workflows/ci-build.yml'
             docs:
               - 'docs/**'
+            # Changes the queue tier judges best before the queue: migrations, which the database
+            # tests and drills replay, and the browser suites' own specs and configuration. The
+            # workflows and actions that define the tier are `test-config` and `build-config`.
+            queue-tier-inputs:
+              - 'server/application/src/main/resources/db/**'
+              - 'webapp/e2e/**'
+              - 'webapp/playwright.config.ts'
+              - 'extension/e2e/**'
+              - 'extension/playwright.config.ts'
             ci-config:
               - '.github/workflows/**'
               - '.github/actions/**'

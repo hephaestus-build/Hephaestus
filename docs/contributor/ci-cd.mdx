@@ -763,13 +763,19 @@ The queue tier is most of a run's runner time, and GitHub's runner concurrency l
 A queue-tier failure removes the entry from the queue, and the failure comment links the run.
 Fix the failure and queue the pull request again.
 
-To get the queue tier before you queue a change, add the `ci:full` label to the pull request.
-Then push, or re-run the latest CI/CD run. Use it for changes to migrations, runtime roles or browser flows.
-`Detect changes` reads the label from the pull request when it runs, not from the event, so a re-run sees it.
+A pull request also runs the queue tier when it changes the tier's own inputs.
+These inputs are the workflows and actions that define the tier, the database migrations, and the
+browser suites' specs and configuration.
+
+To get the queue tier for any other change before you queue it, add the `ci:full` label to the pull request.
+Then push, or use **Re-run all jobs** on the latest CI/CD run.
+**Re-run failed jobs** keeps the earlier `Detect changes` result, so it does not see the label.
+`Detect changes` reads the label from the pull request when it runs, not from the event.
 A label read that fails runs the queue tier.
 
 There is no `labeled` trigger, because a label event would cancel the running CI.
-A run whose jobs all skip would also publish a skipped `CI Status Gate`, which the ruleset accepts.
+A run whose jobs all skip would also report **CI Status Gate** as passed on the head commit.
+That report would replace the verdict of the run that it cancelled.
 Locally, `vp run test:server:integration` and `vp run --filter webapp test:e2e` run the same suites.
 
 **Revert criterion.** If more than 10 % of merge groups fail over two weeks, the queue tier is catching

@@ -143,7 +143,7 @@ void test(
 			},
 		);
 		assert.equal(result.status, 0, result.stderr);
-		assert.match(result.stdout, /::notice title=PR latency baseline incomplete/u);
+		assert.match(result.stdout, /::notice title=Full-verification latency baseline incomplete/u);
 		const evidence = await readFile(path.join(directory, "tmp/ci-metrics/ci-latency.json"), "utf8");
 		assert.match(evidence, /"status": "insufficient-data"/u);
 		assert.match(evidence, /"runs": \[\]/u);
