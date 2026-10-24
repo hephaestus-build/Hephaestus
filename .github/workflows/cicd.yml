@@ -449,9 +449,11 @@ jobs:
             docs:
               - 'docs/**'
             # Changes the queue tier judges best before the queue: migrations, which the database
-            # tests and drills replay, and the browser suites' own specs and configuration. The
-            # workflows and actions that define the tier are `test-config` and `build-config`.
+            # tests and drills replay, the integration shards and test tasks the build script
+            # defines, and the browser suites' own specs and configuration. The workflows and
+            # actions that define the tier are `test-config` and `build-config`.
             queue-tier-inputs:
+              - 'server/application/build.gradle.kts'
               - 'server/application/src/main/resources/db/**'
               - 'webapp/e2e/**'
               - 'webapp/playwright.config.ts'
@@ -1226,3 +1228,5 @@ jobs:
           message: >-
             The [combined merge-queue CI run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             failed, so this pull request left the queue. Inspect the run before re-queueing it.
+            A pull request runs only the fast tier, so an integration, database, drill or browser
+            failure first shows here; add the `ci:full` label to reproduce it on the pull request.

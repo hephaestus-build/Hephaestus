@@ -3,30 +3,17 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, test } from "node:test";
+import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
 	isFullVerification,
+	isLatencySample,
 	latencyBudget,
+	queueTierFailures,
 	renderLatencyBudget,
 	selectLatencyRuns,
-	versionBranch,
 } from "./report-ci-latency.ts";
-
-void describe("the Version PR's CI branch", () => {
-	void test("follows the base branch changesets is configured with", async () => {
-		assert.equal(versionBranch({ baseBranch: "main" }), "changeset-release/main");
-		assert.equal(versionBranch({ baseBranch: "release/2" }), "changeset-release/release/2");
-		const config: unknown = JSON.parse(await readFile(".changeset/config.json", "utf8"));
-		assert.equal(versionBranch(config), "changeset-release/main");
-	});
-
-	void test("refuses a configuration that names no base branch", () => {
-		assert.throws(() => versionBranch({}), /baseBranch must be a string/u);
-		assert.throws(() => versionBranch({ baseBranch: "" }), /declares no baseBranch/u);
-	});
-});
 
 void test("sampling takes first-attempt successful merge groups inside the window", () => {
 	const now = Date.parse("2026-01-30T00:00:00Z");
@@ -53,9 +40,47 @@ void test("sampling takes first-attempt successful merge groups inside the windo
 		selectLatencyRuns(
 			{ workflow_runs: [run, ...excluded.map((fields) => ({ ...run, ...fields }))] },
 			now,
+			"merge_group",
 		),
 		[run],
 	);
+	// The pull-request cohort samples the same way, from its own event.
+	const pullRequest = { ...run, event: "pull_request", head_branch: "feature" };
+	assert.deepEqual(selectLatencyRuns({ workflow_runs: [run, pullRequest] }, now, "pull_request"), [
+		pullRequest,
+	]);
+});
+
+void test("a release candidate's evidence run is not a latency sample", () => {
+	assert.equal(isLatencySample([{ name: "Detect changes" }]), true);
+	assert.equal(
+		isLatencySample([{ name: "Detect changes" }, { name: "Release evidence preflight" }]),
+		false,
+	);
+});
+
+void test("the revert criterion counts groups a queue-tier job failed, apart from fast-tier failures", () => {
+	const groups = [
+		{ conclusion: "success", failedJobs: [] },
+		{ conclusion: "success", failedJobs: [] },
+		{
+			conclusion: "failure",
+			failedJobs: ["Test / App Server: Integration (providers)", "CI Status Gate"],
+		},
+		{ conclusion: "failure", failedJobs: ["Build / App Server: PostgreSQL drills"] },
+		// A fast-tier failure, and a hung prerequisite, are not the queue tier's catch.
+		{ conclusion: "failure", failedJobs: ["Security / Dependencies, secrets, and policy"] },
+		{ conclusion: "failure", failedJobs: ["Detect changes", "CI Status Gate"] },
+		// The queue regrouped this one.
+		{ conclusion: "cancelled", failedJobs: [] },
+	];
+	assert.deepEqual(queueTierFailures(groups), {
+		groups: 6,
+		queueTierFailed: 2,
+		fastTierFailed: 2,
+		queueTierShare: 2 / 6,
+	});
+	assert.equal(queueTierFailures([]).queueTierShare, null);
 });
 
 const verificationJobs = [
@@ -126,7 +151,8 @@ void test(
 		await writeFile(path.join(directory, ".changeset/config.json"), '{"baseBranch":"main"}');
 		await writeFile(
 			path.join(directory, "gh"),
-			`#!/bin/sh\nprintf '%s\\n' '{"workflow_runs":[]}'\n`,
+			// `gh api --paginate --slurp` prints one array of pages.
+			`#!/bin/sh\nprintf '%s\\n' '[{"workflow_runs":[]}]'\n`,
 			{ mode: 0o755 },
 		);
 		const result = spawnSync(
@@ -146,8 +172,9 @@ void test(
 		assert.match(result.stdout, /::notice title=Full-verification latency baseline incomplete/u);
 		const evidence = await readFile(path.join(directory, "tmp/ci-metrics/ci-latency.json"), "utf8");
 		assert.match(evidence, /"status": "insufficient-data"/u);
-		assert.match(evidence, /"runs": \[\]/u);
-		await writeFile(path.join(directory, "gh"), "#!/bin/sh\necho '{}'\n", { mode: 0o755 });
+		assert.match(evidence, /"fullVerification": \[\]/u);
+		assert.match(evidence, /"queueTierShare": null/u);
+		await writeFile(path.join(directory, "gh"), "#!/bin/sh\necho '[{}]'\n", { mode: 0o755 });
 		const invalid = spawnSync(
 			process.execPath,
 			[fileURLToPath(new URL("report-ci-latency.ts", import.meta.url))],

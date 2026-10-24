@@ -83,7 +83,7 @@ A bundled change ships only after its mechanical checks pass.
 This rule applies to every proposed change, from a person or from an AI assistant.
 
 Mechanical checks prove the contract.
-CI runs them on each pull request.
+CI runs them before each change merges.
 They include these checks:
 
 - The catalog loader and the definition validator accept every bundled definition.

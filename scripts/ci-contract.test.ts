@@ -19,7 +19,7 @@ import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { exitStatus } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { planRelease, releaseOutputs } from "./plan-release.ts";
-import { versionBranch } from "./report-ci-latency.ts";
+import { QUEUE_TIER_JOBS } from "./report-ci-latency.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
 import { planSubjects } from "./scan-main-images.ts";
 import { PLATFORMS, planUpstreamSubjects } from "./scan-upstream-images.ts";
@@ -283,6 +283,13 @@ function stepInputs(declaration: YAMLMap): YAMLMap {
 	const map = declaration.get("with");
 	assert.ok(isMap(map), "step declares no inputs");
 	return map;
+}
+
+/** The branch changesets maintains the Version PR on, from its configured base branch. */
+function versionBranch(config: unknown): string {
+	const baseBranch = asString(asRecord(config, "changeset config").baseBranch, "baseBranch");
+	assert.ok(baseBranch, "changeset config declares no baseBranch");
+	return `changeset-release/${baseBranch}`;
 }
 
 /** A `detect-changes` tier output for one event, with the live `ci:full` read set or unreadable. */
@@ -815,6 +822,39 @@ void describe("CI contract", () => {
 				filter,
 			);
 		}
+
+		// The queue tier is exactly these jobs, and the latency report counts them by these names.
+		const guarded: string[] = [];
+		for (const [file, caller] of [
+			[".github/workflows/ci-build.yml", "Build"],
+			[".github/workflows/ci-tests.yml", "Test"],
+		] as const) {
+			const callee = parseDocument(await readFile(file, "utf8"));
+			const jobs = callee.get("jobs");
+			assert.ok(isMap(jobs));
+			for (const entry of jobs.items) {
+				if (isMap(entry.value) && String(entry.value.get("if")).includes("inputs.queue_tier")) {
+					const name = `${caller} / ${String(entry.value.get("name"))}`;
+					guarded.push(String(entry.key));
+					assert.ok(
+						QUEUE_TIER_JOBS.some((pattern) => pattern.test(name)),
+						`report-ci-latency.ts does not count ${name} as queue tier`,
+					);
+				}
+			}
+		}
+		assert.deepEqual(guarded.toSorted(), [
+			"extension-e2e",
+			"postgres-drill",
+			"server-database",
+			"server-integration",
+			"webapp-e2e",
+		]);
+		// A pull request packages for the browser suites only when it runs them.
+		assert.match(
+			String(orchestrator.getIn(["jobs", "server-package", "if"])),
+			/\(needs\.detect-changes\.outputs\.queue-tier == 'true' && \(needs\.detect-changes\.outputs\.e2e == 'true' \|\| needs\.detect-changes\.outputs\.extension-e2e == 'true'\)\)/u,
+		);
 
 		// A draft runs the fast tier only, unless it carries the label, and builds no image.
 		const outputs = (name: string) =>

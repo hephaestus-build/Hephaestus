@@ -214,9 +214,9 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  pr-latency:
+  ci-latency:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    name: Full-verification latency report
+    name: CI latency report
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -229,7 +229,7 @@ jobs:
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "none"
-      - name: Measure completed merge-group verdicts
+      - name: Measure completed CI verdicts
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/report-ci-latency.ts
@@ -237,7 +237,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: pr-latency-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ci-latency-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/ci-metrics/ci-latency.json
           if-no-files-found: error
           retention-days: 30

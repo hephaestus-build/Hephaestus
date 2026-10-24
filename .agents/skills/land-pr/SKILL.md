@@ -40,6 +40,10 @@ Two path groups need attention:
   They do not select the App Server leg.
 - `package.json` or `pnpm-lock.yaml` select every source leg.
 
+A pull request runs only the fast tier. The merge queue runs the integration shards, the database
+tests, the drills and the browser suites. To run them before you queue a change, add the `ci:full`
+label ([Two verification tiers](../../../docs/contributor/ci-cd.mdx#two-verification-tiers)).
+
 Reconcile changed dependency inputs before local gates.
 See [Dependency installation](../../../docs/contributor/local-verification.mdx#dependency-installation)
 for the native install procedure.

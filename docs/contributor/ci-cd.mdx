@@ -769,8 +769,10 @@ no image scan. The automatic queue tier for the tier's own inputs is also off, b
 Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run, with its images.
 
 A pull request that is not a draft also runs the queue tier when it changes the tier's own inputs.
-These inputs are the workflows and actions that define the tier, the database migrations, and the
-browser suites' specs and configuration.
+These inputs are the workflows and actions that define the tier and the database migrations.
+They also include the server build script, which defines the shards and test tasks, and the browser
+suites' specs and configuration. A changed integration test or server class is not such an input, so its integration
+tests first run in the merge queue.
 
 To get the queue tier for any other change before you queue it, add the `ci:full` label to the pull request.
 Then push, or use **Re-run all jobs** on the latest CI/CD run.
@@ -781,11 +783,18 @@ A label read that fails runs the queue tier.
 There is no `labeled` trigger, because a label event would cancel the running CI.
 A run whose jobs all skip would also report **CI Status Gate** as passed on the head commit.
 That report would replace the verdict of the run that it cancelled.
-Locally, `vp run test:server:integration` and `vp run --filter webapp test:e2e` run the same suites.
+Locally, these commands run the queue tier's suites:
 
-**Revert criterion.** If more than 10 % of merge groups fail over two weeks, the queue tier is catching
-too much that a pull request should have caught. Then run the queue tier on pull requests again:
-change `queue-tier` in `detect-changes` to `true` for every event.
+- `vp run test:server:integration` for the integration shards.
+- The database contract tests: from `server/`, `./gradlew :application:databaseTest` with the `SPRING_DATASOURCE_*` settings of a running PostgreSQL (`server/AGENTS.md` § Test tiers).
+- `vp run test:postgres-restore` and `vp run test:postgres-pitr` for the drills.
+- `vp run --filter webapp test:e2e` and `vp run test:extension:e2e` for the browser suites.
+
+**Revert criterion.** [`report:ci-latency`](#full-verification-latency) reports the share of merge
+groups in the last 14 days that a queue-tier job failed, apart from the groups that a fast-tier job
+failed. If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
+should have caught. Then run the queue tier on pull requests again: change `queue-tier` in
+`detect-changes` to `true` for every event.
 
 ## Path filters
 
