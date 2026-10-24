@@ -83,7 +83,7 @@ export function ProblemLevel({ nested, path, problem: state }: ProblemLevelProps
 									<span className="font-mono text-xs break-all">{location}</span>
 								</ReviewFact>
 							)}
-							<ReviewFact label="Result">
+							<ReviewFact label="Observation">
 								{/* One record sheet stands at a time (`layeredStack`): its parent takes its place, and Back returns here. */}
 								<DetailStackLink
 									entry={resultLevel(state.problem.resultId)}
@@ -135,8 +135,8 @@ export function ProblemLevel({ nested, path, problem: state }: ProblemLevelProps
 					<p className="text-sm text-muted-foreground">The evidence of this problem is hidden.</p>
 				)}
 				<p className="text-sm text-muted-foreground">
-					A mark applies to the whole result, not to one problem. Open the result to mark it
-					incorrect or accepted.
+					A mark applies to the whole observation, not to one problem. Open the observation to mark
+					it incorrect or accepted.
 				</p>
 			</DrawerBody>
 		</>

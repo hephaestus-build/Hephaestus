@@ -104,7 +104,7 @@ describe("the selection across practice review tabs", () => {
 		const bar = await selectionBar();
 		await within(bar).findByText(/^Review of #1423 · /u);
 		const navigation = screen.getByRole("navigation", { name: "Practice review sections" });
-		for (const tab of ["Overview", "Results", "Feedback"]) {
+		for (const tab of ["Overview", "Observations", "Feedback"]) {
 			expect(
 				carriedSearch(within(navigation).getByRole("link", { name: new RegExp(`^${tab}`, "u") })),
 			).toStrictEqual({ reviewId: REVIEW, selected: true });

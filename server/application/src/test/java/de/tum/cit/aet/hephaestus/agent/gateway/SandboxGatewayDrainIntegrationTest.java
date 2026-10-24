@@ -78,10 +78,7 @@ class SandboxGatewayDrainIntegrationTest {
         Thread closing = new Thread(context::close, "worker-drain-shutdown");
         closing.setDaemon(true);
         try {
-            int gatewayPort = context.getBean(TomcatServletWebServerFactory.class).getAdditionalConnectors().stream()
-                    .findFirst()
-                    .orElseThrow()
-                    .getLocalPort();
+            int gatewayPort = context.getBean(SandboxGatewayConnector.class).port();
             closing.start();
             assertThat(draining.await(20, TimeUnit.SECONDS))
                     .as("the drain is waiting for the in-flight review")
@@ -123,8 +120,14 @@ class SandboxGatewayDrainIntegrationTest {
 
         /** The production connector, on a port the operating system assigns. */
         @Bean
-        WebServerFactoryCustomizer<TomcatServletWebServerFactory> sandboxGatewayConnector() {
+        SandboxGatewayConnector sandboxGatewayConnector() {
             return new SandboxGatewayConfiguration().sandboxGatewayConnector(new SandboxGatewayProperties(0, 1024, 60));
+        }
+
+        @Bean
+        WebServerFactoryCustomizer<TomcatServletWebServerFactory> sandboxGatewayConnectorCustomizer(
+                SandboxGatewayConnector gateway) {
+            return new SandboxGatewayConfiguration().sandboxGatewayConnectorCustomizer(gateway);
         }
 
         @Bean

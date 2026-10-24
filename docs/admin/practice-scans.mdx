@@ -50,12 +50,12 @@ A changed body with that identity is a conflict, not a second scan.
 
 Files counts distinct eligible file items.
 Outcome counts describe practice/file pairs, so a file can contribute to several practices.
-Reviewed counts new results from this scan. Reused counts earlier results used again.
+Reviewed counts new observations from this scan. Reused counts earlier observations used again.
 The tables show their combined total as **Reviewed or reused**.
 The report separates these facts:
 
-- Results judged in this scan.
-- Results reused from earlier reviews with equal proof identity and method.
+- Observations judged in this scan.
+- Observations reused from earlier reviews with equal proof identity and method.
 - Withheld pairs with recorded refusal reasons.
 - Not reviewed pairs left untouched when the scan closed.
 - Listing completeness and execution completion.
@@ -69,12 +69,12 @@ Null means that the scan did not record exclusions or that the raw inventory exp
 Complete requires a complete listing and every selected pair judged or reused.
 Withheld or unreached work produces Partial.
 Failed and Cancelled retain the work already reached.
-A valid empty selection has zero pairs, not a fabricated Met result.
+A valid empty selection has zero pairs, not a fabricated Met observation.
 Incomplete listing has no invented total file count.
 
 Recorded counts preserve the totals at closure.
 Current open-problem counts exclude accepted, incorrect or inaccessible proof.
-Accepting a result changes open counts without changing its recorded outcome.
+Accepting an observation changes open counts without changing its recorded outcome.
 A hidden quotation does not imply that no problem exists.
 
 ## Compare scans
@@ -83,7 +83,7 @@ Comparison uses the previous terminal scan of the same repository and default br
 Each practice needs equal selectors, review digest and frozen model method.
 A changed standard or method starts a comparison break.
 
-A reused result keeps its original producer review.
+A reused observation keeps its original producer review.
 The report links through the scan's durable membership.
 A model change or changed context requires a new judgment.
 Reuse currently requires the same assigned file blob and declared context inventory.
@@ -92,7 +92,7 @@ With repository-wide context, an unrelated file change can therefore prevent reu
 
 New, Unchanged and Updated describe comparable problem identities.
 Absent requires complete new proof at a changed file version.
-A complete Not met result can prove one earlier problem absent while recording another problem.
+A complete Not met observation can prove one earlier problem absent while recording another problem.
 
 Met can also establish repair within its evidence boundary.
 Missed reads, withholding, marks, applicability exclusions and removed files do not prove absence.
@@ -101,7 +101,7 @@ Completed files in a partial scan can establish their own comparison. The unreac
 ## Read listing warnings
 
 The removal guard uses the entire repository inventory before practice filters.
-An incomplete listing or a [suspect listing](/contributor/practice-review-pipeline#scans) removes no files or current results.
+An incomplete listing or a [suspect listing](/contributor/practice-review-pipeline#scans) removes no files or current observations.
 A changed selector cannot make a real repository file disappear.
 Renaming a file creates a new file item. It is not a claimed repair.
 

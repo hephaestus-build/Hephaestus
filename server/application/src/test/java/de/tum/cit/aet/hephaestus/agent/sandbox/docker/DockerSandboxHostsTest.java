@@ -69,7 +69,8 @@ class DockerSandboxHostsTest extends BaseUnitTest {
     @BeforeEach
     void setUp() throws IOException {
         sandbox = new SandboxHosts(
-                new DockerSandboxBackend(networks, containers, securityPolicy, volumes, creator, "worker-1", 8081),
+                new DockerSandboxBackend(
+                        networks, containers, securityPolicy, volumes, creator, "worker-1", () -> 8081),
                 workspaces,
                 gatewaySessions,
                 "heph-host:test");

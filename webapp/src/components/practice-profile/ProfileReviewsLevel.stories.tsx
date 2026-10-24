@@ -84,9 +84,9 @@ export const Default: Story = {
 		await expect(screen.getByLabelText("Timeframe")).toHaveTextContent("All time");
 		await expect(screen.getByText("Review 2")).toBeVisible();
 		await expect(screen.getByText("Thin controllers")).toBeVisible();
-		await expect(screen.getByText("one result met, one could not be determined")).toBeVisible();
+		await expect(screen.getByText("one practice met, one could not be determined")).toBeVisible();
 		await expect(screen.getByText("Explain each change, Keep the diff reviewable")).toBeVisible();
-		await expect(screen.getByText("one result did not apply")).toBeVisible();
+		await expect(screen.getByText("one practice did not apply")).toBeVisible();
 		await expect(screen.getByText("Stopped before it finished")).toBeVisible();
 		await expect(screen.getAllByText("Nothing to improve")).toHaveLength(2);
 
@@ -250,7 +250,7 @@ export const WhileAReviewIsRunning: Story = {
 	play: async () => {
 		await settledDrawerPanel();
 		await expect(screen.getByText("Still running")).toBeVisible();
-		await expect(screen.getByText("Results appear as it finishes")).toBeVisible();
+		await expect(screen.getByText("Observations appear as it finishes")).toBeVisible();
 	},
 };
 
@@ -277,7 +277,7 @@ export const PartialReview: Story = {
 		// The status is the label the workspace admin's list of reviews shows, with its sentence.
 		const badge = screen.getByRole("button", { name: "Partial" });
 		await expect(badge).toHaveAccessibleDescription(
-			"The review’s results cover only the work it reached.",
+			"The review’s observations cover only the work it reached.",
 		);
 		// A tap on it opens the sentence, not the review.
 		await userEvent.pointer({ keys: "[TouchA]", target: badge });

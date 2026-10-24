@@ -853,7 +853,7 @@ function PracticeCatalogRoute() {
 					<AlertDialogHeader>
 						<AlertDialogTitle>Delete group “{deletingGroup?.name}”?</AlertDialogTitle>
 						<AlertDialogDescription>
-							Its practices stay in the workspace, unassigned, with their results.
+							Its practices stay in the workspace, unassigned, with their observations.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -892,7 +892,7 @@ function PracticeCatalogRoute() {
 							{deletingPractice === null ? "" : currentDefinition(deletingPractice).name}”?
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							This permanently deletes the practice and its results. You cannot undo this.
+							This permanently deletes the practice and its observations. You cannot undo this.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

@@ -256,7 +256,7 @@ export const RunningWithNothingRecorded: Story = {
 		await expect(
 			screen.getByText("Observations appear here as the review reaches each practice."),
 		).toBeVisible();
-		await expect(screen.queryByText(/recorded no result/u)).toBeNull();
+		await expect(screen.queryByText(/recorded no observation/u)).toBeNull();
 	},
 };
 
@@ -269,7 +269,7 @@ export const PartialReview: Story = {
 	play: async () => {
 		const panel = within(await settledReviewPanel());
 		await expect(panel.getByRole("button", { name: "Partial" })).toHaveAccessibleDescription(
-			"The review’s results cover only the work it reached.",
+			"The review’s observations cover only the work it reached.",
 		);
 		await expect(panel.queryByText(/did not finish|stopped before/iu)).toBeNull();
 		await expect(

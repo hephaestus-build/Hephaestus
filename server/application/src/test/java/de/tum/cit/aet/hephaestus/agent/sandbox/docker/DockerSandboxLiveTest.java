@@ -104,7 +104,7 @@ class DockerSandboxLiveTest {
                         dockerOps,
                         new SandboxCreator(dockerOps),
                         owner,
-                        gateway.port(),
+                        gateway::port,
                         true),
                 workspaceManager,
                 gateway.sessions(),

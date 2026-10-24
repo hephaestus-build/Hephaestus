@@ -228,7 +228,7 @@ function FeedbackSources({
 }) {
 	const listed = feedback.basis.filter((id) => byId.has(id)).length;
 	if (elsewhere !== undefined && listed === 0) {
-		return `From ${countOf(feedback.basis.length, "result", "results")} that review recorded`;
+		return `From ${countOf(feedback.basis.length, "observation", "observations")} that review recorded`;
 	}
 	return (
 		<LineageSourceChips

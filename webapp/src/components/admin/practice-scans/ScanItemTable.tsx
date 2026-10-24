@@ -126,7 +126,7 @@ function ScanItemResults({
 						<TableHead scope="col">File</TableHead>
 						<TableHead scope="col">Practice</TableHead>
 						<TableHead scope="col">Status</TableHead>
-						<TableHead scope="col">Result</TableHead>
+						<TableHead scope="col">Observation</TableHead>
 						<TableHead scope="col" className="w-32">
 							<span className="sr-only">Open</span>
 						</TableHead>
@@ -146,7 +146,7 @@ function ScanItemResults({
 										resultId === undefined
 											? undefined
 											: {
-													text: "Open result",
+													text: "Open observation",
 													name: `${path}, ${entry.practiceName}`,
 													render: (
 														<Link

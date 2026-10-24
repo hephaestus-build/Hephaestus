@@ -1,73 +1,18 @@
 ---
 id: production-setup
-title: Integrations & Reference Deployment
-description: The variable reference for every optional integration bundle, and the reference (TUM) multi-file compose deployment.
+title: Integration settings
+description: The deployment settings of every optional integration bundle, email, AI budgets, and sync.
 ---
 
-:::info Which page owns what
+This page owns the deployment settings of the optional integrations: GitLab, Slack, Outline, practice review, email, and sync.
+The [Install guide](./install) owns the base `.env`, the GitHub OAuth app, the first admin, and first boot.
+[Integrations](./integrations) owns the workspace connections that a workspace admin makes in the UI.
+The [reference deployment](./reference-deployment) owns the multi-file Compose stack that the maintainers run, the webapp container, and the rollout tiers.
+The [Install guide](./install#clocks) owns the clock requirement.
 
-**[Install (Self-Hosted)](./install) owns installation:** requirements, the base `.env`, the GitHub OAuth app, the first admin, and first boot.
-It also owns upgrades and install troubleshooting.
-It is the only supported install path.
-
-**This page owns two subjects:**
-
-- The **per-integration variable reference** for GitLab, Slack, Outline, practice review, and sync.
-- The **reference TUM deployment**, with the multi-file compose stack in `docker/compose.{proxy,core,app}.yaml`.
-
-Self-hosters do not use that stack.
-Facts belong on one page, not both.
-This page links to installation facts rather than repeating them.
-
-:::
-
-This page assumes knowledge of Docker Compose.
-The TUM sections also assume access to TUM's protected secrets.
-
-## Platform overview
-
-The reference stack differs from the self-host stack [listed on the install page](./install).
-It contains:
-
-- **Application server:** Spring Boot API, sync, review admission, and Heph conversations.
-- **Application worker:** practice-review sandboxes and the Heph host, with the LLM proxy.
-  Only this container has Docker access.
-- **Webhook server:** the same Spring Boot artifact, with `webhook` profile → NATS JetStream.
-- **React webapp:** nginx serves it.
-- **PostgreSQL 18:** the only supported major version.
-  The release Compose stack includes `pg_partman`.
-  See [ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md).
-  Vanilla PostgreSQL is not a drop-in replacement for the bundled stack.
-- **Hephaestus-native auth:** Spring Security `oauth2Login` federates to GitHub and optional GitLab, either gitlab.com or self-hosted.
-  It issues cookie-session JWTs.
-  See [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md).
-
-## Webapp container
-
-The webapp image runs nginx as an unprivileged user and needs no capabilities.
-
-| Property         | Value                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------- |
-| User and group   | UID `101`, GID `101`                                                                        |
-| Port             | `8080`, plain HTTP. Your proxy handles TLS.                                              |
-| Health check     | `GET /` on port `8080` returns `200`                                                        |
-| Writable path    | `/tmp/hephaestus-webapp` only. It holds the page shell, the runtime configuration and the nginx files. |
-| Root file system | Can be read-only                                                                            |
-
-The reference stack runs the container with a read-only root file system, all capabilities dropped and `no-new-privileges`.
-It mounts a 16 MiB `tmpfs` at `/tmp/hephaestus-webapp`, owned by UID 101 with mode `0700`.
-The maintenance page uses the same image and the same settings.
-The self-host stack uses the same settings.
-If you run the image on another platform, mount an empty directory at `/tmp/hephaestus-webapp` that UID 101 can write, for example an `emptyDir` with `fsGroup: 101`.
-To mount legal overrides, see [Legal Pages](./legal-pages).
-
-## Clocks
-
-Keep the clock of every host that runs a Hephaestus role or PostgreSQL synchronized by NTP.
-Heph turn leases and person erasure compare times that different hosts write.
-If Slack does not answer when Heph starts a streamed reply, the server looks for that reply in the thread by time.
-Hephaestus assumes that Slack's clock and the server's clock differ by less than 2 seconds.
-[Heph runtime § Slack replies](/contributor/unified-pi-runtime#slack-replies) has the rule.
+<a id="webapp-container"></a>
+<a id="clocks"></a>
+<a id="rollout-tiers"></a>
 
 ## Base environment variables
 
@@ -339,10 +284,7 @@ Refresh tokens last 30 days and rotate on use with reuse detection.
 Outline's `apiKeys.create` and `apiKeys.delete` require an interactive session, never a bearer token.
 Hephaestus cannot rotate its own key.
 The connection admin card shows expiry before it happens, using `apiKeys.list` when the key can see itself.
-To renew it:
-
-1. Create a new key in Outline.
-2. Enter it under **Administration → Integrations → Outline**.
+To renew it without erasing the mirror, follow [Replace an Outline key without erasing the mirror](./integrations#replace-an-outline-key-without-erasing-the-mirror).
 
 An expired key reports `accepted=false`.
 The mirror stops refreshing until replacement.
@@ -462,8 +404,10 @@ Two deployment-topology facts belong here.
 The **worker runtime role** (`hephaestus.runtime.worker.enabled`), not `AGENT_ENABLED`, activates the Docker sandbox.
 Only `application-worker` runs sandboxes and holds the Docker socket, for both queued reviews and the Heph host.
 `application-server` disables its worker role and uses connected workers.
+
 `NATS_ENABLED` controls webhook-driven sync consumption.
-It must remain on for that consumption, but is not part of the practice-review bundle.
+It is not part of the practice-review bundle.
+Production startup refuses a server or webhook role without NATS, as [Runtime roles](./runtime-roles#boot-log) describes.
 
 Each worker runs one Heph host for all Heph turns that it claims.
 The host starts with the first turn on that worker.
@@ -471,19 +415,6 @@ The host starts with the first turn on that worker.
 Size each worker for this host in addition to its review sandboxes.
 The application server needs no memory for Heph runtimes.
 [Runtime Roles](./runtime-roles.mdx#heph-turns) explains dispatch, capacity, and the host lifecycle.
-
-### Rollout tiers
-
-Use the same variables differently across environments:
-
-| Environment | Intended scope                                                                                                                                                                                             |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Preview     | Limited by default. Keep GitLab login, GitLab workspaces, sandbox, git checkout, and agent job execution disabled unless explicitly validating rollout.                                                    |
-| Staging     | Uses production compose files with a controlled rollout. Enable GitLab login first, then workspace creation. Enable `AGENT_ENABLED` and `GIT_CHECKOUT_ENABLED` only to validate practice review execution. |
-| Production  | Full rollout only after staging validates the identical bundle.                                                                                                                                            |
-
-Staging and production both use production compose files.
-Their differences should be `.env` values, not compose topology.
 
 ### Instance-wide LLM settings
 
@@ -788,94 +719,4 @@ Optional backfill syncs historical data in batches to avoid rate-limit exhaustio
 It pauses below the rate-limit threshold and resumes on the next cycle.
 It records progress per repository.
 
-:::caution CAUTION: A disconnect erases the active mirror
-
-A workspace connection disconnect or workspace purge permanently deletes its active PostgreSQL mirror.
-This applies to GitHub, GitLab, Slack, and Outline.
-The operation is irreversible.
-A reconnect performs a fresh initial sync.
-
-:::
-
-Materialized diagnostic output, worker-input copies, and broker messages expire within their documented bounded retention windows.
-If erasure fails, the connection stays connected, and you can retry the disconnect.
-If the provider is unreachable, the mirror still erases and the connection disconnects.
-You may then need to remove an app installation, token, or webhook Hephaestus created at the provider.
-
-A connection with its integration disabled instance-wide cannot disconnect until the integration is enabled again.
-Nothing else can erase its mirror.
-See erasure triggers in the [record of processing](./dsms/record-of-processing.md).
-
-## Deployment steps (reference stack)
-
-The [Install guide](./install) owns the same base installation, secrets, GitHub OAuth app and callback, before-first-boot admin allowlist, and legal-pages obligation.
-Only multi-file stack differences appear here.
-Each file is a separate Compose project and needs its own `-p` and `up`.
-Each resolves images from the verified release lock.
-`docker/.env` defines no `HEPHAESTUS_IMAGE_*` variable.
-A project without the lock refuses startup.
-
-For an upgrade, read the [database migration instructions](./compatibility-policy#database-migrations) before starting any target runtime role.
-
-1. Make sure PostgreSQL, NATS, and storage volumes are ready.
-   The self-host stack supplies its own.
-   This stack does not.
-2. Copy `docker/.env.example` to `docker/.env`.
-3. Fill it in per [Install § 2](./install#2-configure-env), with the three reference-only variables above.
-4. Load the variables into your secret manager or Docker/Kubernetes `.env` files.
-5. Prepare the lock beside the reference stack as in [Install § 1](./install#1-get-the-files).
-6. Start projects in this order, with a healthy result required before the next starts:
-
-   ```bash
-   VERSION=<the release you are deploying>   # without the leading "v"
-   node scripts/prepare-release-lock.ts "v$VERSION" docker/release-lock.env
-   cd docker
-   dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
-   dc -p hephaestus-core -f compose.core.yaml up -d --wait nats-server
-   dc -p hephaestus-app -f compose.app.yaml up -d --wait
-   dc -p hephaestus-core -f compose.core.yaml up -d --wait
-   dc -p hephaestus-proxy -f compose.proxy.yaml up -d --wait
-   ```
-
-`depends_on` cannot cross project boundaries.
-You must maintain the order.
-The broker starts first to preserve existing application-server JetStream connections during redeployment.
-The application stack owns PostgreSQL.
-Start the core stack's webhook runtime only after the required database migrations complete.
-The proxy starts last, never routing to a stack that is still starting.
-
-Kubernetes manifests need the same order.
-
-1. Watch `application-server` logs to confirm migration completion.
-2. Verify the bootstrap admin can sign in.
-3. Verify access to instance-admin navigation.
-4. Verify workspace admin endpoints for workspaces where the bootstrap admin has membership.
-   Membership automatically elevates them to workspace ADMIN there.
-5. Verify a test GitHub or GitLab webhook reaches the ingest pipeline.
-6. Before GitLab practice-review tests, confirm `GITLAB_ENABLED`, `GITLAB_WORKSPACE_CREATION`, `AGENT_ENABLED`, `GIT_CHECKOUT_ENABLED`, and `NATS_ENABLED` in the deployed environment.
-   Preview environments most often lack this bundle.
-7. Verify `/imprint` and `/privacy` have no red "not configured" banner.
-   See [Legal Pages](./legal-pages).
-
-## Global admin privileges
-
-Instance admins have ADMIN access to any active workspace, even without membership.
-Elevation does not grant OWNER privileges.
-Owner-only operations require explicit OWNER membership.
-[Instance administration](/contributor/instance-admin#who-is-an-instance-admin) owns the authority.
-See the [elevated-access audit policy](/contributor/instance-admin#elevated-workspace-access).
-
-## Operational tips
-
-1. Monitor services with the central Prometheus/Loki stack.
-2. Verify trace IDs in logs.
-3. Schedule regular PostgreSQL backups.
-   It holds auth state (accounts, identity links, sessions) and application data.
-4. Verify rollouts on staging, not preview.
-
-A preview represents a GitLab practice-review rollout only with identical GitLab IdP, sandbox, git-checkout, and agent-job-queue settings.
-
-## Support
-
-If you need secret rotation or infrastructure migration, contact the Hephaestus core team.
-Document differences from this checklist in the deployment runbook.
+A workspace connection disconnect or workspace purge permanently erases the mirror. [Disconnect is an erase](./integrations#disconnect-is-an-erase) gives the details.

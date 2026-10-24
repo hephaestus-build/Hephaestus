@@ -95,7 +95,7 @@ export function ResetToCatalogDialog({
 					<AlertDialogTitle>Reset “{name}” to the catalog?</AlertDialogTitle>
 					<AlertDialogDescription>
 						{practice
-							? "The catalog’s version is saved as a new version of this practice. Earlier versions and their results stay."
+							? "The catalog’s version is saved as a new version of this practice. Earlier versions and their observations stay."
 							: "The catalog’s details replace this group’s. Its practices stay where they are."}
 					</AlertDialogDescription>
 				</AlertDialogHeader>

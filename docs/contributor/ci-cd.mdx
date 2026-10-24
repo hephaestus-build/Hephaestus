@@ -63,7 +63,7 @@ It can capture evidence only for images that its run published.
 | Build → Extension: E2E                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                                           | `vp run test:extension:e2e`                                              |
 | Build → App Server image                                                | `pack build` from the packaged JAR, signed, attested and policy-scanned                                                                                                                                   | —                                                                        |
 | Test → App Server: Unit and architecture, App Server: Integration       | compiled from source                                                                                                                                                                                      | `vp run test:server:verification`, `test:server:integration`             |
-| Dependency review → New dependency risk                                          | informational dependency review. Pull requests only. Independent of CI Status Gate                                                                                                                                                                     | —                                                                        |
+| Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
 | Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability guard, legacy-reference guards                                                            | —                                                                        |
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze                                                                                                                     | `vp run gate:changesets`                                                 |
 | Compose → Render compose stacks                                         | the self-hosted, preview and reference stacks render                                                                                                                                                      | `vp run gate:preview-stack`                                              |
@@ -202,10 +202,10 @@ changesets rather than adding one. [Release management](./release-management.mdx
 | Control                               | Timing                                                                       | Enforcement                                                                                                             | Destination                                 |
 | ------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | Dependency vulnerability gate         | Security workflow                                                            | owns the dependency verdict. Blocks fixable high or critical findings in every dependency the checkout resolves         | required Security workflow                  |
-| GitHub dependency review              | pull requests                                                                | reports the advisories a pull request introduces, with their patched versions. Holds no verdict                         | Independent dependency-review summary       |
+| GitHub dependency review              | pull requests that change a dependency input                                 | reports the advisories a pull request introduces, with their patched versions. Holds no verdict                         | Independent dependency-review summary       |
 | TruffleHog and GitHub push protection | pull requests and pushes                                                     | block verified secrets                                                                                                  | Security workflow and repository protection |
 | Trivy filesystem scan                 | Security workflow                                                            | a scanner error blocks. Findings of every severity are report-only                                                      | code scanning                               |
-| Semgrep TLS policy                    | pull requests, merge groups, and `main` pushes                               | fails on a rule violation or a scanner error                                                                            | code scanning and a run artifact            |
+| Semgrep TLS policy                    | pull requests and `main` pushes                                              | fails on a rule violation or a scanner error                                                                            | code scanning and a run artifact            |
 | Image vulnerability policy            | image build and release                                                      | blocks fixable high or critical findings                                                                                | build summary and release evidence          |
 | Weekly image rescans                  | `rescan-main-images.yml`, `rescan-release-images.yml`                        | the `main` rescan upserts one tracking issue. The release rescan fails and comments on the vulnerability response issue | issues and run artifacts                    |
 | OpenSSF Scorecard                     | `main` pushes, branch-protection changes, and weekly. Never on pull requests | reports                                                                                                                 | code scanning and a run artifact            |
@@ -235,8 +235,13 @@ the code-scanning dashboard. It applies the [vulnerability remediation](./vulner
 Dependency review compares the base and head dependency graphs, so it cannot hold that verdict. It
 reports what the pull request introduces in the independent `dependency-review.yml` workflow.
 Asynchronous snapshots can keep this report pending, but it does not delay `CI Status Gate`,
-CI/CD completion, or release qualification. Documentation-only Markdown, MDX, and changeset prose
-skip this comparison through native path filters.
+CI/CD completion, or release qualification.
+
+The comparison runs only when a pull request changes a file that the dependency graph reads.
+These files are package manifests and lockfiles, workflows and actions, and the Gradle build
+scripts, lockfiles and version catalog. Any other change has an empty comparison.
+`dependency-graph.yml` uses the same pull-request filter. Thus, the head snapshot that the review
+waits for exists whenever the review runs. `scripts/ci-contract.test.ts` holds both filters to one list.
 
 Those filters use GitHub's bounded changed-file
 diff. A very large mixed change can omit this informational report. The required full-checkout
@@ -588,8 +593,8 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                                             |
 | `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds, signs, attests, and blocks on the release vulnerability policy for the `linux/amd64` image                                                                                                                               |
 | `ci-security-scan.yml`                | Called by cicd.yml                                                            | Trivy dependency scan, secret detection and repository policy checks                                                                                                                                                             |
-| `dependency-review.yml`               | Pull requests except documentation and release-note prose                     | Reports introduced dependency advisories independently of the required CI verdict                                                                                                                                                |
-| `dependency-graph.yml`                | PR, push to main                                                              | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |
+| `dependency-review.yml`               | PR changing a dependency input                                                | Reports introduced dependency advisories independently of the required CI verdict                                                                                                                                                |
+| `dependency-graph.yml`                | PR changing a dependency input, push to main                                  | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |
 | `submit-dependency-graph.yml`         | Successful dependency-graph workflow                                          | Submits snapshot data without executing code from the originating run                                                                                                                                                            |
 | `verify-changesets.yml`               | Called by cicd.yml                                                            | Tests changeset and version-sync policy and enforces release-note presence                                                                                                                                                       |
 | `ci-compose-validate.yml`             | Called by cicd.yml                                                            | Validates rendered reference and self-hosted Compose stacks                                                                                                                                                                      |
@@ -597,7 +602,7 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `security-mutation.yml`               | PR touching the suite's inputs, manual                                        | Runs the security mutation suite                                                                                                                                                                                                 |
 | `practice-guidance-links.yml`         | PR touching practice guidance, weekly, manual                                 | Checks the web links in bundled practice guides                                                                                                                                                                                  |
 | `scorecard.yml`                       | Push to main, branch-protection change, weekly                                | Publishes the OpenSSF Scorecard                                                                                                                                                                                                  |
-| `semgrep.yml`                         | Pull request, push to main, merge group                                       | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
+| `semgrep.yml`                         | Pull request, push to main                                                    | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
 | `rescan-main-images.yml`              | Weekly, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings                                                                                                  |
 | `rescan-release-images.yml`           | Weekly, manual                                                                | Rescans the latest published release's images and reports drift on the vulnerability response issue                                                                                                                              |
 | `ci-diagnostics.yml`                  | Completed CI/CD runs                                                          | Reports exact-attempt job and step timings without changing the required CI verdict                                                                                                                                              |
@@ -861,7 +866,7 @@ If no such default-branch commit exists, the run builds every image itself. `det
   the tier. `vp run test:server:selection` checks coverage through JUnit dry-run reports before
   unit/architecture verification. Discovery reports stay separate from execution results.
   All shards use `fail-fast: false`. `CI Status Gate` requires their aggregate result. Locally
-  the tier runs whole.
+  the tier runs whole. The weekly [server profiles](#server-profiles) run the same shards.
 - Pull requests and merge groups build `linux/amd64`. Pushes to `main`, and every run on the Version
   PR's branch, build both architectures. Pull requests and merge groups build only changed images and alias the rest.
   The Version PR's branch builds them all. `detect-changes` decides both once, as `single-arch` and `all-images`, and hands them to
@@ -875,7 +880,31 @@ If no such default-branch commit exists, the run builds every image itself. `det
   snapshot, so only it waits for `Image advisory database`.
 - Quality legs run independently. The image matrix in `reusable-docker-build.yml` uses
   `fail-fast: true`.
-- Pull-request runs cancel superseded runs. `release.yml` never cancels. The same-repository
+- A push to a pull request cancels the earlier runs of that pull request, and no other runs.
+  A superseded run validates a commit that nobody merges, and it holds runners that other pull requests wait for.
+  Each workflow that runs on `pull_request` or `pull_request_target` declares this at the top level:
+
+  ```yaml
+  concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  ```
+
+  Equivalent groups are permitted. A `pull_request_target` run has the base branch as its ref, so its group must name the pull request number, as in `pull-request.yml`.
+  A group must not use the head branch name alone, because two forks can push branches with the same name.
+  A reusable workflow declares no lane of its own.
+  In a called workflow, `github.workflow` is the caller's name, so a group there would join the caller's lane.
+  The caller's lane covers the jobs that it calls.
+
+  Some workflows do not cancel, because a run cancelled halfway leaves state that no later run replaces.
+  That state is a deploy, a teardown, a commit, or an approval.
+  A sticky comment that the next run rewrites is not such state, so `pull-request.yml` cancels.
+  `UNCANCELLED_PULL_REQUEST_RUNS` in `scripts/ci-contract.test.ts` lists the workflows that do not cancel, with their reasons.
+
+  The test evaluates each group. It fails when a workflow lacks the rule or when one pull request cancels another.
+  It also fails when a run can cancel a run on `main` or in the merge queue.
+  It also fails when a workflow-level or job-level lane of a listed workflow cancels a pull-request run.
+- `release.yml` never cancels. The same-repository
   Version PR shares a concurrency lane with a dispatch on its branch. A racing trigger replaces redundant validation. Either survivor must pass release preflight. The merge queue separately validates
   the final merge tree. Ordinary PRs, forks, main pushes and merge groups retain separate lanes.
 - A run on `main` that leaves a per-commit record — `semgrep.yml`, `scorecard.yml`,
@@ -990,13 +1019,19 @@ Deep profiling stays in the manual/weekly workflow, not on the PR critical path.
 `CI profile`. Weekly runs profile both tiers sequentially so diagnostics do not occupy two heavy
 runners at once.
 
+The integration tier is profiled one shard at a time, with the shards that
+[Parallelism and concurrency](#parallelism-and-concurrency) defines.
+A run of the whole tier no longer fits in one test task's timeout.
+The shard list is mirrored in both weekly workflows and pinned to the CI matrix by `scripts/ci-contract.test.ts`.
+
 Each tier retains its JFR recording, Gradle task profile, resource usage and JUnit
 results for 14 days. Verification profiles are diagnostic artifacts, not integration-history samples.
 
 Profile invocations use a single-use Gradle process (`--no-daemon`) for repeatable JVM startup.
 Gradle streams test output only in these profiles so Spring context diagnostics reach the retained log.
-History uses the `ci-profile-history-gradle-jfr` artifact and compares wall time, test time and context
-measurements.
+History uses one `ci-profile-history-gradle-jfr-<shard>` artifact for each shard and compares wall time,
+test time and context measurements. Each sample names its shard. A baseline accepts only samples of the
+same shard, so the earlier whole-tier history is not used.
 
 GNU time's CPU/RSS accounting does not reliably include Gradle's detached JVMs, so those
 values are not reported as suite metrics or compared against budgets. Inspect the retained JFR recordings
@@ -1007,7 +1042,7 @@ Ubuntu 24.04 x64 and ARM64 runners, one job at a time. Preparation is a separate
 and compilation caches are not mistaken for test execution speed. Each sample retains runner hardware,
 JUnit results and Gradle task profiles. Compare actual job ordering, test counts and execution time as
 well as end-to-end latency. Matrix declaration order is not a scheduling guarantee. These samples do
-not enter full-suite JFR history and do not change the runners used for required CI.
+not enter profile history and do not change the runners used for required CI.
 
 The integration profile also records Spring context-cache metrics. It warns about
 a sustained regression after three consecutive profiles exceed variance limits against five earlier
@@ -1021,7 +1056,7 @@ Without seven earlier
 profiles, the sustained-regression check has no verdict. Branch dispatches produce diagnostic
 artifacts without changing or comparing against the baseline.
 
-The workflow's `Run integration suite with JFR` step owns the invocation. Additional test-JVM flags
+The workflow's `Run integration shard with JFR` step owns the invocation. Additional test-JVM flags
 use `-PtestJvmArgs=...`. Gradle composes them with the configured memory limits and JaCoCo agent.
 `-PprofileTests=true` writes a separate JFR recording for each test task, so unit and architecture
 recordings never overwrite each other.
@@ -1032,11 +1067,14 @@ Spring-context measurements. Unit/architecture profiles do not require a Spring 
 
 For local shard profiling, use the same `HEPHAESTUS_INTEGRATION_SHARD` selector as the CI matrix
 and the Java version pinned in `.java-version`. Compare the same suite, runtime and cache state.
-The weekly whole-tier baseline is not comparable to one shard.
+Compare a local shard only with the weekly history of the same shard.
 
 `SpringTestContextArchitectureTest` enforces the reviewed Spring context keys. The weekly
-**Server Phase Reference** workflow profiles generation, compilation and test execution with the
-build cache disabled, and compares two clean generated-client JARs.
+**Server Phase Reference** workflow profiles generation, compilation, and unit and architecture execution
+in one job, with the build cache disabled. It compares two clean generated-client JARs.
+When that job ends, each integration shard runs in a separate job, one at a time.
+Each shard job compiles from source with the build cache disabled.
+The Gradle profile (`--profile`) of each job is the phase breakdown: it lists the time of every task.
 
 ## Running CI locally
 

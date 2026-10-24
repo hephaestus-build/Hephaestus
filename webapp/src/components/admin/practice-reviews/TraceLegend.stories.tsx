@@ -70,7 +70,7 @@ export const Open: Story = {
 			"Stages",
 			"Steps",
 			"Where a path ends",
-			"Results and feedback",
+			"Observations and feedback",
 			"Connections",
 			"Rail",
 			"Icons",

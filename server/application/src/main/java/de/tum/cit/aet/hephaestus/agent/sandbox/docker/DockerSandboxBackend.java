@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +52,7 @@ public class DockerSandboxBackend implements SandboxBackend {
     private final DockerVolumeOperations volumeOperations;
     private final SandboxCreator creator;
     private final String owner;
-    private final int gatewayPort;
+    private final IntSupplier gatewayPort;
     private final boolean reviewsOnTheMachine;
     private final Map<String, Sandbox> sandboxes = new ConcurrentHashMap<>();
 
@@ -62,7 +63,7 @@ public class DockerSandboxBackend implements SandboxBackend {
             DockerVolumeOperations volumeOperations,
             SandboxCreator creator,
             String owner,
-            int gatewayPort) {
+            IntSupplier gatewayPort) {
         this(networkManager, containerManager, securityPolicy, volumeOperations, creator, owner, gatewayPort, false);
     }
 
@@ -73,7 +74,7 @@ public class DockerSandboxBackend implements SandboxBackend {
             DockerVolumeOperations volumeOperations,
             SandboxCreator creator,
             String owner,
-            int gatewayPort,
+            IntSupplier gatewayPort,
             boolean reviewsOnTheMachine) {
         this.reviewsOnTheMachine = reviewsOnTheMachine;
         this.networkManager = networkManager;
@@ -202,7 +203,8 @@ public class DockerSandboxBackend implements SandboxBackend {
                 extraHosts = List.of("host.docker.internal:host-gateway");
             }
             sandbox.workspace = new DockerAttemptWorkspace(volumeOperations, UUID.randomUUID(), labels);
-            Map<String, String> environment = launch.environment().at("http://" + workerAddress + ":" + gatewayPort);
+            Map<String, String> environment =
+                    launch.environment().at("http://" + workerAddress + ":" + gatewayPort.getAsInt());
             sandbox.template = new DockerOperations.ContainerSpec(
                     launch.image(),
                     List.of(),

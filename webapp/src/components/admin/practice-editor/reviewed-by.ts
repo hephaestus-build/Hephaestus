@@ -16,7 +16,7 @@ export const REVIEWED_BY_LABELS: Record<ReviewedByKind, string> = {
 
 export const REVIEWED_BY_DESCRIPTIONS: Record<ReviewedByKind, string> = {
 	HEPHAESTUS:
-		"An automated review reads the work and records a result. When a source it must read cannot be captured, the review is withheld rather than guessed.",
+		"An automated review reads the work and records an observation. When a source it must read cannot be captured, the review is withheld rather than guessed.",
 	PEOPLE:
 		"A developer, peer or mentor reviews this practice. No automated review runs, and the practice still offers its guidance.",
 	NOBODY: "This practice offers guidance without automated review.",

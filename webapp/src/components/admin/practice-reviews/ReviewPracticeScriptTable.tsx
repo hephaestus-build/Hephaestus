@@ -64,7 +64,7 @@ export function ReviewPracticeScriptTable({
 						Practice
 					</TableHead>
 					<TableHead scope="col" className="min-w-44">
-						Result
+						Run
 					</TableHead>
 					<TableHead scope="col" numeric className="text-right">
 						Review calls

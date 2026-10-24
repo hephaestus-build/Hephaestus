@@ -31,6 +31,7 @@ const paginate = Object.assign(async (_, {run_id}) => artifacts[run_id] ?? [], {
 const github = {paginate, rest: {actions: {listWorkflowRuns: {}, listWorkflowRunArtifacts: {}}}};
 await (async () => {${String(source)}})();`,
 		encoding: "utf8",
+		env: { ...process.env, HISTORY_ARTIFACT: "ci-profile-history-gradle-jfr-providers" },
 	});
 	assert.equal(result.status, 0, result.stderr);
 	return result.stdout;
@@ -41,7 +42,7 @@ const run = (id: number, headBranch = "main", repository = "owner/repo") => ({
 	head_branch: headBranch,
 	head_repository: { full_name: repository },
 });
-const history = { name: "ci-profile-history-gradle-jfr", expired: false };
+const history = { name: "ci-profile-history-gradle-jfr-providers", expired: false };
 
 void test("history skips this rerun, foreign sources and incomplete profiles across pages", () => {
 	assert.equal(
@@ -123,6 +124,15 @@ void test("verification profiling retains coverage and runs separately from inte
 void test("only opt-in Gradle profiles stream context diagnostics", async () => {
 	const build = await readFile("server/application/build.gradle.kts", "utf8");
 	assert.match(build, /showStandardStreams = profileTests\.get\(\)/u);
+});
+
+void test("a shard's history excludes other shards and the earlier whole-tier history", () => {
+	for (const name of [
+		"ci-profile-history-gradle-jfr-application",
+		"ci-profile-history-gradle-jfr",
+	]) {
+		assert.equal(selectHistory([[run(9)]], { 9: [{ name, expired: false }] }), "", name);
+	}
 });
 
 void test("profile history excludes incompatible process-accounting baselines", () => {

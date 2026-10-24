@@ -1,0 +1,27 @@
+---
+id: troubleshooting
+title: Troubleshooting
+description: Common failures of a self-hosted installation, how to identify them, and how to fix them.
+---
+
+This page lists failures that operators of the self-hosted Compose stack meet.
+Each row gives the symptom, the cause, and the fix.
+Run the commands from `/opt/hephaestus/docker/self-host`.
+
+## Startup and sign-in
+
+| Symptom                                                        | Cause / fix                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `application-server` exits: *ProxyTrustGuard*                  | `HEPHAESTUS_TRUSTED_PROXIES` is blank. The Compose default is non-blank. Your override therefore set it to empty. Unset the override. If you changed the network, you can instead set it to match `reverse-proxy`'s IP.                                                                                   |
+| Exits: encryption-key length error                             | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` must be exactly 32 printable, non-space ASCII characters. Restore the original key for an existing database. On a new installation, clear the invalid value. Then rerun `./setup.sh`.                                                                                |
+| Login page has no sign-in button                               | No login provider configured: both `GH_OAUTH_CLIENT_ID` **and** `_SECRET` must be non-empty (a half-filled pair is skipped and logged at ERROR).                                                                                                                                                          |
+| OAuth redirect loop / cookie never sticks                      | A proxy in front of Traefik is injecting a `Domain=` attribute on cookies, which browsers reject for `__Host-` cookies. Serve the stack directly on ports 80/443.                                                                                                                                         |
+| Signed in but not admin                                        | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` did not match. On the account's **first** login, the server logs (INFO) the exact `provider subject username` it saw. Copy that into the allowlist. Restart. (For an account that already existed, check that log line from its first sign-in, or use the numeric id.) |
+| `down` or `logs` aborts with "variable is missing" | Pass both `--env-file .env --env-file release-lock.env`. Every subcommand validates required variables. Restore the matching configuration if either file is missing.                                                                                                                                                                                             |
+
+## Provider events
+
+| Symptom                                                        | Cause / fix                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub webhook deliveries show `401`                           | `WEBHOOK_SECRET` on GitHub differs from `.env` — must be byte-identical.                                                                                                                                                                                                                                  |
+| Data appears only ~hourly                                      | No GitHub webhook configured. See [Install § 6](./install#6-connect-repository-data).                                                                                                                                                                                                                    |

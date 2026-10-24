@@ -143,11 +143,11 @@ describe("practice review routes", () => {
 	it.each([
 		["Overview", `${REVIEWS}/overview`],
 		["Reviews", REVIEWS],
-		["Results", `${REVIEWS}/results`],
+		["Observations", `${REVIEWS}/results`],
 		["Problems", `${REVIEWS}/problems`],
 		["Feedback", `${REVIEWS}/feedback`],
 		// A level is opened over the tab the reader is on, and never moves them off it.
-		["Results", `${REVIEWS}/results?detail=feedback:${FEEDBACK}`],
+		["Observations", `${REVIEWS}/results?detail=feedback:${FEEDBACK}`],
 	])("marks only %s as current on %s", async (expectedCurrent, url) => {
 		renderRouteAtWithRouter(url);
 
@@ -179,7 +179,7 @@ describe("practice review routes", () => {
 			groupSlug: "design",
 			developerId: "7",
 		};
-		for (const tab of ["Overview", "Reviews", "Results", "Problems", "Feedback"]) {
+		for (const tab of ["Overview", "Reviews", "Observations", "Problems", "Feedback"]) {
 			expect(carriedSearch(sectionLink(navigation, tab))).toStrictEqual(expected);
 		}
 	});
@@ -187,7 +187,7 @@ describe("practice review routes", () => {
 	it("carries nothing when nothing is scoped", async () => {
 		renderRouteAtWithRouter(`${REVIEWS}/results?severity=${encodeURIComponent('["MAJOR"]')}`);
 		const navigation = await sectionNavigation();
-		for (const tab of ["Overview", "Reviews", "Results", "Problems", "Feedback"]) {
+		for (const tab of ["Overview", "Reviews", "Observations", "Problems", "Feedback"]) {
 			expect(carriedSearch(sectionLink(navigation, tab))).toStrictEqual({});
 		}
 	});
@@ -199,7 +199,7 @@ describe("practice review routes", () => {
 	it("keeps a chosen range on the overview and off every tab", async () => {
 		renderRouteAtWithRouter(`${REVIEWS}/overview?range=90d`);
 		const navigation = await sectionNavigation();
-		for (const tab of ["Overview", "Reviews", "Results", "Problems", "Feedback"]) {
+		for (const tab of ["Overview", "Reviews", "Observations", "Problems", "Feedback"]) {
 			expect(carriedSearch(sectionLink(navigation, tab))).toStrictEqual({});
 		}
 	});
@@ -262,7 +262,7 @@ describe("practice review page titles", () => {
 			{ name: "Reviews, 1,688", hidden: true },
 			ROUTE_RENDER_WAIT,
 		);
-		await within(navigation).findByRole("link", { name: "Results, 13,308", hidden: true });
+		await within(navigation).findByRole("link", { name: "Observations, 13,308", hidden: true });
 		await within(navigation).findByRole("link", { name: "Problems, 2,210", hidden: true });
 		await within(navigation).findByRole("link", { name: "Feedback, 1,951", hidden: true });
 		within(navigation).getByRole("link", { name: "Overview", hidden: true });
@@ -284,7 +284,7 @@ describe("practice review page titles", () => {
 		const navigation = await sectionNavigation();
 		await within(navigation).findByRole(
 			"link",
-			{ name: "Results, 13,308", hidden: true },
+			{ name: "Observations, 13,308", hidden: true },
 			{ timeout: 10_000 },
 		);
 		expect(reads.count()).toBe(2);
@@ -299,7 +299,7 @@ describe("practice review page titles", () => {
 			const navigation = await sectionNavigation();
 			await within(navigation).findByRole(
 				"link",
-				{ name: "Results, 13,308", hidden: true },
+				{ name: "Observations, 13,308", hidden: true },
 				ROUTE_RENDER_WAIT,
 			);
 			await router.navigate({
@@ -309,11 +309,11 @@ describe("practice review page titles", () => {
 			});
 			await waitFor(() => expect(scoped.asked()).toBe(true));
 			expect(
-				within(navigation).queryByRole("link", { name: "Results, 13,308", hidden: true }),
+				within(navigation).queryByRole("link", { name: "Observations, 13,308", hidden: true }),
 			).toBeNull();
-			within(navigation).getByRole("link", { name: "Results", hidden: true });
+			within(navigation).getByRole("link", { name: "Observations", hidden: true });
 			scoped.release();
-			await within(navigation).findByRole("link", { name: "Results, 42", hidden: true });
+			await within(navigation).findByRole("link", { name: "Observations, 42", hidden: true });
 		} finally {
 			scoped.release();
 		}

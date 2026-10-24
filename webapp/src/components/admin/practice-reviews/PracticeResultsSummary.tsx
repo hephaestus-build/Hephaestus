@@ -97,7 +97,7 @@ function Figures({ state }: { state: PracticeResultsSummaryProps["counts"] }) {
 	if (state.counts === undefined) {
 		return (
 			<p className="max-w-sm text-sm text-muted-foreground">
-				No review recorded a result about this practice in these days.
+				No review recorded an observation about this practice in these days.
 			</p>
 		);
 	}
@@ -113,7 +113,7 @@ function Figures({ state }: { state: PracticeResultsSummaryProps["counts"] }) {
 				state.stale && STALE,
 			)}
 		>
-			<Figure label="Results" value={String(total)}>
+			<Figure label="Observations" value={String(total)}>
 				{slots
 					.filter((slot) => slot.count > 0)
 					.map((slot) => `${slot.count} ${slot.label}`)

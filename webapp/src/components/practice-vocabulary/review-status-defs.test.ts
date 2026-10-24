@@ -10,7 +10,7 @@ import { reviewReasonSentence } from "./review-status-defs";
 describe("legacy withholding reasons", () => {
 	it("describes retained ambiguity without selecting a result", () => {
 		expect(reviewReasonSentence("LEGACY_AMBIGUOUS_RESULTS")).toBe(
-			"This review keeps several historical results for the same practice and work without choosing one as its answer.",
+			"This review keeps several historical observations for the same practice and work without choosing one as its answer.",
 		);
 		expect(withheldSentence("LEGACY_AMBIGUOUS_RESULTS")).toBe(
 			reviewReasonSentence("LEGACY_AMBIGUOUS_RESULTS"),
@@ -18,7 +18,7 @@ describe("legacy withholding reasons", () => {
 	});
 	it("describes an unbound historical reuse through the same registry", () => {
 		expect(withheldSentence("LEGACY_REUSE_UNBOUND")).toBe(
-			"This review referred to an earlier result that could not be identified exactly.",
+			"This review referred to an earlier observation that could not be identified exactly.",
 		);
 	});
 	it("describes a practice whose evidence settings cannot be used for this work", () => {

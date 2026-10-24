@@ -13,8 +13,10 @@ interface TestCase {
 }
 
 export interface TestSummary {
-	schemaVersion: 3;
+	schemaVersion: 4;
 	name: string;
+	/** The integration shard Gradle selected; absent when the whole tier or another tier ran. */
+	shard?: string;
 	files: number;
 	tests: number;
 	failures: number;
@@ -81,11 +83,12 @@ export function parseJUnit(xml: string): TestCase[] {
 	});
 }
 
-export function summarize(name: string, documents: string[]): TestSummary {
+export function summarize(name: string, documents: string[], shard?: string): TestSummary {
 	const cases = documents.flatMap(parseJUnit);
 	return {
-		schemaVersion: 3,
+		schemaVersion: 4,
 		name,
+		...(shard === undefined ? {} : { shard }),
 		files: documents.length,
 		tests: cases.length,
 		failures: cases.filter((test) => test.failed).length,
@@ -219,7 +222,9 @@ async function main(): Promise<void> {
 	}
 	const files = await xmlFiles(path.resolve(input));
 	const documents = await Promise.all(files.map(async (file) => readFile(file, "utf8")));
-	const summary = summarize(name, documents);
+	// Gradle selects its shard from this variable too. Set at job level, it names the shard that this job ran.
+	const shard = process.env.HEPHAESTUS_INTEGRATION_SHARD;
+	const summary = summarize(name, documents, shard === "" ? undefined : shard);
 	if ((logPath === undefined) !== (resourcePath === undefined)) {
 		throw new Error("Profiling requires both log and resource usage files");
 	}

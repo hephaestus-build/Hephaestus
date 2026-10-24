@@ -286,10 +286,11 @@ A component, its file, its props type, and its story title all name the same con
 Use the name in `docs/contributor/practice-feedback-language.md`.
 It is the product's word, not the server's or the screen's previous word.
 
-The outcome of one practice for one item is a **result**.
-One located problem under a Not met result is a **problem** in code and on screen.
+The record of reviewing one practice for one item is an **observation**.
+One located problem under a Not met observation is a **problem** in code and on screen.
 What a developer receives is **feedback**.
 Use only these three words for them.
+`docs/contributor/practice-feedback-language.md` § Observations records the exception for observation identifiers.
 
 Changing only the copy is not sufficient.
 The next component inherits a name that stays in the import list.

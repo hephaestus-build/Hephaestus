@@ -227,7 +227,7 @@ function versionEvent(version: PracticeVersion): SheetEvent {
 				<span className="block">{detail}</span>
 				{version.reviewChanged && (
 					<span className="block">
-						What a review checks changed, so earlier results no longer reflect it.
+						What a review checks changed, so earlier observations no longer reflect it.
 					</span>
 				)}
 			</>

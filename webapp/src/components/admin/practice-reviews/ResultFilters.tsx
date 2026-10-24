@@ -220,7 +220,7 @@ export function ResultFilters({
 			hasFacet={hasResultFacet(search)}
 			onReset={onReset}
 			total={total}
-			noun={["result", "results"]}
+			noun={["observation", "observations"]}
 		/>
 	);
 }

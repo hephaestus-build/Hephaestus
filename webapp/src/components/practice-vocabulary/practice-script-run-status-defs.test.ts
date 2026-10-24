@@ -30,21 +30,21 @@ const result = (value: PracticeScriptRun) =>
 
 describe("how a practice script run ended", () => {
 	it.each([
-		[run({}), "Practice script returned a result."],
-		[run({ scriptKind: "BUILTIN" }), "Built-in review returned a result."],
+		[run({}), "Practice script returned a candidate observation."],
+		[run({ scriptKind: "BUILTIN" }), "Built-in review returned a candidate observation."],
 		[run({ status: "WITHHELD" }), "Practice script did not run: the practice was withheld."],
-		[run({ status: "FAILED" }), "Practice script stopped without a result."],
+		[run({ status: "FAILED" }), "Practice script stopped without a candidate observation."],
 		[
 			run({ status: "FAILED", stopReason: "DEADLINE" }),
-			"Practice script stopped without a result: it ran out of time.",
+			"Practice script stopped without a candidate observation: it ran out of time.",
 		],
 		[
 			run({ status: "FAILED", stopReason: "INVALID_SCRIPT" }),
-			"Practice script stopped without a result: it is not a script the review can run.",
+			"Practice script stopped without a candidate observation: it is not a script the review can run.",
 		],
 		[
 			run({ status: "FAILED", stopReason: "OFF_FORMAT" }),
-			"Practice script stopped without a result: a model answered in the wrong format.",
+			"Practice script stopped without a candidate observation: a model answered in the wrong format.",
 		],
 		[
 			run({
@@ -53,7 +53,7 @@ describe("how a practice script run ended", () => {
 				stopReason: "OFF_FORMAT",
 				noResultCause: "EVIDENCE_NOT_READ",
 			}),
-			"Built-in review stopped without a result: its result was refused because it had not read the evidence it needed.",
+			"Built-in review stopped without a candidate observation: its candidate observation was refused because it had not read the evidence it needed.",
 		],
 		[
 			run({
@@ -62,7 +62,7 @@ describe("how a practice script run ended", () => {
 				stopReason: "OFF_FORMAT",
 				noResultCause: "SESSION_ENDED",
 			}),
-			"Built-in review stopped without a result: its review session ended without an accepted result.",
+			"Built-in review stopped without a candidate observation: its review session ended without an accepted candidate observation.",
 		],
 		[run({ status: "NOT_REACHED" }), "The review ended before the practice script started."],
 		[
@@ -75,7 +75,7 @@ describe("how a practice script run ended", () => {
 	});
 
 	it.each([
-		[run({}), "Returned a result"],
+		[run({}), "Returned a candidate observation"],
 		[run({ status: "WITHHELD" }), "Withheld"],
 		[run({ status: "FAILED" }), "Failed"],
 		[run({ status: "FAILED", stopReason: "BUDGET" }), "Failed: out of budget"],

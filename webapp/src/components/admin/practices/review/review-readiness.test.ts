@@ -59,7 +59,7 @@ describe("workspace review model readiness", () => {
 		expect(
 			reviewReadinessDescription({ enabled: true, model: { status: "ready", binding: inHouse } }),
 		).toBe(
-			"Practice reviews are on and a review model declared as In-house is ready. Each developer’s AI choice still decides whether it runs for them. Feedback mode decides separately where results become feedback.",
+			"Practice reviews are on and a review model declared as In-house is ready. Each developer’s AI choice still decides whether it runs for them. Feedback mode decides separately where observations become feedback.",
 		);
 		expect(
 			reviewReadinessDescription({

@@ -101,7 +101,7 @@ class RepositoryTreeStagingLiveTest {
                         dockerOps,
                         new SandboxCreator(dockerOps),
                         owner,
-                        gateway.port(),
+                        gateway::port,
                         true),
                 new SandboxWorkspaceManager(),
                 gateway.sessions(),

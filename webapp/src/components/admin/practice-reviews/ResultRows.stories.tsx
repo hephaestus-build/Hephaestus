@@ -37,7 +37,7 @@ const overAWeek: ReviewResult[] = reviewResults.map((result, index) => ({
 const clearFilters = fn();
 const retry = fn();
 
-const TABLE = { name: "Results" } as const;
+const TABLE = { name: "Observations" } as const;
 
 const meta = {
 	component: ResultRows,
@@ -61,7 +61,7 @@ export const Default: Story = {
 			within(table)
 				.getAllByRole("columnheader")
 				.map((head) => head.textContent),
-		).toEqual(["Recorded", "Result", "Work", "Developer", "Actions", "Open"]);
+		).toEqual(["Recorded", "Observation", "Work", "Developer", "Actions", "Open"]);
 		await expect(canvas.getAllByText("Not met · 1 problem")).toHaveLength(4);
 		await expect(canvas.getAllByText("Not met · 2 problems")).toHaveLength(3);
 		await expect(canvas.getAllByText("Not met · 3 problems")).toHaveLength(1);
@@ -73,7 +73,7 @@ export const Default: Story = {
 		await expect(canvas.queryByText("Trivial")).not.toBeInTheDocument();
 		await expect(canvas.getAllByText("Backfilled")).toHaveLength(2);
 		const open = canvas
-			.getAllByRole("link", { name: /^Open result /u })
+			.getAllByRole("link", { name: /^Open observation /u })
 			.find(
 				(link) =>
 					link
@@ -194,7 +194,7 @@ export const Empty: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
 		await expect(
-			within(canvas.getByRole("table", TABLE)).getByText("No results yet"),
+			within(canvas.getByRole("table", TABLE)).getByText("No observations yet"),
 		).toBeVisible();
 	},
 };
@@ -218,7 +218,7 @@ export const LoadFailed: Story = {
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("We could not load results");
+		await canvas.findByText("We could not load observations");
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(retry).toHaveBeenCalled();
 	},
@@ -239,7 +239,7 @@ export const Tracked: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		const [tracked] = canvas.getAllByRole("button", { name: /^Track result /u });
+		const [tracked] = canvas.getAllByRole("button", { name: /^Track observation /u });
 		await expect(tracked).toHaveAttribute("aria-pressed", "true");
 		await expect(tracked?.closest("tr")).toHaveAttribute("data-variant", "highlighted");
 	},
@@ -248,9 +248,9 @@ export const Tracked: Story = {
 export const TextUnavailable: Story = {
 	args: { state: { status: "ready", results: [{ ...firstResult, summary: null }] } },
 	play: async ({ canvas }) => {
-		canvas.getByText("Result text unavailable");
+		canvas.getByText("Observation text unavailable");
 		const link = canvas.getByRole("link", {
-			name: /Open result Result text unavailable/u,
+			name: /Open observation Observation text unavailable/u,
 		});
 		await expect(levelsOpenedBy(link)).toEqual([`result:${firstResult.id}`]);
 		await expect(canvas.queryByText("undefined")).not.toBeInTheDocument();

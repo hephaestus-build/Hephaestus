@@ -80,7 +80,7 @@ class DockerSandboxReconciliationTest extends BaseUnitTest {
                 volumes,
                 creator,
                 OWNER,
-                8081);
+                () -> 8081);
         reconciler = new SandboxReconciler(
                 jobRepository, backend, new SimpleMeterRegistry(), Clock.fixed(NOW, ZoneOffset.UTC));
         lenient().when(containerManager.listManagedContainers()).thenReturn(List.of());

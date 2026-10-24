@@ -4,7 +4,7 @@ import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -218,7 +218,7 @@ public class DockerSandboxConfiguration {
             DockerClientOperations volumeOperations,
             SandboxCreator creator,
             DockerSandboxProperties dockerProperties,
-            SandboxGatewayProperties gatewayProperties) {
+            SandboxGatewayConnector gateway) {
         return new DockerSandboxBackend(
                 networkManager,
                 containerManager,
@@ -226,7 +226,7 @@ public class DockerSandboxConfiguration {
                 volumeOperations,
                 creator,
                 dockerProperties.owner(),
-                gatewayProperties.port());
+                gateway::port);
     }
 
     @Bean

@@ -117,7 +117,7 @@ export function RemoveChannelAlertDialog({
 						) : (
 							<>
 								This permanently deletes <strong>all messages collected</strong> from this channel
-								and every practice result derived from them. You cannot undo this.
+								and every observation derived from them. You cannot undo this.
 							</>
 						)}
 					</AlertDialogDescription>

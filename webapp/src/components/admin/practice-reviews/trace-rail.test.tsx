@@ -155,7 +155,9 @@ describe("the results' table", () => {
 		expect(tableRows(container)).toHaveLength(whole.results.length);
 		fireEvent.click(screen.getByRole("button", { name: "Fold the table" }));
 		expect(tableRows(container)).toHaveLength(0);
-		fireEvent.click(screen.getByRole("button", { name: /^Show all \d+ results in the table$/u }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /^Show all \d+ observations in the table$/u }),
+		);
 		expect(tableRows(container)).toHaveLength(whole.results.length);
 	});
 

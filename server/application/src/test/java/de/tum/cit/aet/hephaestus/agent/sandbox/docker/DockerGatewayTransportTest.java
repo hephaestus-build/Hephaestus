@@ -69,7 +69,7 @@ class DockerGatewayTransportTest extends BaseUnitTest {
     void setUp() {
         var meters = new SimpleMeterRegistry();
         adapter = new SandboxAttemptRunner(
-                new DockerSandboxBackend(network, containers, security, volumes, creator, "default", 8081),
+                new DockerSandboxBackend(network, containers, security, volumes, creator, "default", () -> 8081),
                 new SandboxWorkspaceManager(),
                 sessions,
                 meters);

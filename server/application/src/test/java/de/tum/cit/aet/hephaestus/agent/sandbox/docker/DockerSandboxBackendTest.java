@@ -89,7 +89,7 @@ class DockerSandboxBackendTest extends BaseUnitTest {
 
     private DockerSandboxBackend backend(int gatewayPort) {
         return new DockerSandboxBackend(
-                networkManager, containerManager, securityPolicy, volumeOperations, creator, OWNER, gatewayPort);
+                networkManager, containerManager, securityPolicy, volumeOperations, creator, OWNER, () -> gatewayPort);
     }
 
     private static Map<String, String> reviewLabels(UUID job, @Nullable Integer attempt) {

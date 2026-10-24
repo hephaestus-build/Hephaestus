@@ -45,7 +45,7 @@ import tools.jackson.databind.ObjectMapper;
 public class ResultAdmissionService {
     public static final String INADMISSIBLE_REASON_CODE = "inadmissible_results";
     public static final String INTERRUPTED_AFTER_ADMISSION =
-            "The review stopped after its results were admitted. The recorded results are kept.";
+            "The review stopped after its observations were admitted. The recorded observations are kept.";
     private final ReviewJobRepository jobs;
     private final ReviewOutputService output;
     private final AdmittedResultQuery proof;

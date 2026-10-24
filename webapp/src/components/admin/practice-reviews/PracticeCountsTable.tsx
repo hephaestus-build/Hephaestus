@@ -99,11 +99,12 @@ const { minimumResults, neverAppliesShare, oftenUndecidedShare } = PRACTICE_MARK
 /** How each column's count is reached, for its (i). */
 const COLUMN_INFO = {
 	results:
-		"Every result the reviews recorded about this practice in the range: met, not met, does not apply and could not determine.",
-	notMet: "The results of this practice whose outcome was not met, out of all its results.",
-	doesNotApply: `The results where the practice did not apply to the work, out of all its results. From ${minimumResults} results, a practice where ${Math.round(neverAppliesShare * 100)}% or more do not apply is marked "${PRACTICE_MARKER_DEFS.NEVER_APPLIES.label}".`,
-	couldNotDetermine: `The results where the review could not decide, out of all its results. From ${minimumResults} results, a practice where ${Math.round(oftenUndecidedShare * 100)}% or more could not be determined is marked "${PRACTICE_MARKER_DEFS.OFTEN_UNDECIDED.label}".`,
-	markedIncorrect: `The results an admin marked incorrect, out of all its results. They keep their outcome too. ${MARKED_INCORRECT.note}`,
+		"Every observation the reviews recorded about this practice in the range: met, not met, does not apply and could not determine.",
+	notMet:
+		"The observations of this practice whose outcome was not met, out of all its observations.",
+	doesNotApply: `The observations where the practice did not apply to the work, out of all its observations. From ${minimumResults} observations, a practice where ${Math.round(neverAppliesShare * 100)}% or more do not apply is marked "${PRACTICE_MARKER_DEFS.NEVER_APPLIES.label}".`,
+	couldNotDetermine: `The observations where the review could not decide, out of all its observations. From ${minimumResults} observations, a practice where ${Math.round(oftenUndecidedShare * 100)}% or more could not be determined is marked "${PRACTICE_MARKER_DEFS.OFTEN_UNDECIDED.label}".`,
+	markedIncorrect: `The observations an admin marked incorrect, out of all its observations. They keep their outcome too. ${MARKED_INCORRECT.note}`,
 	feedbackDelivered:
 		"The feedback about this practice that reached the developer, out of all the feedback composed about it in the range: delivered, waiting, withheld, rejected or failed. A piece replaced by a newer one is not counted.",
 } as const;
@@ -172,9 +173,9 @@ export function PracticeCountsTable({ state, practices, filter }: PracticeCounts
 		{ label: "Practice" },
 		// Six columns of counts, each head at most two lines; the practice's name takes the rest.
 		{
-			label: "Results",
+			label: "Observations",
 			className: COUNT_COLUMN,
-			info: <ColumnInfo label="Results">{COLUMN_INFO.results}</ColumnInfo>,
+			info: <ColumnInfo label="Observations">{COLUMN_INFO.results}</ColumnInfo>,
 		},
 		{
 			label: NOT_MET,
@@ -212,7 +213,7 @@ export function PracticeCountsTable({ state, practices, filter }: PracticeCounts
 					</EmptyMedia>
 					<EmptyTitle>No practice was checked in this range</EmptyTitle>
 					<EmptyDescription>
-						Practices appear here once a review records a result or feedback about them.
+						Practices appear here once a review records an observation or feedback about them.
 					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
@@ -287,7 +288,7 @@ function Count({ value, of }: { value: number; of?: number }) {
  */
 function TotalsRow({ totals }: { totals: PracticeTotals }) {
 	const cells: [string, number, number?][] = [
-		["Results", totals.results],
+		["Observations", totals.results],
 		[NOT_MET, totals.notMet, totals.results],
 		[DOES_NOT_APPLY, totals.doesNotApply, totals.results],
 		[COULD_NOT_DETERMINE, totals.couldNotDetermine, totals.results],
@@ -337,7 +338,7 @@ function StackedColumnInfo() {
 			<InfoTip label={label}>
 				<InfoLines
 					lines={[
-						{ term: "Results", text: COLUMN_INFO.results },
+						{ term: "Observations", text: COLUMN_INFO.results },
 						{ term: NOT_MET, text: COLUMN_INFO.notMet },
 						{ term: DOES_NOT_APPLY, text: COLUMN_INFO.doesNotApply },
 						{ term: COULD_NOT_DETERMINE, text: COLUMN_INFO.couldNotDetermine },
@@ -410,7 +411,7 @@ function PracticeCountsRow({ counts }: { counts: ReviewPracticeCounts }) {
 					<Marker counts={counts} />
 				</span>
 			</TableCell>
-			<TableCell numeric data-label="Results" className={COUNT_CELL}>
+			<TableCell numeric data-label="Observations" className={COUNT_CELL}>
 				<Count value={results} />
 			</TableCell>
 			<TableCell numeric data-label={NOT_MET} className={COUNT_CELL}>

@@ -56,7 +56,7 @@ export function LineageResultChip({
 }) {
 	const outcome = OUTCOME_DEFS[result.outcome];
 	const words = [
-		`Result ${number}, ${outcome.label.toLowerCase()}`,
+		`Observation ${number}, ${outcome.label.toLowerCase()}`,
 		withSummary ? `: ${resultSummary(result)}` : "",
 	].join("");
 	return (
@@ -92,14 +92,15 @@ export function LineageSourceChips({
 	fromClassName?: string;
 }) {
 	if (feedback.basis.length === 0) {
-		return <span>From no recorded result</span>;
+		return <span>From no recorded observation</span>;
 	}
 	const known = feedback.basis
 		.map((id) => byId.get(id))
 		.filter((entry) => entry !== undefined)
 		.sort((a, b) => a.number - b.number);
 	const unknown = feedback.basis.length - known.length;
-	const counted = known.length > 0 ? `+ ${unknown}` : countOf(unknown, "result", "results");
+	const counted =
+		known.length > 0 ? `+ ${unknown}` : countOf(unknown, "observation", "observations");
 	const rest = `${counted} ${elsewhere === undefined ? "not listed" : `of ${elsewhere}`}`;
 	return (
 		<span className="flex flex-wrap items-center gap-1.5">
