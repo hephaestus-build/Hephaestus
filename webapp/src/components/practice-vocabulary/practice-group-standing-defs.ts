@@ -60,8 +60,9 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		predicate: { one: "is going well", many: "are going well" },
 		practicesTitle: "Practices going well",
 	},
+	// Both unsettled standings share the short label: the counts a developer reads hold them as one.
 	NO_OPPORTUNITY: {
-		shortLabel: "Nothing to report",
+		shortLabel: "No standing yet",
 		label: "Nothing to report yet",
 		icon: CircleSlashIcon,
 		badgeVariant: "outline",
@@ -71,7 +72,7 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		practicesTitle: "Practices with nothing to report yet",
 	},
 	NOT_OBSERVED: {
-		shortLabel: "Not reviewed",
+		shortLabel: "No standing yet",
 		label: "Not reviewed",
 		icon: CircleDashedIcon,
 		badgeVariant: "outline",

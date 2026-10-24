@@ -356,7 +356,7 @@ const patternArgs = {
 /**
  * The pattern: "Has open feedback", a plain label beside the practice's name, on the line of its standing. The sentence under it names the work, so the label
  * does not count it again. It is no control; the row's own link opens the practice. The practice
- * that never applied folds under the table.
+ * that never applied folds under the table, with no standing yet.
  */
 export const Pattern: Story = {
 	args: patternArgs,
@@ -365,9 +365,7 @@ export const Pattern: Story = {
 		await expectSettledVisible(label);
 		await expect(label.closest("button")).toBeNull();
 		await expect(screen.queryByRole("button", { name: /Has open feedback/u })).toBeNull();
-		await expectSettledVisible(
-			screen.getByRole("button", { name: "Does not apply to your work yet" }),
-		);
+		await expectSettledVisible(screen.getByRole("button", { name: FOLD }));
 	},
 };
 
@@ -402,6 +400,9 @@ export const PatternPhone: Story = {
 	},
 };
 
+/** The one fold under the table: practices with no standing yet, whatever the reason. */
+const FOLD = "Practices with no standing yet";
+
 /** The group's practices with one never applied and one no review has reviewed yet. */
 const foldedPractices = detailPractices.map((practice, index) => {
 	if (index === detailPractices.length - 1) {
@@ -420,25 +421,22 @@ const foldedPractices = detailPractices.map((practice, index) => {
 const notReviewedName = detailPractices.at(-2)?.name ?? "";
 
 /**
- * A practice no review has reviewed yet leaves the table for
- * its own folded line, beside the fold of practices that never applied. It still opens from there.
+ * A practice no review has reviewed yet and one that never applied leave the table for the same
+ * folded line: to a developer, both have no standing yet. Each still opens from there.
  */
-export const NotReviewedPractices: Story = {
+export const NoStandingYetPractices: Story = {
 	args: { practices: foldedPractices },
 	play: async ({ args }) => {
-		const trigger = await screen.findByRole("button", {
-			name: "Practices not reviewed",
-		});
+		const trigger = await screen.findByRole("button", { name: FOLD });
 		await expectSettledVisible(trigger);
 		await expect(practiceRows()).toHaveLength(3);
-		await expect(
-			screen.getByRole("button", { name: "Does not apply to your work yet" }),
-		).toBeVisible();
+		await expect(screen.queryByText("Does not apply to your work yet")).toBeNull();
 		await userEvent.click(trigger);
-		// Opened, the fold's rows join the same table, each with its standing badge alone.
+		// Opened, the fold's rows join the same table, each with the one badge alone.
 		await expect(screen.getAllByRole("table")).toHaveLength(1);
-		const folded = screen.getByRole("rowgroup", { name: "Practices not reviewed" });
-		await expect(within(folded).getByText("Not reviewed")).toBeVisible();
+		const folded = screen.getByRole("rowgroup", { name: FOLD });
+		await expect(within(folded).getAllByText("No standing yet")).toHaveLength(2);
+		await expect(within(folded).queryByText("Not reviewed")).toBeNull();
 		await expect(within(folded).queryByText(/compare/u)).toBeNull();
 		await expectFoldOnTableColumns(practiceRows()[0] ?? null, folded);
 		await userEvent.click(
@@ -449,11 +447,18 @@ export const NotReviewedPractices: Story = {
 };
 
 /**
- * Every practice of the group is not reviewed yet. The group has practices, so the table does not
- * claim it has none: the fold stands open and its own sentence says why.
+ * No practice of the group has a standing yet. The group has practices, so the table does not
+ * claim it has none: the fold stands open and its own sentence says why, and the header reads as
+ * the rows do.
  */
-export const OnlyNotReviewedPractices: Story = {
+export const OnlyNoStandingYetPractices: Story = {
 	args: {
+		standing: {
+			...packagingStanding,
+			standing: "NOT_OBSERVED",
+			direction: null,
+			trendSupport: null,
+		},
 		practices: detailPractices.map((practice) => ({
 			...practice,
 			standing: "NOT_OBSERVED" as const,
@@ -462,53 +467,42 @@ export const OnlyNotReviewedPractices: Story = {
 		})),
 	},
 	play: async () => {
-		const trigger = await screen.findByRole("button", { name: "Practices not reviewed" });
+		const trigger = await screen.findByRole("button", { name: FOLD });
 		await expectSettledVisible(trigger);
 		await expect(trigger).toHaveAttribute("aria-expanded", "true");
 		await expect(screen.queryByText("No practices yet")).toBeNull();
-		const folded = screen.getByRole("rowgroup", { name: "Practices not reviewed" });
-		await expect(within(folded).getAllByText("Not reviewed")).toHaveLength(detailPractices.length);
+		const folded = screen.getByRole("rowgroup", { name: FOLD });
+		// The group's five practices, one badge each.
+		await expect(within(folded).getAllByText("No standing yet")).toHaveLength(5);
+		// The header's badge says what the rows say: five rows and the header. Nothing says "Not reviewed".
+		await expect(screen.getAllByRole("button", { name: "No standing yet" })).toHaveLength(6);
+		await expect(screen.queryByText("Not reviewed")).toBeNull();
+		// The header's trend chip says there is nothing to compare yet; the folded rows stay badge-only.
+		await expect(screen.getAllByText("Not enough to compare yet")).toHaveLength(1);
 	},
 };
 
-export const NotReviewedPracticesOpen: Story = {
+/** Opened, every folded row sits on the columns of the rows above. */
+export const NoStandingYetPracticesOpen: Story = {
 	args: { practices: foldedPractices },
+	globals: { viewport: { value: "desktop" } },
 	play: async () => {
-		const trigger = await screen.findByRole("button", {
-			name: "Practices not reviewed",
-		});
+		const trigger = await screen.findByRole("button", { name: FOLD });
 		await expectSettledVisible(trigger);
 		await userEvent.click(trigger);
 		await expectFoldOnTableColumns(
 			practiceRows()[0] ?? null,
-			screen.getByRole("rowgroup", { name: "Practices not reviewed" }),
+			screen.getByRole("rowgroup", { name: FOLD }),
 		);
 	},
 };
 
-/** Both folds open at once at 1440 px: every folded row sits on the columns of the rows above. */
-export const FoldsOpen: Story = {
-	args: { practices: foldedPractices },
-	globals: { viewport: { value: "desktop" } },
-	play: async () => {
-		for (const name of ["Practices not reviewed", "Does not apply to your work yet"]) {
-			const trigger = await screen.findByRole("button", { name });
-			await expectSettledVisible(trigger);
-			await userEvent.click(trigger);
-			await expectFoldOnTableColumns(
-				practiceRows()[0] ?? null,
-				screen.getByRole("rowgroup", { name }),
-			);
-		}
-	},
-};
-
-export const NotReviewedPracticesDark: Story = {
-	...NotReviewedPracticesOpen,
+export const NoStandingYetPracticesDark: Story = {
+	...NoStandingYetPracticesOpen,
 	globals: { theme: "dark" },
 };
 
-export const NotReviewedPracticesPhone: Story = {
-	...NotReviewedPracticesOpen,
+export const NoStandingYetPracticesPhone: Story = {
+	...NoStandingYetPracticesOpen,
 	globals: { viewport: { value: "phone390" } },
 };

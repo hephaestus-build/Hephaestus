@@ -27,6 +27,17 @@ export function shownTrendDirection(
 	return direction !== undefined && support !== undefined ? direction : "INSUFFICIENT_EVIDENCE";
 }
 
+/**
+ * How far back a trend reads, in days: the server's look-back (`PracticeTrendService.LOOKBACK_DAYS`).
+ */
+export const TREND_LOOKBACK_DAYS = 90;
+
+/**
+ * What every trend is, said before its own evidence: the latest reviewed work against the work
+ * before it. A chip's words alone ("Not enough to compare yet") do not say they are a trend.
+ */
+export const TREND_EXPLAINED = `The trend compares your latest reviewed work with the work before it, in the last ${TREND_LOOKBACK_DAYS} days.`;
+
 /** Below this many decided pieces of work, a settled standing is an early read (product vocabulary). */
 export const EARLY_READ_BELOW = 3;
 

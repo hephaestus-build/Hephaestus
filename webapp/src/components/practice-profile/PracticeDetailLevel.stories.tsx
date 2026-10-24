@@ -178,17 +178,29 @@ export const Default: Story = {
 		await expect(pill).not.toBe(heading);
 		await expect(getComputedStyle(pill ?? heading).backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
 		const [first, second, third] = screen.getAllByRole("tab");
+		// The header's trend says in its sentence what a trend compares; no "Trend:" before it.
+		const trend = screen.getByRole("button", {
+			description: /^The trend compares your latest reviewed work/u,
+		});
+		await expect(trend.textContent).not.toMatch(/Trend:/u);
+		await expect(screen.queryByText("Standing:")).toBeNull();
 		await expect(first).toHaveAccessibleName("Feedback 1");
 		await expect(second).toHaveAccessibleName("Observations 3");
 		await expect(third).toHaveAccessibleName("Guide");
 		// The feedback leads its tab; the introduction and its picture wait in the Guide tab.
 		await expect(screen.queryByRole("region", { name: "Introduction" })).not.toBeInTheDocument();
+		// No heading repeats the tab's name: the tab carries what it holds as its description.
 		await expect(
-			within(screen.getByRole("tabpanel", { name: "Feedback 1" })).getByRole("heading", {
+			within(screen.getByRole("tabpanel", { name: "Feedback 1" })).queryByRole("heading", {
 				level: 2,
-				name: "Feedback",
 			}),
-		).toBeVisible();
+		).toBeNull();
+		await expect(first).toHaveAccessibleDescription(
+			"Feedback about patterns in your work: the open card, then the ones that resolved, newest first.",
+		);
+		await expect(third).toHaveAccessibleDescription(
+			"Why this practice matters, what good looks like, and how to do it.",
+		);
 		await expect(screen.getByRole("tab", { name: "Feedback 1" })).toHaveAttribute(
 			"aria-selected",
 			"true",
@@ -208,7 +220,7 @@ export const ObservationsTab: Story = {
 			result.id === detailResult.id ? <ReviewResultDetails result={detailResult} /> : undefined,
 	},
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Observations/u }));
 		await expect(screen.getByRole("tab", { name: "Guide" })).toHaveAttribute(
 			"aria-selected",
 			"false",
@@ -404,7 +416,7 @@ export const ObservationsTimeframe: Story = {
 export const FilterByWork: Story = {
 	args: { tab: "results", renderObservation: completeDetail },
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Observations/u }));
 		const search = await screen.findByRole("searchbox", { name: "Search" });
 		await userEvent.type(search, "#898");
 		const history = screen.getByRole("list", { name: "Reviews" });
@@ -525,7 +537,7 @@ export const RequestedReviewClean: Story = {
 		feed: { ...readyFeed, reviews: [requestedCleanReview, ...detailReviews] },
 	},
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Observations/u }));
 		await expect(screen.getAllByText("Needs attention")).not.toHaveLength(0);
 		await expect(
 			screen.getByText(/A requested review is evidence only and does not change your standing\./u),
@@ -633,7 +645,7 @@ export const FeedbackCardOutsideTimeframe: Story = {
 export const FeedbackTab: Story = {
 	args: { tab: "feedback", practice: describedPractice },
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { level: 2, name: "Feedback" }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Feedback/u }));
 		await expect(screen.getByRole("heading", { level: 3, name: "Current feedback" })).toBeVisible();
 		await expect(screen.getByRole("tab", { name: "Feedback 2" })).toHaveAttribute(
 			"aria-selected",
@@ -671,7 +683,7 @@ export const FeedbackEmpty: Story = {
 				"Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on a single piece of work stays there. Open its observation to find recorded comment links.",
 			),
 		).toBeVisible();
-		await expect(screen.getByRole("heading", { level: 2, name: "Feedback" })).toBeVisible();
+		await expect(screen.getByRole("tabpanel", { name: /^Feedback/u })).toBeVisible();
 		await expect(screen.queryByText("Current feedback")).not.toBeInTheDocument();
 		await expect(screen.queryByText("Resolved feedback")).not.toBeInTheDocument();
 	},
@@ -756,7 +768,7 @@ export const NothingToExplain: Story = {
 		guidance: { ...readyGuidance, visual: null, guide: null },
 	},
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { level: 2, name: "Feedback" }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Feedback/u }));
 		await expect(screen.getByRole("tab", { name: "Feedback 1" })).toHaveAttribute(
 			"aria-selected",
 			"true",
@@ -770,7 +782,7 @@ export const NothingToExplain: Story = {
 export const WithoutWhereYouStand: Story = {
 	args: { tab: "results" },
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Observations/u }));
 		await expect(screen.queryByText("Where you stand")).not.toBeInTheDocument();
 		await expect(
 			screen.queryByText(/counts most, and older work counts less/u),
@@ -791,8 +803,8 @@ export const MoreToLoad: Story = {
 };
 
 /**
- * A practice no review has settled: the badge and the trend in the header say so, and nothing
- * claims a basis or a direction.
+ * A practice no review has settled: the header says "No standing yet", as its folded row does, and
+ * nothing claims a basis or a direction.
  */
 export const NotReviewed: Story = {
 	args: {
@@ -805,13 +817,15 @@ export const NotReviewed: Story = {
 		feed: { ...readyFeed, reviews: [] },
 	},
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { level: 2, name: "Feedback" }));
-		await expect(screen.getAllByText("Not reviewed")).toHaveLength(1);
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Feedback/u }));
+		await expect(screen.getAllByRole("button", { name: "No standing yet" })).toHaveLength(1);
+		await expect(screen.queryByText("Not reviewed")).toBeNull();
 		await expect(screen.queryByText(/No practice in this group/u)).not.toBeInTheDocument();
 		await expect(screen.queryByText(/Read from|counts most/u)).not.toBeInTheDocument();
 		await expect(screen.queryByText(/pieces? of work$/u)).not.toBeInTheDocument();
-		// The header's chip is the only one: no direction is claimed over no verdict.
-		await expect(screen.getAllByText("Not enough to compare yet")).toHaveLength(1);
+		// The trend chip says there is nothing to compare yet, with the sentence on what a trend compares.
+		const trend = screen.getByRole("button", { name: /Not enough to compare yet/u });
+		await expect(trend).toHaveAccessibleDescription(/The trend compares/u);
 	},
 };
 
@@ -895,7 +909,7 @@ export const MobileReflow: Story = {
 	args: { tab: "results" },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Observations/u }));
 		// The frontmost panel: the group level behind it is a placeholder with no body to measure.
 		const panels = document.querySelectorAll<HTMLElement>('[data-slot="drawer-popup"]');
 		const frontmost = [...panels].at(-1);
@@ -919,14 +933,19 @@ export const PatternNotInHeader: Story = {
 	},
 };
 
-/** A practice that never applied says so instead of a gap. */
+/**
+ * A practice that never applied has no standing yet, as its folded row says; why stays behind the
+ * badge, so it reads as no gap.
+ */
 export const NeverApplied: Story = {
 	args: {
 		practice: { ...focusedChanges, standing: "NO_OPPORTUNITY", doesNotApplyOnly: true },
 		neverApplied: true,
 	},
 	play: async () => {
-		await expect(await screen.findAllByText("Does not apply to your work yet")).not.toHaveLength(0);
+		const badge = await screen.findByRole("button", { name: "No standing yet" });
+		await expect(badge).toHaveAccessibleDescription(/did not apply to your work/u);
+		await expect(screen.queryByText("Does not apply to your work yet")).toBeNull();
 	},
 };
 
@@ -947,12 +966,10 @@ export const EarlierReviewsCriteriaUnknown: Story = {
 		},
 	},
 	play: async () => {
-		const mark = await screen.findByRole("button", {
-			name: "Based on earlier reviews, criteria unknown",
-		});
-		await expect(mark).toHaveAccessibleDescription(
-			/They do not show whether the current criteria are met\./u,
+		await expectSettledVisible(
+			await screen.findByText("Based on earlier reviews, the criteria might have changed"),
 		);
+		await expect(screen.queryByRole("button", { name: /^Based on earlier reviews/u })).toBeNull();
 	},
 };
 
@@ -961,7 +978,7 @@ export const CurrentReviewsCarryNoMark: Story = {
 	args: { practice: { ...focusedChanges, basis: "CURRENT_REVIEWS" } },
 	play: async () => {
 		await screen.findAllByRole("heading");
-		await expect(screen.queryByRole("button", { name: /^Based on earlier reviews/u })).toBeNull();
+		await expect(screen.queryByText(/^Based on earlier reviews/u)).toBeNull();
 	},
 };
 
@@ -1000,7 +1017,7 @@ export const ObservationError: Story = {
 		),
 	},
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Observations/u }));
 		await expect(screen.getByText("We could not load this observation")).toBeVisible();
 		await expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
 	},
@@ -1011,7 +1028,7 @@ export const CompleteObservationPhone: Story = {
 	globals: { viewport: { value: "reflow" } },
 	play: async () => {
 		await expect(window.innerWidth).toBe(320);
-		const heading = await screen.findByRole("heading", { name: "Observations" });
+		const heading = await screen.findByRole("tabpanel", { name: /^Observations/u });
 		await expectSettledVisible(heading);
 		await expect(
 			screen.getByText("Move the class in one commit and add the cache in the next."),

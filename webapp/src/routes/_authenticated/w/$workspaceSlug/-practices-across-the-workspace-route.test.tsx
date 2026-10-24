@@ -252,13 +252,13 @@ describe("Practices across the workspace", () => {
 		await renderPage();
 		screen.getByText(`${EARLIER_REVIEWS_COUNTED.title}.`);
 		const table = within(screen.getByRole("table", { name: "All practice groups" }));
-		table.getByRole("button", { name: "Based on earlier reviews, criteria unknown" });
+		table.getByText("Based on earlier reviews, the criteria might have changed");
 	});
 
 	it("says nothing about earlier reviews when every counted standing is current", async () => {
 		await renderPage();
 		await screen.findByText("11", undefined, ROUTE_RENDER_WAIT);
-		expect(screen.queryByText(`${EARLIER_REVIEWS_COUNTED.title}.`)).toBeNull();
+		expect(screen.queryByText(EARLIER_REVIEWS_COUNTED.title)).toBeNull();
 	});
 
 	it("reads the overview once and not again on a refocus", async () => {

@@ -35,6 +35,7 @@ import { REVIEW_FILTER_MAX_LENGTH } from "@/components/practice-trace/trace-form
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import { getGroupVisual, groupMark } from "@/components/practice-vocabulary/group-visuals";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
+import { isSettledStanding } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import {
 	type FeedbackRatingProps,
 	PracticeFeedbackCard,
@@ -66,7 +67,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { problemStatusOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 
-import { NeverAppliedBadge } from "./FoldedPractices";
+import { NoStandingYetBadge } from "./FoldedPractices";
 import {
 	carriesObservation,
 	changedObservationFilter,
@@ -78,7 +79,7 @@ import {
 	shownObservations,
 } from "./observation-filter";
 import { newestFirst } from "./practice-feedback-cards";
-import { NEVER_APPLIED } from "./practice-folds";
+import { NEVER_APPLIED, noStandingYetReason } from "./practice-folds";
 import { FeedbackEmpty, LabelledBlock } from "./practice-profile-blocks";
 import {
 	ALL_TIME,
@@ -89,6 +90,18 @@ import {
 	reviewRangeStart,
 } from "./practice-profile-search";
 import { requestedReviewNote } from "./requested-review-note";
+
+/**
+ * What each tab holds, said on the tab itself (tooltip and accessible description), so a panel
+ * starts with its content rather than a heading that repeats the tab's name.
+ */
+const TAB_DESCRIPTIONS: Record<PracticeTab, string> = {
+	feedback:
+		"Feedback about patterns in your work: the open card, then the ones that resolved, newest first.",
+	results:
+		"Reviews of your work that reached this practice, newest first. Open one to see its problems, each with its next step.",
+	guide: "Why this practice matters, what good looks like, and how to do it.",
+};
 
 const TAB_LABELS: Record<PracticeTab, string> = {
 	feedback: "Feedback",
@@ -300,7 +313,12 @@ export function PracticeDetailLevel({
 				<PracticeTabsRail>
 					<PracticeTabsList aria-label="Practice">
 						{tabs.map((candidate) => (
-							<PracticeTabsTrigger key={candidate} value={candidate} count={counts[candidate]}>
+							<PracticeTabsTrigger
+								key={candidate}
+								value={candidate}
+								count={counts[candidate]}
+								description={TAB_DESCRIPTIONS[candidate]}
+							>
 								{TAB_LABELS[candidate]}
 							</PracticeTabsTrigger>
 						))}
@@ -334,11 +352,7 @@ export function PracticeDetailLevel({
 					/>
 				</TabsContent>
 				<TabsContent value="results" className="min-w-0">
-					<Section
-						size="lg"
-						title="Observations"
-						description="Reviews of your work that reached this practice, newest first. Open one to see its problems, each with its next step."
-					>
+					<div className="flex min-w-0 flex-col gap-4">
 						{hasText(requestedNote) && <p className="max-w-2xl text-sm">{requestedNote}</p>}
 						<ObservationHistory
 							feed={feed}
@@ -350,7 +364,7 @@ export function PracticeDetailLevel({
 							skeletonRows={skeletonRows}
 							responses={responses}
 						/>
-					</Section>
+					</div>
 				</TabsContent>
 				{hasGuide && (
 					<TabsContent value="guide" className="min-w-0">
@@ -422,7 +436,11 @@ export function PracticeDetailLevel({
 	);
 }
 
-/** Where the reader stands on the practice, under the level's title. */
+/**
+ * Where the reader stands on the practice, under the level's title. A practice with no standing yet,
+ * whether it never applied, nobody reviewed it or there was nothing to report, reads as its folded row
+ * does: one "No standing yet", with why behind it and no trend.
+ */
 function PracticeStandingChips({
 	practice,
 	neverApplied,
@@ -430,22 +448,32 @@ function PracticeStandingChips({
 	practice: PracticeStanding;
 	neverApplied: boolean;
 }) {
-	// A practice that never applied has no trend, as its folded row shows.
-	if (neverApplied) {
-		return <NeverAppliedBadge scope="practice" />;
+	if (!isSettledStanding(practice.standing)) {
+		// With no standing there is nothing to compare, and the trend chip says so with its sentence.
+		return (
+			<span className="inline-flex flex-wrap items-center gap-x-5 gap-y-2">
+				<NoStandingYetBadge
+					reason={noStandingYetReason(practice.standing, "practice", neverApplied)}
+				/>
+				<TrendNote scope="practice" />
+			</span>
+		);
 	}
 	return (
 		<>
-			<StandingBadge
-				standing={practice.standing}
-				scope="practice"
-				support={practice.trendSupport ?? undefined}
-			/>
-			<TrendNote
-				direction={practice.direction ?? undefined}
-				support={practice.trendSupport ?? undefined}
-				scope="practice"
-			/>
+			{/* A little more room between the standing and its trend, so they read as two facts. */}
+			<span className="inline-flex flex-wrap items-center gap-x-5 gap-y-2">
+				<StandingBadge
+					standing={practice.standing}
+					scope="practice"
+					support={practice.trendSupport ?? undefined}
+				/>
+				<TrendNote
+					direction={practice.direction ?? undefined}
+					support={practice.trendSupport ?? undefined}
+					scope="practice"
+				/>
+			</span>
 			<StandingBasisNote basis={practice.basis} />
 		</>
 	);
@@ -480,7 +508,10 @@ function PracticeGuidance({
 	);
 }
 
-/** The Feedback tab: the practice's one open card, then the cards the work resolved. */
+/**
+ * The Feedback tab: the practice's one open card, then the cards the work resolved. Its tab says
+ * what it holds, so the panel has no heading of its own.
+ */
 function PracticeFeedbackSection({
 	feedback,
 	ratingProps,
@@ -537,11 +568,7 @@ function PracticeFeedbackSection({
 		);
 	};
 	return (
-		<Section
-			size="lg"
-			title="Feedback"
-			description="Feedback about patterns in your work: the open card, then the ones that resolved, newest first."
-		>
+		<div className="flex min-w-0 flex-col gap-4">
 			{arriving !== undefined &&
 				feedback.open?.feedbackId !== arriving &&
 				!feedback.resolved.some((card) => card.feedbackId === arriving) && (
@@ -568,7 +595,7 @@ function PracticeFeedbackSection({
 					)}
 				</div>
 			)}
-		</Section>
+		</div>
 	);
 }
 

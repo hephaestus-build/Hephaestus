@@ -14,12 +14,8 @@ import { expectFoldOnTableColumns } from "@/stories/fold-columns";
 
 import { SAMPLE_NEVER_APPLIED, SAMPLE_NOT_OBSERVED } from "@/stories/practice-profile-samples";
 import { practiceStandingOf } from "@/stories/practice-profile-story-mock-data";
-import {
-	type FoldReason,
-	FoldedPractices,
-	type FoldedPracticesProps,
-	FoldedStandingCell,
-} from "./FoldedPractices";
+import { FoldedPractices, type FoldedPracticesProps, FoldedStandingCell } from "./FoldedPractices";
+import { isNeverApplied, noStandingYetReason } from "./practice-folds";
 
 const onOpen = fn();
 
@@ -41,10 +37,31 @@ const SHOWN_ROWS: PracticeStanding[] = [
 		standing: "STRENGTH",
 	}),
 ];
-const NEVER_APPLIED_ROWS = standingsOf(SAMPLE_NEVER_APPLIED, "NO_OPPORTUNITY");
-const NOT_OBSERVED_ROWS = standingsOf(SAMPLE_NOT_OBSERVED, "NOT_OBSERVED");
+/**
+ * Practices with no standing yet for every reason: three never applied, two nobody reviewed, and
+ * one reviewed but not judged.
+ */
+const NO_STANDING_YET_ROWS = [
+	...standingsOf(SAMPLE_NEVER_APPLIED, "NO_OPPORTUNITY").map((practice) => ({
+		...practice,
+		doesNotApplyOnly: true,
+	})),
+	...standingsOf(SAMPLE_NOT_OBSERVED, "NOT_OBSERVED"),
+	practiceStandingOf({
+		slug: "edge-cases",
+		name: "Name the edge cases you checked",
+		standing: "NO_OPPORTUNITY",
+		doesNotApplyOnly: false,
+	}),
+];
 
-function PracticeRow({ practice, folded }: { practice: PracticeStanding; folded?: FoldReason }) {
+function PracticeRow({
+	practice,
+	folded = false,
+}: {
+	practice: PracticeStanding;
+	folded?: boolean;
+}) {
 	return (
 		<PracticeTableRow
 			link={{
@@ -56,7 +73,9 @@ function PracticeRow({ practice, folded }: { practice: PracticeStanding; folded?
 			}}
 		>
 			{folded ? (
-				<FoldedStandingCell scope="practice" reason={folded} />
+				<FoldedStandingCell
+					reason={noStandingYetReason(practice.standing, "practice", isNeverApplied(practice))}
+				/>
 			) : (
 				<StandingCell
 					standing={practice.standing}
@@ -91,11 +110,7 @@ function FoldStory({ practices, ...fold }: FoldStoryArgs) {
 			sections={(columns) => (
 				<FoldedPractices {...fold} columns={columns}>
 					{practices.map((practice) => (
-						<PracticeRow
-							key={practice.slug}
-							practice={practice}
-							folded={fold.reason ?? "never-applied"}
-						/>
+						<PracticeRow key={practice.slug} practice={practice} folded />
 					))}
 				</FoldedPractices>
 			)}
@@ -104,8 +119,8 @@ function FoldStory({ practices, ...fold }: FoldStoryArgs) {
 }
 
 /**
- * Practices or groups folded into one row at the end of
- * their table instead of reading as a gap. The row counts nothing. Opened, its rows follow it in the
+ * Practices or groups with no standing yet, whether they never applied or nobody reviewed them,
+ * folded into one row at the end of their table instead of reading as a gap. The row counts nothing. Opened, its rows follow it in the
  * same table, on the table's own columns, each in its plain state, and each opens as any row does.
  */
 const meta = {
@@ -113,9 +128,9 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		count: NEVER_APPLIED_ROWS.length,
+		count: NO_STANDING_YET_ROWS.length,
 		noun: "practice",
-		practices: NEVER_APPLIED_ROWS,
+		practices: NO_STANDING_YET_ROWS,
 	},
 	argTypes: { practices: { control: false } },
 } satisfies Meta<typeof FoldStory>;
@@ -123,9 +138,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const FOLD = "Practices with no standing yet";
+
 export const Folded: Story = {
 	play: async ({ canvas, userEvent }) => {
-		const trigger = canvas.getByRole("button", { name: "Does not apply to your work yet" });
+		const trigger = canvas.getByRole("button", { name: FOLD });
 		await expect(trigger).toHaveAttribute("aria-expanded", "false");
 		// The row names the fold and counts nothing.
 		await expect(trigger.closest("tr")?.textContent).not.toMatch(/\d/u);
@@ -133,10 +150,13 @@ export const Folded: Story = {
 		await expect(trigger.getBoundingClientRect().height).toBeGreaterThanOrEqual(32);
 		await expect(getComputedStyle(trigger).borderTopWidth).toBe("0px");
 		await userEvent.click(trigger);
+		await expect(
+			canvas.getByText(/has given these practices a standing in your work\. This is not a gap\./u),
+		).toBeVisible();
 		// One table: the fold adds no second one and no second header.
 		await expect(canvas.getAllByRole("table")).toHaveLength(1);
 		await expect(canvas.getAllByRole("columnheader")).toHaveLength(3);
-		const rows = canvas.getByRole("rowgroup", { name: "Does not apply to your work yet" });
+		const rows = canvas.getByRole("rowgroup", { name: FOLD });
 		await userEvent.click(
 			within(rows).getByRole("button", { name: "Open practice Document the public API" }),
 		);
@@ -147,12 +167,26 @@ export const Folded: Story = {
 export const Open: Story = {
 	args: { defaultOpen: true },
 	play: async ({ canvas }) => {
-		const rows = canvas.getByRole("rowgroup", { name: "Does not apply to your work yet" });
-		// Each row in its plain state, the badge alone: no trend note under it. The badge says what
-		// the fold says, as the practice's own level does.
-		await expect(within(rows).getAllByText("Does not apply to your work yet")).toHaveLength(3);
+		const rows = canvas.getByRole("rowgroup", { name: FOLD });
+		// Each row in its plain state, the badge alone: no trend note under it. Whatever the reason,
+		// the badge says what the fold says; only its sentence differs.
+		// Three never applied, two not reviewed, one not judged: six rows, one badge each.
+		await expect(within(rows).getAllByText("No standing yet")).toHaveLength(6);
+		await expect(within(rows).getByText("Name the edge cases you checked")).toBeVisible();
+		await expect(within(rows).queryByText("Does not apply to your work yet")).toBeNull();
+		await expect(within(rows).queryByText("Not reviewed")).toBeNull();
 		await expect(within(rows).queryByText("Nothing to report yet")).toBeNull();
 		await expect(within(rows).queryByText(/compare/u)).toBeNull();
+	},
+};
+
+/** Opened, every folded row's cells start where the cells of the rows above start. */
+export const OpenOnTableColumns: Story = {
+	args: { defaultOpen: true },
+	globals: { viewport: { value: "desktop" } },
+	play: async ({ canvas }) => {
+		const shown = canvas.getAllByRole("row").find((row) => row.textContent.includes("Describe"));
+		await expectFoldOnTableColumns(shown ?? null, canvas.getByRole("rowgroup", { name: FOLD }));
 	},
 };
 
@@ -160,50 +194,5 @@ export const Dark: Story = { args: { defaultOpen: true }, globals: { theme: "dar
 
 export const Phone: Story = {
 	args: { defaultOpen: true },
-	globals: { viewport: { value: "phone390" } },
-};
-
-// --- Not reviewed ---------------------------------------------------------------------------
-
-const notReviewedArgs = {
-	count: NOT_OBSERVED_ROWS.length,
-	reason: "not-reviewed",
-	practices: NOT_OBSERVED_ROWS,
-} as const;
-
-/** A group's practices that no review has reviewed yet, folded. */
-export const NotReviewedPracticesFolded: Story = {
-	args: notReviewedArgs,
-	play: async ({ canvas, userEvent }) => {
-		const trigger = canvas.getByRole("button", { name: "Practices not reviewed" });
-		await expect(trigger).toHaveAttribute("aria-expanded", "false");
-		await userEvent.click(trigger);
-		await expect(trigger).toHaveAttribute("aria-expanded", "true");
-		await expect(canvas.getByText(/has looked at these practices in your work/u)).toBeVisible();
-		const rows = canvas.getByRole("rowgroup", { name: "Practices not reviewed" });
-		await expect(within(rows).getAllByText("Not reviewed")).toHaveLength(2);
-	},
-};
-
-/** Opened, every folded row's cells start where the cells of the rows above start. */
-export const NotReviewedPracticesOpen: Story = {
-	args: { ...notReviewedArgs, defaultOpen: true },
-	globals: { viewport: { value: "desktop" } },
-	play: async ({ canvas }) => {
-		const shown = canvas.getAllByRole("row").find((row) => row.textContent.includes("Describe"));
-		await expectFoldOnTableColumns(
-			shown ?? null,
-			canvas.getByRole("rowgroup", { name: "Practices not reviewed" }),
-		);
-	},
-};
-
-export const NotReviewedDark: Story = {
-	args: { ...notReviewedArgs, defaultOpen: true },
-	globals: { theme: "dark" },
-};
-
-export const NotReviewedPhone: Story = {
-	args: { ...notReviewedArgs, defaultOpen: true },
 	globals: { viewport: { value: "phone390" } },
 };

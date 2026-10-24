@@ -43,10 +43,21 @@ export function countPracticeStandings(practices: readonly HasStanding[]): Stand
 	return counts;
 }
 
-/** Every standing with at least one practice, in registry order. */
+/**
+ * The counts as a developer reads them: "Nothing to report yet" counts with "Not reviewed", as one
+ * "No standing yet". Whether a practice did not apply or was not reviewed is no difference a
+ * developer acts on; admin surfaces count the two apart.
+ */
+function asDeveloperReads(counts: StandingCounts): StandingCounts {
+	const { NO_OPPORTUNITY = 0, NOT_OBSERVED = 0, ...settled } = counts;
+	return { ...settled, NOT_OBSERVED: NOT_OBSERVED + NO_OPPORTUNITY };
+}
+
+/** Every standing with at least one practice, in registry order, the two unsettled ones as one. */
 export function summarizeStandingCounts(counts: StandingCounts) {
+	const read = asDeveloperReads(counts);
 	return STANDING_SEGMENTS.map((segment) => ({
 		...segment,
-		count: counts[segment.standing] ?? 0,
+		count: read[segment.standing] ?? 0,
 	})).filter((segment) => segment.count > 0);
 }

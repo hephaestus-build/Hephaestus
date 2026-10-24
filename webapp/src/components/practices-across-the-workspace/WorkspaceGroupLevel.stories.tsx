@@ -90,13 +90,13 @@ export const Default: Story = {
 		);
 		await expect(args.onGoToPractice).toHaveBeenCalledWith("scope-to-one-concern");
 		// Every standing is current, so nothing here is marked as earlier reviews.
-		await expect(level.queryByRole("button", { name: /^Based on earlier reviews/u })).toBeNull();
+		await expect(level.queryByText(/^Based on earlier reviews/u)).toBeNull();
 	},
 };
 
 /**
  * The reader's group standing and two of their practices rest on earlier reviews. Each says so in
- * the words the Practice profile uses, criteria unknown where the reviews did not record them.
+ * the words the Practice profile uses, whether or not the reviews recorded their criteria.
  */
 export const EarlierReviews: Story = {
 	args: {
@@ -108,11 +108,9 @@ export const EarlierReviews: Story = {
 	play: async () => {
 		const level = within(await settledDrawerPanel());
 		await expect(
-			level.getAllByRole("button", { name: "Based on earlier reviews, criteria unknown" }),
-		).toHaveLength(2);
-		await expect(level.getAllByRole("button", { name: "Based on earlier reviews" })).toHaveLength(
-			1,
-		);
+			level.getAllByText("Based on earlier reviews, the criteria might have changed"),
+		).toHaveLength(3);
+		await expect(level.queryByRole("button", { name: /^Based on earlier reviews/u })).toBeNull();
 	},
 };
 
