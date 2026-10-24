@@ -21,7 +21,7 @@ jobs:
     # GitHub's actions are glibc-based, so the musl scanner image runs as a container step rather
     # than as the job's container.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       security-events: write

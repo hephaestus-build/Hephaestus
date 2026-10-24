@@ -99,7 +99,7 @@ jobs:
   reuse:
     name: Reuse merge-queue image
     if: inputs.publish && inputs.reuse-run != ''
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       attestations: read

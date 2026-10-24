@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     # OpenSSF publishing is limited to the default branch.
     if: github.event.repository.default_branch == github.ref_name
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write

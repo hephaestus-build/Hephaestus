@@ -3848,6 +3848,7 @@ void describe("CI contract", () => {
 		// step holds a runner for a working day and reports nothing until it is killed. A job that
 		// only `uses:` a reusable workflow runs no step here: its bound is on the callee's jobs.
 		const unbounded: string[] = [];
+		const tight: string[] = [];
 		for (const [file, source] of await workflowSources()) {
 			const jobs = parseDocument(source).get("jobs");
 			if (!isMap(jobs)) {
@@ -3858,12 +3859,23 @@ void describe("CI contract", () => {
 				if (!isMap(definition) || !isSeq(definition.get("steps"))) {
 					continue;
 				}
-				if (definition.get("timeout-minutes") === undefined) {
+				const limit = definition.get("timeout-minutes");
+				if (limit === undefined) {
 					unbounded.push(`${file}#${String(entry.key)}`);
+				} else if (typeof limit === "number" && limit < 15) {
+					// GitHub has been observed to cancel a finished job against a tight limit, because it
+					// recorded the completion late (ci-cd.mdx § Parallelism and concurrency). An
+					// expression limit, such as a matrix-dependent one, is outside this check.
+					tight.push(`${file}#${String(entry.key)}: ${limit}`);
 				}
 			}
 		}
 		assert.deepEqual(unbounded, [], "these jobs run steps without bounding how long they may run");
+		assert.deepEqual(
+			tight,
+			[],
+			"a job's limit is a hang detector of at least 15 minutes (ci-cd.mdx)",
+		);
 	});
 });
 
