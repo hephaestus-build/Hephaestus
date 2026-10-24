@@ -1,4 +1,4 @@
-import { InfoIcon } from "lucide-react";
+import { InfoIcon, type LucideIcon } from "lucide-react";
 import { type ReactNode, useId } from "react";
 
 import { cn } from "cn";
@@ -20,15 +20,21 @@ export interface InfoLine {
 	second?: { term: string; text: string };
 	/** A colour sample in front of the line, for a legend: a text colour the sample paints with. */
 	swatchClass?: string;
+	/** The icon of the control the line explains, in front of it, so the reader matches the two. */
+	icon?: LucideIcon;
 }
 
 /**
  * The lines of an (i) panel as short paragraphs, each led by its key term in bold, so the panel reads
- * at a glance and not as one block. A legend line starts with its colour, which its words also name.
+ * at a glance and not as one block. A legend line starts with its colour, which its words also name;
+ * a line about a control starts with the control's icon, which its term names.
  */
 export function InfoLines({ lines }: { lines: readonly InfoLine[] }) {
-	return lines.map((line) => (
+	return lines.map(({ icon: Icon, ...line }) => (
 		<p key={line.term} className="flex gap-2">
+			{Icon !== undefined && (
+				<Icon aria-hidden className="mt-1 size-3.5 shrink-0 text-foreground" />
+			)}
 			{line.swatchClass !== undefined && (
 				<span
 					aria-hidden

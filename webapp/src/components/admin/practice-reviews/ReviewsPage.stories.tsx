@@ -138,6 +138,33 @@ export const RequestReviewFromARow: Story = {
 };
 
 /**
+ * The (i) over the actions column leads each term with its button's icon, so the reader sees which
+ * button does what; the icon is decoration, the term and its words stay what a screen reader hears.
+ */
+export const RowActionsLegend: Story = {
+	args: { requestReview: storyRequestActions() },
+	parameters: { chromatic: { viewports: [1440] } },
+	play: async ({ canvas, userEvent }) => {
+		const table = await canvas.findByRole("table", LIST);
+		const buttons = {
+			Track: within(table).getAllByRole("button", { name: /^Track /u })[0],
+			Trace: within(table).getAllByRole("link", { name: /^Trace /u })[0],
+			"Request review": within(table).getAllByRole("button", { name: /^Request review of /u })[0],
+		};
+		await userEvent.click(within(table).getByRole("button", { name: "About the row actions" }));
+		const legend = await screen.findByRole("dialog", { name: "About the row actions" });
+		for (const [term, button] of Object.entries(buttons)) {
+			const line = within(legend).getByText(term, { selector: "strong" }).closest("p");
+			const icon = line?.querySelector("svg");
+			await expect(icon).toHaveAttribute("aria-hidden", "true");
+			await expect(icon?.getAttribute("class")).toContain(
+				button?.querySelector("svg")?.getAttribute("class"),
+			);
+		}
+	},
+};
+
+/**
  * A row's ask was accepted before the list reads the new review, or while a filter keeps it out:
  * the way to it stands above the table all the same.
  */
