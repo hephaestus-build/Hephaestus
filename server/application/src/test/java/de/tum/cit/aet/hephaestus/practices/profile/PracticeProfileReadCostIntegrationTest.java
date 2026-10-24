@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemSourceAccess;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackService;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeGroupStandingService;
@@ -41,6 +42,7 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,6 +89,9 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     SqlStatementCounter statements;
 
     @Autowired
+    FeedbackRepository feedback;
+
+    @Autowired
     IdentityProviderRepository providers;
 
     @Autowired
@@ -112,6 +117,9 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     List<Scenario> works;
 
     Map<Long, Result> newestOnWork = new HashMap<>();
+
+    @Nullable
+    Result newestProblem;
 
     int seeded;
 
@@ -147,6 +155,22 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         assertThat(many).isEqualTo(few);
     }
 
+    @Test
+    void shouldShowPracticePageFeedbackAsItStandsWhenTheReadingTransactionLoadedItBefore() {
+        seed(works.size());
+        var piece = practicePageFeedback(Objects.requireNonNull(newestProblem), true);
+        var cards = new TransactionTemplate(transactions).execute(status -> {
+            assertThat(feedback.findById(piece)).isPresent();
+            jdbc.update("UPDATE feedback SET body='Name each change after its intent.' WHERE id=?", piece);
+            return practicePageFeedback.getOwnPracticePageFeedback(
+                    scenario.workspace().getId());
+        });
+        assertThat(cards)
+                .filteredOn(card -> card.id().equals(piece))
+                .singleElement()
+                .satisfies(card -> assertThat(card.body()).isEqualTo("Name each change after its intent."));
+    }
+
     /** Each read's statements, after checking that the read saw the seeded work. */
     private Map<String, Long> costs() {
         var context = WorkspaceContext.fromWorkspace(scenario.workspace(), Set.of(), null);
@@ -177,12 +201,20 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
                                 .singleElement()
                                 .satisfies(group -> assertThat(group.standing())
                                         .isNotIn(PracticeStanding.NOT_OBSERVED, PracticeStanding.NO_OPPORTUNITY))));
+        // A piece no one has read yet goes through the egress gate on every read.
+        var unread = practicePageFeedback(Objects.requireNonNull(newestProblem), false);
         costs.put(
                 "practice page feedback",
                 writingCost(
                         () -> practicePageFeedback.getOwnPracticePageFeedback(
                                 scenario.workspace().getId()),
                         read -> assertThat(read).isNotEmpty()));
+        assertThat(jdbc.queryForObject(
+                        "SELECT checks->'EGRESS' IS NOT NULL FROM feedback WHERE id=?", Boolean.class, unread))
+                .isTrue();
+        // The gate decides each unread piece on its own, so each measurement reads exactly one; this one now counts
+        // among the delivered history.
+        jdbc.update("UPDATE feedback SET state='DELIVERED',delivered_at=created_at WHERE id=?", unread);
         return costs;
     }
 
@@ -213,7 +245,10 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
             if (previous != null) data.end(previous, at);
             var result = data.result(work, seeded % 3 == 0 ? ResultOutcome.NOT_MET : ResultOutcome.MET, at);
             newestOnWork.put(work.item().getId(), result);
-            if (result.getOutcome() == ResultOutcome.NOT_MET) practicePageFeedback(result);
+            if (result.getOutcome() == ResultOutcome.NOT_MET) {
+                practicePageFeedback(result, true);
+                newestProblem = result;
+            }
             seeded++;
             // Only capture writes custody receipts; the guard that refuses other writers stays on.
             new TransactionTemplate(transactions).executeWithoutResult(status -> {
@@ -227,18 +262,19 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    private void practicePageFeedback(Result bound) {
+    private UUID practicePageFeedback(Result bound, boolean delivered) {
         var id = UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,"
-                        + "delivered_at) VALUES(?,?,?,?,?,'PRACTICE_PAGE','DELIVERED','Keep each change focused.',?,?)",
+                        + "delivered_at) VALUES(?,?,?,?,?,'PRACTICE_PAGE',?,'Keep each change focused.',?,?)",
                 id,
                 bound.getWorkspaceId(),
                 bound.getReviewId(),
                 bound.getItemId(),
                 bound.getDeveloperId(),
+                delivered ? "DELIVERED" : "READY",
                 Timestamp.from(bound.getRecordedAt()),
-                Timestamp.from(bound.getRecordedAt()));
+                delivered ? Timestamp.from(bound.getRecordedAt()) : null);
         jdbc.update(
                 "INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)"
                         + " VALUES(?,?,?,?,?,0)",
@@ -247,6 +283,7 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
                 id,
                 bound.getId(),
                 bound.getDeveloperId());
+        return id;
     }
 
     private void inShownGroup() {

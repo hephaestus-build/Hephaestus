@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultCitations;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultProofAccess;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -59,8 +60,7 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
                 .filter(result -> result.getId() != null && result.getWorkspaceId() == workspaceId)
                 .filter(result -> !newDelivery || result.getEvidenceVersion() == 1)
                 .toList();
-        boolean readsHistory = purpose == SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW
-                || purpose == SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+        boolean readsHistory = ResultProofAccess.readsHistory(purpose);
         Set<UUID> permitted = new HashSet<>(access.permitsAllHistory(
                 workspaceId,
                 owned.stream()

@@ -36,7 +36,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSp
     /** Locks the rows in one id order, so two readers locking overlapping sets cannot deadlock. */
     @Query(value = """
         SELECT f.* FROM feedback f WHERE f.workspace_id = :workspaceId AND f.id IN (:ids)
-        ORDER BY f.id::text FOR UPDATE
+        ORDER BY f.id FOR UPDATE
         """, nativeQuery = true)
     List<Feedback> lockAllByIdInAndWorkspaceId(
             @Param("ids") Collection<UUID> ids, @Param("workspaceId") long workspaceId);

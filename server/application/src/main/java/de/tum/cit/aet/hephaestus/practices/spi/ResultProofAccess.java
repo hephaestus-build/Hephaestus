@@ -8,6 +8,12 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 public interface ResultProofAccess {
+    /** Whether {@code purpose} may read retained history at all: operator review and practice feedback delivery. */
+    static boolean readsHistory(SourceUsePurpose purpose) {
+        return purpose == SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW
+                || purpose == SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+    }
+
     /**
      * The ids of the loaded {@code rows} whose retained history {@code purpose} may read, checked together. Human
      * access to retained history does not certify it for reuse or new delivery.

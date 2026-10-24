@@ -164,7 +164,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     @Override
     @Transactional(readOnly = true)
     public Set<UUID> permitsAllHistory(long workspaceId, Collection<Result> rows, SourceUsePurpose purpose) {
-        if (!readsHistory(purpose)) return Set.of();
+        if (!ResultProofAccess.readsHistory(purpose)) return Set.of();
         return admitted(workspaceId, rows, purpose, SourceReadAudience.PROCESSING, true);
     }
 
@@ -197,27 +197,22 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         return permitted;
     }
 
-    private static boolean readsHistory(SourceUsePurpose purpose) {
-        return purpose == SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW
-                || purpose == SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
-    }
-
     /** The read that {@link #asOneRead} opened on this thread, if any. */
     private static final ThreadLocal<@Nullable OneRead> ACTIVE_READ = new ThreadLocal<>();
 
-    private record OneRead(long workspaceId, Lookups lookups) {}
+    private record OneRead(ResultSourceAuthorization owner, long workspaceId, Lookups lookups) {}
 
     /**
      * Runs {@code read} as one read of the workspace: every check inside it shares its lookups, so a work item,
-     * source, person, account or capture job that several checks reach is looked up once. A read already open for the
-     * workspace on this thread is joined. The lookups are dropped when the outermost read returns, so no later read
-     * sees an answer of this one.
+     * source, person, account or capture job that several checks reach is looked up once. A read this instance already
+     * opened for the workspace on this thread is joined. The lookups are dropped when the outermost read returns, so no
+     * later read sees an answer of this one.
      */
     @Override
     public <T> T asOneRead(long workspaceId, Supplier<T> read) {
         var open = ACTIVE_READ.get();
-        if (open != null && open.workspaceId() == workspaceId) return read.get();
-        ACTIVE_READ.set(new OneRead(workspaceId, new Lookups()));
+        if (joins(open, workspaceId)) return read.get();
+        ACTIVE_READ.set(new OneRead(this, workspaceId, new Lookups()));
         try {
             return read.get();
         } finally {
@@ -228,7 +223,12 @@ public class ResultSourceAuthorization implements ResultProofAccess {
 
     private Lookups lookups(long workspaceId) {
         var open = ACTIVE_READ.get();
-        return open != null && open.workspaceId() == workspaceId ? open.lookups() : new Lookups();
+        return open != null && joins(open, workspaceId) ? open.lookups() : new Lookups();
+    }
+
+    // The holder is static, so a read joins only the scope this instance opened for the same workspace.
+    private boolean joins(@Nullable OneRead open, long workspaceId) {
+        return open != null && equals(open.owner()) && open.workspaceId() == workspaceId;
     }
 
     // Only processing by or for AI honours the AI choice; every source owner reads the same audience.
@@ -432,7 +432,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     /** Migrated words are readable history, never a certificate of complete copy custody. */
     @Transactional(readOnly = true)
     public boolean permitsHistory(long workspaceId, UUID resultId, SourceUsePurpose purpose) {
-        if (!readsHistory(purpose)) return false;
+        if (!ResultProofAccess.readsHistory(purpose)) return false;
         var lookups = lookups(workspaceId);
         return results.findByIdAndWorkspaceId(resultId, workspaceId)
                 .map(result -> {
