@@ -33,6 +33,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -58,7 +59,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     private final List<ItemSourceAccess> access;
 
     public HistoryCustody custody(Result result) {
-        return custody(result, new Lookups());
+        return custody(result, lookups(result.getWorkspaceId()));
     }
 
     private HistoryCustody custody(Result result, Lookups lookups) {
@@ -120,7 +121,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     }
 
     public boolean authorized(Result result, HistoryCustody facts, SourceUsePurpose purpose) {
-        return authorized(result, facts, purpose, SourceReadAudience.PROCESSING, new Lookups());
+        return authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups(result.getWorkspaceId()));
     }
 
     private boolean authorized(
@@ -143,29 +144,91 @@ public class ResultSourceAuthorization implements ResultProofAccess {
      * about them; a standing read off reviews that already ran is neither (ADR 0051). Nothing this admits becomes
      * quotable, deliverable or model context: it is not part of {@link ResultProofAccess}, which every AI and
      * delivery reader uses, and those readers keep the full check.
-     *
-     * <p>One call is one read: rows that share a work item, a source, a person, an account or a capture job look each
-     * up once, and the rows' assignments and problems load in a bounded number of queries rather than one per row.
-     * Nothing outlives the call.
      */
     @Transactional(readOnly = true)
     public Set<UUID> permitsHumanStanding(long workspaceId, Collection<Result> rows) {
+        return admitted(
+                workspaceId,
+                rows,
+                SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY,
+                SourceReadAudience.HUMAN_RECORDED_STANDING,
+                true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> permitsAll(long workspaceId, Collection<Result> rows, SourceUsePurpose purpose) {
+        return admitted(workspaceId, rows, purpose, SourceReadAudience.PROCESSING, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> permitsAllHistory(long workspaceId, Collection<Result> rows, SourceUsePurpose purpose) {
+        if (!readsHistory(purpose)) return Set.of();
+        return admitted(workspaceId, rows, purpose, SourceReadAudience.PROCESSING, true);
+    }
+
+    /**
+     * Rows that share a work item, a source, a person, an account or a capture job look each up once, and the rows'
+     * assignments and problems load in a bounded number of queries rather than one per row.
+     *
+     * @param history whether a row recorded before the current result model is read as history
+     */
+    private Set<UUID> admitted(
+            long workspaceId,
+            Collection<Result> rows,
+            SourceUsePurpose purpose,
+            SourceReadAudience audience,
+            boolean history) {
         var owned = rows.stream()
                 .filter(result -> result.getWorkspaceId() == workspaceId)
                 .toList();
         if (owned.isEmpty()) return Set.of();
-        var purpose = SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
-        var lookups = new Lookups();
+        var lookups = lookups(workspaceId);
         lookups.prefetch(workspaceId, owned);
         Set<UUID> permitted = new HashSet<>();
         for (var result : owned) {
             var facts = custody(result, lookups);
-            boolean admitted = result.getEvidenceVersion() != 0
-                    ? authorized(result, facts, purpose, SourceReadAudience.HUMAN_RECORDED_STANDING, lookups)
-                    : historyAuthorized(result, facts, purpose, SourceReadAudience.HUMAN_RECORDED_STANDING, lookups);
+            boolean admitted = (history && result.getEvidenceVersion() == 0)
+                    ? historyAuthorized(result, facts, purpose, audience, lookups)
+                    : authorized(result, facts, purpose, audience, lookups);
             if (admitted) permitted.add(result.getId());
         }
         return permitted;
+    }
+
+    private static boolean readsHistory(SourceUsePurpose purpose) {
+        return purpose == SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW
+                || purpose == SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY;
+    }
+
+    /** The read that {@link #asOneRead} opened on this thread, if any. */
+    private static final ThreadLocal<@Nullable OneRead> ACTIVE_READ = new ThreadLocal<>();
+
+    private record OneRead(long workspaceId, Lookups lookups) {}
+
+    /**
+     * Runs {@code read} as one read of the workspace: every check inside it shares its lookups, so a work item,
+     * source, person, account or capture job that several checks reach is looked up once. A read already open for the
+     * workspace on this thread is joined. The lookups are dropped when the outermost read returns, so no later read
+     * sees an answer of this one.
+     */
+    @Override
+    public <T> T asOneRead(long workspaceId, Supplier<T> read) {
+        var open = ACTIVE_READ.get();
+        if (open != null && open.workspaceId() == workspaceId) return read.get();
+        ACTIVE_READ.set(new OneRead(workspaceId, new Lookups()));
+        try {
+            return read.get();
+        } finally {
+            if (open == null) ACTIVE_READ.remove();
+            else ACTIVE_READ.set(open);
+        }
+    }
+
+    private Lookups lookups(long workspaceId) {
+        var open = ACTIVE_READ.get();
+        return open != null && open.workspaceId() == workspaceId ? open.lookups() : new Lookups();
     }
 
     // Only processing by or for AI honours the AI choice; every source owner reads the same audience.
@@ -181,6 +244,8 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     private final class Lookups {
         private final Map<Long, Optional<ItemRef>> items = new HashMap<>();
         private final Map<SourceKey, Boolean> sources = new HashMap<>();
+        // Suppression does not depend on the purpose or the audience, so every source check of an item shares it.
+        private final Map<Long, Boolean> suppressedSources = new HashMap<>();
         private final Map<Long, Optional<AccountDirectory.AccountView>> accounts = new HashMap<>();
         private final Map<Long, Boolean> suppressedAccounts = new HashMap<>();
         private final Map<UUID, Boolean> suppressedJobs = new HashMap<>();
@@ -188,66 +253,70 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         private final Map<PersonKey, Optional<Optional<Long>>> owners = new HashMap<>();
         private final Map<UUID, HistoryCustody> receipts = new HashMap<>();
         private @Nullable List<PersonIdentityResolver.Provider> providers;
-        // Filled by prefetch for a read of many rows; without it each row reads its own, as a single check does.
-        private @Nullable Map<ReviewItem.Id, ReviewItem> producers;
-        private @Nullable Map<UUID, List<ReviewItem>> retained;
-        private @Nullable Map<UUID, List<Problem>> children;
+        // Filled by prefetch for a read of many rows; a row it has not seen reads its own, as a single check does.
+        private final Set<UUID> prefetchedReviews = new HashSet<>();
+        private final Map<ReviewItem.Id, ReviewItem> producers = new HashMap<>();
+        private final Set<UUID> prefetchedResults = new HashSet<>();
+        private final Map<UUID, List<ReviewItem>> retained = new HashMap<>();
+        private final Map<UUID, List<Problem>> children = new HashMap<>();
 
         /**
-         * Loads the assignments and problems of {@code owned} in chunked collection queries, so the checks below read
-         * them from memory. The rows' producers are among their reviews' assignments; retained custody includes
-         * assignments of other reviews that reused a row.
+         * Loads the assignments and problems of the rows in {@code owned} this read has not seen, in chunked collection
+         * queries, so the checks below read them from memory. The rows' producers are among their reviews'
+         * assignments; retained custody includes assignments of other reviews that reused a row.
          */
         void prefetch(long workspaceId, List<Result> owned) {
-            var byAssignment = assignmentsOf(workspaceId, owned);
-            Map<UUID, List<ReviewItem>> byRetained = new HashMap<>();
-            for (var chunk : chunks(owned.stream().map(Result::getId).distinct().toList()))
+            var reviews = owned.stream()
+                    .map(Result::getReviewId)
+                    .distinct()
+                    .filter(prefetchedReviews::add)
+                    .toList();
+            for (var chunk : chunks(reviews))
+                assignments
+                        .findByWorkspaceIdAndReviewIdIn(workspaceId, chunk)
+                        .forEach(m ->
+                                producers.put(new ReviewItem.Id(m.getReviewId(), m.getPracticeId(), m.getItemId()), m));
+            var ids = owned.stream()
+                    .map(Result::getId)
+                    .distinct()
+                    .filter(prefetchedResults::add)
+                    .toList();
+            for (var chunk : chunks(ids)) {
                 for (var m : assignments.findByWorkspaceIdAndResultIdInOrderByReviewIdAscPracticeIdAscItemIdAsc(
                         workspaceId, chunk)) {
                     var resultId = m.getResultId();
                     if (resultId != null)
-                        byRetained
-                                .computeIfAbsent(resultId, ignored -> new ArrayList<>())
+                        retained.computeIfAbsent(resultId, ignored -> new ArrayList<>())
                                 .add(m);
                 }
-            Map<UUID, List<Problem>> byResult = new HashMap<>();
-            // Only a result with current proof checks the source kinds its problems cite.
-            for (var chunk : chunks(owned.stream()
-                    .filter(result -> result.getEvidenceVersion() != 0)
-                    .map(Result::getId)
-                    .distinct()
-                    .toList()))
+                // Every row may reach its problems: a processing read checks the source kinds they cite at any
+                // evidence version.
                 problems.findByWorkspaceIdAndResultIdInOrderByResultIdAscPositionAsc(workspaceId, chunk)
                         .forEach(
-                                problem -> byResult.computeIfAbsent(problem.getResultId(), ignored -> new ArrayList<>())
+                                problem -> children.computeIfAbsent(problem.getResultId(), ignored -> new ArrayList<>())
                                         .add(problem));
-            producers = byAssignment;
-            retained = byRetained;
-            children = byResult;
+            }
         }
 
         Optional<ReviewItem> producer(Result result) {
-            var known = producers;
-            if (known == null)
+            if (!prefetchedReviews.contains(result.getReviewId()))
                 return assignments.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
                         result.getWorkspaceId(), result.getReviewId(), result.getPracticeId(), result.getItemId());
             return Optional.ofNullable(
-                    known.get(new ReviewItem.Id(result.getReviewId(), result.getPracticeId(), result.getItemId())));
+                    producers.get(new ReviewItem.Id(result.getReviewId(), result.getPracticeId(), result.getItemId())));
         }
 
         List<ReviewItem> retained(Result result) {
-            var known = retained;
-            if (known == null)
+            if (!prefetchedResults.contains(result.getId()))
                 return assignments.findByWorkspaceIdAndResultIdOrderByReviewIdAscPracticeIdAscItemIdAsc(
                         result.getWorkspaceId(), result.getId());
-            return known.getOrDefault(result.getId(), List.of());
+            return retained.getOrDefault(result.getId(), List.of());
         }
 
         List<Problem> problems(Result result) {
-            var known = children;
-            if (known == null)
+            if (!prefetchedResults.contains(result.getId()))
                 return problems.findByWorkspaceIdAndResultIdOrderByPositionAsc(result.getWorkspaceId(), result.getId());
-            return known.getOrDefault(result.getId(), List.of());
+            return children.getOrDefault(result.getId(), List.of());
         }
 
         Optional<ItemRef> item(long workspaceId, long itemId) {
@@ -256,6 +325,15 @@ public class ResultSourceAuthorization implements ResultProofAccess {
 
         Optional<AccountDirectory.AccountView> account(long accountId) {
             return accounts.computeIfAbsent(accountId, ResultSourceAuthorization.this.accounts::find);
+        }
+
+        boolean sourceSuppressed(ItemRef item) {
+            var source = item.sourceId();
+            return source != null
+                    && suppressedSources.computeIfAbsent(
+                            item.itemId(),
+                            ignored -> suppression.isSourceSuppressed(
+                                    item.workspaceId(), item.kind().value(), source));
         }
 
         boolean accountSuppressed(long accountId) {
@@ -352,12 +430,10 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     }
 
     /** Migrated words are readable history, never a certificate of complete copy custody. */
-    @Override
     @Transactional(readOnly = true)
     public boolean permitsHistory(long workspaceId, UUID resultId, SourceUsePurpose purpose) {
-        if (purpose != SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW
-                && purpose != SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY) return false;
-        var lookups = new Lookups();
+        if (!readsHistory(purpose)) return false;
+        var lookups = lookups(workspaceId);
         return results.findByIdAndWorkspaceId(resultId, workspaceId)
                 .map(result -> {
                     var facts = custody(result, lookups);
@@ -409,10 +485,9 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         return item.isPresent() && source(item.orElseThrow(), purpose, audience, lookups);
     }
 
-    @Override
     @Transactional(readOnly = true)
     public boolean permits(long workspaceId, UUID resultId, SourceUsePurpose purpose) {
-        var lookups = new Lookups();
+        var lookups = lookups(workspaceId);
         return results.findByIdAndWorkspaceId(resultId, workspaceId)
                 .map(result ->
                         authorized(result, custody(result, lookups), purpose, SourceReadAudience.PROCESSING, lookups))
@@ -430,9 +505,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
 
     private boolean sourcePermits(
             ItemRef item, SourceUsePurpose purpose, SourceReadAudience audience, Lookups lookups) {
-        if (item.sourceId() != null
-                && suppression.isSourceSuppressed(
-                        item.workspaceId(), item.kind().value(), item.sourceId())) return false;
+        if (lookups.sourceSuppressed(item)) return false;
         if (item.parentId() != null) {
             var parent = lookups.item(item.workspaceId(), item.parentId());
             if (parent.isEmpty() || !source(parent.orElseThrow(), purpose, audience, lookups)) return false;

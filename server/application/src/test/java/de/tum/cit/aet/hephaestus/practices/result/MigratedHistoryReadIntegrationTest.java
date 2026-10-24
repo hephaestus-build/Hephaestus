@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -428,6 +429,64 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         when(source.permits(any(), any(), any())).thenReturn(false);
         assertThat(authorization.permitsHumanStanding(workspaceId, rows)).isEmpty();
         assertThat(singleReads(workspaceId, rows)).isEmpty();
+    }
+
+    @Test
+    void shouldAdmitInOneBatchExactlyTheResultsThatSingleReadsAdmitForEveryPurpose() {
+        long workspaceId = scenario.workspace().getId();
+        var rows = chain(4);
+        // The newest keeps current proof; complete custody lets processing purposes admit it too.
+        historical(
+                "UPDATE review_item SET detail=CAST(? AS jsonb) WHERE workspace_id=? AND result_id=?",
+                retainedCustody(true),
+                workspaceId,
+                rows.getLast().getId());
+        var stored = rows.stream().map(this::stored).toList();
+        var batch = new ArrayList<>(stored);
+        batch.add(data.result(data.scenario(), ResultOutcome.MET, Instant.now()));
+
+        boolean anyAdmitted = false;
+        for (var purpose : SourceUsePurpose.values()) {
+            var current = stored.stream()
+                    .filter(row -> authorization.permits(workspaceId, row.getId(), purpose))
+                    .map(Result::getId)
+                    .collect(Collectors.toSet());
+            var history = stored.stream()
+                    .filter(row -> authorization.permitsHistory(workspaceId, row.getId(), purpose))
+                    .map(Result::getId)
+                    .collect(Collectors.toSet());
+            assertThat(authorization.permitsAll(workspaceId, batch, purpose)).isEqualTo(current);
+            assertThat(authorization.permitsAllHistory(workspaceId, batch, purpose))
+                    .isEqualTo(history);
+            anyAdmitted |= !current.isEmpty() && !history.isEmpty();
+        }
+        assertThat(anyAdmitted).isTrue();
+    }
+
+    @Test
+    void shouldShareLookupsOnlyInsideOneReadOfTheWorkspaceAndAnswerFreshlyAfterIt() {
+        long workspaceId = scenario.workspace().getId();
+        var rows = chain(3);
+        var first = authorization.asOneRead(workspaceId, () -> {
+            var permitted = authorization.permitsHumanStanding(workspaceId, rows);
+            // A read of another workspace inside it neither joins nor ends it.
+            assertThat(authorization.asOneRead(
+                            workspaceId + 1, () -> authorization.permitsHumanStanding(workspaceId + 1, rows)))
+                    .isEmpty();
+            var again = statements(() -> authorization.permitsHumanStanding(workspaceId, rows));
+            assertThat(again.permitted()).isEqualTo(permitted);
+            assertThat(again.statements()).isZero();
+            return permitted;
+        });
+        assertThat(first).isNotEmpty();
+
+        assertThatThrownBy(() -> authorization.asOneRead(workspaceId, () -> {
+                    authorization.permitsHumanStanding(workspaceId, rows);
+                    throw new IllegalStateException("The read failed.");
+                }))
+                .isInstanceOf(IllegalStateException.class);
+        when(source.permits(any(), any(), any())).thenReturn(false);
+        assertThat(authorization.permitsHumanStanding(workspaceId, rows)).isEmpty();
     }
 
     @Test
