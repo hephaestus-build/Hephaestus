@@ -147,7 +147,8 @@ class DockerSandboxBackendTest extends BaseUnitTest {
         lenient().when(securityPolicy.buildLabels(JOB_ID)).thenReturn(labels);
         when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
         when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
-        when(securityPolicy.buildHostConfig(any(), any(), anyBoolean())).thenReturn(HOST_CONFIG);
+        when(securityPolicy.buildHostConfig(any(), eq(SandboxTestLimits.ATTEMPT), anyBoolean()))
+                .thenReturn(HOST_CONFIG);
         lenient().when(containerManager.createContainer(any())).thenAnswer(invocation -> {
             DockerOperations.ContainerSpec spec = invocation.getArgument(0);
             return spec.command().equals(SandboxLayout.INITIALIZER_COMMAND) ? "initializer" : "runtime";

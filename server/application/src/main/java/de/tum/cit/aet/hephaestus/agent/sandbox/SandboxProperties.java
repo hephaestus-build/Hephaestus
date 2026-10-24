@@ -31,7 +31,7 @@ public record SandboxProperties(
 
     /**
      * The resource limits of a review sandbox: its initializer and then its runtime. The defaults and the review usage
-     * they rest on are in docs/admin/install.mdx § Requirements.
+     * they rest on are in docs/admin/sizing.mdx § Review sandbox limits.
      *
      * @param memoryBytes maximum memory in bytes, tmpfs pages included
      * @param cpus CPU limit: a share of CPU time the sandbox may use, not a reservation

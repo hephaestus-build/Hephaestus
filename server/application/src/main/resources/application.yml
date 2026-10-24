@@ -621,7 +621,7 @@ hephaestus:
             port: ${SANDBOX_API_PORT:8081}
             max-request-bytes: ${SANDBOX_API_MAX_REQUEST_BYTES:4194304}
             requests-per-minute: ${SANDBOX_API_REQUESTS_PER_MINUTE:120}
-        # Each review sandbox; the sizing behind the defaults is in docs/admin/install.mdx § Requirements.
+        # Each review sandbox; the sizing behind the defaults is in docs/admin/sizing.mdx § Review sandbox limits.
         default-resource-limits:
             memory-bytes: ${SANDBOX_MEMORY_BYTES:3221225472}  # 3 GiB, tmpfs included
             cpus: ${SANDBOX_CPUS:1.0}
