@@ -4,19 +4,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaModifier;
 import java.lang.annotation.Annotation;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.json.JsonTest;
+import org.springframework.boot.test.context.PropertyMapping;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.BootstrapWith;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.BeanOverride;
@@ -49,7 +60,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "outline-enabled"),
             assignment(
                     "integration.outline.connect.OutlineConnectionAdminControllerIntegrationTest", "outline-enabled"),
-            assignment("integration.outline.item.DocumentItemSourceIntegrationTest", "outline-enabled"),
+            assignment("integration.outline.item.DocumentItemSourceIntegrationTest", "outline-origin"),
             assignment("integration.outline.sync.OutlineDocumentSyncIntegrationTest", "outline-enabled"),
             assignment("integration.scm.domain.item.ScmItemSourceIntegrationTest", "scm-source-currentness"),
             assignment("integration.scm.github.BaseGitHubLiveIntegrationTest", "github-live"),
@@ -68,14 +79,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("notification.AccountDeletionEmailIntegrationTest", "email-capture"),
             assignment("notification.AccountSecurityEmailIntegrationTest", "email-capture"),
             assignment("notification.email.EmailAdminControllerIntegrationTest", "email-capture"),
-            assignment("practices.acrossworkspace.PracticesAcrossWorkspaceIntegrationTest", "review-evidence"),
-            assignment("practices.adapter.ConversationFeedbackErasureIntegrationTest", "review-fixture"),
-            assignment("practices.adapter.PracticesWorkspacePurgeAdapterTest", "review-fixture"),
+            assignment("practices.acrossworkspace.PracticesAcrossWorkspaceIntegrationTest", "review-standing"),
             assignment("practices.feedback.AbstractFeedbackDeliveryIntegrationTest", "review-feedbackdelivery"),
             assignment("agent.adapter.EvidenceDeliveryAuthorizationIntegrationTest", "review-delivery-authorization"),
-            assignment("agent.context.providers.mentor.ReviewAttemptsContentSourceIntegrationTest", "review-fixture"),
-            assignment(
-                    "agent.context.providers.mentor.RetainedReviewContextRegressionIntegrationTest", "review-fixture"),
             assignment("practices.feedback.FeedbackGateIntegrationTest", "review-feedbackgate"),
             assignment("agent.handler.PublicReviewEligibilityIntegrationTest", "review-feedbackgate"),
             assignment("practices.feedback.FeedbackPreparationReceiptIntegrationTest", "review-preparation-receipt"),
@@ -83,48 +89,24 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("practices.feedback.FeedbackPrivateHistoryIntegrationTest", "review-privatehistory"),
             assignment("practices.feedback.FeedbackReviewControllerIntegrationTest", "review-feedbackreviewcontroller"),
             assignment("practices.groupdetail.PracticeGroupReviewHistoryIntegrationTest", "review-evidence"),
-            assignment("practices.groupdetail.PracticeGroupReviewsControllerIntegrationTest", "review-fixture"),
-            assignment("practices.profile.PracticeProfileOverviewIntegrationTest", "review-fixture"),
             assignment("practices.profile.PracticeProfileReviewIntegrationTest", "review-evidence"),
             assignment("practices.research.ResearchDisclosureControllerIntegrationTest", "research-disclosure-http"),
-            assignment("practices.research.ResearchDisclosureIntegrationTest", "review-fixture"),
-            assignment("practices.result.PracticeGroupStandingIntegrationTest", "review-fixture"),
             assignment("practices.review.AbstractResultAdmissionIntegrationTest", "review-resultadmission"),
-            assignment("practices.result.ResultControllerIntegrationTest", "review-fixture"),
             assignment("practices.result.OwnWithdrawnFeedbackIntegrationTest", "review-evidence"),
             assignment("practices.result.MigratedHistoryReadIntegrationTest", "review-migrated-history"),
             assignment("practices.result.ResultHistoryIntegrationTest", "review-resulthistory"),
-            assignment("practices.result.ResultMarkServiceIntegrationTest", "review-fixture"),
-            assignment("practices.result.ResultRepositoryIntegrationTest", "review-fixture"),
-            assignment("practices.review.DeliveredWorkFeedbackControllerIntegrationTest", "review-fixture"),
-            assignment("practices.review.DeliveredWorkFeedbackRepositoryIntegrationTest", "review-fixture"),
-            assignment("practices.review.PracticeReviewCoverageReplaceIntegrationTest", "review-fixture"),
-            assignment("practices.review.PracticeReviewSettingsControllerIntegrationTest", "review-fixture"),
-            assignment("practices.review.ProductItemQueryIntegrationTest", "review-fixture"),
             assignment("practices.review.DisabledIntegrationHistoryIntegrationTest", "review-disabled-integrations"),
-            assignment("practices.review.ReviewContextControllerIntegrationTest", "review-fixture"),
-            assignment("practices.review.ReviewGateIntegrationTest", "review-fixture"),
-            assignment("practices.review.ReviewNarrativeHistoryIntegrationTest", "review-fixture"),
             assignment("practices.review.ReviewOperationalViewsIntegrationTest", "review-reviewoperationalviews"),
-            assignment("practices.review.ReviewRequestControllerIntegrationTest", "review-fixture"),
-            assignment("practices.review.ReviewSummaryControllerIntegrationTest", "review-fixture"),
             assignment("practices.review.ReviewTimingFactsIntegrationTest", "review-reviewtimingfacts"),
             assignment("practices.review.feedbackmode.FeedbackModeReviewIntegrationTest", "review-feedbackmodereview"),
-            assignment("practices.review.schedule.ReviewBatchControllerIntegrationTest", "review-fixture"),
-            assignment("practices.review.schedule.ReviewBatchScopeIntegrationTest", "review-fixture"),
-            assignment("practices.review.schedule.ReviewScheduleControllerIntegrationTest", "review-fixture"),
-            assignment("practices.reviewoutput.PracticeReviewItemFactsIntegrationTest", "review-fixture"),
-            assignment("practices.reviewoutput.PracticeReviewOutputControllerIntegrationTest", "review-fixture"),
-            assignment("practices.reviewoutput.ReviewLineageIntegrationTest", "review-fixture"),
             assignment("practices.scan.ScanReportIntegrationTest", "review-scanreport"),
-            assignment("practices.trace.ItemTraceControllerIntegrationTest", "review-fixture"),
             assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.SurveyEmailInvitationIntegrationTest", "email-capture"),
             assignment("testconfig.BaseIntegrationTest", "base"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"));
 
     private static final Map<String, String> FULL_CONTEXT_JUSTIFICATIONS = Map.ofEntries(
-            Map.entry("base", "shared PostgreSQL, HTTP, security, and application acceptance" + " context"),
+            Map.entry("base", "shared PostgreSQL, HTTP, security, review fixtures and application acceptance context"),
             Map.entry(
                     "repository-provider-scope",
                     "real SQL provider, tenant and monitor lifetime enforcement with controlled GitLab transport and sync orchestration boundary"),
@@ -156,6 +138,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                             + " irreversible upstream token rotation mocked"),
             Map.entry("heph-live", "worker role with a real Heph host container, the agent image and a live model"),
             Map.entry("outline-enabled", "enabled Outline integration wiring"),
+            Map.entry("outline-origin", "enabled Outline integration wiring with one allowed document origin"),
             Map.entry(
                     "practice-upgrade-history",
                     "authenticated HTTP reads and sibling custody/erasure against populated released history"
@@ -179,6 +162,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry(
                     "review-delivery-authorization",
                     "real stored result and problem proof with only current source access controlled"),
+            Map.entry(
+                    "review-standing",
+                    "shared review fixture with evidence and result-source authorization controlled, because the"
+                            + " fixture records no capture custody"),
             Map.entry(
                     "review-evidence",
                     "shared review fixture with the neutral evidence authorization boundary"
@@ -209,10 +196,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry(
                     "review-migrated-history",
                     "real persisted historical reads with only current SCM source access controlled"),
-            Map.entry(
-                    "review-fixture",
-                    "shared persisted review/item/account fixture with real product"
-                            + " services and schema functions"),
             Map.entry(
                     "review-resultadmission",
                     "real transactional result admission with controlled runtime attempts,"
@@ -298,6 +281,30 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> DIRTY_CONTEXT_TESTS = Set.of();
 
+    private static final Set<String> CONTEXT_ANNOTATIONS = Set.of(
+            "ActiveProfiles",
+            "ContextConfiguration",
+            "ContextHierarchy",
+            "DirtiesContext",
+            "Import",
+            "MockitoBean",
+            "MockitoBeans",
+            "MockitoSpyBean",
+            "MockitoSpyBeans",
+            "SpringBootTest",
+            "TestPropertySource",
+            "WebAppConfiguration");
+
+    /** Spring reads these through any depth of meta-annotation, as `@AutoConfigureWebTestClient` does. */
+    private static final Set<Class<? extends Annotation>> CONTEXT_META_ANNOTATIONS = Set.of(
+            ActiveProfiles.class,
+            BootstrapWith.class,
+            ContextConfiguration.class,
+            Import.class,
+            ImportAutoConfiguration.class,
+            PropertyMapping.class,
+            TestPropertySource.class);
+
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
             "workspace.ManualRepositoryAuthorityIntegrationTest",
             "workspace.WorkspaceRepositoryCoverageIntegrationTest",
@@ -336,6 +343,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
         assertInventory(TestPropertySource.class, PROPERTY_SOURCE_TESTS);
         assertInventory(DirtiesContext.class, DIRTY_CONTEXT_TESTS);
         Set<String> mockitoBeans = classesWithTests.stream()
+                .filter(javaClass -> !isOwnFixture(javaClass))
                 .filter(javaClass -> javaClass.isAnnotatedWith(MockitoBean.class)
                         || javaClass.isAnnotatedWith(MockitoBeans.class)
                         || javaClass.getFields().stream()
@@ -377,6 +385,20 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.keySet()).isEqualTo(mergedKeys);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.values())
                 .allSatisfy(reason -> assertThat(reason).isNotBlank());
+
+        Map<String, Map<String, Set<String>>> declarationsByKey = fullContextTests.stream()
+                .filter(javaClass -> !javaClass.getModifiers().contains(JavaModifier.ABSTRACT))
+                .collect(Collectors.groupingBy(
+                        this::mergedContextKey,
+                        TreeMap::new,
+                        Collectors.groupingBy(
+                                this::contextDeclarations,
+                                TreeMap::new,
+                                Collectors.mapping(JavaClass::getSimpleName, Collectors.toCollection(TreeSet::new)))));
+        assertThat(declarationsByKey)
+                .as("Classes that share a reviewed key must declare the same context configuration; Spring"
+                        + " starts one context per distinct declaration")
+                .allSatisfy((key, declarations) -> assertThat(declarations).hasSize(1));
     }
 
     @Test
@@ -400,6 +422,19 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                 .isTrue();
     }
 
+    @Test
+    void shouldTellContextDeclarationsApartWhenArchitectureTestsRun() {
+        assertThat(contextDeclarations(classesWithTests.get(PropertyFixture.class)))
+                .isEqualTo(contextDeclarations(classesWithTests.get(SamePropertyFixture.class)))
+                .isNotEqualTo(contextDeclarations(classesWithTests.get(OtherPropertyFixture.class)));
+        assertThat(contextDeclarations(classesWithTests.get(RunnableMockFixture.class)))
+                .isNotEqualTo(contextDeclarations(classesWithTests.get(SupplierMockFixture.class)));
+        assertThat(contextDeclarations(classesWithTests.get(ShortClientTimeoutFixture.class)))
+                .isNotEqualTo(contextDeclarations(classesWithTests.get(LongClientTimeoutFixture.class)));
+        assertThat(contextDeclarations(classesWithTests.get(NestedConfigurationFixture.class)))
+                .isNotEqualTo(contextDeclarations(classesWithTests.get(TestBeanFixture.class)));
+    }
+
     private boolean hasAnnotationNamed(Set<? extends JavaAnnotation<?>> annotations, String... names) {
         Set<String> expectedNames = Set.of(names);
         return annotations.stream()
@@ -409,7 +444,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private void assertInventory(Class<? extends Annotation> annotation, Set<String> expected) {
         Set<String> actual = classesWithTests.stream()
-                .filter(javaClass -> javaClass.isAnnotatedWith(annotation))
+                .filter(javaClass -> !isOwnFixture(javaClass) && javaClass.isAnnotatedWith(annotation))
                 .map(JavaClass::getName)
                 .collect(Collectors.toCollection(TreeSet::new));
         assertThat(actual)
@@ -428,22 +463,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     }
 
     private boolean hasDirectContextCustomizer(JavaClass javaClass) {
-        Set<String> cacheKeyAnnotations = Set.of(
-                "ActiveProfiles",
-                "ContextConfiguration",
-                "ContextHierarchy",
-                "DirtiesContext",
-                "Import",
-                "MockitoBean",
-                "MockitoBeans",
-                "MockitoSpyBean",
-                "MockitoSpyBeans",
-                "SpringBootTest",
-                "TestPropertySource",
-                "WebAppConfiguration");
-        return (javaClass.getAnnotations().stream()
-                        .anyMatch(annotation -> cacheKeyAnnotations.contains(
-                                annotation.getRawType().getSimpleName()))
+        return (javaClass.getAnnotations().stream().anyMatch(this::isContextAnnotation)
                 || javaClass.getFields().stream()
                         .anyMatch(field -> field.getAnnotations().stream().anyMatch(this::isBeanOverride))
                 || javaClass.getMethods().stream()
@@ -453,8 +473,19 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                         .anyMatch(candidate -> candidate.isAnnotatedWith(TestConfiguration.class)));
     }
 
+    private boolean isContextAnnotation(JavaAnnotation<?> annotation) {
+        return CONTEXT_ANNOTATIONS.contains(annotation.getRawType().getSimpleName())
+                || CONTEXT_META_ANNOTATIONS.stream()
+                        .anyMatch(meta -> annotation.getRawType().isMetaAnnotatedWith(meta));
+    }
+
     private boolean isBeanOverride(JavaAnnotation<?> annotation) {
         return annotation.getRawType().isMetaAnnotatedWith(BeanOverride.class);
+    }
+
+    /** The fixtures nested in this class prove the rules; they are not tests in the inventories. */
+    private boolean isOwnFixture(JavaClass javaClass) {
+        return isNestedInside(javaClass, classesWithTests.get(SpringTestContextArchitectureTest.class));
     }
 
     private boolean isNestedInside(JavaClass candidate, JavaClass owner) {
@@ -466,9 +497,47 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
         return false;
     }
 
+    /** The context-cache inputs that a test class and its superclasses declare. */
+    private String contextDeclarations(JavaClass javaClass) {
+        return Stream.concat(Stream.of(javaClass), javaClass.getAllRawSuperclasses().stream())
+                .flatMap(owner -> Stream.of(
+                                owner.getAnnotations().stream()
+                                        .filter(this::isContextAnnotation)
+                                        .map(this::describe),
+                                owner.getFields().stream()
+                                        .flatMap(field -> field.getAnnotations().stream()
+                                                .filter(this::isBeanOverride)
+                                                .map(annotation -> describe(annotation) + " "
+                                                        + field.getRawType().getName())),
+                                owner.getMethods().stream()
+                                        .filter(method -> method.isAnnotatedWith(DynamicPropertySource.class))
+                                        .map(method -> "@DynamicPropertySource " + method.getFullName()),
+                                classesWithTests.stream()
+                                        .filter(nested -> isNestedInside(nested, owner)
+                                                && nested.isAnnotatedWith(TestConfiguration.class))
+                                        .map(nested -> "@TestConfiguration " + nested.getName()))
+                        .flatMap(declarations -> declarations))
+                .sorted()
+                .collect(Collectors.joining("\n"));
+    }
+
+    private String describe(JavaAnnotation<?> annotation) {
+        return "@" + annotation.getRawType().getName()
+                + new TreeMap<>(annotation.getProperties())
+                        .entrySet().stream()
+                                .map(property -> property.getKey() + "="
+                                        + Arrays.deepToString(new Object[] {property.getValue()}))
+                                .collect(Collectors.joining(", ", "(", ")"));
+    }
+
     private String mergedContextKey(JavaClass javaClass) {
         String assigned = FULL_CONTEXT_ASSIGNMENTS.get(javaClass.getName());
         if (assigned != null) return assigned;
+        // A subclass of a keyed abstract base shares that base's context; `base` and `real-auth` are defaults.
+        for (JavaClass superclass : javaClass.getAllRawSuperclasses()) {
+            String inherited = FULL_CONTEXT_ASSIGNMENTS.get(superclass.getName());
+            if (inherited != null && !inherited.equals("base") && !inherited.equals("real-auth")) return inherited;
+        }
         boolean realAuth = javaClass.getAllRawSuperclasses().stream()
                 .anyMatch(superclass -> superclass.getName().equals(name("testconfig.RealAuthIntegrationTest")));
         return realAuth ? "real-auth" : "base";
@@ -495,6 +564,37 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
         @TestConfiguration
         static class Configuration {}
     }
+
+    @TestPropertySource(properties = "fixture=1")
+    private static final class PropertyFixture {}
+
+    @TestPropertySource(properties = "fixture=1")
+    private static final class SamePropertyFixture {}
+
+    @TestPropertySource(properties = "fixture=2")
+    private static final class OtherPropertyFixture {}
+
+    private static final class RunnableMockFixture {
+
+        @SuppressWarnings("UnusedVariable") // ArchUnit reads its bean override; Spring never loads the fixture
+        @MockitoBean
+        @Nullable
+        Runnable dependency;
+    }
+
+    private static final class SupplierMockFixture {
+
+        @SuppressWarnings("UnusedVariable") // ArchUnit reads its bean override; Spring never loads the fixture
+        @MockitoBean
+        @Nullable
+        Supplier<String> dependency;
+    }
+
+    @AutoConfigureWebTestClient(timeout = "1s")
+    private static final class ShortClientTimeoutFixture {}
+
+    @AutoConfigureWebTestClient(timeout = "2s")
+    private static final class LongClientTimeoutFixture {}
 
     private static final class TestBeanFixture {
 

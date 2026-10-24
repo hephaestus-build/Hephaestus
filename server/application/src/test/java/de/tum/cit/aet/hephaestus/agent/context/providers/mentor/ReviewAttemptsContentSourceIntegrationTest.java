@@ -59,7 +59,6 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -70,7 +69,6 @@ import tools.jackson.databind.json.JsonMapper;
  * it while its review row still says whose work it was. Rows are seeded directly; a judged member carries only the
  * result row its recorded state requires, no evidence or delivery is created, and no review service ran to produce them.
  */
-@Import({ReviewIntegrationData.class, ScanReportTestData.class})
 class ReviewAttemptsContentSourceIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;

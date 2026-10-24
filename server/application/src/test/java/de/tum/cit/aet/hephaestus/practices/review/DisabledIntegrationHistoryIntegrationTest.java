@@ -27,11 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-@Import({ReviewIntegrationData.class, ReviewLookupData.class})
 @TestPropertySource(
         properties = {"hephaestus.integration.slack.enabled=false", "hephaestus.integration.outline.enabled=false"})
 class DisabledIntegrationHistoryIntegrationTest extends BaseIntegrationTest {

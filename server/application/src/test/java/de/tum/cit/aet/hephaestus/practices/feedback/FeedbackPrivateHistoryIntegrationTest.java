@@ -77,7 +77,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -86,7 +85,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-@Import({ReviewIntegrationData.class, ReviewAdmissionData.class})
 class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
     private static final Path FABRIC_ROOT = temporaryDirectory();
     private static final String WORKER = "private-history-worker";
