@@ -23,6 +23,12 @@ export interface Change {
 	mergeCommit: string;
 	/** The Version PR consumes changesets; it is release mechanics, not a change. */
 	versionPr: boolean;
+	/** The stages of the last push: CI/CD started on it, its gate passed, and the last queue entry. */
+	pushedAt: number | undefined;
+	greenAt: number | undefined;
+	queuedAt: number | undefined;
+	/** How often the pull request entered the merge queue; more than once means it was dropped. */
+	queueEntries: number;
 }
 
 export interface Deployment {
@@ -32,7 +38,6 @@ export interface Deployment {
 	/** The last of success, failure or error; a later `inactive` only means it was replaced. */
 	outcome: "success" | "failure" | "error" | undefined;
 	finishedAt: number | undefined;
-	rollback: boolean;
 }
 
 export interface Release {
@@ -78,24 +83,43 @@ export function isRevert(title: string): boolean {
 	return /^(?:Revert "|revert(?:\([^)]*\))?:)/u.test(title);
 }
 
+export type Verdict = "success" | "failed" | "repeat" | "undecided";
+
 /**
- * A deployment failed when its record says so, or when the next deployment to the same environment
- * deliberately moved it back.
+ * Walks one environment's deployments in order. A deployment of what already runs is a repeat: it
+ * moves nothing, so it is neither a deployment nor a failure. A deployment failed when its record
+ * says so, or when the next deployment that moved the environment went back on main's history.
  */
-function failures(deployments: readonly Deployment[]): Set<Deployment> {
-	const failed = new Set<Deployment>();
+export function classify(
+	deployments: readonly Deployment[],
+	position: ReadonlyMap<string, number>,
+): Map<Deployment, Verdict> {
+	const verdicts = new Map<Deployment, Verdict>();
 	const ordered = deployments.toSorted((left, right) => left.createdAt - right.createdAt);
-	for (const [index, deployment] of ordered.entries()) {
-		if (deployment.outcome === "failure" || deployment.outcome === "error") {
-			failed.add(deployment);
+	let running: string | undefined;
+	let previous: Deployment | undefined;
+	for (const deployment of ordered) {
+		if (deployment.sha === running) {
+			verdicts.set(deployment, "repeat");
+			continue;
 		}
-		const next = ordered[index + 1];
-		if (deployment.outcome === "success" && next?.rollback === true) {
-			failed.add(deployment);
+		if (deployment.outcome !== "success") {
+			verdicts.set(deployment, deployment.outcome === undefined ? "undecided" : "failed");
+			continue;
 		}
+		const from = previous === undefined ? undefined : position.get(previous.sha);
+		const to = position.get(deployment.sha);
+		if (previous !== undefined && from !== undefined && to !== undefined && to < from) {
+			verdicts.set(previous, "failed");
+		}
+		verdicts.set(deployment, "success");
+		running = deployment.sha;
+		previous = deployment;
 	}
-	return failed;
+	return verdicts;
 }
+
+const doneAt = (deployment: Deployment) => deployment.finishedAt ?? deployment.createdAt;
 
 export function deliveryMetrics(
 	window: Window,
@@ -104,14 +128,22 @@ export function deliveryMetrics(
 	releases: readonly Release[],
 	position: ReadonlyMap<string, number>,
 ) {
+	const verdicts = new Map(
+		ENVIRONMENTS.flatMap((environment) => [
+			...classify(
+				deployments.filter((deployment) => deployment.environment === environment),
+				position,
+			),
+		]),
+	);
+	const verdict = (deployment: Deployment) => verdicts.get(deployment) ?? "undecided";
+	// Only a deployment that stayed counts as the change running there: a rolled-back one did not.
 	const arrivals = (environment: Environment) =>
 		deployments
-			.filter((deployment) => deployment.environment === environment)
-			.filter((deployment) => deployment.outcome === "success")
-			.map((deployment) => ({
-				position: position.get(deployment.sha),
-				at: deployment.finishedAt ?? deployment.createdAt,
-			}));
+			.filter(
+				(deployment) => deployment.environment === environment && verdict(deployment) === "success",
+			)
+			.map((deployment) => ({ position: position.get(deployment.sha), at: doneAt(deployment) }));
 	const staging = arrivals("Staging");
 	const production = arrivals("Production");
 	const released = releases.map((release) => ({
@@ -120,6 +152,9 @@ export function deliveryMetrics(
 	}));
 
 	const merged = changes.filter((change) => inWindow(change.mergedAt, window) && !change.versionPr);
+	const pushToGreen: number[] = [];
+	const greenToQueued: number[] = [];
+	const queuedToMerged: number[] = [];
 	const commitToMerge: number[] = [];
 	const mergeToStaging: number[] = [];
 	const mergeToRelease: number[] = [];
@@ -133,6 +168,17 @@ export function deliveryMetrics(
 	let awaitingProduction = 0;
 	for (const change of merged) {
 		commitToMerge.push(change.mergedAt - change.firstCommitAt);
+		const { pushedAt, greenAt, queuedAt } = change;
+		if (pushedAt !== undefined && greenAt !== undefined && greenAt >= pushedAt) {
+			pushToGreen.push(greenAt - pushedAt);
+		}
+		if (greenAt !== undefined && queuedAt !== undefined) {
+			// Auto-merge can queue a pull request the moment its gate passes.
+			greenToQueued.push(Math.max(0, queuedAt - greenAt));
+		}
+		if (queuedAt !== undefined) {
+			queuedToMerged.push(change.mergedAt - queuedAt);
+		}
 		const place = position.get(change.mergeCommit);
 		if (place === undefined) {
 			unplaced += 1;
@@ -162,59 +208,46 @@ export function deliveryMetrics(
 	}
 
 	const environments = ENVIRONMENTS.map((environment) => {
-		const own = deployments.filter((deployment) => deployment.environment === environment);
-		const failed = failures(own);
-		const decided = own.filter(
-			(deployment) => deployment.outcome !== undefined && inWindow(deployment.createdAt, window),
+		const own = deployments
+			.filter((deployment) => deployment.environment === environment)
+			.toSorted((left, right) => left.createdAt - right.createdAt);
+		const current = own.filter((deployment) => inWindow(deployment.createdAt, window));
+		const decided = current.filter(
+			(deployment) => verdict(deployment) === "success" || verdict(deployment) === "failed",
 		);
-		const successes = decided.filter(
-			(deployment) => deployment.outcome === "success" && !failed.has(deployment),
-		);
-		const restores: number[] = [];
-		let unrestored = 0;
-		for (const deployment of decided.filter((candidate) => failed.has(candidate))) {
-			const failedAt = deployment.finishedAt ?? deployment.createdAt;
-			const restore = own
-				.filter(
-					(candidate) =>
-						candidate.outcome === "success" &&
-						!failed.has(candidate) &&
-						candidate.createdAt > deployment.createdAt,
-				)
-				.map((candidate) => candidate.finishedAt ?? candidate.createdAt)
-				.toSorted((left, right) => left - right)[0];
-			if (restore === undefined) {
-				unrestored += 1;
-			} else {
-				restores.push(restore - failedAt);
+		const successes = decided.filter((deployment) => verdict(deployment) === "success");
+		// Consecutive failures are one incident, recovered by the next deployment that stayed.
+		const recoveries: number[] = [];
+		let incident: number | undefined;
+		let unrecovered = 0;
+		for (const deployment of own) {
+			if (verdict(deployment) === "failed" && incident === undefined) {
+				incident = doneAt(deployment);
+			} else if (verdict(deployment) === "success" && incident !== undefined) {
+				if (inWindow(incident, window)) {
+					recoveries.push(doneAt(deployment) - incident);
+				}
+				incident = undefined;
 			}
+		}
+		if (incident !== undefined && inWindow(incident, window)) {
+			unrecovered = 1;
 		}
 		const days = (window.until - window.since) / DAY;
-		const earlier = own.filter((deployment) => deployment.createdAt < window.since);
-		const seen = new Set(earlier.map((deployment) => deployment.sha));
-		let repeats = 0;
-		for (const deployment of decided.toSorted((left, right) => left.createdAt - right.createdAt)) {
-			if (seen.has(deployment.sha)) {
-				repeats += 1;
-			}
-			seen.add(deployment.sha);
-		}
 		return {
 			environment,
 			deployments: decided.length,
-			repeats,
+			repeats: current.filter((deployment) => verdict(deployment) === "repeat").length,
 			successful: successes.length,
 			perWeek: (successes.length / days) * 7,
 			deploymentDays: new Set(
-				successes.map((deployment) =>
-					new Date(deployment.finishedAt ?? deployment.createdAt).toISOString().slice(0, 10),
-				),
+				successes.map((deployment) => new Date(doneAt(deployment)).toISOString().slice(0, 10)),
 			).size,
 			failed: decided.length - successes.length,
-			changeFailureRate:
+			changeFailRate:
 				decided.length === 0 ? null : (decided.length - successes.length) / decided.length,
-			timeToRestore: distribution(restores),
-			unrestored,
+			recoveryTime: distribution(recoveries),
+			unrecovered,
 		};
 	});
 
@@ -230,6 +263,7 @@ export function deliveryMetrics(
 			merged: merged.length,
 			reverts,
 			revertRate: merged.length === 0 ? null : reverts / merged.length,
+			requeued: merged.filter((change) => change.queueEntries > 1).length,
 			unplaced,
 			awaitingStaging,
 			awaitingRelease,
@@ -241,6 +275,9 @@ export function deliveryMetrics(
 			patchShare: published.length === 0 ? null : patches / published.length,
 		},
 		leadTime: {
+			pushToGreen: distribution(pushToGreen),
+			greenToQueued: distribution(greenToQueued),
+			queuedToMerged: distribution(queuedToMerged),
 			commitToMerge: distribution(commitToMerge),
 			mergeToStaging: distribution(mergeToStaging),
 			mergeToRelease: distribution(mergeToRelease),
@@ -281,6 +318,9 @@ export function renderDeliveryMetrics(title: string, metrics: Metrics): string {
 		"",
 		"| From → to | Median | p90 | Changes |",
 		"|---|---:|---:|---:|",
+		lead("Last push → pull-request CI passed", metrics.leadTime.pushToGreen),
+		lead("CI passed → entered the merge queue", metrics.leadTime.greenToQueued),
+		lead("Entered the merge queue → merged", metrics.leadTime.queuedToMerged),
 		lead("First commit → merged", metrics.leadTime.commitToMerge),
 		lead("Merged → running on staging", metrics.leadTime.mergeToStaging),
 		lead("Merged → in a published release", metrics.leadTime.mergeToRelease),
@@ -288,6 +328,8 @@ export function renderDeliveryMetrics(title: string, metrics: Metrics): string {
 		lead("First commit → running on staging", metrics.leadTime.commitToStaging),
 		lead("First commit → running in production", metrics.leadTime.commitToProduction),
 		lead("Pull request opened → running in production", metrics.leadTime.openToProduction),
+		"",
+		`Dropped from the merge queue at least once: ${metrics.changes.requeued} of ${metrics.changes.merged}.`,
 		"",
 		`Not yet on staging: ${metrics.changes.awaitingStaging}. Not yet released: ${metrics.changes.awaitingRelease}. Not yet in production: ${metrics.changes.awaitingProduction}.`,
 		...(metrics.changes.unplaced === 0
@@ -299,15 +341,17 @@ export function renderDeliveryMetrics(title: string, metrics: Metrics): string {
 		"",
 		"### Deployments",
 		"",
-		"| Environment | Successful | Per week | Days with a deployment | Change failure rate | Time to restore (median) | Not restored | Repeats of a deployed build |",
+		"Production is the DORA measure; Staging shows the flow before it. The fail rate and recovery time are proxies: a failure is a deployment whose version check failed or that was rolled back. See the Delivery Metrics page.",
+		"",
+		"| Environment | Successful | Per week | Days with a deployment | Change fail rate (proxy) | Failed deployment recovery time (median, proxy) | Not recovered | Repeats of what ran |",
 		"|---|---:|---:|---:|---:|---:|---:|---:|",
 		...metrics.environments.map(
 			(environment) =>
-				`| ${environment.environment} | ${environment.successful} | ${environment.perWeek.toFixed(1)} | ${environment.deploymentDays} | ${percent(environment.changeFailureRate)} (${environment.failed}/${environment.deployments}) | ${duration(environment.timeToRestore.p50)} (n=${environment.timeToRestore.count}) | ${environment.unrestored} | ${environment.repeats} |`,
+				`| ${environment.environment} | ${environment.successful} | ${environment.perWeek.toFixed(1)} | ${environment.deploymentDays} | ${percent(environment.changeFailRate)} (${environment.failed}/${environment.deployments}) | ${duration(environment.recoveryTime.p50)} (n=${environment.recoveryTime.count}) | ${environment.unrecovered} | ${environment.repeats} |`,
 		),
 		"",
 		`Reverted changes: ${metrics.changes.reverts} of ${metrics.changes.merged} (${percent(metrics.changes.revertRate)}).`,
-		`Patch releases (rework): ${metrics.releases.patches} of ${metrics.releases.published} (${percent(metrics.releases.patchShare)}).`,
+		`Patch releases (rework rate proxy): ${metrics.releases.patches} of ${metrics.releases.published} (${percent(metrics.releases.patchShare)}).`,
 		"",
 	].join("\n");
 }
@@ -319,6 +363,48 @@ const time = (value: unknown, label: string) => {
 	}
 	return parsed;
 };
+
+const earliest = (times: readonly number[]) =>
+	times.length === 0 ? undefined : Math.min(...times);
+const latest = (times: readonly number[]) => (times.length === 0 ? undefined : Math.max(...times));
+
+/** When the merged head was pushed, passed CI (the gate's `All CI Passed` status), and last entered the merge queue. */
+function pushStages(node: Record<string, unknown>) {
+	const head = asArray(asRecord(node.head, "head").nodes, "head commits")[0];
+	const commit = isRecord(head) ? asRecord(head.commit, "head commit") : {};
+	const contexts = isRecord(commit.status)
+		? asArray(commit.status.contexts, "status contexts")
+		: [];
+	const suites = isRecord(commit.checkSuites)
+		? asArray(commit.checkSuites.nodes, "check suites")
+		: [];
+	const entries = asArray(asRecord(node.timelineItems, "timeline").nodes, "queue entries").map(
+		(entry) => time(asRecord(entry, "queue entry").createdAt, "queue entry createdAt"),
+	);
+	return {
+		pushedAt: earliest(
+			suites.flatMap((suite) => {
+				const run = isRecord(suite) ? suite.workflowRun : undefined;
+				return isRecord(run) &&
+					run.event === "pull_request" &&
+					isRecord(run.workflow) &&
+					run.workflow.name === "CI/CD"
+					? [time(run.createdAt, "workflow run createdAt")]
+					: [];
+			}),
+		),
+		greenAt: latest(
+			contexts.flatMap((value) => {
+				const status = asRecord(value, "status context");
+				return status.context === "All CI Passed" && status.state === "SUCCESS"
+					? [time(status.createdAt, "status createdAt")]
+					: [];
+			}),
+		),
+		queuedAt: latest(entries),
+		queueEntries: entries.length,
+	};
+}
 
 export function parseChanges(pages: unknown, releaseBranch: string): Change[] {
 	return asArray(pages, "pull request pages").flatMap((page) =>
@@ -337,6 +423,7 @@ export function parseChanges(pages: unknown, releaseBranch: string): Change[] {
 					mergedAt: time(node.mergedAt, "mergedAt"),
 					mergeCommit: asString(asRecord(node.mergeCommit, "mergeCommit").oid, "merge commit"),
 					versionPr: node.headRefName === releaseBranch,
+					...pushStages(node),
 				};
 			},
 		),
@@ -345,11 +432,19 @@ export function parseChanges(pages: unknown, releaseBranch: string): Change[] {
 
 const PULLS_QUERY = `query($q: String!, $endCursor: String) {
   search(query: $q, type: ISSUE, first: 100, after: $endCursor) {
+    issueCount
     pageInfo { hasNextPage endCursor }
     nodes { ... on PullRequest {
       number title createdAt mergedAt headRefName
       mergeCommit { oid }
       commits(first: 1) { nodes { commit { authoredDate } } }
+      head: commits(last: 1) { nodes { commit {
+        status { contexts { context state createdAt } }
+        checkSuites(first: 20) { nodes { workflowRun { event createdAt workflow { name } } } }
+      } } }
+      timelineItems(itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT], last: 20) {
+        nodes { ... on AddedToMergeQueueEvent { createdAt } }
+      }
     } }
   }
 }`;
@@ -362,6 +457,16 @@ const RELEASES_QUERY = `query($owner: String!, $name: String!, $endCursor: Strin
     }
   }
 }`;
+
+/** The number of results the search found, which can exceed what it returns. */
+export function searchCount(pages: unknown): number {
+	const [first] = asArray(pages, "pull request pages");
+	const count = asRecord(at(first, ["data", "search"], "search"), "search").issueCount;
+	if (typeof count !== "number") {
+		throw new TypeError("search returned no issueCount");
+	}
+	return count;
+}
 
 export function parseReleases(pages: unknown): Release[] {
 	return asArray(pages, "release pages").flatMap((page) =>
@@ -398,14 +503,12 @@ export function parseDeployment(
 	const decided = asArray(statuses, "statuses")
 		.map((status) => asRecord(status, "status"))
 		.find((status) => isOutcome(status.state));
-	const payload = isRecord(record.payload) ? record.payload : {};
 	return {
 		environment,
 		sha: asString(record.sha, "sha"),
 		createdAt: time(record.created_at, "created_at"),
 		outcome: isOutcome(decided?.state) ? decided.state : undefined,
 		finishedAt: decided === undefined ? undefined : time(decided.created_at, "status created_at"),
-		rollback: payload.allow_rollback === true,
 	};
 }
 
@@ -428,21 +531,27 @@ if (import.meta.main) {
 	const history = firstParents.trim().split("\n");
 	const position = new Map(history.map((sha, index) => [sha, history.length - index]));
 
-	const changes = parseChanges(
+	const pulls = await api([
+		"graphql",
+		"--paginate",
+		"--slurp",
+		"-f",
+		`query=${PULLS_QUERY}`,
+		"-f",
+		`q=repo:${repository} is:pr is:merged base:main merged:>=${sinceDate}`,
+	]);
+	const changes = parseChanges(pulls, versionBranch(await readJsonFile(".changeset/config.json")));
+	if (changes.length < searchCount(pulls)) {
+		// GitHub's search returns at most 1,000 results.
+		throw new Error(
+			`only ${changes.length} of ${searchCount(pulls)} merged pull requests were listed`,
+		);
+	}
+	const releases = parseReleases(
 		await api([
 			"graphql",
 			"--paginate",
 			"--slurp",
-			"-f",
-			`query=${PULLS_QUERY}`,
-			"-f",
-			`q=repo:${repository} is:pr is:merged base:main merged:>=${sinceDate}`,
-		]),
-		versionBranch(await readJsonFile(".changeset/config.json")),
-	);
-	const releases = parseReleases([
-		await api([
-			"graphql",
 			"-f",
 			`query=${RELEASES_QUERY}`,
 			"-f",
@@ -450,7 +559,7 @@ if (import.meta.main) {
 			"-f",
 			`name=${name}`,
 		]),
-	]);
+	);
 	const deployments: Deployment[] = [];
 	for (const environment of ENVIRONMENTS) {
 		const listed = asArray(
