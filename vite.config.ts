@@ -104,6 +104,7 @@ const policyGates = [
 	"gate:contracts",
 	"gate:preview-stack",
 	"gate:env",
+	"gate:quarantine",
 ];
 const serverGates = ["gate:java-nullness", "gate:server"];
 const webappGates = ["gate:webapp", "gate:webapp-format", "gate:components", "gate:stories"];
@@ -241,6 +242,9 @@ export default defineConfig({
 				"node scripts/validate-source-use-contracts.ts && node scripts/check-source-use-contract-immutability.ts && node --test scripts/check-source-use-contract-immutability.test.ts",
 			),
 			"gate:prose": run("node --test scripts/check-prose.test.ts && node scripts/check-prose.ts"),
+			"gate:quarantine": run(
+				"node --test scripts/check-quarantine.test.ts && node scripts/check-quarantine.ts",
+			),
 			"lint:prose": run("node scripts/check-prose.ts"),
 			"report:prose": run("node scripts/report-prose.ts"),
 			"gate:instructions": run(
@@ -422,6 +426,7 @@ export default defineConfig({
 			"schema:nats": run("node scripts/nats-extract-examples.ts"),
 			"report:ci-latency": run("node scripts/report-ci-latency.ts"),
 			"report:ci-timings": run("node scripts/report-ci-timings.ts"),
+			"report:flakes": run("node scripts/report-flakes.ts"),
 			"report:test-results": run("node scripts/summarize-test-results.ts"),
 			"release:version": run("changeset version && node scripts/sync-release-version.ts"),
 

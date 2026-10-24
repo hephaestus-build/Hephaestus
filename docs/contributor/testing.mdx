@@ -165,6 +165,29 @@ Those discovery reports are not evidence that tests passed.
 Execution tasks do not accept the removed `-PtestSelection` property.
 Use the selection command for discovery.
 
+## Flaky tests
+
+A flaky test fails and then passes on the same commit.
+CI does not retry Gradle or Vitest tests.
+Playwright retries a failed test once to record a trace, and then it fails the run as flaky.
+You can rerun a failed job, but the rerun does not hide the flake.
+The weekly [flaky test report](ci-cd.mdx#flaky-tests) lists every job that passed only on a rerun.
+Maintainers read it each week.
+
+When a test flakes:
+
+1. Open an issue for the test and assign an owner.
+2. The owner finds the cause and fixes it, or deletes a test that asserts nothing new.
+   Do not add a retry, a longer timeout, or a sleep to hide it.
+3. Quarantine the test only while the flake blocks merges and the cause is not fixed yet.
+   The skip names the issue, the owner's GitHub login and an end date at most 14 days ahead.
+   In Java, write `@Disabled("quarantine #123 @owner until 2026-11-07: free-port race")`.
+   In TypeScript, put `// quarantine #123 @owner until 2026-11-07: free-port race` on the line directly above `it.skip(`.
+4. On the end date, the owner fixes or deletes the test.
+
+`vp run check` fails on a skip that names no issue, owner and end date, and on an expired quarantine.
+A skip that depends on the environment, such as missing live credentials, is not a quarantine.
+
 ## Live external-service tests
 
 Live tests use real provider APIs, LLM endpoints or sandbox containers. They carry `@Tag("live")`

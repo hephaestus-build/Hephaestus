@@ -1,0 +1,41 @@
+name: Flaky test report
+
+# Reads run attempts and retained JUnit reports; it never reruns or retries anything.
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Flaky tests of the last 14 days
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      - name: List tests that failed and then passed on the same commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: vp run report:flakes
+      - name: Retain the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flake-report-${{ github.run_id }}
+          path: tmp/ci-metrics/flakes.json
+          if-no-files-found: error
+          retention-days: 90
