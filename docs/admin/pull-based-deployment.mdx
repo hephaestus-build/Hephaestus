@@ -61,7 +61,12 @@ promotion rather than clearing a freeze.
 
 A host applies a frozen channel like any other: `freeze` matters only to automatic promotion.
 Thus, one promotion moves Staging to a release or commit and keeps it there.
-Only Staging follows `main`, so only Staging can be frozen. Establish the initial channel with a manual promotion before
+Only Staging follows `main`, so only Staging can be frozen.
+A host that runs tooling from before this rule ignores a frozen channel.
+On such a host, a frozen promotion to a new target fails its version check.
+Promote that host once without **freeze** first.
+
+Establish the initial channel with a manual promotion before
 enabling continuous staging.
 
 An automatic promotion that would advance the channel checks the most recent successful CI/CD run of a push to `main` in the same repository.
@@ -246,7 +251,7 @@ Do not change the checkout underneath a tick.
 | Move an environment                                    | Run the **Promote** workflow: pick the environment and release or commit                                                                                     |
 | Roll back                                              | Pause reconciliation, then follow [Rollback](./upgrade#rollback). After the database matches the older release, promote that release with **allow-rollback** |
 | Keep Staging on a release or commit                    | Promote it with **freeze**                                                                                                                                   |
-| Let Staging follow `main` again                        | Promote a commit of `main` with **freeze** cleared. The next successful build moves it on                                                                    |
+| Let Staging follow `main` again                        | Promote a commit of `main` with **freeze** cleared. The next successful build moves it on. Promoting the commit that runs applies it again                   |
 | Reapply Compose configuration                          | Promote the release or commit the host already runs                                                                                                          |
 | Move a following host onto the commit's database image | Promote the commit with **refresh-database-image**                                                                                                           |
 | Prevent new reconciliation runs                        | Use the timer-disable command below                                                                                                                          |

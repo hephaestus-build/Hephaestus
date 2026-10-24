@@ -150,6 +150,17 @@ await test("a frozen channel moves the host to what it names, and freezing what 
 		decide({ release: "v0.75.2", freeze: true }, current, "c".repeat(40), newRequest, true),
 		{ action: "noop", reason: "already running v0.75.2" },
 	);
+	// A freeze that also asks for the commit's database image is a request the host must apply.
+	assert.deepEqual(
+		decide(
+			{ release: "v0.75.2", freeze: true, refreshDatabaseImage: true },
+			current,
+			"c".repeat(40),
+			newRequest,
+			true,
+		),
+		{ action: "apply", release: "v0.75.2" },
+	);
 	// A freeze is no rollback permission.
 	assert.equal(
 		decide({ release: "v0.75.1", freeze: true }, current, "c".repeat(40), newRequest, true).action,

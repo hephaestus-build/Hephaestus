@@ -265,10 +265,12 @@ export function decide(
 	}
 	// A new request naming the release already applied is a re-promotion, and re-applying is how a
 	// host that was hand-patched during an incident converges. A freeze only keeps automatic
-	// promotion away, so freezing what already runs asks the host for nothing.
+	// promotion away, so freezing what already runs asks the host for nothing, unless the same
+	// request also asks for the commit's database image.
+	const freezesWhatRuns = channel.freeze === true && channel.refreshDatabaseImage !== true;
 	if (
 		applied?.release === channel.release &&
-		(channel.freeze === true || isAppliedRequest(applied, channelCommit, channelIdentity))
+		(freezesWhatRuns || isAppliedRequest(applied, channelCommit, channelIdentity))
 	) {
 		return { action: "noop", reason: `already running ${channel.release}` };
 	}
