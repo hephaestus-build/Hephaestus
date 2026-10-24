@@ -58,7 +58,7 @@ describe("traceVerdict on a review", () => {
 			"This review waits in the queue and has recorded nothing yet.",
 		);
 		expect(verdictOf("running")).toMatchObject({
-			sentence: "This review remains open and has recorded 2 results so far.",
+			sentence: "This review remains open and has recorded 2 observations so far.",
 			end: { kind: "open", label: "Open" },
 		});
 	});
@@ -76,7 +76,7 @@ describe("traceVerdict on a review", () => {
 
 	it("says a stopped review ended before it composed feedback", () => {
 		expect(verdictOf("failed").sentence).toBe(
-			"This review failed after 9 min and recorded 1 result, but composed no feedback.",
+			"This review failed after 9 min and recorded 1 observation, but composed no feedback.",
 		);
 		expect(verdictOf("cancelled")).toMatchObject({
 			sentence: "This review was cancelled after 1 min with nothing recorded.",
@@ -86,13 +86,13 @@ describe("traceVerdict on a review", () => {
 
 	it("says a partial review closed as partial, not that it stopped or what it left out", () => {
 		expect(verdictOf("scan-many-jobs").sentence).toMatch(
-			/^This review closed as partial after .+ and recorded \d+ results, but composed no feedback\.$/u,
+			/^This review closed as partial after .+ and recorded \d+ observations, but composed no feedback\.$/u,
 		);
 	});
 
 	it("says a review with no result recorded none", () => {
 		expect(verdictOf("empty")).toMatchObject({
-			sentence: "This review completed after 9 min and recorded no result.",
+			sentence: "This review completed after 9 min and recorded no observation.",
 			end: { kind: "none" },
 		});
 	});
@@ -129,7 +129,8 @@ describe("traceVerdict on a review", () => {
 describe("traceVerdict on a result", () => {
 	it("says a not met result with no feedback left the developer untold", () => {
 		expect(verdictOf("not-met-silent", resultNode(STATE_RESULT_ID))).toMatchObject({
-			sentence: "This result was not met but led to no feedback, so the developer was not told.",
+			sentence:
+				"The practice was not met, but no feedback was written, so the developer was not told.",
 			end: { kind: "lost" },
 		});
 	});
@@ -137,7 +138,7 @@ describe("traceVerdict on a result", () => {
 	it("counts many different ends by kind, with the best one naming the path", () => {
 		expect(verdictOf("delivery-states", resultNode(STATE_RESULT_ID))).toMatchObject({
 			sentence:
-				"This result led to 8 pieces of feedback; one was delivered, two are still open, four did not arrive, and one has no known end.",
+				"This observation led to 8 pieces of feedback; one was delivered, two are still open, four did not arrive, and one has no known end.",
 			end: { kind: "delivered" },
 		});
 	});

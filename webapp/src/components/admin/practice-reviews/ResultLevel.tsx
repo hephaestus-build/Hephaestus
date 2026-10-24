@@ -56,12 +56,12 @@ import { ReviewItemLink } from "./ReviewItem";
 import { ReviewLevelHeader } from "./ReviewLevelHeader";
 import { ReviewPerson } from "./ReviewPerson";
 
-const HIDDEN_EVIDENCE = "The evidence of this result is hidden.";
+const HIDDEN_EVIDENCE = "The evidence of this observation is hidden.";
 
 const RESULT_END_SENTENCES: Record<NonNullable<ReviewResultDetail["endReason"]>, string> = {
 	REPLACED: "A later review of the same work replaced it.",
-	OUTRANKED: "A review ordered later already held the current result, so this one is history.",
-	WORK_CHANGED: "The work changed after this result.",
+	OUTRANKED: "A review ordered later already held the current observation, so this one is history.",
+	WORK_CHANGED: "The work changed after this observation.",
 	REPAIRED: "A later review found the work repaired.",
 	REMOVED: "The work it is about was removed.",
 };
@@ -135,7 +135,7 @@ export function ResultLevel({
 					{state.status === "error" ? (
 						<QueryErrorAlert
 							error={state.error}
-							title="We could not load this result"
+							title="We could not load this observation"
 							onRetry={state.onRetry}
 						/>
 					) : (
@@ -190,8 +190,8 @@ export function ResultLevel({
 						<div className="space-y-6">
 							{hasText(record.explanation) && (
 								// Every outcome carries an explanation, so its heading names none: a met or
-								// inapplicable result raised nothing.
-								<Section level={4} size="sm" title="Why this result">
+								// inapplicable observation raised nothing.
+								<Section level={4} size="sm" title="Why this observation">
 									{/* The review writes its explanation in Markdown, as the developer's own row shows it. */}
 									<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "text-sm")}>
 										<UntrustedMarkdown headingLevel={5}>{record.explanation}</UntrustedMarkdown>
@@ -253,7 +253,7 @@ export function ResultLevel({
 					<SheetTechnical
 						foldKey={levelFoldKey("result", "technical")}
 						facts={[
-							{ label: "Result ID", value: <code>{record.id}</code>, copy: record.id },
+							{ label: "Observation ID", value: <code>{record.id}</code>, copy: record.id },
 							{ label: "Review ID", value: <code>{record.reviewId}</code>, copy: record.reviewId },
 							{
 								label: "Practice version",
@@ -310,7 +310,7 @@ export function ResultLevel({
  */
 function ResultFeedback({ feedback }: { feedback: readonly ReviewBoundFeedback[] }) {
 	return (
-		<ul aria-label="Feedback written from this result" className="flex min-w-0 flex-col gap-2">
+		<ul aria-label="Feedback written from this observation" className="flex min-w-0 flex-col gap-2">
 			{feedback.map((entry) => {
 				const destination = FEEDBACK_DESTINATION_DEFS[entry.destination].label;
 				// The bound record carries no stop reason, so a refined state reads as its base state.
@@ -422,16 +422,16 @@ function OpenQuestionItem({ question }: { question: OpenQuestion }) {
 const MARK_COPY: Record<ResultMarkKind, CorrectionReasonCopy> = {
 	INCORRECT: {
 		trigger: RESULT_MARK_ACTIONS.INCORRECT,
-		title: "Mark this result incorrect",
+		title: "Mark this observation incorrect",
 		description:
-			"The review record stays as it was. Its pending feedback stops, and the developer sees your reason next to the result.",
-		placeholder: "What the result got wrong…",
+			"The review record stays as it was. Its pending feedback stops, and the developer sees your reason next to the observation.",
+		placeholder: "What the observation got wrong…",
 	},
 	ACCEPTED: {
 		trigger: RESULT_MARK_ACTIONS.ACCEPTED,
-		title: "Mark this result accepted",
-		description: "It records that the result is right. No feedback changes.",
-		placeholder: "Why the result is right…",
+		title: "Mark this observation accepted",
+		description: "It records that the observation is right. No feedback changes.",
+		placeholder: "Why the observation is right…",
 	},
 };
 
@@ -440,14 +440,14 @@ const REMOVE_COPY: Record<ResultMarkKind, CorrectionReasonCopy> = {
 		trigger: REMOVE_MARK_ACTION,
 		title: "Remove the incorrect mark",
 		description:
-			"The result counts again from now on. Feedback that was stopped stays stopped, and nothing is sent again.",
-		placeholder: "Why the result was right after all…",
+			"The observation counts again from now on. Feedback that was stopped stays stopped, and nothing is sent again.",
+		placeholder: "Why the observation was right after all…",
 	},
 	ACCEPTED: {
 		trigger: REMOVE_MARK_ACTION,
 		title: "Remove the accepted mark",
-		description: "The result goes back to the open lists. No feedback changes.",
-		placeholder: "Why the result is no longer accepted…",
+		description: "The observation goes back to the open lists. No feedback changes.",
+		placeholder: "Why the observation is no longer accepted…",
 	},
 };
 

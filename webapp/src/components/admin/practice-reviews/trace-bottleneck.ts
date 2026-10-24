@@ -429,7 +429,7 @@ function lossBottleneck(
 			kind: "lost",
 			stage: "review",
 			title: "Not told",
-			text: `${silent.length === 1 ? "One result was" : `${silent.length} results were`} not met, but the review composed no feedback from ${silent.length === 1 ? "it" : "them"}, so the developer was not told.`,
+			text: `${silent.length === 1 ? "One practice was" : `${silent.length} practices were`} not met, but the review composed no feedback from ${silent.length === 1 ? "that observation" : "those observations"}, so the developer was not told.`,
 			...NOT_TOLD,
 		};
 	}

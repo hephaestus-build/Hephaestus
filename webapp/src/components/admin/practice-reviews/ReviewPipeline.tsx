@@ -92,9 +92,9 @@ const STAGES: readonly StageDef[] = [
 	},
 	{
 		key: "results",
-		title: "Results",
+		title: "Observations",
 		icon: ScanSearchIcon,
-		noun: (count) => (count === 1 ? "result" : "results"),
+		noun: (count) => (count === 1 ? "observation" : "observations"),
 		perBucket: (bucket) => bucket.results,
 		total: (overview) => slotsTotal(resultSlots(overview.results)),
 		slots: (overview, scope) =>

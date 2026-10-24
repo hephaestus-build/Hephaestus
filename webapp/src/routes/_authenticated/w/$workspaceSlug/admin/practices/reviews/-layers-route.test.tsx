@@ -239,10 +239,10 @@ describe("layer 0: a row's own record, Track and Trace", () => {
 		// The loading table is replaced by the loaded one, so the row is found first and its table after.
 		const track = await screen.findByRole(
 			"button",
-			{ name: `Track result ${resultSummary(fixtureResult)}` },
+			{ name: `Track observation ${resultSummary(fixtureResult)}` },
 			ROUTE_RENDER_WAIT,
 		);
-		expect(track.closest("table")?.getAttribute("aria-label")).toBe("Results");
+		expect(track.closest("table")?.getAttribute("aria-label")).toBe("Observations");
 		await userEvent.click(track);
 
 		await waitFor(() =>
@@ -266,7 +266,7 @@ describe("layer 0: a row's own record, Track and Trace", () => {
 				// The list is read again for the narrowed scope, so the row is found afresh.
 				screen
 					.getByRole("button", {
-						name: `Track result ${resultSummary(fixtureResult)}`,
+						name: `Track observation ${resultSummary(fixtureResult)}`,
 					})
 					.getAttribute("aria-pressed"),
 			).toBe("true"),
@@ -424,7 +424,7 @@ describe("the trace and a record over it", () => {
 		expectNoStrayRecordLinks(over, resultFeedbackLevels);
 		await within(over).findByRole("button", { name: "Mark incorrect" }, ROUTE_RENDER_WAIT);
 		const [feedbackLink] = within(
-			within(over).getByRole("list", { name: "Feedback written from this result" }),
+			within(over).getByRole("list", { name: "Feedback written from this observation" }),
 		).getAllByRole("link");
 		assert(feedbackLink);
 		await userEvent.click(feedbackLink);

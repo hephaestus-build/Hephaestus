@@ -295,9 +295,9 @@ function ConfirmationSection({
 					Each {noun} is reviewed once, as it stands now. There is no record of how it looked while
 					it was being worked on. Nothing is posted on the work itself and nobody is notified.
 					Commenting on {plural} that are already finished would notify everyone involved about work
-					nobody can act on. The results it records are kept separate from your live trends, because
-					older work has been polished since. A comparison of the two would invent an improvement
-					nobody made.
+					nobody can act on. The observations it records are kept separate from your live trends,
+					because older work has been polished since. A comparison of the two would invent an
+					improvement nobody made.
 				</AlertDescription>
 			</Alert>
 
@@ -431,7 +431,7 @@ function HistorySection({ batches, isLoading }: { batches: ReviewBatch[]; isLoad
 							<ItemDescription>
 								{batch.status === "CANCELLED"
 									? `Stopped after reviewing ${countOf(batch.submittedCount, batch.itemKind)}.`
-									: `Reviewed ${countOf(batch.submittedCount, batch.itemKind)}. ${batch.skippedCount} needed no new result.${
+									: `Reviewed ${countOf(batch.submittedCount, batch.itemKind)}. ${batch.skippedCount} needed no new observation.${
 											batch.failedCount > 0
 												? ` ${batch.failedCount} could not be read, so were not reviewed.`
 												: ""

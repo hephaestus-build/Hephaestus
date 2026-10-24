@@ -454,7 +454,7 @@ export const WithheldResultMarkedIncorrect: Story = {
 		const panelElement = await settledDrawerPanel();
 		await expectHeaderChip(panelElement, "Withheld");
 		history(panelElement).getByText(
-			"A workspace admin marked a result behind it as incorrect, so nothing more of it was sent.",
+			"A workspace admin marked an observation behind it as incorrect, so nothing more of it was sent.",
 		);
 	},
 };
@@ -546,7 +546,7 @@ export const Restored: Story = {
 		const events = history(panelElement);
 		events.getByText("Withdrawn");
 		events.getByText("Restored");
-		events.getByText(/The result stands after all/u);
+		events.getByText(/The observation stands after all/u);
 		await expect(
 			within(panelElement).getByRole("button", { name: "Withdraw feedback" }),
 		).toBeEnabled();
@@ -621,7 +621,7 @@ export const WithdrawnPartlyRetractedUnknownWrite: Story = {
 		const panel = within(panelElement);
 		await expectHeaderChip(panelElement, "Withdrawn");
 		panel.getByText(
-			"It is withdrawn, but 2 copies may still be on the work, because a write was never confirmed. Check delivery to find out. A comment found there is then retracted. The results behind it are unchanged.",
+			"It is withdrawn, but 2 copies may still be on the work, because a write was never confirmed. Check delivery to find out. A comment found there is then retracted. The observations behind it are unchanged.",
 		);
 		await expect(panel.queryByText(/Heph cannot remove/u)).toBeNull();
 		const events = history(panelElement);
@@ -779,7 +779,7 @@ export const WithdrawFeedback: Story = {
 };
 
 const UNKNOWN_WRITE_WITHDRAWAL =
-	"An unconfirmed comment may still be on the work. Heph can retract that comment only if a check finds it. Receipts and results are kept.";
+	"An unconfirmed comment may still be on the work. Heph can retract that comment only if a check finds it. Receipts and observations are kept.";
 
 /** Withdrawing a comment whose write is unknown promises no removal it cannot make yet. */
 export const WithdrawUnconfirmedComment: Story = {
@@ -822,7 +822,7 @@ export const WithdrawDeliveredFromWork: Story = {
 		await userEvent.click(panel.getByRole("button", { name: "Withdraw feedback" }));
 		await expectSettledVisible(await screen.findByRole("textbox", { name: "Reason" }));
 		screen.getByText(
-			"Copies already posted on the work are retracted there, and nothing more is posted. Their receipts stay on this sheet, and the results behind it are unchanged.",
+			"Copies already posted on the work are retracted there, and nothing more is posted. Their receipts stay on this sheet, and the observations behind it are unchanged.",
 		);
 		await expect(screen.queryByText(UNKNOWN_WRITE_WITHDRAWAL)).toBeNull();
 	},
@@ -957,7 +957,7 @@ export const WithdrawnUnknownWrite: Story = {
 		const panel = within(panelElement);
 		await expectHeaderChip(panelElement, "Withdrawn");
 		panel.getByText(
-			"It is withdrawn, but one copy may still be on the work, because a write was never confirmed. Check delivery to find out. A comment found there is then retracted. The results behind it are unchanged.",
+			"It is withdrawn, but one copy may still be on the work, because a write was never confirmed. Check delivery to find out. A comment found there is then retracted. The observations behind it are unchanged.",
 		);
 		await expect(panel.queryByText(/Heph cannot remove/u)).toBeNull();
 		await expect(panel.getByRole("button", { name: "Check delivery" })).toBeEnabled();
@@ -973,7 +973,7 @@ export const WithdrawnDeliveryCheckInProgress: Story = {
 		const panelElement = await settledDrawerPanel();
 		const panel = within(panelElement);
 		panel.getByText(
-			"It is withdrawn. Heph is confirming whether a comment it began writing appeared on the work. A comment found there is then retracted. The results behind it are unchanged.",
+			"It is withdrawn. Heph is confirming whether a comment it began writing appeared on the work. A comment found there is then retracted. The observations behind it are unchanged.",
 		);
 		await expect(panel.queryByText(/still removing/u)).toBeNull();
 		// Being sent, it may be the first write or a readback; the record does not say which.
@@ -1018,7 +1018,7 @@ export const WithdrawnBeforeConversation: Story = {
 			/Withdrawn|Ready for conversation/u,
 		);
 		panel.getByText(
-			"It is withdrawn, so Heph does not raise it in a conversation. The results behind it are unchanged.",
+			"It is withdrawn, so Heph does not raise it in a conversation. The observations behind it are unchanged.",
 		);
 		await expect(panel.queryByText(/which is what delivers it/u)).toBeNull();
 		await expect(panel.getByRole("button", { name: "Restore feedback" })).toBeEnabled();
@@ -1323,17 +1323,19 @@ export const BasedOnAResultAndOneOfItsProblems: Story = {
 		const result = within(entry);
 		await expect(result.getAllByRole("link", { name: SUMMARY })).toHaveLength(1);
 		await expect(entry).toHaveTextContent(
-			`${PRACTICE} · The whole result · One problem of this result`,
+			`${PRACTICE} · The whole observation · One problem of this observation`,
 		);
 		await expect(levelsOpenedBy(result.getByRole("link", { name: SUMMARY }))).toEqual([
 			`result:${RESULT_ID}`,
 		]);
 		await expect(
-			levelsOpenedBy(result.getByRole("link", { name: `One problem of this result: ${SUMMARY}` })),
+			levelsOpenedBy(
+				result.getByRole("link", { name: `One problem of this observation: ${SUMMARY}` }),
+			),
 		).toEqual([`problem:${PROBLEM_ID}`]);
 		const panel = within(panelElement);
-		await expect(panel.getByRole("button", { name: "Copy basis result 1" })).toBeVisible();
-		await expect(panel.getByRole("button", { name: "Copy basis result 2" })).toBeVisible();
+		await expect(panel.getByRole("button", { name: "Copy basis observation 1" })).toBeVisible();
+		await expect(panel.getByRole("button", { name: "Copy basis observation 2" })).toBeVisible();
 		await expect(panel.getByRole("button", { name: "Copy basis problem 2" })).toBeVisible();
 		await expect(panel.getByText(PROBLEM_ID)).toBeVisible();
 	},
@@ -1382,11 +1384,11 @@ export const BasedOnSeveralResults: Story = {
 		const result = within(first);
 		await expect(result.getAllByRole("link", { name: SUMMARY })).toHaveLength(1);
 		await expect(first).toHaveTextContent(
-			`${PRACTICE} · The whole result · One problem of this result · Another problem of this result`,
+			`${PRACTICE} · The whole observation · One problem of this observation · Another problem of this observation`,
 		);
 		for (const [name, problemId] of [
-			[`One problem of this result: ${SUMMARY} (reference 1 of 2)`, PROBLEM_ID],
-			[`Another problem of this result: ${SUMMARY} (reference 2 of 2)`, SECOND_PROBLEM_ID],
+			[`One problem of this observation: ${SUMMARY} (reference 1 of 2)`, PROBLEM_ID],
+			[`Another problem of this observation: ${SUMMARY} (reference 2 of 2)`, SECOND_PROBLEM_ID],
 		] as const) {
 			await expect(levelsOpenedBy(result.getByRole("link", { name }))).toEqual([
 				`problem:${problemId}`,
@@ -1395,18 +1397,20 @@ export const BasedOnSeveralResults: Story = {
 
 		const other = within(second);
 		await expect(other.getAllByRole("link", { name: SUMMARY })).toHaveLength(1);
-		await expect(second).toHaveTextContent(`${PRACTICE} · One problem of this result`);
-		await expect(second).not.toHaveTextContent("The whole result");
-		await expect(second).not.toHaveTextContent("Another problem of this result");
+		await expect(second).toHaveTextContent(`${PRACTICE} · One problem of this observation`);
+		await expect(second).not.toHaveTextContent("The whole observation");
+		await expect(second).not.toHaveTextContent("Another problem of this observation");
 		await expect(
-			levelsOpenedBy(other.getByRole("link", { name: `One problem of this result: ${SUMMARY}` })),
+			levelsOpenedBy(
+				other.getByRole("link", { name: `One problem of this observation: ${SUMMARY}` }),
+			),
 		).toEqual([`problem:${OTHER_PROBLEM_ID}`]);
 
 		const unavailable = within(third);
-		await expect(third).toHaveTextContent(`${PRACTICE} · The whole result`);
+		await expect(third).toHaveTextContent(`${PRACTICE} · The whole observation`);
 		await expect(unavailable.getAllByRole("link")).toHaveLength(1);
 		await expect(
-			levelsOpenedBy(unavailable.getByRole("link", { name: "Result text unavailable" })),
+			levelsOpenedBy(unavailable.getByRole("link", { name: "Observation text unavailable" })),
 		).toEqual([`result:${UNAVAILABLE_RESULT_ID}`]);
 		await expectNoPanelOverflow(panelElement);
 	},

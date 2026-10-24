@@ -207,7 +207,7 @@ describe("result level", () => {
 		renderRouteAtWithRouter(RESULT_LEVEL, queryClient);
 		await submitReason("Mark incorrect");
 
-		await screen.findByText("We could not change this result");
+		await screen.findByText("We could not change this observation");
 		expect(screen.getByRole("textbox", { name: "Reason" })).toHaveProperty("value", REASON);
 		expect(queryClient.getQueryState(ours)?.isInvalidated).toBe(false);
 	});

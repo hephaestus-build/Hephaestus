@@ -117,7 +117,7 @@ function reviewNow(review: ReviewDetail): string | undefined {
 	}
 	// The sentence names results, so a feedback count alone does not earn it.
 	if ((review.status === "FAILED" || review.status === "CANCELLED") && hasResults(review.results)) {
-		return "Results recorded before it stopped remain in this review.";
+		return "Observations recorded before it stopped remain in this review.";
 	}
 	return undefined;
 }
@@ -309,7 +309,7 @@ function CountLink({
 }
 
 /**
- * Results by outcome, each opening the Results tab at exactly those results: the review's, or one
+ * Results by outcome, each opening the Observations tab at exactly those observations: the review's, or one
  * of its practices'. The words name only the outcome, since the fact or the row already says whose
  * results they are. Problems sit under Not met results and are not counted here: the link opens
  * them without a figure the sheet does not hold.
@@ -440,7 +440,7 @@ function ReviewWhat({
 					)}
 				</span>
 			</ReviewFact>
-			<ReviewFact label="Results">
+			<ReviewFact label="Observations">
 				<ResultCountLinks
 					workspaceSlug={workspaceSlug}
 					counts={review.results}
@@ -601,7 +601,9 @@ function ReviewPracticeList({
 							)}
 							<span className="font-medium break-words">{practice.practiceName}</span>
 							<span className="flex min-w-0 flex-col gap-1 text-pretty text-muted-foreground">
-								{practice.status !== "DONE" && recorded && <span>Results recorded so far</span>}
+								{practice.status !== "DONE" && recorded && (
+									<span>Observations recorded so far</span>
+								)}
 								{(practice.status === "DONE" || recorded) && (
 									<span>
 										<ResultCountLinks
@@ -609,7 +611,7 @@ function ReviewPracticeList({
 											counts={practice.results}
 											scope={{ reviewId: review.id, practiceSlug: [practice.practiceSlug] }}
 											practiceName={practice.practiceName}
-											empty="No results"
+											empty="No observations"
 										/>
 									</span>
 								)}

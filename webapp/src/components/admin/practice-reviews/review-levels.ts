@@ -23,7 +23,7 @@ export type PracticeReviewLevel = DetailStackEntry<PracticeReviewLevelKind>;
 
 export const PRACTICE_REVIEW_LEVEL_LABELS = {
 	review: "Review",
-	result: "Result",
+	result: "Observation",
 	problem: "Problem",
 	feedback: "Feedback",
 	item: "Work",

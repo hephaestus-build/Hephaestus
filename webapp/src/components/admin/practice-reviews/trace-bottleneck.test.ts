@@ -226,7 +226,7 @@ describe("traceBottleneck for the review itself", () => {
 			kind: "lost",
 			stage: "review",
 			title: "Partial review",
-			text: "The scan’s budget was used up. Its results cover only the work it reached.",
+			text: "The scan’s budget was used up. Its observations cover only the work it reached.",
 			tone: "warning",
 		});
 	});
@@ -237,17 +237,17 @@ describe("traceBottleneck for the review itself", () => {
 		[
 			"ran to the end with a selected practice withheld",
 			"EXECUTION_INCOMPLETE",
-			"The review did not record a result for every selected practice. Its results and feedback cover only the practices it reviewed.",
+			"The review did not record an observation for every selected practice. Its observations and feedback cover only the practices it reviewed.",
 		],
 		[
 			"ran out of time",
 			"TIMED_OUT",
-			"It ran past the time it is allowed and was stopped. Its results and feedback cover only the practices it reviewed.",
+			"It ran past the time it is allowed and was stopped. Its observations and feedback cover only the practices it reviewed.",
 		],
 		[
 			"kept historical results without a settled answer",
 			"RESULT_WITHHELD",
-			"Its results were withheld. Its results and feedback cover only the practices it reviewed.",
+			"Its candidate observations were withheld. Its observations and feedback cover only the practices it reviewed.",
 		],
 	] as const)("says a partial review that %s by its reason alone", (_, stopReason, text) => {
 		const { lineage } = lineageStateCase("complete");

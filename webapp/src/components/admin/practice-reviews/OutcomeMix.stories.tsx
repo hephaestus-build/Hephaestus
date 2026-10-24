@@ -10,7 +10,7 @@ import { OutcomeMix } from "./OutcomeMix";
 import { feedbackSlots, markedIncorrectSlot, resultSlots, slotsTotal } from "./review-outcomes";
 import { ReviewListLink } from "./ReviewListLink";
 
-const resultNoun = (total: number): string => (total === 1 ? "result" : "results");
+const resultNoun = (total: number): string => (total === 1 ? "observation" : "observations");
 const feedbackNoun = (total: number): string =>
 	total === 1 ? "piece of feedback" : "pieces of feedback";
 
@@ -34,13 +34,13 @@ const meta = {
 		total: slotsTotal(RESULTS),
 		slots: RESULTS,
 		flags: {
-			label: "Results checked by an admin",
+			label: "Observations checked by an admin",
 			slots: [
 				markedIncorrectSlot(practiceReviewOverview.resultsMarkedIncorrect, reviewOverviewScope),
 			],
 		},
 		noun: resultNoun,
-		label: "Results by outcome",
+		label: "Observations by outcome",
 		delta: "12 more than the previous 30 days",
 		children: <p className="text-xs text-muted-foreground">The total over time draws here.</p>,
 	},
@@ -57,16 +57,16 @@ type Story = StoryObj<typeof meta>;
 
 export const Results: Story = {
 	play: async ({ canvas }) => {
-		const legend = within(canvas.getByRole("list", { name: "Results by outcome" }));
+		const legend = within(canvas.getByRole("list", { name: "Observations by outcome" }));
 		await expect(legend.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-			"35 met results",
-			"27 not met results",
+			"35 met observations",
+			"27 not met observations",
 			"10 does not apply",
 			"6 could not determine",
 		]);
 		// The counts are text: the card it sits in has one link, to the list it counts.
 		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
-		const flags = within(canvas.getByRole("list", { name: "Results checked by an admin" }));
+		const flags = within(canvas.getByRole("list", { name: "Observations checked by an admin" }));
 		flags.getByText("3", { exact: false });
 	},
 };
@@ -148,7 +148,7 @@ export const NothingCounted: Story = {
 	args: {
 		total: 0,
 		slots: resultSlots({ met: 0, notMet: 0, doesNotApply: 0, couldNotDetermine: 0 }),
-		flags: { label: "Results checked by an admin", slots: [markedIncorrectSlot(0)] },
+		flags: { label: "Observations checked by an admin", slots: [markedIncorrectSlot(0)] },
 		delta: "Same as the previous 30 days",
 		children: undefined,
 	},

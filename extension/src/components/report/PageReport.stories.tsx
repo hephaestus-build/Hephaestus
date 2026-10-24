@@ -166,7 +166,7 @@ export const Opened: Story = {
 		await expect(within(comments).getAllByRole("listitem")[2]).toHaveTextContent(
 			/^src\/login\/login\.css:4 · no link recordedFeedback · \d+ min\. ago$/u,
 		);
-		const results = canvas.getByRole("region", { name: "Your results" });
+		const results = canvas.getByRole("region", { name: "Your observations" });
 		await expect(resultRows(results)).toHaveLength(5);
 		await expect(within(results).getByText("Not met · 2 problems · Major")).toBeVisible();
 		await expect(within(results).getByText(/^Not met · Minor/u)).toBeVisible();
@@ -174,7 +174,7 @@ export const Opened: Story = {
 		await expect(within(results).getByText("Does not apply", { exact: true })).toBeVisible();
 		await expect(within(results).getByText("Could not determine", { exact: true })).toBeVisible();
 		await expect(
-			within(results).getByText(/We cannot verify what this result was based on/u),
+			within(results).getByText(/We cannot verify what this observation was based on/u),
 		).toBeVisible();
 		// When, precisely, and at which commit; the rest is in Hephaestus.
 		await expect(canvas.getByText(/^Reviewed .+ at 4f2a9c1\.$/u)).toBeVisible();
@@ -224,7 +224,7 @@ export const ReviewStatusUnavailable: Story = {
 		await expect(
 			canvas.getByText("No review history is available for your account on this work."),
 		).toBeVisible();
-		await expect(canvas.getByText("No results about your work here.")).toBeVisible();
+		await expect(canvas.getByText("No observations about your work here.")).toBeVisible();
 	},
 };
 
@@ -235,7 +235,7 @@ export const CommentsWithoutResults: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("list", { name: "Comments for you" })).toBeVisible();
-		await expect(canvas.queryByRole("region", { name: "Your results" })).toBeNull();
+		await expect(canvas.queryByRole("region", { name: "Your observations" })).toBeNull();
 	},
 };
 
@@ -269,7 +269,7 @@ export const ResultsFailed: Story = {
 		},
 	},
 	play: async ({ canvas, args }) => {
-		const results = canvas.getByRole("region", { name: "Your results" });
+		const results = canvas.getByRole("region", { name: "Your observations" });
 		await userEvent.click(within(results).getByRole("button", { name: "Retry" }));
 		await expect(args.onRetryResults).toHaveBeenCalledOnce();
 		await expect(args.onRetry).not.toHaveBeenCalled();
@@ -283,7 +283,7 @@ export const ProblemsUnderAResult: Story = {
 		results: { status: "ready", data: { ...OWN_PAGE, rows: [NOT_MET_ROW, MET_ROW], total: 2 } },
 	},
 	play: async ({ canvas }) => {
-		const results = canvas.getByRole("region", { name: "Your results" });
+		const results = canvas.getByRole("region", { name: "Your observations" });
 		await expect(within(results).getByText("Not met · 2 problems · Major")).toBeVisible();
 		const problems = within(results).getByRole("list", { name: "Problems" });
 		const items = within(problems).getAllByRole("listitem");
@@ -299,7 +299,7 @@ export const ProblemsUnderAResult: Story = {
 export const ManyResults: Story = {
 	args: { expanded: true, results: { status: "ready", data: LONG_PAGE } },
 	play: async ({ canvas }) => {
-		const results = canvas.getByRole("region", { name: "Your results" });
+		const results = canvas.getByRole("region", { name: "Your observations" });
 		await expect(resultRows(results)).toHaveLength(5);
 		await userEvent.click(within(results).getByRole("button", { name: "Show 20 more" }));
 		await expect(resultRows(results)).toHaveLength(25);
@@ -362,7 +362,7 @@ export const MetWithoutSummary: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		const results = canvas.getByRole("region", { name: "Your results" });
+		const results = canvas.getByRole("region", { name: "Your observations" });
 		await expect(resultRows(results)).toHaveLength(1);
 		await expect(resultRows(results)[0]).toHaveTextContent(/^Small, focused changesMet$/u);
 	},

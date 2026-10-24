@@ -295,10 +295,10 @@ function lineageTarget(
 function traceDescription(record: RecordRef): string | undefined {
 	switch (record.kind) {
 		case "practice": {
-			return "The trace of its newest result, narrowed to the practice.";
+			return "The trace of its newest observation, narrowed to the practice.";
 		}
 		case "problem": {
-			return "The trace of the result that records this problem. Feedback shows under that result; open a feedback to see which problem it rests on.";
+			return "The trace of the observation that records this problem. Feedback shows under that observation; open a feedback to see which problem it rests on.";
 		}
 		case "review":
 		case "result":

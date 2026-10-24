@@ -351,8 +351,8 @@ function WorkspaceDecisionCard({
 				</CardTitle>
 				<CardDescription>
 					One feedback mode for the whole workspace. Every group and practice below follows it,
-					unless you set that group or practice by hand. Feedback mode decides where results become
-					feedback. It does not decide what Hephaestus reviews.
+					unless you set that group or practice by hand. Feedback mode decides where observations
+					become feedback. It does not decide what Hephaestus reviews.
 				</CardDescription>
 			</CardHeader>
 			<CardContent>

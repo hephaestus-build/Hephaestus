@@ -181,7 +181,7 @@ it("refreshes new and repaired results while the report stays open", async () =>
 	await act(async () => {
 		await vi.advanceTimersByTimeAsync(100);
 	});
-	expect(container.textContent).toContain("No results about your work here.");
+	expect(container.textContent).toContain("No observations about your work here.");
 	expect(container.textContent).not.toContain(NOT_MET_ROW.summary);
 
 	answers.set("list-results", ok(OWN_PAGE));

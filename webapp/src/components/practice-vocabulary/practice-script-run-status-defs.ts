@@ -21,20 +21,21 @@ export const PRACTICE_SCRIPT_STOP_REASON_DEFS = {
 		result: "Not a runnable script",
 	},
 	INVALID_CANDIDATE: {
-		sentence: "what it returned is not a result",
-		result: "Returned no result",
+		sentence: "what it returned is not a candidate observation",
+		result: "Returned no candidate observation",
 	},
 } satisfies Record<PracticeScriptStopReason, { sentence: string; result: string }>;
 
-/** What the server proved about a review session that ended without a result; it says more than the stop reason. */
+/** What the server proved about a review session that ended without a candidate observation; it says more than the stop reason. */
 export const PRACTICE_SCRIPT_NO_RESULT_CAUSE_DEFS = {
 	EVIDENCE_NOT_READ: {
-		sentence: "its result was refused because it had not read the evidence it needed",
+		sentence:
+			"its candidate observation was refused because it had not read the evidence it needed",
 		result: "Evidence not read",
 	},
 	SESSION_ENDED: {
-		sentence: "its review session ended without an accepted result",
-		result: "No accepted result",
+		sentence: "its review session ended without an accepted candidate observation",
+		result: "No accepted candidate observation",
 	},
 } satisfies Record<PracticeScriptNoResultCause, { sentence: string; result: string }>;
 
@@ -48,15 +49,15 @@ function failedReason(run: PracticeScriptRun): { sentence: string; result: strin
 interface PracticeScriptRunStatusDef {
 	/** The first sentence of the trace line under "What it saw". */
 	sentence: (run: PracticeScriptRun) => string;
-	/** The *Result* cell of the review's *Practice scripts* section. */
+	/** The *Run* cell of the review's *Practice scripts* section. */
 	result: (run: PracticeScriptRun) => string;
 }
 
 // Script execution is an operating fact; a status badge would imply a practice outcome.
 export const PRACTICE_SCRIPT_RUN_STATUS_DEFS = {
 	OK: {
-		sentence: (run) => `${scriptName(run)} returned a result.`,
-		result: () => "Returned a result",
+		sentence: (run) => `${scriptName(run)} returned a candidate observation.`,
+		result: () => "Returned a candidate observation",
 	},
 	WITHHELD: {
 		sentence: (run) => `${scriptName(run)} did not run: the practice was withheld.`,
@@ -66,8 +67,8 @@ export const PRACTICE_SCRIPT_RUN_STATUS_DEFS = {
 		sentence: (run) => {
 			const reason = failedReason(run);
 			return reason === undefined
-				? `${scriptName(run)} stopped without a result.`
-				: `${scriptName(run)} stopped without a result: ${reason.sentence}.`;
+				? `${scriptName(run)} stopped without a candidate observation.`
+				: `${scriptName(run)} stopped without a candidate observation: ${reason.sentence}.`;
 		},
 		result: (run) => {
 			const reason = failedReason(run);

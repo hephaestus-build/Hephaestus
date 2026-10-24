@@ -60,8 +60,8 @@ export function ItemFeedbackPage({ feed, responses }: ItemFeedbackPageProps) {
 				feed={feed}
 				responses={responses}
 				skeletonRows={2}
-				emptyTitle="No review results are available here"
-				emptyDescription="There are no results you can read here. Results can be hidden when access to their sources cannot be verified."
+				emptyTitle="No observations are available here"
+				emptyDescription="There are no observations you can read here. Observations can be hidden when access to their sources cannot be verified."
 			/>
 		</div>
 	);

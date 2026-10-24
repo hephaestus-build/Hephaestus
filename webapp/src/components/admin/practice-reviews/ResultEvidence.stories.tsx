@@ -151,7 +151,7 @@ export const EverySource: Story = {
 				"Review comments",
 				"What this project contains",
 				"Referenced documents",
-				"Earlier results",
+				"Earlier observations",
 				"Feedback already sent",
 			].sort(),
 		);

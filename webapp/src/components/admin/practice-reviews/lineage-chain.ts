@@ -271,7 +271,7 @@ export function verdictSummary(results: readonly ReviewBoundResult[]): string {
 	const parts = verdictCounts(results).map(
 		({ outcome, count }) => `${count} ${OUTCOME_DEFS[outcome].label.toLowerCase()}`,
 	);
-	return `${countOf(results.length, "result", "results")}: ${parts.join(", ")}`;
+	return `${countOf(results.length, "observation", "observations")}: ${parts.join(", ")}`;
 }
 
 export function countOf(count: number, singular: string, plural: string): string {

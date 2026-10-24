@@ -818,7 +818,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 						removed: {
 							by: reviewAccounts.grace,
 							at: "2026-07-28T15:02:00Z",
-							reason: "The convention was retired last month; the result stands.",
+							reason: "The convention was retired last month; the observation stands.",
 						},
 					},
 					{
@@ -994,7 +994,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 						action: "RESTORE",
 						by: reviewAccounts.grace,
 						at: "2026-07-28T15:02:30Z",
-						note: "The result stands after all, so the card can show again.",
+						note: "The observation stands after all, so the card can show again.",
 					},
 				],
 			},
@@ -1149,7 +1149,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 				evidence: [
 					cited(
 						"hephaestus.result-history",
-						"Earlier result on this practice",
+						"Earlier observation on this practice",
 						"An earlier thread in #engineering also closed without a written decision.",
 					),
 				],
@@ -2632,7 +2632,7 @@ export const reviewDetailProcessingFailed: ReviewDetail = standaloneReview(
 		jobsOf({ ...summary, status: "COMPLETE" }, 1).map((job) => ({
 			...job,
 			processingStatus: "FAILED",
-			errorMessage: "Review result processing failed.",
+			errorMessage: "Processing the review output failed.",
 		})),
 );
 
