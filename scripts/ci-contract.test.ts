@@ -676,6 +676,37 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("weekly server profiles run CI's integration shards, never the whole tier", async () => {
+		const ci = parseDocument(await readFile(".github/workflows/ci-tests.yml", "utf8"));
+		const ciMatrix = ci.getIn(["jobs", "server-integration", "strategy", "matrix"]);
+		assert.ok(isMap(ciMatrix));
+		const shards = matrixValues(ciMatrix, "shard");
+		for (const [file, name, selectorAt] of [
+			[".github/workflows/ci-profile.yml", "server-integration", undefined],
+			[
+				".github/workflows/ci-server-clean-reference.yml",
+				"integration",
+				"Profile integration execution",
+			],
+		] as const) {
+			const workflow = parseDocument(await readFile(file, "utf8"));
+			const jobPath = ["jobs", name];
+			const matrix = workflow.getIn([...jobPath, "strategy", "matrix"]);
+			assert.ok(isMap(matrix), `${file} profiles each shard`);
+			assert.deepEqual(matrixValues(matrix, "shard"), shards, `${file} profiles CI's shards`);
+			const environment =
+				selectorAt === undefined
+					? workflow.getIn([...jobPath, "env"])
+					: namedStep(workflow, jobPath, selectorAt).get("env");
+			assert.ok(isMap(environment), `${file} sets the shard selector`);
+			assert.match(
+				String(environment.get("HEPHAESTUS_INTEGRATION_SHARD")),
+				/^\$\{\{ matrix\.shard \}\}$/u,
+				`${file} selects the shard through the environment`,
+			);
+		}
+	});
+
 	void test("the server package job is the only Gradle cache producer", async () => {
 		const action = parseDocument(await readFile(".github/actions/setup-caches/action.yml", "utf8"));
 		assert.equal(action.getIn(["inputs", "cache-write", "default"]), "false");

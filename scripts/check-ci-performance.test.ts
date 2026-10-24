@@ -9,9 +9,10 @@ import { fileURLToPath } from "node:url";
 import { parseSummary, regressions } from "./check-ci-performance.ts";
 import type { TestSummary } from "./summarize-test-results.ts";
 
-const summary = (startup: number, wall = 200): TestSummary => ({
-	schemaVersion: 3,
+const summary = (startup: number, wall = 200, shard = "providers"): TestSummary => ({
+	schemaVersion: 4,
 	name: "profile",
+	shard,
 	files: 1,
 	tests: 1,
 	failures: 0,
@@ -61,6 +62,17 @@ await test("rejects incomplete, failed, and nonfinite profiles before comparison
 		assert.throws(() => regressions(invalid, []));
 		assert.throws(() => regressions(summary(100), [invalid]));
 	}
+});
+
+await test("compares a shard only with earlier profiles of the same shard", () => {
+	const baseline = [100, 101, 99, 100, 100].map((startup) => summary(startup));
+	assert.throws(
+		() => regressions(summary(100, 200, "application"), baseline),
+		/A profile of shard providers cannot be a baseline for shard application/u,
+	);
+	const { shard: _shard, ...wholeTier } = summary(100);
+	assert.throws(() => regressions(wholeTier, []), /must name the integration shard/u);
+	assert.throws(() => parseSummary(JSON.stringify(wholeTier)), /Invalid CI metrics summary/u);
 });
 
 await test("validates numeric fields in persisted profiles", () => {

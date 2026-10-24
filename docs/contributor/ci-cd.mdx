@@ -861,7 +861,7 @@ If no such default-branch commit exists, the run builds every image itself. `det
   the tier. `vp run test:server:selection` checks coverage through JUnit dry-run reports before
   unit/architecture verification. Discovery reports stay separate from execution results.
   All shards use `fail-fast: false`. `CI Status Gate` requires their aggregate result. Locally
-  the tier runs whole.
+  the tier runs whole. The weekly [server profiles](#server-profiles) run the same shards.
 - Pull requests and merge groups build `linux/amd64`. Pushes to `main`, and every run on the Version
   PR's branch, build both architectures. Pull requests and merge groups build only changed images and alias the rest.
   The Version PR's branch builds them all. `detect-changes` decides both once, as `single-arch` and `all-images`, and hands them to
@@ -990,13 +990,19 @@ Deep profiling stays in the manual/weekly workflow, not on the PR critical path.
 `CI profile`. Weekly runs profile both tiers sequentially so diagnostics do not occupy two heavy
 runners at once.
 
+The integration tier is profiled one shard at a time, with the shards that
+[Parallelism and concurrency](#parallelism-and-concurrency) defines.
+A run of the whole tier no longer fits in one test task's timeout.
+`scripts/ci-contract.test.ts` keeps the profile matrices equal to the CI matrix.
+
 Each tier retains its JFR recording, Gradle task profile, resource usage and JUnit
 results for 14 days. Verification profiles are diagnostic artifacts, not integration-history samples.
 
 Profile invocations use a single-use Gradle process (`--no-daemon`) for repeatable JVM startup.
 Gradle streams test output only in these profiles so Spring context diagnostics reach the retained log.
-History uses the `ci-profile-history-gradle-jfr` artifact and compares wall time, test time and context
-measurements.
+History uses one `ci-profile-history-gradle-jfr-<shard>` artifact for each shard and compares wall time,
+test time and context measurements. Each sample names its shard. A baseline accepts only samples of the
+same shard, so the earlier whole-tier history is not used.
 
 GNU time's CPU/RSS accounting does not reliably include Gradle's detached JVMs, so those
 values are not reported as suite metrics or compared against budgets. Inspect the retained JFR recordings
@@ -1007,7 +1013,7 @@ Ubuntu 24.04 x64 and ARM64 runners, one job at a time. Preparation is a separate
 and compilation caches are not mistaken for test execution speed. Each sample retains runner hardware,
 JUnit results and Gradle task profiles. Compare actual job ordering, test counts and execution time as
 well as end-to-end latency. Matrix declaration order is not a scheduling guarantee. These samples do
-not enter full-suite JFR history and do not change the runners used for required CI.
+not enter profile history and do not change the runners used for required CI.
 
 The integration profile also records Spring context-cache metrics. It warns about
 a sustained regression after three consecutive profiles exceed variance limits against five earlier
@@ -1021,7 +1027,7 @@ Without seven earlier
 profiles, the sustained-regression check has no verdict. Branch dispatches produce diagnostic
 artifacts without changing or comparing against the baseline.
 
-The workflow's `Run integration suite with JFR` step owns the invocation. Additional test-JVM flags
+The workflow's `Run integration shard with JFR` step owns the invocation. Additional test-JVM flags
 use `-PtestJvmArgs=...`. Gradle composes them with the configured memory limits and JaCoCo agent.
 `-PprofileTests=true` writes a separate JFR recording for each test task, so unit and architecture
 recordings never overwrite each other.
@@ -1032,11 +1038,12 @@ Spring-context measurements. Unit/architecture profiles do not require a Spring 
 
 For local shard profiling, use the same `HEPHAESTUS_INTEGRATION_SHARD` selector as the CI matrix
 and the Java version pinned in `.java-version`. Compare the same suite, runtime and cache state.
-The weekly whole-tier baseline is not comparable to one shard.
+Compare a local shard only with the weekly history of the same shard.
 
 `SpringTestContextArchitectureTest` enforces the reviewed Spring context keys. The weekly
-**Server Phase Reference** workflow profiles generation, compilation and test execution with the
-build cache disabled, and compares two clean generated-client JARs.
+**Server Phase Reference** workflow profiles generation, compilation, and unit and architecture execution
+in one job, with the build cache disabled. It compares two clean generated-client JARs.
+Each integration shard then runs in a separate job that compiles from source with the build cache disabled.
 
 ## Running CI locally
 
