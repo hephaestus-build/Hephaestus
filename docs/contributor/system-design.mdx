@@ -48,11 +48,18 @@ Every `@Scheduled` method therefore does one of these:
 - It acts only on the memory, gauges or streams of its own process, so it must run on every replica.
 
 `ScheduledWorkAcrossReplicasIntegrationTest` lists each unlocked job with its reason.
-It also races every lock between two application contexts on one database.
+It also checks every lock between two application contexts on one database.
+Then it runs one real job while the other context holds its lock.
 A new `@Scheduled` method fails that test until it holds a lock or has a reason.
 
-Spring runs every fixed-delay task on one scheduler thread.
-A lease heartbeat is therefore fixed-rate, so a long job cannot delay it until another replica reaps a live lease.
+The scheduler is a pool of `spring.task.scheduling.pool.size` threads.
+A long job holds one thread, and the other jobs keep their schedule.
+
+Two server replicas are not safe yet:
+
+- Two servers pull from the same durable consumer of a scope (`IntegrationNatsConsumer`).
+  Thus, they can process the events of one scope at the same time and out of order.
+- Every server runs the Liquibase migration at start. There is no separate migration run yet.
 
 ## Module boundaries
 

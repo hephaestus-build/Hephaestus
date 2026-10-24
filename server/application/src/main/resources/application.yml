@@ -74,9 +74,9 @@ spring:
     reactor:
         context-propagation: auto
 
-    # Virtual threads are always daemons. With virtual threads enabled, both the request executor
-    # and the @Scheduled TaskScheduler use them — so no non-daemon thread remains after main().
-    # keep-alive registers one to hold the JVM open between cron firings.
+    # Virtual threads are always daemons, and the request executor uses them. A role without the
+    # server's scheduler pool may have no non-daemon thread left after main(); keep-alive registers
+    # one to hold the JVM open.
     main:
         keep-alive: true
 
@@ -177,6 +177,10 @@ spring:
     # and its job lock is released before the database closes (ServerSchedulingConfig).
     task:
         scheduling:
+            # The server's scheduled jobs (ServerSchedulingConfig). The few jobs that can run for minutes
+            # hold one thread each, and the short jobs share the rest.
+            pool:
+                size: 8
             shutdown:
                 await-termination: true
                 await-termination-period: ${SHUTDOWN_TIMEOUT:20s}
@@ -448,6 +452,7 @@ hephaestus:
             enabled: false
             batch-size: 25
             rate-limit-threshold: 500
+            # A cycle holds its replica lock for 30s (HistoricalBackfillScheduler), so a value below 30 runs every 30s.
             interval-seconds: 60
         # Nightly Slack reconciliation (SlackSyncProperties): heal channel metadata and replay
         # conversations.history for ACTIVE monitored channels through the consent-gated ingest stack

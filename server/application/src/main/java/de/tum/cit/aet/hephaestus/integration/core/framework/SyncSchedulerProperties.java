@@ -87,7 +87,8 @@ public record SyncSchedulerProperties(
      * @param enabled Whether backfill processing is enabled
      * @param batchSize Maximum pages to process per repository per cycle
      * @param rateLimitThreshold Remaining API rate limit below which backfill pauses
-     * @param intervalSeconds Seconds between backfill cycles (default: 60s)
+     * @param intervalSeconds Seconds between backfill cycles (default: 60s). A cycle holds its replica lock for at
+     *     least 30s, so a shorter interval runs at most every 30s.
      */
     public record BackfillProperties(
             @DefaultValue("false") boolean enabled,

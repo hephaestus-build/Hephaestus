@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.handler.AgentHandlerTestDoubles;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceCleanupJob;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.testconfig.SharedTestDoubles;
@@ -20,13 +21,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.SimpleLock;
 import net.javacrumbs.shedlock.spring.ExtendedLockConfigurationExtractor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.junit.jupiter.api.AfterAll;
@@ -46,8 +44,9 @@ import org.springframework.scheduling.support.ScheduledMethodRunnable;
 import org.springframework.util.ClassUtils;
 
 /**
- * Two server replicas share one database. Every {@code @Scheduled} method either takes a ShedLock, so that one
- * replica runs it per tick, or is listed below with the reason it is safe on every replica.
+ * Two server replicas share one database. Every {@code @Scheduled} method either takes a ShedLock, so that only one
+ * replica runs it at a time, or is listed below with the reason it is safe on every replica. A second application
+ * context on the same database plays the other replica.
  */
 class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
 
@@ -90,6 +89,9 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private OAuthStateNonceCleanupJob nonceCleanup;
 
     @BeforeAll
     static void startSecondReplica(@Autowired Environment first) {
@@ -150,10 +152,13 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
                 .allSatisfy((name, count) -> assertThat(count).isOne());
     }
 
+    /**
+     * The lock each job's annotation configures, held by one context, keeps the other context out, and its row
+     * stays held for at least the job's floor after the run. The floor is read from the row, not waited for.
+     */
     @Test
-    void shouldRunEveryLockedJobOncePerTickAcrossTwoReplicas() throws Exception {
+    void shouldHoldEveryJobLockAgainstTheOtherContextForAtLeastItsFloor() {
         LockProvider secondLocks = secondReplica.getBean(LockProvider.class);
-        Map<String, Integer> runs = new HashMap<>();
         List<String> names = new ArrayList<>();
         try {
             for (var job : scheduledJobs().entrySet()) {
@@ -164,7 +169,7 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
                         .getLockConfiguration(new ScheduledMethodRunnable(new Object(), job.getValue()))
                         .orElseThrow();
                 assertThat(annotated.getLockAtLeastFor())
-                        .as("%s holds its lock long enough for the other replica's tick", job.getKey())
+                        .as("%s keeps its lock past the other replica's tick", job.getKey())
                         .isGreaterThanOrEqualTo(Duration.ofSeconds(1))
                         .isLessThan(annotated.getLockAtMostFor());
                 // The real durations under a fresh name, so locks that other tests left behind do not interfere.
@@ -173,36 +178,65 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
                 names.add(name);
                 var tick = new LockConfiguration(
                         Instant.now(), name, annotated.getLockAtMostFor(), annotated.getLockAtLeastFor());
-                AtomicInteger executions = new AtomicInteger();
-                Runnable body = executions::incrementAndGet;
 
-                var barrier = new CyclicBarrier(2);
-                CompletableFuture.allOf(
-                                CompletableFuture.runAsync(() -> tickOn(firstLocks, tick, body, barrier)),
-                                CompletableFuture.runAsync(() -> tickOn(secondLocks, tick, body, barrier)))
-                        .get();
-                // The faster replica finished before the slower one's timer fired.
-                new DefaultLockingTaskExecutor(secondLocks).executeWithLock(body, tick);
-                new DefaultLockingTaskExecutor(firstLocks).executeWithLock(body, tick);
+                SimpleLock held = firstLocks.lock(tick).orElseThrow();
+                assertThat(secondLocks.lock(tick))
+                        .as("%s while the first context runs it", job.getKey())
+                        .isEmpty();
+                held.unlock();
 
-                runs.put(job.getKey(), executions.get());
+                Double floor = jdbc.queryForObject(
+                        "SELECT EXTRACT(EPOCH FROM lock_until - locked_at) FROM shedlock WHERE name = ?",
+                        Double.class,
+                        name);
+                assertThat(floor)
+                        .as("%s stays locked for its floor after the run", job.getKey())
+                        .isGreaterThanOrEqualTo(annotated.getLockAtLeastFor().toMillis() / 1000.0);
             }
         } finally {
             names.forEach(name -> jdbc.update("DELETE FROM shedlock WHERE name = ?", name));
         }
-
-        assertThat(runs)
-                .isNotEmpty()
-                .allSatisfy((job, count) -> assertThat(count).as(job).isOne());
+        assertThat(names).isNotEmpty();
     }
 
-    private static void tickOn(LockProvider locks, LockConfiguration tick, Runnable body, CyclicBarrier barrier) {
+    /** The real proxied job of one context, while the other context holds its lock, does not run its body. */
+    @Test
+    void shouldSkipARealJobWhileTheOtherContextHoldsItsLock() {
+        String name = "oauth-state-nonce-cleanup";
+        String nonce = UUID.randomUUID().toString().substring(0, 32);
+        LockProvider secondLocks = secondReplica.getBean(LockProvider.class);
         try {
-            barrier.await();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
+            jdbc.update("DELETE FROM shedlock WHERE name = ?", name);
+            // Far past any retention, so the job deletes it whenever its body runs.
+            jdbc.update(
+                    "INSERT INTO oauth_state_nonce (nonce, workspace_id, kind, issued_at)"
+                            + " VALUES (?, 0, 'GITHUB', now() - interval '10 years')",
+                    nonce);
+            SimpleLock held = secondLocks
+                    .lock(new LockConfiguration(Instant.now(), name, Duration.ofMinutes(1), Duration.ZERO))
+                    .orElseThrow();
+
+            nonceCleanup.cleanupExpired();
+
+            assertThat(nonceExists(nonce))
+                    .as("the first context skipped the run")
+                    .isTrue();
+            held.unlock();
+
+            nonceCleanup.cleanupExpired();
+
+            assertThat(nonceExists(nonce))
+                    .as("the first context ran it once the lock was free")
+                    .isFalse();
+        } finally {
+            jdbc.update("DELETE FROM oauth_state_nonce WHERE nonce = ?", nonce);
+            jdbc.update("DELETE FROM shedlock WHERE name = ?", name);
         }
-        new DefaultLockingTaskExecutor(locks).executeWithLock(body, tick);
+    }
+
+    private boolean nonceExists(String nonce) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM oauth_state_nonce WHERE nonce = ?)", Boolean.class, nonce));
     }
 
     /** Every {@code @Scheduled} method in the application, keyed {@code SimpleClassName#method}. */

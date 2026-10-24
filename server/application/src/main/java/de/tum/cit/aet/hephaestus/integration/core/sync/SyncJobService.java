@@ -326,11 +326,8 @@ public class SyncJobService implements SmartLifecycle {
      * Touches {@code heartbeat_at} for every job currently executing in this JVM, and refreshes each
      * handle's {@code cancelRequested} flag from the database in the same pass — the cross-pod path for
      * a cancel request landing on a different pod than the one executing the job.
-     *
-     * <p>Fixed rate, not fixed delay: Spring runs every fixed-delay task on one shared scheduler thread, so a
-     * long job there would hold this heartbeat back until another server replica reaps a live job.
      */
-    @Scheduled(fixedRate = 60, initialDelay = 60, timeUnit = TimeUnit.SECONDS)
+    @Scheduled(fixedDelay = 60, initialDelay = 60, timeUnit = TimeUnit.SECONDS)
     @WorkspaceAgnostic("Refreshes only leases registered in this JVM; job ids are globally unique")
     public void refreshLeases() {
         if (activeHandles.isEmpty()) {

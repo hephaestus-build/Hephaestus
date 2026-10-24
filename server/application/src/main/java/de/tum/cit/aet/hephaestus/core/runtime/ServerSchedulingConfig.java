@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.runtime;
 import jakarta.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 import org.springframework.boot.autoconfigure.AbstractDependsOnBeanFactoryPostProcessor;
+import org.springframework.boot.task.ThreadPoolTaskSchedulerBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -35,6 +36,17 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @ConditionalOnServerRole
 @EnableScheduling
 public class ServerSchedulingConfig {
+
+    /**
+     * A pool rather than Boot's virtual-thread scheduler, which runs every fixed-delay task on its one scheduler
+     * thread: there, one long job (an Outline catch-up can run for up to an hour) held back every other fixed-delay
+     * job, the sync lease heartbeat included, until another replica reaped a live sync. Here a long job holds one of
+     * {@code spring.task.scheduling.pool.size} threads.
+     */
+    @Bean(name = "taskScheduler")
+    TaskScheduler taskScheduler(ThreadPoolTaskSchedulerBuilder builder) {
+        return builder.build();
+    }
 
     @Bean
     static SchedulerClosesBeforeDatabase schedulerClosesBeforeDatabase() {
