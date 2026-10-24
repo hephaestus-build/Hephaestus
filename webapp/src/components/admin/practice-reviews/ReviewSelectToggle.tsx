@@ -13,6 +13,9 @@ import {
 	selectionSearch,
 } from "./review-selection";
 
+/** Track's icon, which the actions column's (i) also leads Track's line with. */
+export const TrackIcon = CrosshairIcon;
+
 export interface ReviewSelectToggleProps {
 	/** What the row selects. */
 	selection: ReviewSelection;
@@ -49,7 +52,7 @@ export function ReviewSelectToggle({ selection, name }: ReviewSelectToggleProps)
 				);
 			}}
 		>
-			<CrosshairIcon aria-hidden />
+			<TrackIcon aria-hidden />
 		</Toggle>
 	);
 }

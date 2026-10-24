@@ -18,6 +18,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
+/** Request review's icon, which the actions column's (i) also leads its line with. */
+export const RequestReviewIcon = PlayIcon;
+
 /** What a row's "Request review" asks about, and whether it can ask now. */
 export interface RowReviewRequest {
 	/** The work by name, as the confirmation says it inside a sentence: "pull request #1423". */
@@ -67,7 +70,7 @@ export function RequestReviewAction({ request, label }: RequestReviewActionProps
 	);
 	const content = (
 		<>
-			<PlayIcon aria-hidden />
+			<RequestReviewIcon aria-hidden />
 			{label}
 		</>
 	);
