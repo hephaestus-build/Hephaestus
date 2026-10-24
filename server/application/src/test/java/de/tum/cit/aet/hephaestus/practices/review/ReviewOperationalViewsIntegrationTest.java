@@ -26,12 +26,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-@Import(ReviewIntegrationData.class)
 class ReviewOperationalViewsIntegrationTest extends BaseIntegrationTest {
     private static final Instant FROM = Instant.parse("2026-03-10T00:00:00Z");
     private static final Instant TO = Instant.parse("2026-03-13T00:00:00Z");

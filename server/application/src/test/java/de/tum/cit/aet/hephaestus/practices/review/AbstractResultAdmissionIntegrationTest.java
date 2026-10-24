@@ -6,13 +6,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewModelBindings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.event.RecordApplicationEvents;
 
 @RecordApplicationEvents
-@Import({ReviewIntegrationData.class, ReviewAdmissionData.class})
 public abstract class AbstractResultAdmissionIntegrationTest extends BaseIntegrationTest {
     @MockitoSpyBean
     protected ProductItemQuery productItems;

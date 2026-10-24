@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
 import de.tum.cit.aet.hephaestus.agent.handler.AgentHandlerTestDoubles;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewLookupData;
+import de.tum.cit.aet.hephaestus.practices.scan.ScanReportTestData;
 import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +28,11 @@ import org.springframework.test.context.TestPropertySource;
     AgentHandlerTestDoubles.class,
     WorkspaceEchoControllers.ScopedEchoController.class,
     WorkspaceEchoControllers.WorkspaceContextEchoController.class,
+    // Stateless review fixtures: one shared import keeps every test that uses them in this context.
+    ReviewIntegrationData.class,
+    ReviewLookupData.class,
+    ReviewAdmissionData.class,
+    ScanReportTestData.class,
 })
 @Tag("integration")
 @TestPropertySource(

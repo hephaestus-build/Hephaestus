@@ -7,11 +7,9 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-@Import(ReviewIntegrationData.class)
 class PracticeReviewSettingsControllerIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;

@@ -33,11 +33,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-@Import(ReviewIntegrationData.class)
 class PracticeReviewItemFactsIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;

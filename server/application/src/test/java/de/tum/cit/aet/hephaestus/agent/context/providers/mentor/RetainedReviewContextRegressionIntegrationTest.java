@@ -18,7 +18,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -26,7 +25,6 @@ import tools.jackson.databind.json.JsonMapper;
  * A retained failed run whose frozen assignment no longer exists must not stop Heph's context. Uses only the public
  * contribution boundary that predates the fix, so the same file runs against the earlier source and shows its failure.
  */
-@Import(ReviewIntegrationData.class)
 class RetainedReviewContextRegressionIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private ReviewIntegrationData data;
