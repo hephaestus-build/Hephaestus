@@ -10,7 +10,11 @@ x-pgbackrest-restore-env: &pgbackrest-restore-env
   PGBACKREST_REPO1_CIPHER_PASS: ${BACKUP_CIPHER_PASS:?Set BACKUP_CIPHER_PASS}
 
 services:
-  # A plain `up` on a clone must not boot application code, broker consumers or public ingress.
+  # A plain `up` on a clone must not boot application code, broker consumers or public ingress,
+  # nor migrate the restored database past the release it was taken from.
+  database-migration:
+    profiles: [restore-release-only]
+    entrypoint: [/bin/false]
   application-server:
     profiles: [restore-release-only]
     entrypoint: [/bin/false]
