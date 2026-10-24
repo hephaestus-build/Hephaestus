@@ -112,7 +112,7 @@ The feedback is advisory: it does not approve a change for merge or grade anyone
 - **Run your own deployment.** Check the [supported hosts and capacity guidance](https://docs.hephaestus.build/admin/install#requirements).
 
   ```bash
-  VERSION=0.94.7   # the release you are installing, without the leading "v"
+  VERSION=0.95.0   # the release you are installing, without the leading "v"
   sudo git clone --depth 1 --branch "v$VERSION" https://github.com/hephaestus-build/Hephaestus.git /opt/hephaestus
   sudo chown -R "$USER" /opt/hephaestus
   cd /opt/hephaestus/docker/self-host
