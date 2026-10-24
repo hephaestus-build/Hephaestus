@@ -102,6 +102,7 @@
 	"docs/admin/configuration-readiness.mdx",
 	"docs/admin/configuration-reference.mdx",
 	"docs/admin/credential-key-rotation.mdx",
+	"docs/admin/data-retention.mdx",
 	"docs/admin/dsms/README.md",
 	"docs/admin/dsms/item-source-governance.md",
 	"docs/admin/dsms/dpia-prescreen.md",

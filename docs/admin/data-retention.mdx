@@ -1,0 +1,92 @@
+---
+id: data-retention
+title: Data retention
+description: What a self-hosted instance stores, where it stores it, and when the stored data is deleted.
+---
+
+This page lists what a self-hosted instance stores, where, and for how long.
+Each period comes from the code or the shipped configuration.
+"No automatic deletion" means that no scheduled job deletes the data.
+Workspace purge, disconnection, and verified person erasure still remove it, as the [personal-data map](./dsms/personal-data-map.md) describes.
+The [record of processing](./dsms/record-of-processing.md) gives the legal basis of each category.
+
+The **Setting** column names the variable that changes a period.
+Compose forwards only some of them to the containers.
+The [configuration reference](./configuration-reference) says which ones, and how to set the others.
+
+## Worker disk
+
+The worker keeps these files under `HEPHAESTUS_FABRIC_ROOT`, on the `worker-git-repos` volume.
+
+| Data | Retention | Setting | Deleted by |
+| --- | --- | --- | --- |
+| Debug transcript of an agent run | 24 hours. It goes earlier when the job's evidence expires. | None | A worker sweep every minute |
+| Inputs of an attempt | Until the result is admitted, otherwise 1 hour after the attempt ends. A worker restart deletes them. | None | The same sweep |
+| Repository mirrors | No age limit. The server deletes a mirror when no workspace monitors its repository. | None | Repository monitoring |
+
+## PostgreSQL
+
+| Data | Retention | Setting | Deleted by |
+| --- | --- | --- | --- |
+| Capture and output of a review job | 14 days after the job ends. A job that waits for delivery keeps them. | `AGENT_PAYLOAD_RETENTION` | A server job every 6 hours, when `AGENT_ENABLED` is `true` |
+| Review job rows, with their script runs and attempt usage | 90 days after the job ends | `AGENT_ROW_RETENTION` | The same job |
+| Original review inputs (composition basis) | Until they expire or the job ends | None | The same job |
+| Evidence-copy receipts | No automatic deletion. Erasure empties a receipt and marks it erased. | None | Erasure only |
+| Evidence of an item event | Replaced by a marker 30 days after it is recorded | `hephaestus.item-event-ledger.retain-for` | A server job every 15 minutes |
+| Item events that nothing references | 30 days after their decision | `hephaestus.item-event-ledger.retain-for` | The same job |
+| Item events that stay pending | Expire after 7 days | `ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER` | The same job |
+| Practice results that no feedback cites, and the raw proof of scans | 400 days | None | A server job at 03:00 every day |
+| Feedback and its delivery records | No automatic deletion. Conversation feedback that is never shown is withheld after 14 days and kept. | None | — |
+| LLM usage records | 400 days | `HEPHAESTUS_LLM_USAGE_RETENTION` | A server job at 04:15 every day |
+| Heph conversations | No automatic deletion | None | — |
+| Slack messages and threads | 30 days for each connection, at most 180 days | The retention of the Slack connection | A server job at 03:30 every day |
+| Outline documents | No age limit. Document bodies above 200 MB for each workspace are evicted. | `HEPHAESTUS_INTEGRATION_OUTLINE_CACHE_MAX_SIZE_MB` | Outline sync |
+| GitHub and GitLab mirror tables | No age limit while a workspace monitors the repository | None | Repository monitoring |
+| Sync job history | The newest 50 runs of each connection | None | Each new sync run |
+| Connection audit records | No automatic deletion | None | — |
+| Authentication events, including sign-ins, user views, IP address, and user agent | 12 months, in monthly partitions | None | Partition maintenance at 00:10 every day |
+| Configuration audit events | 365 days | None | A server job at 00:20 every day |
+| Issued access tokens | Until they expire. Access tokens last 24 hours. | `HEPHAESTUS_AUTH_ACCESS_TTL` | A server job at 03:30 every day |
+| Client sessions | At most 7 days, or 1 day after revocation | `hephaestus.auth.session-max-lifetime` | A server job every hour |
+| OAuth state values | 7 days | `hephaestus.integration.oauth-state.nonce-retention` | A server job at 04:00 every day |
+| Email notifications waiting for delivery | Deleted when delivered. Security, alert, and weekly digest mail expires after 24 hours. Product feedback mail expires after 7 days, and survey mail when its request expires. | None | Delivery and the retry job |
+| Self-service account exports | The download is removed 48 hours after it is ready | None | A server job every hour |
+| Deleted accounts | Removed 48 hours after the request, by the next hourly sweep | `hephaestus.auth.delete-cooldown` | A server job every hour |
+| Product feedback and survey responses | No automatic deletion | None | — |
+| Research disclosure records | No automatic deletion. The released file is not stored. | None | — |
+
+## NATS JetStream
+
+The `nats-data` volume keeps webhook deliveries.
+A stream deletes its oldest messages first when it reaches a limit.
+
+| Stream | Age limit | Size limit | Setting |
+| --- | --- | --- | --- |
+| `github` | 180 days | 10 GB | `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE`, `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` |
+| `gitlab` | 180 days | 1 GB | `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE`, `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES` |
+| `slack`, `outline` | 72 hours | 1 GB | `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES` |
+
+The self-hosted `.env.example` sets smaller size limits.
+A shorter limit on an existing stream does not apply until you allow it, as [Webhook ingestion operations](./webhook-ingestion-operations#changing-a-bound-on-a-stream-that-already-exists) describes.
+
+## Logs and traces
+
+| Data | Retention | Setting |
+| --- | --- | --- |
+| Container logs | By size only: 5 files of 50 MiB for the webapp, server, worker, and PostgreSQL, and 3 files of 10 MiB for the others | The `logging` block of each service |
+| Journal logs, with the optional journald overlay | The journal size limit of the host | `SystemMaxUse` in `journald.conf` |
+| Logs shipped to Loki | The retention that you set in Loki | Loki |
+| Traces | Off by default. The OTLP recipient keeps them under its own retention. | `TRACING_OTLP_ENABLED` |
+
+No container writes an HTTP access log.
+
+## Backups
+
+| Data | Retention | Setting |
+| --- | --- | --- |
+| pgBackRest backups, with the optional backup overlay | Two full backups with their differential backups and WAL, about two to three weeks. A full backup runs every Sunday at 02:15 UTC, a differential backup every other day. | `repo1-retention-full` in `pgbackrest.conf` |
+| A plain `pg_dump` file | No automatic deletion | Delete it yourself |
+
+A backup contains the whole database, so it also contains data that the instance deleted later.
+Erasure does not reach a backup.
+[Backup & restore](./backup-restore) gives the restore procedure.
