@@ -76,6 +76,9 @@ It can capture evidence only for images that its run published.
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The PR body follows attribution policy | —                                                                        |
 
+`Build → App Server: Database`, the PostgreSQL drills, both E2E rows and the integration shards are
+the queue tier ([Two verification tiers](#two-verification-tiers)).
+
 The browser jobs retain `webapp-e2e-results` and `extension-e2e-results`, each including
 `e2e-server.log`, for seven days on success as well as failure. Inspect server startup and shutdown output even when browser assertions
 pass. A passing suite does not prove that background work started correctly. Its coverage summary
@@ -763,10 +766,13 @@ The queue tier is most of a run's runner time, and GitHub's runner concurrency l
 A queue-tier failure removes the entry from the queue, and the failure comment links the run.
 Fix the failure and queue the pull request again.
 
-A draft pull request runs the fast tier and builds no image. So it gets no preview, no host smoke and
-no image scan. The automatic queue tier for the tier's own inputs is also off, but `ci:full` still opts in.
+A draft pull request runs the fast tier and builds no image. So it gets no host smoke and no image
+scan. The `preview` label still builds its images, and a release candidate always builds its evidence.
+
+For a draft, the automatic queue tier for the tier's own inputs is off, but `ci:full` still opts in.
 `CI Status Gate` still reports, so required checks resolve on a draft.
-Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run, with its images.
+Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
+with its images. That run is never skipped as a duplicate of the draft's run.
 
 A pull request that is not a draft also runs the queue tier when it changes the tier's own inputs.
 These inputs are the workflows and actions that define the tier and the database migrations.
@@ -791,8 +797,8 @@ Locally, these commands run the queue tier's suites:
 - `vp run --filter webapp test:e2e` and `vp run test:extension:e2e` for the browser suites.
 
 **Revert criterion.** [`report:ci-latency`](#full-verification-latency) reports the share of merge
-groups in the last 14 days that a queue-tier job failed, apart from the groups that a fast-tier job
-failed. If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
+groups in the last 14 days in which a queue-tier job failed. It counts the groups in which only
+fast-tier jobs failed apart, and it gives no share for fewer than 20 groups. If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
 should have caught. Then run the queue tier on pull requests again: change `queue-tier` in
 `detect-changes` to `true` for every event.
 
@@ -808,7 +814,7 @@ Ordinary main pushes omit Quality, Test, Security, Actionlint, Zizmor, and Compo
 They skip API, schema, database, and browser jobs inside `Build`.
 
 Release-version pushes repeat those checks. Main still packages and publishes images.
-Same-repository pull requests also run `Build` and `Docker` regardless of paths, because
+Same-repository pull requests, except drafts without the `preview` label, also run `Build` and `Docker` regardless of paths, because
 previews need every image at the head SHA. No other event has a preview.
 
 | Selects                    | Paths                                                                                                                                                                                                                                                                                                                                                                                                                             |

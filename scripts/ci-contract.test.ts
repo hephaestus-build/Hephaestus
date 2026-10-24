@@ -292,25 +292,38 @@ function versionBranch(config: unknown): string {
 	return `changeset-release/${baseBranch}`;
 }
 
-/** A `detect-changes` tier output for one event, with the live `ci:full` read set or unreadable. */
-function evaluateTierOutput(
-	source: string,
-	event: string,
-	full: string | undefined,
-	filter: Readonly<Record<string, string>> = {},
-	pullRequest: Readonly<Record<string, unknown>> = {},
-): string {
+/** What a `detect-changes` expression reads about one run, apart from its event. */
+interface TierRun {
+	/** The live `ci:full` read; undefined is a read that failed and wrote no output. */
+	readonly full?: string;
+	readonly preview?: string;
+	readonly filter?: Readonly<Record<string, string>>;
+	readonly pullRequest?: Readonly<Record<string, unknown>>;
+	readonly action?: string;
+	readonly releaseCandidate?: string;
+}
+
+/** A `detect-changes` tier output for one event and run. */
+function evaluateTierOutput(source: string, event: string, run: TierRun = {}): string {
 	const body = /^\$\{\{ (?<body>.+) \}\}$/u.exec(source)?.groups?.body;
 	assert.ok(isSet(body));
 	const parsed = new Parser(new Lexer(body).lex().tokens, ["github", "steps"], []).parse();
+	const optIn = {
+		...(run.full === undefined ? {} : { full: run.full }),
+		...(run.preview === undefined ? {} : { preview: run.preview }),
+	};
 	const context: unknown = JSON.parse(
 		JSON.stringify({
-			github: { event_name: event, event: { pull_request: pullRequest } },
+			github: {
+				event_name: event,
+				repository: "owner/repo",
+				event: { action: run.action ?? "synchronize", pull_request: run.pullRequest ?? {} },
+			},
 			steps: {
-				opt_in: { outputs: full === undefined ? {} : { full } },
-				filter: { outputs: filter },
+				opt_in: { outputs: optIn },
+				filter: { outputs: run.filter ?? {} },
 				skip_check: { outputs: { should_skip: "true" } },
-				release_candidate: { outputs: { "release-candidate": "false" } },
+				release_candidate: { outputs: { "release-candidate": run.releaseCandidate ?? "false" } },
 			},
 		}),
 		data.reviver,
@@ -803,13 +816,13 @@ void describe("CI contract", () => {
 		] as const) {
 			const label = full ?? "unreadable";
 			assert.equal(
-				evaluateTierOutput(decision, event, full),
+				evaluateTierOutput(decision, event, { full }),
 				queue,
 				`${event} with ci:full ${label}`,
 			);
 			// A duplicate is skipped only without the opt-in, so a re-run after the label runs the tier.
 			assert.equal(
-				evaluateTierOutput(skip, event, full),
+				evaluateTierOutput(skip, event, { full }),
 				skipped,
 				`duplicate skip, ${event} ${label}`,
 			);
@@ -817,7 +830,10 @@ void describe("CI contract", () => {
 		// A change to the tier's own inputs runs it on the pull request, label or not.
 		for (const filter of ["queue-tier-inputs", "test-config", "build-config"]) {
 			assert.equal(
-				evaluateTierOutput(decision, "pull_request", "false", { [filter]: "true" }),
+				evaluateTierOutput(decision, "pull_request", {
+					full: "false",
+					filter: { [filter]: "true" },
+				}),
 				"true",
 				filter,
 			);
@@ -860,19 +876,52 @@ void describe("CI contract", () => {
 		const outputs = (name: string) =>
 			String(orchestrator.getIn(["jobs", "detect-changes", "outputs", name]));
 		const draft = { draft: true, head: { repo: { full_name: "owner/repo" } } };
-		assert.equal(evaluateTierOutput(outputs("draft"), "pull_request", "false", {}, draft), "true");
-		assert.equal(evaluateTierOutput(outputs("draft"), "pull_request", "false"), "false");
 		assert.equal(
-			evaluateTierOutput(outputs("draft"), "merge_group", undefined, {}, draft),
+			evaluateTierOutput(outputs("draft"), "pull_request", { full: "false", pullRequest: draft }),
+			"true",
+		);
+		assert.equal(evaluateTierOutput(outputs("draft"), "pull_request", { full: "false" }), "false");
+		assert.equal(
+			evaluateTierOutput(outputs("draft"), "merge_group", { pullRequest: draft }),
 			"false",
 		);
 		assert.equal(
-			evaluateTierOutput(decision, "pull_request", "false", { "test-config": "true" }, draft),
+			evaluateTierOutput(decision, "pull_request", {
+				full: "false",
+				filter: { "test-config": "true" },
+				pullRequest: draft,
+			}),
 			"false",
 			"a draft that changes the tier's inputs still runs only the fast tier",
 		);
-		assert.equal(evaluateTierOutput(decision, "pull_request", "true", {}, draft), "true");
-		assert.match(outputs("previews"), /github\.event\.pull_request\.draft != true/u);
+		assert.equal(
+			evaluateTierOutput(decision, "pull_request", { full: "true", pullRequest: draft }),
+			"true",
+		);
+		// The preview label is an explicit opt-in, and a release candidate always builds its evidence.
+		const labelled = { full: "false", preview: "true", pullRequest: draft };
+		assert.equal(evaluateTierOutput(outputs("draft"), "pull_request", labelled), "false");
+		assert.equal(evaluateTierOutput(outputs("previews"), "pull_request", labelled), "true");
+		assert.equal(
+			evaluateTierOutput(outputs("previews"), "pull_request", {
+				full: "false",
+				pullRequest: draft,
+			}),
+			"false",
+		);
+		assert.equal(
+			evaluateTierOutput(outputs("draft"), "pull_request", {
+				full: "false",
+				pullRequest: draft,
+				releaseCandidate: "true",
+			}),
+			"false",
+		);
+		// Marking a draft ready repeats its tree, so it must not be skipped as a duplicate.
+		assert.equal(
+			evaluateTierOutput(skip, "pull_request", { full: "false", action: "ready_for_review" }),
+			"false",
+		);
 		for (const name of [
 			"vulnerability-database",
 			"application-server-image",
@@ -890,7 +939,7 @@ void describe("CI contract", () => {
 		assert.ok(isSeq(types));
 		assert.deepEqual(types.toJSON(), ["opened", "synchronize", "reopened", "ready_for_review"]);
 		assert.equal(orchestrator.getIn(["jobs", "all-ci-passed", "if"]), "always()");
-		const optIn = namedStep(orchestrator, ["jobs", "detect-changes"], "Read the ci:full opt-in");
+		const optIn = namedStep(orchestrator, ["jobs", "detect-changes"], "Read the opt-in labels");
 		assert.equal(optIn.get("continue-on-error"), true);
 		assert.match(
 			String(optIn.get("run")),

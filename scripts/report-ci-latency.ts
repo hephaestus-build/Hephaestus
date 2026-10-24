@@ -86,6 +86,20 @@ export const QUEUE_TIER_JOBS = [
 ];
 
 /**
+ * A pull request's fast-tier verdict: the server suites ran and no queue-tier job did. Docs-only,
+ * duplicate-skipped and `ci:full` runs measure something else.
+ */
+export function isFastTier(jobs: readonly { name: string }[]) {
+	return (
+		jobs.some((job) => job.name === "Test / App Server: Unit and architecture") &&
+		!jobs.some((job) => QUEUE_TIER_JOBS.some((pattern) => pattern.test(job.name)))
+	);
+}
+
+/** Fewer completed groups than this cannot support the revert criterion's 10 %. */
+export const MINIMUM_GROUPS = 20;
+
+/**
  * The share of completed merge groups that a queue-tier job failed, apart from the groups only a
  * fast-tier job failed. A cancelled group was regrouped by the queue and says nothing.
  */
@@ -103,7 +117,7 @@ export function queueTierFailures(
 		groups: completed.length,
 		queueTierFailed: queueTier,
 		fastTierFailed: failed.length - queueTier,
-		queueTierShare: completed.length === 0 ? null : queueTier / completed.length,
+		queueTierShare: completed.length < MINIMUM_GROUPS ? null : queueTier / completed.length,
 	};
 }
 
@@ -142,7 +156,7 @@ export function renderLatencyBudget(
 ): string {
 	const share =
 		failures.queueTierShare === null
-			? "Not available"
+			? `Not available (fewer than ${MINIMUM_GROUPS} groups)`
 			: `${(failures.queueTierShare * 100).toFixed(1)} %`;
 	return [
 		"## Full-verification latency (advisory)",
@@ -156,12 +170,11 @@ export function renderLatencyBudget(
 		"",
 		"## Pull-request latency (fast tier, observed)",
 		"",
-		`| Median | ${seconds(median([...pullRequests]))} | p90 | ${seconds(percentile([...pullRequests], 0.9))} | ${pullRequests.length} runs |`,
-		"|---|---:|---|---:|---|",
+		`Median ${seconds(median([...pullRequests]))}, p90 ${seconds(percentile([...pullRequests], 0.9))}, over ${pullRequests.length} server pull-request runs that ran only the fast tier.`,
 		"",
 		`## Merge groups failed by the queue tier, last ${FAILURE_WINDOW_DAYS} days`,
 		"",
-		`${share} of ${failures.groups} completed groups (${failures.queueTierFailed} queue tier, ${failures.fastTierFailed} fast tier only). Revert criterion: above 10 %.`,
+		`${share} of ${failures.groups} completed groups failed a queue-tier job; ${failures.fastTierFailed} more failed only fast-tier jobs. Revert criterion: above 10 %.`,
 		"",
 		"Historical timings include runner waiting and earlier commits; this is not a verdict on the current change.",
 		"Inspect the retained ci-latency.json run timelines to distinguish queue delays from execution before changing CI.",
@@ -248,7 +261,7 @@ if (import.meta.main) {
 	const groups = await listRuns(repository, "merge_group", now - WINDOW_DAYS * DAY);
 	const pullRequests = await listRuns(repository, "pull_request", now - WINDOW_DAYS * DAY);
 	const full = await sample(repository, groups, now, "merge_group", isFullVerification);
-	const fast = await sample(repository, pullRequests, now, "pull_request", () => true);
+	const fast = await sample(repository, pullRequests, now, "pull_request", isFastTier);
 	const budget = latencyBudget(full.map((run) => run.verdictSeconds));
 
 	const recent = groups.workflow_runs

@@ -88,16 +88,18 @@ jobs:
       # database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
       # ci-cd.mdx § Two verification tiers says why.
       queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' || (github.event.pull_request.draft != true && (steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true')) }}
-      # A draft runs the fast tier and builds no image: no preview, no host smoke, no image scan.
-      # Marking it ready starts a full pull-request run. ci-cd.mdx § Two verification tiers.
-      draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true }}
+      # A draft runs the fast tier and builds no image: no preview, no host smoke, no image scan,
+      # unless it carries `preview`. A release candidate always builds its evidence. Marking it
+      # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
+      draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true && steps.opt_in.outputs.preview != 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
       publishable: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-      previews: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft != true }}
+      previews: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (github.event.pull_request.draft != true || steps.opt_in.outputs.preview == 'true') }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
       # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
       # run without the opt-in may be skipped as a duplicate.
-      should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' }}
+      # A pull request marked ready repeats the draft's tree but builds what the draft skipped.
+      should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && github.event.action != 'ready_for_review' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -129,9 +131,9 @@ jobs:
           fi
           echo "release-candidate=$release_candidate" >> "$GITHUB_OUTPUT"
 
-      # Read from the pull request rather than the event payload, so a re-run after the label was
+      # Read from the pull request rather than the event payload, so a re-run after a label was
       # added sees it. A `labeled` trigger would let any label cancel the running CI.
-      - name: Read the ci:full opt-in
+      - name: Read the opt-in labels
         id: opt_in
         if: github.event_name == 'pull_request'
         continue-on-error: true
@@ -139,8 +141,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          full=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq 'any(.labels[]; .name == "ci:full")')
-          echo "full=$full" >> "$GITHUB_OUTPUT"
+          labels=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '[.labels[].name]')
+          echo "full=$(jq -r 'any(. == "ci:full")' <<< "$labels")" >> "$GITHUB_OUTPUT"
+          echo "preview=$(jq -r 'any(. == "preview")' <<< "$labels")" >> "$GITHUB_OUTPUT"
 
       - id: skip_check
         if: github.event_name == 'pull_request' && steps.release_candidate.outputs.release-candidate != 'true'

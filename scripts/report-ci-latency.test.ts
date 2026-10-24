@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+	isFastTier,
 	isFullVerification,
 	isLatencySample,
 	latencyBudget,
@@ -51,6 +52,14 @@ void test("sampling takes first-attempt successful merge groups inside the windo
 	]);
 });
 
+void test("the pull-request cohort is the server fast tier", () => {
+	const unit = { name: "Test / App Server: Unit and architecture" };
+	assert.equal(isFastTier([unit, { name: "Quality / App Server / Gates" }]), true);
+	// Docs-only and duplicate-skipped runs have no server suites; ci:full adds the queue tier.
+	assert.equal(isFastTier([{ name: "Quality / Tooling and Docs / Gates" }]), false);
+	assert.equal(isFastTier([unit, { name: "Test / App Server: Integration (providers)" }]), false);
+});
+
 void test("a release candidate's evidence run is not a latency sample", () => {
 	assert.equal(isLatencySample([{ name: "Detect changes" }]), true);
 	assert.equal(
@@ -74,13 +83,18 @@ void test("the revert criterion counts groups a queue-tier job failed, apart fro
 		// The queue regrouped this one.
 		{ conclusion: "cancelled", failedJobs: [] },
 	];
+	// Below the minimum the share is not a verdict yet.
 	assert.deepEqual(queueTierFailures(groups), {
 		groups: 6,
 		queueTierFailed: 2,
 		fastTierFailed: 2,
-		queueTierShare: 2 / 6,
+		queueTierShare: null,
 	});
-	assert.equal(queueTierFailures([]).queueTierShare, null);
+	const enough = [
+		...groups,
+		...Array.from({ length: 14 }, () => ({ conclusion: "success", failedJobs: [] })),
+	];
+	assert.equal(queueTierFailures(enough).queueTierShare, 2 / 20);
 });
 
 const verificationJobs = [
