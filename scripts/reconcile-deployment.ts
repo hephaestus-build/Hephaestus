@@ -22,8 +22,8 @@ import { output, run, succeeds } from "./lib/process.ts";
 export type Stack = "proxy" | "core" | "app";
 
 /**
- * The application server runs the Liquibase migration the webhook runtime in `core` reads, and the
- * edge comes last so it never routes to a stack that is still starting.
+ * The `app` stack's migration service applies the schema the webhook runtime in `core` waits for, and
+ * the edge comes last so it never routes to a stack that is still starting.
  */
 const STACK_ORDER: readonly Stack[] = ["app", "core", "proxy"];
 

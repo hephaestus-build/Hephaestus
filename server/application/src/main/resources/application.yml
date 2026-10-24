@@ -292,6 +292,9 @@ hephaestus:
         environment: ${DEPLOYMENT_ENVIRONMENT:local}
     database:
         allow-insecure-remote: ${HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE:false}
+        # How long a process that does not migrate waits at start for the migrate run mode to apply
+        # this release's changelog (docs/admin/runtime-roles.mdx#database-migrations).
+        migration-wait: 10m
     consent:
         # Names the organisation running optional research. Unset means this deployment runs none,
         # and first-login setup and account settings then omit the question entirely.

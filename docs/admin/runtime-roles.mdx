@@ -103,6 +103,52 @@ profile groups. Startup rejects that combination even when production secrets ar
 Production encryption requirements apply to Spring's expanded profiles, so selecting a production
 profile group requires the same keys as selecting `prod` directly.
 
+## Database migrations
+
+The `migrate` run mode applies the database migration of a release, then exits.
+Start the application image with `SPRING_PROFILES_ACTIVE=prod,migrate`.
+It needs only `DATABASE_URL`, `DATABASE_USERNAME` and `DATABASE_PASSWORD`.
+It starts no web server and no runtime role.
+It exits with status 0 when the schema is current, and with a non-zero status when the migration fails.
+
+Under the `prod` profile, no role migrates at start.
+Each role waits until the database holds every change set of its release.
+The wait reads the migration history and writes nothing.
+A schema that is ahead of the role is correct: during a rollout, the previous release runs against the new schema.
+After `hephaestus.database.migration-wait` (default `10m`), the role stops.
+Its error names the first change set that has not run.
+
+Run the migration once for each release, before the new roles start:
+
+- **Compose.** The shipped stacks contain a one-shot `database-migration` service.
+  `docker compose up` runs it again when the image changes.
+  The server and the worker start only after it completes successfully.
+  The previous containers keep running during the migration.
+- **Kubernetes.** Run the migration as a Job for each release.
+  Do not use a `pre-install` hook: on the first install, the bundled PostgreSQL does not exist yet.
+  The roles wait for the Job.
+- **Other deployments.** Run the image once with the `migrate` profile, then start the new roles.
+
+### One migration at a time
+
+The run mode holds a PostgreSQL advisory lock for the whole migration.
+A second migration waits until the first ends.
+PostgreSQL releases this lock when the process stops, also when the process is killed.
+Thus, a killed migration cannot block the next one.
+The next run releases the Liquibase lock that the killed run left.
+It logs `database.migration.lock_released` with the holder and the time of that lock.
+
+### Rollouts and rollback
+
+Between the migration and the end of the rollout, both releases use the new schema.
+The [expand/contract rule](/contributor/database-migration#changelog-immutability-policy) keeps this safe.
+A release that cannot follow the rule says so in its migration guide entry.
+For that release, stop every role, run the migration, then start the new release.
+
+The schema is never rolled back.
+Roll forward to a release that fixes the problem.
+[Upgrade § If migration fails](./upgrade#if-migration-fails) restores the backup from before the upgrade, and [§ Rollback](./upgrade#rollback) explains why images alone cannot undo a schema change.
+
 ## Configuration cheatsheet
 
 Each cell shows the value a pod uses when the operator sets **no** environment variable for it.

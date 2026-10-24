@@ -66,36 +66,7 @@ public final class ConfigurationReadinessEvaluator {
                 serverRole.valid() && workerRole.valid() && webhookRole.valid() && (server || worker || webhook),
                 "At least one runtime role must be enabled.",
                 "runtime-roles");
-        add(
-                facts,
-                "database.url",
-                "spring.datasource.url",
-                allRoles(),
-                ConfigurationRequirement.REQUIRED,
-                true,
-                this::validJdbcPostgres,
-                "A PostgreSQL JDBC URL is required.",
-                "database");
-        add(
-                facts,
-                "database.username",
-                "spring.datasource.username",
-                allRoles(),
-                ConfigurationRequirement.REQUIRED,
-                true,
-                ConfigurationReadinessEvaluator::notBlank,
-                "A database username is required.",
-                "database");
-        add(
-                facts,
-                "database.password",
-                "spring.datasource.password",
-                allRoles(),
-                ConfigurationRequirement.REQUIRED,
-                true,
-                ConfigurationReadinessEvaluator::notBlank,
-                "A database password is required.",
-                "database");
+        addDatabaseFacts(facts);
         add(
                 facts,
                 "security.credential-encryption",
@@ -238,6 +209,46 @@ public final class ConfigurationReadinessEvaluator {
 
         verifyCatalogue(facts);
         return List.copyOf(facts);
+    }
+
+    /** The database migration run mode reads the database settings and nothing else. */
+    public List<ConfigurationFactDTO> evaluateMigration() {
+        List<ConfigurationFactDTO> facts = new ArrayList<>();
+        addDatabaseFacts(facts);
+        return List.copyOf(facts);
+    }
+
+    private void addDatabaseFacts(List<ConfigurationFactDTO> facts) {
+        add(
+                facts,
+                "database.url",
+                "spring.datasource.url",
+                allRoles(),
+                ConfigurationRequirement.REQUIRED,
+                true,
+                this::validJdbcPostgres,
+                "A PostgreSQL JDBC URL is required.",
+                "database");
+        add(
+                facts,
+                "database.username",
+                "spring.datasource.username",
+                allRoles(),
+                ConfigurationRequirement.REQUIRED,
+                true,
+                ConfigurationReadinessEvaluator::notBlank,
+                "A database username is required.",
+                "database");
+        add(
+                facts,
+                "database.password",
+                "spring.datasource.password",
+                allRoles(),
+                ConfigurationRequirement.REQUIRED,
+                true,
+                ConfigurationReadinessEvaluator::notBlank,
+                "A database password is required.",
+                "database");
     }
 
     public List<ConfigurationFactDTO> evaluateReadiness(boolean hasSignInProvider) {

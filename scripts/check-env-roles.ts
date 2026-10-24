@@ -218,7 +218,7 @@ const REQUIRED_SETTINGS: readonly RequiredSetting[] = [
 /** `application-<profile>.yml` turns roles off too, so a service's profiles decide as much as its env. */
 const PROFILE_YML = (profile: string): string =>
 	`server/application/src/main/resources/application-${profile}.yml`;
-const PROFILES = ["prod", "worker", "webhook", "local", "e2e"];
+const PROFILES = ["prod", "worker", "webhook", "migrate", "local", "e2e"];
 
 /**
  * Profile name to the roles that profile's overlay switches off. The names are whatever the overlays

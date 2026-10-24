@@ -17,7 +17,7 @@ In-place downgrades are unsupported.
 ## Validate the actual production data
 
 Use a restricted staging copy of production with the backup's access and retention rules.
-Starting the target release's application server with the production profile runs Spring Boot's Liquibase update against staging.
+Running the target release's [migrate run mode](./runtime-roles#database-migrations) with the production profile runs the Liquibase update against staging.
 The update must use that exact release's changelog, contexts, PostgreSQL image/extensions, secrets, and role configuration.
 
 1. Apply [pre-boot isolation](./production-operations-runbook#pre-boot-isolation--mandatory-for-every-restore) **before** restoring secrets or starting application code.
