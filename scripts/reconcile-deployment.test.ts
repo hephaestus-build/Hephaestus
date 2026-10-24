@@ -161,6 +161,22 @@ await test("a frozen channel moves the host to what it names, and freezing what 
 		),
 		{ action: "apply", release: "v0.75.2" },
 	);
+	// A freeze bypasses neither the channel's ancestry nor a commit that runs behind what is applied.
+	assert.equal(
+		decide({ release: "v0.75.2", freeze: true }, current, "c".repeat(40), newRequest, false).action,
+		"refuse",
+	);
+	assert.equal(
+		decide(
+			{ release: "a".repeat(40), freeze: true },
+			current,
+			"c".repeat(40),
+			newRequest,
+			true,
+			true,
+		).action,
+		"refuse",
+	);
 	// A freeze is no rollback permission.
 	assert.equal(
 		decide({ release: "v0.75.1", freeze: true }, current, "c".repeat(40), newRequest, true).action,
