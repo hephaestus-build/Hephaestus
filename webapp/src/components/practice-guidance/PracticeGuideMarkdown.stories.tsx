@@ -44,8 +44,17 @@ async function expectFigureAtTextSize(canvas: StoryCanvas) {
 
 /** The bundled guide, with its figure drawn where the Markdown names it. */
 export const Default: Story = {
-	play: async ({ canvas }) => {
+	play: async ({ canvas, canvasElement }) => {
 		await expectFigureAtTextSize(canvas);
+		// The list markers take the muted foreground of the bullets in the profile's tables.
+		const item = canvasElement.querySelector("li");
+		const probe = document.createElement("span");
+		probe.className = "text-muted-foreground";
+		canvasElement.append(probe);
+		await expect(item === null ? "" : getComputedStyle(item, "::marker").color).toBe(
+			getComputedStyle(probe).color,
+		);
+		probe.remove();
 	},
 };
 
@@ -58,5 +67,22 @@ export const MobileReflow: Story = {
 		await expectFigureAtTextSize(canvas);
 		const root = canvasElement.firstElementChild ?? canvasElement;
 		await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+	},
+};
+
+/** A link to a source outside the app says that it leaves: the accent, an underline and the icon. */
+export const ExternalSourceLink: Story = {
+	args: {
+		guide: {
+			...bundledGuidance.guide,
+			markdown: `${bundledGuidance.guide.markdown}\n\nRead more in [the Git book](https://git-scm.com/book).`,
+		},
+	},
+	play: async ({ canvas }) => {
+		const link = canvas.getByRole("link", { name: /the Git book/u });
+		await expect(link).toHaveAttribute("target", "_blank");
+		await expect(link).toHaveAccessibleName(/opens in a new tab/u);
+		await expect(link.querySelector("svg")).not.toBeNull();
+		await expect(getComputedStyle(link).textDecorationLine).toContain("underline");
 	},
 };

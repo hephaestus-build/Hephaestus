@@ -35,9 +35,15 @@ export function PracticeGuideMarkdown({ guide, headingLevel = 4 }: PracticeGuide
 	return (
 		// A figure takes the paragraphs' `my-2`: a practice SVG draws to its canvas edges and has no margin.
 		<div
-			className={cn(UNTRUSTED_MARKDOWN_PROSE, "max-w-2xl text-sm text-pretty prose-figure:my-2")}
+			// List markers in the muted foreground, as the bullets under a practice in the profile's
+			// tables are; the prose default is too light to find a line by.
+			className={cn(
+				UNTRUSTED_MARKDOWN_PROSE,
+				"max-w-2xl text-sm text-pretty prose-figure:my-2 [&_li::marker]:text-muted-foreground",
+			)}
 		>
-			<UntrustedMarkdown renderImage={renderFigure} headingLevel={headingLevel}>
+			{/* A guide's links lead to sources outside the app, and say so. */}
+			<UntrustedMarkdown renderImage={renderFigure} headingLevel={headingLevel} markExternalLinks>
 				{guide.markdown}
 			</UntrustedMarkdown>
 		</div>

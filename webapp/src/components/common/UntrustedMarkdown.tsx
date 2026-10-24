@@ -11,6 +11,8 @@ import {
 } from "react";
 import { Streamdown } from "streamdown";
 
+import { cn } from "cn";
+import { InlineLink } from "@/components/common/InlineLink";
 import { MarkdownCode } from "@/components/common/MarkdownCode";
 
 const HTTP_URL = /^https?:\/\//iu;
@@ -20,10 +22,23 @@ const plainText = (value: string): ReactNode => value;
 /** Carries {@link UntrustedMarkdownProps.renderText} to the text runs; the default is the words. */
 const RenderTextContext = createContext(plainText);
 
+/** Carries {@link UntrustedMarkdownProps.markExternalLinks} to the links. */
+const MarkExternalLinksContext = createContext(false);
+
 /** A link the model wrote is only a link when it is one: anything else renders as its own text. */
 function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnchorElement>) {
+	const marked = useContext(MarkExternalLinksContext);
 	if (typeof href !== "string" || !HTTP_URL.test(href)) {
 		return <span className={className}>{children}</span>;
+	}
+	if (marked) {
+		// The app's own outbound link: the accent and an underline at rest, the outbound icon after
+		// the words and "(opens in a new tab)" for a screen reader, so the reader sees they leave.
+		return (
+			<InlineLink href={href} external className={cn(className, "text-mentor underline")}>
+				<RenderTextContext.Provider value={plainText}>{children}</RenderTextContext.Provider>
+			</InlineLink>
+		);
 	}
 	return (
 		<a href={href} className={className} rel="noopener noreferrer" target="_blank">
@@ -182,6 +197,11 @@ export interface UntrustedMarkdownProps {
 	streaming?: boolean;
 	/** The level of every heading in the body: one below the heading of the section it sits under. */
 	headingLevel?: 3 | 4 | 5;
+	/**
+	 * Draws every link as the app's outbound link, in the accent, underlined and with its icon, for a
+	 * text whose links lead to sources outside the app, such as a practice guide.
+	 */
+	markExternalLinks?: boolean;
 }
 
 /**
@@ -199,25 +219,28 @@ export function UntrustedMarkdown({
 	renderImage,
 	streaming = false,
 	headingLevel = 4,
+	markExternalLinks = false,
 }: UntrustedMarkdownProps) {
 	return (
-		<HeadingLevelContext.Provider value={headingLevel}>
-			<RenderTextContext.Provider value={renderText ?? plainText}>
-				<RenderImageContext.Provider value={renderImage ?? noImage}>
-					<Streamdown
-						mode={streaming ? "streaming" : "static"}
-						isAnimating={streaming}
-						// Marks each new word while the text streams; the caller decides whether and how it fades.
-						animated={streaming ? NEW_WORDS : false}
-						rehypePlugins={[]}
-						remarkRehypeOptions={{ allowDangerousHtml: false }}
-						components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
-						translations={TRANSLATIONS}
-					>
-						{children}
-					</Streamdown>
-				</RenderImageContext.Provider>
-			</RenderTextContext.Provider>
-		</HeadingLevelContext.Provider>
+		<MarkExternalLinksContext.Provider value={markExternalLinks}>
+			<HeadingLevelContext.Provider value={headingLevel}>
+				<RenderTextContext.Provider value={renderText ?? plainText}>
+					<RenderImageContext.Provider value={renderImage ?? noImage}>
+						<Streamdown
+							mode={streaming ? "streaming" : "static"}
+							isAnimating={streaming}
+							// Marks each new word while the text streams; the caller decides whether and how it fades.
+							animated={streaming ? NEW_WORDS : false}
+							rehypePlugins={[]}
+							remarkRehypeOptions={{ allowDangerousHtml: false }}
+							components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
+							translations={TRANSLATIONS}
+						>
+							{children}
+						</Streamdown>
+					</RenderImageContext.Provider>
+				</RenderTextContext.Provider>
+			</HeadingLevelContext.Provider>
+		</MarkExternalLinksContext.Provider>
 	);
 }
