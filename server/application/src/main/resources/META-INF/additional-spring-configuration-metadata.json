@@ -98,7 +98,7 @@
     {
       "name": "hephaestus.integration.slack.redirect-uri",
       "type": "java.lang.String",
-      "description": "Redirect URI registered on the Slack app; must match the SlackConnectionStrategy authorize URL"
+      "description": "Redirect URI registered on the Slack app. It must match the authorization URL that Hephaestus builds for the Slack connection."
     },
     {
       "name": "hephaestus.integration.slack.api-base",
@@ -118,7 +118,7 @@
     {
       "name": "hephaestus.agent.image.require-digest",
       "type": "java.lang.Boolean",
-      "description": "When true, AgentImagePinGuard fails startup unless 'reference' is digest-pinned."
+      "description": "Refuses startup unless the agent image reference is pinned by digest."
     },
     {
       "name": "hephaestus.runtime.server.enabled",
@@ -180,13 +180,13 @@
     {
       "name": "hephaestus.workspace.default.login",
       "type": "java.lang.String",
-      "description": "GitHub organization or user login that the startup PAT workspace syncs. Required when init-default is true.",
+      "description": "GitHub organization or user login that the startup PAT workspace syncs. Required when hephaestus.workspace.init-default turns on the startup workspace.",
       "sourceType": "de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties$DefaultProperties"
     },
     {
       "name": "hephaestus.workspace.default.token",
       "type": "java.lang.String",
-      "description": "GitHub personal access token for the startup PAT workspace. Required when init-default is true.",
+      "description": "GitHub personal access token for the startup PAT workspace. Required when hephaestus.workspace.init-default turns on the startup workspace.",
       "sourceType": "de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties$DefaultProperties"
     },
     {
@@ -320,6 +320,17 @@
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
       "description": "Origin of the Outline instance for account linking, such as https://wiki.example.com. Required when the client ID is set. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+    },
+    {
+      "name": "hephaestus.features.flags.gitlab-workspace-creation",
+      "type": "java.lang.Boolean",
+      "sourceType": "de.tum.cit.aet.hephaestus.feature.FeatureProperties",
+      "description": "Lets admins create GitLab workspaces in the UI and the API."
+    },
+    {
+      "name": "spring.application.version",
+      "type": "java.lang.String",
+      "description": "Version that the application reports in its logs, traces and release card. Compose sets it from the release."
     }
   ],
   "hints": [

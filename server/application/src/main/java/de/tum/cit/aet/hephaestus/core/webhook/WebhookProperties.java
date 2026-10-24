@@ -158,17 +158,15 @@ public record WebhookProperties(
      *     JetStream deletes the oldest messages to admit new ones. Must be at least 4 times http.max-payload-bytes.
      * @param maxBytesByStream Storage bounds keyed by stream name that override max-bytes for that stream. The github
      *     stream carries most of the traffic. Each entry must be at least 4 times http.max-payload-bytes.
-     * @param storageBudget what the broker may hold for all webhook streams together, which must stay at or below
-     *     the free space on its volume. Keeping the per-stream bounds inside it is what keeps a full stream a stream
-     *     that refuses messages rather than a broker that cannot write at all.
-     * @param allowDestructiveLimitUpdates lets startup apply a limit change that would delete messages the stream
-     *     already holds. Off by default: bounding a stream that has outgrown the new limit deletes the excess
-     *     immediately, so it is a decision an operator makes rather than one a deploy makes for them.
-     * @param limitUpdateTimeout how long startup waits for one stream limit update. Bounding a stream that has
-     *     outgrown the new limit deletes the excess before the broker answers, so the work is proportional to the
-     *     bytes being shed rather than to the size of the request — tens of GB take far longer than the request
-     *     timeout the health probes want. This is deliberately separate from the consumer request timeout so a
-     *     slow admin call cannot slow a readiness answer.
+     * @param storageBudget What the broker may hold for all webhook streams together. Keep it at or below the free
+     *                      space on the broker volume. The per-stream bounds must stay inside it, so a full stream
+     *                      refuses messages instead of stopping the broker.
+     * @param allowDestructiveLimitUpdates Lets startup apply a limit change that deletes messages that the stream
+     *                                     already holds. A smaller bound deletes the excess at once, so the operator
+     *                                     must turn this on deliberately.
+     * @param limitUpdateTimeout How long startup waits for one stream limit update. A smaller bound deletes the
+     *                           excess before the broker answers, so a large stream can take long. It is separate
+     *                           from the consumer request timeout, so a slow update does not delay readiness.
      * @param monitorInterval how often the stream monitor reads stream and consumer state
      * @see <a href="https://docs.hephaestus.build/admin/webhook-ingestion-operations">Webhook
      *     ingestion operations</a>

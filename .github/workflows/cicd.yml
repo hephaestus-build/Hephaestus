@@ -309,7 +309,6 @@ jobs:
               - 'docker/compose.proxy.yaml'
               - 'docker/self-host/compose*.yaml'
               - 'docker/self-host/.env.example'
-              - 'docker/.env.example'
               - 'docker/observability/compose.journald.yaml'
               - 'docs/admin/configuration-reference.mdx'
               - 'scripts/generate-configuration-reference.ts'

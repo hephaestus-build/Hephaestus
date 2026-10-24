@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { judge } from "./check-configuration-reference.ts";
 import {
+	descriptionProblems,
 	displayDefault,
 	join,
 	Metadata,
@@ -210,4 +211,30 @@ await test("a pipe or a brace in a description cannot break the table or the MDX
 	assert.match(page, /\\\|\\\| Host/u);
 	assert.match(page, /\\\{braces\\\}/u);
 	assert.equal(readPage(page)[0]?.variable, "APP_HOST_MATCH");
+});
+
+await test("a description that states a default or names Java code is rejected", () => {
+	assert.deepEqual(descriptionProblems("Timeout for GraphQL operations."), []);
+	assert.deepEqual(descriptionProblems("Runs on gVisor and pgBackRest."), []);
+	assert.deepEqual(descriptionProblems("Timeout (default: 30 seconds)."), ["states a default"]);
+	assert.deepEqual(descriptionProblems("Paired with `clientId`."), [
+		"names a Java identifier: clientId",
+	]);
+	assert.deepEqual(descriptionProblems("Checked by AgentImagePinGuard."), [
+		"names a Java type: AgentImagePinGuard",
+	]);
+	assert.deepEqual(descriptionProblems("See core.auth.clientsession.InstalledClientRegistry."), [
+		"names a Java type: core.auth.clientsession.InstalledClientRegistry",
+	]);
+});
+
+await test("a field that a later file replaces with `!override` drops what earlier files fed into it", () => {
+	const compose = readCompose([
+		[
+			"compose.core.yaml",
+			`services:\n  nats:\n    ports:\n      - "\${NATS_BIND_HOST:-127.0.0.1}:4222:4222"\n`,
+		],
+		["compose.single-host.yaml", "services:\n  nats:\n    ports: !override []\n"],
+	]);
+	assert.deepEqual(compose.uses, []);
 });

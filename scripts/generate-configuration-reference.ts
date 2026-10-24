@@ -19,9 +19,10 @@ import {
 } from "./lib/configuration-reference.ts";
 import { isRecord, parseJson } from "./lib/json.ts";
 
+// The manual file first: the processor copies it into the generated one, so it is the source.
 const METADATA_FILES = [
-	"META-INF/spring-configuration-metadata.json",
 	"META-INF/additional-spring-configuration-metadata.json",
+	"META-INF/spring-configuration-metadata.json",
 ];
 
 function metadataProperties(json: Uint8Array): MetadataProperty[] {

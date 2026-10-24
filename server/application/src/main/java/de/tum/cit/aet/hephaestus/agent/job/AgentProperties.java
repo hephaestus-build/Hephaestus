@@ -18,13 +18,13 @@ import org.springframework.validation.annotation.Validated;
  *                          worker role runs them, so set it on both.
  * @param pollInterval      how long the poll loop sleeps when a poll claimed nothing
  * @param claimBatchSize    max QUEUED jobs considered per poll iteration
- * @param maxRetries        orphan-requeue attempts before a job whose owning worker was lost is failed
- *                          instead; the authoritative counter is {@code review_job.attempt}
+ * @param maxRetries        How many times a job whose worker was lost goes back to the queue before it fails. The
+ *                          counter is the attempt number of the job.
  * @param heartbeatInterval interval between {@code worker_registry} liveness heartbeats
  * @param payloadRetention  age from {@code completed_at} at which a TERMINAL job's {@code capture}
  *                          and {@code output} are stripped to NULL
- * @param rowRetention      age from {@code completed_at} at which an unreferenced TERMINAL job row is
- *                          deleted; must be {@code >= payloadRetention}
+ * @param rowRetention      Age, counted from the end of a job, at which an ended job row that waits for no delivery
+ *                          is deleted. Must be at least the payload retention.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.agent")

@@ -36,7 +36,10 @@ export const APPLICATION_FILES = [
 /** Documents of these profiles run only on a developer's machine. */
 const DEVELOPER_PROFILES = new Set(["local", "e2e", "playwright", "test"]);
 
-/** The supported self-hosted stack and the reference deployment, with their optional overlays. */
+/**
+ * The supported self-hosted stack: `docker/self-host/compose.yaml` includes the first four files, and
+ * the backup, restore and journald files are its optional overlays.
+ */
 export const COMPOSE_FILES = [
 	"docker/compose.proxy.yaml",
 	"docker/compose.core.yaml",
@@ -46,8 +49,8 @@ export const COMPOSE_FILES = [
 	"docker/self-host/compose.restore.yaml",
 	"docker/observability/compose.journald.yaml",
 ];
-/** First wins: the self-hosted template describes a key for the supported path. */
-export const ENV_EXAMPLES = ["docker/self-host/.env.example", "docker/.env.example"];
+/** The template of the supported stack. The reference deployment's `docker/.env.example` is not documented. */
+export const ENV_EXAMPLES = ["docker/self-host/.env.example"];
 
 /** The prefix of a container variable in a Compose use's field. */
 const ENVIRONMENT = "environment.";
@@ -164,12 +167,26 @@ export function displayDefault(fallback: string, syntax: "spring" | "compose"): 
 	return shown;
 }
 
-// Compose's merge tags. Compose applies them; for this reader the tagged value is the value.
-const COMPOSE_TAGS: Tags = ["!override", "!reset"].flatMap((tag) => [
-	{ tag, collection: "map" as const, resolve: (value: unknown) => value },
-	{ tag, collection: "seq" as const, resolve: (value: unknown) => value },
-	{ tag, resolve: (value: string) => value },
-]);
+/** A field that a later file replaces (`!override`) or removes (`!reset`) instead of merging into it. */
+interface Replaced {
+	readonly replaced: true;
+	readonly value: unknown;
+}
+
+const isReplaced = (value: unknown): value is Replaced =>
+	isRecord(value) && value.replaced === true;
+
+const COMPOSE_TAGS: Tags = ["!override", "!reset"].flatMap((tag) => {
+	const resolve = (value: unknown): Replaced => ({
+		replaced: true,
+		value: tag === "!reset" ? undefined : value,
+	});
+	return [
+		{ tag, collection: "map" as const, resolve },
+		{ tag, collection: "seq" as const, resolve },
+		{ tag, resolve },
+	];
+});
 
 function yamlDocuments(text: string, file: string, customTags?: Tags): unknown[] {
 	return parseAllDocuments(text, { merge: true, customTags }).map((document) => {
@@ -311,6 +328,29 @@ function interpolations(file: string, service: string, definition: unknown): Com
 	);
 }
 
+/** A replaced field drops what earlier files contributed to it, as Compose does. */
+function dropReplaced(
+	uses: ComposeUse[],
+	services: ReadonlyMap<string, ComposeService>,
+	service: string,
+	declared: Record<string, unknown>,
+): void {
+	for (const [field, value] of Object.entries(declared)) {
+		if (!isReplaced(value)) {
+			continue;
+		}
+		const fed = (use: ComposeUse) =>
+			use.service === service &&
+			(use.field === field ||
+				use.field.startsWith(`${field}.`) ||
+				use.field.startsWith(`${field}[`));
+		uses.splice(0, uses.length, ...uses.filter((use) => !fed(use)));
+		if (field === "environment") {
+			services.get(service)?.environment.clear();
+		}
+	}
+}
+
 /** Services, their container environment, and every interpolation, with Compose's own merges resolved. */
 export function readCompose(
 	files: readonly (readonly [file: string, text: string])[],
@@ -327,10 +367,17 @@ export function readCompose(
 			for (const [name, definition] of Object.entries(configs)) {
 				uses.push(...interpolations(file, `configs.${name}`, definition));
 			}
-			for (const [name, definition] of Object.entries(document.services)) {
-				if (!isRecord(definition)) {
+			for (const [name, declared] of Object.entries(document.services)) {
+				if (!isRecord(declared)) {
 					continue;
 				}
+				dropReplaced(uses, services, name, declared);
+				const definition = Object.fromEntries(
+					Object.entries(declared).map(([field, value]) => [
+						field,
+						isReplaced(value) ? value.value : value,
+					]),
+				);
 				const known = services.get(name);
 				const image = typeof definition.image === "string" ? definition.image : "";
 				const environment = environmentEntries(definition.environment);
@@ -448,6 +495,15 @@ export class Metadata {
 		return undefined;
 	}
 
+	/** The canonical name of a YAML key path when the metadata has it, so `privateKey` reads `private-key`. */
+	name(keyPath: string): string {
+		const indexed = /(?<entry>\[[^\]]*\])$/u.exec(keyPath)?.groups?.entry ?? "";
+		const known = this.#byCanonical.get(
+			canonical(keyPath.slice(0, keyPath.length - indexed.length)),
+		);
+		return known ? `${known.name}${indexed}` : keyPath;
+	}
+
 	/** The property a container variable binds through relaxed binding, when exactly one matches. */
 	relaxedProperty(variable: string): MetadataProperty | undefined {
 		const matches = this.#byRelaxed.get(relaxed(variable)) ?? [];
@@ -539,7 +595,7 @@ function describe(context: JoinContext, properties: readonly string[]): string {
 function containerProperties(context: JoinContext, variable: string): string[] {
 	const viaPlaceholder = context.bindings.get(variable);
 	if (viaPlaceholder) {
-		return unique(viaPlaceholder.map((binding) => binding.property));
+		return unique(viaPlaceholder.map((binding) => context.metadata.name(binding.property)));
 	}
 	const viaRelaxed = context.metadata.relaxedProperty(variable);
 	return viaRelaxed ? [viaRelaxed.name] : [];
@@ -636,7 +692,7 @@ function unforwardedRow(
 	variable: string,
 	bindings: readonly SpringBinding[],
 ): Row {
-	const properties = unique(bindings.map((binding) => binding.property));
+	const properties = unique(bindings.map((binding) => context.metadata.name(binding.property)));
 	const composeValues = unique(
 		[...context.sources.compose.services.values()].flatMap((service) => {
 			const template = service.java ? service.environment.get(variable) : undefined;
@@ -754,11 +810,11 @@ const SECTIONS: Record<RowKind, { title: string; intro: string; columns: string[
 		columns: ["Variable", "Feeds", "Default", "Required", "Services", "Description"],
 	},
 	unforwarded: {
-		title: "Application settings that Compose does not read from `.env`",
+		title: "Application settings that the supported stack fixes",
 		intro:
-			"The application reads these variables, but a value in `.env` has no effect. " +
+			"The application reads these variables, but the supported stack does not take them from `.env`. " +
 			"Compose sets some of them to a fixed value or from other variables, as the Default column shows. " +
-			"To change one, add it to the `environment:` block of each service that needs it in a Compose override.",
+			"The others keep the application default. In the supported stack, these values are fixed.",
 		columns: ["Variable", "Setting", "Default", "Required", "Description"],
 	},
 };
@@ -780,8 +836,8 @@ export function renderPage(rows: readonly Row[]): string {
 		"description: Every variable an operator can set, with its setting, default, required flag, and description.",
 		"---",
 		"",
-		"This page lists every variable that an operator can set for the self-hosted Compose stack and the reference deployment.",
-		"It is generated from the application's configuration files, its configuration metadata, the Compose files, and `.env.example`.",
+		"This page lists every variable of the supported self-hosted Compose stack in `docker/self-host`.",
+		"It is generated from the application's configuration files, its configuration metadata, the Compose files of that stack, and its `.env.example`.",
 		"",
 		"A **Required** variable stops Compose or the application when it is unset.",
 		"[Configuration readiness](./configuration-readiness) reports the settings that a running instance still needs.",
@@ -812,6 +868,34 @@ export function renderPage(rows: readonly Row[]): string {
 		lines.push("");
 	}
 	return `${lines.join("\n").trimEnd()}\n`;
+}
+
+/** Product names that are written in camel case on purpose. */
+const CAMEL_CASE_NAMES = new Set(["gVisor", "pgBackRest", "iOS", "macOS"]);
+
+/**
+ * What an operator description must not contain. A default belongs in the Default column, where the
+ * YAML placeholder sets it. A Java identifier or class name is a leak of the implementation.
+ */
+export function descriptionProblems(description: string): string[] {
+	const problems: string[] = [];
+	if (/\(default\b|\bdefaults? (?:to|is)\b|\bdefault:/iu.test(description)) {
+		problems.push("states a default");
+	}
+	const camel = (description.match(/\b[a-z]+(?:[A-Z][a-z0-9]*)+\b/gu) ?? []).filter(
+		(word) => !CAMEL_CASE_NAMES.has(word),
+	);
+	if (camel.length > 0) {
+		problems.push(`names a Java identifier: ${unique(camel).join(", ")}`);
+	}
+	const types =
+		description.match(
+			/\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+){2,}\b|\b[a-z]+(?:\.[a-z]+)+\.[A-Z]\w*/gu,
+		) ?? [];
+	if (types.length > 0) {
+		problems.push(`names a Java type: ${unique(types).join(", ")}`);
+	}
+	return problems;
 }
 
 export interface PageRow {

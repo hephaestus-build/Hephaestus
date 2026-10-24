@@ -10,11 +10,13 @@ import org.springframework.validation.annotation.Validated;
  * of the rendered lock env, so one that is present but malformed is a broken deployment and refuses
  * startup rather than being reported as an observation.
  *
- * @param commit       the source commit the lock names; empty outside a lock-driven deployment
- * @param image        the digest reference this container was started from; empty likewise
+ * @param commit       The source commit that the release lock names. It is empty outside a deployment from a release
+ *                     lock.
+ * @param image        The digest reference of the image that this container started from. It is empty outside a
+ *                     deployment from a release lock.
  * @param checkEnabled whether the server role may ask GitHub for the newest published release
- * @param environment  the name the deployment gives this instance, such as {@code production}; the
- *                     webapp, log lines and traces use the same name
+ * @param environment  The name of this deployment, such as {@code production}. The webapp, log lines and traces use
+ *                     the same name.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.release")

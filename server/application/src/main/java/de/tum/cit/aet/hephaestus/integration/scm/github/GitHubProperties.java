@@ -66,12 +66,13 @@ public record GitHubProperties(@Valid App app, @Valid Meta meta) {
      * <p>If both are provided, {@code privateKeyLocation} takes precedence.
      *
      * @param id                 the GitHub App ID (0 means disabled, must be non-negative)
-     * @param privateKeyLocation resource location of the private key file
-     * @param privateKey         PEM-encoded private key as inline string
+     * @param privateKey         PEM-encoded private key of the GitHub App, as an inline value.
+     * @param privateKeyLocation Resource location of the private key file of the GitHub App. It takes precedence over
+     *                           the inline key.
      * @param installationUrl    URL where users install the GitHub App (e.g. https://github.com/apps/my-app/installations/new)
      * @param clientId           the App's client ID, which exchanges the code GitHub returns when an installation
      *                           requests user authorization
-     * @param clientSecret       the App's client secret, paired with {@code clientId}
+     * @param clientSecret       The client secret of the GitHub App. Set it together with the client ID.
      */
     public record App(
             @Min(value = 0, message = "GitHub App ID must be non-negative (0 means disabled)") @DefaultValue("0")

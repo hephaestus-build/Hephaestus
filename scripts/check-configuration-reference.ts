@@ -11,6 +11,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+	descriptionProblems,
 	readPage,
 	readSources,
 	REFERENCE_PAGE,
@@ -22,6 +23,8 @@ export interface Verdict {
 	readonly missing: string[];
 	readonly stale: string[];
 	readonly undescribed: string[];
+	/** `VARIABLE: problem` for each description that breaks a rule of descriptionProblems. */
+	readonly flawed: string[];
 }
 
 export function judge(required: ReadonlySet<string>, pageText: string): Verdict {
@@ -31,6 +34,9 @@ export function judge(required: ReadonlySet<string>, pageText: string): Verdict 
 		missing: [...required].filter((variable) => !onPage.has(variable)).toSorted(),
 		stale: [...onPage].filter((variable) => !required.has(variable)).toSorted(),
 		undescribed: rows.filter((row) => row.description === "").map((row) => row.variable),
+		flawed: rows.flatMap((row) =>
+			descriptionProblems(row.description).map((problem) => `${row.variable}: ${problem}`),
+		),
 	};
 }
 
@@ -44,7 +50,10 @@ function report(title: string, variables: readonly string[], fix: string): void 
 
 if (import.meta.main) {
 	const page = await readFile(path.join(REPO_ROOT, REFERENCE_PAGE), "utf8");
-	const { missing, stale, undescribed } = judge(requiredVariables(await readSources()), page);
+	const { missing, stale, undescribed, flawed } = judge(
+		requiredVariables(await readSources()),
+		page,
+	);
 	report(
 		`${REFERENCE_PAGE} has no row for these variables`,
 		missing,
@@ -62,7 +71,13 @@ if (import.meta.main) {
 			"additional-spring-configuration-metadata.json for a key without one, or the comment above the key in .env.example. " +
 			"Then run `vp run generate:configuration-reference`.",
 	);
-	if (missing.length + stale.length + undescribed.length > 0) {
+	report(
+		`${REFERENCE_PAGE} has descriptions that an operator cannot use`,
+		flawed,
+		"Rewrite the description at its source without a default, a Java identifier or a class name. " +
+			"Then run `vp run generate:configuration-reference`.",
+	);
+	if (missing.length + stale.length + undescribed.length + flawed.length > 0) {
 		process.exit(1);
 	}
 	console.log(

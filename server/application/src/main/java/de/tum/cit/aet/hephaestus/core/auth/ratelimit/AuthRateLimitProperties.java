@@ -66,8 +66,8 @@ public record AuthRateLimitProperties(
     /**
      * A single token-bucket limit: {@code capacity} requests per {@code period}.
      *
-     * @param capacity max requests permitted within one {@code period}; must be {@code >= 1}.
-     * @param period   refill window; must be positive.
+     * @param capacity Most requests that one key may send within one period. Must be at least 1.
+     * @param period   Refill window of the limit. Must be positive.
      */
     public record Limit(
             @DefaultValue("20") long capacity,

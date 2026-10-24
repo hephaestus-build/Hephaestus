@@ -29,14 +29,12 @@ import org.springframework.validation.annotation.Validated;
  *       token-validation-cache-duration: 5m
  * }</pre>
  *
- * @param defaultServerUrl              default GitLab server URL; used when workspace does not
- *                                      specify a custom server URL (default: https://gitlab.com)
- * @param graphqlTimeout                default timeout for GraphQL operations (default: 30 seconds)
- * @param extendedGraphqlTimeout        extended timeout for complex operations (default: 60 seconds)
- * @param paginationThrottle            delay between pagination requests to avoid exceeding
- *                                      GitLab's rate limits (default: 200 milliseconds)
- * @param tokenValidationCacheDuration  how long to cache token validation results before
- *                                      re-validating against {@code /api/v4/user} (default: 5 minutes)
+ * @param defaultServerUrl              The GitLab server URL for a workspace that names no server of its own.
+ * @param graphqlTimeout                Timeout for GraphQL operations.
+ * @param extendedGraphqlTimeout        Timeout for complex GraphQL operations.
+ * @param paginationThrottle            Delay between pagination requests, to stay below the rate limits of GitLab.
+ * @param tokenValidationCacheDuration  How long a token validation result is kept before Hephaestus checks the token
+ *                                      against {@code /api/v4/user} again.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.integration.gitlab")
