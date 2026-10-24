@@ -141,10 +141,19 @@ await test("a downgrade requires an explicit rollback on a new channel commit", 
 	);
 });
 
-await test("a frozen channel holds the host where it is, even against a newer release", () => {
+await test("a frozen channel moves the host to what it names, and freezing what runs restarts nothing", () => {
 	assert.deepEqual(
 		decide({ release: "v0.99.0", freeze: true }, current, "c".repeat(40), newRequest, true),
-		{ action: "noop", reason: "channel is frozen" },
+		{ action: "apply", release: "v0.99.0" },
+	);
+	assert.deepEqual(
+		decide({ release: "v0.75.2", freeze: true }, current, "c".repeat(40), newRequest, true),
+		{ action: "noop", reason: "already running v0.75.2" },
+	);
+	// A freeze is no rollback permission.
+	assert.equal(
+		decide({ release: "v0.75.1", freeze: true }, current, "c".repeat(40), newRequest, true).action,
+		"refuse",
 	);
 });
 
@@ -1544,15 +1553,16 @@ await test(
 			assert.doesNotMatch(calls, imageOrServiceChanges);
 			assert.deepEqual(await host.record(), reapplied);
 
-			// A hold is accepted without becoming the request that runs, in a record of either kind.
+			// Freezing what runs restarts nothing and becomes the request that runs.
 			await host.promote(built, { freeze: true });
-			assert.match(host.apply(), /No change: channel is frozen/u);
-			const held = await host.record();
-			assert.deepEqual(held, { ...reapplied, channelCommit: held?.channelCommit });
-			await writeFile(appliedFile, JSON.stringify({ ...held, channelIdentity: undefined }));
-			assert.match(host.apply(), /No change: channel is frozen/u);
-			const stillHeld = await host.record();
-			assert.equal(stillHeld?.channelIdentity, undefined);
+			calls = await callsDuring(() => {
+				assert.match(host.apply(), /No change: already running/u);
+			});
+			assert.doesNotMatch(calls, imageOrServiceChanges);
+			const frozen = await host.record();
+			assert.equal(frozen?.release, built);
+			assert.notEqual(frozen.channelIdentity, reapplied.channelIdentity);
+			assert.match(host.apply(), /No change: already running/u);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}

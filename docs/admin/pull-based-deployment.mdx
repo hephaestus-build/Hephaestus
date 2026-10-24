@@ -28,9 +28,9 @@ It restarts nothing.
 
 If its own request is not applied yet, for example after a failed apply, the host tries it again.
 Each promotion signs again, so a promotion of the target that already runs applies again.
+A frozen promotion of the target that already runs is the exception: it restarts nothing.
 
 `applied.json` records the last-applied request as `channelIdentity`.
-A hold never becomes the applied request.
 A record without `channelIdentity` was written by an earlier release.
 For such a record, only its accepted commit counts as the applied request.
 The first unchanged run records the identity.
@@ -44,9 +44,9 @@ If another environment was promoted first, the host applies its own request once
 
 | Field           | Effect                                                                                         |
 | --------------- | ---------------------------------------------------------------------------------------------- |
-| `release`       | the `vX.Y.Z` release to apply when not frozen                                                  |
+| `release`       | the `vX.Y.Z` release to apply                                                                  |
 | `allowRollback` | lets the host apply an older release or commit. It does not restore the database or any volume |
-| `freeze`        | holds the environment where it is, for an incident                                             |
+| `freeze`        | keeps a following environment on this target: automatic promotion leaves the channel alone     |
 
 Staging can follow successful builds of `main` instead of releases. Its channel names a full
 `commit` SHA instead of `release`, plus an `images` map of digest-pinned references and a
@@ -57,7 +57,11 @@ the channel. Upstream image pins come from that commit's inventory.
 Automatic promotions check the latest channel while holding the promotion lock. A frozen channel,
 an already-promoted commit, or an older completed build leaves the channel unchanged, including
 when switching from a release to a commit. An unreadable channel or failed history comparison stops
-promotion rather than clearing a hold. Establish the initial channel with a manual promotion before
+promotion rather than clearing a freeze.
+
+A host applies a frozen channel like any other: `freeze` matters only to automatic promotion.
+Thus, one promotion moves Staging to a release or commit and keeps it there.
+Only Staging follows `main`, so only Staging can be frozen. Establish the initial channel with a manual promotion before
 enabling continuous staging.
 
 An automatic promotion that would advance the channel checks the most recent successful CI/CD run of a push to `main` in the same repository.
@@ -241,8 +245,8 @@ Do not change the checkout underneath a tick.
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Move an environment                                    | Run the **Promote** workflow: pick the environment and release or commit                                                                                     |
 | Roll back                                              | Pause reconciliation, then follow [Rollback](./upgrade#rollback). After the database matches the older release, promote that release with **allow-rollback** |
-| Hold an environment                                    | Promote with **freeze**                                                                                                                                      |
-| Resume a held environment                              | Manually promote the desired release or commit with **freeze** cleared                                                                                       |
+| Keep Staging on a release or commit                    | Promote it with **freeze**                                                                                                                                   |
+| Let Staging follow `main` again                        | Promote a commit of `main` with **freeze** cleared. The next successful build moves it on                                                                    |
 | Reapply Compose configuration                          | Promote the release or commit the host already runs                                                                                                          |
 | Move a following host onto the commit's database image | Promote the commit with **refresh-database-image**                                                                                                           |
 | Prevent new reconciliation runs                        | Use the timer-disable command below                                                                                                                          |
@@ -430,25 +434,25 @@ Warn when it falls below twice `HEPHAESTUS_MIN_FREE_GIB`, before the reconciler 
 
 Alert when `time() - hephaestus_deploy_reconcile_timestamp_seconds` exceeds ten minutes, when
 `hephaestus_deploy_reconcile_success` is `0`, or when the host's reconciliation metrics are absent.
-`hephaestus_deploy_last_success_timestamp_seconds` records the last successful **apply**. Unchanged
-and frozen channels do not advance it, so its age is not a reconciliation-liveness check.
+`hephaestus_deploy_last_success_timestamp_seconds` records the last successful **apply**. An
+unchanged channel does not advance it, so its age is not a reconciliation-liveness check.
 Alert as well when `hephaestus_deploy_tooling_pending` stays `1`: the host runs tooling no apply has
 recorded yet, and a promotion of the release it runs ends that.
 
-A promotion without **freeze** waits for the public webapp to report the requested version. This
+A promotion waits for the public webapp to report the requested version. This
 checks the webapp version, not the readiness of every service. Use host metrics and logs for the
-Compose result. A promotion with **freeze** records the hold without waiting for a version change.
+Compose result.
 
-A promotion without **freeze** also records a GitHub deployment of the release or commit that it promotes.
+A promotion also records a GitHub deployment of the release or commit that it promotes.
 The record names who requested the promotion.
 Its final state tells whether the public webapp reported the version.
 Its time is when the promotion ran, not when a host applied it.
 
 Host metrics remain the record of what each host runs.
-A hold and a skipped automatic promotion record no deployment.
+A skipped automatic promotion records no deployment.
 [Release Management § Deployment history](/contributor/release-management#deployment-history) lists the recorded fields.
 
-The promotion job summary explicitly names this boundary, including when a version check fails or a hold skips it.
+The promotion job summary explicitly names this boundary, including when a version check fails.
 It does not fetch host metrics.
 The textfile collector and authenticated monitoring access belong to the host, not the public application.
 A matching frontend version does not establish server, worker, webhook, database, NATS, or integration readiness.

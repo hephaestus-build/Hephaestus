@@ -14,11 +14,8 @@ import { asRecord, readJsonFile } from "./lib/json.ts";
 import { parseChannel, RELEASE_TAG, type Channel } from "./reconcile-deployment.ts";
 import { promotionQualifiers } from "./resolve-promotion.ts";
 
-/** The deployment to record for a channel, or nothing for a hold, which moves no host. */
+/** The deployment to record for a channel. */
 export function deploymentRequest(channel: Channel, environment: string, requestedBy: string) {
-	if (channel.freeze === true) {
-		return;
-	}
 	const { release } = channel;
 	const isRelease = RELEASE_TAG.test(release);
 	return {
@@ -83,17 +80,15 @@ if (import.meta.main) {
 			requiredEnv(process.env, "ENVIRONMENT"),
 			requiredEnv(process.env, "REQUESTED_BY"),
 		);
-		if (request !== undefined) {
-			const { id } = asRecord(
-				await githubPost(`repos/${repository}/deployments`, request),
-				"deployment",
-			);
-			if (typeof id !== "number") {
-				throw new TypeError("GitHub returned a deployment without an id");
-			}
-			await appendFile(requiredEnv(process.env, "GITHUB_OUTPUT"), `id=${id}\n`);
-			await status(id, "in_progress", "Publishing the signed channel.");
+		const { id } = asRecord(
+			await githubPost(`repos/${repository}/deployments`, request),
+			"deployment",
+		);
+		if (typeof id !== "number") {
+			throw new TypeError("GitHub returned a deployment without an id");
 		}
+		await appendFile(requiredEnv(process.env, "GITHUB_OUTPUT"), `id=${id}\n`);
+		await status(id, "in_progress", "Publishing the signed channel.");
 	} else if (process.argv[2] === "finish") {
 		const { state, description } = deploymentOutcome(
 			requiredEnv(process.env, "PUBLISHED"),

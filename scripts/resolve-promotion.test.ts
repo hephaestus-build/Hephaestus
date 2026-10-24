@@ -5,7 +5,12 @@ import { promotionHeadline, resolvePromotion, type PromotionSources } from "./re
 
 const commit = "a".repeat(40);
 const images = { HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/o/webapp@sha256:${"1".repeat(64)}` };
-const request = { allowRollback: false, freeze: false, refreshDatabaseImage: false };
+const request = {
+	environment: "Staging",
+	allowRollback: false,
+	freeze: false,
+	refreshDatabaseImage: false,
+};
 const never = (what: string) => async (): Promise<never> => {
 	throw new Error(`${what} must not be consulted`);
 };
@@ -22,6 +27,16 @@ await test("a published release is promoted by tag and reported by version", asy
 			{ ...sources, isDraft: async () => false },
 		),
 		{ channel: { release: "v1.2.3", allowRollback: false, freeze: true }, version: "1.2.3" },
+	);
+});
+
+await test("only Staging, which automatic promotion follows, can be frozen", async () => {
+	await assert.rejects(
+		resolvePromotion(
+			{ ...request, environment: "Production", release: "v1.2.3", freeze: true },
+			{ ...sources, isDraft: async () => false },
+		),
+		/Production moves only by manual promotion/u,
 	);
 });
 
@@ -131,16 +146,15 @@ await test("only a commit channel can be asked to take the database image it nam
 	);
 });
 
-await test("the deploy-state headline names a hold, a rollback and a database refresh", () => {
+await test("the deploy-state headline names a freeze, a rollback and a database refresh", () => {
 	const file = "channels/staging.json";
 	assert.equal(
 		promotionHeadline(file, { release: "v1.2.3", allowRollback: false, freeze: false }),
 		"chore(deploy): channels/staging.json -> v1.2.3",
 	);
-	// A hold ignores the release it names, so the headline does not claim a move to it.
 	assert.equal(
 		promotionHeadline(file, { release: "v1.2.3", allowRollback: true, freeze: true }),
-		"chore(deploy): freeze channels/staging.json",
+		"chore(deploy): channels/staging.json -> v1.2.3 (frozen, rollback allowed)",
 	);
 	assert.equal(
 		promotionHeadline(file, {

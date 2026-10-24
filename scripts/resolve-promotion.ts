@@ -13,6 +13,7 @@ import { output } from "./lib/process.ts";
 import { isCommit, RELEASE_TAG, serializeChannel, type Channel } from "./reconcile-deployment.ts";
 
 export interface PromotionRequest {
+	environment: string;
 	release?: string;
 	commit?: string;
 	allowRollback: boolean;
@@ -38,7 +39,11 @@ export async function resolvePromotion(
 	request: PromotionRequest,
 	sources: PromotionSources,
 ): Promise<Promotion> {
-	const { release, commit, allowRollback, freeze, refreshDatabaseImage } = request;
+	const { environment, release, commit, allowRollback, freeze, refreshDatabaseImage } = request;
+	// Only automatic promotion reads a freeze, and only an environment that follows main has one.
+	if (freeze && environment !== "Staging") {
+		throw new Error(`${environment} moves only by manual promotion, so there is nothing to freeze`);
+	}
 	if (commit !== undefined) {
 		if (release !== undefined) {
 			throw new Error("Name a release or a commit, not both");
@@ -77,6 +82,7 @@ export async function resolvePromotion(
 /** What a promotion allows beyond moving to its target, as both of its records name it. */
 export function promotionQualifiers(channel: Channel): string[] {
 	return [
+		channel.freeze === true ? "frozen" : undefined,
 		channel.allowRollback === true ? "rollback allowed" : undefined,
 		channel.refreshDatabaseImage === true ? "database image refresh requested" : undefined,
 	].filter(isSet);
@@ -84,9 +90,6 @@ export function promotionQualifiers(channel: Channel): string[] {
 
 /** The `deploy-state` commit headline: what a host will do, not only which file changed. */
 export function promotionHeadline(file: string, channel: Channel): string {
-	if (channel.freeze === true) {
-		return `chore(deploy): freeze ${file}`;
-	}
 	const qualifiers = promotionQualifiers(channel);
 	const target = `chore(deploy): ${file} -> ${channel.release}`;
 	return qualifiers.length === 0 ? target : `${target} (${qualifiers.join(", ")})`;
@@ -105,6 +108,7 @@ if (import.meta.main) {
 	const hostname = requiredEnv(process.env, "HOSTNAME");
 	const { channel, version } = await resolvePromotion(
 		{
+			environment,
 			release: optional("RELEASE"),
 			commit: optional("COMMIT"),
 			allowRollback: process.env.ALLOW_ROLLBACK === "true",

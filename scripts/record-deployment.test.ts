@@ -11,7 +11,6 @@ await test("a release is recorded against its tag, as the production environment
 		"Production",
 		"octocat",
 	);
-	assert.ok(request);
 	assert.equal(request.ref, "v1.2.3");
 	assert.equal(request.auto_merge, false);
 	assert.deepEqual(request.required_contexts, []);
@@ -30,7 +29,6 @@ await test("a commit is recorded against itself, with what its channel allows", 
 		"Staging",
 		"octocat",
 	);
-	assert.ok(request);
 	assert.equal(request.ref, commit);
 	assert.equal(request.production_environment, false);
 	assert.equal(
@@ -45,14 +43,14 @@ await test("a commit is recorded against itself, with what its channel allows", 
 	});
 });
 
-await test("a hold records no deployment", () => {
+await test("a frozen promotion moves the environment, so it records a deployment that says so", () => {
 	assert.equal(
 		deploymentRequest(
 			{ release: "v1.2.3", allowRollback: false, freeze: true },
-			"Production",
+			"Staging",
 			"octocat",
-		),
-		undefined,
+		).description,
+		"v1.2.3 · frozen",
 	);
 });
 

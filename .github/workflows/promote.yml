@@ -28,7 +28,7 @@ on:
         type: boolean
         default: false
       freeze:
-        description: Hold the environment where it is and ignore this release
+        description: Keep Staging on this release or commit. Automatic promotion leaves it there until a promotion without freeze
         type: boolean
         default: false
       refresh-database-image:
@@ -149,7 +149,7 @@ jobs:
 
       - name: Verify the public webapp version
         id: webapp-version
-        if: ${{ steps.policy.outputs.apply != 'false' && !inputs.freeze }}
+        if: ${{ steps.policy.outputs.apply != 'false' }}
         env:
           EXPECTED: ${{ steps.release.outputs.version }}
           HOSTNAME: ${{ vars.APP_HOSTNAME }}
@@ -185,7 +185,6 @@ jobs:
       - name: Report promotion verification scope
         if: ${{ always() && steps.publish-channel.outcome == 'success' }}
         env:
-          FROZEN: ${{ inputs.freeze }}
           WEBAPP_OUTCOME: ${{ steps.webapp-version.outcome }}
         run: node scripts/report-promotion-coverage.ts
 
