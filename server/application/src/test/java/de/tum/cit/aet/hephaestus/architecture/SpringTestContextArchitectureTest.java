@@ -11,15 +11,23 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.json.JsonTest;
+import org.springframework.boot.test.context.PropertyMapping;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.BootstrapWith;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.BeanOverride;
@@ -156,8 +164,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "real stored result and problem proof with only current source access controlled"),
             Map.entry(
                     "review-standing",
-                    "shared review fixture with evidence authorization and capture custody controlled, because"
-                            + " the fixture records no capture custody"),
+                    "shared review fixture with evidence and result-source authorization controlled, because the"
+                            + " fixture records no capture custody"),
             Map.entry(
                     "review-evidence",
                     "shared review fixture with the neutral evidence authorization boundary"
@@ -287,6 +295,16 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "TestPropertySource",
             "WebAppConfiguration");
 
+    /** Spring reads these through any depth of meta-annotation, as `@AutoConfigureWebTestClient` does. */
+    private static final Set<Class<? extends Annotation>> CONTEXT_META_ANNOTATIONS = Set.of(
+            ActiveProfiles.class,
+            BootstrapWith.class,
+            ContextConfiguration.class,
+            Import.class,
+            ImportAutoConfiguration.class,
+            PropertyMapping.class,
+            TestPropertySource.class);
+
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
             "workspace.ManualRepositoryAuthorityIntegrationTest",
             "workspace.WorkspaceRepositoryCoverageIntegrationTest",
@@ -325,6 +343,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
         assertInventory(TestPropertySource.class, PROPERTY_SOURCE_TESTS);
         assertInventory(DirtiesContext.class, DIRTY_CONTEXT_TESTS);
         Set<String> mockitoBeans = classesWithTests.stream()
+                .filter(javaClass -> !isOwnFixture(javaClass))
                 .filter(javaClass -> javaClass.isAnnotatedWith(MockitoBean.class)
                         || javaClass.isAnnotatedWith(MockitoBeans.class)
                         || javaClass.getFields().stream()
@@ -403,6 +422,19 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                 .isTrue();
     }
 
+    @Test
+    void shouldTellContextDeclarationsApartWhenArchitectureTestsRun() {
+        assertThat(contextDeclarations(classesWithTests.get(PropertyFixture.class)))
+                .isEqualTo(contextDeclarations(classesWithTests.get(SamePropertyFixture.class)))
+                .isNotEqualTo(contextDeclarations(classesWithTests.get(OtherPropertyFixture.class)));
+        assertThat(contextDeclarations(classesWithTests.get(RunnableMockFixture.class)))
+                .isNotEqualTo(contextDeclarations(classesWithTests.get(SupplierMockFixture.class)));
+        assertThat(contextDeclarations(classesWithTests.get(ShortClientTimeoutFixture.class)))
+                .isNotEqualTo(contextDeclarations(classesWithTests.get(LongClientTimeoutFixture.class)));
+        assertThat(contextDeclarations(classesWithTests.get(NestedConfigurationFixture.class)))
+                .isNotEqualTo(contextDeclarations(classesWithTests.get(TestBeanFixture.class)));
+    }
+
     private boolean hasAnnotationNamed(Set<? extends JavaAnnotation<?>> annotations, String... names) {
         Set<String> expectedNames = Set.of(names);
         return annotations.stream()
@@ -412,7 +444,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private void assertInventory(Class<? extends Annotation> annotation, Set<String> expected) {
         Set<String> actual = classesWithTests.stream()
-                .filter(javaClass -> javaClass.isAnnotatedWith(annotation))
+                .filter(javaClass -> !isOwnFixture(javaClass) && javaClass.isAnnotatedWith(annotation))
                 .map(JavaClass::getName)
                 .collect(Collectors.toCollection(TreeSet::new));
         assertThat(actual)
@@ -443,13 +475,17 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private boolean isContextAnnotation(JavaAnnotation<?> annotation) {
         return CONTEXT_ANNOTATIONS.contains(annotation.getRawType().getSimpleName())
-                || annotation.getRawType().getAnnotations().stream()
-                        .anyMatch(meta ->
-                                CONTEXT_ANNOTATIONS.contains(meta.getRawType().getSimpleName()));
+                || CONTEXT_META_ANNOTATIONS.stream()
+                        .anyMatch(meta -> annotation.getRawType().isMetaAnnotatedWith(meta));
     }
 
     private boolean isBeanOverride(JavaAnnotation<?> annotation) {
         return annotation.getRawType().isMetaAnnotatedWith(BeanOverride.class);
+    }
+
+    /** The fixtures nested in this class prove the rules; they are not tests in the inventories. */
+    private boolean isOwnFixture(JavaClass javaClass) {
+        return isNestedInside(javaClass, classesWithTests.get(SpringTestContextArchitectureTest.class));
     }
 
     private boolean isNestedInside(JavaClass candidate, JavaClass owner) {
@@ -475,7 +511,11 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                                                         + field.getRawType().getName())),
                                 owner.getMethods().stream()
                                         .filter(method -> method.isAnnotatedWith(DynamicPropertySource.class))
-                                        .map(method -> "@DynamicPropertySource " + method.getFullName()))
+                                        .map(method -> "@DynamicPropertySource " + method.getFullName()),
+                                classesWithTests.stream()
+                                        .filter(nested -> isNestedInside(nested, owner)
+                                                && nested.isAnnotatedWith(TestConfiguration.class))
+                                        .map(nested -> "@TestConfiguration " + nested.getName()))
                         .flatMap(declarations -> declarations))
                 .sorted()
                 .collect(Collectors.joining("\n"));
@@ -493,6 +533,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private String mergedContextKey(JavaClass javaClass) {
         String assigned = FULL_CONTEXT_ASSIGNMENTS.get(javaClass.getName());
         if (assigned != null) return assigned;
+        // A subclass of a keyed abstract base shares that base's context; `base` and `real-auth` are defaults.
         for (JavaClass superclass : javaClass.getAllRawSuperclasses()) {
             String inherited = FULL_CONTEXT_ASSIGNMENTS.get(superclass.getName());
             if (inherited != null && !inherited.equals("base") && !inherited.equals("real-auth")) return inherited;
@@ -523,6 +564,37 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
         @TestConfiguration
         static class Configuration {}
     }
+
+    @TestPropertySource(properties = "fixture=1")
+    private static final class PropertyFixture {}
+
+    @TestPropertySource(properties = "fixture=1")
+    private static final class SamePropertyFixture {}
+
+    @TestPropertySource(properties = "fixture=2")
+    private static final class OtherPropertyFixture {}
+
+    private static final class RunnableMockFixture {
+
+        @SuppressWarnings("UnusedVariable") // ArchUnit reads its bean override; Spring never loads the fixture
+        @MockitoBean
+        @Nullable
+        Runnable dependency;
+    }
+
+    private static final class SupplierMockFixture {
+
+        @SuppressWarnings("UnusedVariable") // ArchUnit reads its bean override; Spring never loads the fixture
+        @MockitoBean
+        @Nullable
+        Supplier<String> dependency;
+    }
+
+    @AutoConfigureWebTestClient(timeout = "1s")
+    private static final class ShortClientTimeoutFixture {}
+
+    @AutoConfigureWebTestClient(timeout = "2s")
+    private static final class LongClientTimeoutFixture {}
 
     private static final class TestBeanFixture {
 

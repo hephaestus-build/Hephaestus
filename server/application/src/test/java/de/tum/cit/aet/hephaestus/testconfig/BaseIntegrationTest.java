@@ -29,6 +29,7 @@ import org.springframework.test.context.TestPropertySource;
     WorkspaceEchoControllers.ScopedEchoController.class,
     WorkspaceEchoControllers.WorkspaceContextEchoController.class,
     // Stateless review fixtures: one shared import keeps every test that uses them in this context.
+    // ScanReportTestData needs the server role, which every subclass keeps.
     ReviewIntegrationData.class,
     ReviewLookupData.class,
     ReviewAdmissionData.class,
