@@ -305,6 +305,16 @@ jobs:
               # schema; a preview cannot rehearse it, because the controller refuses to deploy a
               # head that changes docker/preview/.
               - 'docker/preview/compose.app.yaml'
+              # The generated configuration reference reads these, and its drift check runs on this leg.
+              - 'docker/compose.proxy.yaml'
+              - 'docker/self-host/compose*.yaml'
+              - 'docker/self-host/.env.example'
+              - 'docker/.env.example'
+              - 'docker/observability/compose.journald.yaml'
+              - 'docs/admin/configuration-reference.mdx'
+              - 'scripts/generate-configuration-reference.ts'
+              - 'scripts/lib/configuration-reference.ts'
+              - 'scripts/lib/application-jar.ts'
               - '!server/**/AGENTS.md'
               - '!server/**/CLAUDE.md'
             tooling:

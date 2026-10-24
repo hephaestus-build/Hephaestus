@@ -19,6 +19,7 @@ const sidebars: SidebarsConfig = {
 			label: "Configure",
 			collapsed: false,
 			items: [
+				"configuration-reference",
 				"configuration-readiness",
 				"production-setup",
 				"integrations",

@@ -68,6 +68,13 @@ public record WorkerProperties(
                 + "]");
     }
 
+    /**
+     * Concurrency of this worker.
+     *
+     * @param reviewMax Number of practice reviews this worker runs at once. Accepts an integer or auto, which means
+     *     one less than the processor count and at least 1.
+     * @param mentorMax Number of Heph turns this worker runs at once. Accepts an integer or auto, which means 8.
+     */
     public record Capacity(
             @DefaultValue("auto") String reviewMax,
             @DefaultValue("auto") String mentorMax) {
@@ -96,6 +103,12 @@ public record WorkerProperties(
         }
     }
 
+    /**
+     * Shutdown behavior of this worker.
+     *
+     * @param timeout How long a stopping worker waits for running practice reviews to finish before it cancels them.
+     *     Set 0s to cancel them at once.
+     */
     public record Drain(@DefaultValue("5m") Duration timeout) {
         public Drain {
             if (timeout == null || timeout.isNegative()) {
@@ -112,6 +125,14 @@ public record WorkerProperties(
         }
     }
 
+    /**
+     * Control channel from this worker to the server.
+     *
+     * @param endpoint WebSocket address of the server's worker control channel, such as
+     *     ws://application-server:8080/api/workers/connect. The worker stays disconnected when it is unset.
+     * @param registrationToken Token that this worker exchanges at the server for its access token. Give it the same
+     *     value as hephaestus.worker.hub.token.registration-token on the server.
+     */
     public record Control(
             @Nullable URI endpoint,
             @Nullable String registrationToken,

@@ -13,6 +13,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>It is unset by default. Only the deployment that actually runs the study sets it, which is also
  * what keeps the question off the screens of every self-hoster who does not.
+ *
+ * @param researchOrganization Name of the organization that runs a research study on this instance. When it is set,
+ *     first-login setup and account settings ask users for research consent. At most 255 characters.
  */
 @ConfigurationProperties(prefix = "hephaestus.consent")
 public record ConsentProperties(@Nullable String researchOrganization) {

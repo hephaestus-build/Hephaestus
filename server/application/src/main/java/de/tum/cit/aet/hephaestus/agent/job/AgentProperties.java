@@ -14,12 +14,14 @@ import org.springframework.validation.annotation.Validated;
  * Configuration for the PostgreSQL-backed agent job queue: the {@code review_job} table itself, claimed
  * by {@link ReviewJobExecutor}'s poll loop with {@code FOR UPDATE SKIP LOCKED}.
  *
+ * @param enabled           Turns on agent jobs, which run practice reviews. The server role submits jobs and the
+ *                          worker role runs them, so set it on both.
  * @param pollInterval      how long the poll loop sleeps when a poll claimed nothing
  * @param claimBatchSize    max QUEUED jobs considered per poll iteration
  * @param maxRetries        orphan-requeue attempts before a job whose owning worker was lost is failed
  *                          instead; the authoritative counter is {@code review_job.attempt}
  * @param heartbeatInterval interval between {@code worker_registry} liveness heartbeats
- * @param payloadRetention  age from {@code completed_at} at which a TERMINAL job's {@code container_logs}
+ * @param payloadRetention  age from {@code completed_at} at which a TERMINAL job's {@code capture}
  *                          and {@code output} are stripped to NULL
  * @param rowRetention      age from {@code completed_at} at which an unreferenced TERMINAL job row is
  *                          deleted; must be {@code >= payloadRetention}

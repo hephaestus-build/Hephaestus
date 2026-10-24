@@ -105,6 +105,7 @@ const policyGates = [
 	"gate:preview-stack",
 	"gate:env",
 	"gate:quarantine",
+	"gate:configuration-reference",
 ];
 const serverGates = ["gate:java-nullness", "gate:server"];
 const webappGates = ["gate:webapp", "gate:webapp-format", "gate:components", "gate:stories"];
@@ -237,6 +238,9 @@ export default defineConfig({
 			),
 			"gate:env": run(
 				"node scripts/check-env-defaults.ts && node scripts/check-env-roles.ts && node --test scripts/check-env-roles.test.ts scripts/self-host-setup.test.ts",
+			),
+			"gate:configuration-reference": run(
+				"node scripts/check-configuration-reference.ts && node --test scripts/check-configuration-reference.test.ts",
 			),
 			"gate:contracts": run(
 				"node scripts/validate-source-use-contracts.ts && node scripts/check-source-use-contract-immutability.ts && node --test scripts/check-source-use-contract-immutability.test.ts",
@@ -414,6 +418,7 @@ export default defineConfig({
 			// Generated artefacts, schema and integration schemas
 			"generate:api": run(["vp run generate:api:specs", "vp run generate:api:client"]),
 			"generate:api:specs": run("node scripts/generate-openapi-spec.ts"),
+			"generate:configuration-reference": run("node scripts/generate-configuration-reference.ts"),
 			"generate:api:client": run(
 				"node scripts/rm.ts webapp/src/api extension/src/api && vp run --filter webapp generate:api && vp run --filter extension generate:api",
 			),
