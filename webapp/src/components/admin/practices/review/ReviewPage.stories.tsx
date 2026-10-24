@@ -128,3 +128,22 @@ export const SectionsAreRealTabs: Story = {
 		);
 	},
 };
+
+/**
+ * Every tab sits inside the track, at every width: the active one does not stand out past the
+ * track's edge, and a wrapped row grows the track instead of spilling over the section below.
+ */
+export const TabsSitInsideTheTrack: Story = {
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async ({ canvas }) => {
+		const track = canvas.getByRole("tablist").getBoundingClientRect();
+		for (const tab of canvas.getAllByRole("tab")) {
+			const box = tab.getBoundingClientRect();
+			await expect(box.top).toBeGreaterThanOrEqual(track.top);
+			await expect(box.bottom).toBeLessThanOrEqual(track.bottom);
+		}
+		await expect(canvas.getByRole("tabpanel").getBoundingClientRect().top).toBeGreaterThanOrEqual(
+			track.bottom,
+		);
+	},
+};
