@@ -160,7 +160,7 @@ The links, the buttons, and the work on the line keep their own action.
 
 The title chip opens the reviews that recorded an observation about your work, newest first and grouped by day.
 A review that still runs may not appear yet, because a review appears only after it records an observation about your work.
-The newest review has the **Latest** tag.
+The newest review is framed in blue and says **Latest review** in its corner.
 
 A review that someone requested has the **Requested** tag.
 It is a real review and retains earlier observations in history.
@@ -170,42 +170,46 @@ A marked current observation does not make an earlier observation current again.
 Repository scans have no developer and do not move your personal standing.
 
 Each row names the work and links to the original.
-It starts with the practices to improve: the first two by name, then a count of the rest.
-If there are none, a complete or partial review says *Some practices could not be determined* when a practice could not be determined.
-Otherwise a complete review says *Nothing to improve*, and a partial review says *Nothing to improve in what it reached*.
-A review that failed or was cancelled says *Stopped before it finished*.
-A review that waits or runs says so.
+Its sequence on the work, such as *Review 2 of 3*, sits under the work, and its status stands over the time of the review.
+Your latest review is framed in blue and says **Latest review** in its top left corner.
+**What it saw** counts the practices the review recorded about you on its first line, then each outcome on the line under it, such as *8 practices*, then *5 met · 2 not met · 1 does not apply*.
+A review that is waiting or running and has recorded nothing yet says *No practices yet*; one that ended with nothing recorded says *No practices*.
 
-Below that, it counts each practice once by its outcome: **Met**, **Does not apply**, or **Could not determine**.
-It then counts the practices the review reached, including those with no recorded observation about you.
+The list does not link the feedback a review gave. Open an observation of the review to read its feedback.
 
-For feedback on GitLab, **Read the feedback on the merge request** opens the comment or diff discussion.
+The filters work as on the admin **Reviews** tab:
 
-Line notes appear on the reviewed diff line.
-If GitLab cannot attach a note there, it appears as a comment with a link to the reviewed code.
+- **Work** selects one or more kinds of work.
+- **Status** selects one or more statuses: **Waiting**, **Running**, **Completed**, **Partial**, **Failed** or **Cancelled**.
+- The timeframe shows the last 7, 30, or 90 days, or **All time**, the initial value.
+- **Sort** lists the newest review first, or the oldest.
+- **Reset** clears every filter, and a line counts the reviews that match.
 
-Elsewhere, the row counts the pieces of feedback that reached you.
-**Show** filters the list by kind of work.
-**Timeframe** filters it to the last 7, 30, or 90 days.
-**All time** is the initial value.
-With either filter on, no row shows the **Latest** tag, because the newest included review might not be your latest.
+Each row ends in icon buttons: the play button is **Request another review**, the crosshair is **Track this work**.
+A line above the table says what each one does, and hovering or focusing a button shows its name.
+When a work has more than one review, its rows offer **Track this work**.
+**Track this work** narrows the list to every review of that work. Once all of them have loaded, and with no other filter and newest first, each shows its sequence, such as *Review 2 of 3*.
+**Tracking** above the table names the work. Its close button removes the work filter; **Reset** clears every filter.
+With any filter on, or oldest first, no row is framed as the **Latest review**, because the top review might not be your latest.
 
 Older reviews load when you scroll to the end of the list.
 You can also select **View earlier reviews**.
 If older reviews cannot load, select **Retry**.
-After the whole list loads without filters, later reviews of the same work show their sequence, such as *2nd review*.
-**Request review** appears beside a row when you may request another review as author, assignee, or workspace admin.
+After the whole list loads, newest first and with no filter other than **Track this work**, every review of a work reviewed more than once shows its sequence, such as *Review 2 of 3*.
+**Request another review** appears in the row of a work's latest review when you may ask for one as author, assignee, or workspace admin.
+With a **Status** filter, a timeframe or oldest first, the list cannot tell which review is a work's latest, so no row offers it.
 
-**Open review** opens a review.
-It shows the link to the original work, the date, and the number of practices reached.
-It also shows **Request review** when you may request a review.
-Two tabs follow:
+**See the reviewed practices** opens a review.
+Its header names the work, as a link to the original, then the date and the status, and its sequence on the work when the list knows it.
+To ask for another review, use **Request another review** in the list.
+A table lists every practice the review reached, with its outcome, under a gray heading for each practice group.
+Select **Open observation** to read that observation in its practice.
+When you come back to the review, the row of the observation you opened last keeps a blue bar on its left edge.
+During a review, practices appear as the review reaches them.
 
-- **Every practice** lists the review's observations. Each shows its outcome and a count when it records problems. Select **Open observation** to read that exact observation in its practice. During a review, practices appear as the review reaches them.
-- **What we noticed** shows recent recorded activity on the work, oldest first.
+These filters apply to the table:
 
-In **Every practice**, these filters apply:
-
+- **Outcome** selects one or more outcomes, as on the admin **Observations** tab.
 - **Group** selects one practice group.
 - **Practice** filters names by the text you enter.
 

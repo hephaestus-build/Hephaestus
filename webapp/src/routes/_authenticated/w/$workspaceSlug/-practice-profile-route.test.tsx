@@ -208,7 +208,7 @@ const OPEN_REVIEW_PAGE = `${PAGE}?detail=${encodeURIComponent(
 	JSON.stringify(["reviews:all", `review:${openProfileReview.review.id}`]),
 )}`;
 
-const openReviewRowName = `Open review of ${openProfileReview.review.item.label}, ${formatDayTime(
+const openReviewRowName = `See the reviewed practices for ${openProfileReview.review.item.label}, ${formatDayTime(
 	openProfileReview.review.completedAt ?? openProfileReview.review.createdAt,
 	new Date(STORY_NOW),
 )}`;
@@ -459,13 +459,34 @@ describe("practice profile route", () => {
 		}, ROUTE_RENDER_WAIT);
 		await within(table).findByRole("button", { name: "Thin controllers" }, SETTLE_WAIT);
 		// The row under the level and the head over it.
-		await waitFor(() => expect(screen.getAllByText("Review 2")).toHaveLength(2));
+		await waitFor(() => expect(screen.getAllByText("Review 2 of 2")).toHaveLength(2));
 
 		// One level per history entry, so Back closes exactly one and then the drawer.
 		router.history.back();
 		await waitFor(() => expect(detail()).toStrictEqual(["reviews:all"]));
 		router.history.back();
 		await waitFor(() => expect(detail()).toStrictEqual([]));
+	});
+
+	it("asks the reviews list for a tracked work and a status, and lets go of both on Reset", async () => {
+		const asked: { itemId: string | null; status: string | null }[] = [];
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practice-profile/reviews", ({ request }) => {
+				const params = new URL(request.url).searchParams;
+				asked.push({ itemId: params.get("itemId"), status: params.get("status") });
+				return HttpResponse.json(pageOf(profileReviews));
+			}),
+		);
+		const tracked = openProfileReview.review.item.id;
+		const { router } = renderRouteAtWithRouter(
+			`${PAGE}?detail=${encodeURIComponent(JSON.stringify(["reviews:all"]))}&reviewItem=${tracked}&reviewStatus=PARTIAL`,
+		);
+		await screen.findByRole("heading", { name: "Reviews of your work" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(asked.at(-1)).toStrictEqual({ itemId: tracked, status: "PARTIAL" }));
+		fireEvent.click(screen.getByRole("button", { name: /^Reset/u }));
+		await waitFor(() => expect(router.state.location.search.reviewItem).toBeUndefined());
+		expect(router.state.location.search.reviewStatus).toBeUndefined();
+		await waitFor(() => expect(asked.at(-1)).toStrictEqual({ itemId: null, status: null }));
 	});
 
 	it("turns the chosen timeframe into the since the reviews list asks for", async () => {
@@ -516,7 +537,7 @@ describe("practice profile route", () => {
 		fireEvent.click(await openReviewsChip());
 
 		fireEvent.click(
-			await screen.findByRole("button", { name: "Request review: #890" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Request another review: #890" }, ROUTE_RENDER_WAIT),
 		);
 
 		await screen.findByText(
@@ -526,33 +547,6 @@ describe("practice profile route", () => {
 		);
 		const failed = profileReviews.find((entry) => entry.review.item.label === "#890");
 		expect(asked).toStrictEqual([{ itemId: failed?.review.item.id }]);
-	});
-
-	it("says a refusal on the review it was asked from, and on no other review of the item", async () => {
-		server.use(
-			http.post("*/workspaces/:workspaceSlug/practices/review-requests", () =>
-				HttpResponse.json({
-					status: "REFUSED",
-					reason: "REQUEST_COOLDOWN_ACTIVE",
-					reviewId: null,
-				}),
-			),
-		);
-		// The page is inert under the drawer, so the head's own button is what says it has rendered.
-		const { router } = renderRouteAtWithRouter(OPEN_REVIEW_PAGE);
-
-		fireEvent.click(
-			await screen.findByRole("button", { name: "Request review" }, ROUTE_RENDER_WAIT),
-		);
-		await screen.findByText("No review was started", undefined, SETTLE_WAIT);
-
-		router.history.push(
-			`${PAGE}?detail=${encodeURIComponent(
-				JSON.stringify(["reviews:all", `review:${earlier.review.id}`]),
-			)}`,
-		);
-		await screen.findByRole("tab", { name: /^Every practice/u }, ROUTE_RENDER_WAIT);
-		await waitFor(() => expect(screen.queryByText("No review was started")).toBeNull());
 	});
 
 	it("opens the earlier review that recorded a reused result in place of this one, without this one's filter", async () => {
@@ -582,18 +576,13 @@ describe("practice profile route", () => {
 		await within(table).findByRole("button", { name: "Explain each change" }, SETTLE_WAIT);
 	});
 
-	it("renders the member-safe event display names from the wire without exposing raw names or inventing review reasons", async () => {
+	it("answers an old What we noticed link with every practice, and lists no recorded activity", async () => {
 		server.use(
 			reviewReads({
 				...openProfileReviewDetail,
 				trace: {
 					...openProfileReviewDetail.trace,
 					events: [
-						{
-							name: "legacy.retired.event",
-							displayName: "Activity recorded",
-							occurredAt: new Date("2026-10-20T12:00:00Z"),
-						},
 						{
 							name: "scm.pull_request.ready",
 							displayName: "Marked ready for review",
@@ -604,21 +593,9 @@ describe("practice profile route", () => {
 			}),
 		);
 		renderRouteAtWithRouter(`${OPEN_REVIEW_PAGE}&reviewTab=noticed`);
-		await screen.findByText("Marked ready for review", undefined, ROUTE_RENDER_WAIT);
-		await screen.findByText("Activity recorded", undefined, ROUTE_RENDER_WAIT);
-		expect(screen.queryByText("legacy.retired.event")).toBeNull();
-		expect(screen.queryByText("scm.pull_request.ready")).toBeNull();
-		expect(screen.queryByText("No review started")).toBeNull();
-		expect(screen.queryByText("Started a review")).toBeNull();
-		const timeline = screen.getByRole("region", { name: "What we noticed" });
-		expect(
-			within(timeline)
-				.getAllByRole("listitem")
-				.map((item) => item.textContent),
-		).toStrictEqual([
-			expect.stringContaining("Marked ready for review"),
-			expect.stringContaining("Activity recorded"),
-		]);
+		await screen.findByRole("table", { name: "Every practice in this review" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("tab", { name: /What we noticed/u })).toBeNull();
+		expect(screen.queryByText("Marked ready for review")).toBeNull();
 	});
 
 	it("shows a review that is not the reader's as not found, without asking again", async () => {
@@ -1481,41 +1458,6 @@ describe("the way to a review an accepted ask created", () => {
 
 	const STILL_EMPTY = "Observations appear here as the review reaches each practice.";
 
-	it("keeps the review asked from as it was, and opens the new one in its place without its filter", async () => {
-		const { asked, reads } = acceptAsks(openProfileReview.review.item);
-		const { router } = renderRouteAtWithRouter(`${OPEN_REVIEW_PAGE}&reviewPractice=thin`);
-
-		fireEvent.click(
-			await screen.findByRole("button", { name: "Request review" }, ROUTE_RENDER_WAIT),
-		);
-		const note = await screen.findByRole("note", undefined, SETTLE_WAIT);
-		expect(asked).toStrictEqual([{ itemId: openProfileReview.review.item.id }]);
-		// Nothing opened for the reader, and nothing of the new review was read.
-		expect(stack(router)).toStrictEqual(["reviews:all", `review:${openProfileReview.review.id}`]);
-		expect(router.state.location.search.reviewPractice).toBe("thin");
-		expect(reads()).toBe(0);
-
-		fireEvent.click(within(note).getByRole("link", { name: "View requested review" }));
-		await waitFor(() => expect(stack(router)).toStrictEqual(["reviews:all", `review:${NEW_ID}`]));
-		// The filter chosen on the review it replaced is not this one's.
-		expect(router.state.location.search.reviewPractice).toBeUndefined();
-		await screen.findByText(STILL_EMPTY, undefined, ROUTE_RENDER_WAIT);
-		expect(screen.getByText("Created").querySelector("time")).not.toBeNull();
-		expect(reads()).toBeGreaterThan(0);
-		// The open review is the requested one, so it does not link to itself.
-		await waitFor(() => expect(screen.queryByRole("note")).toBeNull());
-		expect(asked).toHaveLength(1);
-
-		// Back returns to the review asked from, still with its filter and the way to the new one.
-		router.history.back();
-		await waitFor(() =>
-			expect(stack(router)).toStrictEqual(["reviews:all", `review:${openProfileReview.review.id}`]),
-		);
-		expect(router.state.location.search.reviewPractice).toBe("thin");
-		await screen.findByRole("note", undefined, SETTLE_WAIT);
-		expect(asked).toHaveLength(1);
-	});
-
 	it("answers a row with the new review opened over the list, and says it on no other work's review", async () => {
 		const row = profileReviews.find((entry) => entry.review.item.label === "#890");
 		assert(row, "The fixtures carry a review of #890");
@@ -1524,7 +1466,7 @@ describe("the way to a review an accepted ask created", () => {
 		const router = await renderProfile();
 		fireEvent.click(await openReviewsChip());
 		fireEvent.click(
-			await screen.findByRole("button", { name: "Request review: #890" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Request another review: #890" }, ROUTE_RENDER_WAIT),
 		);
 
 		const note = await screen.findByRole("note", undefined, SETTLE_WAIT);
@@ -1549,7 +1491,7 @@ describe("the way to a review an accepted ask created", () => {
 		await waitFor(() =>
 			expect(stack(router)).toStrictEqual(["reviews:all", `review:${openProfileReview.review.id}`]),
 		);
-		await screen.findByRole("tab", { name: /^Every practice/u }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("table", { name: "Every practice in this review" }, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(screen.queryByRole("note")).toBeNull());
 		expect(asked).toHaveLength(1);
 	});
@@ -1595,7 +1537,7 @@ describe("practice profile in a user view", () => {
 		fireEvent.click(await openReviewsChip());
 
 		await screen.findByRole("button", { name: openReviewRowName }, ROUTE_RENDER_WAIT);
-		expect(screen.queryAllByRole("button", { name: /^Request review/u })).toHaveLength(0);
+		expect(screen.queryAllByRole("button", { name: /^Request (?:another )?review/u })).toHaveLength(0);
 	});
 
 	it("offers an administrator viewing as the developer none of them", async () => {

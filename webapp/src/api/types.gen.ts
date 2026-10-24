@@ -12670,8 +12670,23 @@ export type ListOwnReviewsData = {
         workspaceSlug: string;
     };
     query?: {
-        itemKind?: string;
+        /**
+         * Only work of these kinds
+         */
+        itemKind?: Array<string>;
+        /**
+         * Only the reviews of this work, with the reviews of its pull request's reviews
+         */
+        itemId?: string;
+        /**
+         * Only reviews in these statuses
+         */
+        status?: Array<'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED'>;
         since?: Date;
+        /**
+         * OLDEST lists the oldest review first; NEWEST, the default, the newest
+         */
+        order?: 'NEWEST' | 'OLDEST';
         page?: number;
         size?: number;
     };

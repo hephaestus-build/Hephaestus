@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
 
+import { cn } from "cn";
 import type { ItemRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
+import { statusToneClass } from "@/components/common/status-def";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import {
 	RecordDayTable,
 	type RecordTableColumn,
@@ -10,8 +13,9 @@ import {
 } from "@/components/practice-vocabulary/RecordTable";
 import { TableCell } from "@/components/ui/table";
 import { itemName } from "@/lib/item-kinds";
+import { rendersContent } from "@/lib/react-node";
 
-import { reviewLead, reviewReach, type ReviewSaw } from "./review-saw";
+import { outcomeCounts, practicesLabel, type ReviewSaw } from "./review-saw";
 import { ReviewOrdinalTag } from "./review-tags";
 
 export type ReviewColumn = RecordTableColumn;
@@ -35,6 +39,8 @@ export interface ReviewDayTableProps<TReview> {
 	empty: ReactNode;
 	/** Placeholder rows after the reviews while the next page loads. */
 	loadingMore?: number;
+	/** Classes on the `<table>`, such as a list that centers its cells in the row. */
+	tableClassName?: string;
 }
 
 export function ReviewDayTable<TReview>({
@@ -79,6 +85,13 @@ export interface ReviewItemCellProps {
 	 */
 	linked?: boolean;
 	children?: ReactNode;
+	/**
+	 * Tags about this review of the work, such as "Latest": on one line with its sequence ("Review
+	 * 2"), so the two read together.
+	 */
+	tags?: ReactNode;
+	/** A line under the tags, such as the way to the feedback on the work. */
+	footer?: ReactNode;
 }
 
 export function ReviewItemCell({
@@ -87,6 +100,8 @@ export function ReviewItemCell({
 	total,
 	linked = true,
 	children,
+	tags,
+	footer,
 }: ReviewItemCellProps) {
 	const ItemIcon = reviewedWorkIcon(item.kind, item.provider ?? undefined);
 	const name = itemName(item);
@@ -114,9 +129,30 @@ export function ReviewItemCell({
 				{title !== undefined && (
 					<span className="max-w-xs text-xs text-muted-foreground">{title}</span>
 				)}
-				<ReviewOrdinalTag position={position} total={total} />
+				<ReviewTags position={position} total={total} tags={tags} />
+				{footer}
 			</span>
 		</TableCell>
+	);
+}
+
+function ReviewTags({
+	position,
+	total,
+	tags,
+}: {
+	position?: number;
+	total?: number;
+	tags?: ReactNode;
+}) {
+	if (!rendersContent(tags)) {
+		return <ReviewOrdinalTag position={position} total={total} />;
+	}
+	return (
+		<span className="flex flex-wrap items-center gap-1.5">
+			<ReviewOrdinalTag position={position} total={total} />
+			{tags}
+		</span>
 	);
 }
 
@@ -140,17 +176,38 @@ function titleBeside(item: ItemRef, name: string): string | undefined {
 
 export interface ReviewSawCellProps {
 	saw: ReviewSaw;
-	children?: ReactNode;
 }
 
-export function ReviewSawCell({ saw, children }: ReviewSawCellProps) {
-	const reach = reviewReach(saw);
+/**
+ * What the review saw, and nothing else: how many practices it reviewed on the first line, then how
+ * they came out on the line under it, each outcome with its registry icon and tone and its count
+ * ("8 practices", then "5 met · 2 not met").
+ */
+export function ReviewSawCell({ saw }: ReviewSawCellProps) {
+	const outcomes = outcomeCounts(saw);
 	return (
 		<TableCell className="align-top whitespace-normal">
-			<span className="flex min-w-0 flex-col items-start gap-1.5">
-				<span className="text-sm font-semibold">{reviewLead(saw)}</span>
-				{reach !== "" && <span className="text-xs text-muted-foreground">{reach}</span>}
-				<span className="flex flex-wrap items-center gap-1.5">{children}</span>
+			<span className="flex min-w-0 flex-col items-start gap-1 text-sm">
+				<span className="font-semibold">{practicesLabel(saw)}</span>
+				{outcomes.length > 0 && (
+					// Each outcome led by its own icon, apart by a gap rather than a dot, so the line can
+					// wrap where the table is narrow without a wrapped line starting with a separator.
+					<span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+						{outcomes.map(({ outcome, text }) => {
+							const def = OUTCOME_DEFS[outcome];
+							const Icon = def.icon;
+							return (
+								<span key={outcome} className="inline-flex items-center gap-1 whitespace-nowrap">
+									<Icon
+										aria-hidden
+										className={cn("size-3.5 shrink-0", statusToneClass(def.badgeVariant))}
+									/>
+									{text}
+								</span>
+							);
+						})}
+					</span>
+				)}
 			</span>
 		</TableCell>
 	);

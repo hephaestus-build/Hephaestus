@@ -66,4 +66,10 @@ describe("reviewOrdinalLabel", () => {
 		expect(reviewOrdinalLabel(2, 3)).toBe("Review 2 of 3");
 		expect(reviewOrdinalLabel(4, 3)).toBe("Review 4");
 	});
+
+	it("names the first run too once the work has more than one", () => {
+		expect(reviewOrdinalLabel(1, 2)).toBe("Review 1 of 2");
+		expect(reviewOrdinalLabel(1, 1)).toBeUndefined();
+		expect(reviewOrdinalLabel(1)).toBeUndefined();
+	});
 });

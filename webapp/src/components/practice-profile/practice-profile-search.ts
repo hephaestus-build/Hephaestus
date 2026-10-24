@@ -1,15 +1,22 @@
 import { z } from "zod";
 
 import { startOfDay, subDays } from "date-fns";
+import { statusValues } from "@/components/common/status-def";
 import {
 	type DetailStackEntry,
 	detailStackSchema,
 } from "@/components/layout/detail-drawer/detail-stack";
 import { REVIEW_FILTER_MAX_LENGTH } from "@/components/practice-trace/trace-format";
+import { type Outcome, OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import {
 	DEFAULT_PRACTICE_GROUP_SORT,
 	type SortDirection,
 } from "@/components/practice-vocabulary/practice-group-list-order";
+import {
+	OWN_REVIEW_STATUS_DEFS,
+	type ReviewStatus,
+} from "@/components/practice-vocabulary/review-status-defs";
+import { multiValue, narrowToEnum, nonEmpty } from "@/lib/search-params";
 
 const SORT_DIRECTIONS = ["asc", "desc"] as const satisfies readonly SortDirection[];
 
@@ -75,17 +82,15 @@ export function reviewLevel(reviewId: string): DetailStackEntry<PracticeProfileD
 
 /** Clear review-specific tabs, filters, and focus on a review switch so old filters cannot hide the next review. */
 export const REVIEW_SELECTION_CLEARED = {
-	reviewTab: undefined,
 	reviewGroup: undefined,
 	reviewPractice: undefined,
+	reviewOutcome: undefined,
 } satisfies PracticeGroupDetailSelection;
 
-/** The review level's tabs, from the `reviewTab` search param. */
-export const REVIEW_TABS = ["practices", "noticed"] as const;
+/** The orders the reviews list offers besides its default, newest first. */
+export const REVIEW_ORDERS = ["OLDEST"] as const;
 
-export type ReviewTab = (typeof REVIEW_TABS)[number];
-
-export const DEFAULT_REVIEW_TAB: ReviewTab = "practices";
+export type ReviewOrder = (typeof REVIEW_ORDERS)[number];
 
 /** How far back the reviews list reaches; absent is every review. */
 export const REVIEW_TIMEFRAMES = ["7d", "30d", "90d"] as const;
@@ -132,11 +137,19 @@ export interface PracticeGroupDetailSelection {
 	practiceTab?: PracticeTab;
 	/** Exact observation selected independently of loaded review pages. */
 	observation?: string;
-	reviewKind?: string;
+	/** The reviews list's kinds of work. */
+	reviewKind?: string[];
 	reviewSince?: ReviewTimeframe;
-	reviewTab?: ReviewTab;
+	/** The reviews list's statuses. */
+	reviewStatus?: ReviewStatus[];
+	/** The reviews list's order: absent is newest first. */
+	reviewOrder?: ReviewOrder;
+	/** The work the reviews list is narrowed to, by its id: a row's Track sets it. */
+	reviewItem?: string;
 	reviewGroup?: string;
 	reviewPractice?: string;
+	/** The outcomes a review's table is narrowed to. */
+	reviewOutcome?: Outcome[];
 }
 
 /**
@@ -158,11 +171,26 @@ const practiceProfileFilterSchema = z.object({
 	practiceTab: z.enum(PRACTICE_TABS).default(DEFAULT_PRACTICE_TAB).catch(DEFAULT_PRACTICE_TAB),
 	observation: z.uuid().optional().catch(undefined),
 	// A free string, for the reason `TraceKindFilter` gives.
-	reviewKind: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
+	// Free strings, for the reason `TraceKindFilter` gives; a link from before named one kind.
+	reviewKind: multiValue.transform((values) =>
+		nonEmpty(
+			(values ?? []).filter((kind) => kind.length > 0 && kind.length <= REVIEW_FILTER_MAX_LENGTH),
+		),
+	),
 	reviewSince: z.enum(REVIEW_TIMEFRAMES).optional().catch(undefined),
-	reviewTab: z.enum(REVIEW_TABS).default(DEFAULT_REVIEW_TAB).catch(DEFAULT_REVIEW_TAB),
+	reviewStatus: multiValue.transform((values) =>
+		narrowToEnum(values, statusValues(OWN_REVIEW_STATUS_DEFS)),
+	),
+	reviewOrder: z.enum(REVIEW_ORDERS).optional().catch(undefined),
+	// The router reads a numeric value from the address as a number; the id is kept as text.
+	reviewItem: z.coerce
+		.string()
+		.regex(/^\d{1,18}$/u)
+		.optional()
+		.catch(undefined),
 	reviewGroup: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
 	reviewPractice: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
+	reviewOutcome: multiValue.transform((values) => narrowToEnum(values, statusValues(OUTCOME_DEFS))),
 });
 
 /** Each param at its default, which the route leaves out of the URL. */
@@ -188,7 +216,10 @@ export const PRACTICE_PROFILE_LEVEL_PARAMS = [
 	"observation",
 	"reviewKind",
 	"reviewSince",
-	"reviewTab",
+	"reviewStatus",
+	"reviewOrder",
+	"reviewItem",
 	"reviewGroup",
 	"reviewPractice",
+	"reviewOutcome",
 ] as const satisfies readonly (keyof PracticeGroupDetailSelection)[];

@@ -40,11 +40,22 @@ export function reviewPositionsOnItem(reviews: readonly ReviewRef[]): Map<string
 	return positions;
 }
 
-export function reviewOrdinalLabel(position: number, total?: number): string | undefined {
-	if (position <= 1) {
-		return undefined;
+/** How many reviews each review's work has, by review id; like positions, it needs every review. */
+export function reviewTotalsOnItem(reviews: readonly ReviewRef[]): Map<string, number> {
+	const perItem = new Map<string, number>();
+	for (const review of reviews) {
+		perItem.set(review.item.id, (perItem.get(review.item.id) ?? 0) + 1);
 	}
-	return total !== undefined && total >= position
-		? `Review ${position} of ${total}`
-		: `Review ${position}`;
+	return new Map(reviews.map((review) => [review.id, perItem.get(review.item.id) ?? 0]));
+}
+
+/**
+ * "Review 2 of 3": a review's place among the runs of its work. With the total known, every run of
+ * a work reviewed more than once says it, the first too; without it, only a later run does.
+ */
+export function reviewOrdinalLabel(position: number, total?: number): string | undefined {
+	if (total !== undefined && total > 1 && total >= position) {
+		return `Review ${position} of ${total}`;
+	}
+	return position > 1 ? `Review ${position}` : undefined;
 }

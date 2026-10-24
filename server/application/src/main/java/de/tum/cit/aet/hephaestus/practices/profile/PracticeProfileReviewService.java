@@ -14,10 +14,12 @@ import de.tum.cit.aet.hephaestus.practices.review.dto.OutcomeVectorDTO;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.trace.OwnItemTraceQueryService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,12 +48,33 @@ public class PracticeProfileReviewService {
     private final EvidenceAuthorization authorization;
     private final ProductItemRepository items;
 
+    private static final Comparator<List<ResultView>> OLDEST_FIRST = Comparator.comparing(
+                    (List<ResultView> v) -> v.getFirst().review().getCreatedAt())
+            .thenComparing(v -> v.getFirst().review().getId().toString());
+
     public Page<ProfileReviewDTO> list(
             WorkspaceContext ws,
             @Nullable String itemKind,
             @Nullable Long itemId,
             @Nullable String groupSlug,
             @Nullable Instant since,
+            Pageable page) {
+        return list(ws, itemKind == null ? null : List.of(itemKind), itemId, groupSlug, null, since, false, page);
+    }
+
+    /**
+     * The reader's reviews, narrowed by kinds of work, one work, a group and statuses, newest first or
+     * oldest first. Every narrowing applies before paging, so a page never comes back short of
+     * reviews that a later page would have had.
+     */
+    public Page<ProfileReviewDTO> list(
+            WorkspaceContext ws,
+            @Nullable Collection<String> itemKinds,
+            @Nullable Long itemId,
+            @Nullable String groupSlug,
+            @Nullable Collection<ReviewStatus> statuses,
+            @Nullable Instant since,
+            boolean oldestFirst,
             Pageable page) {
         var account = developer.currentDeveloperId();
         if (account.isEmpty()) return Page.empty(page);
@@ -63,7 +86,9 @@ public class PracticeProfileReviewService {
                         .anyMatch(item -> item.getKind().equals("scm.pull_request"));
         var byReview = new LinkedHashMap<UUID, List<ResultView>>();
         views.views(ws.id(), rows).stream()
-                .filter(v -> itemKind == null || v.item().kind().equals(itemKind))
+                .filter(v -> itemKinds == null
+                        || itemKinds.isEmpty()
+                        || itemKinds.contains(v.item().kind()))
                 .filter(v -> itemId == null
                         || v.result().getItemId() == itemId
                         || (includeReviewChildren
@@ -75,10 +100,10 @@ public class PracticeProfileReviewService {
                 .forEach(v -> byReview.computeIfAbsent(v.result().getReviewId(), id -> new ArrayList<>())
                         .add(v));
         var ordered = byReview.values().stream()
-                .sorted(Comparator.comparing(
-                                (List<ResultView> v) -> v.getFirst().review().getCreatedAt())
-                        .thenComparing(v -> v.getFirst().review().getId().toString())
-                        .reversed())
+                .filter(v -> statuses == null
+                        || statuses.isEmpty()
+                        || statuses.contains(v.getFirst().review().getStatus()))
+                .sorted(oldestFirst ? OLDEST_FIRST : OLDEST_FIRST.reversed())
                 .toList();
         return new PageImpl<>(
                 ordered.stream()
