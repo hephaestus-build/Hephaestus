@@ -28,22 +28,23 @@ void describe("the Version PR's CI branch", () => {
 	});
 });
 
-void test("sampling excludes stale/future, retried, failed and release validation", () => {
+void test("sampling takes first-attempt successful merge groups inside the window", () => {
 	const now = Date.parse("2026-01-30T00:00:00Z");
 	const run = {
-		event: "pull_request",
+		event: "merge_group",
 		status: "completed",
 		conclusion: "success",
 		run_attempt: 1,
-		head_branch: "feature",
+		head_branch: "gh-readonly-queue/main/pr-12-abc",
 		created_at: "2026-01-29T00:00:00Z",
 	};
+	// A pull request runs only the fast tier, and a push repeats a verified tree.
 	const excluded = [
-		{ event: "merge_group" },
+		{ event: "pull_request" },
+		{ event: "push" },
 		{ conclusion: "failure" },
 		{ conclusion: "cancelled" },
 		{ run_attempt: 2 },
-		{ head_branch: "changeset-release/main" },
 		{ status: "in_progress" },
 		{ created_at: "2025-12-31T00:00:00Z" },
 		{ created_at: "2026-01-31T00:00:00Z" },
@@ -51,7 +52,6 @@ void test("sampling excludes stale/future, retried, failed and release validatio
 	assert.deepEqual(
 		selectLatencyRuns(
 			{ workflow_runs: [run, ...excluded.map((fields) => ({ ...run, ...fields }))] },
-			"changeset-release/main",
 			now,
 		),
 		[run],
@@ -70,7 +70,7 @@ function integration(...shards: string[]) {
 	return shards.map((shard) => `Test / App Server: Integration (${shard})`);
 }
 
-void test("lightweight PRs cannot make full verification's latency budget pass", () => {
+void test("lightweight runs cannot make full verification's latency budget pass", () => {
 	for (const shards of [
 		["providers", "runtime-and-startup", "practices-and-agent", "application"],
 		["providers", "runtime-and-startup", "application"],

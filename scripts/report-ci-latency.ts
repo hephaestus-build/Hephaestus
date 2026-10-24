@@ -1,6 +1,6 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 
-import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
+import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 import { median, percentile } from "./lib/statistics.ts";
 import { summarizeCiTimings } from "./report-ci-timings.ts";
@@ -16,7 +16,8 @@ export function versionBranch(config: unknown): string {
 	return `changeset-release/${baseBranch}`;
 }
 
-export function selectLatencyRuns(value: unknown, releaseBranch: string, now: number) {
+/** Merge groups always verify a change in full; ci-cd.mdx § Two verification tiers. */
+export function selectLatencyRuns(value: unknown, now: number) {
 	return asArray(asRecord(value, "runs response").workflow_runs, "workflow_runs")
 		.map((run) => asRecord(run, "run"))
 		.filter((run) => {
@@ -25,11 +26,10 @@ export function selectLatencyRuns(value: unknown, releaseBranch: string, now: nu
 				throw new Error("Invalid run creation timestamp");
 			}
 			return (
-				run.event === "pull_request" &&
+				run.event === "merge_group" &&
 				run.status === "completed" &&
 				run.conclusion === "success" &&
 				run.run_attempt === 1 &&
-				run.head_branch !== releaseBranch &&
 				created <= now &&
 				created >= now - WINDOW_DAYS * 24 * 60 * 60 * 1000
 			);
@@ -98,7 +98,7 @@ function seconds(value: number | null): string {
 
 export function renderLatencyBudget(budget: ReturnType<typeof latencyBudget>): string {
 	return [
-		"## Pull-request latency (advisory)",
+		"## Full-verification latency (advisory)",
 		"",
 		`Status: **${budget.status}** (${budget.count}/10 qualifying runs).`,
 		"",
@@ -118,14 +118,13 @@ if (import.meta.main) {
 	if (repository === undefined || !/^[\w.-]+\/[\w.-]+$/u.test(repository)) {
 		throw new Error("GITHUB_REPOSITORY must be owner/repository");
 	}
-	const releaseBranch = versionBranch(await readJsonFile(".changeset/config.json"));
 	const now = Date.now();
 	const since = new Date(now - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 	const listing = asRecord(
 		parseJson(
 			await output("gh", [
 				"api",
-				`repos/${repository}/actions/workflows/cicd.yml/runs?event=pull_request&status=completed&created=${encodeURIComponent(`>=${since}`)}&per_page=100`,
+				`repos/${repository}/actions/workflows/cicd.yml/runs?event=merge_group&status=completed&created=${encodeURIComponent(`>=${since}`)}&per_page=100`,
 			]),
 		),
 		"runs response",
@@ -135,7 +134,7 @@ if (import.meta.main) {
 	);
 	const summaries = [];
 	let fullCount = 0;
-	for (const run of selectLatencyRuns(listing, releaseBranch, now)) {
+	for (const run of selectLatencyRuns(listing, now)) {
 		const { id } = run;
 		if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) {
 			throw new Error("Invalid run ID");
@@ -153,6 +152,10 @@ if (import.meta.main) {
 		).map((page) => asRecord(page, "job page"));
 		const jobs = pages.flatMap((page) => asArray(page.jobs, "jobs"));
 		const summary = summarizeCiTimings(run, { total_count: pages[0]?.total_count, jobs });
+		// A release candidate's group also generates release evidence, which is not verification latency.
+		if (summary.jobs.some((job) => job.name === "Release evidence preflight")) {
+			continue;
+		}
 		const cohort = isFullVerification(summary.jobs) ? "full-verification" : "partial-verification";
 		summaries.push({ ...summary, cohort });
 		if (cohort === "full-verification") {

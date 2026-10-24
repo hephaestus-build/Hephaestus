@@ -32,6 +32,10 @@ on:
         description: "Commit whose published PostgreSQL image the database legs reuse"
         required: true
         type: string
+      queue_tier:
+        description: "Whether the run also verifies the queue tier (docs/contributor/ci-cd.mdx § Two verification tiers)"
+        required: true
+        type: string
 
 permissions: {}
 
@@ -130,7 +134,7 @@ jobs:
 
   server-database:
     name: "App Server: Database"
-    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true'
+    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -191,7 +195,7 @@ jobs:
   # rather than queueing behind databaseTest's Gradle invocation.
   postgres-drill:
     name: "App Server: PostgreSQL drill (${{ matrix.drill }})"
-    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true'
+    if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -225,7 +229,7 @@ jobs:
 
   webapp-e2e:
     name: "Webapp: E2E"
-    if: inputs.should_skip != 'true' && inputs.e2e_changed == 'true'
+    if: inputs.should_skip != 'true' && inputs.e2e_changed == 'true' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -306,7 +310,7 @@ jobs:
   # zip: the Extension quality leg builds that and checks its manifest (check:extension-package).
   extension-e2e:
     name: "Extension: E2E"
-    if: inputs.should_skip != 'true' && inputs.extension_e2e_changed == 'true'
+    if: inputs.should_skip != 'true' && inputs.extension_e2e_changed == 'true' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:

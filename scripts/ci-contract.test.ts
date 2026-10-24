@@ -286,6 +286,26 @@ function stepInputs(declaration: YAMLMap): YAMLMap {
 }
 
 /** The shell a named `run` step ships. */
+/** A `detect-changes` tier output for one event, with the live `ci:full` read set or unreadable. */
+function evaluateTierOutput(source: string, event: string, full: string | undefined): string {
+	const body = /^\$\{\{ (?<body>.+) \}\}$/u.exec(source)?.groups?.body;
+	assert.ok(isSet(body));
+	const parsed = new Parser(new Lexer(body).lex().tokens, ["github", "steps"], []).parse();
+	const context: unknown = JSON.parse(
+		JSON.stringify({
+			github: { event_name: event },
+			steps: {
+				opt_in: { outputs: full === undefined ? {} : { full } },
+				skip_check: { outputs: { should_skip: "true" } },
+				release_candidate: { outputs: { "release-candidate": "false" } },
+			},
+		}),
+		data.reviver,
+	);
+	assert.ok(context instanceof data.Dictionary);
+	return new Evaluator(parsed, context).evaluate().coerceString();
+}
+
 function runScript(workflow: Document, jobPath: string[], name: string): string {
 	const shell = namedStep(workflow, jobPath, name).get("run");
 	assert.ok(typeof shell === "string", `${name} is not a run step`);
@@ -750,6 +770,84 @@ void describe("CI contract", () => {
 			/^\$\{\{ !cancelled\(\) \}\}$/u,
 			"shards start after the cold phase job, even when it fails",
 		);
+	});
+
+	void test("a pull request runs the fast tier, and every other event also runs the queue tier", async () => {
+		const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const decision = String(
+			orchestrator.getIn(["jobs", "detect-changes", "outputs", "queue-tier"]),
+		);
+		const skip = String(orchestrator.getIn(["jobs", "detect-changes", "outputs", "should_skip"]));
+		// `full` is the live label read; undefined is a read that failed and wrote no output.
+		for (const [event, full, queue, skipped] of [
+			["pull_request", "false", "false", "true"],
+			["pull_request", "true", "true", "false"],
+			["pull_request", undefined, "true", "false"],
+			["merge_group", undefined, "true", "false"],
+			["push", undefined, "true", "false"],
+			["workflow_dispatch", undefined, "true", "false"],
+		] as const) {
+			const label = full ?? "unreadable";
+			assert.equal(
+				evaluateTierOutput(decision, event, full),
+				queue,
+				`${event} with ci:full ${label}`,
+			);
+			// A duplicate is skipped only without the opt-in, so a re-run after the label runs the tier.
+			assert.equal(
+				evaluateTierOutput(skip, event, full),
+				skipped,
+				`duplicate skip, ${event} ${label}`,
+			);
+		}
+		const optIn = namedStep(orchestrator, ["jobs", "detect-changes"], "Read the ci:full opt-in");
+		assert.equal(optIn.get("continue-on-error"), true);
+		assert.match(
+			String(optIn.get("run")),
+			/gh api "repos\/\$GITHUB_REPOSITORY\/pulls\/\$PR_NUMBER"/u,
+		);
+		const source = await readFile(".github/workflows/cicd.yml", "utf8");
+		// The event payload keeps the labels of the push, so a re-run would not see the opt-in.
+		assert.doesNotMatch(source, /github\.event\.pull_request\.labels/u);
+		assert.doesNotMatch(
+			JSON.stringify(orchestrator.getIn(["on", "pull_request"]) ?? {}),
+			/labeled/u,
+		);
+		for (const caller of ["Build", "Test"]) {
+			assert.equal(
+				orchestrator.getIn(["jobs", caller, "with", "queue_tier"]),
+				`\${{ needs.detect-changes.outputs.queue-tier }}`,
+				`${caller} receives the tier decision`,
+			);
+		}
+		for (const [file, queue, fast] of [
+			[
+				".github/workflows/ci-build.yml",
+				["server-database", "postgres-drill", "webapp-e2e", "extension-e2e"],
+				["server-api"],
+			],
+			[".github/workflows/ci-tests.yml", ["server-integration"], ["server-verification"]],
+		] as const) {
+			const workflow = parseDocument(await readFile(file, "utf8"));
+			assert.equal(
+				workflow.getIn(["on", "workflow_call", "inputs", "queue_tier", "required"]),
+				true,
+			);
+			for (const name of queue) {
+				assert.match(
+					String(workflow.getIn(["jobs", name, "if"])),
+					/&& inputs\.queue_tier == 'true'$/u,
+					`${name} belongs to the queue tier`,
+				);
+			}
+			for (const name of fast) {
+				assert.doesNotMatch(
+					String(workflow.getIn(["jobs", name, "if"])),
+					/queue_tier/u,
+					`${name} belongs to the fast tier`,
+				);
+			}
+		}
 	});
 
 	void test("the server package job is the only Gradle cache producer", async () => {
