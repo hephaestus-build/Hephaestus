@@ -125,8 +125,9 @@ Run the migration once for each release, before the new roles start:
 - **Compose.** The shipped stacks contain a one-shot `database-migration` service.
   The server and the worker start only after it completes successfully.
   The webhook receiver of the single-host stack also waits for it.
-  Run `docker compose run --rm -T database-migration` first.
-  It ends with the exit status of the migration, and the previous roles keep serving until then.
+  Run `docker compose run --rm -T --no-deps database-migration` first.
+  `--no-deps` keeps Compose from restarting PostgreSQL under the running roles.
+  The command ends with the exit status of the migration, and the previous roles keep serving until then.
   If it fails, Compose replaces no role. Follow [Upgrade § If migration fails](./upgrade#if-migration-fails).
   Then run `docker compose up -d` to replace the roles.
   It stops the previous roles and runs the migration service again, which finds nothing to apply.
@@ -140,6 +141,8 @@ Run the migration once for each release, before the new roles start:
 ### One migration at a time
 
 Every migration holds a PostgreSQL advisory lock while it runs.
+The lock lives in the database session, so the migration needs a direct or session-pooled connection.
+A proxy that pools by transaction can leave the lock on a server connection.
 This applies to the run mode and to a process that migrates at start, such as the development server or a role with `SPRING_LIQUIBASE_ENABLED=true`.
 A second migration waits until the first ends, and logs `database.migration.lock_awaited`.
 After `hephaestus.database.migration-wait`, the waiting process stops.

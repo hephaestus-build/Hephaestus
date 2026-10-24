@@ -871,6 +871,7 @@ console.log(found.ID);
 if (args[0] === "image" && args[1] === "rm" && process.env.IMAGE_IN_USE === args[2]) process.exit(1);
 if (args.includes("pull") && process.env.FAIL_PULL === args[args.indexOf("--project-name") + 1]) process.exit(1);
 if (args.includes("run") && process.env.FAIL_RUN === args.at(-1)) process.exit(1);
+if (args.includes("ps") && process.env.POSTGRES_RUNNING === "1") console.log("postgres-container");
 if (args.includes("stop")) {
 const service = declared[args.at(-1)];
 if (service === undefined || process.env.FAIL_WORKER_STOP === "1") process.exit(1);
@@ -928,6 +929,7 @@ await main(${JSON.stringify(units)});\n`,
 			failWorkerStop = false,
 			failPull,
 			failRun,
+			postgresRunning = false,
 			unlockedStack,
 			channel = "test",
 			environment = {},
@@ -940,6 +942,7 @@ await main(${JSON.stringify(units)});\n`,
 			failPull?: string;
 			/** The service whose `docker compose run` fails. */
 			failRun?: string;
+			postgresRunning?: boolean;
 			channel?: string;
 			unlockedStack?: string;
 			/** More of the host's environment, such as what the fake Docker lists. */
@@ -965,6 +968,7 @@ await main(${JSON.stringify(units)});\n`,
 						FAIL_WORKER_STOP: failWorkerStop ? "1" : "0",
 						FAIL_PULL: failPull,
 						FAIL_RUN: failRun,
+						POSTGRES_RUNNING: postgresRunning ? "1" : "0",
 						UNLOCKED_STACK: unlockedStack,
 						...environment,
 					}),
@@ -1100,7 +1104,7 @@ await test(
 			assert.equal(calls[1], "trusted verifier");
 			const docker = calls.filter((line) => line.startsWith("docker compose"));
 			// A first install runs no worker yet, so nothing is stopped.
-			assert.equal(docker.length, 11);
+			assert.equal(docker.length, 12);
 			for (const [index, stack] of ["app", "core", "proxy"].entries()) {
 				assert.match(
 					docker[index] ?? "",
@@ -1112,12 +1116,13 @@ await test(
 					new RegExp(`--project-name ${stack} .* pull --policy missing$`, "u"),
 				);
 			}
-			// The migration ends before any stack replaces its roles.
-			assert.match(docker[6] ?? "", /--project-name app .* run --rm -T database-migration$/u);
-			assert.match(docker[7] ?? "", /--project-name core .* up .* nats-server$/u);
+			// The migration ends before any stack replaces its roles. Nothing runs yet, so it starts PostgreSQL.
+			assert.match(docker[6] ?? "", /--project-name app .* ps --status running --quiet postgres$/u);
+			assert.match(docker[7] ?? "", /--project-name app .* run --rm -T database-migration$/u);
+			assert.match(docker[8] ?? "", /--project-name core .* up .* nats-server$/u);
 			for (const [index, stack] of ["app", "core", "proxy"].entries()) {
 				assert.match(
-					docker[index + 8] ?? "",
+					docker[index + 9] ?? "",
 					new RegExp(`--project-name ${stack} .* up .* --remove-orphans$`, "u"),
 				);
 			}
@@ -1307,7 +1312,7 @@ await test(
 			assert.doesNotMatch(await fixture.calls(), / pull | up | stop /u);
 
 			await fixture.retainLock("v0.9.0", previous.commit);
-			const result = fixture.run();
+			const result = fixture.run({ postgresRunning: true });
 			assert.equal(result.status, 0, result.stderr);
 			const record = await readApplied(path.join(directory, "applied.json"));
 			assert.equal(record?.release, "v1.0.0");
@@ -1332,7 +1337,10 @@ await test(
 			// The running worker keeps working while every target image downloads.
 			assert.equal(pulls.length, 3, lines.join("\n"));
 			assert.ok(lastRender < Math.min(...pulls) && Math.max(...pulls) < stop, lines.join("\n"));
-			const migration = lines.findIndex((line) => line.endsWith(" run --rm -T database-migration"));
+			// PostgreSQL runs, so the migration leaves it to the `up` that replaces the roles.
+			const migration = lines.findIndex((line) =>
+				line.endsWith(" run --rm -T --no-deps database-migration"),
+			);
 			// The previous worker keeps working until the migration ends.
 			assert.ok(Math.max(...pulls) < migration && migration < stop, lines.join("\n"));
 			assert.ok(stop < firstUp, lines.join("\n"));

@@ -290,7 +290,9 @@ The reconciler refuses a release checkout with modified tracked files.
 An apply stops the worker before it replaces a service that the worker depends on.
 After the signed lock and every rendered Compose configuration of the new release pass their checks, the reconciler pulls the images of each stack with `docker compose pull --policy missing`.
 A pull starts no container, so the running worker continues during the download.
+
 Then the reconciler runs the [database migration](./runtime-roles#database-migrations) of the new release, while every role of the previous release still runs.
+A PostgreSQL that runs is left alone: the `up` that replaces the roles applies a changed PostgreSQL service.
 If the migration fails, the reconciler stops nothing, applies no stack and records no release.
 Then the reconciler stops the running worker.
 
@@ -298,6 +300,10 @@ It uses the `app` configuration and retained lock of the release that the host a
 If a pull fails, the reconciler stops nothing, applies no stack and records no release.
 This also stops the worker when the new release removes it.
 It waits until the stop is complete and then applies the stacks.
+
+A host applies a release with the reconciler of the release that it applied last.
+The first apply of the release that adds the migration service therefore uses a reconciler without the migration step.
+That apply stops the previous roles before Compose runs the migration.
 
 Compose waits up to the `stop_grace_period` that the running worker was started with while the worker drains, then stops the container.
 A review that is still running at that time stops with the worker.

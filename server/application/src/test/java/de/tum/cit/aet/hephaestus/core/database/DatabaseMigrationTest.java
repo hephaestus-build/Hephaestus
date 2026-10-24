@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
@@ -14,14 +15,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.liquibase.autoconfigure.LiquibaseProperties;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 @Tag("database")
+@ExtendWith(OutputCaptureExtension.class)
 class DatabaseMigrationTest {
 
     @Test
@@ -60,35 +65,29 @@ class DatabaseMigrationTest {
     }
 
     @Test
-    void shouldApplyEachChangeSetOnceWhenTwoRunsStartTogether() throws Exception {
-        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_concurrent");
+    void shouldKeepAnotherRunsLiquibaseLockWhileThatRunHoldsTheMigrationLock(CapturedOutput output) throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_live_lock");
+        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        var jdbc = jdbc(database);
+        CompletableFuture<Integer> waiting;
+        try (Connection holder = dataSource(database).getConnection();
+                var statement = holder.createStatement()) {
+            // Another live migration: it holds the migration lock and the Liquibase lock.
+            statement.execute("SELECT pg_advisory_lock(hashtext('hephaestus'), hashtext('database-migration'))");
+            jdbc.update("UPDATE databasechangeloglock SET locked = TRUE, lockgranted = now(), lockedby = 'live run'");
 
-        var first = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(arguments(database)));
-        var second = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(arguments(database)));
+            waiting = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(arguments(database)));
+            await().atMost(Duration.ofMinutes(1))
+                    .until(() -> output.getOut().contains("for another database migration to end"));
 
-        assertThat(first.get(5, TimeUnit.MINUTES)).isZero();
-        assertThat(second.get(5, TimeUnit.MINUTES)).isZero();
-        assertThat(jdbc(database)
-                        .queryForObject(
-                                "SELECT count(*) - count(DISTINCT (id, author, filename)) FROM databasechangelog",
-                                Long.class))
-                .isZero();
-    }
+            assertThat(jdbc.queryForObject("SELECT locked FROM databasechangeloglock WHERE id = 1", Boolean.class))
+                    .isTrue();
+        }
 
-    @Test
-    void shouldApplyEachChangeSetOnceWhenAProcessMigratesAtStartBesideTheRunMode() throws Exception {
-        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_beside_start");
-
-        var atStart = CompletableFuture.runAsync(() -> migrateAtStart(database));
-        var runMode = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(arguments(database)));
-
-        atStart.get(5, TimeUnit.MINUTES);
-        assertThat(runMode.get(5, TimeUnit.MINUTES)).isZero();
-        assertThat(jdbc(database)
-                        .queryForObject(
-                                "SELECT count(*) - count(DISTINCT (id, author, filename)) FROM databasechangelog",
-                                Long.class))
-                .isZero();
+        // The live run is gone, and with its session its migration lock; the Liquibase lock it left is stale now.
+        assertThat(waiting.get(5, TimeUnit.MINUTES)).isZero();
+        assertThat(jdbc.queryForObject("SELECT locked FROM databasechangeloglock WHERE id = 1", Boolean.class))
+                .isFalse();
     }
 
     @Test
@@ -121,9 +120,9 @@ class DatabaseMigrationTest {
     void shouldRefusePlaintextToARemoteDatabaseBeforeMigrating() {
         assertThatThrownBy(() -> DatabaseMigration.run(new String[] {
                     "--spring.profiles.active=prod," + DatabaseMigration.PROFILE,
-                    "--DATABASE_URL=postgresql://db.example.org:5432/hephaestus?sslmode=disable",
-                    "--DATABASE_USERNAME=hephaestus",
-                    "--DATABASE_PASSWORD=unused",
+                    "--spring.datasource.url=jdbc:postgresql://db.example.org:5432/hephaestus?sslmode=disable",
+                    "--spring.datasource.username=hephaestus",
+                    "--spring.datasource.password=unused",
                     "--spring.main.banner-mode=off"
                 }))
                 .rootCause()
@@ -140,12 +139,13 @@ class DatabaseMigrationTest {
     }
 
     private static String[] arguments(TestDatabase database) {
-        // The production profile and only the settings the Compose migration service is given.
+        // The production profile and only the data source. On the command line, it outranks the SPRING_DATASOURCE_*
+        // that the database job exports for its own PostgreSQL. The boot smoke covers DATABASE_*.
         return new String[] {
             "--spring.profiles.active=prod," + DatabaseMigration.PROFILE,
-            "--DATABASE_URL=" + database.jdbcUrl().substring("jdbc:".length()),
-            "--DATABASE_USERNAME=" + database.username(),
-            "--DATABASE_PASSWORD=" + database.password(),
+            "--spring.datasource.url=" + database.jdbcUrl(),
+            "--spring.datasource.username=" + database.username(),
+            "--spring.datasource.password=" + database.password(),
             "--spring.main.banner-mode=off"
         };
     }

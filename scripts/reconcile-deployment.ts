@@ -1079,11 +1079,20 @@ async function migrate(
 	composeArgsByStack: ReadonlyMap<Stack, RenderedStack>,
 ): Promise<void> {
 	const app = composeArgsByStack.get("app");
-	if (app?.services.includes(MIGRATION_SERVICE) === true) {
-		await run("docker", [...app.composeArgs, "run", "--rm", "-T", MIGRATION_SERVICE], {
-			cwd: releaseTree,
-		});
+	if (app?.services.includes(MIGRATION_SERVICE) !== true) {
+		return;
 	}
+	// `run` starts the dependencies, and recreates PostgreSQL if the release changed it, under the
+	// running roles. A running PostgreSQL is left to the `up` that replaces the roles.
+	const postgres = await output(
+		"docker",
+		[...app.composeArgs, "ps", "--status", "running", "--quiet", "postgres"],
+		{ cwd: releaseTree },
+	);
+	const deps = postgres.trim() === "" ? [] : ["--no-deps"];
+	await run("docker", [...app.composeArgs, "run", "--rm", "-T", ...deps, MIGRATION_SERVICE], {
+		cwd: releaseTree,
+	});
 }
 
 async function startStacks(
