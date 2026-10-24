@@ -92,7 +92,10 @@ function javaSkips(text: string): Skip[] {
 	}));
 }
 
-/** Unconditional skips that name no issue and owner, or carry an expired or distant end date. */
+/**
+ * Unconditional skips that name no issue and owner, or whose end date is no calendar day, has
+ * passed or lies more than 14 days ahead.
+ */
 export function quarantineFindings(file: string, content: string, today: Date): Finding[] {
 	const skips = file.endsWith(".java") ? javaSkips(content) : tsSkips(content);
 	const lines = content.split("\n");
@@ -117,7 +120,11 @@ export function quarantineFindings(file: string, content: string, today: Date): 
 				];
 			}
 			const until = Date.parse(`${end}T00:00:00Z`);
-			if (!Number.isFinite(until) || until < start) {
+			// `Date.parse` rolls an impossible day over into the next month: 2027-02-30 is 2027-03-02.
+			if (!Number.isFinite(until) || new Date(until).toISOString().slice(0, 10) !== end) {
+				return [{ file, line, problem: `quarantine of #${issue} names no calendar date (${end})` }];
+			}
+			if (until < start) {
 				return [{ file, line, problem: `quarantine of #${issue} expired on ${end}` }];
 			}
 			if (until - start > MAX_DAYS * DAY_MS) {

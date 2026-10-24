@@ -74,6 +74,16 @@ void test("an expired or distant quarantine fails", () => {
 	]);
 });
 
+void test("a quarantine whose end date is not a calendar day fails", () => {
+	for (const end of ["2027-02-30", "2026-11-31"]) {
+		assert.deepEqual(lines("A.java", `@Disabled("quarantine #12 @owner until ${end}: race")\n`), [
+			{ line: 1, problem: `quarantine of #12 names no calendar date (${end})` },
+		]);
+	}
+	const leapDay = '@Disabled("quarantine #12 @owner until 2028-02-29: race")\n';
+	assert.deepEqual(quarantineFindings("A.java", leapDay, new Date("2028-02-20T12:00:00Z")), []);
+});
+
 void test("an environment-gated skip is not a quarantine", () => {
 	const source = [
 		'test.skip(!process.env.HEPHAESTUS_LIVE, "needs live credentials");',
