@@ -84,9 +84,12 @@ export function toFeedbackCard(
 	const group = groups.find((candidate) => candidate.slug === feedback.groupSlug);
 	const { withdrawn } = feedback;
 	const closure = withdrawn ? undefined : closureOf(feedback);
+	// Each piece with what the review made of it, so the timeline draws a piece that needed attention
+	// with the Not met icon rather than a neutral dot.
 	const reviewedWork: ReviewedWorkOutcome[] = feedback.evidence.map((evidence) => ({
 		ref: evidence.item,
 		date: evidence.recordedAt,
+		outcome: evidence.outcome,
 	}));
 	return {
 		feedbackId: feedback.id,

@@ -24,7 +24,7 @@ export const Default: Story = {
 	play: async ({ canvas, canvasElement }) => {
 		const label = canvas.getByText("Has open feedback");
 		await expect(label).toBeVisible();
-		await expect(canvasElement).toHaveTextContent("1 of 3 clean");
+		await expect(canvasElement).toHaveTextContent("1 clean in a row · 2 more resolve it");
 		// Nothing to press or tab to: the row's own link opens the practice.
 		await expect(canvas.queryByRole("button")).toBeNull();
 		await expect(canvas.queryByRole("link")).toBeNull();

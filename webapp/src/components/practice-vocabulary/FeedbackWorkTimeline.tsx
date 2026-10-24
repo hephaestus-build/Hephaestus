@@ -6,7 +6,6 @@ import { InlineLink } from "@/components/common/InlineLink";
 import { statusToneClass } from "@/components/common/status-def";
 import { formatDay, formatShortDay } from "@/lib/dates";
 
-import { count } from "./feedback-text";
 import { OUTCOME_DEFS, type Outcome } from "./outcome-defs";
 import type { TimelinePiece } from "./practice-feedback-timeline";
 
@@ -27,16 +26,38 @@ const EVIDENCE_WORDS = "evidence for this feedback";
  */
 type Joint = "clean" | "plain" | "missing" | "none";
 
-function JointLine({ kind }: { kind: Joint }) {
+/**
+ * One dash pattern for the line to the places still missing, 3 px dash and 3 px gap, drawn as a
+ * gradient rather than a dashed border, whose dashes the browser fits to each half on its own. The
+ * two halves of a joint meet in the middle of the gap between two places: the half after a place
+ * runs its pattern back from that middle starting with a gap, the half before the next place runs
+ * it on from the middle starting with a dash, so across the middle the pattern goes on unbroken.
+ */
+const DASHES = {
+	/** The half before a place: from the middle, dash first. */
+	before: "bg-[repeating-linear-gradient(to_right,currentColor_0_3px,transparent_3px_6px)] bg-left",
+	/** The half after a place: back from the middle, gap first. */
+	after: "bg-[repeating-linear-gradient(to_left,transparent_0_3px,currentColor_3px_6px)] bg-right",
+} as const;
+
+function JointLine({ kind, side }: { kind: Joint; side: "before" | "after" }) {
+	if (kind === "missing") {
+		return (
+			<span
+				aria-hidden
+				data-joint="missing"
+				className={cn("h-px flex-1 text-muted-foreground/40", DASHES[side])}
+			/>
+		);
+	}
 	return (
 		<span
 			aria-hidden
+			data-joint={kind}
 			className={cn(
-				"h-0 flex-1 border-t",
-				kind === "clean" && "border-success",
-				kind === "plain" && "border-border",
-				kind === "missing" && "border-dashed border-muted-foreground/40",
-				kind === "none" && "border-transparent",
+				"h-px flex-1",
+				kind === "clean" && "bg-success",
+				kind === "plain" && "bg-border",
 			)}
 		/>
 	);
@@ -58,11 +79,28 @@ function Place({
 	return (
 		<li className="flex min-w-14 flex-1 flex-col items-center gap-1 text-center" {...props}>
 			<span aria-hidden className="flex h-4 w-full items-center gap-1.5">
-				<JointLine kind={left} />
+				<JointLine kind={left} side="before" />
 				{marker}
-				<JointLine kind={right} />
+				<JointLine kind={right} side="after" />
 			</span>
 			{children}
+		</li>
+	);
+}
+
+/**
+ * Older work the line leaves out: a short stretch of line led by "…" before the first piece shown,
+ * with no count, since the pattern is in the newest pieces. A screen reader hears that there is
+ * earlier work.
+ */
+function EarlierWork() {
+	return (
+		<li data-earlier-work="" className="flex flex-none flex-col items-center">
+			<span aria-hidden className="flex h-4 w-8 items-center gap-1">
+				<span className="text-xs leading-none text-muted-foreground">…</span>
+				<JointLine kind="plain" side="after" />
+			</span>
+			<span className="sr-only">Earlier work not shown</span>
 		</li>
 	);
 }
@@ -82,9 +120,9 @@ function FeedbackCreated({ right }: { right: Joint }) {
 		>
 			{/* No gap and no padding on the line's row, so both halves meet the tick. */}
 			<span className="flex h-4 w-full items-center">
-				<JointLine kind="plain" />
+				<JointLine kind="plain" side="before" />
 				<span data-feedback-created-tick="" className="h-3 w-px shrink-0 bg-muted-foreground" />
-				<JointLine kind={right} />
+				<JointLine kind={right} side="after" />
 			</span>
 			{/* One word a line, so the mark stays as narrow as a piece of work. */}
 			<span className="w-min px-1 text-xs leading-tight text-muted-foreground">
@@ -116,6 +154,7 @@ export function FeedbackWorkTimeline({
 	pieces: TimelinePiece[];
 	createdAt: Date;
 	cleanKeys: Set<string>;
+	/** How many older pieces the line leaves out; any at all draws the "…" stretch, without the number. */
 	earlier: number;
 	/** The clean pieces still missing to resolve the feedback; zero once it can no longer resolve. */
 	missing: number;
@@ -163,17 +202,7 @@ export function FeedbackWorkTimeline({
 	return (
 		<div ref={scroller} className="relative z-10 -mx-1 overflow-x-auto px-1 pt-0.5 pb-1">
 			<ol aria-label="Where it happened" className="flex w-max min-w-full">
-				{earlier > 0 && (
-					<Place
-						left="none"
-						right="plain"
-						marker={<span className="text-xs leading-none text-muted-foreground">…</span>}
-					>
-						<span className="text-xs whitespace-nowrap text-muted-foreground">
-							{count(earlier, "earlier", "earlier")}
-						</span>
-					</Place>
-				)}
+				{earlier > 0 && <EarlierWork />}
 				{pieces.map((piece, index) => {
 					// The outcome's own icon in its own tone, as the profile and the admin pages draw it. Clean
 					// work before the feedback is muted: only the work since counts towards resolving it.

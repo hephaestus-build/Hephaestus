@@ -548,7 +548,7 @@ function PracticeFeedbackSection({
 					)}
 					{feedback.resolved.length > 0 && (
 						<LabelledBlock label="Resolved feedback" as="h3" className="flex flex-col gap-2.5">
-							{feedback.resolved.map(feedbackCard)}
+							<div className="flex flex-col gap-6">{feedback.resolved.map(feedbackCard)}</div>
 						</LabelledBlock>
 					)}
 				</div>

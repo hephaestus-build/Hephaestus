@@ -220,15 +220,16 @@ const onWork = (event: ProfileEvent, joiner: string | undefined): FeedbackTextSe
 	joiner !== undefined && event.evidence.length > 0 ? [text(joiner), ...refs(event.evidence)] : [];
 
 /**
- * "Back to 0 of 3 clean": where the clean run that resolves a piece of feedback now stands. The
- * meter's own reading rather than prose, so the counting rule does not apply — the card below
- * shows the same two numbers as a meter, and spelling them out here would say something the meter
- * does not. A change the wire sent without the run's length says only that the run is empty.
+ * "Back to none of 3 clean in a row": where the clean run that resolves a piece of feedback now
+ * stands, in the words the card's own line uses ("None clean yet · 3 in a row resolve it"), so the
+ * sentence and the card below it never count the same run two ways. The run's length stays a
+ * figure, as the card's meter shows it. A change the wire sent without the run's length says only
+ * that the run is empty.
  */
 const backToClean = (event: ProfileEvent): string =>
 	event.cleanNeeded === undefined
-		? "back to no clean work"
-		: `back to 0 of ${event.cleanNeeded} clean`;
+		? "back to none clean in a row"
+		: `back to none of ${event.cleanNeeded} clean in a row`;
 
 /**
  * "after !425, !427 and !428 came back clean": the work that resolved a piece of feedback, linked.
@@ -265,12 +266,17 @@ interface Wording {
 
 // A standing or trend this build does not know reads as a phrase that fits the sentence, never as
 // the enum value.
-const movedTo = (event: ChangeEvent) => `moved to ${event.label ?? "a new standing"}`;
+const standingOf = (event: ChangeEvent) => event.label ?? "a new standing";
 const trendShown = (event: ChangeEvent) => event.label ?? "a new trend";
 
+/**
+ * A standing that moved says whose it is: the reader's. "Moved to Mixed feedback" left a student
+ * asking what had moved. A practice and its group share the words, so a group that moved with its
+ * practices is said once with them.
+ */
 const MOVED = {
-	predicate: movedTo,
-	alone: movedTo,
+	predicate: (event, plural) => `${plural ? "are" : "is"} now at ${standingOf(event)} for you`,
+	alone: (event) => `your standing is now ${standingOf(event)}`,
 	seenOn: " after ",
 } satisfies Wording;
 

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { NEW_FEEDBACK_CARD } from "@/stories/practice-feedback-cards-story-mock-data";
 import { conversation, issue, pullRequest } from "@/stories/practice-profile-story-mock-data";
@@ -79,6 +79,26 @@ export const New: Story = {
 		// The number rule and the two day rules of `feedback-text` and `lib/dates`: a word below ten,
 		// the short day on the timeline, the full day and the minute in the footer.
 		await expect(canvas.getByText("Created 9 September, 2:10 pm")).toBeVisible();
+		// The head names the kind and number of the work the pattern recurs in, beside the state; a
+		// hover, focus or tap names each piece, linked.
+		const seenIn = canvas.getByRole("button", {
+			name: `Recurring in three pull requests: ${args.card.headline}`,
+		});
+		await expect(seenIn).toBeVisible();
+		await expect(seenIn.nextElementSibling).toHaveTextContent("New");
+		await userEvent.hover(seenIn);
+		const works = await screen.findByRole("dialog", { name: "Recurring in three pull requests" });
+		await expect(within(works).getAllByRole("link")).toHaveLength(3);
+		// A short heading, then one work per line, newest first.
+		// The panel opens with a short animation: wait for it to settle under load.
+		await waitFor(async () => {
+			await expect(within(works).getByText("Recurring in these pull requests")).toBeVisible();
+		});
+		const lines = within(works).getAllByRole("listitem");
+		await expect(lines).toHaveLength(3);
+		const days = lines.map((line) => Date.parse(line.querySelector("time")?.dateTime ?? ""));
+		await expect([...days].sort((a, b) => b - a)).toStrictEqual(days);
+		await userEvent.unhover(seenIn);
 		// The glyph leading the next-step band is decoration: nothing in the card is a checkbox the
 		// reader could tick.
 		await expect(canvas.queryByRole("checkbox")).toBeNull();
@@ -126,22 +146,37 @@ export const New: Story = {
 		await expect(meter).toHaveAccessibleDescription(
 			"Resolves on its own once three pieces of work in a row come back clean",
 		);
-		await expect(meter).toHaveAttribute("aria-valuetext", "0 of 3 clean");
+		await expect(meter).toHaveAttribute("aria-valuetext", "None clean yet · 3 in a row resolve it");
 		await expect(
 			canvas.queryByText("Resolves on its own once three pieces of work in a row come back clean", {
 				ignore: ".sr-only, .sr-only *",
 			}),
 		).toBeNull();
-		// The rule stands in sight under the zone's title, with the card's own number.
-		const rule = within(article).getByText(
-			"Resolves when three pieces of reviewed work come back clean.",
-		);
-		await expect(rule).toBeVisible();
+		// The rule waits behind the (i) beside the zone's title, with the card's own number.
+		await expect(
+			within(article).queryByText("Resolves when three pieces of reviewed work come back clean."),
+		).toBeNull();
+		// The (i) is named for its card, so a page of cards has one name per button.
+		const ruleTip = within(article).getByRole("button", { name: /^How this feedback resolves: /u });
 		await expect(
 			within(article)
 				.getByRole("heading", { name: "Work reviewed for this practice" })
-				.compareDocumentPosition(rule),
+				.compareDocumentPosition(ruleTip),
 		).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+		await userEvent.click(ruleTip);
+		const rulePanel = await screen.findByRole("dialog", { name: "How this feedback resolves" });
+		await waitFor(async () => {
+			await expect(rulePanel).toBeVisible();
+		});
+		await expect(rulePanel).toHaveTextContent(
+			"Resolves when three pieces of reviewed work come back clean.",
+		);
+		await userEvent.keyboard("{Escape}");
+		await waitFor(async () => {
+			await expect(
+				screen.queryByRole("dialog", { name: "How this feedback resolves" }),
+			).not.toBeInTheDocument();
+		});
 		// A keyboard reaches the meter, and focusing it opens the sentence as its tooltip.
 		meter.focus();
 		const tooltip = await screen.findByText(/Resolves on its own once three pieces/u, {
@@ -153,13 +188,23 @@ export const New: Story = {
 		await expect(canvas.getAllByText("resolves")).toHaveLength(1);
 		await expect(canvas.queryByText("next")).toBeNull();
 		// The band has a rule below it as well as above, so it does not run into the progress.
-		const band = within(article).getByRole("heading", { name: "Next step" }).parentElement
-			?.parentElement;
+		const band = within(article)
+			.getByRole("heading", { name: "Next step" })
+			.closest<HTMLElement>("[data-next-step]");
 		if (!band) {
 			throw new Error("Expected the next step's band.");
 		}
 		await expect(getComputedStyle(band).borderTopWidth).toBe("1px");
 		await expect(getComputedStyle(band).borderBottomWidth).toBe("1px");
+		// The call to action: a narrow accent strip on the left edge, as tall as the band, rather than a
+		// border, so there is no mitred corner where it meets the rules.
+		await expect(getComputedStyle(band).borderLeftWidth).toBe("0px");
+		const edge = band.querySelector("[data-next-step-edge]");
+		if (!edge) {
+			throw new Error("Expected the next step's accent edge.");
+		}
+		await expect(edge.getBoundingClientRect().width).toBe(2);
+		await expect(edge.getBoundingClientRect().height).toBe(band.clientHeight);
 		// The order: what it is about, the next step, then the progress with the answers in it.
 		const inOrder = [
 			within(article).getByRole("heading", { name: args.card.headline }),
@@ -267,6 +312,22 @@ export const MarkdownNextStep: Story = {
  * its outcome's registry icon: a wrench where it needed attention, a check in a circle where it
  * came back clean.
  */
+/**
+ * The line to the places still missing keeps one even dash pattern across each gap: the two halves
+ * of a joint meet in phase, gap against dash, so no longer dash sits in the middle.
+ */
+export const EvenDashes: Story = {
+	args: { card: { ...card, state: "open", cleanWork: [] } },
+	play: async ({ canvasElement }) => {
+		const halves = [...canvasElement.querySelectorAll<HTMLElement>("[data-joint='missing']")];
+		await expect(halves.length).toBeGreaterThan(1);
+		for (const half of halves) {
+			await expect(getComputedStyle(half).backgroundImage).toContain("repeating-linear-gradient");
+			await expect(getComputedStyle(half).borderTopStyle).not.toBe("dashed");
+		}
+	},
+};
+
 export const TwoOfThreeClean: Story = {
 	args: { card: { ...card, state: "open", cleanWork: twoClean } },
 	play: async ({ canvas }) => {
@@ -277,7 +338,7 @@ export const TwoOfThreeClean: Story = {
 		await expect(meter).toHaveAttribute("aria-valuemax", "3");
 		await expect(canvas.getByRole("meter", { name: "Clean work in a row" })).toHaveAttribute(
 			"aria-valuetext",
-			"2 of 3 clean",
+			"2 clean in a row · 1 more resolves it",
 		);
 		const timeline = within(canvas.getByRole("list", { name: "Where it happened" }));
 		await expect(
@@ -340,6 +401,15 @@ export const TwoOfThreeClean: Story = {
 		for (const marker of markers) {
 			await expect(marker.closest(".rounded-full")).toBeNull();
 		}
+		// The card's own edge is the one strong line, with a faint shadow; the rules inside are lighter.
+		const article = canvas.getByRole("article");
+		const edge = getComputedStyle(article);
+		await expect(edge.boxShadow).not.toBe("none");
+		const footer = canvas.getByRole("group", { name: "Rate this feedback" }).parentElement;
+		if (!footer) {
+			throw new Error("Expected the card's footer.");
+		}
+		await expect(getComputedStyle(footer).borderTopColor).not.toBe(edge.borderTopColor);
 	},
 };
 
@@ -352,7 +422,7 @@ const longHistory = [11, 12, 13, 14, 15, 16, 17].map((number, index) => ({
 
 /**
  * A long history: nine pieces of reviewed work, and the timeline shows the five newest, never
- * more. The four older ones fold into one quiet "four earlier" place at the start of the line, and
+ * more. The four older ones fold into one short "…" stretch at the start of the line, with no count, and
  * the one clean piece still needed waits as a hollow dot after the newest.
  */
 export const LongHistory: Story = {
@@ -372,21 +442,22 @@ export const LongHistory: Story = {
 		// The older four are one place at the start, not a dot each.
 		const items = timeline.getAllByRole("listitem");
 		await expect(items).toHaveLength(6);
-		await expect(items[0]).toHaveTextContent("four earlier");
-		await expect(canvas.getAllByText(/earlier$/u)).toHaveLength(1);
+		await expect(items[0]).toHaveTextContent("Earlier work not shown");
+		await expect(items[0]).toHaveAttribute("data-earlier-work");
+		await expect(canvas.queryByText(/four earlier|4 earlier/u)).toBeNull();
 		// One clean piece still needed: one hollow dot, the one that resolves.
 		await expect(canvas.getAllByText("resolves")).toHaveLength(1);
 		await expect(canvas.getByRole("meter", { name: "Clean work in a row" })).toHaveAttribute(
 			"aria-valuetext",
-			"2 of 3 clean",
+			"2 clean in a row · 1 more resolves it",
 		);
 	},
 };
 
 /**
  * "Work reviewed for this practice" on a card of its full width: the left side is the timeline, the
- * right side one compact block, well apart from it. In the block the meter and its count share one
- * line, the label "Or mark it yourself" follows, then the two answers in a row of one height; the
+ * right side one compact block, well apart from it. In the block the meter's muted line stands above
+ * its track, the label "Or mark it yourself" follows, then the two answers in a row of one height; the
  * block's left edges align, and the block stands at the zone's right edge. A card narrower than
  * 36rem stacks the block under the timeline, as `Mobile` shows.
  */
@@ -417,18 +488,14 @@ export const ProgressSides: Story = {
 		for (const left of [label.left, buttons[0]?.left ?? 0]) {
 			await expect(Math.abs(left - meter.left)).toBeLessThan(1);
 		}
-		// The count is in the text's own size, on the bar's line.
-		const value = within(meterElement).getByText("2 of 3 clean");
-		await expect(getComputedStyle(value).fontSize).toBe("14px");
-		const track = value.previousElementSibling?.getBoundingClientRect();
+		// The count is one muted line above the track, set like "Or mark it yourself".
+		const value = within(meterElement).getByText("2 clean in a row · 1 more resolves it");
+		const answersLabel = canvas.getByText("Or mark it yourself");
+		await expect(getComputedStyle(value).fontSize).toBe(getComputedStyle(answersLabel).fontSize);
+		await expect(getComputedStyle(value).color).toBe(getComputedStyle(answersLabel).color);
+		const track = value.nextElementSibling?.getBoundingClientRect();
 		await expect(track?.width ?? 0).toBeGreaterThanOrEqual(96);
-		await expect(
-			Math.abs(
-				(track?.top ?? 0) +
-					(track?.height ?? 0) / 2 -
-					(value.getBoundingClientRect().top + value.getBoundingClientRect().height / 2),
-			),
-		).toBeLessThan(2);
+		await expect(track?.top ?? 0).toBeGreaterThanOrEqual(value.getBoundingClientRect().bottom);
 		// The two answers in one row, of one height.
 		await expect(buttons).toHaveLength(2);
 		await expect(Math.abs((buttons[0]?.top ?? 0) - (buttons[1]?.top ?? 1))).toBeLessThan(1);
@@ -464,7 +531,7 @@ export const Resolved: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Resolved")).toBeVisible();
 		await expect(canvas.queryByText("Open")).toBeNull();
-		await expect(canvas.getByText("3 of 3 clean")).toBeVisible();
+		await expect(canvas.getByText("3 clean in a row")).toBeVisible();
 		await expect(canvas.getByText("Resolved 9 September")).toBeVisible();
 		// Each reference carries its own "(opens in a new tab)", so the words are matched around
 		// them.
@@ -505,7 +572,7 @@ export const MarkedByYou: Story = {
 		await expect(
 			canvas.getByText("Marked as addressed on 9 September. Your next work confirms it."),
 		).toBeVisible();
-		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
+		await expect(canvas.getByText("2 clean in a row · 1 more resolves it")).toBeVisible();
 		const fixed = canvas.getByRole("button", { name: "I fixed this" });
 		await expect(fixed).toHaveAttribute("aria-pressed", "true");
 		await expect(fixed).toHaveAccessibleDescription(/Press it again to take it back\.$/u);
@@ -745,7 +812,7 @@ export const KeyboardFocus: Story = {
  * Clean and needed-attention work mixed on one line, in time order whatever order it was given in.
  * The icon tells them apart on screen, and each place also says it in words for a screen reader.
  * All four pieces came before the feedback, so the mark "Feedback created" closes the evidence and
- * the two clean pieces are muted: they do not count, and the meter reads "0 of 3 clean".
+ * the two clean pieces are muted: they do not count, and the meter reads "None clean yet".
  */
 export const EveryOutcome: Story = {
 	args: {
@@ -800,7 +867,7 @@ export const EveryOutcome: Story = {
 		);
 		await expect(canvas.getByRole("meter", { name: "Clean work in a row" })).toHaveAttribute(
 			"aria-valuetext",
-			"0 of 3 clean",
+			"None clean yet · 3 in a row resolve it",
 		);
 	},
 };
@@ -820,6 +887,8 @@ export const GitLabWork: Story = {
 	play: async ({ canvas }) => {
 		const list = canvas.getByRole("list", { name: "Where it happened" });
 		await expect(linkedWork(list)).toStrictEqual(["!17", "!20", "!19"]);
+		// The head follows the provider: merge requests at GitLab.
+		await expect(canvas.getByText("Recurring in three merge requests")).toBeVisible();
 	},
 };
 
@@ -844,6 +913,8 @@ export const MixedWork: Story = {
 		await expect(within(list).getAllByRole("listitem")).toHaveLength(3);
 		await expect(linkedWork(list)).toStrictEqual(["#17", "#13"]);
 		await expect(within(list).getByText("#releases")).toBeVisible();
+		// Two kinds of work: the head names neither, and counts only the work the feedback rests on.
+		await expect(canvas.getByText("Recurring in two pieces of reviewed work")).toBeVisible();
 	},
 };
 
@@ -974,6 +1045,7 @@ export const Withdrawn: Story = {
 		await expect(canvas.queryByText("Resolved")).toBeNull();
 		await expect(canvas.queryByRole("group", { name: "Or mark it yourself" })).toBeNull();
 		await expect(canvas.queryByRole("list", { name: "Where it happened" })).toBeNull();
+		await expect(canvas.queryByText(/^Recurring in /u)).toBeNull();
 		await expect(
 			canvas.queryByRole("button", { name: "Learn more about this practice" }),
 		).toBeNull();

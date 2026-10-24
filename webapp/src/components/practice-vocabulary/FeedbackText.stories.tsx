@@ -96,7 +96,13 @@ export const GroupNotInTheWorkspace: Story = {
 
 /** The full stop after a work link stays on the link's line on a narrow screen. */
 export const StopAfterAWorkLink: Story = {
-	args: { segments: [text("Moved to Needs attention after "), work(pullRequest(21)), text(".")] },
+	args: {
+		segments: [
+			text("Your standing is now Needs attention after "),
+			work(pullRequest(21)),
+			text("."),
+		],
+	},
 	globals: { viewport: { value: "phone390" } },
 	play: async ({ canvas }) => {
 		const link = canvas.getByRole("link", { name: "#21 (opens in a new tab)" });
