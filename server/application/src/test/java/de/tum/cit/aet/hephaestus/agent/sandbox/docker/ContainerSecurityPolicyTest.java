@@ -377,10 +377,12 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseAReviewMemoryLimitThatFullTmpfsMountsWouldExhaust() {
-        assertThatThrownBy(() -> ContainerSecurityPolicy.requireRoomBesideTmpfs(2L * 1024 * 1024 * 1024))
+        // The floor the changeset and the migration note name.
+        long floor = 2_751_463_424L;
+        assertThatThrownBy(() -> ContainerSecurityPolicy.requireRoomBesideTmpfs(floor - 1))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SANDBOX_MEMORY_BYTES");
-        assertThatCode(() -> ContainerSecurityPolicy.requireRoomBesideTmpfs(3L * 1024 * 1024 * 1024))
+        assertThatCode(() -> ContainerSecurityPolicy.requireRoomBesideTmpfs(floor))
                 .doesNotThrowAnyException();
     }
 }

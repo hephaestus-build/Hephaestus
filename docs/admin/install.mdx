@@ -81,8 +81,9 @@ Only the listed native hosts and the unmodified self-hosted Compose topology are
   The 3 GiB memory limit holds the sandbox's temporary file systems, which can grow to 2.06 GiB, and its processes.
   Hephaestus refuses to start if `SANDBOX_MEMORY_BYTES` leaves less than 512 MiB beside those file systems.
 
-  These limits come from measurements.
-  On release 0.82.0, a review of a small course repository reached a cgroup `memory.peak` of 194 MiB.
+  These limits come from one measurement on release 0.82.0.
+  Later releases are not re-measured.
+  On that release, a review of a small course repository reached a cgroup `memory.peak` of 194 MiB.
   It used at most 19 processes and 0.2 CPU, in samples taken once per second.
   The workspace initializer used less than 1 MiB of its own memory for a 437 MB workspace.
   The rest of its memory was file cache, which the kernel reclaims under the limit.
