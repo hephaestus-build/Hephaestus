@@ -448,6 +448,13 @@ change its score.
 | Staging           | qualified commits of `main`                 | automatic promotion policy        | none              |
 | Production        | a published release                         | manual promotion                  | required reviewer |
 
+After each successful `main` push, `continuous-staging.yml` dispatches one automatic **Promote** run for Staging and ends.
+That run decides, signs, publishes and observes the promotion in one job, so a promotion waits for one runner.
+Its conclusion and the Staging deployment record report the outcome.
+GitHub notifies nobody of a run that `GITHUB_TOKEN` dispatched.
+Thus, a failed automatic promotion opens the **Staging did not follow main** issue, or comments on it while it is open.
+Close it after triage.
+
 ### GitHub environment setup
 
 1. **Settings → Environments → New environment**

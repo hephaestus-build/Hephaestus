@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
+import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
 import { parseDocument } from "yaml";
 
 import { asArray, asRecord, asString, asStringArray, at } from "./lib/json.ts";
@@ -268,19 +269,54 @@ await test("the release smoke reaches the installation by the name the installer
 	);
 });
 
-await test("automatic promotion gates the environment job under one workflow lock", () => {
+/** A step's `if` as GitHub would evaluate it, for a condition that uses no status function. */
+function runsWhen(condition: string, apply: string, automatic: boolean): boolean {
+	const expression = /^\$\{\{(?<body>[\s\S]+)\}\}$/u.exec(condition)?.groups?.body ?? condition;
+	const parsed = new Parser(new Lexer(expression).lex().tokens, ["inputs", "steps"], []).parse();
+	const context: unknown = JSON.parse(
+		JSON.stringify({
+			inputs: { automatic, commit: "c".repeat(40), freeze: false },
+			// A skipped step with an id still has its outputs, each an empty string.
+			steps: { policy: { outputs: { apply } } },
+		}),
+		data.reviver,
+	);
+	assert.ok(context instanceof data.Dictionary);
+	return new Evaluator(parsed, context).evaluate().coerceString() === "true";
+}
+
+await test("an automatic promotion decides under the workflow lock, in the job that publishes", () => {
 	const workflow = parseDocument(promotion);
 	assert.equal(workflow.getIn(["concurrency", "group"]), `promote-\${{ inputs.environment }}`);
 	assert.equal(workflow.getIn(["concurrency", "cancel-in-progress"]), false);
-	assert.equal(workflow.getIn(["jobs", "automatic", "environment"]), undefined);
-	assert.equal(workflow.getIn(["jobs", "automatic", "permissions", "contents"]), "read");
-	assert.equal(
-		workflow.getIn(["jobs", "automatic", "outputs", "apply"]),
-		`\${{ steps.policy.outputs.apply }}`,
-	);
-	assert.equal(workflow.getIn(["jobs", "promote", "needs"]), "automatic");
-	assert.equal(
-		workflow.getIn(["jobs", "promote", "if"]),
-		`\${{ !cancelled() && !failure() && (!inputs.automatic || needs.automatic.outputs.apply == 'true') }}`,
-	);
+	// A job before it would wait for a second runner before the promotion could start.
+	const jobs = asRecord(at(promotionWorkflow, ["jobs"], "promote.yml"), "jobs");
+	for (const [name, job] of Object.entries(jobs)) {
+		if (name !== "promote") {
+			assert.equal(asRecord(job, name).needs, "promote", `${name} must run after the promotion`);
+		}
+	}
+	assert.equal(promoteStep("Check automatic promotion", ["if"]), `\${{ inputs.automatic }}`);
+	const policy = promoteSteps.findIndex(({ name }) => name === "Check automatic promotion");
+	// Every step that resolves, records, signs, publishes or observes a channel follows the decision:
+	// none runs when it skipped the request, and all run when it applied it or nobody asked it.
+	for (const step of promoteSteps.slice(policy + 1)) {
+		const label = String(step.name ?? step.uses);
+		const condition = asString(step.if, `${label} condition`);
+		// These two read outputs that only the steps below can set.
+		if (condition.startsWith("${{ always()")) {
+			continue;
+		}
+		assert.equal(
+			runsWhen(condition, "false", true),
+			false,
+			`${label} must not run for a skipped request`,
+		);
+		assert.equal(
+			runsWhen(condition, "true", true),
+			true,
+			`${label} must run for an applied request`,
+		);
+		assert.equal(runsWhen(condition, "", false), true, `${label} must run for a manual promotion`);
+	}
 });
