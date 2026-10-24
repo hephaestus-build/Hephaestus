@@ -29,8 +29,10 @@ public final class AdmittedReviewJobFixtures {
         if (existing.isPresent())
             return ConfigSnapshot.from(existing.get(), resolver).toJson(mapper);
 
-        var connection = connections.save(LlmCatalogTestFixtures.connection("review-delivery"));
-        var model = models.save(LlmCatalogTestFixtures.model(connection, "review-delivery", "test-model"));
+        // Slugs are unique per instance; earlier tests' rows are still there.
+        String slug = "review-delivery-" + workspace.getId();
+        var connection = connections.save(LlmCatalogTestFixtures.connection(slug));
+        var model = models.save(LlmCatalogTestFixtures.model(connection, slug, "test-model"));
         var binding = new WorkspaceAgentBinding();
         binding.setWorkspace(workspace);
         binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
