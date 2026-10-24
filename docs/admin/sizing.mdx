@@ -120,3 +120,20 @@ If you do not set it, the buildpack's default behavior applies.
 The value applies only when the JVM starts.
 To apply a change, drain and restart the worker, as [Graceful drain](./runtime-roles#graceful-drain) describes.
 For the calculation, see the [Paketo memory calculator](https://paketo.io/docs/reference/java-reference/#memory-calculator).
+
+## Disk
+
+Docker's data directory holds the images, the containers and the volumes.
+On a host with [pull-based deployment](./pull-based-deployment.mdx#images-and-free-space), plan for these parts:
+
+| Part | Size | What bounds it |
+| --- | --- | --- |
+| The images of one release | About 1 GB to download for `linux/amd64`. The application server is about half of it | The reconciler keeps the running and the previous release. During an apply, it pulls a third set |
+| PostgreSQL data (`app_postgresql-data`) | Grows with your workspaces and their history | Your data. Back it up as [Backup and restore](./backup-restore.mdx) describes |
+| Git repositories (`app_git-repos`, `app_worker-git-repos`) | Grows with the repositories that reviews read | Not bounded yet |
+| NATS JetStream (`core_nats-data`) | Grows with buffered provider events | Not bounded yet |
+| A restore rehearsal | A full copy of the database volume | Remove the clone's containers and volumes when the rehearsal ends |
+| Free space before a pull | 10 GiB, set by `HEPHAESTUS_MIN_FREE_GIB` | The reconciler refuses an apply below it |
+
+On a small disk, lower `HEPHAESTUS_MIN_FREE_GIB`.
+`docker system df -v` shows what each image, container and volume uses on disk.

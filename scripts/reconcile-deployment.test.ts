@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
+	appendFile,
 	copyFile,
 	mkdir,
 	mkdtemp,
@@ -34,7 +35,11 @@ import {
 	parseChannel,
 	parseStacks,
 	readApplied,
+	guardFreeSpace,
+	lockImages,
+	OperatorActionRequiredError,
 	renderMetrics,
+	unkeptImages,
 	requestIdentity,
 	serializeChannel,
 	syncUnits,
@@ -818,6 +823,15 @@ const stack = args[args.indexOf("--project-name") + 1];
 const image = stack === process.env.UNLOCKED_STACK ? "example.invalid/unverified:latest" : ${JSON.stringify(image)};
 console.log(JSON.stringify({ services: Object.fromEntries(Object.entries(declared).map(([name, service]) => [name, { ...service, image }])) }));
 }
+const images = (process.env.DOCKER_IMAGES ?? "").split("\\n").filter(Boolean).map((line) => JSON.parse(line));
+if (args[0] === "info") console.log(process.env.STATE_DIRECTORY);
+if (args[0] === "image" && args[1] === "ls") process.stdout.write(process.env.DOCKER_IMAGES ?? "");
+if (args[0] === "image" && args[1] === "inspect") {
+const found = images.find((listed) => listed.Repository + "@" + listed.Digest === args.at(-1));
+if (found === undefined) process.exit(1);
+console.log(found.ID);
+}
+if (args[0] === "image" && args[1] === "rm" && process.env.IMAGE_IN_USE === args[2]) process.exit(1);
 if (args.includes("pull") && process.env.FAIL_PULL === args[args.indexOf("--project-name") + 1]) process.exit(1);
 if (args.includes("stop")) {
 const service = declared[args.at(-1)];
@@ -877,6 +891,7 @@ await main(${JSON.stringify(units)});\n`,
 			failPull,
 			unlockedStack,
 			channel = "test",
+			environment = {},
 		}: {
 			cli?: boolean;
 			failVerification?: boolean;
@@ -886,6 +901,8 @@ await main(${JSON.stringify(units)});\n`,
 			failPull?: string;
 			channel?: string;
 			unlockedStack?: string;
+			/** More of the host's environment, such as what the fake Docker lists. */
+			environment?: Record<string, string>;
 		} = {}) =>
 			spawnSync(
 				process.execPath,
@@ -900,11 +917,14 @@ await main(${JSON.stringify(units)});\n`,
 						HEPHAESTUS_STACKS: "proxy core app",
 						HEPHAESTUS_PROMOTE_IDENTITY: "https://example.invalid/promote",
 						HEPHAESTUS_METRICS_FILE: metricsFile,
+						// The free-space guard reads the real disk; only the guard's own tests ask for a floor.
+						HEPHAESTUS_MIN_FREE_GIB: "0.001",
 						FAIL_VERIFICATION: failVerification ? "1" : "0",
 						FAIL_WORKTREE_REMOVE: failWorktreeRemove ? "1" : "0",
 						FAIL_WORKER_STOP: failWorkerStop ? "1" : "0",
 						FAIL_PULL: failPull,
 						UNLOCKED_STACK: unlockedStack,
+						...environment,
 					}),
 				},
 			),
@@ -1001,7 +1021,8 @@ await test(
 			);
 			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
 			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), accepted);
-			assert.doesNotMatch(await fixture.calls(), /docker|systemctl/u);
+			// The failure metric reads where Docker keeps its data; nothing else touches Docker.
+			assert.doesNotMatch(await fixture.calls(), /docker (?!info --format)|systemctl/u);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -1035,7 +1056,7 @@ await test(
 				.filter((line) => /^(?:cosign|trusted verifier|docker|systemctl)/u.test(line));
 			assert.match(calls[0] ?? "", /^cosign verify-blob/u);
 			assert.equal(calls[1], "trusted verifier");
-			const docker = calls.filter((line) => line.startsWith("docker"));
+			const docker = calls.filter((line) => line.startsWith("docker compose"));
 			// A first install runs no worker yet, so nothing is stopped.
 			assert.equal(docker.length, 10);
 			for (const [index, stack] of ["app", "core", "proxy"].entries()) {
@@ -1056,8 +1077,14 @@ await test(
 					new RegExp(`--project-name ${stack} .* up .* --remove-orphans$`, "u"),
 				);
 			}
-			assert.match(calls.at(-2) ?? "", /^systemctl show/u);
-			assert.equal(calls.at(-1), "systemctl daemon-reload");
+			// Unkept images go only after the release runs and is recorded.
+			assert.ok(
+				calls.findIndex((line) => line.startsWith("docker image ls")) >
+					calls.findLastIndex((line) => line.startsWith("docker compose")),
+			);
+			const systemctl = calls.filter((line) => line.startsWith("systemctl"));
+			assert.match(systemctl.at(-2) ?? "", /^systemctl show/u);
+			assert.equal(systemctl.at(-1), "systemctl daemon-reload");
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -1081,7 +1108,8 @@ await test(
 				await readFile(fixture.metricsFile, "utf8"),
 				/^hephaestus_deploy_reconcile_success 0$/mu,
 			);
-			assert.doesNotMatch(await fixture.calls(), /cosign|docker|systemctl/u);
+			// The failure metric reads where Docker keeps its data; nothing else touches Docker.
+			assert.doesNotMatch(await fixture.calls(), /cosign|docker (?!info --format)|systemctl/u);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -1637,3 +1665,231 @@ await test("no stack keeps anything in the release tree it was started from", ()
 		}
 	}
 });
+
+/** A digest of 64 copies of one hex character. */
+function sha(character: string): string {
+	return `sha256:${character.repeat(64)}`;
+}
+
+await test("only images of this deployment's repositories that no kept lock names are unkept", () => {
+	const kept = [
+		`ghcr.io/o/application-server@${sha("1")}`,
+		`docker.io/library/traefik@${sha("2")}`,
+		// A carried pin is in the lock the host wrote, so it is kept like any other.
+		`ghcr.io/o/postgres@${sha("3")}`,
+		`ghcr.io/o/application-server@${sha("4")}`,
+	];
+	assert.deepEqual(
+		unkeptImages(
+			[
+				{ repository: "ghcr.io/o/application-server", digest: sha("1"), id: "one" },
+				{ repository: "ghcr.io/o/application-server", digest: sha("4"), id: "four" },
+				{ repository: "ghcr.io/o/application-server", digest: sha("5"), id: "five" },
+				// Listed under a platform digest, but the same image as a kept index.
+				{ repository: "ghcr.io/o/postgres", digest: sha("8"), id: "three" },
+				// Docker lists a Docker Hub image without its registry and namespace.
+				{ repository: "traefik", digest: sha("2"), id: "two" },
+				{ repository: "traefik", digest: sha("6"), id: "six" },
+				// Nothing the locks name: another workload's image is never this host's to remove.
+				{ repository: "redis", digest: sha("7"), id: "seven" },
+			],
+			kept,
+			new Set(["three"]),
+		),
+		[`ghcr.io/o/application-server@${sha("5")}`, `traefik@${sha("6")}`],
+	);
+	assert.deepEqual(
+		unkeptImages([{ repository: "redis", digest: sha("7"), id: "seven" }], [], new Set()),
+		[],
+	);
+	assert.deepEqual(lockImages([`HEPHAESTUS_RELEASE_COMMIT=${"c".repeat(40)}\nX=a@${sha("1")}\n`]), [
+		`a@${sha("1")}`,
+	]);
+});
+
+await test("the space guard cleans up first and refuses only when that is not enough", async () => {
+	let free = 5;
+	let cleanups = 0;
+	const cleanup = async () => {
+		cleanups += 1;
+		free = 20;
+		return 3;
+	};
+	await guardFreeSpace(10, async () => 15, cleanup);
+	assert.equal(cleanups, 0);
+	await guardFreeSpace(10, async () => free, cleanup);
+	assert.equal(cleanups, 1);
+	await assert.rejects(
+		guardFreeSpace(
+			10 * 1024 ** 3,
+			async () => 1024 ** 3,
+			async () => 2,
+		),
+		(error: unknown) =>
+			error instanceof OperatorActionRequiredError &&
+			/Only 1\.0 GiB is free .* below the 10 GiB .* after removing 2 unused release images/u.test(
+				error.message,
+			),
+	);
+});
+await test("the metrics report the free space under Docker's data", () => {
+	const metrics = renderMetrics({
+		channel: "staging",
+		release: "v1.2.3",
+		commit: "c".repeat(40),
+		success: true,
+		now: new Date(0),
+		freeBytes: 7 * 1024 ** 3,
+	});
+	assert.match(metrics, /^hephaestus_deploy_free_bytes 7516192768$/mu);
+});
+
+await test(
+	"after an apply, the running and previous releases' images stay, unkept ones go, an image in use stays",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-images-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const [repository = "", applying = ""] = fixture.image.split("@");
+			const previous = { ...fixture.record, release: "v0.9.0", commit: fixture.commitOf("v0.9.0") };
+			await writeFile(path.join(directory, "applied.json"), JSON.stringify(previous));
+			await fixture.retainLock("v0.9.0", previous.commit);
+			// The previous release also named an image the new one does not, such as an agent image.
+			await appendFile(
+				path.join(directory, "release-locks", "v0.9.0.env"),
+				`HEPHAESTUS_IMAGE_AGENT_PI=${repository}@${sha("d")}\n`,
+			);
+			const adopted = fixture.run();
+			assert.equal(adopted.status, 0, adopted.stderr);
+			const environment = {
+				DOCKER_IMAGES: [applying, sha("d"), sha("b"), sha("c")]
+					.map((listed) => JSON.stringify({ Repository: repository, Digest: listed, ID: listed }))
+					.join("\n"),
+				IMAGE_IN_USE: `${repository}@${sha("c")}`,
+			};
+			const result = fixture.run({ environment });
+			assert.equal(result.status, 0, result.stderr);
+			const calls = await fixture.calls();
+			const removals = calls.split("\n").filter((line) => line.startsWith("docker image rm"));
+			assert.deepEqual(removals, [
+				`docker image rm ${repository}@${sha("b")}`,
+				`docker image rm ${repository}@${sha("c")}`,
+			]);
+			assert.match(result.stdout, /Keeping image .* Docker refused to remove it/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"too little free space refuses the pull after the safe cleanup, with the reason",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-full-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const [repository = ""] = fixture.image.split("@");
+			const result = fixture.run({
+				cli: true,
+				environment: {
+					HEPHAESTUS_MIN_FREE_GIB: String(1024 ** 3),
+					// The new release's image is not on the host, so the apply must pull.
+					DOCKER_IMAGES: JSON.stringify({ Repository: repository, Digest: sha("b"), ID: "old" }),
+				},
+			});
+			assert.notEqual(result.status, 0);
+			assert.match(
+				result.stderr,
+				/GiB is free for Docker's data, below .* HEPHAESTUS_MIN_FREE_GIB/u,
+			);
+			assert.match(result.stdout, /Removed image/u);
+			assert.doesNotMatch(result.stderr, /^\s+at /mu);
+			const calls = await fixture.calls();
+			assert.doesNotMatch(calls, / pull | up | stop /u);
+			assert.equal(await readApplied(path.join(directory, "applied.json")), undefined);
+			assert.match(
+				await readFile(fixture.metricsFile, "utf8"),
+				/^hephaestus_deploy_reconcile_success 0$/mu,
+			);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"a release whose images are all on the host is applied below the threshold, as a rollback must be",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-present-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const [repository = "", present = ""] = fixture.image.split("@");
+			const result = fixture.run({
+				environment: {
+					HEPHAESTUS_MIN_FREE_GIB: String(1024 ** 3),
+					DOCKER_IMAGES: JSON.stringify({ Repository: repository, Digest: present, ID: "present" }),
+				},
+			});
+			assert.equal(result.status, 0, result.stderr);
+			const record = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(record?.release, "v1.0.0");
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"the guard's cleanup keeps the running and previous releases' images before it refuses",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-full-running-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const [repository = ""] = fixture.image.split("@");
+			const runningRecord = {
+				...fixture.record,
+				release: "v0.9.0",
+				commit: fixture.commitOf("v0.9.0"),
+				previous: "v0.8.0",
+			};
+			await writeFile(path.join(directory, "applied.json"), JSON.stringify(runningRecord));
+			await fixture.retainLock("v0.9.0", runningRecord.commit);
+			await appendFile(
+				path.join(directory, "release-locks", "v0.9.0.env"),
+				`HEPHAESTUS_IMAGE_AGENT_PI=${repository}@${sha("d")}\n`,
+			);
+			await writeFile(
+				path.join(directory, "release-locks", "v0.8.0.env"),
+				`HEPHAESTUS_IMAGE_AGENT_PI=${repository}@${sha("e")}\n`,
+			);
+			// The first tick adopts the recorded release's tooling, as every startup does.
+			const adopted = fixture.run();
+			assert.equal(adopted.status, 0, adopted.stderr);
+			const before = await fixture.calls();
+			// The new release's image is not on the host, so it needs a pull, and the floor is impossible.
+			const result = fixture.run({
+				environment: {
+					HEPHAESTUS_MIN_FREE_GIB: String(1024 ** 3),
+					DOCKER_IMAGES: [sha("d"), sha("e"), sha("b")]
+						.map((listed) => JSON.stringify({ Repository: repository, Digest: listed, ID: listed }))
+						.join("\n"),
+				},
+			});
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /after removing 1 unused release images/u);
+			const after = await fixture.calls();
+			const removals = after
+				.slice(before.length)
+				.split("\n")
+				.filter((line) => line.startsWith("docker image rm"));
+			assert.deepEqual(removals, [`docker image rm ${repository}@${sha("b")}`]);
+			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), runningRecord);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
