@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import java.time.Duration;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -14,10 +16,18 @@ import org.springframework.context.support.StaticApplicationContext;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import org.springframework.validation.beanvalidation.SpringConstraintValidatorFactory;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.server.HttpServer;
 
 class ScmServerEndpointPolicyTest extends BaseUnitTest {
+
+    // The URL checks resolve these names to tell a public host from a private one.
+    @BeforeAll
+    static void declarePublicHosts() {
+        OfflineNetwork.answer("gitlab.com", OfflineNetwork.PUBLIC_ADDRESS);
+    }
+
     private static final String PROPERTY = "hephaestus.e2e.scm-origin";
     private static final String ORIGIN = "http://127.0.0.1:38171";
 
@@ -28,7 +38,8 @@ class ScmServerEndpointPolicyTest extends BaseUnitTest {
         if (!profiles.isEmpty()) {
             environment.setActiveProfiles(profiles.split(","));
         }
-        assertThatThrownBy(() -> new ScmServerEndpointPolicy(environment)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ScmServerEndpointPolicy(environment, WebClient.builder()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @ParameterizedTest
@@ -134,6 +145,6 @@ class ScmServerEndpointPolicyTest extends BaseUnitTest {
     private static ScmServerEndpointPolicy policy(String origin) {
         var environment = new MockEnvironment().withProperty(PROPERTY, origin);
         environment.setActiveProfiles("e2e");
-        return new ScmServerEndpointPolicy(environment);
+        return new ScmServerEndpointPolicy(environment, WebClient.builder());
     }
 }

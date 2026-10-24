@@ -4,12 +4,21 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ServerUrlValidatorTest extends BaseUnitTest {
+
+    // The URL checks resolve these names to tell a public host from a private one.
+    @BeforeAll
+    static void declarePublicHosts() {
+        OfflineNetwork.answer("gitlab.com", OfflineNetwork.PUBLIC_ADDRESS);
+        OfflineNetwork.answer("git.mycompany.org", OfflineNetwork.PUBLIC_ADDRESS);
+    }
 
     @Nested
     class SchemeValidation {

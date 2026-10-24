@@ -12,6 +12,7 @@ import org.springframework.mock.http.client.reactive.MockClientHttpRequest;
 import org.springframework.web.reactive.function.BodyInserter;
 import org.springframework.web.reactive.function.client.ClientRequest;
 import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.ExchangeFunction;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import reactor.core.publisher.Mono;
@@ -41,6 +42,21 @@ public final class ScriptedGitHub implements ExchangeFunction {
     /** The node id GitHub gives a pull request, and the thread its comments are kept under. */
     public static String pullRequest(String nameWithOwner, int number) {
         return "PR_" + nameWithOwner + "#" + number;
+    }
+
+    /**
+     * GitHub's REST budget endpoint, which the provider asks once per scope before its first GraphQL call. It
+     * answers that request alone and passes every other one on.
+     */
+    public ExchangeFilterFunction restRateLimit() {
+        return (request, next) -> request.url().getHost().equals("api.github.com")
+                        && request.url().getPath().equals("/rate_limit")
+                ? Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                        .body(json.writeValueAsString(Map.of(
+                                "resources", Map.of("graphql", Map.of("limit", 5000, "remaining", 5000, "reset", 0)))))
+                        .build())
+                : next.exchange(request);
     }
 
     @Override

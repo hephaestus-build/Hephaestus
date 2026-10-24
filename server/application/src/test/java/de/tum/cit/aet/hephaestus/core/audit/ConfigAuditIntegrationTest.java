@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.ReviewOn;
 import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
+import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
@@ -38,6 +39,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -54,6 +56,12 @@ import org.springframework.web.util.UriBuilder;
  * say the right thing, and that a workspace admin can never read another workspace's history.
  */
 class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    // The URL checks resolve these names to tell a public host from a private one.
+    @BeforeAll
+    static void declarePublicHosts() {
+        OfflineNetwork.answer("api.openai.com", OfflineNetwork.PUBLIC_ADDRESS);
+    }
 
     @Autowired
     private WebTestClient webTestClient;

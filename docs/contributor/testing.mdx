@@ -155,7 +155,17 @@ Contexts built on `BaseIntegrationTest` reach GitHub's GraphQL endpoint through 
 The application's own client, senders, schedulers and listeners run unchanged, and only the HTTP exchange answers from the script.
 A test reads what the application posted from `ScriptedGitHub.threads()`, keyed by repository and number.
 A GitHub document that the script does not answer fails as a GraphQL error.
-Live tests keep the real network.
+
+Tests make no external network calls.
+`OfflineNetwork` replaces host-name resolution in every test JVM.
+Loopback names resolve.
+A name reserved by RFC 2606 or RFC 6761 fails as an unknown host.
+Any other name is refused and recorded, and `OfflineNetworkExtension` fails the test class that tried it.
+
+A reverse lookup of a public address fails too.
+It is recorded unless one of the host's own interfaces carries the address.
+A test whose code only classifies an address declares the name with `OfflineNetwork.answer`.
+The live tier resolves every name.
 
 The test database starts with silent mode engaged, as a new instance does.
 A test that asserts a posted copy turns silent mode off and restores it afterwards.

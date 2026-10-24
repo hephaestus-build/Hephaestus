@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.testconfig;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webclient.WebClientCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -20,6 +21,11 @@ public class ScriptedGitHubTransport {
     @Bean
     ScriptedGitHub scriptedGitHub() {
         return new ScriptedGitHub();
+    }
+
+    @Bean
+    WebClientCustomizer scriptedGitHubRest(ScriptedGitHub github) {
+        return builder -> builder.filter(github.restRateLimit());
     }
 
     @Bean

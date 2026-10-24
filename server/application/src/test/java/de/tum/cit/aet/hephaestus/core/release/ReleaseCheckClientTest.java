@@ -33,7 +33,7 @@ class ReleaseCheckClientTest {
     private final RestClient.Builder builder = RestClient.builder();
     private final MockRestServiceServer server =
             MockRestServiceServer.bindTo(builder).build();
-    private final ReleaseCheckClient client = new ReleaseCheckClient(builder, Clock.fixed(NOW, ZoneOffset.UTC));
+    private final ReleaseCheckClient client = ReleaseCheckClient.over(builder, Clock.fixed(NOW, ZoneOffset.UTC));
 
     private static String release(String tag, String notes) {
         return "{\"tag_name\":\"" + tag + "\",\"draft\":false,\"prerelease\":false,\"body\":\"" + notes

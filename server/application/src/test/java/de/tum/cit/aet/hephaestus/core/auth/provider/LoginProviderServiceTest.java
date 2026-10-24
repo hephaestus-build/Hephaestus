@@ -18,11 +18,13 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -37,6 +39,13 @@ import tools.jackson.databind.ObjectMapper;
  * {@code gitlab-lrz}) and several seed in one boot.
  */
 class LoginProviderServiceTest extends BaseUnitTest {
+
+    // The URL checks resolve these names to tell a public host from a private one.
+    @BeforeAll
+    static void declarePublicHosts() {
+        OfflineNetwork.answer("gitlab.lrz.de", OfflineNetwork.PUBLIC_ADDRESS);
+        OfflineNetwork.answer("gitlab.com", OfflineNetwork.PUBLIC_ADDRESS);
+    }
 
     private final LoginProviderRepository repository = mock(LoginProviderRepository.class);
     private final LoginProviderClientRegistrationRepository registrationCache =

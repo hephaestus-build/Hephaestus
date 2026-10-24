@@ -79,7 +79,8 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
             MembershipService workspaceMembershipService,
             ConnectionService connectionService,
             List<WorkspaceProviderAvailability> providerAvailabilityList,
-            ScmServerEndpointPolicy endpoints) {
+            ScmServerEndpointPolicy endpoints,
+            WebClient.Builder webClients) {
         this.endpoints = endpoints;
         this.workspaceProperties = workspaceProperties;
         this.workspaceRepository = workspaceRepository;
@@ -96,7 +97,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
             map.put(a.kind(), a);
         }
         this.providerAvailability = map;
-        this.webClient = WebClient.builder()
+        this.webClient = webClients
                 .clientConnector(WebClientConnectors.systemDns())
                 .baseUrl(GITHUB_API_BASE_URL)
                 .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")

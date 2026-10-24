@@ -76,7 +76,7 @@ public class OutlineClientConfig {
 
     @Bean
     @Qualifier("outlineWebClient")
-    public WebClient outlineWebClient(JsonMapper baseObjectMapper) {
+    public WebClient outlineWebClient(JsonMapper baseObjectMapper, WebClient.Builder webClients) {
         JsonMapper tolerantMapper = tolerantMapper(baseObjectMapper);
 
         JacksonJsonDecoder decoder = new JacksonJsonDecoder(tolerantMapper);
@@ -90,7 +90,7 @@ public class OutlineClientConfig {
                 })
                 .build();
 
-        return WebClient.builder()
+        return webClients
                 .clientConnector(WebClientConnectors.ssrfGuarded())
                 .exchangeStrategies(strategies)
                 .filter(rateLimitTrackingFilter())

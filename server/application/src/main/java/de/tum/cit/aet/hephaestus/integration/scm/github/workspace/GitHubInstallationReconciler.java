@@ -68,13 +68,14 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
             GitHubLifecycleListener githubLifecycleListener,
             WorkspaceRepository workspaceRepository,
             WorkspaceService workspaceService,
-            WorkspaceScopeFilter workspaceScopeFilter) {
+            WorkspaceScopeFilter workspaceScopeFilter,
+            WebClient.Builder webClients) {
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.githubLifecycleListener = githubLifecycleListener;
         this.workspaceRepository = workspaceRepository;
         this.workspaceService = workspaceService;
         this.workspaceScopeFilter = workspaceScopeFilter;
-        this.webClient = WebClient.builder()
+        this.webClient = webClients
                 .clientConnector(WebClientConnectors.systemDns())
                 .baseUrl(GITHUB_API_BASE_URL)
                 .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")
