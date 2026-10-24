@@ -60,6 +60,16 @@ async function posixGlob(pattern: string): Promise<string[]> {
 	return files.map((file) => file.split(path.sep).join("/")).toSorted();
 }
 
+/** The `paths` filter of a workflow's `pull_request` trigger. */
+async function pullRequestPaths(file: string): Promise<string[]> {
+	const workflow = parseDocument(await readFile(file, "utf8"));
+	assert.equal(workflow.hasIn(["on", "pull_request", "branches"]), false, file);
+	assert.equal(workflow.hasIn(["on", "pull_request", "paths-ignore"]), false, file);
+	const patterns = workflow.getIn(["on", "pull_request", "paths"]);
+	assert.ok(isSeq(patterns), `${file} must filter pull requests on paths`);
+	return asArray(patterns.toJSON(), file).map((pattern) => asString(pattern, file));
+}
+
 async function workflowSources(): Promise<Map<string, string>> {
 	return readSources(await posixGlob(".github/workflows/*.{yml,yaml}"));
 }
@@ -678,6 +688,67 @@ void describe("CI contract", () => {
 		assert.equal(
 			runScript(workflow, ["jobs", "server-verification"], "Verify test tier and shard discovery"),
 			"vp run test:server:selection",
+		);
+	});
+
+	void test("weekly server profiles run CI's integration shards, never the whole tier", async () => {
+		const ci = parseDocument(await readFile(".github/workflows/ci-tests.yml", "utf8"));
+		const ciMatrix = ci.getIn(["jobs", "server-integration", "strategy", "matrix"]);
+		assert.ok(isMap(ciMatrix));
+		const shards = matrixValues(ciMatrix, "shard");
+		for (const [file, name, selectorAt] of [
+			[".github/workflows/ci-profile.yml", "server-integration", undefined],
+			[
+				".github/workflows/ci-server-clean-reference.yml",
+				"integration",
+				"Profile integration execution",
+			],
+		] as const) {
+			const workflow = parseDocument(await readFile(file, "utf8"));
+			const jobPath = ["jobs", name];
+			const matrix = workflow.getIn([...jobPath, "strategy", "matrix"]);
+			assert.ok(isMap(matrix), `${file} profiles each shard`);
+			assert.deepEqual(matrixValues(matrix, "shard"), shards, `${file} profiles CI's shards`);
+			const environment =
+				selectorAt === undefined
+					? workflow.getIn([...jobPath, "env"])
+					: namedStep(workflow, jobPath, selectorAt).get("env");
+			assert.ok(isMap(environment), `${file} sets the shard selector`);
+			assert.match(
+				String(environment.get("HEPHAESTUS_INTEGRATION_SHARD")),
+				/^\$\{\{ matrix\.shard \}\}$/u,
+				`${file} selects the shard through the environment`,
+			);
+			assert.equal(matrix.has("exclude"), false, `${file} skips no shard`);
+			const condition = workflow.getIn([...jobPath, "if"]);
+			assert.ok(condition === undefined || typeof condition === "string");
+			assert.doesNotMatch(condition ?? "", /matrix\./u, `${file} skips no shard`);
+			assert.equal(
+				workflow.getIn([...jobPath, "strategy", "fail-fast"]),
+				false,
+				`${file} profiles every shard when one fails`,
+			);
+			// One heavy runner at a time keeps weekly diagnostics cheap.
+			assert.equal(
+				workflow.getIn([...jobPath, "strategy", "max-parallel"]),
+				1,
+				`${file} profiles one shard at a time`,
+			);
+		}
+		const profile = parseDocument(await readFile(".github/workflows/ci-profile.yml", "utf8"));
+		assert.match(
+			String(profile.getIn(["jobs", "server-integration", "env", "HISTORY_ARTIFACT"])),
+			/\$\{\{ matrix\.shard \}\}/u,
+			"each shard keeps its own history artifact",
+		);
+		const reference = parseDocument(
+			await readFile(".github/workflows/ci-server-clean-reference.yml", "utf8"),
+		);
+		assert.equal(reference.getIn(["jobs", "integration", "needs"]), "verify");
+		assert.match(
+			String(reference.getIn(["jobs", "integration", "if"])),
+			/^\$\{\{ !cancelled\(\) \}\}$/u,
+			"shards start after the cold phase job, even when it fails",
 		);
 	});
 
@@ -2968,37 +3039,48 @@ void describe("CI contract", () => {
 		assert.deepEqual(upstream.toJSON(), ["CI/CD"]);
 	});
 
-	void test("dependency reporting excludes only documentation and release-note prose", async () => {
-		const workflow = parseDocument(
-			await readFile(".github/workflows/dependency-review.yml", "utf8"),
+	void test("dependency reporting runs, with the Gradle snapshot it reads, when a dependency input changes", async () => {
+		const globs = await pullRequestPaths(".github/workflows/dependency-review.yml");
+		// Without the head snapshot, the review spends its whole retry window waiting for one.
+		assert.deepEqual(await pullRequestPaths(".github/workflows/dependency-graph.yml"), globs);
+		const requiresReport = (file: string) =>
+			globs.some((pattern) => minimatch(file, pattern, { dot: true }));
+		const tracked = spawnSync(
+			"git",
+			[
+				"ls-files",
+				"--",
+				":(glob)**/package.json",
+				":(glob)**/pnpm-lock.yaml",
+				":(glob)**/pnpm-workspace.yaml",
+				":(glob)**/*.gradle.kts",
+				":(glob)**/*gradle.lockfile",
+				":(glob)server/gradle/**",
+				":(glob).github/workflows/**",
+				":(glob).github/actions/**",
+			],
+			{ encoding: "utf8" },
 		);
-		assert.equal(workflow.hasIn(["on", "pull_request", "branches"]), false);
-		assert.equal(workflow.hasIn(["on", "pull_request", "branches-ignore"]), false);
-		assert.equal(workflow.hasIn(["on", "pull_request", "paths"]), false);
-		const patterns = workflow.getIn(["on", "pull_request", "paths-ignore"]);
-		assert.ok(isSeq(patterns));
-		const globs = asArray(patterns.toJSON(), "dependency report exclusions").map((pattern) =>
-			asString(pattern, "dependency report exclusion"),
+		assert.equal(tracked.status, 0, tracked.stderr);
+		const manifests = tracked.stdout.trim().split("\n");
+		assert.ok(manifests.includes("server/application/gradle.lockfile"));
+		assert.deepEqual(
+			manifests.filter((file) => !requiresReport(file)),
+			[],
+			"every manifest the dependency graph reads selects the review",
 		);
-		assert.deepEqual(globs, ["docs/**/*.md", "docs/**/*.mdx", ".changeset/*.md"]);
-		const requiresReport = (files: readonly string[]) =>
-			files.some((file) => !globs.some((pattern) => minimatch(file, pattern, { dot: true })));
-		for (const [files, expected] of [
-			[[".changeset/review-progress.md"], false],
-			[[".changeset/review-progress.md", "docs/user/reviews.mdx"], false],
-			[["docs/contributor/reviews.md"], false],
-			[[".changeset/review-progress.md", "package.json"], true],
-			[[".changeset/review-progress.md", "pnpm-lock.yaml"], true],
-			[[".changeset/review-progress.md", "server/build.gradle.kts"], true],
-			[["docs/user/reviews.mdx", "server/application/src/main/resources/application.yml"], true],
-			[[".changeset/review-progress.md", ".github/workflows/cicd.yml"], true],
-			[[".changeset/config.json"], true],
-			[[".changeset/tool.ts"], true],
-			[[".changeset/nested/review-progress.md"], true],
-			[["docs/config.json"], true],
-			[["unknown-file"], true],
+		for (const [file, expected] of [
+			["pnpm-workspace.yaml", true],
+			["docker/agents/pi/pnpm-workspace.yaml", true],
+			["server/gradle.properties", true],
+			[".github/dependency-review-config.yml", true],
+			[".changeset/review-progress.md", false],
+			["docs/user/reviews.mdx", false],
+			["server/application/src/main/java/Application.java", false],
+			["server/application/src/main/resources/application.yml", false],
+			["webapp/src/main.tsx", false],
 		] as const) {
-			assert.equal(requiresReport(files), expected, files.join(", "));
+			assert.equal(requiresReport(file), expected, file);
 		}
 	});
 
@@ -3649,6 +3731,142 @@ void test("a workflow triggered by main does not cancel the run main is judged b
 	}
 });
 
+/**
+ * A pull-request workflow whose superseded runs keep running, and why it must not cancel them: a run
+ * cancelled halfway leaves state that no later run replaces. A workflow whose next run rewrites what
+ * the cancelled one left, such as `pull-request.yml`'s sticky comments, cancels like any other.
+ */
+const UNCANCELLED_PULL_REQUEST_RUNS: Record<string, string> = {
+	".github/workflows/cd-docs-teardown.yml":
+		"It deletes the docs and Storybook previews; a teardown cancelled halfway leaves them published.",
+	".github/workflows/cleanup-preview.yml":
+		"A teardown cancelled halfway leaves preview resources behind.",
+	".github/workflows/deploy-preview.yml":
+		"A deploy cancelled halfway leaves a partly replaced preview.",
+	".github/workflows/openapi-autocommit.yml":
+		"Any label starts it, so an unrelated label would cancel the run that commits the regeneration.",
+	".github/workflows/review-policy.yml":
+		"It writes approvals; a newer run waits and re-reads the current head instead.",
+};
+
+/** A workflow value as the runner expands it: each `${{ }}` evaluated against `context`. */
+function expandExpressions(value: unknown, context: Record<string, unknown>): string {
+	const dictionary: unknown = JSON.parse(JSON.stringify(context), data.reviver);
+	assert.ok(dictionary instanceof data.Dictionary);
+	return String(value).replaceAll(/\$\{\{(?<expression>[\s\S]+?)\}\}/gu, (_, expression: string) =>
+		new Evaluator(
+			new Parser(new Lexer(expression).lex().tokens, Object.keys(context), []).parse(),
+			dictionary,
+		)
+			.evaluate()
+			.coerceString(),
+	);
+}
+
+// A push to a pull request leaves its earlier run validating a commit nobody will merge, and every
+// such run holds runners the next pull request queues for. Cancelling it must not reach another
+// pull request's run, or a run on main or in the merge queue: those are the only runs their commits get.
+void test("a pull-request workflow cancels its superseded runs and nothing else", async () => {
+	const repository = "hephaestus-build/Hephaestus";
+	// Every pull request pushes the same branch name: two forks can each push `patch-1`.
+	const pullRequest = (event: string, number: number, sha: string, head = repository) => ({
+		event_name: event,
+		ref: event === "pull_request" ? `refs/pull/${number}/merge` : "refs/heads/main",
+		ref_name: event === "pull_request" ? `${number}/merge` : "main",
+		head_ref: "patch-1",
+		sha,
+		event: {
+			number,
+			pull_request: { number, head: { sha, ref: "patch-1", repo: { full_name: head } } },
+			repository: { default_branch: "main" },
+		},
+	});
+	const queue = `refs/heads/gh-readonly-queue/main/pr-1-${"c".repeat(40)}`;
+	const otherRuns = [
+		["push", { ref: "refs/heads/main", ref_name: "main" }],
+		["schedule", { ref: "refs/heads/main", ref_name: "main" }],
+		["merge_group", { ref: queue, ref_name: queue.slice("refs/heads/".length) }],
+	] as const;
+	const offenders: string[] = [];
+	for (const [file, source] of await workflowSources()) {
+		const workflow = parseDocument(source);
+		const event = ["pull_request", "pull_request_target"].find((name) =>
+			workflow.hasIn(["on", name]),
+		);
+		if (event === undefined) {
+			continue;
+		}
+		const lane = (concurrency: string[], github: Record<string, unknown>) => {
+			const context = { github: { workflow: workflow.get("name"), repository, ...github } };
+			return {
+				group: expandExpressions(workflow.getIn([...concurrency, "group"]), context),
+				cancels:
+					expandExpressions(workflow.getIn([...concurrency, "cancel-in-progress"]), context) ===
+					"true",
+			};
+		};
+		if (Object.hasOwn(UNCANCELLED_PULL_REQUEST_RUNS, file)) {
+			const jobs = workflow.get("jobs");
+			assert.ok(isMap(jobs), file);
+			for (const concurrency of [
+				["concurrency"],
+				...jobs.items.map((entry) => ["jobs", String(entry.key), "concurrency"]),
+			]) {
+				if (lane(concurrency, pullRequest(event, 1, "a".repeat(40))).cancels) {
+					offenders.push(
+						`${file}: exempt, but ${concurrency.join(".")} cancels a pull-request run`,
+					);
+				}
+			}
+			continue;
+		}
+		if (!workflow.hasIn(["concurrency", "group"])) {
+			offenders.push(`${file}: no concurrency group`);
+			continue;
+		}
+		const first = lane(["concurrency"], pullRequest(event, 1, "a".repeat(40)));
+		const again = lane(["concurrency"], pullRequest(event, 1, "b".repeat(40)));
+		if (!first.cancels || again.group !== first.group) {
+			offenders.push(`${file}: a push to a pull request does not cancel its earlier run`);
+		}
+		if (lane(["concurrency"], pullRequest(event, 2, "a".repeat(40))).group === first.group) {
+			offenders.push(`${file}: one pull request cancels another's run`);
+		}
+		const fork = lane(["concurrency"], pullRequest(event, 3, "a".repeat(40), "fork/Hephaestus"));
+		if (fork.group === first.group) {
+			offenders.push(`${file}: a fork's pull request cancels a run with the same branch name`);
+		}
+		for (const [trigger, github] of otherRuns) {
+			if (!workflow.hasIn(["on", trigger])) {
+				continue;
+			}
+			const run = lane(["concurrency"], {
+				event_name: trigger,
+				head_ref: "",
+				sha: "d".repeat(40),
+				event: { repository: { default_branch: "main" } },
+				...github,
+			});
+			if (run.group === first.group) {
+				offenders.push(`${file}: a pull request cancels a ${trigger} run`);
+			}
+			if (run.cancels && !(trigger === "push" && Object.hasOwn(REPLACEABLE_MAIN_RUNS, file))) {
+				offenders.push(`${file}: a ${trigger} run cancels its predecessor`);
+			}
+		}
+	}
+	assert.deepEqual(offenders, []);
+	const sources = await workflowSources();
+	for (const [file, reason] of Object.entries(UNCANCELLED_PULL_REQUEST_RUNS)) {
+		assert.ok(reason.trim(), `${file} must say why it keeps superseded runs`);
+		const workflow = parseDocument(sources.get(file) ?? "");
+		assert.ok(
+			workflow.hasIn(["on", "pull_request"]) || workflow.hasIn(["on", "pull_request_target"]),
+			`${file} no longer runs on pull requests, so it no longer needs an exception`,
+		);
+	}
+});
+
 void test("proves the toolchain on Windows and from a clean clone", async () => {
 	const source = await readFile(".github/workflows/ci-quality-gates.yml", "utf8");
 	const legSource = await readFile(".github/workflows/ci-quality-leg.yml", "utf8");
@@ -3840,12 +4058,14 @@ void test("a change to the task graph or the hooks selects every quality leg", a
 	}
 });
 
-void test("Semgrep scans PRs, main and merge queues without a privileged trigger or mutable rules", async () => {
+void test("Semgrep scans PRs and main without a privileged trigger or mutable rules", async () => {
 	const source = await readFile(".github/workflows/semgrep.yml", "utf8");
 	const workflow = parseDocument(source);
-	for (const trigger of ["pull_request", "push", "merge_group"]) {
+	for (const trigger of ["pull_request", "push"]) {
 		assert.ok(workflow.hasIn(["on", trigger]), `semgrep.yml must run on ${trigger}`);
 	}
+	// The push to main scans the merge group's own commit; a queue run would scan it twice.
+	assert.equal(workflow.hasIn(["on", "merge_group"]), false);
 	assert.equal(workflow.hasIn(["on", "pull_request_target"]), false);
 	assert.match(
 		String(workflow.getIn(["jobs", "scan", "env", "SEMGREP_IMAGE"])),

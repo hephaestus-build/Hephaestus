@@ -44,7 +44,7 @@ export function useResultController(workspaceSlug: string, resultId: string): Re
 	const settled = {
 		onError: (error: Error) => {
 			void resultQuery.refetch();
-			toast.error("We could not change this result", { description: problemDetailOf(error) });
+			toast.error("We could not change this observation", { description: problemDetailOf(error) });
 		},
 	};
 	const mark = useMutation({

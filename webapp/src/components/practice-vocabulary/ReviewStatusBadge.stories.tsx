@@ -34,7 +34,7 @@ export const Partial: Story = {
 		await expect(badge).toHaveFocus();
 		await expect(badge).toHaveAccessibleDescription(OWN_REVIEW_STATUS_DEFS.PARTIAL.description);
 		await expect(await settledPopup()).toHaveTextContent(
-			"Partial · The review’s results cover only the work it reached.",
+			"Partial · The review’s observations cover only the work it reached.",
 		);
 	},
 };
@@ -47,7 +47,7 @@ export const OpenedByTap: Story = {
 		const dialog = await screen.findByRole("dialog", { name: "Partial" });
 		await waitFor(async () =>
 			expect(
-				within(dialog).getByText(/The review’s results cover only the work it reached\./u),
+				within(dialog).getByText(/The review’s observations cover only the work it reached\./u),
 			).toBeVisible(),
 		);
 	},
@@ -82,7 +82,7 @@ export const WithStopReason: Story = {
 		await userEvent.tab();
 		await expect(canvas.getByRole("button", { name: "Failed" })).toHaveFocus();
 		await expect(await settledPopup()).toHaveTextContent(
-			"Failed · It stopped on an error. Results it recorded before then still stand. It ran past the time it is allowed and was stopped.",
+			"Failed · It stopped on an error. Observations it recorded before then still stand. It ran past the time it is allowed and was stopped.",
 		);
 	},
 };

@@ -31,12 +31,12 @@ export const PRACTICE_MARKER_DEFS: Record<PracticeMarker, PracticeMarkerDef> = {
 	NEVER_APPLIES: {
 		label: "Mostly does not apply",
 		reason: (count, whole) =>
-			`Does not apply in ${count} of ${whole} results. Consider turning it off for this workspace.`,
+			`Does not apply in ${count} of ${whole} observations. Consider turning it off for this workspace.`,
 	},
 	OFTEN_UNDECIDED: {
 		label: "Often could not determine",
 		reason: (count, whole) =>
-			`Could not determine in ${count} of ${whole} results. The review may lack the evidence to decide.`,
+			`Could not determine in ${count} of ${whole} observations. The review may lack the evidence to decide.`,
 	},
 };
 

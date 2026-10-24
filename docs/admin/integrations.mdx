@@ -5,7 +5,7 @@ description: Connect repositories, Slack channels, and Outline collections witho
 ---
 
 This page is for workspace admins. Instance operators configure provider apps and deployment settings
-in [Integrations and reference deployment](./production-setup). Account linking belongs in
+in [Integration settings](./production-setup). Account linking belongs in
 [User settings](/user/user-settings).
 
 ## GitHub
@@ -164,7 +164,7 @@ in 24 hours. **Sync now** checks immediately. See
 ## Disconnect is an erase
 
 **Disconnect** permanently erases the integration's mirrored data in this workspace before it attempts
-provider cleanup. Reconnecting does not restore that data.
+provider cleanup. A workspace purge erases it too. Reconnecting does not restore that data: a reconnect performs a fresh initial sync.
 
 - GitHub and GitLab: repository mirrors and their associated synced work.
 - Slack: mirrored messages, threads, channel records, and associated consent records.
@@ -173,8 +173,15 @@ provider cleanup. Reconnecting does not restore that data.
 - Outline: mirrored documents, collection registrations, and document events.
 
 The upstream repositories, messages, and documents remain.
+Materialized diagnostic output, worker-input copies, and broker messages expire within their documented bounded retention windows.
 Provider cleanup is best effort.
-If local erasure fails, the connection remains unchanged.
+If local erasure fails, the connection remains unchanged, and you can retry the disconnect.
+If the provider is unreachable, the mirror still erases and the connection disconnects.
+You may then need to remove an app installation, token, or webhook Hephaestus created at the provider.
+
+A connection with its integration disabled instance-wide cannot disconnect until the integration is enabled again.
+Nothing else can erase its mirror.
+See erasure triggers in the [record of processing](./dsms/record-of-processing.md).
 
 1. Inspect provider-side app access, hooks, and keys separately.
 2. To repair a credential, use the replacement paths above or [Credential key rotation](./credential-key-rotation), not Disconnect.

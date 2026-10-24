@@ -60,7 +60,7 @@ export function ResultsListPage({
 	const byDay = search.order !== "ACTIONABILITY";
 
 	return (
-		<section aria-label="Practice review results" className="space-y-4">
+		<section aria-label="Practice review observations" className="space-y-4">
 			<ReviewTabIntro tab="results" />
 			<ResultFilters
 				search={search}
@@ -89,13 +89,13 @@ export function ResultsListPage({
 			{results.status === "loading" && <ResultRows state={{ status: "loading" }} />}
 			{results.status === "ready" && (
 				<>
-					<ReviewListRefresh failure={results.refreshFailure} noun="results" />
+					<ReviewListRefresh failure={results.refreshFailure} noun="observations" />
 					<ResultRows
 						state={resultsState(rows, hasFilter ? reset : undefined)}
 						byDay={byDay}
 						loadingMore={loadingMoreRows(results)}
 					/>
-					{rows.length > 0 && <ReviewListEnd {...results} noun="results" />}
+					{rows.length > 0 && <ReviewListEnd {...results} noun="observations" />}
 				</>
 			)}
 		</section>

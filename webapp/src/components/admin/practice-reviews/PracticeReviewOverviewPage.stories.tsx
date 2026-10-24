@@ -137,7 +137,7 @@ export const Default: Story = {
 		const stages = canvas.getByRole("list", { name: "Stages" }).querySelectorAll(":scope > li");
 		await expect([...stages].map((card) => card.textContent)).toEqual([
 			expect.stringMatching(/^Reviews/u),
-			expect.stringMatching(/^Results/u),
+			expect.stringMatching(/^Observations/u),
 		]);
 		const delivery = canvas.getByRole("list", { name: "Delivery" }).querySelectorAll(":scope > li");
 		await expect(delivery).toHaveLength(2);
@@ -173,11 +173,11 @@ export const Default: Story = {
 		await expect(opens("4 withheld")[1]).toBe("WITHHELD,REJECTED");
 		await expect(opens("1 failed to deliver")[1]).toBe("FAILED");
 		await expect(opens("1 replaced by newer")[1]).toBe("REPLACED");
-		const resultsLegend = canvas.getByRole("list", { name: "Results by outcome" });
+		const resultsLegend = canvas.getByRole("list", { name: "Observations by outcome" });
 		await expect(resultsLegend).toHaveTextContent(
 			"35 met27 not met10 does not apply6 could not determine",
 		);
-		const checked = canvas.getByRole("list", { name: "Results checked by an admin" });
+		const checked = canvas.getByRole("list", { name: "Observations checked by an admin" });
 		await expect(checked.parentElement).toBe(resultsLegend.parentElement);
 		await expect(checked.querySelector("svg")).toHaveClass("text-muted-foreground");
 		const resultLink = (name: string) =>

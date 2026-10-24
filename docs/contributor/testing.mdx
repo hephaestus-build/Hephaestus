@@ -249,8 +249,9 @@ HEPHAESTUS_LIVE_LLM_BASE_URL=... HEPHAESTUS_LIVE_LLM_API_KEY=... HEPHAESTUS_LIVE
   ./gradlew :application:liveTest --tests HephTurnLiveTest
 ```
 
-The host reaches the test's sandbox gateway at `host.docker.internal`. If a host firewall admits containers to
-one port only, set `SANDBOX_API_PORT` to that port.
+The host reaches the test's sandbox gateway at `host.docker.internal`. The gateway binds a free port unless
+`SANDBOX_API_PORT` names one. If a host firewall admits containers to one port only, set `SANDBOX_API_PORT` to
+that port.
 
 ### Live models for practice scripts
 

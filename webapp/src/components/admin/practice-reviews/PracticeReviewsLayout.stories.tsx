@@ -42,7 +42,7 @@ const SCOPED: ResultsSearch = {
 
 function ResultsTab({ search }: { search: ResultsSearch }) {
 	return (
-		<section aria-label="Practice results" className="space-y-4">
+		<section aria-label="Practice observations" className="space-y-4">
 			<ResultFilters
 				search={search}
 				onPatch={fn()}
@@ -53,7 +53,7 @@ function ResultsTab({ search }: { search: ResultsSearch }) {
 				people={STORY_PEOPLE}
 				total={7}
 			/>
-			<p className="text-sm text-muted-foreground">The results render here.</p>
+			<p className="text-sm text-muted-foreground">The observations render here.</p>
 		</section>
 	);
 }
@@ -82,7 +82,7 @@ export const Default: Story = {
 		await expect(sections.getAllByRole("link").map((link) => link.textContent)).toEqual([
 			"Overview",
 			"Reviews",
-			"Results",
+			"Observations",
 			"Problems",
 			"Feedback",
 		]);
@@ -113,7 +113,7 @@ export const ScopeAboveTheTabs: Story = {
 		await expect(within(filters).queryByRole("combobox", { name: /Sort/u })).toBeNull();
 		within(filters).getByRole("combobox", { name: "Outcome" });
 		within(filters).getByRole("combobox", { name: "Severity" });
-		within(filters).getByText("7 results.");
+		within(filters).getByText("7 observations.");
 		// No scope is set, so there is nothing to clear.
 		await expect(
 			within(scope).queryByRole("button", { name: "Clear scope" }),
@@ -227,7 +227,7 @@ export const CurrentSection: Story = {
 		);
 		// Overview's address is a prefix of every other section's, so it is the one a fuzzy match would
 		// also mark.
-		for (const name of ["Overview", "Reviews", "Results", "Problems"]) {
+		for (const name of ["Overview", "Reviews", "Observations", "Problems"]) {
 			await expect(sections.getByRole("link", { name })).not.toHaveAttribute("aria-current");
 		}
 		await expect(sections.queryByRole("tab")).not.toBeInTheDocument();
@@ -250,11 +250,11 @@ export const TabCounts: Story = {
 		await expect(sections.getAllByRole("link").map((link) => link.textContent)).toEqual([
 			"Overview",
 			"Reviews1,688",
-			"Results13,308",
+			"Observations13,308",
 			"Problems4,210",
 			"Feedback1,951",
 		]);
-		await expect(sections.getByRole("link", { name: "Results, 13,308" })).toHaveAttribute(
+		await expect(sections.getByRole("link", { name: "Observations, 13,308" })).toHaveAttribute(
 			"aria-current",
 			"page",
 		);
@@ -275,7 +275,7 @@ export const TabCountsLoading: Story = {
 	play: async ({ canvas }) => {
 		const sections = within(canvas.getByRole("navigation", { name: "Practice review sections" }));
 		sections.getByRole("link", { name: "Reviews" });
-		sections.getByRole("link", { name: "Results, 0" });
+		sections.getByRole("link", { name: "Observations, 0" });
 		sections.getByRole("link", { name: "Feedback" });
 	},
 };

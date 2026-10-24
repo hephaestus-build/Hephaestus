@@ -5,7 +5,14 @@ description: What a Hephaestus deployment consists of and the order to set it up
 ---
 
 This guide is for people who run a Hephaestus deployment.
-It covers installation, GitHub or GitLab connections, AI provider selection, and operations.
+It has five parts:
+
+- **Deploy** installs the supported stack.
+- **Configure** connects providers, AI models, and practices.
+- **Operate** covers upgrades, backups, troubleshooting, sizing, and incidents.
+- **Security** covers the threat model, keys, release verification, and data protection.
+- **Policies** state what a version number promises and which releases we support.
+
 Developers who use Hephaestus need the [User Guide](/user/overview).
 People who change the code need the [Contributor Guide](/contributor/overview).
 
@@ -33,7 +40,7 @@ A person can be both.
 
 1. [Install](./install) the supported Compose stack. The guide covers required `.env` values and TLS.
 2. [Connect a source](./integrations): a GitHub App or GitLab connection that supplies repository activity.
-   [Integrations & reference deployment](./production-setup) covers Slack and Outline.
+   [Integration settings](./production-setup) covers Slack and Outline.
 3. [Connect an AI provider](./ai-providers) with an OpenAI-compatible endpoint.
 4. Set a cap on AI spend.
 5. [Choose practices](./practice-catalog) for the instance to include and the workspace to adopt.
@@ -43,26 +50,17 @@ A person can be both.
 
 ## Keep it running
 
-The [Production operations runbook](./production-operations-runbook) covers these subjects:
-
-- The silent deployment checklist.
-- Incident brakes.
-- Migration recovery.
-- PostgreSQL × JetStream restore.
-- Removal of external feedback.
-
-[Practice review operations](./practice-review-operations) and
-[webhook ingestion operations](./webhook-ingestion-operations) cover the two pipelines whose failures are most visible.
-[Backup & restore](./backup-restore) covers recovery.
+- [Upgrade](./upgrade) owns the upgrade procedure, failed-migration recovery, and rollback.
+  Before an upgrade, read the [compatibility policy](./compatibility-policy) and the [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md).
+- [Backup & restore](./backup-restore) covers recovery.
+- [Troubleshooting](./troubleshooting) lists common failures and their fixes.
+- [Sizing and scaling](./sizing) gives the resource budget.
+- The [production operations runbook](./production-operations-runbook) covers incident brakes, silent deployment, PostgreSQL × JetStream restore, and removal of external feedback.
+- [Practice review operations](./practice-review-operations) and
+  [webhook ingestion operations](./webhook-ingestion-operations) cover the two pipelines whose failures are most visible.
 
 Hephaestus is pre-1.0.
 A minor release can still require action.
-
-Before an upgrade:
-
-1. Read the [compatibility policy](./compatibility-policy).
-2. Read the [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md).
-3. Test the upgrade in staging.
 
 ## Repository scans
 

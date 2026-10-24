@@ -165,9 +165,9 @@ export function TraceLegend({ open, onOpenChange }: TraceLegendProps) {
 							</LegendGroup>
 						</div>
 						<div className="space-y-4">
-							<LegendGroup title="Results and feedback">
+							<LegendGroup title="Observations and feedback">
 								<Entry mark={<Chip className={resultChipClass({ outcome: "NOT_MET" })}>3</Chip>}>
-									<Name>Result</Name> by number, in its outcome’s colour
+									<Name>Observation</Name> by number, in its outcome’s colour
 								</Entry>
 								<Entry
 									mark={<Chip className={resultChipClass({ outcome: "DOES_NOT_APPLY" })}>4</Chip>}
@@ -179,17 +179,17 @@ export function TraceLegend({ open, onOpenChange }: TraceLegendProps) {
 										<Chip className={resultChipClass({ outcome: "MET", ringed: true })}>1</Chip>
 									}
 								>
-									<Name>Ringed</Name> the result you started from
+									<Name>Ringed</Name> the observation you started from
 								</Entry>
 								<Entry mark={<FeedbackLetter letter="A" />}>
-									<Name>Feedback</Name> by letter, with its results under From
+									<Name>Feedback</Name> by letter, with its observations under From
 								</Entry>
 							</LegendGroup>
 							<LegendGroup title="Connections">
 								<Entry
 									mark={<ConnectorSample className={connectorTone("destructive", "strong")} />}
 								>
-									<Name>Line</Name> from a result to each piece written from it
+									<Name>Line</Name> from an observation to each piece written from it
 								</Entry>
 								<Entry mark={<ConnectorSample className={connectorTone("destructive", "faint")} />}>
 									<Name>Grey line</Name> off the path of your record
@@ -244,7 +244,7 @@ export function TraceLegend({ open, onOpenChange }: TraceLegendProps) {
 								What the trace cannot show
 							</h4>
 							<ul className="list-disc space-y-0.5 pl-4">
-								<li>Whether a result is right: only an admin’s “Marked incorrect”.</li>
+								<li>Whether an observation is right: only an admin’s “Marked incorrect”.</li>
 								<li>Why the model judged so: only its rationale is stored.</li>
 								<li>Whether the developer read a comment on the work, or learned from it.</li>
 							</ul>

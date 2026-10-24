@@ -56,8 +56,8 @@ export interface OutcomeScope {
  */
 export const OUTCOME_LEGEND_LABELS = {
 	reviews: "Reviews by outcome",
-	results: "Results by outcome",
-	checkedResults: "Results checked by an admin",
+	results: "Observations by outcome",
+	checkedResults: "Observations checked by an admin",
 	/** The reviews of the range without an outcome yet, listed apart from the outcomes. */
 	openReviews: "Reviews not finished yet",
 	feedback: "Feedback by delivery",

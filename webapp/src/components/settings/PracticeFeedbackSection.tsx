@@ -33,8 +33,8 @@ export function PracticeFeedbackSection({
 					<FieldLabel htmlFor="practice-feedback-delivery">Comments on your work</FieldLabel>
 					<FieldDescription>
 						Turn this off to stop new comments on issues, pull requests, and merge requests you
-						author. Reviews still run, and workspace admins can still see the results. This choice
-						applies in every workspace.
+						author. Reviews still run, and workspace admins can still see the observations. This
+						choice applies in every workspace.
 					</FieldDescription>
 				</FieldContent>
 				<Switch

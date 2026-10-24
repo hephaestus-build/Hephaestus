@@ -2,9 +2,10 @@ name: Semgrep
 
 on:
   pull_request:
+  # Not `merge_group`: the queue lands its group's commit on main unchanged, so the push scan
+  # reports on that same commit and is the one that updates main's code-scanning results.
   push:
     branches: [main]
-  merge_group:
 
 permissions: {}
 

@@ -12,7 +12,11 @@ import { carriedScope, type ScopeSource } from "./review-scope";
 const SECTIONS = [
 	{ to: "/w/$workspaceSlug/admin/practices/reviews/overview", label: "Overview", tab: "overview" },
 	{ to: "/w/$workspaceSlug/admin/practices/reviews", label: "Reviews", tab: "reviews" },
-	{ to: "/w/$workspaceSlug/admin/practices/reviews/results", label: "Results", tab: "results" },
+	{
+		to: "/w/$workspaceSlug/admin/practices/reviews/results",
+		label: "Observations",
+		tab: "results",
+	},
 	{
 		to: "/w/$workspaceSlug/admin/practices/reviews/problems",
 		label: "Problems",

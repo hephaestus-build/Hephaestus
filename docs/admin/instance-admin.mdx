@@ -34,9 +34,14 @@ A connected provider account identifies a person. An instance role does not crea
 1. Inspect workspace metadata and status.
 2. Open the workspace administration you need.
 
-Instance admins can administer an active workspace without membership.
-Hephaestus audits this access.
+Instance admins have ADMIN access to any active workspace, even without membership.
+Elevation does not grant OWNER privileges.
+Owner-only operations require explicit OWNER membership.
 It does not give them Heph or a member's private Practice profile in ordinary workspace navigation.
+
+Hephaestus audits this access.
+[Instance administration](/contributor/instance-admin#who-is-an-instance-admin) owns the authority.
+See the [elevated-access audit policy](/contributor/instance-admin#elevated-workspace-access).
 
 ### View as user
 
@@ -107,9 +112,10 @@ external-copy obligations. This console is separate from a member's own
 
 ## Silent mode
 
-New instances start with silent mode on. It blocks outbound feedback writes to GitHub, GitLab, and Slack.
-Inbound events, sync, practice reviews, and result storage continue. OAuth, token lifecycle,
-webhook registration, and operator alerts remain available.
+New instances start with silent mode on.
+It blocks new writes to GitHub, GitLab, and Slack, and all email.
+Inbound events, sync, practice reviews, and result storage continue.
+The [kill-switch map](./production-operations-runbook#first-response-and-kill-switch-map) lists what silent mode stops and what it does not stop.
 
 A stale settings view cannot turn off a newer silent mode setting.
 If you turn silent mode off, Hephaestus does not replay feedback withheld while it was on.

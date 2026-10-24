@@ -57,7 +57,7 @@ Choose one recovery path:
 
 1. Apply a forward fix that is qualified for the recorded migration state.
 2. Restore the verified backup with its matching signed release lock and configuration.
-   Follow [failed-migration recovery](https://docs.hephaestus.build/admin/production-operations-runbook#if-migration-fails).
+   Follow [failed-migration recovery](https://docs.hephaestus.build/admin/upgrade#if-migration-fails).
    The backup does not contain data that was recorded after the upgrade.
 
 **Slack app.**

@@ -51,7 +51,7 @@ It includes building and running benchmarks and evaluation datasets for such AI 
 Your data means:
 
 - Your work in the tools your project connects.
-- Hephaestus’s results, problems and feedback about that work.
+- Hephaestus’s observations, problems and feedback about that work.
 - Your responses to that feedback.
 - How you use Hephaestus, including your conversations with Heph.
 - Your answers to research surveys.
@@ -96,7 +96,7 @@ Workspace admins choose the connected sources and what runs in the workspace:
 - **Outline:** selected collections and documents, their content, and author information.
 
 Practice reviews can read all permitted workspace areas and repositories available to the review.
-This includes Slack threads and result and feedback history scoped to a person.
+This includes Slack threads and observation and feedback history scoped to a person.
 There is no fixed limit on the number of records or the history period for that context.
 Privacy choices, access boundaries, and erasure checks still apply.
 
@@ -105,8 +105,8 @@ Refusal to review a bot’s work does not erase its source records.
 A connection alone does not authorize all uses of its content.
 These sources supply context for practice reviews and for Heph.
 
-Hephaestus records **practice results and practice feedback**, including results that never become comments.
-A result can also store the problems it found, an example from your work, and open questions.
+Hephaestus records **practice observations and practice feedback**, including observations that never become comments.
+An observation can also store the problems it found, an example from your work, and open questions.
 [Activity](./activity) counts and lists your pull requests, reviews, issues, and comments in workspace repositories.
 It also lists your open work, such as review requests and assigned issues.
 Workspace activity can sort people by these counts and never scores them.
@@ -148,7 +148,7 @@ Your choice does not set a retention period or training policy.
 It does not stop source sync, stored work, access by authorized people, or requests already sent to a provider.
 Your work can still appear in shared repository context for reviews about other developers.
 Your choice does not remove that content or change their choices or model routes.
-Hephaestus checks result and feedback history scoped to you separately against your AI choice.
+Hephaestus checks observation and feedback history scoped to you separately against your AI choice.
 
 You answer once, across all your workspaces on this deployment.
 **Cloud** allows In-house models too.
@@ -169,7 +169,7 @@ Each new interaction still checks eligibility.
 
 ## AI processing and visibility
 
-Active AI features send relevant code, discussion, documents, conversation history, and result evidence to the workspace’s configured AI provider.
+Active AI features send relevant code, discussion, documents, conversation history, and observation evidence to the workspace’s configured AI provider.
 **Self-hosting does not necessarily keep AI requests local.**
 Your instance’s privacy notice covers recipients, international transfers, retention, and training terms.
 
@@ -178,7 +178,7 @@ Your instance’s privacy notice covers recipients, international transfers, ret
 Practice feedback is guidance, not a grade or a replacement for human review.
 Access differs by role and destination:
 
-- Members can read [Activity](./activity) without individual source-platform permission checks. Normal member access keeps your Practice profile, its feedback, and Heph conversations private. Other members see your results only inside the counts of [Practices across the workspace](./practice-profile#practices-across-the-workspace), which never name anyone. The page shows every count, also a count of one, so other members can sometimes tell how your work went. [Small counts](./practice-profile#small-counts) lists when. Workspace admins can read results, delivery metadata, current answer metadata, and current disagreement explanations. A rating without an answer, including its time, stays private. They cannot read private practice-page or conversation feedback text, how you rated it, or other private response notes. Taking back your answer removes its metadata from their current view.
+- Members can read [Activity](./activity) without individual source-platform permission checks. Normal member access keeps your Practice profile, its feedback, and Heph conversations private. Other members see your observations only inside the counts of [Practices across the workspace](./practice-profile#practices-across-the-workspace), which never name anyone. The page shows every count, also a count of one, so other members can sometimes tell how your work went. [Small counts](./practice-profile#small-counts) lists when. Workspace admins can read observations, delivery metadata, current answer metadata, and current disagreement explanations. A rating without an answer, including its time, stays private. They cannot read private practice-page or conversation feedback text, how you rated it, or other private response notes. Taking back your answer removes its metadata from their current view.
 - The public activity page shows contributions to public repositories only. Other workspace pages need sign-in. Hidden people and people who opted out do not appear or contribute to its totals.
   Contact the workspace privacy contact to object to publication.
 - The About page lists the people who contribute to the Hephaestus open-source project, as GitHub shows them.
@@ -194,7 +194,7 @@ Access differs by role and destination:
 2. Turn off **Comments on your work** to stop new comments on your work.
 3. To allow new comments again, turn it on.
 
-**Reviews still run and admins can still see results.**
+**Reviews still run and admins can still see observations.**
 Neither action removes existing comments.
 
 ### Weekly digest
@@ -228,7 +228,7 @@ This removal is separate from an erasure request.
 1. In the Hephaestus App Home, select **Stop using my messages**.
 2. To permit new collection, select **Allow future messages**.
 
-The first action stops collection and erases collected channel messages and related conversation results and feedback.
+The first action stops collection and erases collected channel messages and related conversation observations and feedback.
 The second does not restore deleted data.
 Neither erases your Heph conversation, unrelated repository feedback, Slack’s copy, or [separately retained copies](#copies-outside-active-records).
 
@@ -300,7 +300,7 @@ Withdrawal of the disagreement allows that point again.
 Reactions or replies on GitHub or GitLab do not enter this process.
 
 On your Practice profile, **Disagree** also records a disagreement.
-An admin can mark a result incorrect or withdraw practice-page feedback with a reason, then restore it later.
+An admin can mark an observation incorrect or withdraw practice-page feedback with a reason, then restore it later.
 Unseen withdrawn feedback does not appear.
 Feedback you saw becomes a withdrawal notice.
 The original and its history stay stored, but its text leaves future review and Heph context.
@@ -325,7 +325,7 @@ It does not include credentials or session secrets.
 **The self-service export is limited.**
 The privacy contact handles requests for these additional records:
 
-- Conversations, results, and feedback, including feedback never delivered.
+- Conversations, observations, and feedback, including feedback never delivered.
 - Activity records and mirrored source content.
 - Product-feedback submissions and survey responses.
 - Other retained copies.
@@ -360,7 +360,7 @@ An account record remains with contact details cleared.
 There is no self-service undo.
 
 **Account deletion is not complete person erasure.**
-Contributor profiles, conversations, results, feedback, and other retained copies require a wider request.
+Contributor profiles, conversations, observations, feedback, and other retained copies require a wider request.
 A source disconnection or workspace removal is not a substitute.
 Deletion in Hephaestus does not delete original work on connected services.
 
@@ -414,7 +414,7 @@ The sections above describe account and export timing.
 
 - **Authentication history:** records expire in monthly batches. Account erasure redacts identifying authentication details.
 - **Settings-change history:** records expire after their own retention period. Account erasure detaches actor references, not the change record.
-- **Review diagnostics:** records become eligible for removal when enough time has passed since job completion. Job history becomes eligible later, only without result or feedback references. Pending delivery delays both. The job-retention service must also be on. Disabling reviews does not automatically delete old records.
+- **Review diagnostics:** records become eligible for removal when enough time has passed since job completion. Job history becomes eligible later, only without observation or feedback references. Pending delivery delays both. The job-retention service must also be on. Disabling reviews does not automatically delete old records.
 - **Review working copies:** cleanup removes worker attempt folders after evidence admission. Ended attempts have a one-hour cleanup grace period. Restart cleanup removes abandoned folders. Failed cleanup needs a later successful run. Raw Git mirrors follow repository monitoring. The repository owner must handle Git authorship at source.
 - **AI usage accounting:** records contain token counts, costs, and run identifiers, not message content. They stay long enough for annual accounting. An operator can extend retention for a legal obligation.
 - **Other operational and administration history:** some records of who configured or requested an operation have no automatic expiry. They survive account or workspace removal. A verified erasure request must include them.

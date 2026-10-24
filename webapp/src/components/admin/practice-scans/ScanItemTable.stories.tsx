@@ -72,10 +72,10 @@ export const Default: Story = {
 		// A row with this scan's result opens it over Practice reviews; earlier evidence opens nothing.
 		await expect(
 			within(judged).getByRole("link", {
-				name: "Open result server/src/ScanService.java, Errors are handled where they occur",
+				name: "Open observation server/src/ScanService.java, Errors are handled where they occur",
 			}),
 		).toHaveAttribute("href", "/w/aet/admin/practices/reviews/results?detail=result:r-1");
-		await expect(within(reused).getByRole("link", { name: /^Open result /u })).toHaveAttribute(
+		await expect(within(reused).getByRole("link", { name: /^Open observation /u })).toHaveAttribute(
 			"href",
 			"/w/aet/admin/practices/reviews/results?detail=result:r-2",
 		);

@@ -348,7 +348,7 @@ export const RichReviewOverview: Story = {
 		docs: {
 			description: {
 				story:
-					"Deterministic UI example with 24 results and 12 Problems. These records and the imported usage display are synthetic story data, not a live model review.",
+					"Deterministic UI example with 24 observations and 12 Problems. These records and the imported usage display are synthetic story data, not a live model review.",
 			},
 		},
 	},
@@ -358,7 +358,7 @@ export const RichReview: Story = {
 	args: richReviewArgs,
 	play: async ({ userEvent }) => {
 		let panel = within(await settledDrawerPanel());
-		let results = panel.getByRole("list", { name: "Results of this review" });
+		let results = panel.getByRole("list", { name: "Observations of this review" });
 		await expect(results.children).toHaveLength(24);
 		for (const [outcome, count] of [
 			["Met", 10],
@@ -369,12 +369,12 @@ export const RichReview: Story = {
 			await expect(within(results).getAllByText(outcome, { exact: true })).toHaveLength(count);
 		}
 		for (const disclosure of within(results).getAllByRole("button", {
-			name: /^\d+ problems?: .*of result/u,
+			name: /^\d+ problems?: .*of observation/u,
 		})) {
 			await userEvent.click(disclosure);
 		}
 		await expect(
-			within(results).getAllByRole("button", { name: /^Problem \d+ of result/u }),
+			within(results).getAllByRole("button", { name: /^Problem \d+ of observation/u }),
 		).toHaveLength(12);
 
 		await userEvent.click(
@@ -395,7 +395,7 @@ export const RichReview: Story = {
 		});
 
 		panel = within(await settledDrawerPanel());
-		results = panel.getByRole("list", { name: "Results of this review" });
+		results = panel.getByRole("list", { name: "Observations of this review" });
 		await expect(results.children).toHaveLength(24);
 		await userEvent.click(
 			within(results).getByRole("button", {
@@ -429,7 +429,7 @@ export const RichReview: Story = {
 		});
 
 		panel = within(await settledDrawerPanel());
-		results = panel.getByRole("list", { name: "Results of this review" });
+		results = panel.getByRole("list", { name: "Observations of this review" });
 		await userEvent.click(
 			within(results).getByRole("button", {
 				name: /Distinguish failure causes.*Failures lose their context/u,
@@ -464,7 +464,7 @@ export const RichReview: Story = {
 		).toHaveLength(2);
 		await expect(
 			within(feedbackPanel).getAllByRole("link", {
-				name: /^(?:One|Another) problem of this result:/u,
+				name: /^(?:One|Another) problem of this observation:/u,
 			}),
 		).toHaveLength(6);
 		for (const [index, practice] of [
@@ -484,7 +484,7 @@ export const RichReview: Story = {
 			await expectSettledVisible(resultPanel);
 			await expect(within(resultPanel).getByText(practice, { exact: true })).toBeVisible();
 			const related = within(resultPanel).getByRole("list", {
-				name: "Feedback written from this result",
+				name: "Feedback written from this observation",
 			});
 			await userEvent.click(within(related).getByRole("link", { name: "On the work, Delivered" }));
 			await screen.findByRole("heading", { name: "What it says" });
@@ -502,7 +502,7 @@ export const RichReview: Story = {
 		panel = within(await settledDrawerPanel());
 		await userEvent.click(panel.getByRole("combobox", { name: "Steps" }));
 		await userEvent.click(screen.getByRole("option", { name: "Only met (10)" }));
-		results = panel.getByRole("list", { name: "Results of this review" });
+		results = panel.getByRole("list", { name: "Observations of this review" });
 		await expect(results.children).toHaveLength(10);
 		const mixedFeedback = panel.getByRole("button", { name: /^Feedback F\s/u });
 		await expect(within(mixedFeedback).getByText("21", { exact: true })).toBeVisible();
@@ -534,19 +534,21 @@ export const RichResultPath: Story = {
 	},
 	play: async ({ userEvent }) => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByRole("list", { name: "Results on this path" }).children).toHaveLength(
-			1,
+		await expect(
+			panel.getByRole("list", { name: "Observations on this path" }).children,
+		).toHaveLength(1);
+		await userEvent.click(
+			panel.getByRole("button", { name: "Show all 24 observations in the table" }),
 		);
-		await userEvent.click(panel.getByRole("button", { name: "Show all 24 results in the table" }));
-		const listed = panel.getByRole("list", { name: "Results of this review" });
+		const listed = panel.getByRole("list", { name: "Observations of this review" });
 		await expect(listed.children).toHaveLength(12);
-		await userEvent.click(panel.getByRole("button", { name: "Show 12 more results" }));
+		await userEvent.click(panel.getByRole("button", { name: "Show 12 more observations" }));
 		await expect(listed.children).toHaveLength(24);
 		await userEvent.click(
-			panel.getByRole("button", { name: "Show only the results on this path" }),
+			panel.getByRole("button", { name: "Show only the observations on this path" }),
 		);
-		await expect(panel.getByRole("list", { name: "Results on this path" }).children).toHaveLength(
-			1,
-		);
+		await expect(
+			panel.getByRole("list", { name: "Observations on this path" }).children,
+		).toHaveLength(1);
 	},
 };

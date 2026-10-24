@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,7 +37,7 @@ public class DockerHostSandbox implements HostSandbox {
     private final SandboxAttemptLauncher launcher;
     private final String image;
     private final String owner;
-    private final int gatewayPort;
+    private final IntSupplier gatewayPort;
     private final Map<UUID, Resources> running = new ConcurrentHashMap<>();
 
     public DockerHostSandbox(
@@ -49,7 +50,7 @@ public class DockerHostSandbox implements HostSandbox {
             DockerVolumeOperations volumes,
             String image,
             String owner,
-            int gatewayPort) {
+            IntSupplier gatewayPort) {
         this.networks = networks;
         this.workspaces = workspaces;
         this.containers = containers;
@@ -102,7 +103,8 @@ public class DockerHostSandbox implements HostSandbox {
             }
             attempt = launcher.openHost(id, policy, workspaces.createInputTar(spec.files(), Map.of()), labels);
             Map<String, String> environment = new LinkedHashMap<>(spec.environment());
-            environment.put("LLM_PROXY_URL", "http://" + workerAddress + ":" + gatewayPort + "/internal/llm");
+            environment.put(
+                    "LLM_PROXY_URL", "http://" + workerAddress + ":" + gatewayPort.getAsInt() + "/internal/llm");
             environment.put("SANDBOX_RUNTIME_URL", attempt.runtimeUrl(workerAddress));
             environment.put("LLM_PROXY_TOKEN", token);
             DockerOperations.ContainerSpec template = new DockerOperations.ContainerSpec(

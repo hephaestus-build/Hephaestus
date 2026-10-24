@@ -3,7 +3,20 @@ name: Gradle dependency graph
 on:
   push:
     branches: [main]
+  # Only dependency review reads a pull request's snapshot; this list is that workflow's.
   pull_request:
+    paths:
+      - "**/package.json"
+      - "**/pnpm-lock.yaml"
+      - "**/pnpm-workspace.yaml"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/dependency-review-config.yml"
+      - "server/**/*.gradle.kts"
+      - "server/**/gradle.lockfile"
+      - "server/*-gradle.lockfile"
+      - "server/gradle/**"
+      - "server/gradle.properties"
 
 permissions: {}
 

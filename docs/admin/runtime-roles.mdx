@@ -64,6 +64,7 @@ Each role has a Spring profile YAML that turns off the other two flags and remov
   Its HTTP connector also serves management endpoints.
   It binds to loopback for in-container health checks.
   A separate sandbox gateway listens on `SANDBOX_API_PORT` (default `8081`).
+  If you set it to `0`, the gateway binds a free port at start, and sandboxes dial that port.
 - `application-webhook.yml`: `runtime.server=false` and `runtime.worker=false`.
   It enables sync NATS and disables the agent job queue.
   Webhook pods never claim jobs.
@@ -329,7 +330,7 @@ The host has these fixed limits:
 
 These limits do not come from the `SANDBOX_*` variables, and the host does not count against `SANDBOX_MAX_CONCURRENT`.
 The host is a separate container beside the worker container.
-Its 2 GiB do not count against `APPLICATION_WORKER_MEM_LIMIT` or the worker's [memory headroom](#memory-headroom).
+Its 2 GiB do not count against `APPLICATION_WORKER_MEM_LIMIT` or the worker's [memory headroom](./sizing#memory-headroom).
 The machine must hold them in addition to the worker container.
 The host has its own internal Docker network and volumes.
 Its container has the label `hephaestus.kind=heph-host`.
@@ -476,7 +477,7 @@ A worker never claims more concurrent reviews than the host permits concurrent s
 The single-host self-hosted Compose file sets this limit to 1.
 A higher review capacity there has no effect until you also raise the sandbox limit.
 
-1. Raise the sandbox limit only with sufficient RAM, as the [Install guide](./install) describes.
+1. Raise the sandbox limit only with sufficient RAM, as [Sizing](./sizing) describes.
 
 The app pod signs worker tokens from a key *ring*, not a single value:
 `hephaestus.worker.hub.token.keys[0].kid` + `.private-key` and
@@ -484,40 +485,7 @@ The app pod signs worker tokens from a key *ring*, not a single value:
 configure it through a mounted YAML/config-tree rather than a flat variable. Unset, the app logs a
 warning and generates an ephemeral key that invalidates every worker token on restart.
 
-### Database connections
-
-Preparing code evidence can hold two database connections.
-The worker also needs connections for its control traffic and to record results.
-Thus, the worker's pool must hold two connections for each review that can prepare code evidence at the same time, plus room for the rest.
-
-The worker profile gives the worker a pool of 32 connections, in Compose and on any other deployment.
-The other roles keep the application default of 20.
-`HIKARI_MAXIMUM_POOL_SIZE` overrides the pool size of each JVM that receives it.
-The Compose stacks pass it to the worker only.
-
-Each JVM replica can open up to its own pool size.
-Budget the sum of all pools against the connections that PostgreSQL makes available, less its reserved connections and the connections of other clients.
-For example, one server, one worker and one webhook server use up to 32 + 20 + 20 = 72 connections.
-If PostgreSQL allows 100 connections and reserves 3, then 25 remain for migrations, operator access and other clients.
-This example is only an illustration.
-More replicas or larger pools use more connections, and other clients need their own headroom.
-
-### Memory headroom
-
-When the JVM starts, the buildpack's memory calculator sets the Java memory from the container's memory limit.
-`BPL_JVM_HEAD_ROOM` is an optional percentage of that limit.
-The calculator keeps this percentage out of the Java memory that it calculates.
-The heap must also leave room for the worker's file cache and for other memory that the container uses outside the JVM.
-
-The default headroom is 0 %.
-Thus, if you increase the container memory limit, the heap can also increase at the next start.
-Select the headroom for the actual workload of your worker.
-
-The split Compose stack passes `BPL_JVM_HEAD_ROOM` to the worker only.
-If you do not set it, the buildpack's default behavior applies.
-The value applies only when the JVM starts.
-To apply a change, drain and restart the worker, as [Graceful drain](#graceful-drain) describes.
-For the calculation, see the [Paketo memory calculator](https://paketo.io/docs/reference/java-reference/#memory-calculator).
+[Sizing](./sizing#database-connections) owns the connection pool budget of each role and the JVM [memory headroom](./sizing#memory-headroom).
 
 ## Graceful drain
 

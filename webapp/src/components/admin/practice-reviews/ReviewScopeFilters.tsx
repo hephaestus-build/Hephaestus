@@ -75,13 +75,13 @@ export interface ScopeRecordFilter {
 const RECORD_TITLES: Record<ScopeRecordFilter["facet"], string> = {
 	review: "Review",
 	item: "Work",
-	result: "Result",
+	result: "Observation",
 };
 
 const RECORD_UNNAMED: Record<ScopeRecordFilter["facet"], string> = {
 	review: "one review",
 	item: "one piece of work",
-	result: "one result",
+	result: "one observation",
 };
 
 const DEVELOPER_TITLE = "Developer";

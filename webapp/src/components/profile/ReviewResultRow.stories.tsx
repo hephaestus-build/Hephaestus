@@ -144,7 +144,7 @@ export const StaleWithoutEvidence: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText("The practice or the reviewed work changed after this result."),
+			canvas.getByText("The practice or the reviewed work changed after this observation."),
 		).toBeVisible();
 		await expect(canvas.queryByText("Why it was noted")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("Evidence")).not.toBeInTheDocument();

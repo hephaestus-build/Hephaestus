@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.springframework.security.oauth2.core.authorization.OAuth2AuthorizationManagers.hasScope;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -68,6 +69,7 @@ class LlmProxySecurityConfig {
     SecurityFilterChain llmProxyFilterChain(
             HttpSecurity http,
             SandboxGatewayProperties gatewayProperties,
+            SandboxGatewayConnector gateway,
             ReviewJobRepository agentJobRepository,
             MentorTurnRepository mentorTurnRepository,
             SandboxGatewaySessions gatewaySessions,
@@ -111,7 +113,7 @@ class LlmProxySecurityConfig {
                 new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, hostCommands, turnEndpoints);
         var limit = new AuthRateLimitProperties.Limit(gatewayProperties.requestsPerMinute(), Duration.ofMinutes(1));
 
-        http.securityMatcher(new AndRequestMatcher(onGatewayConnector(gatewayProperties), capabilities))
+        http.securityMatcher(new AndRequestMatcher(onGatewayConnector(gateway), capabilities))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(
@@ -157,9 +159,9 @@ class LlmProxySecurityConfig {
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE + 1)
-    SecurityFilterChain hideNonGatewayCapabilities(HttpSecurity http, SandboxGatewayProperties gatewayProperties)
+    SecurityFilterChain hideNonGatewayCapabilities(HttpSecurity http, SandboxGatewayConnector gateway)
             throws Exception {
-        return hidden(http, onGatewayConnector(gatewayProperties));
+        return hidden(http, onGatewayConnector(gateway));
     }
 
     @Bean
@@ -185,8 +187,8 @@ class LlmProxySecurityConfig {
     }
 
     /** Written once so the two connector-matched chains provably claim the same requests. */
-    private static RequestMatcher onGatewayConnector(SandboxGatewayProperties gatewayProperties) {
-        return request -> request.getLocalPort() == gatewayProperties.port();
+    private static RequestMatcher onGatewayConnector(SandboxGatewayConnector gateway) {
+        return request -> request.getLocalPort() == gateway.port();
     }
 
     /** Denies everything it matches and reports nothing but {@code 404} while doing so. */

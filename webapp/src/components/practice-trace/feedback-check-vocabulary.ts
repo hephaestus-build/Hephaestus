@@ -19,7 +19,7 @@ export const FEEDBACK_CHECK_FACT_LABELS = {
 	evidenceAllowed: "Evidence may be shown",
 	modelAllowed: "Model may be used",
 	deliveryEnabled: "Feedback turned on",
-	incorrectBasis: "Rests on a result marked incorrect",
+	incorrectBasis: "Rests on an observation marked incorrect",
 	currentVersion: "Reviewed version is current",
 	approvalCurrent: "Approval still current",
 	writeStarted: "Sending started",

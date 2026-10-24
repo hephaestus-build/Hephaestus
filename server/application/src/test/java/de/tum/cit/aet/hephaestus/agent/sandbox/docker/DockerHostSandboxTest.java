@@ -72,7 +72,7 @@ class DockerHostSandboxTest extends BaseUnitTest {
                 volumes,
                 "heph-host:test",
                 "worker-1",
-                8081);
+                () -> 8081);
     }
 
     @Test

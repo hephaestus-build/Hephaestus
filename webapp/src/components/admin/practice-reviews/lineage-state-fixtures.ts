@@ -216,7 +216,7 @@ const reviewCases: LineageStateCase[] = [
 	),
 	withCase(
 		"running",
-		"Running, two results so far",
+		"Running, two observations so far",
 		chain({
 			review: { status: "RUNNING", completedAt: null },
 			results: threeResults().slice(0, 2),
@@ -226,7 +226,7 @@ const reviewCases: LineageStateCase[] = [
 	withCase("complete", "Complete", chain()),
 	withCase(
 		"failed",
-		"Failed after recording one result",
+		"Failed after recording one observation",
 		chain({ review: { status: "FAILED" }, results: threeResults().slice(0, 1), feedback: [] }),
 		(lineage) => detailOf(lineage, { stopReason: "EXECUTION_FAILED" }),
 	),
@@ -248,7 +248,7 @@ const reviewCases: LineageStateCase[] = [
 	),
 	withCase(
 		"withheld-practice",
-		"A practice withheld, with no result",
+		"A practice withheld, with no observation",
 		chain({ results: threeResults().slice(0, 2) }),
 		(lineage) => detailOf(lineage, { practices: [...reviewDetail().practices, withheldPractice] }),
 	),
@@ -501,7 +501,7 @@ function richResults(firstRecordedAt: Date): ReviewResultDetail[] {
 				index === 1 || index === 6
 					? "Failures lose their context"
 					: `${practiceName}: reviewed boundary ${index + 1}`,
-			explanation: `This result concerns boundary ${index + 1}. The captured passage supports the recorded outcome for this practice.`,
+			explanation: `This observation concerns boundary ${index + 1}. The captured passage supports the recorded outcome for this practice.`,
 			recordedAt: new Date(firstRecordedAt.getTime() + index * 10_000),
 			problems,
 			evidence: {
@@ -795,10 +795,10 @@ const resultCases: LineageStateCase[] = [
 		}),
 	),
 	withCase("not-met-silent", "Not met, and no feedback written from it", chain({ feedback: [] })),
-	withCase("empty", "Complete with no result", chain({ results: [], feedback: [] })),
+	withCase("empty", "Complete with no observation", chain({ results: [], feedback: [] })),
 	{
 		key: "many-results",
-		title: "24 results across practices, with 12 problems and six pieces of feedback",
+		title: "24 observations across practices, with 12 problems and six pieces of feedback",
 		lineage: richReviewFixture.lineage,
 		review: richReviewFixture.review,
 	},
@@ -892,7 +892,7 @@ const deliveryCases: LineageStateCase[] = [
 const volumeCases: LineageStateCase[] = [
 	withCase(
 		"many-feedback",
-		"Ten pieces of feedback from three results",
+		"Ten pieces of feedback from three observations",
 		chain({
 			feedback: Array.from({ length: 10 }, (_, index) =>
 				stateFeedback(
@@ -924,7 +924,7 @@ export const LINEAGE_STATE_GROUP_TITLES: Record<LineageStateGroup, string> = {
 	review: "How the review ran",
 	origin: "What started it",
 	item: "The work reviewed",
-	results: "Results",
+	results: "Observations",
 	destination: "Where feedback went",
 	delivery: "What became of feedback",
 	volume: "Many records",

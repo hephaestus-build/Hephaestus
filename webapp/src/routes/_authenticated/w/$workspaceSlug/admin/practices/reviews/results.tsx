@@ -32,7 +32,7 @@ export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/admin/practices/reviews/results",
 )({
 	validateSearch: resultsSearchSchema,
-	head: practiceReviewsHead("Results"),
+	head: practiceReviewsHead("Observations"),
 	component: ResultsListRoute,
 });
 

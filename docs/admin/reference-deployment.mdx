@@ -1,0 +1,129 @@
+---
+id: reference-deployment
+title: Reference deployment
+description: The multi-file Compose deployment that the maintainers run, and the container contract of the webapp image.
+---
+
+The reference deployment is the multi-file Compose stack in `docker/compose.{proxy,core,app}.yaml`.
+The maintainers run it for the TUM deployment.
+Self-hosters do not use that stack.
+The [Install guide](./install) is the only supported install path, and this page links to its facts rather than repeating them.
+
+This page assumes knowledge of Docker Compose.
+The TUM sections also assume access to TUM's protected secrets.
+
+## Platform overview
+
+The reference stack differs from the self-host stack [listed on the install page](./install).
+It contains:
+
+- **Application server:** Spring Boot API, sync, review admission, and Heph conversations.
+- **Application worker:** practice-review sandboxes and the Heph host, with the LLM proxy.
+  Only this container has Docker access.
+- **Webhook server:** the same Spring Boot artifact, with `webhook` profile → NATS JetStream.
+- **React webapp:** nginx serves it.
+- **PostgreSQL 18:** the only supported major version.
+  The release Compose stack includes `pg_partman`.
+  See [ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md).
+  Vanilla PostgreSQL is not a drop-in replacement for the bundled stack.
+- **Hephaestus-native auth:** Spring Security `oauth2Login` federates to GitHub and optional GitLab, either gitlab.com or self-hosted.
+  It issues cookie-session JWTs.
+  See [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md).
+
+## Webapp container
+
+The webapp image runs nginx as an unprivileged user and needs no capabilities.
+
+| Property         | Value                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| User and group   | UID `101`, GID `101`                                                                        |
+| Port             | `8080`, plain HTTP. Your proxy handles TLS.                                              |
+| Health check     | `GET /` on port `8080` returns `200`                                                        |
+| Writable path    | `/tmp/hephaestus-webapp` only. It holds the page shell, the runtime configuration and the nginx files. |
+| Root file system | Can be read-only                                                                            |
+
+The reference stack runs the container with a read-only root file system, all capabilities dropped and `no-new-privileges`.
+It mounts a 16 MiB `tmpfs` at `/tmp/hephaestus-webapp`, owned by UID 101 with mode `0700`.
+The maintenance page uses the same image and the same settings.
+The self-host stack uses the same settings.
+If you run the image on another platform, mount an empty directory at `/tmp/hephaestus-webapp` that UID 101 can write, for example an `emptyDir` with `fsGroup: 101`.
+To mount legal overrides, see [Legal Pages](./legal-pages).
+
+## Deployment steps (reference stack)
+
+The [Install guide](./install) owns the same base installation, secrets, GitHub OAuth app and callback, before-first-boot admin allowlist, and legal-pages obligation.
+Only multi-file stack differences appear here.
+Each file is a separate Compose project and needs its own `-p` and `up`.
+Each resolves images from the verified release lock.
+`docker/.env` defines no `HEPHAESTUS_IMAGE_*` variable.
+A project without the lock refuses startup.
+
+For an upgrade, read the [database migration instructions](./compatibility-policy#database-migrations) before starting any target runtime role.
+
+1. Make sure PostgreSQL, NATS, and storage volumes are ready.
+   The self-host stack supplies its own.
+   This stack does not.
+2. Copy `docker/.env.example` to `docker/.env`.
+3. Fill it in per [Install § 2](./install#2-configure-env), with the [deployment settings](./production-setup#base-environment-variables) that you need.
+4. Load the variables into your secret manager or Docker/Kubernetes `.env` files.
+5. Prepare the lock beside the reference stack as in [Install § 1](./install#1-get-the-files).
+6. Start projects in this order, with a healthy result required before the next starts:
+
+   ```bash
+   VERSION=<the release you are deploying>   # without the leading "v"
+   node scripts/prepare-release-lock.ts "v$VERSION" docker/release-lock.env
+   cd docker
+   dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
+   dc -p hephaestus-core -f compose.core.yaml up -d --wait nats-server
+   dc -p hephaestus-app -f compose.app.yaml up -d --wait
+   dc -p hephaestus-core -f compose.core.yaml up -d --wait
+   dc -p hephaestus-proxy -f compose.proxy.yaml up -d --wait
+   ```
+
+`depends_on` cannot cross project boundaries.
+You must maintain the order.
+The broker starts first to preserve existing application-server JetStream connections during redeployment.
+The application stack owns PostgreSQL.
+Start the core stack's webhook runtime only after the required database migrations complete.
+The proxy starts last, never routing to a stack that is still starting.
+
+Kubernetes manifests need the same order.
+
+1. Watch `application-server` logs to confirm migration completion.
+2. Verify the bootstrap admin can sign in.
+3. Verify access to instance-admin navigation.
+4. Verify workspace admin endpoints for workspaces where the bootstrap admin has membership.
+   Membership automatically elevates them to workspace ADMIN there.
+5. Verify a test GitHub or GitLab webhook reaches the ingest pipeline.
+6. Before GitLab practice-review tests, confirm `GITLAB_ENABLED`, `GITLAB_WORKSPACE_CREATION`, `AGENT_ENABLED`, `GIT_CHECKOUT_ENABLED`, and `NATS_ENABLED` in the deployed environment.
+   Preview environments most often lack this bundle.
+7. Verify `/imprint` and `/privacy` have no red "not configured" banner.
+   See [Legal Pages](./legal-pages).
+
+## Rollout tiers
+
+Use the same variables differently across environments:
+
+| Environment | Intended scope                                                                                                                                                                                             |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preview     | Limited by default. Keep GitLab login, GitLab workspaces, sandbox, git checkout, and agent job execution disabled unless explicitly validating rollout.                                                    |
+| Staging     | Uses production compose files with a controlled rollout. Enable GitLab login first, then workspace creation. Enable `AGENT_ENABLED` and `GIT_CHECKOUT_ENABLED` only to validate practice review execution. |
+| Production  | Full rollout only after staging validates the identical bundle.                                                                                                                                            |
+
+Staging and production both use production compose files.
+Their differences should be `.env` values, not compose topology.
+
+## Operational tips
+
+1. Monitor services with the central Prometheus/Loki stack.
+2. Verify trace IDs in logs.
+3. Schedule regular PostgreSQL backups.
+   It holds auth state (accounts, identity links, sessions) and application data.
+4. Verify rollouts on staging, not preview.
+
+A preview represents a GitLab practice-review rollout only with identical GitLab IdP, sandbox, git-checkout, and agent-job-queue settings.
+
+## Support
+
+If you need secret rotation or infrastructure migration, contact the Hephaestus core team.
+Document differences from this checklist in the deployment runbook.

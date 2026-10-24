@@ -1,11 +1,21 @@
 name: Dependency review
 
 on:
+  # The files the dependency graph reads. Without a change to one, the comparison is empty.
+  # dependency-graph.yml filters on the same list, so the head snapshot this waits for exists.
   pull_request:
-    paths-ignore:
-      - "docs/**/*.md"
-      - "docs/**/*.mdx"
-      - ".changeset/*.md"
+    paths:
+      - "**/package.json"
+      - "**/pnpm-lock.yaml"
+      - "**/pnpm-workspace.yaml"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/dependency-review-config.yml"
+      - "server/**/*.gradle.kts"
+      - "server/**/gradle.lockfile"
+      - "server/*-gradle.lockfile"
+      - "server/gradle/**"
+      - "server/gradle.properties"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

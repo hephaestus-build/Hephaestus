@@ -6,9 +6,9 @@ description: Enable practice review, set feedback mode and review scope, control
 
 # Practice review
 
-Hephaestus checks eligible work against workspace practices and records results before preparing feedback.
-A failed capture creates no result.
-A quiet review can have results without delivered feedback.
+Hephaestus checks eligible work against workspace practices and records observations before preparing feedback.
+A failed capture creates no observation.
+A quiet review can have observations without delivered feedback.
 The [vocabulary](/contributor/practice-feedback-language) owns outcome and feedback terms.
 
 ## First successful review
@@ -19,7 +19,7 @@ The [vocabulary](/contributor/practice-feedback-language) owns outcome and feedb
 4. Check that the practices use Hephaestus under Reviewed by.
 5. Set Feedback mode to Approve first while you inspect the first review.
 6. Request a review of eligible work.
-7. Open Practice reviews and inspect Results and Problems.
+7. Open Practice reviews and inspect Observations and Problems.
 8. Read capture and withholding reasons before interpreting a quiet review.
 9. Approve eligible feedback only after checking the complete proposed text.
 
@@ -31,13 +31,13 @@ Missing or ambiguous roles withhold the practice without inventing attribution.
 
 ## Follow one review end to end
 
-Read the recorded event or request, source readiness, result and feedback state separately.
+Read the recorded event or request, source readiness, observation and feedback state separately.
 A capture failure is not Could not determine.
-A refused candidate is Withheld, with no result row.
-A delivered comment does not prove that the result was correct.
+A refused candidate observation is Withheld, with no observation row.
+A delivered comment does not prove that the observation was correct.
 
 Practice scripts shows each script's execution state, model use and stop reason.
-Execution details can expire while results and delivery history remain available.
+Execution details can expire while observations and delivery history remain available.
 The [operations guide](./practice-review-operations.mdx) owns deployment controls and retention.
 
 ## Feedback mode, review scope and delivery
@@ -48,7 +48,7 @@ Feedback mode controls delivery independently:
 
 | Mode          | Behavior                                                                                            |
 | ------------- | --------------------------------------------------------------------------------------------------- |
-| Off           | Reviews can record results. No feedback reaches any destination.                                    |
+| Off           | Reviews can record observations. No feedback reaches any destination.                                    |
 | Approve first | Eligible feedback on the work waits for admin approval. Private destinations keep their own checks. |
 | Automatic     | Eligible feedback on the work can proceed after all normal checks.                                  |
 
@@ -64,7 +64,7 @@ AI choice, source consent and instance silent mode are also separate constraints
 
 ## Approve, reject and retry
 
-Inspect every summary, line note and supporting result in a proposal.
+Inspect every summary, line note and supporting observation in a proposal.
 Approval binds the exact text, anchors and developer.
 Approve and reject can change only before a copy write begins or a send is claimed.
 A later policy change cannot make an unsafe reversal valid.
@@ -86,37 +86,37 @@ A confirmed copy is never posted again.
 A parent can stay Unconfirmed while another copy has a confirmed delivery time.
 Read copy details rather than treating the entire package as absent.
 
-## Correct results and feedback
+## Correct observations and feedback
 
-Mark incorrect when the result was wrong when made.
-Give a reason. The result stays in history without supporting new feedback.
+Mark incorrect when the observation was wrong when made.
+Give a reason. The observation stays in history without supporting new feedback.
 The system requests supported provider correction after reconciling any started write.
 An unsupported correction retains the actual posted copy and its reason.
 
-Mark accepted to remove a result from open-problem lists and current open report counts.
+Mark accepted to remove an observation from open-problem lists and current open report counts.
 Give a reason. The recorded outcome and total problem count do not change.
 Acceptance is not proof that the developer repaired the work.
 
 It does not cancel an incorrect mark.
 Remove either mark with a reason to reverse it.
-Neither action revives an older claim or changes the result's end time.
+Neither action revives an older claim or changes the observation's end time.
 
-Withdraw a private card when correct results led to incorrect words.
+Withdraw a private card when correct observations led to incorrect words.
 Restore reverses withdrawal if current checks permit it.
-Withdrawal does not change results or erase a confirmed first-read time.
+Withdrawal does not change observations or erase a confirmed first-read time.
 A developer's disagreement is a response, not an automatic admin mark.
 
 ## Read unavailable evidence
 
 Source permissions can make summaries, explanations, examples and quotations unavailable.
 Safe outcomes, identifiers and delivery facts can remain visible.
-Unavailable detail does not mean the result has no problems.
-Private card and conversation text remains private on operator result views.
+Unavailable detail does not mean the observation has no problems.
+Private card and conversation text remains private on operator observation views.
 A rating alone does not expose the developer's note to admins.
 
 ## Scans and reports
 
 [Scan a repository](./practice-scans.mdx) describes default-branch scans and SARIF exports.
 A scan has no developer feedback or personal standing.
-It records file results, Withheld pairs and Not reviewed pairs separately.
+It records file observations, Withheld pairs and Not reviewed pairs separately.
 Use recorded counts for the close-time summary and open counts for current eligible problems.

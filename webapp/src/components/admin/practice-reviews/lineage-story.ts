@@ -25,11 +25,11 @@ export interface ReviewStepState {
 
 const ASSESSED_NOTHING: Record<ReviewStatus, string> = {
 	QUEUED: "The review has not started, so it has recorded nothing yet.",
-	RUNNING: "The review finishes its practice checks before recording results here.",
-	COMPLETE: "The review ran to the end and recorded no result.",
-	PARTIAL: "The review closed before it recorded a result.",
-	FAILED: "The review stopped before it recorded a result.",
-	CANCELLED: "The review was cancelled before it recorded a result.",
+	RUNNING: "The review finishes its practice checks before recording observations here.",
+	COMPLETE: "The review ran to the end and recorded no observation.",
+	PARTIAL: "The review closed before it recorded an observation.",
+	FAILED: "The review stopped before it recorded an observation.",
+	CANCELLED: "The review was cancelled before it recorded an observation.",
 };
 
 export function reviewStepState(
@@ -44,10 +44,10 @@ export function reviewStepState(
 		def,
 		title: `Review ${def.label.toLowerCase()}`,
 		note: stopReason === null ? undefined : REVIEW_STOP_REASON_SENTENCES[stopReason],
-		// Withheld practices have reasons, not results; an empty result list must preserve that distinction.
+		// Withheld practices have reasons, not observations; an empty observation list must preserve that distinction.
 		assessedNothing:
 			withheld > 0
-				? `${countOf(withheld, "practice was", "practices were")} withheld with a recorded reason, so no result stands for ${withheld === 1 ? "it" : "them"}.`
+				? `${countOf(withheld, "practice was", "practices were")} withheld with a recorded reason, so no observation stands for ${withheld === 1 ? "it" : "them"}.`
 				: ASSESSED_NOTHING[review.status],
 	};
 }

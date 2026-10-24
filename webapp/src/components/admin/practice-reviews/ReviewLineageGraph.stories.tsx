@@ -66,7 +66,7 @@ function endOf(root: HTMLElement): HTMLElement | null {
 export const ResultStory: Story = {
 	play: async ({ canvas, canvasElement }) => {
 		await expect(verdictOf(canvasElement)).toHaveTextContent(
-			"This result led to 3 pieces of feedback; one was delivered, then withdrawn, one was delivered, and one was replaced by newer feedback.",
+			"This observation led to 3 pieces of feedback; one was delivered, then withdrawn, one was delivered, and one was replaced by newer feedback.",
 		);
 		await expect(hereOf(canvasElement)).toHaveAttribute(
 			"data-lineage-node",
@@ -76,7 +76,7 @@ export const ResultStory: Story = {
 		await expect(stages.map((stage) => stage.textContent)).toStrictEqual([
 			"Started by",
 			"Review",
-			"Results",
+			"Observations",
 			"Feedback",
 			"Effect",
 		]);
@@ -85,7 +85,7 @@ export const ResultStory: Story = {
 		);
 		await expect(stepsOf(canvasElement).querySelectorAll('[data-step="feedback"]')).toHaveLength(3);
 		await expect(
-			canvas.getByRole("button", { name: "3 other results, 5 other pieces of feedback" }),
+			canvas.getByRole("button", { name: "3 other observations, 5 other pieces of feedback" }),
 		).toBeVisible();
 		await expect(endOf(canvasElement)).toHaveTextContent(
 			"3 pieces of feedback: 1 withdrawn by an admin, 1 delivered, 1 replaced by newer feedback.",
@@ -98,7 +98,7 @@ export const ResultStory: Story = {
 export const ResultStorySiblingsShown: Story = {
 	play: async ({ canvas, canvasElement, userEvent }) => {
 		await userEvent.click(
-			canvas.getByRole("button", { name: "3 other results, 5 other pieces of feedback" }),
+			canvas.getByRole("button", { name: "3 other observations, 5 other pieces of feedback" }),
 		);
 		await expect(showToggle(canvasElement, "Siblings")).toHaveAttribute("aria-pressed", "false");
 		await expect(stepsOf(canvasElement).querySelectorAll('[data-step="feedback"]')).toHaveLength(8);
@@ -185,7 +185,7 @@ export const AllShown: Story = {
 		await waitFor(async () => {
 			await expect(canvasElement.querySelectorAll("path[data-connector-line]")).toHaveLength(9);
 		});
-		await expect(canvas.getByRole("list", { name: "Results of this review" })).toBeVisible();
+		await expect(canvas.getByRole("list", { name: "Observations of this review" })).toBeVisible();
 		// Said once, in the facts "Expand all" opens under the piece, not again on its line.
 		await expect(canvasElement.querySelectorAll("[data-step-facts]").length).toBeGreaterThan(0);
 		await expect(canvas.queryByText("Composed by")).toBeNull();
@@ -212,7 +212,9 @@ export const ResultTable: Story = {
 	play: async ({ canvas, canvasElement, userEvent }) => {
 		const table = () => canvasElement.querySelector('[data-trace-table="results"]');
 		const rows = () =>
-			canvas.getByRole("list", { name: "Results of this review" }).querySelectorAll(":scope > li");
+			canvas
+				.getByRole("list", { name: "Observations of this review" })
+				.querySelectorAll(":scope > li");
 		await expect(showToggle(canvasElement, "Siblings")).toHaveAttribute("aria-pressed", "false");
 		await expect(rows()).toHaveLength(4);
 		await expect(
@@ -220,8 +222,10 @@ export const ResultTable: Story = {
 		).toHaveTextContent(/Not met.*Major.*B, C, E/u);
 		await userEvent.click(canvas.getByRole("button", { name: "Fold the table" }));
 		await expect(table()).toBeNull();
-		await expect(canvas.getByRole("list", { name: "Results by number" })).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "Show all 4 results in the table" }));
+		await expect(canvas.getByRole("list", { name: "Observations by number" })).toBeVisible();
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Show all 4 observations in the table" }),
+		);
 		await expect(rows()).toHaveLength(4);
 	},
 };
@@ -229,12 +233,12 @@ export const ResultTable: Story = {
 /** A trace that starts on one result keeps the review's other results folded to their dots. */
 export const ResultTraceFoldsTheOthers: Story = {
 	play: async ({ canvas, canvasElement }) => {
-		await expect(canvas.getByRole("list", { name: "Results on this path" })).toBeVisible();
+		await expect(canvas.getByRole("list", { name: "Observations on this path" })).toBeVisible();
 		await expect(
 			canvasElement.querySelectorAll('[data-trace-table="results"] [data-lineage-node]'),
 		).toHaveLength(1);
 		await expect(
-			canvas.getByRole("button", { name: /^Show all \d+ results in the table$/u }),
+			canvas.getByRole("button", { name: /^Show all \d+ observations in the table$/u }),
 		).toHaveAttribute("aria-expanded", "false");
 	},
 };
@@ -379,7 +383,7 @@ export const OnlyOneOutcome: Story = {
 		filter: { kind: "outcome", outcome: "MET" },
 	},
 	play: async ({ canvas, userEvent }) => {
-		await expect(canvas.getByText(/^It recorded 4 results: /u)).toBeVisible();
+		await expect(canvas.getByText(/^It recorded 4 observations: /u)).toBeVisible();
 		await expect(canvas.getByText("The filter shows 1 of them.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("combobox", { name: "Steps" }));
 		await expectSettledVisible(await screen.findByRole("option", { name: "Only met (1)" }));
@@ -417,7 +421,9 @@ export const FilterKeepsWhatFeedbackRestsOn: Story = {
 	play: async ({ canvas, canvasElement }) => {
 		const met = richRecords.results.filter((result) => result.outcome === "MET");
 		await expect(
-			canvas.getByRole("list", { name: "Results of this review" }).querySelectorAll(":scope > li"),
+			canvas
+				.getByRole("list", { name: "Observations of this review" })
+				.querySelectorAll(":scope > li"),
 		).toHaveLength(met.length);
 		const row = canvasElement.querySelector(`[data-feedback-row="${acrossOutcomes.id}"]`);
 		const chips = [...(row?.querySelectorAll<HTMLElement>("[data-result-chip]") ?? [])];
@@ -435,8 +441,8 @@ export const FilterKeepsWhatFeedbackRestsOn: Story = {
 	},
 };
 
-const PROBLEM_TOGGLE = /^\d+ problems?: .+, of result \d+$/u;
-const PROBLEM_LIST = /^Problems of result \d+$/u;
+const PROBLEM_TOGGLE = /^\d+ problems?: .+, of observation \d+$/u;
+const PROBLEM_LIST = /^Problems of observation \d+$/u;
 
 /**
  * A Not met row folds its problems to their count and severities, so many problems do not bury the
@@ -454,11 +460,11 @@ export const ProblemsFoldUnderTheirResult: Story = {
 		await expect(toggle).toHaveAttribute("aria-expanded", "false");
 		await userEvent.click(toggle);
 		await expect(toggle).toHaveAttribute("aria-expanded", "true");
-		const number = /of result (?<number>\d+)$/u.exec(toggle.getAttribute("aria-label") ?? "")
+		const number = /of observation (?<number>\d+)$/u.exec(toggle.getAttribute("aria-label") ?? "")
 			?.groups?.number;
-		const list = canvas.getByRole("list", { name: `Problems of result ${String(number)}` });
+		const list = canvas.getByRole("list", { name: `Problems of observation ${String(number)}` });
 		await expect(
-			within(list).getAllByRole("button", { name: /^Problem \d+ of result \d+: /u }).length,
+			within(list).getAllByRole("button", { name: /^Problem \d+ of observation \d+: /u }).length,
 		).toBeGreaterThan(0);
 		await userEvent.click(toggle);
 		await expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -660,7 +666,7 @@ export const BottleneckReviewPartial: Story = {
 		const line = bottleneckOf(canvasElement);
 		await expect(line).toHaveTextContent(/^Partial review/u);
 		await expect(line).toHaveTextContent(
-			"The review did not record a result for every selected practice.",
+			"The review did not record an observation for every selected practice.",
 		);
 		await expect(line).not.toHaveTextContent(/did not finish|stopped before/u);
 		await expect(canvasElement.querySelector('[data-stage="results"]')).toHaveTextContent(

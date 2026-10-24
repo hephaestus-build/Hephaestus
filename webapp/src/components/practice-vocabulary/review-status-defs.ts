@@ -33,7 +33,7 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		label: "Running",
 		icon: LoaderIcon,
 		badgeVariant: "secondary",
-		description: "Being run now. Results appear as it finishes.",
+		description: "Being run now. Observations appear as it finishes.",
 	},
 	COMPLETE: {
 		label: "Complete",
@@ -45,13 +45,13 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		label: "Partial",
 		icon: CircleDashedIcon,
 		badgeVariant: "warning",
-		description: "Its results cover only the work it reached.",
+		description: "Its observations cover only the work it reached.",
 	},
 	FAILED: {
 		label: "Failed",
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
-		description: "It stopped on an error. Results it recorded before then still stand.",
+		description: "It stopped on an error. Observations it recorded before then still stand.",
 	},
 	CANCELLED: {
 		label: "Cancelled",
@@ -89,7 +89,7 @@ export const OWN_REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		label: "Partial",
 		icon: CircleDashedIcon,
 		badgeVariant: "warning",
-		description: "The review’s results cover only the work it reached.",
+		description: "The review’s observations cover only the work it reached.",
 	},
 	FAILED: {
 		label: "Failed",
@@ -111,8 +111,8 @@ export const OWN_REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
  * only the scope and never the cause.
  */
 export const PARTIAL_REVIEW_SCOPE: Record<ReviewRef["kind"], string> = {
-	ITEM: "Its results and feedback cover only the practices it reviewed.",
-	SCAN: "Its results cover only the work it reached.",
+	ITEM: "Its observations and feedback cover only the practices it reviewed.",
+	SCAN: "Its observations cover only the work it reached.",
 };
 
 export function isActiveReview(status: ReviewStatus): boolean {
@@ -124,14 +124,14 @@ export const REVIEW_STOP_REASON_SENTENCES: Record<ReviewStopReason, string> = {
 	TIMED_OUT: "It ran past the time it is allowed and was stopped.",
 	EXECUTION_FAILED: "Running the review failed.",
 	PREPARATION_FAILED: "Preparing the review failed.",
-	PROCESSING_FAILED: "Processing the review’s results failed.",
+	PROCESSING_FAILED: "Processing the review’s output failed.",
 	PERSON_DATA_ERASED: "A person’s data was erased.",
 	STALE_ROLLOUT_REVISION: "Review settings changed while it waited.",
 	CANCELLED_BY_ADMIN: "A workspace admin cancelled it.",
 	REPLACED: "A newer review of the same work replaced it.",
 	LEGACY_FAILURE: "It failed before Hephaestus recorded why.",
-	EXECUTION_INCOMPLETE: "The review did not record a result for every selected practice.",
-	RESULT_WITHHELD: "Its results were withheld.",
+	EXECUTION_INCOMPLETE: "The review did not record an observation for every selected practice.",
+	RESULT_WITHHELD: "Its candidate observations were withheld.",
 	READINESS_REFUSED: "Something the review needs was not ready.",
 	SUSPECT_LISTING: "The file listing changed too much to trust, so files were not removed.",
 	BUDGET: "The scan’s budget was used up.",
@@ -151,9 +151,9 @@ export const REVIEW_STOP_REASON_SENTENCES: Record<ReviewStopReason, string> = {
 const REVIEW_WITHHELD_REASON_SENTENCES: Readonly<Record<string, string>> = {
 	...REVIEW_STOP_REASON_SENTENCES,
 	LEGACY_AMBIGUOUS_RESULTS:
-		"This review keeps several historical results for the same practice and work without choosing one as its answer.",
+		"This review keeps several historical observations for the same practice and work without choosing one as its answer.",
 	LEGACY_REUSE_UNBOUND:
-		"This review referred to an earlier result that could not be identified exactly.",
+		"This review referred to an earlier observation that could not be identified exactly.",
 	source_contract_unsupported:
 		"Hephaestus cannot use this practice’s evidence settings for this work. Ask a workspace admin to check them.",
 	item_capability_unsupported:
@@ -166,7 +166,7 @@ export function reviewReasonSentence(code: string | null): string | undefined {
 		: undefined;
 }
 
-/** Where one practice stands inside one review. Withheld is a decision with a reason, not a result. */
+/** Where one practice stands inside one review. Withheld is a decision with a reason, not an observation. */
 export const REVIEW_PRACTICE_STATUS_DEFS: StatusDefs<ReviewPracticeStatus> = {
 	QUEUED: {
 		label: "Queued",
@@ -190,19 +190,19 @@ export const REVIEW_PRACTICE_STATUS_DEFS: StatusDefs<ReviewPracticeStatus> = {
 		label: "Done",
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
-		description: "It recorded its results.",
+		description: "It recorded its observations.",
 	},
 	WITHHELD: {
 		label: "Withheld",
 		icon: EyeOffIcon,
 		badgeVariant: "warning",
-		description: "It was not reviewed, for the recorded reason. This is not a result.",
+		description: "It was not reviewed, for the recorded reason. This is not an observation.",
 	},
 	FAILED: {
 		label: "Failed",
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
-		description: "Reviewing it failed. It recorded no result.",
+		description: "Reviewing it failed. It recorded no observation.",
 	},
 };
 

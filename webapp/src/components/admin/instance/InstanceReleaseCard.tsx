@@ -34,7 +34,7 @@ import {
 } from "./release-check-status-defs";
 
 const RELEASES_URL = "https://github.com/hephaestus-build/Hephaestus/releases";
-const UPGRADE_GUIDE_URL = "https://docs.hephaestus.build/admin/install#upgrades";
+const UPGRADE_GUIDE_URL = "https://docs.hephaestus.build/admin/upgrade";
 
 export type ReleaseCheckRequest =
 	| { status: "idle" | "pending" | "success" }

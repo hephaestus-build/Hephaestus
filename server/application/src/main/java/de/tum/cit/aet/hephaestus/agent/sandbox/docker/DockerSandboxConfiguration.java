@@ -4,7 +4,7 @@ import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -211,7 +211,7 @@ public class DockerSandboxConfiguration {
             SandboxWorkspaceManager workspaceManager,
             SandboxContainerManager containerManager,
             ContainerSecurityPolicy securityPolicy,
-            SandboxGatewayProperties gatewayProperties,
+            SandboxGatewayConnector gateway,
             MeterRegistry meterRegistry,
             SandboxGatewaySessions gatewaySessions,
             DockerClientOperations volumeOperations) {
@@ -220,7 +220,7 @@ public class DockerSandboxConfiguration {
                 workspaceManager,
                 containerManager,
                 securityPolicy,
-                gatewayProperties.port(),
+                gateway::port,
                 meterRegistry,
                 gatewaySessions,
                 volumeOperations);
@@ -237,7 +237,7 @@ public class DockerSandboxConfiguration {
             DockerClientOperations volumeOperations,
             AgentImageProperties agentImageProperties,
             DockerSandboxProperties dockerProperties,
-            SandboxGatewayProperties gatewayProperties) {
+            SandboxGatewayConnector gateway) {
         return new DockerHostSandbox(
                 networkManager,
                 workspaceManager,
@@ -248,7 +248,7 @@ public class DockerSandboxConfiguration {
                 volumeOperations,
                 agentImageProperties.reference(),
                 dockerProperties.owner(),
-                gatewayProperties.port());
+                gateway::port);
     }
 
     /**

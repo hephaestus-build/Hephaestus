@@ -50,11 +50,11 @@ export interface ResultRowsProps {
 	loadingMore?: number;
 }
 
-const LIST_LABEL = "Results";
+const LIST_LABEL = "Observations";
 
 export const RESULT_COLUMNS: readonly RecordTableColumn[] = [
 	{ label: "Recorded", className: "w-24 whitespace-nowrap" },
-	{ label: "Result" },
+	{ label: "Observation" },
 	{ label: "Work" },
 	{ label: "Developer", className: "w-44" },
 	rowActionsColumn(),
@@ -62,11 +62,11 @@ export const RESULT_COLUMNS: readonly RecordTableColumn[] = [
 ];
 
 const RESULT_WORDS: RecordResultsWords = {
-	errorTitle: "We could not load results",
+	errorTitle: "We could not load observations",
 	icon: ScanSearchIcon,
-	emptyTitle: "No results yet",
-	filteredTitle: "No results match these filters",
-	emptyDescription: "Results appear after a practice review completes.",
+	emptyTitle: "No observations yet",
+	filteredTitle: "No observations match these filters",
+	emptyDescription: "Observations appear after a practice review completes.",
 };
 
 export function ResultRows({ state, byDay = true, loadingMore }: ResultRowsProps) {
@@ -172,7 +172,7 @@ export function ResultRow({ result, withDay = false }: ResultRowProps) {
 	return (
 		<PracticeTableRow
 			link={{
-				text: "Open result",
+				text: "Open observation",
 				name: `${summary}, ${formatDayTime(result.recordedAt, today)}`,
 				render: <DetailStackLink entry={resultLevel(result.id)} single />,
 			}}
@@ -181,7 +181,7 @@ export function ResultRow({ result, withDay = false }: ResultRowProps) {
 				<RecordRowActions
 					record={{ kind: "result", id: result.id }}
 					reviewId={result.reviewId}
-					name={`result ${summary}`}
+					name={`observation ${summary}`}
 				/>
 			}
 		>

@@ -13,10 +13,10 @@ A term has one definition in one of these pages.
 
 | Term                    | Meaning                                                                                                                                                       | Identifier                                          |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| **Item**                | One thing that a result can concern or a review can cover. Its kind states what it is.                                                                        | item, item.kind                                     |
+| **Item**                | One thing that an observation can concern or a review can cover. Its kind states what it is.                                                                  | item, item.kind                                     |
 | **Version**             | One fixed state of an item. Its domain defines what identifies that state.                                                                                    | item_version                                        |
 | **Event**               | A recorded change to an item, such as a pull request merged.                                                                                                  | item_event                                          |
-| **Review**              | One operation that checks practices against an item at a version and can record results.                                                                      | review                                              |
+| **Review**              | One operation that checks practices against an item at a version and can record observations.                                                                 | review                                              |
 | **Scan**                | A review of the items held by another item at a version. The holder is a repository on its monitored default branch.                                          | review.kind = SCAN                                  |
 | **Scan exclusion**      | A listed file that cannot supply scan text. It stays in the inventory and has no eligible practice/file pairs.                                                | inventory_receipt.exclusions                        |
 | **Origin**              | How a review started: an event, a request, a schedule or a backfill.                                                                                          | review.origin                                       |
@@ -25,15 +25,15 @@ A term has one definition in one of these pages.
 | **Review on**           | The events and recorded state that select a practice for automatic review.                                                                                    | definition.reviewOn                                 |
 | **Applies when**        | The conditions that establish whether a practice applies on every review origin.                                                                              | definition.appliesWhen                              |
 | **Reviewed by**         | Who reviews a practice: Hephaestus, people or nobody.                                                                                                         | definition.reviewedBy                               |
-| **Practice script**     | Code that reviews one practice for one item and returns one candidate result.                                                                                 | definition.script                                   |
-| **Candidate**           | The proposed result that a script returns before server admission.                                                                                            | Candidate                                           |
-| **Admission**           | The server checks that decide whether a candidate can become a result.                                                                                        | result admission                                    |
+| **Practice script**     | Code that reviews one practice for one item and returns one candidate observation.                                                                            | definition.script                                   |
+| **Candidate**           | The proposed observation that a script returns before server admission.                                                                                       | Candidate                                           |
+| **Admission**           | The server checks that decide whether a candidate can become an observation.                                                                                  | result admission                                    |
 | **Feedback mode**       | How the workspace permits feedback: Off, Approve first or Automatic.                                                                                          | feedback_mode                                       |
 | **Publication context** | What other reviews communicated on the same work to the same developer, as one history read issued it. A public piece keeps the context it was composed from. | publicationContext                                  |
 | **Evidence**            | The material that a review captured and read.                                                                                                                 | result.evidence                                     |
 | **Citation**            | A pointer into captured source text at an item version, with its quote and available coordinates.                                                             | citation                                            |
-| **Coverage**            | What a result read and what it did not read.                                                                                                                  | result.coverage                                     |
-| **Report**              | A scan's summary and supported results for workspace admins and exports.                                                                                      | review.report                                       |
+| **Coverage**            | What an observation read and what it did not read.                                                                                                            | result.coverage                                     |
+| **Report**              | A scan's summary and supported observations for workspace admins and exports.                                                                                 | review.report                                       |
 
 Use Review as the short product name where the page establishes the practice context.
 Use practice review in prose that does not establish that context.
@@ -55,7 +55,7 @@ Work is a plain word with no identifier or separate taxonomy.
 
 Origin and review kind are independent.
 A requested repository review is a scan with REQUEST origin.
-A backfill is not another result outcome or another current-result namespace.
+A backfill is not another observation outcome or another current-observation namespace.
 The [pipeline](./practice-review-pipeline.mdx) owns ordering, eligibility and feedback restrictions.
 
 ### Review definition and feedback mode
@@ -72,7 +72,7 @@ A practice with a null script uses the built-in script.
 A script that fails does not fall back to it.
 
 Feedback mode is separate from Reviewed by.
-Off prevents feedback at every destination but does not prevent eligible result recording.
+Off prevents feedback at every destination but does not prevent eligible observation recording.
 Approve first requires an admin decision before feedback leaves on the work.
 Automatic permits that delivery after the normal policy checks.
 The two active modes permit eligible practice-page and conversation feedback without public approval.
@@ -123,9 +123,9 @@ The same name is the source capture code that causes it.
 | **Readiness**                  | Whether the captured sources meet the practice's declared requirements.                                   | review_practice                |
 | **Job folder**                 | The worker's disposable files and repository copies for one execution attempt.                            | workspace ABI                  |
 | **Runtime non-result**         | An assigned practice that stopped without a candidate. Its stop reason describes execution, not the work. | nonResults                     |
-| **Composition**                | The preparation of feedback from admitted and eligible results.                                           | feedback composition           |
+| **Composition**                | The preparation of feedback from admitted and eligible observations.                                      | feedback composition           |
 | **Send**                       | One leased provider write or retraction of on-work feedback, with its reconciliation state.               | feedback_send                  |
-| **Review digest**              | The digest of the definition inputs that can change a result from the same evidence.                      | practice_version.review_digest |
+| **Review digest**              | The digest of the definition inputs that can change an observation from the same evidence.                | practice_version.review_digest |
 | **Heph host**                  | The one long-lived sandboxed process on a worker that runs Heph turns.                      | heph-host.ts, HephHost         |
 | **Turn**                       | One run of Heph for one question, with its attempts, lease, partial answer and usage.       | mentor_turn                    |
 | **Context folder**             | The read-only files that one agent may read for one person, in one workspace, for one purpose. | INDEX.md, inputs/context/, repos/ |
@@ -137,7 +137,7 @@ The job folder of a review is the context folder of that review.
 The [Heph runtime](./unified-pi-runtime.mdx) owns turns, the Heph host, context documents, context loaders and turn sandboxes.
 A turn is not a job: it has no job row and no review.
 
-A job can expire without removing its review or results.
+A job can expire without removing its review or observations.
 The [runtime guide](./practice-review-runtime.mdx) owns execution, retries and retention.
 The [workspace ABI](./agent/workspace-abi.mdx) owns file paths and capture records.
 The [source contract](./item-source-contract.mdx) owns capture states.
@@ -161,7 +161,7 @@ Product labels remain the labels defined above and in the product vocabulary.
 | Scan                | Evaluation of a collection     | run                               | System assessment                 |
 | Item                | Test subject or test target    | artifact or logical location      | Assessment subject                |
 | Version             | State under evaluation         | revisionId                        | State under assessment            |
-| Result              | Assertion and TestResult       | result or run properties          | Objective-status finding          |
+| Observation         | Assertion and TestResult       | result or run properties          | Objective-status finding          |
 | Met                 | passed                         | pass                              | Satisfied objective               |
 | Not met             | failed                         | fail                              | Unsatisfied objective             |
 | Does not apply      | inapplicable                   | notApplicable                     | Applicability explanation         |
@@ -173,8 +173,8 @@ Product labels remain the labels defined above and in the product vocabulary.
 | Citation            | pointer                        | location and snippet              | Relevant evidence                 |
 | Report              | Evaluation report              | log                               | Assessment results document       |
 
-The EARL and ACT outcome terms correspond to the four result outcomes and the separate Not reviewed state.
-This does not make a withheld result an untested claim.
+The EARL and ACT outcome terms correspond to the four observation outcomes and the separate Not reviewed state.
+This does not make a withheld candidate an untested claim.
 See [EARL 1.0](https://www.w3.org/TR/EARL10-Schema/) and [ACT Rules Format](https://www.w3.org/TR/act-rules-format/).
 
 The [SARIF specification](https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html) defines export fields and allowed values.
@@ -188,8 +188,9 @@ Baseline values new, unchanged, updated and absent describe problem comparison.
 Absent needs comparable complete proof at a changed version. Removal and admin marks do not prove absence.
 
 The [OSCAL assessment model](https://pages.nist.gov/OSCAL/learn/concepts/layer/assessment/assessment-results/) separates evidence from objective-status conclusions.
-Its observation can support compliance or non-compliance.
-Its finding is closer to a Hephaestus result than to one located problem.
+An OSCAL observation can support compliance or non-compliance.
+Despite the shared word, it is not a Hephaestus observation.
+An OSCAL finding is closer to a Hephaestus observation than to one located problem.
 This correspondence does not provide an OSCAL exporter.
 
 [ISO/IEC 17000](https://www.iso.org/standard/73029.html) supplies conformity-assessment vocabulary.
@@ -198,7 +199,7 @@ Do not claim an ISO clause mapping that the implementation does not establish.
 
 [PROV-DM](https://www.w3.org/TR/prov-dm/) separates entities, activities and attribution.
 Captured versions and practice versions correspond to entities. Reviews correspond to activities.
-A provider actor and a result's developer have different attribution roles.
+A provider actor and an observation's developer have different attribution roles.
 This is a design comparison, not a PROV export contract.
 
 Task, process and self-regulation are research descriptions of feedback content.
