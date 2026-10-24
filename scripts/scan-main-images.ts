@@ -11,10 +11,8 @@
  * the release evidence gate demands. Both share `lib/image-scan.ts`, which hands each Trivy report
  * to `check-release-vulnerabilities.ts`.
  *
- * Only `linux/amd64`, unlike the upstream scan, which covers both. A finding on either architecture
- * of an image we build is fixed by the same rebuild, and the Version PR preflight scans both before
- * a release is cut; a pinned upstream digest has no rebuild and its fix arrives as a digest bump in
- * a pull request, so that scan cannot leave half a subject to the release gate.
+ * Both platforms, as `scan-upstream-images.ts` explains: an arm64-only finding left to the Version
+ * PR preflight is a finding whose first appearance blocks the release.
  *
  * A finding never fails this run. `report-vulnerability-drift.ts` reads the `.policy.json` files
  * written here and routes them to a tracking issue; only an infrastructure failure — a missing tag, an
@@ -23,8 +21,9 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { PLATFORM, scanAll, type Subject } from "./lib/image-scan.ts";
+import { type ScanOutcome, scanAll, type Subject } from "./lib/image-scan.ts";
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
+import { PLATFORMS } from "./scan-upstream-images.ts";
 
 /**
  * The first-party images to scan, in inventory order.
@@ -52,12 +51,17 @@ if (import.meta.main) {
 	const registry = process.env.IMAGE_REGISTRY ?? "ghcr.io/hephaestus-build";
 	const tag = process.env.IMAGE_TAG ?? "main";
 	const subjects = planSubjects(await readJsonFile("security/release-images.json"), registry, tag);
-	const outcomes = await scanAll(subjects, directory);
+	const outcomes: ScanOutcome[] = [];
+	for (const platform of PLATFORMS) {
+		outcomes.push(...(await scanAll(subjects, directory, { platform })));
+	}
 	await writeFile(
 		path.join(directory, "scan.json"),
-		`${JSON.stringify({ platform: PLATFORM, registry, scannedAt: new Date().toISOString(), subjects, tag }, null, 2)}\n`,
+		`${JSON.stringify({ platforms: PLATFORMS, registry, scannedAt: new Date().toISOString(), subjects, tag }, null, 2)}\n`,
 	);
 	for (const outcome of outcomes) {
-		process.stdout.write(`${outcome.image}: ${outcome.passed ? "pass" : "fail"}\n`);
+		process.stdout.write(
+			`${outcome.image} (${outcome.platform}): ${outcome.passed ? "pass" : "fail"}\n`,
+		);
 	}
 }

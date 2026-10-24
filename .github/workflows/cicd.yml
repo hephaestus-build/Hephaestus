@@ -32,6 +32,7 @@ jobs:
     name: "Detect changes"
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       pull-requests: read
       contents: read
     outputs:
@@ -61,9 +62,15 @@ jobs:
       release-candidate: ${{ steps.release_candidate.outputs.release-candidate }}
       release-preflight: ${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}
       any-code: ${{ steps.filter.outputs.webapp == 'true' || steps.filter.outputs.extension == 'true' || steps.filter.outputs.application-server == 'true' || steps.filter.outputs.tooling == 'true' || steps.filter.outputs.agent-images == 'true' || steps.filter.outputs.postgres-image == 'true' }}
-      # The vulnerability policy's match key includes the platform, so an arm64-only finding has to
-      # be found before the release rather than by it, and only a manifest that exists can carry it.
-      single-arch: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.release_candidate.outputs.release-candidate != 'true' }}
+      # The platforms every image build in the run publishes. A pull request builds `linux/amd64`
+      # alone, so a push to it does not pay for arm64. Every other event builds both, so the merge
+      # group finds an arm64 failure once per merge, before main. The Version PR builds both too:
+      # its preflight evidences each image on both platforms, and the vulnerability policy's match
+      # key includes the platform, so an arm64-only finding must be found before the release.
+      platforms: ${{ github.event_name == 'pull_request' && steps.release_candidate.outputs.release-candidate != 'true' && '["linux/amd64"]' || '["linux/amd64","linux/arm64"]' }}
+      # The successful merge-queue run of a default-branch push's exact commit, whose images the push
+      # reuses instead of rebuilding; empty after a direct push, which builds every image.
+      queue-run: ${{ steps.queue_run.outputs.run-id }}
       # The commit an unchanged image is aliased from; scripts/resolve-alias-base.ts says how it is
       # found and docs/contributor/ci-cd.mdx the rule.
       alias-base: ${{ steps.alias_base.outputs.commit }}
@@ -130,10 +137,22 @@ jobs:
           fi
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
-      - if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+      - if: >-
+          github.event_name == 'pull_request' || github.event_name == 'merge_group' ||
+          (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
         uses: ./.github/actions/setup-toolchain
         with:
           install: "none"
+
+      # An unresolved run only means every image is built, so a failed lookup takes that answer.
+      - name: Find the exact-commit merge-queue run
+        id: queue_run
+        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node scripts/resolve-queue-run.ts
 
       # An unresolved base already means "build every image", and the script writes its output only
       # once it has one, so a failed `gh api` call takes the safe answer. Failing the step instead
@@ -744,7 +763,8 @@ jobs:
       run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:dc90cbdbbff35916ff5a26409f29f0525cbc7fa76cc317adca856c4127ebf2ba"
       registry: "ghcr.io"
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
-      single-arch: ${{ needs.detect-changes.outputs.single-arch == 'true' }}
+      platforms: ${{ needs.detect-changes.outputs.platforms }}
+      reuse-run: ${{ needs.detect-changes.outputs.queue-run }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
 
   Build:
@@ -885,7 +905,8 @@ jobs:
       database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
-      single_arch: ${{ needs.detect-changes.outputs.single-arch }}
+      platforms: ${{ needs.detect-changes.outputs.platforms }}
+      reuse_run: ${{ needs.detect-changes.outputs.queue-run }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
