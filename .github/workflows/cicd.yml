@@ -665,9 +665,10 @@ jobs:
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.previews == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
-        needs.detect-changes.outputs.build-config == 'true'
+        needs.detect-changes.outputs.build-config == 'true' ||
+        needs.detect-changes.outputs.test-config == 'true'
       ) && (
-        needs.detect-changes.outputs.application-server == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
+        needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.test-config == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
       )
     env:
       SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
@@ -888,10 +889,13 @@ jobs:
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
 
+  # The suites run the packaged classes. A failed package already fails the gate; a package that
+  # was skipped while the suites were selected must fail them rather than skip them.
   Test:
     uses: ./.github/workflows/ci-tests.yml
-    needs: [detect-changes]
+    needs: [detect-changes, server-package]
     if: |
+      !cancelled() && needs.detect-changes.result == 'success' && needs.server-package.result != 'failure' &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.application-server == 'true' ||

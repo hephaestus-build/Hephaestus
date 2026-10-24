@@ -29,7 +29,11 @@ on:
 
 permissions: {}
 
-# Test compilation runs independently of release packaging to avoid a serial build dependency.
+env:
+  SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
+  # The suites run the package job's compiled classes. docs/contributor/ci-cd.mdx § Build once says why.
+  ORG_GRADLE_PROJECT_packagedServer: "true"
+
 jobs:
   server-verification:
     name: "App Server: Unit and architecture"
@@ -47,6 +51,9 @@ jobs:
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
+      - uses: ./.github/actions/restore-server-build
+        with:
+          artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
       - name: Verify test tier and shard discovery
         run: vp run test:server:selection
       - name: Run unit and architecture tests with coverage floors
@@ -96,6 +103,9 @@ jobs:
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
+      - uses: ./.github/actions/restore-server-build
+        with:
+          artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
       - uses: ./.github/actions/postgres-image
         with:
           base-sha: ${{ inputs.postgres_base_sha }}

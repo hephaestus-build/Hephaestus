@@ -66,7 +66,7 @@ It can capture evidence only for images that its run published.
 | Build → Webapp: E2E                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
 | Build → Extension: E2E                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                                           | `vp run test:extension:e2e`                                              |
 | Build → App Server image                                                | `pack build` from the packaged JAR, signed, attested and policy-scanned                                                                                                                                   | —                                                                        |
-| Test → App Server: Unit and architecture, App Server: Integration       | compiled from source                                                                                                                                                                                      | `vp run test:server:verification`, `test:server:integration`             |
+| Test → App Server: Unit and architecture, App Server: Integration       | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
 | Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
 | Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability guard, legacy-reference guards                                                            | —                                                                        |
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze                                                                                                                     | `vp run gate:changesets`                                                 |
@@ -598,7 +598,7 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `ci-quality-leg.yml`                  | Called by ci-quality-gates.yml                                                | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg                                                                                                                                     |
 | `cache-toolchain.yml`                 | Main push changing install inputs or setup                                    | Seeds trusted Linux and Windows install caches without repeating quality gates                                                                                                                                                   |
 | `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml                                                                                                                        |
-| `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, compiled from source                                                                                                                                                       |
+| `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, on the package job's compiled classes                                                                                                                                     |
 | `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                                             |
 | `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds each requested platform natively, merges the index, signs, attests, and blocks on the release vulnerability policy for each platform                                                                                       |
 | `ci-security-scan.yml`                | Called by cicd.yml                                                            | Trivy dependency scan, secret detection and repository policy checks                                                                                                                                                             |
@@ -888,10 +888,16 @@ gives the retried job a new attempt number.
 ## Build once
 
 `App Server: Package` in `cicd.yml` packages the server once and uploads its JARs, compiled tests and resources. OpenAPI and
-browser checks boot that executable JAR. Buildpacks consume it without another build. Schema gates
-and database contract tests use the restored classes with `-PpackagedServer=true`, which bypasses
-compilation. Unit, architecture and integration suites compile from source in `Test` without
-waiting for packaging. Their outputs do not ship.
+browser checks boot that executable JAR. Buildpacks consume it without another build. Schema gates,
+database contract tests and the `Test` suites use the restored classes with `-PpackagedServer=true`,
+which bypasses compilation. `ci-tests.yml` sets it as `ORG_GRADLE_PROJECT_packagedServer`, because
+its commands are `vp run` tasks. Thus, every server suite tests the classes that the JAR ships.
+
+Test compilation is the slowest server build step. It is rarely a cache hit, because a change
+alters the test sources or the main classes they compile against. A suite that compiled for itself
+repeated that step in each of its five jobs. The suites therefore wait for packaging. Their chain
+becomes slightly longer, and each run saves five test compilations of runner time. When runners are
+contended, queue time is most of a pull request's CI time, so the saved runner time shortens it.
 
 The PostgreSQL backup-restore and PITR drills apply the migrations from that same executable JAR.
 Spring Boot's launcher runs the Liquibase bundled in the JAR against the changelog in the JAR, from an empty directory and with a minimal environment.

@@ -1539,16 +1539,14 @@ void describe("CI contract", () => {
 						`${name} installs its toolchain before browsers`,
 					);
 				}
-				if (file.endsWith("ci-build.yml")) {
-					assert.ok(
-						uses.some(
-							(action) =>
-								action === "./.github/actions/restore-server-build" ||
-								action.startsWith("actions/download-artifact@"),
-						),
-						`${name} does not hold the packaged server before its consumer`,
-					);
-				}
+				assert.ok(
+					uses.some(
+						(action) =>
+							action === "./.github/actions/restore-server-build" ||
+							action.startsWith("actions/download-artifact@"),
+					),
+					`${name} does not hold the packaged server before its consumer`,
+				);
 			}
 		}
 
@@ -1572,12 +1570,37 @@ void describe("CI contract", () => {
 		assert.match(image, /needs: \[detect-changes, server-package, vulnerability-database\]/u);
 		assert.match(image, /use-buildpacks: true/u);
 
-		// The long suites compile from source and never wait for the package job.
+		// The suites run the packaged classes rather than compiling the tests once per job.
 		const tests = await readFile(".github/workflows/ci-tests.yml", "utf8");
-		assert.doesNotMatch(tests, /^ {4}needs:|download-artifact|restore-server-build/mu);
-		assert.match(job(tests, "server-verification"), /vp run test:server:verification/u);
-		assert.match(job(tests, "server-integration"), /vp run test:server:integration/u);
+		assert.equal(
+			parseDocument(tests).getIn(["env", "ORG_GRADLE_PROJECT_packagedServer"]),
+			"true",
+			"Every Gradle invocation in the suites consumes the restored classes",
+		);
+		for (const [name, command] of [
+			["server-verification", /vp run test:server:verification/u],
+			["server-integration", /vp run test:server:integration/u],
+		] as const) {
+			const suite = job(tests, name);
+			assert.match(suite, command);
+			assert.match(suite, /uses: \.\/\.github\/actions\/restore-server-build/u);
+			assert.doesNotMatch(suite, /^ {4}needs:/mu);
+		}
 		assert.match(job(orchestrator, "Build"), /needs: \[detect-changes, server-package\]/u);
+		assert.match(job(orchestrator, "Test"), /needs: \[detect-changes, server-package\]/u);
+		// A package skipped while the suites are selected must fail them, never skip them.
+		assert.match(job(orchestrator, "Test"), /needs\.server-package\.result != 'failure'/u);
+		assert.doesNotMatch(job(orchestrator, "Test"), /needs\.server-package\.result == 'success'/u);
+		assert.match(
+			job(orchestrator, "server-package"),
+			/needs\.detect-changes\.outputs\.test-config == 'true'/u,
+			"A change to the suites' own workflow must package the classes they run",
+		);
+		const gradle = await readFile("server/application/build.gradle.kts", "utf8");
+		assert.match(
+			gradle,
+			/if \(packagedServer\.get\(\)\) \{\n {4}tasks\.withType<Test>\(\)\.configureEach \{/u,
+		);
 
 		const reusable = await readFile(".github/workflows/reusable-docker-build.yml", "utf8");
 		const packBuilds = [
@@ -1805,12 +1828,11 @@ void describe("CI contract", () => {
 			"Test",
 			"Compose",
 		]) {
-			assert.match(
-				job(source, name),
-				name === "upstream-images"
-					? /needs: \[detect-changes, vulnerability-database\]/u
-					: /needs: \[detect-changes\]/u,
-			);
+			const needs = {
+				"upstream-images": /needs: \[detect-changes, vulnerability-database\]/u,
+				Test: /needs: \[detect-changes, server-package\]/u,
+			}[name];
+			assert.match(job(source, name), needs ?? /needs: \[detect-changes\]/u);
 			assert.match(
 				job(source, name),
 				/github\.event_name != 'push'.*needs\.detect-changes\.outputs\.version-bump == 'true'/su,
