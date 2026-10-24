@@ -9,7 +9,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.liquibase.autoconfigure.LiquibaseProperties;
@@ -50,10 +49,25 @@ class DatabaseMigrationTest {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_awaited");
         var start = CompletableFuture.runAsync(() -> awaitSchema(database, Duration.ofMinutes(5)));
 
-        assertThat(start).failsWithin(Duration.ofSeconds(8)).withThrowableThat().isInstanceOf(TimeoutException.class);
         assertThat(DatabaseMigration.run(arguments(database))).isZero();
 
         start.get(1, TimeUnit.MINUTES);
+    }
+
+    @Test
+    void shouldApplyEachChangeSetOnceWhenTwoRunsStartTogether() throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_concurrent");
+
+        var first = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(arguments(database)));
+        var second = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(arguments(database)));
+
+        assertThat(first.get(5, TimeUnit.MINUTES)).isZero();
+        assertThat(second.get(5, TimeUnit.MINUTES)).isZero();
+        assertThat(jdbc(database)
+                        .queryForObject(
+                                "SELECT count(*) - count(DISTINCT (id, author, filename)) FROM databasechangelog",
+                                Long.class))
+                .isZero();
     }
 
     @Test

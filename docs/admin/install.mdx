@@ -267,10 +267,11 @@ For the break-glass bootstrap token, see [Instance admin](./instance-admin#boots
 
 ```bash
 docker compose --env-file .env --env-file release-lock.env up -d
-docker compose --env-file .env --env-file release-lock.env logs -f application-server
+docker compose --env-file .env --env-file release-lock.env logs -f database-migration application-server
 ```
 
-First startup pulls about 2 GB of images and runs all database migrations.
+First startup pulls about 2 GB of images, and the one-shot `database-migration` service runs all database migrations.
+The application server starts after it completes; a failed migration shows in its log.
 It can take a few minutes.
 
 1. Open `https://<APP_HOSTNAME>`.

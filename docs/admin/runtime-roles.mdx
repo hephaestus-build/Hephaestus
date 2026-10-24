@@ -115,15 +115,16 @@ Under the `prod` profile, no role migrates at start.
 Each role waits until the database holds every change set of its release.
 The wait reads the migration history and writes nothing.
 A schema that is ahead of the role is correct: during a rollout, the previous release runs against the new schema.
-After `hephaestus.database.migration-wait` (default `10m`), the role stops.
+After `hephaestus.database.migration-wait` (`HEPHAESTUS_DATABASE_MIGRATION_WAIT`, default `10m`), the role stops.
 Its error names the first change set that has not run.
 
 Run the migration once for each release, before the new roles start:
 
 - **Compose.** The shipped stacks contain a one-shot `database-migration` service.
   `docker compose up` runs it again when the image changes.
-  The server and the worker start only after it completes successfully.
+  The server and the worker start only after it completes successfully, and so does the webhook receiver of the single-host stack.
   The previous containers keep running during the migration.
+  After you restore a database under unchanged images, run `docker compose up --force-recreate database-migration` before the roles start.
 - **Kubernetes.** Run the migration as a Job for each release.
   Do not use a `pre-install` hook: on the first install, the bundled PostgreSQL does not exist yet.
   The roles wait for the Job.
@@ -132,11 +133,16 @@ Run the migration once for each release, before the new roles start:
 ### One migration at a time
 
 The run mode holds a PostgreSQL advisory lock for the whole migration.
-A second migration waits until the first ends.
+A second run waits until the first ends.
 PostgreSQL releases this lock when the process stops, also when the process is killed.
-Thus, a killed migration cannot block the next one.
+Thus, a killed run cannot block the next one.
 The next run releases the Liquibase lock that the killed run left.
 It logs `database.migration.lock_released` with the holder and the time of that lock.
+
+A process that migrates at start takes no advisory lock.
+Examples are a release from before the run mode and the development monolith.
+Do not run one against the database while the run mode runs.
+Release a Liquibase lock by hand only when such a process left it, and only after you prove that it no longer runs.
 
 ### Rollouts and rollback
 

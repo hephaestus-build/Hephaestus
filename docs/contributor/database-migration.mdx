@@ -5,7 +5,7 @@ title: Database Migration Workflow
 description: How a schema change becomes a Liquibase changelog, and what CI checks.
 ---
 
-Liquibase manages schema changes. In production, the migrate run mode applies them before a release starts. This page is the procedure. The entity
+Liquibase manages schema changes. In production, the [migrate run mode](../admin/runtime-roles#database-migrations) applies them before a release starts. That process has only the database settings, so a change set cannot read encryption keys or other secrets. This page is the procedure. The entity
 conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
 
 ## Quick start

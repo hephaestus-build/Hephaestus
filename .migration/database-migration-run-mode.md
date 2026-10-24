@@ -2,7 +2,7 @@
 
 Under the `prod` profile, no runtime role migrates the database at start.
 The server, the worker and the webhook receiver wait until the database holds every change set of their release.
-After 10 minutes (`hephaestus.database.migration-wait`), a role stops and names the first change set that has not run.
+After `hephaestus.database.migration-wait`, a role stops and names the first change set that has not run.
 The bundled Compose stacks already contain a one-shot `database-migration` service that runs before the roles.
 
 **Operators:** do these steps only if you start the application image outside the bundled Compose stacks.

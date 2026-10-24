@@ -3,7 +3,7 @@
 PostgreSQL 18 is required.
 Fresh installations apply the baseline automatically.
 Before the target release starts, existing databases must finish the v0.77.4 migrations and synchronize the baseline.
-Unsynchronized existing schemas fail startup.
+Unsynchronized existing schemas fail the database migration.
 
 ## Fresh self-hosted installations
 
@@ -30,7 +30,7 @@ Initialization imports no accounts, workspaces, or production credentials.
 It does not validate their schema or execute initialization.
 Never use a schema-only dump as a rollback backup.
 
-The target release's changelog rejects older migration history for both startup and synchronization.
+The target release's changelog rejects older migration history for both the database migration and synchronization.
 
 1. Read the [database baseline prerequisites](compatibility-policy#database-baseline-prerequisites).
 2. If the database is older than v0.77.4, install v0.77.4.
@@ -118,6 +118,9 @@ Do not synchronize beyond the baseline tag.
 
 **CAUTION:** Never clear a live process's lock.
 Do not delete the lock table or disable locking.
+
+The synchronization command above takes no advisory lock, so a lock it left needs this procedure.
+The run mode releases a lock that a killed run left by itself ([One migration at a time](./runtime-roles#one-migration-at-a-time)).
 
 1. Confirm that no migration process is still active.
 2. Use the same target-release image command and connection parameters.

@@ -320,8 +320,7 @@ services:
       # WEBHOOK_EXTERNAL_URL intentionally unset: GitLab auto-registration defaults it to
       # APPLICATION_HOST_URL (same origin here), then appends /webhooks/gitlab itself.
       # AES-256-GCM key for credentials encrypted at rest in the `connection` table. Exactly 32
-      # chars. Required in prod (fail-fast); the Liquibase backfill re-encrypts on boot, so this
-      # MUST be set on application-server (where Liquibase runs). Keep it stable.
+      # chars. Required in prod (fail-fast). Keep it stable.
       HEPHAESTUS_SECURITY_ENCRYPTION_KEY: ${HEPHAESTUS_SECURITY_ENCRYPTION_KEY:?Set HEPHAESTUS_SECURITY_ENCRYPTION_KEY to exactly 32 printable ASCII characters}
       HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: ${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY:?Set HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY to exactly 32 printable ASCII characters}
       HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION: ${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION:-1}
@@ -452,7 +451,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      # The start can wait for the schema (hephaestus.database.migration-wait, 10m). A successful
+      # The start can wait for the schema (hephaestus.database.migration-wait). A successful
       # probe ends this grace immediately; later failures still use the normal retry limit.
       start_period: 10m
     # Matches application.yml's SHUTDOWN_TIMEOUT default (20s) plus headroom so SIGTERM has time

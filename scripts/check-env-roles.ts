@@ -157,7 +157,10 @@ const PER_CONTAINER = new Map<string, string>([
 	[ROLE_FLAGS.server, "the role flags are the split itself"],
 	[ROLE_FLAGS.worker, "the role flags are the split itself"],
 	[ROLE_FLAGS.webhook, "the role flags are the split itself"],
-	["SPRING_LIQUIBASE_ENABLED", "one container owns the migration and the rest must not race it"],
+	[
+		"SPRING_LIQUIBASE_ENABLED",
+		"only the migrate run mode migrates; a role that sets it says it does not",
+	],
 	["THC_PATH", "the receiver reports NATS through readiness; the others answer liveness"],
 ]);
 

@@ -1,15 +1,14 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
 import javax.sql.DataSource;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
+import liquibase.Scope;
+import liquibase.changelog.ChangeLogHistoryServiceFactory;
 import liquibase.changelog.ChangeSet;
-import liquibase.exception.DatabaseException;
 import liquibase.exception.LiquibaseException;
 import liquibase.integration.spring.SpringLiquibase;
 import org.slf4j.Logger;
@@ -82,13 +81,12 @@ public final class MigratedSchemaWait extends SpringLiquibase {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Interrupted while waiting for the database migration", e);
             }
-            // A fresh Liquibase: the history that the previous one read is cached with it.
-            try (Connection connection = getDataSource().getConnection();
-                    Liquibase next = createLiquibase(connection)) {
-                pending = pending(next);
-            } catch (SQLException e) {
-                throw new DatabaseException(e);
-            }
+            // Liquibase caches the history it read; forget it, so the next read sees the migration's progress.
+            Scope.getCurrentScope()
+                    .getSingleton(ChangeLogHistoryServiceFactory.class)
+                    .getChangeLogService(liquibase.getDatabase())
+                    .reset();
+            pending = pending(liquibase);
         }
         log.atInfo().addKeyValue("event.name", "database.migration.current").log("Database schema is current");
     }

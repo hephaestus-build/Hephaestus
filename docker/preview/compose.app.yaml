@@ -420,6 +420,7 @@ services:
           cpus: "1.0"
           memory: 1G
           pids: 256
+
   appserver:
     image: ghcr.io/hephaestus-build/application-server:${SOURCE_COMMIT:?Coolify supplies the deployed commit}
     # Bounded automatic retries, unlike the reference stack, because restarting this image is not

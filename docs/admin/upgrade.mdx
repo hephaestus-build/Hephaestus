@@ -74,7 +74,7 @@ The commands below do not prepare existing databases for the PostgreSQL 18/Liqui
 :::caution CAUTION: Failed migration
 Do not clear checksums, edit released changelogs, or mark the changeset as run.
 Do not run an older binary against the partly migrated database.
-Do not release a Liquibase lock until you prove that no migrator is alive.
+Do not release a Liquibase lock by hand except as [One migration at a time](./runtime-roles#one-migration-at-a-time) allows.
 Removal of a stale lock does not repair a failed migration.
 :::
 
