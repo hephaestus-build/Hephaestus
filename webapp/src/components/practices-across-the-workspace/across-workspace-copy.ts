@@ -1,7 +1,6 @@
 import { CircleDashedIcon } from "lucide-react";
 
 import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit } from "@/api/types.gen";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
 import type { FilterOption } from "@/components/common/FilterToggle";
 import { statusValues } from "@/components/common/status-def";
 import { count } from "@/components/practice-vocabulary/feedback-text";
@@ -24,18 +23,21 @@ interface WindowDef {
 	phrase: string;
 }
 
-function activityWindow(range: ActivityRange): WindowDef {
-	const def = ACTIVITY_RANGE_DEFS[range];
-	return { label: def.label, shortLabel: def.shortLabel, phrase: `in ${def.inSentence}` };
+/** A window that reaches back `days` from now, in the words the reviews list's timeframe uses. */
+function lastDays(days: number): WindowDef {
+	const label = `Last ${days} days`;
+	return { label, shortLabel: label, phrase: `in the last ${days} days` };
 }
 
 /**
- * Shortest first, as Apple Health orders its ranges, and in Activity's words for the same span. A
- * total `Record`, so a window the server adds fails to compile instead of rendering blank.
+ * Shortest first, as the timeframe of Reviews of your work orders and words them ("Last 7 days |
+ * Last 30 days | Last 90 days | All time"). A total `Record`, so a window the server adds fails to
+ * compile instead of rendering blank.
  */
 const WINDOW_DEFS: Record<AcrossWorkspaceWindow, WindowDef> = {
-	DAYS_30: activityWindow("30d"),
-	DAYS_90: activityWindow("90d"),
+	DAYS_7: lastDays(7),
+	DAYS_30: lastDays(30),
+	DAYS_90: lastDays(90),
 	ALL_TIME: { label: "All time", shortLabel: "All time", phrase: "so far" },
 };
 
