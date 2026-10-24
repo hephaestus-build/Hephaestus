@@ -53,7 +53,8 @@ Then it runs one real job while the other context holds its lock.
 A new `@Scheduled` method fails that test until it holds a lock or has a reason.
 
 The scheduler is a pool of `spring.task.scheduling.pool.size` threads.
-A long job holds one thread, and the other jobs keep their schedule.
+A long job holds one thread.
+`application.yml` sizes the pool above the number of jobs that can run long at the same time, so the other jobs keep their schedule.
 
 Two server replicas are not safe yet:
 

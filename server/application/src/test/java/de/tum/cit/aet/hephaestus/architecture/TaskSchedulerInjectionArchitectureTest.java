@@ -7,9 +7,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
- * {@code spring.threads.virtual.enabled=true} swaps the auto-configured task scheduler bean to
- * {@code SimpleAsyncTaskScheduler}; injecting concrete {@link ThreadPoolTaskScheduler} breaks
- * wiring on that path. Use {@link org.springframework.scheduling.TaskScheduler} instead.
+ * The type behind the task scheduler bean is not fixed: the server role builds a pool
+ * ({@code ServerSchedulingConfig}), and Boot's default with virtual threads is a
+ * {@code SimpleAsyncTaskScheduler}. Injecting the concrete {@link ThreadPoolTaskScheduler} ties a
+ * class to one of them. Use {@link org.springframework.scheduling.TaskScheduler} instead.
  */
 class TaskSchedulerInjectionArchitectureTest extends HephaestusArchitectureTest {
 

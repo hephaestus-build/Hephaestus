@@ -177,10 +177,11 @@ spring:
     # and its job lock is released before the database closes (ServerSchedulingConfig).
     task:
         scheduling:
-            # The server's scheduled jobs (ServerSchedulingConfig). The few jobs that can run for minutes
-            # hold one thread each, and the short jobs share the rest.
+            # The server's scheduled jobs (ServerSchedulingConfig). Keep it above the number of jobs that
+            # can run for most of an hour at once (8: those with lockAtMostFor of PT50M or more), so the
+            # short jobs, the sync lease heartbeat among them, always find a thread.
             pool:
-                size: 8
+                size: 16
             shutdown:
                 await-termination: true
                 await-termination-period: ${SHUTDOWN_TIMEOUT:20s}
