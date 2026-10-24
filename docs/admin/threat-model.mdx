@@ -90,6 +90,8 @@ accDescr: The diagram separates independently controlled systems, the operator e
 ```
 
 Arrows show permitted logical flows, not network-level reachability.
+The [architecture and network diagram](./overview#architecture-and-network) shows the containers and their connections.
+[Network egress](./network-egress) lists every outbound destination.
 Only `application-worker` holds the Docker socket and joins each internal sandbox network.
 That container carries the worker role.
 The application server runs without the worker role and joins none of those networks.

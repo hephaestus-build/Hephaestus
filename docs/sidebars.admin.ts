@@ -76,6 +76,7 @@ const sidebars: SidebarsConfig = {
 			collapsed: false,
 			items: [
 				"threat-model",
+				"network-egress",
 				"credential-key-rotation",
 				"release-image-lock",
 				"legal-pages",
