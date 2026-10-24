@@ -1,5 +1,0 @@
----
-"hephaestus": minor
----
-
-Heph now knows more about your work. It can read what you did in the last 14 days, with dates: the pull requests and issues you opened, merged or closed, the reviews and comments you wrote, and your commits. For your own pull requests it sees the requested reviewers, labels, commits and changed files. For issues you opened or that are assigned to you, it sees the description, the comments and related issues. It can also show your standing in each practice, as your Practice profile shows it, and it links the team documents it quotes. Heph knows your handle in each connected system and today's date in your time zone, so questions such as "what did I do last week?" get answers about the right days. Heph keeps reviews by Hephaestus apart from reviews by people, says when it cannot see something, and never reads repositories that your team hides from contributions. Heph reads only from the GitHub or GitLab instance your workspace is connected to.

@@ -1,5 +1,143 @@
 # Changelog
 
+## 0.95.0
+
+### Minor Changes
+
+- The review, result, problem, feedback, practice and work sheets of Practice reviews now part their sections with a thin line. Admins can fold every section by its heading, and the choice is remembered. Section headings take the size of the practice pages' sections.
+- Protect admin access with passkeys. Workspace owners can require passkeys for their admins and owners. Instance policy takes precedence over workspace and personal choices.
+
+  **Operators:** Production instance administration now requires passkeys by default. Before upgrade, read the passkey enrollment and recovery procedure. Configure the trusted browser origin if it differs from the instance URL. You can explicitly select optional instance-admin protection through `HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED=false`.
+
+- Instance admins can export consented practice-review metadata for research after a fresh passkey check. Each dataset uses new participant keys and records its permitted use period. Removal and closure records help admins track withdrawn consent and downstream deletion. Exports exclude source content, private notes and model transcripts.
+- Practices across the workspace again compares developers' standings, with your marker, time ranges and typical ranges. Earlier assessments remain visible and are marked when their criterion version is unknown. Requested reviews and reviews of past work keep a valid standing when they return no verdict. Turning feedback off stops delivery and keeps standing.
+
+  **Operators:** The practice comparison API responses change. Update clients that consume `/practices/workspace-overview` or `/practices/tiles` with this release.
+
+- On the Practice reviews overview, Queue, What the reviews did, Delivery and Practices can now be folded. Each choice is kept in this browser.
+- Workspace admins can now change which GitLab projects a workspace follows after setup. Under **Integrations → GitLab → Projects to follow**, choose all projects in the group or only the projects already listed. Changing to all projects asks for confirmation first, and stopped projects stay stopped. Neither choice removes synced work or changes group membership. Each change is recorded in the connection's audit history.
+- Stopping a GitLab project now keeps the work Hephaestus already synced from it. The project appears under **Integrations → GitLab → Stopped projects**, stays out of later syncs, and comes back when you add its current path again. To remove the kept work, select **Remove synced work** there while the connection is active. The project on GitLab does not change, and practice reviews, feedback, and conversations keep their usual retention. Each removal is recorded in the connection's audit history.
+- When you create a GitLab workspace, you can now choose which projects it monitors: all projects of the group, including ones added later, or only the projects you select. Search and page through the group's projects to choose them. The choice covers project content such as merge requests and issues; workspace members and teams still come from the whole group.
+- Heph now keeps one conversation with you in each workspace. The Heph page and the Heph panel show all of it, with a Slack marker on the messages written in Slack. Your Slack direct message shows what you asked there and Heph's answers. You can reply to any message in a thread.
+
+  Heph answers where you asked. A question from the app gets its answer only in the app. You can send another message while Heph answers and delete your own messages. You stop an answer in the app, also an answer that Heph writes in Slack. You rate an answer as **Helpful** or **Not helpful**, also in a Slack thread. **New chat**, the chat history list and editing a sent message are gone. The upgrade deletes earlier Heph chat history.
+
+  Heph can point to a result or a problem in your work, and it can show you feedback that a review prepared for your conversation. That feedback counts as delivered only when Heph shows it in an answer that you can see. Hephaestus does not post an answer to Slack a second time. If an answer does not fully reach Slack, the app shows "Not fully delivered to Slack. The full answer is here."
+
+  Heph can now read the code of the repositories that your workspace monitors, with their history and changes. It reads them at a branch, a commit, a pull request or a merge request. It can search the files and compare two versions, and it names the commit that it read. Heph only reads: it cannot run, build or change your code.
+
+  **Operators:** Stop every role before you upgrade. The upgrade drops the Heph chat tables and deletes earlier Heph chat history. Back up the database and keep the release lock of the previous release for a restore. Update the Slack app from the manifest template, reinstall it, and select **Reconnect Slack** in each workspace that uses it. Rename `HEPHAESTUS_RATE_LIMIT_MENTOR_CHAT_*` to `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_*`. Remove the Traefik sticky-cookie labels and the removed `hephaestus.mentor.*` settings. The **Internet access** switch of the Heph model assignment is removed, and Heph has no internet access. If you pin a custom agent image, rebuild it for runtime contract 8. Each worker starts one Heph host container, and the recommended single host has 24 GB of memory. Heph reads your work and code in a short-lived sandbox on the worker, with no network and no credentials. Each worker keeps 2 empty sandboxes ready and starts one for each running answer, with 1 CPU and 1 GiB of memory each. The worker needs Docker for these sandboxes. Heph reads code only where Git mirrors are enabled. Heph refuses a model with a context window below 32,768 tokens or an output limit below 4,096 tokens. Preview operators must recreate existing preview environments before they use this release. The migration guide lists the removed settings, the new settings and the changed metrics.
+
+- Heph now knows more about your work. It can read what you did in the last 14 days, with dates: the pull requests and issues you opened, merged or closed, the reviews and comments you wrote, and your commits. For your own pull requests it sees the requested reviewers, labels, commits and changed files. For issues you opened or that are assigned to you, it sees the description, the comments and related issues. It can also show your standing in each practice, as your Practice profile shows it, and it links the team documents it quotes. Heph knows your handle in each connected system and today's date in your time zone, so questions such as "what did I do last week?" get answers about the right days. Heph keeps reviews by Hephaestus apart from reviews by people, says when it cannot see something, and never reads repositories that your team hides from contributions. Heph reads only from the GitHub or GitLab instance your workspace is connected to.
+- While Heph works on an answer, it now says what it is reading, for example "Reading your practice feedback…". Heph answers about your work only from what it read in that answer, and it fails an answer that holds no words instead of showing you an empty one.
+
+  If Heph shows no text for a long time and then the whole answer at once, a proxy in front of the model buffers its stream. The AI providers guide says how to turn that buffering off.
+
+- Hephaestus can add a weekly digest to your Heph conversation. Turn it on in **User settings**. Each Monday from 09:00 in your time zone, Hephaestus adds a digest of the week before to your conversation in each workspace where Heph can answer you. It lists the practice feedback that reached you on your work or in your Heph conversation, and what changed on your Practice profile. It also counts the new feedback that waits for you on your Practice profile. Quiet weeks send nothing.
+
+  A short note in Slack tells you that the digest is ready. Without a connected Slack account, you get an email instead. If Hephaestus cannot reach you either way, the digest is only in your conversation. The note contains no feedback. Reply in the digest's thread to go through it with Heph. The setting **Comments and Slack reminders** is now **Comments on your work**, and the Slack reminder about prepared feedback is gone.
+
+- On the Practice reviews overview, the card titles Reviews, Results, Feedback and "Delivered and withheld" now open their tab with the same period.
+- The waiting, running and on hold figures of the review queue now open exactly the reviews they count, filtered by queue state.
+- Delayed pull-request, merge-request and submitted-review reviews use the work saved when their event was recorded. Later edits cannot replace those words, state or people. Reviews without that original record are withheld.
+
+  **Operators:** Deploy matching runtime versions through the coordinated upgrade procedure. Earlier events have no saved original. Read the migration guide before upgrading or restoring an earlier release.
+
+- The admin lists of reviews, results and problems can now be read oldest first, as the feedback list already could.
+- The admin review list can now show only the reviews that wait, are on hold for budget or run, as the queue counts them.
+- Practice reviews keep one time order, newest or oldest first, above the tabs for every list. Results still offer "Most actionable first".
+- Every runtime role now writes its logs as Elastic Common Schema JSON, with the running version, the deployment environment and the runtime role on each line. Log lines name exceptions by class and frames without their messages, never contain a sandbox transcript, and no longer repeat the database's message for a failed statement. Hephaestus no longer sends errors to Sentry. An optional example ships the service logs to a Loki that you run. **Operators:** remove `SENTRY_DSN`, and update log queries and dashboards for the new field names.
+- Operators can disable additional authentication confirmation on isolated test instances with `HEPHAESTUS_AUTH_ASSURANCE_ENFORCED=false`. Settings show the effective policy. Production protection stays enabled by default; saved passkeys and policies remain intact.
+- The webapp container and the maintenance page now run as an unprivileged user on port 8080, need no added capabilities and work with a read-only root file system. They write only to `/tmp/hephaestus-webapp`. The bundled Compose stacks already use these settings. **Operators:** if your own proxy, health check or `docker run -p` mapping sends traffic to the webapp container's port 80, change it to port 8080, and mount a directory that UID 101 can write at `/tmp/hephaestus-webapp`.
+
+### Patch Changes
+
+- The Activity page now uses the same width as Workspace activity in every state. Its width stays the same while it loads or when your account is unavailable.
+- You can request a practice review again from your own open work on the Activity page: your own pull requests and the issues assigned to you. Once the review is requested, a link takes you to it on your practice profile.
+- While the next page of an admin review list loads, placeholder rows now continue its table under its columns.
+- An administrator who has not verified a passkey now stays on the workspace page they open, such as Heph or Teams, instead of landing in Settings. Protected administration still requires passkey verification.
+- The AI choice now says which models each answer permits and where requests may go. It no longer promises that one answer gets faster or stronger models, because both answers that allow AI can use the same model. **No AI** now says it stops new AI requests, since earlier feedback stays readable.
+- Update the bundled proxy to Traefik 3.7.16 with the Go certificate-verification fix. Image checks now distinguish the supplied NATS broker configuration from custom certificate-verifying deployments.
+- On your Practice profile, an observation now opens with its available explanation, problems and next steps, evidence, and recorded feedback links. A review links to that exact observation in its practice, including when it is older than the loaded history.
+
+  Recorded activity now shows readable event names.
+
+- Pull and merge request reviews now date the title and description they read to the moment they read them. Reviews no longer say these words were kept from an earlier point. If the work changes before the review reads it, that review still stops instead of reviewing the new words.
+- The web app now uses DOMPurify 3.4.17, which fixes security advisories in the HTML and SVG sanitizer of 3.4.16.
+- Separator dots between short facts now sit on the middle line of the text. This covers review results, review cards, sign-in links and integration resources.
+- Separator dots in scans, sync details, review details and list rows now use the same centered style.
+- While the next page of a paged list loads, placeholders in the shape of its rows now continue the list. This covers the activity log, review timelines, audit, user and scan tables, and repositories in the generated-paths settings.
+- On your Practice profile, each piece of work behind a feedback card now shows its own number, such as #21 or !24, instead of "pull request" for every one.
+- A GitLab workspace that follows selected projects no longer adds people only because they belong to the group. People become members with Reporter access or higher to a chosen project, or through membership of a subgroup that contains it. Workspace owners always stay, and group admins with such access stay admins. Changes apply at the next successful sync or **Sync now**. If GitLab does not list a chosen project or subgroup completely, the current members stay. Workspaces that follow all projects are unchanged.
+- Opening user settings or instance administration keeps the selected workspace in the navigation.
+- GitLab syncs now respect it when GitLab says something is not there. A sub-issue moved out from under its parent no longer keeps the old parent. A project with a pending e-mail invitation still syncs its members. A merge request whose head has no pipeline no longer shows the pipeline of an earlier read.
+- On a phone, the Heph panel's message field keeps the page's remove button, Stop and Send apart while Heph answers. Empty message fields leave more room for reading and still grow as you type. A thread closes before you return to the conversation, including when its reply field had focus. Retry shows when older messages are loading. Heph waits until the conversation is loaded before accepting a question, and preserves your draft if a later load fails. Screen readers hear when the thread is loading.
+- Heph's context folder separates file staging from the commands run for a turn. Those commands cannot request the rights used to add files.
+- Heph now sees when a past practice review result was ended and the reason Hephaestus recorded for ending it. The result keeps the outcome it recorded.
+- Heph keeps answering in a long conversation. When the conversation grows past what the AI model can read, Heph summarizes the earlier part, also with a reasoning model. When the AI model stops in the middle of an answer, Heph says that the model stopped responding.
+- Heph now sees when Hephaestus captured the work a past practice review read, when that time is known. Heph also sees whether that pull request or issue as Hephaestus stores it now still matches the reviewed version, including after an edit of only its title or description. Reading this history ends no result and changes no recorded outcome.
+
+  Marking feedback Addressed records your response. Only a later practice review can record a new result.
+
+- Earlier practice review history that is kept in a workspace no longer stops Heph from answering. When Heph cannot tell whose work a kept review run was about, it leaves that run out and treats its list of review runs as incomplete.
+- Heph now has the completion state of a practice review alongside the status of its run. Its review history also supplies counts of practices judged, reused, withheld or pending for you on the reviewed work. Unavailable counts remain unknown.
+- Opening the Heph panel again on a thread you replied in no longer brings up the keyboard on a phone. A thread now says when live updates are paused, as the conversation does.
+- The dots in a record's "State and history" now sit exactly on the line. Each dot is centered on its first text line, also next to an icon.
+- On the instance **AI models** page, the models table and the settings card keep their shape while they load, so the page no longer jumps when they arrive.
+- A model call that returns after its review was cancelled or retried is now counted in the spending of the attempt that made it, at that attempt's price. It no longer drops, and it never changes the review's result or the attempt that runs now. This covers calls whose provider reported usage. It does not restore usage lost before this change. Before you upgrade, let old workers finish their running reviews with a graceful drain; queued reviews need not wait.
+- Image checks now recognize that the reviewed launch binaries do not contain the certificate-verification code affected by CVE-2026-111943. The assessment is bound to the exact component hashes and advisory, and expires unless reassessed.
+- On the AI models pages, a provider, model or workspace-access change that finishes after you moved on no longer closes, locks or opens a sign-in prompt over the form you opened next, so your edits there stay. If a provider change needs a fresh sign-in, a notice says it was not saved. The save button shows "Saving…" while its own save runs.
+- Adding a repository by hand to a workspace connected with a GitLab or GitHub token now first asks GitLab or GitHub whether that workspace's own token can read it. Another workspace on the same server having synced the repository no longer lets it in. A repository the token cannot read is not added, and none of its work appears in the workspace.
+
+  The token is only ever sent to the server its connection names. If the connection is reconnected, its token replaced or its server changed while the check runs, nothing is added. Try again. A GitHub token for a server other than github.com cannot add repositories by hand.
+
+- On a workspace's **Members** page, searching, sorting, changing pages or rows per page no longer jumps to the top of the page. The members already listed stay on screen until the new list arrives. When you switch to another team or workspace, placeholders show until its members arrive, so you never see the wrong members.
+- Date and time fields now follow your light or dark theme, so their calendar icon stays visible in dark mode.
+- Webapp images include nginx security fixes for request processing.
+- When you open an observation from a review, the practice panel now shows that observation directly below its tabs, also on a phone. The practice's introduction, picture and guide are now in the **Guide** tab, so your feedback and observations come first.
+- On the Practice reviews overview, "27 finished" and "2 running" are now one link each. Number and word are underlined together, as the other counts are.
+- On the Practice reviews overview, the review time row now shows only "finished", which opens its reviews. Counts that no list can open are no longer shown.
+- On the Practice reviews overview, "4 min oldest wait" now links to the review waiting longest. Number and words are underlined together, like "2 running" and "27 finished".
+- Reviews of your work now show each review's status as a label, the same one workspace admins see in their list of reviews. Hover, focus or tap the label to read what the status means, for example that a partial review's results cover only the work it reached.
+- When an admin page needs a passkey, Hephaestus now opens a short confirmation page instead of your settings. It explains why, lets you add your first passkey without naming it, and takes you back to the exact page you were on once you confirm. If you close the browser prompt, you can try again from the same page, or leave with **Not now**.
+- Browser tests now use a patched server that refuses private files such as environment files and the test runner’s access token. Deployed applications were not affected.
+- Builds and contributor checks now use the patched Vite+ toolchain. Cached checks keep their existing input and environment controls.
+- Practice-script searches return matches correctly on macOS.
+- A practice group's description now looks like a practice's why it matters, in the same text color and column width.
+- A practice's introduction now sets why it matters at the size of its caption and guide. Labels in its picture no longer grow past that text in a wide panel.
+- Sparse issue and pull-request updates preserve stored counts and discussion locks when those inputs are omitted. Merge-request sync also preserves values that GitLab cannot return.
+- Pull request previews start with the agent image from their own commit. Previews that run fresh reviews still require an explicit image digest.
+- Heph now considers conversation feedback independently of comments on the reviewed work.
+- The landing page, About page and introduction now describe practice feedback as it works. The examples show where work needs attention and a concrete next step. Slack channel messages are described as used only with each member's permission.
+- In Practice reviews, the queue's "See all 7" link now reads "See all": it opens reviews by status, which need not match the queue's figures. The queue's (i) no longer gives the pace or the number of workers, since no list opens them.
+- When an admin views a developer's feedback on a piece of work as that developer, the page no longer tells them to respond to the feedback. They can only read it there.
+- The admin Problems list includes recorded Problems from accepted and ended results. Its filters no longer silently restrict the list to open Problems.
+- Practice lists now move rows to the intended position when you reorder them with the keyboard.
+- Separator dots in the status line of review details and in the Practice profile's latest review chip now sit centered next to icons and chips.
+- You can now remove your last passkey in User settings after you verify a passkey and turn off personal admin protection. Removing it also deletes your recovery codes and signs you out of your other sessions. Admin access that your instance or a workspace protects with passkeys stays locked until you add and verify a new passkey. Your last passkey stays while personal protection is on or recovery is active.
+- When you request a review, **View requested review** stays available after the toast closes. You can open it from your Practice profile or the admin Practice reviews page, even before results appear. The original review keeps its own status.
+- The research datasets page now follows the instance’s confirmation policy. It no longer asks for a passkey when additional confirmation is disabled. Loading or failed policy reads no longer imply that confirmation is required or waived. The server still checks every export, check and dataset update.
+- A research removal check that runs while an account is erased, or while removals are recorded, no longer links the erased account to its participant key again. It also no longer reopens a removal that was already recorded. The key and the owed removal stay listed until the researchers' removal is recorded or the dataset is closed. The reason and date that were recorded first stay.
+- While earlier reviews load, placeholder rows now continue the table under its columns.
+- A logged stack trace now starts with its root cause, so a failure wrapped many times, as at startup, still shows what started it within the trace length limit.
+- User settings now ask you to verify a passkey before you add another passkey, remove one, change protection or create new recovery codes, and say why each of those waits. Adding a passkey says beforehand that it turns on personal admin protection and signs out your other sessions. When a confirmation expires during a change, the page tells you to verify again. New recovery codes can be copied in one step. You can now disconnect a Slack or Outline account even when GitHub or GitLab is your only sign-in method; that last sign-in method stays protected, and the page suggests connecting another sign-in account first. Links at the top of user settings lead to account security, passkeys, preferences, research participation and your data. Account security now comes first, with connected accounts, passkeys and active sessions together. Your AI choice, connected accounts and research participation no longer wait for, or disappear with, your other preferences.
+- The sidebar section "Your practices" now opens and closes its pages like the admin sections. The Practice profile is the first page under it.
+- A stop reported by Slack while Heph streams an answer now stops its work on that answer too. Queued follow-up questions keep their place.
+
+  Feedback from an interrupted answer keeps its recorded delivery uncertainty when Slack later finishes or rejects the reply.
+
+- Heph explains when it is not set up to answer in Slack instead of leaving your message unanswered.
+- In your Slack settings, each workspace's channel-message switch now stays unavailable until its own change is saved, even when you change another workspace in the meantime. Workspaces you are not changing stay available.
+- Slack preferences now show a placeholder shaped like a workspace’s settings while they load.
+- In a Slack thread with Heph, Slack now shows that Heph works, with a **Stop** control that stops only the answer in progress. It works also before Heph writes its first words, and questions that wait after it keep their place. Heph stops soon after, not always at once. To show the control, apply the current Slack app manifest, which subscribes the app to `agent_session_stopped` and needs no new OAuth scope. Until then, developers stop Heph in the app as before.
+- In Practice reviews, "Started by" now shows a requester's face and name, as the Developer column in Results does.
+- Protects local Storybook development previews from cross-origin messages and unauthorized story edits. Published static Storybooks remain available.
+- The group headings on the Activity page, such as "Review requested", now use the same weight as every other subsection heading.
+- The agent images and the development tooling now use undici 7.30.1 and 8.12.2, which fix a denial-of-service security advisory in stream error handling.
+- AI usage reports now name practice reviews in the run type column. These rows were blank before. Reports for earlier months keep their existing run type names.
+- The workspace switcher no longer shows a workspace's name twice when its account login is the same. Screen readers hear the workspace once, including when the sidebar is collapsed to icons. When you have no workspace yet, the collapsed **No workspace** and **Create workspace** buttons keep their names too.
+- The web app, the browser extension, and the agent image now use Zod 4.6.6, which fixes a security advisory in how schema validation checks size limits on lists, maps, and sets.
+
 ## 0.94.7
 
 ### Patch Changes
@@ -2067,7 +2205,7 @@
   escaping the release-age floor every other Hephaestus dependency is held to. The image now applies
   that floor and verifies it while it builds.
 - The reference multi-host stack now deploys instead of stopping with `service "webhook-server"
-depends on undefined service "postgres": invalid compose project`. That deployment brings the proxy,
+  depends on undefined service "postgres": invalid compose project`. That deployment brings the proxy,
   core and app stacks up as three separate Compose projects, and the core stack had been asking Compose
   to start the webhook receiver after a database that belongs to the app stack — an order Compose
   cannot honour across projects, and one that made the core stack refuse to render at all. The receiver
@@ -2076,13 +2214,13 @@ depends on undefined service "postgres": invalid compose project`. That deployme
   after the database. Nothing to set on either — deploy or upgrade as usual.
 - A fresh self-host install now starts instead of crash-looping with
   `hephaestus.security.prior-credential-encryption-key and prior-credential-encryption-key-version must
-be configured together`. The stack passes both credential-rotation variables through empty when you
+  be configured together`. The stack passes both credential-rotation variables through empty when you
   have not set them, and Hephaestus was reading one empty value as a half-finished key rotation; an
   empty value now means what you meant by it — not configured. Finishing a rotation by clearing the
   prior key and its version works the same way. Setting only one of the two is still refused at
   startup, so a rotation cannot half-apply and leave stored credentials unreadable.
 - A fresh self-host install now starts instead of stopping with `required variable NATS_USERNAME is
-missing a value`: `setup.sh` generates the message-broker credentials alongside the database password
+  missing a value`: `setup.sh` generates the message-broker credentials alongside the database password
   and the other internal secrets. Upgrading an existing installation picks them up by rerunning
   `docker/self-host/setup.sh`, which leaves every value you already set untouched.
 - The webhook receiver in a self-host install now starts instead of crash-looping with
@@ -2852,7 +2990,7 @@ missing a value`: `setup.sh` generates the message-broker credentials alongside 
   `GET /admin/llm/usage`, `PUT /admin/workspaces/{slug}/llm/budget`, `GET /workspaces/{slug}/llm/usage`,
   `PUT /workspaces/{slug}/llm/budget`, `GET /workspaces/{slug}/llm/settings`, and the per-purpose
   bindings — `GET /workspaces/{slug}/agents` to list them, `PUT`/`DELETE
-/workspaces/{slug}/agents/{purpose}` to set or clear one.
+  /workspaces/{slug}/agents/{purpose}` to set or clear one.
 
   The workspace console's retired `/w/{slug}/admin/ai/*` browser URLs no longer redirect either; those
   pages have been at `/w/{slug}/admin/models` and `/w/{slug}/admin/practices` since the previous
