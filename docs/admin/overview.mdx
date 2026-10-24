@@ -30,8 +30,8 @@ It does not keep that container active between reviews.
 ## Architecture and network
 
 The diagram shows the self-hosted Compose stack on one host.
-Each box is a container, and each arrow is a connection that the container opens.
-[Network egress](./network-egress) lists each outbound destination and when it is used.
+Each box is a container, and each arrow is one of its main connections.
+[Network egress](./network-egress) lists every outbound destination and when it is used, also the ones that the diagram leaves out.
 The [threat model](./threat-model#system-and-data-flow) shows the trust boundaries of the same system.
 
 ```mermaid
@@ -80,9 +80,13 @@ accDescr: Browsers and provider webhooks reach the reverse proxy on ports 80 and
   Worker -->|model calls| AiProvider
 ```
 
-Only the worker container has the Docker socket.
+Only `application-worker` starts containers through the Docker socket.
+`reverse-proxy` mounts the socket read-only to discover its routes.
+
+Only `reverse-proxy` publishes ports, 80 and 443.
+Browsers, OAuth callbacks, and provider webhooks arrive there.
 Each Java container has a management port, 9090, for health and metrics.
-It is not published.
+That port, PostgreSQL, and NATS stay on the internal Compose network.
 [Runtime roles](./runtime-roles) explains what each role does.
 
 ## Two kinds of admin

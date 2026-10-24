@@ -6,7 +6,7 @@ description: Every outbound destination of the self-hosted stack, which part of 
 
 This page lists every destination that the self-hosted Compose stack and its host connect to.
 Use it to build a firewall allowlist.
-The [architecture diagram](./overview#architecture-and-network) shows where each connection starts.
+The [architecture diagram](./overview#architecture-and-network) shows where the main connections start and which ports the stack publishes.
 
 Sandboxes have no internet access.
 A review sandbox and the Heph host reach only the sandbox gateway of their worker.
@@ -31,7 +31,7 @@ The host connects to these destinations during installation, upgrades, and each 
 | The API of your DNS provider | Answer the DNS-01 challenge. | `reverse-proxy` | Only when `ACME_CHALLENGE` selects DNS-01. |
 | `github.com` and `api.github.com` | Sign-in, repository sync, feedback delivery, and Git fetches. | `application-server`, `application-worker` | When GitHub sign-in or a GitHub workspace is configured. |
 | The GitLab instance (`GITLAB_DEFAULT_SERVER_URL`, `GITLAB_OAUTH_BASE_URL`) | Sign-in, sync, group hook registration, feedback delivery, and Git fetches. | `application-server`, `application-worker` | When GitLab is configured. |
-| `slack.com` | Slack API calls and Slack account linking. | `application-server` | When `HEPHAESTUS_INTEGRATION_SLACK_ENABLED` is `true`. |
+| `slack.com`, the API base in `HEPHAESTUS_INTEGRATION_SLACK_API_BASE` | Slack API calls and Slack account linking. | `application-server`, `application-worker` | When `HEPHAESTUS_INTEGRATION_SLACK_ENABLED` is `true`. |
 | The Outline origins in `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | Document sync and Outline account linking. | `application-server` | When `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` is `true`. |
 | The base URL of each AI provider connection | Model calls of practice reviews and Heph go through the LLM proxy of the worker. The server tests a connection when an admin selects **Test and fetch models**. | `application-worker`, `application-server` | When an admin registers a provider connection ([Connect an AI Provider](./ai-providers)). |
 | `api.github.com` | The [update check](./upgrade#update-checks). | `application-server` | By default. `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` turns it off. |
@@ -40,9 +40,3 @@ The host connects to these destinations during installation, upgrades, and each 
 | Your OTLP endpoint (`TRACING_OTLP_ENDPOINT`) | Traces. | `application-server`, `application-worker`, `webhook-server` | Only when `TRACING_OTLP_ENABLED` is `true` ([Observability](./observability#exporting-opentelemetry-traces)). |
 | Your Loki push endpoint (`LOKI_PUSH_URL`) | Logs. | The optional log shipper | Only when you run it ([Collecting logs](./observability#collecting-logs)). |
 | `config.liquibase.com` and the usage analytics of Liquibase | Liquibase product usage data during database migrations. | `application-server` | Never by default. Only when the container sets `LIQUIBASE_ANALYTICS_ENABLED=true`. |
-
-## Inbound
-
-In the self-hosted stack, only `reverse-proxy` publishes ports, 80 and 443.
-Browsers, OAuth callbacks, and provider webhooks arrive there.
-The management port 9090 of each Java container and the ports of PostgreSQL and NATS stay on the internal Compose network.
