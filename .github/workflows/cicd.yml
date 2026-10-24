@@ -75,6 +75,9 @@ jobs:
       # The successful merge-queue run of a default-branch push's exact commit, whose images the push
       # reuses instead of rebuilding; empty after a direct push, which builds every image.
       queue-run: ${{ steps.queue_run.outputs.run-id }}
+      # The images that run published. The push builds any other image at once, without a reuse job
+      # that would find nothing: the queue run did not build it.
+      queue-images: ${{ steps.queue_run.outputs.images || '[]' }}
       # The commit an unchanged image is aliased from; scripts/resolve-alias-base.ts says how it is
       # found and docs/contributor/ci-cd.mdx the rule.
       alias-base: ${{ steps.alias_base.outputs.commit }}
@@ -806,7 +809,7 @@ jobs:
       registry: "ghcr.io"
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
       platforms: ${{ needs.detect-changes.outputs.platforms }}
-      reuse-run: ${{ needs.detect-changes.outputs.queue-run }}
+      reuse-run: ${{ contains(fromJSON(needs.detect-changes.outputs.queue-images), 'application-server') && needs.detect-changes.outputs.queue-run || '' }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
 
   Build:
@@ -950,6 +953,7 @@ jobs:
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
       platforms: ${{ needs.detect-changes.outputs.platforms }}
       reuse_run: ${{ needs.detect-changes.outputs.queue-run }}
+      reuse_images: ${{ needs.detect-changes.outputs.queue-images }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
