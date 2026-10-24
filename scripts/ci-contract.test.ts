@@ -800,7 +800,8 @@ void describe("CI contract", () => {
 	});
 
 	void test("a pull request runs the fast tier, and every other event also runs the queue tier", async () => {
-		const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const orchestratorSource = await readFile(".github/workflows/cicd.yml", "utf8");
+		const orchestrator = parseDocument(orchestratorSource);
 		const decision = String(
 			orchestrator.getIn(["jobs", "detect-changes", "outputs", "queue-tier"]),
 		);
@@ -838,6 +839,22 @@ void describe("CI contract", () => {
 				filter,
 			);
 		}
+		// What the queue tier replays, and what defines the shards, first runs on the pull request.
+		assert.deepEqual(
+			[
+				...pathFilter(orchestratorSource, "queue-tier-inputs").matchAll(
+					/^\s+- '(?<path>[^']+)'$/gmu,
+				),
+			].map((match) => match.groups?.path),
+			[
+				"server/application/build.gradle.kts",
+				"server/application/src/main/resources/db/**",
+				"webapp/e2e/**",
+				"webapp/playwright.config.ts",
+				"extension/e2e/**",
+				"extension/playwright.config.ts",
+			],
+		);
 
 		// The queue tier is exactly these jobs, and the latency report counts them by these names.
 		const guarded: string[] = [];
@@ -1539,16 +1556,14 @@ void describe("CI contract", () => {
 						`${name} installs its toolchain before browsers`,
 					);
 				}
-				if (file.endsWith("ci-build.yml")) {
-					assert.ok(
-						uses.some(
-							(action) =>
-								action === "./.github/actions/restore-server-build" ||
-								action.startsWith("actions/download-artifact@"),
-						),
-						`${name} does not hold the packaged server before its consumer`,
-					);
-				}
+				assert.ok(
+					uses.some(
+						(action) =>
+							action === "./.github/actions/restore-server-build" ||
+							action.startsWith("actions/download-artifact@"),
+					),
+					`${name} does not hold the packaged server before its consumer`,
+				);
 			}
 		}
 
@@ -1572,12 +1587,36 @@ void describe("CI contract", () => {
 		assert.match(image, /needs: \[detect-changes, server-package, vulnerability-database\]/u);
 		assert.match(image, /use-buildpacks: true/u);
 
-		// The long suites compile from source and never wait for the package job.
+		// The suites run the packaged classes rather than compiling the tests once per job.
 		const tests = await readFile(".github/workflows/ci-tests.yml", "utf8");
-		assert.doesNotMatch(tests, /^ {4}needs:|download-artifact|restore-server-build/mu);
-		assert.match(job(tests, "server-verification"), /vp run test:server:verification/u);
-		assert.match(job(tests, "server-integration"), /vp run test:server:integration/u);
+		assert.equal(
+			parseDocument(tests).getIn(["env", "ORG_GRADLE_PROJECT_packagedServer"]),
+			"true",
+			"Every Gradle invocation in the suites consumes the restored classes",
+		);
+		for (const [name, command] of [
+			["server-verification", /vp run test:server:verification/u],
+			["server-integration", /vp run test:server:integration/u],
+		] as const) {
+			const suite = job(tests, name);
+			assert.match(suite, command);
+			assert.match(suite, /uses: \.\/\.github\/actions\/restore-server-build/u);
+			assert.doesNotMatch(suite, /^ {4}needs:/mu);
+		}
 		assert.match(job(orchestrator, "Build"), /needs: \[detect-changes, server-package\]/u);
+		assert.match(job(orchestrator, "Test"), /needs: \[detect-changes, server-package\]/u);
+		// A package skipped while the suites are selected must fail them, never skip them.
+		assert.match(job(orchestrator, "Test"), /needs\.server-package\.result != 'failure'/u);
+		assert.doesNotMatch(job(orchestrator, "Test"), /needs\.server-package\.result == 'success'/u);
+		// One output decides the suites, and packaging reads the same one, so they cannot disagree.
+		assert.match(
+			job(orchestrator, "Test"),
+			/needs\.detect-changes\.outputs\.server-tests == 'true'/u,
+		);
+		assert.match(
+			job(orchestrator, "server-package"),
+			/needs\.detect-changes\.outputs\.server-tests == 'true'/u,
+		);
 
 		const reusable = await readFile(".github/workflows/reusable-docker-build.yml", "utf8");
 		const packBuilds = [
@@ -1805,12 +1844,11 @@ void describe("CI contract", () => {
 			"Test",
 			"Compose",
 		]) {
-			assert.match(
-				job(source, name),
-				name === "upstream-images"
-					? /needs: \[detect-changes, vulnerability-database\]/u
-					: /needs: \[detect-changes\]/u,
-			);
+			const needs = {
+				"upstream-images": /needs: \[detect-changes, vulnerability-database\]/u,
+				Test: /needs: \[detect-changes, server-package\]/u,
+			}[name];
+			assert.match(job(source, name), needs ?? /needs: \[detect-changes\]/u);
 			assert.match(
 				job(source, name),
 				/github\.event_name != 'push'.*needs\.detect-changes\.outputs\.version-bump == 'true'/su,
@@ -1871,7 +1909,6 @@ void describe("CI contract", () => {
 			"Quality",
 			"server-package",
 			"Security",
-			"Test",
 			"Docker",
 		]) {
 			assert.match(
@@ -1880,6 +1917,17 @@ void describe("CI contract", () => {
 				`${name} does not read the path-selection decision`,
 			);
 		}
+		// Test and the package job share one decision, which states the unfiltered events itself.
+		assert.match(
+			String(workflow.getIn(["jobs", "Test", "if"])),
+			/needs\.detect-changes\.outputs\.server-tests == 'true'/u,
+		);
+		assert.ok(
+			String(workflow.getIn(["jobs", "detect-changes", "outputs", "server-tests"])).includes(
+				"github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
+			),
+			"server-tests runs the suites for every unfiltered event",
+		);
 
 		assert.doesNotMatch(
 			String(workflow.getIn(["jobs", "detect-changes", "outputs", "all-images"])),

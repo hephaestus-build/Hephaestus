@@ -66,7 +66,7 @@ It can capture evidence only for images that its run published.
 | Build → Webapp: E2E                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
 | Build → Extension: E2E                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                                           | `vp run test:extension:e2e`                                              |
 | Build → App Server image                                                | `pack build` from the packaged JAR, signed, attested and policy-scanned                                                                                                                                   | —                                                                        |
-| Test → App Server: Unit and architecture, App Server: Integration       | compiled from source                                                                                                                                                                                      | `vp run test:server:verification`, `test:server:integration`             |
+| Test → App Server: Unit and architecture, App Server: Integration       | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
 | Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
 | Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability guard, legacy-reference guards                                                            | —                                                                        |
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze                                                                                                                     | `vp run gate:changesets`                                                 |
@@ -605,7 +605,7 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `ci-quality-leg.yml`                  | Called by ci-quality-gates.yml                                                | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg                                                                                                                                     |
 | `cache-toolchain.yml`                 | Main push changing install inputs or setup                                    | Seeds trusted Linux and Windows install caches without repeating quality gates                                                                                                                                                   |
 | `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml                                                                                                                        |
-| `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, compiled from source                                                                                                                                                       |
+| `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, on the package job's compiled classes                                                                                                                                     |
 | `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                                             |
 | `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds each requested platform natively, merges the index, signs, attests, and blocks on the release vulnerability policy for each platform                                                                                       |
 | `ci-security-scan.yml`                | Called by cicd.yml                                                            | Trivy dependency scan, secret detection and repository policy checks                                                                                                                                                             |
@@ -780,6 +780,8 @@ For a draft, the automatic queue tier for the tier's own inputs is off, but `ci:
 `CI Status Gate` still reports, so required checks resolve on a draft.
 Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
 with its images. That run is never skipped as a duplicate of the draft's run.
+A re-run replays the event of its run, so a re-run of a draft's run builds no image, even after
+the pull request is ready. Re-run the ready run instead.
 
 A pull request that is not a draft also runs the queue tier when it changes the tier's own inputs.
 These inputs are the workflows and actions that define the tier and the database migrations.
@@ -902,10 +904,16 @@ gives the retried job a new attempt number.
 ## Build once
 
 `App Server: Package` in `cicd.yml` packages the server once and uploads its JARs, compiled tests and resources. OpenAPI and
-browser checks boot that executable JAR. Buildpacks consume it without another build. Schema gates
-and database contract tests use the restored classes with `-PpackagedServer=true`, which bypasses
-compilation. Unit, architecture and integration suites compile from source in `Test` without
-waiting for packaging. Their outputs do not ship.
+browser checks boot that executable JAR. Buildpacks consume it without another build. Schema gates,
+database contract tests and the `Test` suites use the restored classes with `-PpackagedServer=true`,
+which bypasses compilation. `ci-tests.yml` sets it as `ORG_GRADLE_PROJECT_packagedServer`, because
+its commands are `vp run` tasks. Thus, every server suite tests the classes that the JAR ships.
+
+The suites never compile. Test compilation is the slowest server build step, and it is rarely a
+cache hit. A change alters the test sources or the main classes they compile against.
+So the suites wait for packaging rather than compile the same sources in each of their jobs.
+The package artifact is kept for one day, so a failed job re-run after that day fails on its download.
+Re-run all jobs instead.
 
 The PostgreSQL backup-restore and PITR drills apply the migrations from that same executable JAR.
 Spring Boot's launcher runs the Liquibase bundled in the JAR against the changelog in the JAR, from an empty directory and with a minimal environment.
@@ -971,7 +979,7 @@ If no such default-branch commit exists, the run builds every image itself. `det
 
 ## Parallelism and concurrency
 
-- `Quality` legs and `Test` suites start from source. `Build` gates start when `App Server: Package`
+- `Quality` legs start from source. `Test` suites and `Build` gates start when `App Server: Package`
   uploads its artifact.
 - `App Server: Integration` has four shards.
   `providers` selects the `integration` package.
@@ -1087,12 +1095,17 @@ JUnit results appear as `Test Results - …` check runs.
 The full-verification target is a six-minute median and a seven-minute p90, measured from workflow
 creation to completion of **CI Status Gate**. A merge group always runs both
 [verification tiers](#two-verification-tiers), so the sample is merge groups.
-On the default branch, `CI profile` examines the latest 100 completed merge-group runs created in the last 28 days.
+On the default branch, `CI profile` lists every completed merge-group run created in the last 28 days.
 It selects the ten most recent successful first-attempt runs with full server and browser verification.
-
 Lightweight changes and release-candidate groups, which also generate release evidence, cannot
-satisfy this cohort. Failed and canceled counts describe the bounded listing, not a repository-wide failure
-rate. Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
+satisfy this cohort.
+
+The report also selects the ten most recent successful first-attempt pull-request runs of the fast
+tier: the server suites ran, and no queue-tier job ran. It reports their median and p90 as an
+observation, with no target. It counts the merge groups of the last 14 days in which a queue-tier
+job failed, for the [revert criterion](#two-verification-tiers).
+
+Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
 qualifying runs produces an insufficient-data notice, not a pass or a regression.
 
 All observations
@@ -1152,8 +1165,8 @@ GITHUB_REPOSITORY=owner/repository vp run report:flakes
 
 ### Server profiles
 
-Normal PR test jobs retain JUnit XML reports for 14 days, separately for each suite, shard and
-attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
+PR and merge-queue test jobs retain JUnit XML reports for 14 days, separately for each suite,
+shard and attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
 Deep profiling stays in the manual/weekly workflow, not on the PR critical path. Select
 `integration`, `verification` (unit and architecture, including coverage), or `all` when dispatching
 `CI profile`. Weekly runs profile both tiers sequentially so diagnostics do not occupy two heavy
