@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { glob, readFile } from "node:fs/promises";
 import { test } from "node:test";
+
+import { isMap, parseDocument, visit } from "yaml";
 
 import {
 	type AttemptJob,
@@ -7,6 +10,7 @@ import {
 	failedTestCases,
 	flakyJobs,
 	flakyTests,
+	REPORT_STEP,
 	renderFlakes,
 	reportArtifacts,
 	rerunsOf,
@@ -17,10 +21,12 @@ const job = (
 	conclusion: string | null,
 	failedSteps: string[] = [],
 	startedAt = "2026-10-24T10:00:00Z",
+	reported = true,
 ): AttemptJob => ({
 	name,
 	conclusion,
 	startedAt,
+	reported,
 	url: `https://github.com/example/project/actions/runs/1/job/${name}`,
 	failedSteps,
 });
@@ -96,6 +102,18 @@ void test("tests stay unknown unless every never-passing job ran again in the la
 		[3, [job("A", "success", [], at(12)), job("B", "failure", [], at(11))]],
 	]);
 	assert.equal(attributable(threeAttempts, flaky, 3), false);
+	// B ran again and failed again, but its report upload did not succeed.
+	const unreported = new Map([
+		[1, first],
+		[2, [job("A", "success", [], at(11)), job("B", "failure", [], at(11), false)]],
+	]);
+	assert.equal(attributable(unreported, flaky, 2), false);
+	// A job that never passed and never left a report adds no tests to the earlier reports.
+	const imageBuild = new Map([
+		[1, [job("A", "failure", [], at(10)), job("Image", "failure", [], at(10), false)]],
+		[2, [job("A", "success", [], at(11)), job("Image", "failure", [], at(10), false)]],
+	]);
+	assert.equal(attributable(imageBuild, flaky, 2), true);
 	// A cancelled rerun of B leaves no report to subtract.
 	const cancelled = new Map([
 		[1, first],
@@ -108,6 +126,30 @@ void test("tests stay unknown unless every never-passing job ran again in the la
 		[2, [job("A", "success", [], at(11))]],
 	]);
 	assert.equal(attributable(onlyFlaky, flaky, 2), true);
+});
+
+void test("every CI step that uploads attempt reports is recognised as the job's report", async () => {
+	const steps: string[] = [];
+	for await (const file of glob(".github/workflows/*.{yml,yaml}")) {
+		visit(parseDocument(await readFile(file, "utf8")), {
+			Map(_, node) {
+				const upload = node.get("uses");
+				const inputs = node.get("with");
+				if (
+					typeof upload === "string" &&
+					upload.startsWith("actions/upload-artifact@") &&
+					isMap(inputs) &&
+					/-reports-\$\{\{ github\.run_attempt \}\}/u.test(String(inputs.get("name")))
+				) {
+					steps.push(String(node.get("name")));
+				}
+			},
+		});
+	}
+	assert.ok(steps.length >= 4, `found only ${steps.length} report uploads`);
+	for (const name of steps) {
+		assert.match(name, REPORT_STEP);
+	}
 });
 
 void test("reruns are listed once, even where two day windows share a bound", () => {

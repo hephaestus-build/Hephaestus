@@ -10,6 +10,9 @@ import { output } from "./lib/process.ts";
 // CI retains JUnit reports for 14 days, so older reruns cannot name their failed tests.
 const WINDOW_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// The step of a CI job that uploads its `*-reports-<attempt>` artifact. report-flakes.test.ts keeps
+// every such step named this way.
+export const REPORT_STEP = /^Retain\b.*\btest\b/u;
 // The gate fails because another job failed; it never names a flaky test of its own.
 const AGGREGATE_JOBS = new Set(["CI Status Gate"]);
 
@@ -20,6 +23,8 @@ export interface AttemptJob {
 	startedAt: string | null;
 	url: string;
 	failedSteps: string[];
+	/** Whether the job uploaded its JUnit reports in this attempt. */
+	reported: boolean;
 }
 
 export interface FlakyJob {
@@ -79,6 +84,12 @@ export function attemptJobs(value: unknown): AttemptJob[] {
 				.map((step) => asRecord(step, "step"))
 				.filter((step) => step.conclusion === "failure")
 				.map((step) => asString(step.name, "step.name")),
+			reported: steps
+				.map((step) => asRecord(step, "step"))
+				.some(
+					(step) =>
+						step.conclusion === "success" && REPORT_STEP.test(asString(step.name, "step.name")),
+				),
 		};
 	});
 }
@@ -124,9 +135,9 @@ export function flakyTests(
 
 /**
  * Whether the failed tests of the flaky attempts can be told apart from those of jobs that never
- * passed. Each such job must have run again in the last attempt and failed there, so that its
- * tests can be subtracted. A job that the last attempt did not rerun keeps the start it had in the
- * attempt before. A cancelled rerun leaves no report and does not conclude `failure`.
+ * passed. Each such job that left reports must have run again in the last attempt, failed there and
+ * left its reports there too, so that its tests can be subtracted. A job that the last attempt did
+ * not rerun keeps the start it had in the attempt before. Otherwise the run's tests stay unknown.
  */
 export function attributable(
 	attempts: ReadonlyMap<number, readonly AttemptJob[]>,
@@ -141,13 +152,16 @@ export function attributable(
 			.filter(
 				(job) =>
 					job.conclusion === "failure" &&
+					job.reported &&
 					!AGGREGATE_JOBS.has(job.name) &&
 					!flakyNames.has(job.name),
 			)
 			.every(({ name }) => {
 				const rerun = last.find((job) => job.name === name);
 				const before = previous.find((job) => job.name === name);
-				return rerun?.conclusion === "failure" && rerun.startedAt !== before?.startedAt;
+				return (
+					rerun?.conclusion === "failure" && rerun.reported && rerun.startedAt !== before?.startedAt
+				);
 			}),
 	);
 }
