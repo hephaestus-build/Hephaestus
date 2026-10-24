@@ -894,7 +894,7 @@ which bypasses compilation. `ci-tests.yml` sets it as `ORG_GRADLE_PROJECT_packag
 its commands are `vp run` tasks. Thus, every server suite tests the classes that the JAR ships.
 
 The suites never compile. Test compilation is the slowest server build step, and it is rarely a
-cache hit, because a change alters the test sources or the main classes they compile against.
+cache hit. A change alters the test sources or the main classes they compile against.
 So the suites wait for packaging rather than compile the same sources in each of their jobs.
 The package artifact is kept for one day, so a failed job re-run after that day fails on its download.
 Re-run all jobs instead.

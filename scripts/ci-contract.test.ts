@@ -1591,10 +1591,14 @@ void describe("CI contract", () => {
 		// A package skipped while the suites are selected must fail them, never skip them.
 		assert.match(job(orchestrator, "Test"), /needs\.server-package\.result != 'failure'/u);
 		assert.doesNotMatch(job(orchestrator, "Test"), /needs\.server-package\.result == 'success'/u);
+		// One output decides the suites, and packaging reads the same one, so they cannot disagree.
+		assert.match(
+			job(orchestrator, "Test"),
+			/needs\.detect-changes\.outputs\.server-tests == 'true'/u,
+		);
 		assert.match(
 			job(orchestrator, "server-package"),
-			/needs\.detect-changes\.outputs\.test-config == 'true'/u,
-			"A change to the suites' own workflow must package the classes they run",
+			/needs\.detect-changes\.outputs\.server-tests == 'true'/u,
 		);
 
 		const reusable = await readFile(".github/workflows/reusable-docker-build.yml", "utf8");
@@ -1888,7 +1892,6 @@ void describe("CI contract", () => {
 			"Quality",
 			"server-package",
 			"Security",
-			"Test",
 			"Docker",
 		]) {
 			assert.match(
@@ -1897,6 +1900,17 @@ void describe("CI contract", () => {
 				`${name} does not read the path-selection decision`,
 			);
 		}
+		// Test and the package job share one decision, which states the unfiltered events itself.
+		assert.match(
+			String(workflow.getIn(["jobs", "Test", "if"])),
+			/needs\.detect-changes\.outputs\.server-tests == 'true'/u,
+		);
+		assert.ok(
+			String(workflow.getIn(["jobs", "detect-changes", "outputs", "server-tests"])).includes(
+				"github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
+			),
+			"server-tests runs the suites for every unfiltered event",
+		);
 
 		assert.doesNotMatch(
 			String(workflow.getIn(["jobs", "detect-changes", "outputs", "all-images"])),
