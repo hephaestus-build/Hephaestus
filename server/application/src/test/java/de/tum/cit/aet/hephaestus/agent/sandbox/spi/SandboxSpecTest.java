@@ -17,38 +17,41 @@ class SandboxSpecTest extends BaseUnitTest {
 
     @Test
     void shouldRejectBlankImage() {
-        assertThatThrownBy(() -> new SandboxSpec(
-                        UUID.randomUUID(),
-                        "  ",
-                        List.of(),
-                        Map.of(),
-                        null,
-                        SandboxTestLimits.ATTEMPT,
-                        SecurityProfile.DEFAULT,
-                        Map.of(),
-                        "/workspace/out"))
+        assertThatThrownBy(() -> spec("  ", "token"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("blank");
     }
 
     @Test
+    void shouldRequireAGatewayCredential() {
+        assertThatThrownBy(() -> spec("alpine:latest", " "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Gateway credential required");
+    }
+
+    @Test
     void shouldAcceptValidSpec() {
-        // networkPolicy, securityProfile can be null
-        // command, environment, inputFiles are defaulted to empty collections
-        var spec = new SandboxSpec(
-                UUID.randomUUID(),
-                "alpine:latest",
-                null,
-                null,
-                null,
-                SandboxTestLimits.ATTEMPT,
-                null,
-                null,
-                "/workspace/out");
+        var spec = spec("alpine:latest", "token");
         assertThat(spec.jobId()).isNotNull();
         assertThat(spec.command()).isEmpty();
         assertThat(spec.environment()).isEmpty();
         assertThat(spec.inputFiles()).isEmpty();
+        assertThat(spec.workDeadline()).isNull();
+    }
+
+    private static SandboxSpec spec(String image, String token) {
+        return new SandboxSpec(
+                UUID.randomUUID(),
+                null,
+                image,
+                List.of(),
+                Map.of(),
+                token,
+                SandboxTestLimits.ATTEMPT,
+                null,
+                Map.of(),
+                Map.of(),
+                List.of());
     }
 
     @Nested

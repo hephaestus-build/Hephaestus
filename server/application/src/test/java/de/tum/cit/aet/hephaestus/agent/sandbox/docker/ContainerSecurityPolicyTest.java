@@ -5,9 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.util.List;
@@ -34,8 +32,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldApplyDefaultSecurityOptions() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.readonlyRootfs()).isTrue();
             assertThat(config.privileged()).isFalse();
@@ -47,8 +45,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldSetMemoryNoSwap() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.memoryBytes()).isEqualTo(4L * 1024 * 1024 * 1024);
             assertThat(config.memorySwapBytes()).isEqualTo(config.memoryBytes());
@@ -56,24 +54,24 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldSetCpuLimit() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.nanoCpus()).isEqualTo(2_000_000_000L);
         }
 
         @Test
         void shouldSetPidLimit() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.pidsLimit()).isEqualTo(512);
         }
 
         @Test
         void shouldSetUlimitNofile() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.ulimits()).containsKey("nofile");
             var nofile = config.ulimits().get("nofile");
@@ -88,24 +86,24 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldBlockDnsWhenNoInternet() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.dns()).containsExactly("0.0.0.0");
         }
 
         @Test
         void shouldAllowDnsWithInternet() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(true, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, true);
 
             assertThat(config.dns()).isEmpty();
         }
 
         @Test
-        void shouldBlockDnsWhenNetworkPolicyNull() {
+        void shouldBlockDnsWithoutInternetAccess() {
             DockerOperations.HostConfigSpec config =
-                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, null);
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.dns()).containsExactly("0.0.0.0");
         }
@@ -116,8 +114,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldConfigureDefaultTmpfs() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.tmpfsMounts()).containsKey("/tmp");
             assertThat(config.tmpfsMounts()).containsKey("/run");
@@ -133,8 +131,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         void shouldUseGvisorFromProfile() {
             SecurityProfile gvisorProfile = new SecurityProfile("runsc", "none", List.of("ALL"), Map.of());
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    gvisorProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(gvisorProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.runtime()).isEqualTo("runsc");
         }
@@ -145,16 +143,16 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
                     new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, "runsc", "default");
             ContainerSecurityPolicy policyWithRuntime = new ContainerSecurityPolicy(propsWithRuntime, null);
 
-            DockerOperations.HostConfigSpec config = policyWithRuntime.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    policyWithRuntime.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.runtime()).isEqualTo("runsc");
         }
 
         @Test
         void shouldHaveNoRuntimeByDefault() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.runtime()).isNull();
         }
@@ -187,8 +185,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
                     new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default"),
                     "{\"defaultAction\":\"SCMP_ACT_ERRNO\"}");
 
-            DockerOperations.HostConfigSpec config = policyWithSeccomp.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    policyWithSeccomp.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.securityOpts())
                     .anyMatch(opt -> opt.startsWith("seccomp=") && opt.contains("SCMP_ACT_ERRNO"));
@@ -196,8 +194,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldNotIncludeSeccompWhenNull() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.securityOpts()).noneMatch(opt -> opt.startsWith("seccomp="));
         }
@@ -214,8 +212,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
                     512,
                     Duration.ofMinutes(30));
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, custom, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, custom, false);
 
             assertThat(config.memoryBytes()).isEqualTo(8L * 1024 * 1024 * 1024);
             assertThat(config.nanoCpus()).isEqualTo(4_000_000_000L);
@@ -230,8 +228,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         void shouldEnforceNoNewPrivileges() {
             SecurityProfile laxProfile = new SecurityProfile(null, "none", List.of(), Map.of());
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    laxProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(laxProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.securityOpts()).contains("no-new-privileges");
         }
@@ -240,8 +238,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         void shouldEnforceCapDropAll() {
             SecurityProfile laxProfile = new SecurityProfile(null, "none", List.of(), Map.of());
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    laxProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(laxProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.capDrop()).containsExactly("ALL");
         }
@@ -251,8 +249,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
             SecurityProfile partialCapProfile =
                     new SecurityProfile(null, "none", List.of("NET_RAW", "SYS_ADMIN"), Map.of());
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    partialCapProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(partialCapProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.capDrop()).containsExactly("ALL");
         }
@@ -261,8 +259,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         void shouldEnforcePrivateCgroupns() {
             SecurityProfile laxProfile = new SecurityProfile(null, "none", List.of("ALL"), Map.of());
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    laxProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(laxProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.cgroupnsMode()).isEqualTo("private");
         }
@@ -271,8 +269,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         void shouldRejectHostIpcMode() {
             SecurityProfile hostIpcProfile = new SecurityProfile(null, "host", List.of("ALL"), Map.of());
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    hostIpcProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(hostIpcProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.ipcMode()).isEqualTo("none");
         }
@@ -281,8 +279,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         void shouldRejectShareableIpcMode() {
             SecurityProfile shareableIpcProfile = new SecurityProfile(null, "shareable", List.of("ALL"), Map.of());
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    shareableIpcProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(shareableIpcProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.ipcMode()).isEqualTo("none");
         }
@@ -291,8 +289,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         void shouldDefaultIpcToNone() {
             SecurityProfile nullIpcProfile = new SecurityProfile(null, null, List.of("ALL"), Map.of());
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    nullIpcProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(nullIpcProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.ipcMode()).isEqualTo("none");
         }
@@ -301,8 +299,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         void shouldAllowPrivateIpcMode() {
             SecurityProfile privateIpcProfile = new SecurityProfile(null, "private", List.of("ALL"), Map.of());
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    privateIpcProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(privateIpcProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.ipcMode()).isEqualTo("private");
         }
@@ -312,8 +310,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
             SecurityProfile weakTmpfsProfile = new SecurityProfile(
                     null, "none", List.of("ALL"), Map.of("/tmp", "rw,exec,size=100g", "/custom", "rw,size=512m"));
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    weakTmpfsProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(weakTmpfsProfile, SandboxTestLimits.ATTEMPT, false);
 
             // Enforces noexec on /tmp even though the caller's profile requested "exec"
             assertThat(config.tmpfsMounts().get("/tmp")).contains("noexec");
@@ -326,8 +324,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         void shouldHandleNullTmpfsMounts() {
             SecurityProfile nullTmpfsProfile = new SecurityProfile(null, "none", List.of("ALL"), null);
 
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    nullTmpfsProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(nullTmpfsProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.tmpfsMounts()).containsKey("/tmp");
             assertThat(config.tmpfsMounts()).containsKey("/run");
@@ -343,8 +341,8 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
             SecurityProfile runcProfile = new SecurityProfile("runc", "none", List.of("ALL"), Map.of());
 
-            DockerOperations.HostConfigSpec config = policyWithRuntime.buildHostConfig(
-                    runcProfile, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    policyWithRuntime.buildHostConfig(runcProfile, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.runtime()).isEqualTo("runsc");
         }
@@ -356,16 +354,16 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
 
         @Test
         void shouldSetNprocUlimit() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.ulimits()).doesNotContainKey("nproc");
         }
 
         @Test
         void shouldDisableCoreDumps() {
-            DockerOperations.HostConfigSpec config = securityPolicy.buildHostConfig(
-                    SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, new NetworkPolicy(false, null, null));
+            DockerOperations.HostConfigSpec config =
+                    securityPolicy.buildHostConfig(SecurityProfile.DEFAULT, SandboxTestLimits.ATTEMPT, false);
 
             assertThat(config.ulimits()).containsKey("core");
             var core = config.ulimits().get("core");

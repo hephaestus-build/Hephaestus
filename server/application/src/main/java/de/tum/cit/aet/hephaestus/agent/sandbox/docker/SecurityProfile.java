@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.sandbox.spi;
+package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import java.util.List;
 import java.util.Map;
@@ -37,8 +37,8 @@ public record SecurityProfile(
                     "/run",
                     "rw,noexec,nosuid,nodev,size=67108864",
                     // exec (not noexec): Pi's Node.js runtime extracts native addons here at runtime.
-                    // ContainerSecurityPolicy.MANDATORY_TMPFS already forces this to exec; keep the SPI
-                    // default in sync so it doesn't mislead readers into re-breaking native addons.
+                    // ContainerSecurityPolicy.MANDATORY_TMPFS already forces this to exec; this default says
+                    // the same, so that it does not mislead a reader into re-breaking native addons.
                     "/home/agent/.local",
                     "rw,exec,nosuid,nodev,size=1073741824"));
 }

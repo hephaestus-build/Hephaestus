@@ -1,0 +1,48 @@
+---
+id: upgrade-to-1-0
+title: Upgrade from 0.x to 1.0
+description: The path from a 0.x release to 1.0, and the operator actions of the breaking changes after v0.94.7.
+---
+
+1.0 is the first release with the 1.x upgrade guarantee.
+After 1.0, any 1.x release upgrades to any later 1.y release without an intermediate release, as the [compatibility policy](./compatibility-policy#upgrade-guarantee) states.
+Before 1.0, a release can require action.
+This page collects the actions on the way from a 0.x release to 1.0.
+
+[Upgrade](./upgrade) owns the procedure itself: the rehearsal on a copy, the upgrade, failed-migration recovery, and rollback.
+The [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns the full instructions of each change.
+
+## Before you start
+
+1. Find the release that the host runs on **Instance administration → Overview**.
+2. If the database has not passed the v0.77.4 cut-point, follow the [database baseline prerequisites](./compatibility-policy#database-baseline-prerequisites) first.
+3. Read every migration guide entry between your release and 1.0.
+4. Make a database backup and verify that it restores, as [Backup & restore](./backup-restore) describes.
+5. Keep the signed release lock and the `.env` of your current release with the backup.
+
+:::caution CAUTION: Stop every role
+Several changes on the way to 1.0 need every runtime role stopped before the migration.
+A server, worker, or webhook server of the old release fails when it reads the new schema or the data that the new release writes.
+Stop `application-server`, `application-worker`, and `webhook-server` before you start any role of the new release.
+:::
+
+## Breaking changes after v0.94.7
+
+The releases after v0.94.7 include these changes.
+Each row names the action and the migration guide entry that owns the procedure.
+The migration guide also has the entries of the releases before v0.94.7.
+
+| Change | Operator action | Migration guide entry |
+| --- | --- | --- |
+| Heph keeps one conversation for each developer in each workspace. The upgrade deletes the earlier Heph chat history. | Stop every role before the upgrade, then follow the entry. | Stop every role for the Heph conversation upgrade, which deletes Heph chat history |
+| Production instance administration requires passkeys. | Before the upgrade, read [Admin passkeys](./passkeys). After the upgrade, enroll two passkeys and save the recovery codes. Set the passkey origin and RP ID if the webapp uses another origin. | Admin passkey protection |
+| Delayed reviews use the work that was saved when their event was recorded. | Stop every role, back up the database, and deploy matching server, worker, and webhook images. | Deploy matching runtime roles for retained review evidence |
+| Logs use the Elastic Common Schema, and Sentry is removed. | Remove `SENTRY_DSN`. Update log queries, alerts, and dashboards for the new field names. | Update log queries for the new log format and remove `SENTRY_DSN` |
+| The webapp container runs as an unprivileged user on port 8080. | Only if you run the webapp image outside the bundled Compose stacks: send traffic to port 8080 and mount a writable `/tmp/hephaestus-webapp`. | Send webapp traffic to port 8080 |
+| The practice comparison API responses change. | Update clients that read `/practices/workspace-overview` or `/practices/tiles`. | Update practice comparison API clients |
+
+## After the upgrade
+
+1. Open **Instance administration → Overview** and read **Configuration readiness**.
+2. Resolve each item under **Action required**.
+3. Run one practice review in **Review before sending** mode, as [Install § 9](./install#9-first-practice-review) describes.

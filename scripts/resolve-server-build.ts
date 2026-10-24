@@ -12,6 +12,7 @@ const requiredJobs = [
 	"Build / App Server: PostgreSQL drill (pitr)",
 	"Build / Webapp: E2E",
 	"App Server image / Build linux/amd64 Docker Image",
+	"App Server image / Build linux/arm64 Docker Image",
 	"Test / App Server: Unit and architecture",
 	"Test / App Server: Integration (application)",
 	"Test / App Server: Integration (providers)",
@@ -77,12 +78,20 @@ function serverBuildArtifact(
 	return undefined;
 }
 
-export async function resolveServerBuild(
+type Api = (path: string) => Promise<unknown>;
+
+/**
+ * The successful merge-queue CI/CD runs of exactly `commit` in which every job in `jobNames`
+ * succeeded. The queue squashes, so a merge group's commit is the one its push to the default
+ * branch carries.
+ */
+async function* queueRuns(
 	repository: string,
 	commit: string,
 	defaultBranch: string,
-	api: (path: string) => Promise<unknown>,
-): Promise<{ runId: number; artifactId: number } | undefined> {
+	api: Api,
+	jobNames: readonly string[],
+): AsyncGenerator<{ runId: number; repositoryId: number }> {
 	if (!/^[a-f\d]{40}$/u.test(commit)) {
 		throw new Error("Expected an exact commit SHA");
 	}
@@ -111,12 +120,41 @@ export async function resolveServerBuild(
 			.flatMap((page) => asArray(asRecord(page, "job page").jobs, "jobs"))
 			.map((job) => asRecord(job, "job"));
 		if (
-			!requiredJobs.every((name) =>
+			!jobNames.every((name) =>
 				jobs.some((job) => job.name === name && job.conclusion === "success"),
 			)
 		) {
 			continue;
 		}
+		yield { runId, repositoryId };
+	}
+}
+
+/** The merge-queue run whose images and verdict a push of the same commit may reuse. */
+export async function resolveQueueRun(
+	repository: string,
+	commit: string,
+	defaultBranch: string,
+	api: Api,
+): Promise<number | undefined> {
+	const first = await queueRuns(repository, commit, defaultBranch, api, ["CI Status Gate"]).next();
+	return first.done === true ? undefined : first.value.runId;
+}
+
+export async function resolveServerBuild(
+	repository: string,
+	commit: string,
+	defaultBranch: string,
+	api: Api,
+): Promise<{ runId: number; artifactId: number } | undefined> {
+	const root = `repos/${repository}/actions`;
+	for await (const { runId, repositoryId } of queueRuns(
+		repository,
+		commit,
+		defaultBranch,
+		api,
+		requiredJobs,
+	)) {
 		const artifactPages = asArray(
 			await api(`${root}/runs/${runId}/artifacts?per_page=100`),
 			"artifact pages",
@@ -132,19 +170,23 @@ export async function resolveServerBuild(
 	return undefined;
 }
 
+/** `gh api`, with list endpoints read whole as one array of pages. */
+export async function ghApi(path: string): Promise<unknown> {
+	return parseJson(
+		await output("gh", [
+			"api",
+			path,
+			...(path.includes("/workflows/") ? [] : ["--paginate", "--slurp"]),
+		]),
+	);
+}
+
 if (import.meta.main) {
 	const result = await resolveServerBuild(
 		requiredEnv(process.env, "GITHUB_REPOSITORY"),
 		requiredEnv(process.env, "GITHUB_SHA"),
 		requiredEnv(process.env, "DEFAULT_BRANCH"),
-		async (path) =>
-			parseJson(
-				await output("gh", [
-					"api",
-					path,
-					...(path.includes("/workflows/") ? [] : ["--paginate", "--slurp"]),
-				]),
-			),
+		ghApi,
 	);
 	if (result) {
 		await appendFile(

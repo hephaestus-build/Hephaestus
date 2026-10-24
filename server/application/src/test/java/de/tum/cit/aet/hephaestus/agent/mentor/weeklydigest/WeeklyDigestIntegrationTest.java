@@ -82,7 +82,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -95,7 +94,6 @@ import tools.jackson.databind.ObjectMapper;
  * rendering and the document Heph reads in its thread. The evidence authorization boundary permits every stored
  * result of the workspace, as in the other review-evidence tests.
  */
-@Import(ReviewIntegrationData.class)
 class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     private static final ZoneId BERLIN = ZoneId.of("Europe/Berlin");

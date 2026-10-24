@@ -3,9 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -14,6 +12,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxHosts;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -24,12 +24,14 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 
-class DockerHostSandboxTest extends BaseUnitTest {
+/** {@code SandboxHosts} on the Docker backend: what a Heph host gets from Docker, and what its failure leaves. */
+class DockerSandboxHostsTest extends BaseUnitTest {
 
     private static final HostSandbox.HostSpec SPEC = new HostSandbox.HostSpec(
             Map.of(),
@@ -58,31 +60,35 @@ class DockerHostSandboxTest extends BaseUnitTest {
     @Mock
     private DockerVolumeOperations volumes;
 
-    private DockerHostSandbox sandbox;
+    @TempDir
+    Path temp;
+
+    private SandboxGatewaySessions.Session session;
+    private SandboxHosts sandbox;
 
     @BeforeEach
-    void setUp() {
-        sandbox = new DockerHostSandbox(
-                networks,
+    void setUp() throws IOException {
+        sandbox = new SandboxHosts(
+                new DockerSandboxBackend(
+                        networks, containers, securityPolicy, volumes, creator, "worker-1", () -> 8081),
                 workspaces,
-                containers,
-                securityPolicy,
-                creator,
                 gatewaySessions,
-                volumes,
-                "heph-host:test",
-                "worker-1",
-                () -> 8081);
+                "heph-host:test");
+        when(workspaces.createInputTar(any(), any())).thenReturn(Files.createFile(temp.resolve("input.tar")));
+        session = mock(SandboxGatewaySessions.Session.class);
+        when(session.id()).thenReturn(UUID.randomUUID());
+        when(gatewaySessions.registerHost(any(), any(), any(), any())).thenReturn(session);
     }
 
     @Test
-    void shouldStartNoHostWhenTheWorkerRunsInAContainerThatItCannotIdentify() {
+    void shouldStartNoHostWhenTheWorkerRunsInAContainerThatItCannotIdentify() throws IOException {
         when(creator.labels()).thenReturn(Map.of());
         when(creator.outsideContainer()).thenReturn(false);
 
         assertThatThrownBy(() -> sandbox.launch(SPEC)).isInstanceOf(IOException.class);
 
         verify(networks, never()).createJobNetwork(any(), anyBoolean(), any());
+        verify(session).close();
     }
 
     @Test
@@ -113,18 +119,31 @@ class DockerHostSandboxTest extends BaseUnitTest {
      * host ran on is still removed.
      */
     @Test
-    void shouldRemoveEverythingTheHostRanOnAndReadNoneOfItsOutputWhenItFailsToStart(@TempDir Path temp)
-            throws Exception {
+    void shouldRemoveEverythingTheHostRanOnAndReadNoneOfItsOutputWhenItFailsToStart() throws Exception {
         when(creator.labels())
                 .thenReturn(Map.of(
                         SandboxLabels.CREATOR_CONTAINER, "3f2a9c1b7d4e", SandboxLabels.CREATOR_STARTED_AT, "t1"));
-        when(networks.createJobNetwork(any(), anyBoolean(), any())).thenReturn("net-1");
+        AtomicReference<Map<String, String>> labels = new AtomicReference<>(Map.of());
+        when(networks.createJobNetwork(any(), anyBoolean(), any())).thenAnswer(invocation -> {
+            labels.set(invocation.getArgument(2));
+            return "net-1";
+        });
         when(networks.connectAppServer("net-1")).thenReturn("10.0.0.2");
-        when(workspaces.createInputTar(any(), any())).thenReturn(Files.createFile(temp.resolve("input.tar")));
-        SandboxGatewaySessions.Session session = mock(SandboxGatewaySessions.Session.class);
-        when(session.id()).thenReturn(UUID.randomUUID());
-        when(gatewaySessions.registerHost(any(), any(), any(), any())).thenReturn(session);
-        when(securityPolicy.buildHostConfig(any(), any(), any()))
+        // The removal finds what the host ran on by its labels, as the daemon lists it.
+        when(networks.networkPrefix()).thenReturn("hephaestus-sandbox-worker-1--");
+        when(networks.listNetworks())
+                .thenAnswer(invocation -> List.of(new DockerOperations.NetworkInfo(
+                        "net-1",
+                        "hephaestus-sandbox-worker-1--" + labels.get().get(SandboxLabels.SESSION_ID),
+                        null,
+                        labels.get())));
+        when(networks.removeUnlessInUse(eq("net-1"), any())).thenReturn(true);
+        when(containers.listManagedContainers())
+                .thenAnswer(invocation ->
+                        List.of(new DockerOperations.ContainerInfo("host-1", "host-1", labels.get(), "created", null)));
+        when(volumes.listVolumes(any()))
+                .thenAnswer(invocation -> List.of(new DockerOperations.VolumeInfo("volume-1", labels.get())));
+        when(securityPolicy.buildHostConfig(any(), any(), anyBoolean()))
                 .thenReturn(new DockerOperations.HostConfigSpec(
                         0, 0, 0, 0, true, false, List.of(), List.of(), Map.of(), List.of(), null, null, null, Map.of(),
                         List.of()));
@@ -137,9 +156,9 @@ class DockerHostSandboxTest extends BaseUnitTest {
         assertThatThrownBy(() -> sandbox.launch(SPEC)).hasMessage("stop here");
 
         verify(containers).forceRemove("host-1");
-        verify(volumes, atLeastOnce()).removeVolume(any());
+        verify(volumes).removeVolume("volume-1");
         verify(session).close();
-        verify(networks).removeNetwork("net-1");
-        verify(containers, never()).getLogs(any(), anyInt());
+        verify(networks).removeUnlessInUse(eq("net-1"), any());
+        verify(containers, never()).getLogs(any());
     }
 }

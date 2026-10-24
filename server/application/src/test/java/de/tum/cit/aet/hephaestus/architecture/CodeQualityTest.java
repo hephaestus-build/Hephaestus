@@ -127,8 +127,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "ActivityEventService.record",
                     "ActivityRecorder.record",
                     // @Bean factory wiring Spring dependencies — not business logic complexity
-                    "DockerSandboxConfiguration.dockerSandboxAdapter",
-                    "DockerSandboxConfiguration.dockerHostSandbox");
+                    "DockerSandboxConfiguration.dockerSandboxBackend");
 
             // Repository native SQL methods require individual @Param annotations and cannot use
             // parameter objects. These are atomic upsert operations that map directly to DB columns.

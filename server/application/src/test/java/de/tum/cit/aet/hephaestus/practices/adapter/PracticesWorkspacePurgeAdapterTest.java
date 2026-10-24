@@ -10,11 +10,9 @@ import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
-@Import(ReviewIntegrationData.class)
 class PracticesWorkspacePurgeAdapterTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;

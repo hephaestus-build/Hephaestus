@@ -1,6 +1,6 @@
 import { appendFile, readdir } from "node:fs/promises";
 
-import { isSet, requiredEnv } from "./lib/env.ts";
+import { requiredEnv } from "./lib/env.ts";
 import { reportStem, resolvePlatformDigest } from "./lib/image-scan.ts";
 
 const outputFile = requiredEnv(process.env, "GITHUB_OUTPUT");
@@ -8,17 +8,13 @@ const platform = requiredEnv(process.env, "SCAN_PLATFORM");
 if (platform !== "linux/amd64" && platform !== "linux/arm64") {
 	throw new Error("SCAN_PLATFORM must be linux/amd64 or linux/arm64");
 }
-const directory = process.env.DIGEST_DIRECTORY;
-if (isSet(directory) === isSet(process.env.IMAGE_REF)) {
-	throw new Error("Set exactly one of IMAGE_REF and DIGEST_DIRECTORY");
-}
-// A multi-architecture build's digest artifact names its platform's pushed image by its file name.
+// A platform build's digest artifact names its pushed image by its file name.
 // The merge job refuses an index whose leaves differ from these same artifacts.
-const reference = isSet(directory)
-	? `${requiredEnv(process.env, "IMAGE_REPOSITORY")}@sha256:${await artifactDigest(directory)}`
-	: requiredEnv(process.env, "IMAGE_REF");
+const reference = `${requiredEnv(process.env, "IMAGE_REPOSITORY")}@sha256:${await artifactDigest(
+	requiredEnv(process.env, "DIGEST_DIRECTORY"),
+)}`;
 if (!/^[^\s@]+@sha256:[a-f0-9]{64}$/u.test(reference)) {
-	throw new Error("IMAGE_REF must be an immutable image digest reference");
+	throw new Error("IMAGE_REPOSITORY must be a repository name without whitespace or a digest");
 }
 const image = requiredEnv(process.env, "INPUT_IMAGE_NAME").split("/").at(-1);
 if (image === undefined || !/^[a-z0-9][a-z0-9._-]*$/u.test(image)) {

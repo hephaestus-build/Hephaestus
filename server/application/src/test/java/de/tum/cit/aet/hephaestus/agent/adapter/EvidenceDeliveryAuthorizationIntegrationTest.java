@@ -20,11 +20,9 @@ import java.util.List;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
-@Import({ReviewIntegrationData.class, ReviewAdmissionData.class})
 class EvidenceDeliveryAuthorizationIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;

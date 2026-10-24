@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
-import { resolveServerBuild } from "./resolve-server-build.ts";
+import { resolveQueueRun, resolveServerBuild } from "./resolve-server-build.ts";
 
 const repository = "hephaestus-build/Hephaestus";
 const commit = "a".repeat(40);
@@ -16,6 +16,7 @@ const requiredJobs = [
 	"Build / App Server: PostgreSQL drill (pitr)",
 	"Build / Webapp: E2E",
 	"App Server image / Build linux/amd64 Docker Image",
+	"App Server image / Build linux/arm64 Docker Image",
 	"Test / App Server: Unit and architecture",
 	"Test / App Server: Integration (application)",
 	"Test / App Server: Integration (providers)",
@@ -37,11 +38,10 @@ function fixture() {
 			repository: { id: 7, full_name: repository },
 			head_repository: { id: 7, full_name: repository },
 		},
-		jobs: [
-			...requiredJobs,
-			"App Server image / Build linux/arm64 Docker Image",
-			"Release evidence preflight",
-		].map((name) => ({ name, conclusion: "success" })),
+		jobs: [...requiredJobs, "Release evidence preflight"].map((name) => ({
+			name,
+			conclusion: "success",
+		})),
 		artifact: {
 			id: 202,
 			name: "server-build-101",
@@ -68,13 +68,11 @@ await test("selects the immutable artifact of an exact-commit successful release
 	assert.deepEqual(await resolve(), { runId: 101, artifactId: 202 });
 });
 
-await test("reuses an ordinary merge group without release-only image and evidence jobs", async () => {
+await test("reuses an ordinary merge group without the release-only evidence job", async () => {
 	const data = fixture();
-	data.jobs = data.jobs
-		.filter((job) => job.name !== "App Server image / Build linux/arm64 Docker Image")
-		.map((job) =>
-			job.name === "Release evidence preflight" ? { ...job, conclusion: "skipped" } : job,
-		);
+	data.jobs = data.jobs.map((job) =>
+		job.name === "Release evidence preflight" ? { ...job, conclusion: "skipped" } : job,
+	);
 	assert.deepEqual(await resolve(data), { runId: 101, artifactId: 202 });
 });
 
@@ -202,4 +200,76 @@ await test("main reuses immutable verified artifacts without bypassing validatio
 	assert.ok(steps.items.indexOf(upload) > steps.items.indexOf(validate));
 	assert.match(String(upload.get("uses")), /^actions\/upload-artifact@/u);
 	assert.equal(upload.getIn(["with", "name"]), `\${{ env.SERVER_BUILD_ARTIFACT }}`);
+});
+
+await test("a push reuses the images of the successful queue run of its exact commit", async () => {
+	const lookup = async (data = fixture()) =>
+		resolveQueueRun(repository, commit, "main", async (path) => {
+			if (path.includes("/workflows/")) {
+				return { workflow_runs: [data.run] };
+			}
+			return [{ jobs: data.jobs }];
+		});
+	assert.equal(await lookup(), 101);
+	// Its verdict covers every image job and scan, so the final gate is all it needs.
+	const gateOnly = fixture();
+	gateOnly.jobs = [{ name: "CI Status Gate", conclusion: "success" }];
+	assert.equal(await lookup(gateOnly), 101);
+	for (const conclusion of ["failure", "skipped", "cancelled"]) {
+		const data = fixture();
+		data.jobs = data.jobs.map((job) =>
+			job.name === "CI Status Gate" ? { ...job, conclusion } : job,
+		);
+		assert.equal(await lookup(data), undefined, conclusion);
+	}
+	for (const patch of [
+		{ head_sha: "c".repeat(40) },
+		{ event: "push" },
+		{ head_branch: "gh-readonly-queue/other/pr-123" },
+	]) {
+		const data = fixture();
+		Object.assign(data.run, patch);
+		assert.equal(await lookup(data), undefined, JSON.stringify(patch));
+	}
+	await assert.rejects(
+		resolveQueueRun(repository, "HEAD", "main", async () => ({ workflow_runs: [] })),
+		/exact commit/u,
+	);
+});
+
+await test("the image builds receive the queue run a default-branch push resolved", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const detect = ["jobs", "detect-changes"];
+	const steps = workflow.getIn([...detect, "steps"]);
+	assert.ok(isSeq(steps));
+	const lookup = steps.items.find((item) => isMap(item) && item.get("id") === "queue_run");
+	assert.ok(isMap(lookup));
+	assert.equal(lookup.get("run"), "node scripts/resolve-queue-run.ts");
+	assert.equal(lookup.get("continue-on-error"), true);
+	assert.equal(
+		lookup.get("if"),
+		"github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+	);
+	assert.equal(workflow.getIn([...detect, "permissions", "actions"]), "read");
+	assert.equal(
+		workflow.getIn([...detect, "outputs", "queue-run"]),
+		`\${{ steps.queue_run.outputs.run-id }}`,
+	);
+	assert.equal(
+		workflow.getIn(["jobs", "application-server-image", "with", "reuse-run"]),
+		`\${{ needs.detect-changes.outputs.queue-run }}`,
+	);
+	assert.equal(
+		workflow.getIn(["jobs", "Docker", "with", "reuse_run"]),
+		`\${{ needs.detect-changes.outputs.queue-run }}`,
+	);
+	const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+	for (const job of ["webapp-build", "agent-pi-build", "postgres-build"]) {
+		assert.equal(docker.getIn(["jobs", job, "with", "reuse-run"]), `\${{ inputs.reuse_run }}`, job);
+	}
+	// The webapp records its branch at build time, and the merge group's build is the one that ships.
+	assert.match(
+		String(docker.getIn(["jobs", "webapp-build", "with", "build-args"])),
+		/COOLIFY_BRANCH=\$\{\{ github\.head_ref \|\| \(github\.event_name == 'merge_group' && github\.event\.repository\.default_branch\) \|\| github\.ref_name \}\}/u,
+	);
 });

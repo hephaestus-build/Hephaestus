@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -47,7 +46,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * returns with its earlier response and only the comments that still carry it. Admin surfaces are not read here and
  * keep the full record.
  */
-@Import(ReviewIntegrationData.class)
 class OwnWithdrawnFeedbackIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;

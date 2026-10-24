@@ -64,14 +64,13 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
     }
 
     @Nested
-    class NetworkPolicyContract {
+    class GatewayCredential {
 
         @Test
         void alwaysForwardsToken() {
-            var policy = factory.build(spec("azure-openai-responses", "gpt-5.4-mini"))
-                    .networkPolicy();
-            assertThat(policy.internetAccess()).isFalse();
-            assertThat(policy.llmProxyToken()).isEqualTo("job-token-123");
+            assertThat(factory.build(spec("azure-openai-responses", "gpt-5.4-mini"))
+                            .jobToken())
+                    .isEqualTo("job-token-123");
         }
     }
 
@@ -283,7 +282,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
 
         @Test
         @DisplayName(
-                "No shell-side credential export — LLM_PROXY_URL/TOKEN come from NetworkPolicy, not AGENT_BUDGET_MS"
+                "No shell-side credential export — LLM_PROXY_URL/TOKEN come from the sandbox runner, not AGENT_BUDGET_MS"
                         + " env")
         void noLegacyProviderEnvVars() {
             var env = factory.build(spec("openai-completions", "gpt-x")).environment();

@@ -34,13 +34,17 @@ flowchart TD
 
 ## Release flow
 
-Every push to `main` builds and attests multi-architecture images for that commit and maintains the
+Every push to `main` publishes signed multi-architecture images for that commit and maintains the
 Version PR. Merging the Version PR cuts a release that promotes those images by digest —
-[Release management](./release-management.mdx). Pull requests and merge groups build `linux/amd64`
-only. A merge group has its own SHA, so its images are never the ones a release promotes.
+[Release management](./release-management.mdx). A pull request builds `linux/amd64` only, so a
+push to it does not pay for a second architecture. A merge group builds `linux/amd64` and
+`linux/arm64`, so an arm64 build failure or finding is found once per merge, before `main`.
+The merge queue squashes, so a merge group's SHA is the commit its push to `main` carries.
+That push reuses the images the merge group built and tested instead of building them again —
+[Merge-queue image reuse](#merge-queue-image-reuse).
 
 The Version PR's branch is the exception.
-Every run builds every release image on both architectures, regardless of its start event.
+Every run builds every release image itself on both architectures, regardless of its start event.
 The branch's release evidence preflight requires each image on both published platforms.
 It can capture evidence only for images that its run published.
 
@@ -481,7 +485,9 @@ Its `Tag unchanged images` job aliases the base commit's verified digests for th
 Thus, every image exists at the head SHA.
 
 An alias serves a preview, never release evidence.
-If the base commit's image is still publishing, it uses the merged pull request's candidate, which carries only `linux/amd64`. That is why the Version PR's branch builds every image itself instead.
+If the base commit's image is still publishing, it uses the merged pull request's candidate, which carries only `linux/amd64`.
+Either way, the alias is an image that another commit's run built.
+That is why the Version PR's branch builds every image itself instead.
 
 A draft deploys like any other pull request.
 Unfinished work commonly needs review, so the label is the sole opt-in.
@@ -582,7 +588,7 @@ Why the label is the authority, and which alternatives were priced and declined,
 
 | Workflow                              | Trigger                                                                       | Purpose                                                                                                                                                                                                                          |
 | ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cicd.yml`                            | PR, merge group, push to main, manual                                         | Validates changes before merge and builds final-SHA images after merge. The release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
+| `cicd.yml`                            | PR, merge group, push to main, manual                                         | Validates changes before merge and publishes final-SHA images after merge. The release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
 | `review-policy.yml`                   | PR opened, reopened, synchronized, ready for review, edited                   | Approves a listed maintainer's pull request so the ruleset's required approval is met. Does nothing for anyone else                                                                                                              |
 | `pull-request.yml`                    | PR opened, edited, synchronized, reopened, ready for review                   | Validates the title against the exported policy in `commitlint.config.ts`, without installing the workspace. Applies the commit identity policy in the checks table above. Assigns the author when the pull request opens        |
 | `ci-quality-gates.yml`                | Called by cicd.yml                                                            | Selects quality legs, clean-install verification and story tests                                                                                                                                                                 |
@@ -591,7 +597,7 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml                                                                                                                        |
 | `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, compiled from source                                                                                                                                                       |
 | `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                                             |
-| `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds, signs, attests, and blocks on the release vulnerability policy for the `linux/amd64` image                                                                                                                               |
+| `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds each requested platform natively, merges the index, signs, attests, and blocks on the release vulnerability policy for each platform                                                                                       |
 | `ci-security-scan.yml`                | Called by cicd.yml                                                            | Trivy dependency scan, secret detection and repository policy checks                                                                                                                                                             |
 | `dependency-review.yml`               | PR changing a dependency input                                                | Reports introduced dependency advisories independently of the required CI verdict                                                                                                                                                |
 | `dependency-graph.yml`                | PR changing a dependency input, push to main                                  | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |
@@ -666,10 +672,9 @@ Commit, branch and pull request image tags are published only after their immuta
 signature and provenance verification. Index assembly uses a run-specific staging tag. Final tag
 publication preserves the verified digest.
 
-Image verification stays beside publishing. The single-platform step signs and verifies one image.
-The merge job signs recursively, then verifies the index. The alias job verifies each immutable
-subject before moving its tags. Merge and alias jobs need no checkout or repository toolchain just
-to verify registry evidence.
+Image verification stays beside publishing. The merge job signs recursively, then verifies the
+index. The alias job verifies each immutable subject before moving its tags. Merge and alias jobs
+need no checkout or repository toolchain just to verify registry evidence.
 Provenance verification reads attestation bundles from the image registry and keeps the existing
 identity and predicate policy.
 
@@ -761,9 +766,11 @@ previews need every image at the head SHA. No other event has a preview.
 
 ## Docker layer caching
 
-Dockerfile builds import `<image>:cache-main-<platform>` from `ghcr.io` and write it, with every
-intermediate layer, only on pushes to `main`, so a pull request reuses `main`'s layers and writes
-nothing. amd64 builds on `ubuntu-24.04`, arm64 on `ubuntu-24.04-arm`. No emulation. The buildpacks
+Dockerfile builds import `<image>:cache-main-<platform>` from `ghcr.io`.
+Only pushes to `main` and merge groups write it, with every intermediate layer.
+A pull request reuses those layers and writes nothing.
+
+amd64 builds on `ubuntu-24.04`, arm64 on `ubuntu-24.04-arm`. No emulation. The buildpacks
 path (`App Server image`) does not use this cache. Dockerfile builds always bypass the cache for
 the `os-packages` and exported `runtime` stages. [OS package updates](vulnerability-remediation.mdx#os-package-updates-in-first-party-images)
 owns that contract and the local build commands.
@@ -798,10 +805,11 @@ that same immutable reference.
 Every consumer resolves an image through its build commit.
 `reusable-docker-build.yml` publishes exactly that tag for the run's start event.
 Pushes, dispatches, and merge groups use `github.sha`.
+A push that reuses its merge group's image publishes the same digest under that tag.
 Pull requests use their head SHA because `github.sha` is a merge commit with no image tag.
 
 Within a run, the vulnerability scan ignores tags.
-It reads the captured single-architecture build output or its own platform build digest artifact.
+It reads its own platform build digest artifact.
 Thus, a scan-only rerun scans that build's artifact.
 
 `ci-contract.test.ts` asserts the whole contract.
@@ -834,15 +842,42 @@ final CI gate still requires all of them. An early image verdict cannot approve 
 
 A default-branch push reuses the packaged server when a successful merge group
 validated the exact same commit. The source must be this repository's `cicd.yml` run, with successful
-artifact gates, tests, security checks, the AMD64 server build and final gate. ARM64 image builds
-and release preflight do not change the packaged Java artifact, so their absence in ordinary merge
-groups does not force a rebuild. Main still validates both image platforms. Release candidates
-still require release preflight.
+artifact gates, tests, security checks, both server image builds and final gate. Release preflight
+does not change the packaged Java artifact, so its absence in ordinary merge groups does not force
+a rebuild. Release candidates still require release preflight.
+
+The latest attempt of each job counts, so an arm64 server image build that flaked and passed on a
+re-run does not block reuse. A queue run whose arm64 build stays failed fails its gate, so its
+commit does not merge. `main` packages the server again when the merge group did not rebuild the
+server image, because that queue run has no server image builds.
 
 The immutable artifact ID and its SHA-256 digest bind the download to that run. Missing, expired or
 unavailable source evidence falls back to packaging. A corrupt download fails rather than being used.
-Main still runs its own validation and publishes its images, including main-only tags and source maps.
+Main still runs its own validation and publishes its images under main-only tags.
 Release publication still generates fresh vulnerability evidence and signatures.
+
+### Merge-queue image reuse
+
+A default-branch push reuses each image that its successful merge group published for the same commit.
+`detect-changes` resolves that run with `scripts/resolve-queue-run.ts`.
+The run must have a successful `CI Status Gate`, which covers its image builds and per-platform scans.
+The `reuse` job in `reusable-docker-build.yml` accepts the image at `<image>:<commit>` only when all these checks pass:
+
+- Its platform leaves are exactly the platforms that the push requests.
+- Its cosign signature comes from `reusable-docker-build.yml` on the queue branch, with the `merge_group` trigger, at this commit.
+- Its build provenance attestation names this commit and was made by that queue run.
+
+The push then signs the index and each leaf again, verifies them, and moves the `main` tags.
+It does not rebuild, re-attest, or rescan the image.
+The release verifier accepts only the default-branch signing identity, so the push signs the image again.
+The provenance stays the queue run's, because that run built the image.
+A missing or unverifiable image is built and scanned as before.
+Examples are a direct push, an image that the merge group did not rebuild, and a lookup that failed.
+
+A merge group adds one arm64 build job per image that it rebuilds, which is four when it rebuilds all images.
+A push no longer rebuilds those images on either architecture, which more than offsets that cost.
+The webapp records its branch at build time, so a merge group builds it with the default branch's name.
+Merge groups also write the Dockerfile layer cache, because the push no longer refreshes it for reused images.
 
 An unchanged pull-request image is not rebuilt.
 `Tag unchanged images` verifies an earlier run's published digest and retags it to this run's head SHA. It aliases from the nearest default-branch commit found through the chain of bases.
@@ -867,10 +902,11 @@ If no such default-branch commit exists, the run builds every image itself. `det
   unit/architecture verification. Discovery reports stay separate from execution results.
   All shards use `fail-fast: false`. `CI Status Gate` requires their aggregate result. Locally
   the tier runs whole. The weekly [server profiles](#server-profiles) run the same shards.
-- Pull requests and merge groups build `linux/amd64`. Pushes to `main`, and every run on the Version
-  PR's branch, build both architectures. Pull requests and merge groups build only changed images and alias the rest.
-  The Version PR's branch builds them all. `detect-changes` decides both once, as `single-arch` and `all-images`, and hands them to
-  every image build in the run.
+- Pull requests build `linux/amd64`. Merge groups, pushes to `main`, dispatches, and every run on
+  the Version PR's branch build `linux/amd64` and `linux/arm64`. Both lists take the same build,
+  merge, signing, attestation and per-platform scan path. Pull requests and merge groups build only
+  changed images and alias the rest. The Version PR's branch builds them all. `detect-changes`
+  decides both once, as `platforms` and `all-images`, and hands them to every image build in the run.
 - Action and composite setup steps run sequentially within each job. The runner writes the shared
   event file before each action. The action SDK reads that file. Concurrent action starts can expose
   incomplete event data. Jobs and matrix entries still run independently. Standalone shell work

@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -63,8 +61,9 @@ public class ContainerSecurityPolicy {
         this.seccompProfileJson = seccompProfileJson;
     }
 
+    /** @param internetAccess whether the container's network has a route out: only a Heph host's outside Docker */
     public DockerOperations.HostConfigSpec buildHostConfig(
-            SecurityProfile security, ResourceLimits resources, @Nullable NetworkPolicy networkPolicy) {
+            SecurityProfile security, ResourceLimits resources, boolean internetAccess) {
         List<String> securityOpts = new ArrayList<>();
         securityOpts.add("no-new-privileges");
 
@@ -74,7 +73,7 @@ public class ContainerSecurityPolicy {
 
         // DNS: block all DNS when internet is disabled (prevents DNS exfiltration, CVE-2024-29018)
         List<String> dns = new ArrayList<>();
-        if (networkPolicy == null || !networkPolicy.internetAccess()) {
+        if (!internetAccess) {
             dns.add("0.0.0.0");
         }
 

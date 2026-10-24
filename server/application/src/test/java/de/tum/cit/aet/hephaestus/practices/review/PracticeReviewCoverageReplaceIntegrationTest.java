@@ -15,13 +15,11 @@ import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@Import(ReviewIntegrationData.class)
 class PracticeReviewCoverageReplaceIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;
