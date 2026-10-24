@@ -1,0 +1,43 @@
+# Weekly delivery metrics from GitHub's own records. Advisory: it gates nothing.
+name: Delivery metrics
+
+on:
+  schedule:
+    - cron: "37 5 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: delivery-metrics
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      deployments: read
+      pull-requests: read
+    steps:
+      # Lead time places each merge on main's first-parent history.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+
+      - name: Report delivery metrics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/report-delivery-metrics.ts
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: delivery-metrics
+          path: tmp/delivery-metrics/delivery-metrics.json
+          retention-days: 90

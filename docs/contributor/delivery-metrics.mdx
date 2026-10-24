@@ -1,0 +1,61 @@
+---
+id: delivery-metrics
+title: Delivery Metrics
+description: Weekly lead time, deployment frequency, change failure rate and time to restore from GitHub records.
+---
+
+# Delivery Metrics
+
+The **Delivery metrics** workflow reports the four [DORA](https://dora.dev/guides/dora-metrics/) delivery metrics each Monday.
+It reads only GitHub records that the delivery flow already writes.
+It uses no external service and gates nothing.
+
+Each run reports the last 7 days and the last 28 days in its job summary.
+It keeps the measurements as the `delivery-metrics` artifact for 90 days.
+
+## Sources
+
+| Record | Written by | Gives |
+| --- | --- | --- |
+| Merged pull requests into `main` | the merge queue | first commit time, opening time, merge time, merge commit |
+| Published releases | `release.yml` | publication time and the release commit |
+| Deployments of `Staging` and `Production` | `promote.yml` through `scripts/record-deployment.ts` | promoted commit, outcome, outcome time, rollback flag |
+| First-parent history of `main` | Git | the order of merge commits |
+
+A deployment carries a change when it deploys the change's merge commit or a later commit on the first-parent history of `main`.
+A release carries a change in the same way.
+
+The outcome of a deployment is its last `success`, `failure` or `error` status.
+The `success` time is when the public webapp reported the promoted version.
+[Release Management § Deployment history](./release-management.mdx#deployment-history) defines these states.
+
+## Metrics
+
+| Metric | Definition |
+| --- | --- |
+| Lead time for changes | Median and p90, per change, from its first commit (or from when its pull request opened) to when it first runs on staging, appears in a published release, and runs in production. Merge time is reported as a stage too. |
+| Deployment frequency | Successful deployments per environment, per week, and the number of days with a deployment. |
+| Change failure rate | Deployments that ended in `failure` or `error`, or that the next deployment rolled back, divided by all decided deployments. Reported per environment. Reverted pull requests are reported beside it. |
+| Time to restore | For each failed deployment, the time from its failure to the next successful deployment to the same environment that did not fail. |
+
+The Version PR is not a change. It consumes the changes it releases.
+A change that has not arrived yet is counted as waiting, not as a zero duration.
+
+## Limits
+
+- A deployment record states what the promotion workflow observed: the public webapp version.
+  It does not prove that every service is healthy. Host metrics are the record of what a host runs.
+- A failure that no deployment record shows, such as an incident that a forward fix resolved, is not counted.
+- Days with a deployment are calendar days in UTC.
+
+## Run it locally
+
+You need an authenticated GitHub CLI and a checkout with the history of `main`:
+
+```bash
+git fetch origin main
+GITHUB_REPOSITORY=hephaestus-build/Hephaestus vp run report:delivery
+```
+
+The report goes to standard output.
+The measurements go to the same JSON file that the workflow keeps as its artifact, under the ignored temporary directory.
