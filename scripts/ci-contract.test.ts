@@ -34,6 +34,17 @@ function job(source: string, name: string): string {
 	return match[0];
 }
 
+/** Every number of minutes a `timeout-minutes` value can yield, ignoring quoted strings. */
+function limitMinutes(limit: unknown): number[] {
+	if (typeof limit === "number") {
+		return [limit];
+	}
+	if (typeof limit !== "string") {
+		return [];
+	}
+	return [...limit.replaceAll(/'[^']*'/gu, "").matchAll(/\d+/gu)].map(Number);
+}
+
 function pathFilter(source: string, name: string): string {
 	const match = new RegExp(
 		`^            ${name}:\\n(?:[\\s\\S]*?)(?=^            [\\w-]+:\\s*$)`,
@@ -3849,6 +3860,7 @@ void describe("CI contract", () => {
 		// only `uses:` a reusable workflow runs no step here: its bound is on the callee's jobs.
 		const unbounded: string[] = [];
 		const tight: string[] = [];
+		const MIN_JOB_TIMEOUT_MINUTES = 15;
 		for (const [file, source] of await workflowSources()) {
 			const jobs = parseDocument(source).get("jobs");
 			if (!isMap(jobs)) {
@@ -3862,11 +3874,14 @@ void describe("CI contract", () => {
 				const limit = definition.get("timeout-minutes");
 				if (limit === undefined) {
 					unbounded.push(`${file}#${String(entry.key)}`);
-				} else if (typeof limit === "number" && limit < 15) {
-					// GitHub has been observed to cancel a finished job against a tight limit, because it
-					// recorded the completion late (ci-cd.mdx § Parallelism and concurrency). An
-					// expression limit, such as a matrix-dependent one, is outside this check.
-					tight.push(`${file}#${String(entry.key)}: ${limit}`);
+				} else {
+					// A job limit below the floor can cancel a finished job (ci-cd.mdx § Parallelism and
+					// concurrency). An expression limit, such as a matrix-dependent one, is held to it
+					// through every number in it.
+					const minutes = limitMinutes(limit);
+					if (minutes.length === 0 || minutes.some((value) => value < MIN_JOB_TIMEOUT_MINUTES)) {
+						tight.push(`${file}#${String(entry.key)}: ${JSON.stringify(limit)}`);
+					}
 				}
 			}
 		}
@@ -3874,7 +3889,7 @@ void describe("CI contract", () => {
 		assert.deepEqual(
 			tight,
 			[],
-			"a job's limit is a hang detector of at least 15 minutes (ci-cd.mdx)",
+			`a job's limit is a hang detector of at least ${MIN_JOB_TIMEOUT_MINUTES} minutes (ci-cd.mdx)`,
 		);
 	});
 });

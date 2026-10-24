@@ -1001,16 +1001,20 @@ If no such default-branch commit exists, the run builds every image itself. `det
   decides both once, as `platforms` and `all-images`, and hands them to every image build in the run.
 - A job's `timeout-minutes` is a hang detector of at least 15 minutes.
   This holds whatever the job's usual duration is.
-  GitHub cancels a job that runs longer than its limit
+  GitHub documents only that it cancels a job that runs longer than its limit
   ([`jobs.<job_id>.timeout-minutes`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes)).
-  GitHub has cancelled a job whose steps had all succeeded within seconds.
-  It had recorded the job's completion minutes late.
+  On 2026-10-24, the steps of one job finished in seconds.
+  About 6 minutes later, the job was marked cancelled for exceeding its 5-minute limit.
+  The cause is unknown.
   A cancelled prerequisite fails `CI Status Gate` and removes a pull request from the merge queue.
   The gate cannot tell that cancellation from a real hang.
-  `ubuntu-slim` jobs cannot exceed 15 minutes
-  ([GitHub-hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)).
+  The floor of 15 minutes is a chosen margin over that one delay, not a value that GitHub documents.
+  Revisit it when more delays are measured.
+  The 15-minute limit of `ubuntu-slim` jobs
+  ([GitHub-hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners))
+  is a ceiling for those jobs, not the basis of the floor.
   This rule covers job limits only. A step limit stops the step's process on the runner.
-  `ci-contract.test.ts` holds every job to the floor.
+  `ci-contract.test.ts` holds every job to the floor, and every number in an expression limit too.
 - Action and composite setup steps run sequentially within each job. The runner writes the shared
   event file before each action. The action SDK reads that file. Concurrent action starts can expose
   incomplete event data. Jobs and matrix entries still run independently. Standalone shell work
