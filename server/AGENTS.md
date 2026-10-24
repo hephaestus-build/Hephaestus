@@ -46,7 +46,7 @@ are not here: write code that reads like the file you are editing.
   incremental and cacheable. Test JVMs set `MANAGEMENT_PORT=0 SERVER_PORT=0`. Local OAuth settings
   in `server/.env` can still affect environment-sensitive tests.
 - **Packaged-artifact consumption is CI-only.** `-PpackagedServer=true` uses restored compiled
-  classes for database tooling and database tests. Never use it after editing source locally.
+  classes for database tooling and every CI server test tier. Never use it after editing source locally.
 
 ## Boundaries
 

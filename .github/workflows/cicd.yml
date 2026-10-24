@@ -889,8 +889,7 @@ jobs:
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
 
-  # The suites run the packaged classes. A failed package already fails the gate; a package that
-  # was skipped while the suites were selected must fail them rather than skip them.
+  # The suites run the packaged classes, so a package skipped while they are selected fails them.
   Test:
     uses: ./.github/workflows/ci-tests.yml
     needs: [detect-changes, server-package]

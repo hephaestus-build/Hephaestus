@@ -893,11 +893,11 @@ database contract tests and the `Test` suites use the restored classes with `-Pp
 which bypasses compilation. `ci-tests.yml` sets it as `ORG_GRADLE_PROJECT_packagedServer`, because
 its commands are `vp run` tasks. Thus, every server suite tests the classes that the JAR ships.
 
-Test compilation is the slowest server build step. It is rarely a cache hit, because a change
-alters the test sources or the main classes they compile against. A suite that compiled for itself
-repeated that step in each of its five jobs. The suites therefore wait for packaging. Their chain
-becomes slightly longer, and each run saves five test compilations of runner time. When runners are
-contended, queue time is most of a pull request's CI time, so the saved runner time shortens it.
+The suites never compile. Test compilation is the slowest server build step, and it is rarely a
+cache hit, because a change alters the test sources or the main classes they compile against.
+So the suites wait for packaging rather than compile the same sources in each of their jobs.
+The package artifact is kept for one day, so a failed job re-run after that day fails on its download.
+Re-run all jobs instead.
 
 The PostgreSQL backup-restore and PITR drills apply the migrations from that same executable JAR.
 Spring Boot's launcher runs the Liquibase bundled in the JAR against the changelog in the JAR, from an empty directory and with a minimal environment.
@@ -961,7 +961,7 @@ If no such default-branch commit exists, the run builds every image itself. `det
 
 ## Parallelism and concurrency
 
-- `Quality` legs and `Test` suites start from source. `Build` gates start when `App Server: Package`
+- `Quality` legs start from source. `Test` suites and `Build` gates start when `App Server: Package`
   uploads its artifact.
 - `App Server: Integration` has four shards.
   `providers` selects the `integration` package.

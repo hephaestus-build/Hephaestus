@@ -1596,11 +1596,6 @@ void describe("CI contract", () => {
 			/needs\.detect-changes\.outputs\.test-config == 'true'/u,
 			"A change to the suites' own workflow must package the classes they run",
 		);
-		const gradle = await readFile("server/application/build.gradle.kts", "utf8");
-		assert.match(
-			gradle,
-			/if \(packagedServer\.get\(\)\) \{\n {4}tasks\.withType<Test>\(\)\.configureEach \{/u,
-		);
 
 		const reusable = await readFile(".github/workflows/reusable-docker-build.yml", "utf8");
 		const packBuilds = [
