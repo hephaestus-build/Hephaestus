@@ -353,23 +353,6 @@ The journal names each worktree the reconciler removes, and says why it keeps a 
 one that holds files. Pruning deletes worktrees and lock files only. It never touches a Docker
 volume, so the certificates in `proxy_letsencrypt` and the database stay as they are.
 
-After it prunes the worktrees, the reconciler removes the images that neither the release just applied nor the previous release names.
-It considers only the repositories that these two releases name.
-In such a repository, it also removes an unused image that another workload pulled.
-Docker refuses to remove an image that a container uses, running or stopped.
-The journal names each image that is removed or kept.
-
-A rollback to the previous release therefore needs no download.
-A rollback to an older release downloads its images again.
-If a step after the apply fails, the next apply removes the images.
-
-Before it pulls, the reconciler checks the free space on the filesystems that hold Docker's data and the containerd image store.
-It checks only when the release needs a pull, so a rollback whose images are on the host is never refused.
-Below `HEPHAESTUS_MIN_FREE_GIB` (default 10), it first removes the images that neither the running, the previous nor the new release names.
-If the space is still too small, it refuses the apply, stops nothing and records nothing.
-The journal states the free space and the threshold, and the next tick tries again.
-[Sizing § Disk](./sizing.mdx#disk) gives the disk budget.
-
 1. To keep a worktree during use, lock it.
 2. When you finish, unlock it:
 
@@ -406,6 +389,25 @@ This prevents another pass from using a worktree that pruning removes.
    ```
 
 2. Do not start the reconciler directly.
+
+### Images and free space
+
+After it prunes the worktrees, the reconciler removes the images that neither the release just applied nor the previous release names.
+It considers only the repositories that these two releases name.
+In such a repository, it also removes an unused image that another workload pulled.
+Docker refuses to remove an image that a container uses, running or stopped.
+The journal names each image that is removed or kept.
+
+A rollback to the previous release therefore needs no download.
+A rollback to an older release downloads its images again.
+If a step after the apply fails, the next apply removes the images.
+
+Before it pulls, the reconciler checks the free space on the filesystems that hold Docker's data and the containerd image store.
+It checks only when the release needs a pull, so a rollback whose images are on the host is never refused.
+Below `HEPHAESTUS_MIN_FREE_GIB`, it first removes the images that neither the running, the previous nor the new release names.
+If the space is still too small, it refuses the apply, stops nothing and records nothing.
+The journal states the free space and the threshold, and the next tick tries again.
+[Sizing § Disk](./sizing.mdx#disk) gives the default threshold and the disk budget.
 
 ## Watching it
 

@@ -917,6 +917,8 @@ await main(${JSON.stringify(units)});\n`,
 						HEPHAESTUS_STACKS: "proxy core app",
 						HEPHAESTUS_PROMOTE_IDENTITY: "https://example.invalid/promote",
 						HEPHAESTUS_METRICS_FILE: metricsFile,
+						// The free-space guard reads the real disk; only the guard's own tests ask for a floor.
+						HEPHAESTUS_MIN_FREE_GIB: "0.001",
 						FAIL_VERIFICATION: failVerification ? "1" : "0",
 						FAIL_WORKTREE_REMOVE: failWorktreeRemove ? "1" : "0",
 						FAIL_WORKER_STOP: failWorkerStop ? "1" : "0",
@@ -1811,6 +1813,81 @@ await test(
 				await readFile(fixture.metricsFile, "utf8"),
 				/^hephaestus_deploy_reconcile_success 0$/mu,
 			);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"a release whose images are all on the host is applied below the threshold, as a rollback must be",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-present-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const [repository = "", present = ""] = fixture.image.split("@");
+			const result = fixture.run({
+				environment: {
+					HEPHAESTUS_MIN_FREE_GIB: String(1024 ** 3),
+					DOCKER_IMAGES: JSON.stringify({ Repository: repository, Digest: present, ID: "present" }),
+				},
+			});
+			assert.equal(result.status, 0, result.stderr);
+			const record = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(record?.release, "v1.0.0");
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"the guard's cleanup keeps the running and previous releases' images before it refuses",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-full-running-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const [repository = ""] = fixture.image.split("@");
+			const runningRecord = {
+				...fixture.record,
+				release: "v0.9.0",
+				commit: fixture.commitOf("v0.9.0"),
+				previous: "v0.8.0",
+			};
+			await writeFile(path.join(directory, "applied.json"), JSON.stringify(runningRecord));
+			await fixture.retainLock("v0.9.0", runningRecord.commit);
+			await appendFile(
+				path.join(directory, "release-locks", "v0.9.0.env"),
+				`HEPHAESTUS_IMAGE_AGENT_PI=${repository}@${sha("d")}\n`,
+			);
+			await writeFile(
+				path.join(directory, "release-locks", "v0.8.0.env"),
+				`HEPHAESTUS_IMAGE_AGENT_PI=${repository}@${sha("e")}\n`,
+			);
+			// The first tick adopts the recorded release's tooling, as every startup does.
+			const adopted = fixture.run();
+			assert.equal(adopted.status, 0, adopted.stderr);
+			const before = await fixture.calls();
+			// The new release's image is not on the host, so it needs a pull, and the floor is impossible.
+			const result = fixture.run({
+				environment: {
+					HEPHAESTUS_MIN_FREE_GIB: String(1024 ** 3),
+					DOCKER_IMAGES: [sha("d"), sha("e"), sha("b")]
+						.map((listed) => JSON.stringify({ Repository: repository, Digest: listed, ID: listed }))
+						.join("\n"),
+				},
+			});
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /after removing 1 unused release images/u);
+			const after = await fixture.calls();
+			const removals = after
+				.slice(before.length)
+				.split("\n")
+				.filter((line) => line.startsWith("docker image rm"));
+			assert.deepEqual(removals, [`docker image rm ${repository}@${sha("b")}`]);
+			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), runningRecord);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}

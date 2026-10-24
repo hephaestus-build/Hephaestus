@@ -101,7 +101,7 @@ For the calculation, see the [Paketo memory calculator](https://paketo.io/docs/r
 ## Disk
 
 Docker's data directory holds the images, the containers and the volumes.
-On a host with [pull-based deployment](./pull-based-deployment.mdx#what-it-keeps-on-disk), plan for these parts:
+On a host with [pull-based deployment](./pull-based-deployment.mdx#images-and-free-space), plan for these parts:
 
 | Part | Size | What bounds it |
 | --- | --- | --- |
@@ -112,6 +112,5 @@ On a host with [pull-based deployment](./pull-based-deployment.mdx#what-it-keeps
 | A restore rehearsal | A full copy of the database volume | Remove the clone's containers and volumes when the rehearsal ends |
 | Free space before a pull | 10 GiB, set by `HEPHAESTUS_MIN_FREE_GIB` | The reconciler refuses an apply below it |
 
-The 40 GB initial budget leaves room for the 10 GiB floor, three release image sets and a small database.
-On a smaller disk, lower `HEPHAESTUS_MIN_FREE_GIB`.
+On a small disk, lower `HEPHAESTUS_MIN_FREE_GIB`.
 `docker system df -v` shows what each image, container and volume uses on disk.
