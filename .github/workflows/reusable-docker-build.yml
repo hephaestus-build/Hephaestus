@@ -161,7 +161,8 @@ jobs:
     if: ${{ !cancelled() && needs.reuse.outputs.digest == '' }}
     strategy:
       # Each platform scans in its own build, so one platform's refusal must not cancel the other's
-      # scan and evidence. The merge still waits for every build to succeed.
+      # scan and evidence. A broken build therefore lets its sibling finish; the merge still waits
+      # for every build to succeed.
       fail-fast: false
       matrix:
         platform: ${{ fromJSON(inputs.platforms) }}
@@ -346,6 +347,8 @@ jobs:
         with:
           database-artifact: ${{ inputs.database-artifact }}
 
+      # Trivy and Syft pull through the job's registry login, so the package-writing token is not
+      # also handed to them as environment variables.
       - name: Enforce the release vulnerability policy
         if: inputs.publish && inputs.scan-images
         env:
@@ -354,8 +357,6 @@ jobs:
           SCAN_PLATFORM: ${{ matrix.platform }}
           SUBJECT_DIGEST: ${{ steps.subject.outputs.digest }}
           REPORT_STEM: ${{ steps.subject.outputs.report-stem }}
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p reports

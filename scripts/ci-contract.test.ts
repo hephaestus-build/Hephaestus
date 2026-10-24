@@ -2125,7 +2125,16 @@ void describe("CI contract", () => {
 			`vulnerability-policy-\${{ steps.subject.outputs.report-stem }}-\${{ github.run_attempt }}`,
 		);
 		assert.equal(report.get("if"), `\${{ !cancelled() && steps.subject.outcome == 'success' }}`);
-		assert.match(reusable, /uses: \.\/\.github\/actions\/download-trivy-db/u);
+		assert.match(job(reusable, "build"), /uses: \.\/\.github\/actions\/download-trivy-db/u);
+		// The scanners pull through the registry login, not with the token in their environment.
+		assert.equal(enforce.hasIn(["env", "TRIVY_PASSWORD"]), false);
+		assert.equal(enforce.hasIn(["env", "TRIVY_USERNAME"]), false);
+		// The scan sits in the build because the manifest job holds the signing token and runs no
+		// repository code: no checkout, no local action, no repository script.
+		const merge = job(reusable, "merge");
+		assert.doesNotMatch(merge, /uses: actions\/checkout@/u);
+		assert.doesNotMatch(merge, /uses: \.\//u);
+		assert.doesNotMatch(merge, /node (?:\.\/)?scripts\//u);
 		// The tools are installed for the runner's own CPU, since arm64 scans on an arm64 runner.
 		const tools = await readFile(".github/actions/setup-release-security-tools/action.yml", "utf8");
 		assert.match(tools, /ARM64\) syft_arch=arm64 trivy_arch=ARM64/u);

@@ -798,6 +798,9 @@ Before publishing verified tags, it checks that the final index leaves equal tho
 A scan therefore costs no job and no runner queue wait of its own.
 It does not run in the manifest job, because that job holds the signing token and runs no repository code.
 
+The build matrix does not fail fast, so one platform's refusal keeps the other platform's scan and evidence.
+A broken build thus lets its sibling finish, which costs a runner for that time.
+
 The scan resolves the immutable image reference through
 `scripts/resolve-image-scan-subject.ts`, using the same platform resolver in `scripts/lib/image-scan.ts` as scheduled rescans. An index must
 contain the requested platform. A missing platform or malformed index fails instead of falling back
