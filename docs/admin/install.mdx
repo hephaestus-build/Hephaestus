@@ -41,11 +41,31 @@ Hephaestus supports the specified single-host stack on the following native (not
 | Ubuntu 24.04 LTS | x86-64 (`amd64`)       |
 | Ubuntu 24.04 LTS | ARMv8 64-bit (`arm64`) |
 
-Both require Docker Engine 28 or newer and Docker Compose 2.24.4 or newer.
+Both require the Docker Engine and Docker Compose versions in [Tested versions](#tested-versions).
 Docker supports these hosts according to its [Ubuntu installation requirements](https://docs.docker.com/engine/install/ubuntu/#os-requirements).
 Before publication, each release passes qualification on both matrix cells.
 
 Only the listed native hosts and the unmodified self-hosted Compose topology are supported. Other hosts, runtimes, and topologies are outside release qualification.
+
+### Tested versions
+
+This table lists the versions that CI and release qualification actually run.
+A version that no job runs is not in the table.
+
+| Component | Version | What tests it |
+| --- | --- | --- |
+| Docker Engine | 28 or newer | Release qualification refuses an older engine on both matrix cells. It records the engine that it ran in the release assets `host-smoke-amd64.json` and `host-smoke-arm64.json`. No job runs version 28.0.0 itself. |
+| Docker Compose | 2.24.4 or newer | Release qualification refuses an older Compose and records the version that it ran in the same assets. Every pull request checks that the Compose files render. No job runs version 2.24.4 itself. |
+| PostgreSQL | 18, the release image with `pg_partman` | Every pull request runs the integration tests against an image built from the same Dockerfile. |
+| NATS server | The version that `security/release-images.json` pins | Release qualification boots it. The integration tests use NATS 2.10. |
+| Traefik | The version that `security/release-images.json` pins | Release qualification sends a request through it. |
+| Java | 21 | CI builds and tests with Java 21. The server image runs the Java 21 runtime of its buildpack. |
+| Browsers | Chromium, the build that Playwright 1.63 bundles | The end-to-end, component, and Chrome extension suites run Chromium only. No job runs Firefox or Safari. |
+| Chrome extension | Chrome 130 or newer | The extension manifest requires it. No job runs Chrome 130 itself. |
+| Node.js, for release-lock verification | The version pinned in `package.json#devEngines.runtime` | CI installs this version through the setup-toolchain action. |
+| Cosign, for release-lock verification | 3.1.4 | Release, promotion, and image signing jobs verify with this version. |
+
+To see which Docker Engine and Docker Compose a release ran, download the `host-smoke-*.json` assets of that release from the [releases page](https://github.com/hephaestus-build/Hephaestus/releases).
 
 - The CPU, memory, and disk that [Sizing](./sizing) gives.
 - A host in the supported matrix, plus `git` and `openssl`.
@@ -322,12 +342,10 @@ The job queue runs on PostgreSQL, so this bundle needs no NATS setup.
 It covers provider connection registration, tests, model prices, model shares, and an assignment to the **practice reviews** purpose.
 No reviews run until setup is complete.
 
-If the flags are on but no model is assigned, webhook-driven reviews skip with only a DEBUG log line.
+If the flags are on but no model is assigned, reviews do not run.
+Hephaestus records each review opportunity with the reason **No AI model is assigned to practice review.**
+The reason is visible under **Practices → Practice reviews → Work**.
 A workspace without an assigned model is a normal state.
-A higher-level log line for each event would create noise.
-The manual dev trigger answers with the reason.
-
-1. Use it to tell "no model assigned" apart from "broken".
 
 ### Chrome extension
 

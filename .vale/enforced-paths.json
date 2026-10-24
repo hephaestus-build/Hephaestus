@@ -131,6 +131,7 @@
 	"docs/admin/threat-model.mdx",
 	"docs/admin/troubleshooting.mdx",
 	"docs/admin/upgrade.mdx",
+	"docs/admin/upgrade-to-1-0.mdx",
 	"docs/admin/webhook-ingestion-operations.mdx",
 	"docs/admin/workspace-subdomains.mdx",
 	"docs/admin/writing-practices.mdx",
