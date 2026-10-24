@@ -5,12 +5,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
+import java.sql.Connection;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.liquibase.autoconfigure.LiquibaseProperties;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -71,6 +76,37 @@ class DatabaseMigrationTest {
     }
 
     @Test
+    void shouldApplyEachChangeSetOnceWhenAProcessMigratesAtStartBesideTheRunMode() throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_beside_start");
+
+        var atStart = CompletableFuture.runAsync(() -> migrateAtStart(database));
+        var runMode = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(arguments(database)));
+
+        atStart.get(5, TimeUnit.MINUTES);
+        assertThat(runMode.get(5, TimeUnit.MINUTES)).isZero();
+        assertThat(jdbc(database)
+                        .queryForObject(
+                                "SELECT count(*) - count(DISTINCT (id, author, filename)) FROM databasechangelog",
+                                Long.class))
+                .isZero();
+    }
+
+    @Test
+    void shouldStopAProcessThatMigratesAtStartWhenAnotherMigrationHoldsTheLock() throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_lock_held");
+        try (Connection holder = dataSource(database).getConnection();
+                var statement = holder.createStatement()) {
+            statement.execute("SELECT pg_advisory_lock(hashtext('hephaestus'), hashtext('database-migration'))");
+
+            assertThatThrownBy(() -> migrateAtStart(database, "--hephaestus.database.migration-wait=1s"))
+                    .rootCause()
+                    .hasMessageContaining("Another database migration still ran after PT1S");
+        }
+        assertThat(jdbc(database).queryForObject("SELECT to_regclass('databasechangelog') IS NULL", Boolean.class))
+                .isTrue();
+    }
+
+    @Test
     void shouldNameThePendingChangeSetWhenTheMigrationNeverRuns() {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_missing");
 
@@ -112,6 +148,24 @@ class DatabaseMigrationTest {
             "--DATABASE_PASSWORD=" + database.password(),
             "--spring.main.banner-mode=off"
         };
+    }
+
+    /** A process that migrates at start, as the development server does, with Liquibase outside the run mode. */
+    private static void migrateAtStart(TestDatabase database, String... settings) {
+        var application = new SpringApplication(DatabaseMigration.class);
+        application.setWebApplicationType(WebApplicationType.NONE);
+        String[] arguments = Stream.concat(
+                        Stream.of(
+                                "--spring.datasource.url=" + database.jdbcUrl(),
+                                "--spring.datasource.username=" + database.username(),
+                                "--spring.datasource.password=" + database.password(),
+                                "--spring.liquibase.enabled=true",
+                                // The run mode's contexts: a database migrated under another holds other change sets.
+                                "--spring.liquibase.contexts=prod",
+                                "--spring.main.banner-mode=off"),
+                        Arrays.stream(settings))
+                .toArray(String[]::new);
+        application.run(arguments).close();
     }
 
     private static void awaitSchema(TestDatabase database, Duration timeout) {

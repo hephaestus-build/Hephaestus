@@ -37,6 +37,14 @@ const FOUNDATION: Partial<Record<Stack, readonly string[]>> = {
 };
 
 /**
+ * The `app` stack's one-shot migration, run before the worker stops and any stack replaces its
+ * services (docs/admin/runtime-roles.mdx#database-migrations). `run` returns its exit status;
+ * `up --wait` returns once it starts, and `wait` fails once it has exited. A release from before the
+ * migrate run mode declares no such service.
+ */
+const MIGRATION_SERVICE = "database-migration";
+
+/**
  * A black-holed connection must not hold a tick until the unit's start timeout; the next tick
  * retries, and the failure metric says why this one did not.
  */
@@ -1066,6 +1074,18 @@ async function appliedWorker(
 		: undefined;
 }
 
+async function migrate(
+	releaseTree: string,
+	composeArgsByStack: ReadonlyMap<Stack, RenderedStack>,
+): Promise<void> {
+	const app = composeArgsByStack.get("app");
+	if (app?.services.includes(MIGRATION_SERVICE) === true) {
+		await run("docker", [...app.composeArgs, "run", "--rm", "-T", MIGRATION_SERVICE], {
+			cwd: releaseTree,
+		});
+	}
+}
+
 async function startStacks(
 	config: HostConfig,
 	releaseTree: string,
@@ -1193,6 +1213,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		);
 	}
 	await pullStacks(releaseTree, composeArgsByStack);
+	await migrate(releaseTree, composeArgsByStack);
 	if (worker !== undefined) {
 		await run("docker", [...worker.composeArgs, "stop", WORKER_SERVICE], { cwd: worker.tree });
 	}

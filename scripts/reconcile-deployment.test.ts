@@ -800,7 +800,7 @@ async function reconcilerFixture(directory: string) {
 	for (const [release, services] of [
 		["v0.8.0", { app: {} }],
 		["v0.9.0", { app: {}, "application-worker": { stop_grace_period: "6m" } }],
-		["v1.0.0", { app: {} }],
+		["v1.0.0", { app: {}, "database-migration": {} }],
 	] as const) {
 		await writeFile(appCompose, JSON.stringify({ services }));
 		if (release === "v1.0.0") {
@@ -870,6 +870,7 @@ console.log(found.ID);
 }
 if (args[0] === "image" && args[1] === "rm" && process.env.IMAGE_IN_USE === args[2]) process.exit(1);
 if (args.includes("pull") && process.env.FAIL_PULL === args[args.indexOf("--project-name") + 1]) process.exit(1);
+if (args.includes("run") && process.env.FAIL_RUN === args.at(-1)) process.exit(1);
 if (args.includes("stop")) {
 const service = declared[args.at(-1)];
 if (service === undefined || process.env.FAIL_WORKER_STOP === "1") process.exit(1);
@@ -926,6 +927,7 @@ await main(${JSON.stringify(units)});\n`,
 			failWorktreeRemove = false,
 			failWorkerStop = false,
 			failPull,
+			failRun,
 			unlockedStack,
 			channel = "test",
 			environment = {},
@@ -936,6 +938,8 @@ await main(${JSON.stringify(units)});\n`,
 			failWorkerStop?: boolean;
 			/** The stack whose image pull fails. */
 			failPull?: string;
+			/** The service whose `docker compose run` fails. */
+			failRun?: string;
 			channel?: string;
 			unlockedStack?: string;
 			/** More of the host's environment, such as what the fake Docker lists. */
@@ -960,6 +964,7 @@ await main(${JSON.stringify(units)});\n`,
 						FAIL_WORKTREE_REMOVE: failWorktreeRemove ? "1" : "0",
 						FAIL_WORKER_STOP: failWorkerStop ? "1" : "0",
 						FAIL_PULL: failPull,
+						FAIL_RUN: failRun,
 						UNLOCKED_STACK: unlockedStack,
 						...environment,
 					}),
@@ -1095,7 +1100,7 @@ await test(
 			assert.equal(calls[1], "trusted verifier");
 			const docker = calls.filter((line) => line.startsWith("docker compose"));
 			// A first install runs no worker yet, so nothing is stopped.
-			assert.equal(docker.length, 10);
+			assert.equal(docker.length, 11);
 			for (const [index, stack] of ["app", "core", "proxy"].entries()) {
 				assert.match(
 					docker[index] ?? "",
@@ -1107,10 +1112,12 @@ await test(
 					new RegExp(`--project-name ${stack} .* pull --policy missing$`, "u"),
 				);
 			}
-			assert.match(docker[6] ?? "", /--project-name core .* up .* nats-server$/u);
+			// The migration ends before any stack replaces its roles.
+			assert.match(docker[6] ?? "", /--project-name app .* run --rm -T database-migration$/u);
+			assert.match(docker[7] ?? "", /--project-name core .* up .* nats-server$/u);
 			for (const [index, stack] of ["app", "core", "proxy"].entries()) {
 				assert.match(
-					docker[index + 7] ?? "",
+					docker[index + 8] ?? "",
 					new RegExp(`--project-name ${stack} .* up .* --remove-orphans$`, "u"),
 				);
 			}
@@ -1211,6 +1218,40 @@ await test(
 );
 
 await test(
+	"a failed migration leaves the previous roles, the applied release and the tooling untouched",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-migration-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const previous = { ...fixture.record, release: "v0.9.0", commit: fixture.commitOf("v0.9.0") };
+			await writeFile(path.join(directory, "applied.json"), JSON.stringify(previous));
+			await fixture.retainLock("v0.9.0", previous.commit);
+			const adopted = fixture.run();
+			assert.equal(adopted.status, 0, adopted.stderr);
+			const beforeCalls = await fixture.calls();
+
+			const result = fixture.run({ failRun: "database-migration" });
+
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /docker exited with code 1/u);
+			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), previous);
+			assert.equal(
+				await readlink(path.join(directory, "tooling")),
+				path.join(directory, "releases/v0.9.0"),
+			);
+			const afterCalls = await fixture.calls();
+			const calls = afterCalls.slice(beforeCalls.length);
+			assert.match(calls, /--project-name app .* run --rm -T database-migration$/mu);
+			// v0.9.0 runs the worker; it keeps running.
+			assert.doesNotMatch(calls, / stop | up /u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
 	"a worker that cannot be stopped leaves every stack, the applied release and the tooling untouched",
 	reconcilerSubprocess,
 	async () => {
@@ -1291,6 +1332,9 @@ await test(
 			// The running worker keeps working while every target image downloads.
 			assert.equal(pulls.length, 3, lines.join("\n"));
 			assert.ok(lastRender < Math.min(...pulls) && Math.max(...pulls) < stop, lines.join("\n"));
+			const migration = lines.findIndex((line) => line.endsWith(" run --rm -T database-migration"));
+			// The previous worker keeps working until the migration ends.
+			assert.ok(Math.max(...pulls) < migration && migration < stop, lines.join("\n"));
 			assert.ok(stop < firstUp, lines.join("\n"));
 			assert.match(lines[firstUp] ?? "", /--project-name core .* up .* nats-server$/u);
 		} finally {

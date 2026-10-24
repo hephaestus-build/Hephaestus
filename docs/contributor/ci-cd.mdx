@@ -465,7 +465,7 @@ Close it after triage.
    A custom rule needs the record that this setting stops, so the job would fail.
 
 A deploy starts `app`, then `core`, then `proxy`.
-The application server runs the Liquibase migration that the webhook runtime in `core` reads.
+The [database migration](/admin/runtime-roles#database-migrations) in `app` applies the schema that the webhook runtime in `core` waits for.
 The edge starts last, against complete routers. The pull reconciler applies this order.
 
 The `proxy` stack publishes :80 and :443. If the host already has an edge, set `DEPLOY_EDGE_PROXY=false`.

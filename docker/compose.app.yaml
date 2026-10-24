@@ -188,9 +188,7 @@ services:
         max-file: "5"
 
   # Applies this release's database migration, then exits. Every role waits for it and none
-  # migrates at start (docs/admin/runtime-roles.mdx#database-migrations). `up` re-runs it whenever
-  # the image changes, before it recreates the roles; until then the previous release keeps running
-  # against the migrated schema, which the expand/contract rule keeps compatible.
+  # migrates at start. Upgrade order: docs/admin/runtime-roles.mdx#database-migrations.
   database-migration:
     image: "${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
     mem_limit: ${DATABASE_MIGRATION_MEM_LIMIT:-1g}

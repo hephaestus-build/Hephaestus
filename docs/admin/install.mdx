@@ -271,7 +271,7 @@ docker compose --env-file .env --env-file release-lock.env logs -f database-migr
 ```
 
 First startup pulls about 2 GB of images, and the one-shot `database-migration` service runs all database migrations.
-The application server starts after it completes; a failed migration shows in its log.
+The application server starts after it completes. A failed migration shows in its log.
 It can take a few minutes.
 
 1. Open `https://<APP_HOSTNAME>`.
