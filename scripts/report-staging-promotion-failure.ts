@@ -4,12 +4,13 @@ import { requiredEnv } from "./lib/env.ts";
  * promotion with `GITHUB_TOKEN`, so GitHub notifies nobody when the run fails; an issue notifies the
  * repository's watchers. A maintainer closes it after triage, and the next failure opens a new one.
  */
-import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, parseJson } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
 
-const KEY = "hephaestus:staging-promotion-failure";
-export const MARKER = `<!-- ${KEY} -->`;
+export const MARKER = "<!-- hephaestus:staging-promotion-failure -->";
 export const TITLE = "Staging did not follow main";
+/** The account the workflow token creates the issue as. */
+const CREATOR = "github-actions[bot]";
 
 export type FailureReport =
 	| { kind: "create"; title: string; body: string }
@@ -40,27 +41,22 @@ export function planFailureReport(
 
 if (import.meta.main) {
 	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
+	// The issues listing, not search: search is eventually consistent, so a failure right after
+	// another could miss the open issue and open a second one.
 	const listed = asArray(
 		parseJson(
 			await output("gh", [
-				"issue",
-				"list",
-				"--repo",
-				repository,
-				"--state",
-				"open",
-				"--search",
-				`"${KEY}" in:body`,
-				"--json",
-				"body,number",
-				"--limit",
-				"100",
+				"api",
+				`repos/${repository}/issues?state=open&creator=${encodeURIComponent(CREATOR)}&per_page=100`,
 			]),
 		),
-		"gh issue list",
+		"open issues",
 	).map((value, index) => {
-		const issue = asRecord(value, `gh issue list[${index}]`);
-		return { number: Number(issue.number), body: asString(issue.body, "issue body") };
+		const issue = asRecord(value, `open issues[${index}]`);
+		return {
+			number: Number(issue.number),
+			body: typeof issue.body === "string" ? issue.body : "",
+		};
 	});
 	const report = planFailureReport(
 		listed,

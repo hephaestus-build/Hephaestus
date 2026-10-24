@@ -276,7 +276,8 @@ function runsWhen(condition: string, apply: string, automatic: boolean): boolean
 	const context: unknown = JSON.parse(
 		JSON.stringify({
 			inputs: { automatic, commit: "c".repeat(40), freeze: false },
-			steps: apply === "" ? {} : { policy: { outputs: { apply } } },
+			// A skipped step with an id still has its outputs, each an empty string.
+			steps: { policy: { outputs: { apply } } },
 		}),
 		data.reviver,
 	);
