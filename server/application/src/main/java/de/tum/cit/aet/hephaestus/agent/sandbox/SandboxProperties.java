@@ -29,6 +29,25 @@ public record SandboxProperties(
         @DefaultValue("60") @Min(10) int reconciliationIntervalSeconds,
         @DefaultValue @Valid DefaultResourceLimits defaultResourceLimits) {
 
+    /** The memory a review sandbox keeps for its processes when every in-memory file system it has is full. */
+    public static final long MIN_PROCESS_BYTES = 512L * 1024 * 1024;
+
+    /**
+     * Refuses a review memory limit that full in-memory file systems could exhaust: the kernel would then kill the
+     * review for files the agent wrote, not for what its processes use.
+     *
+     * @param inMemoryBytes the most that the backend's in-memory file systems of a review sandbox hold
+     */
+    public static void requireRoomBeside(long memoryBytes, long inMemoryBytes) {
+        long floor = inMemoryBytes + MIN_PROCESS_BYTES;
+        if (memoryBytes < floor) {
+            throw new IllegalStateException(
+                    "SANDBOX_MEMORY_BYTES is " + memoryBytes + "; a review sandbox needs at least "
+                            + floor + ": " + inMemoryBytes + " for its in-memory file systems and " + MIN_PROCESS_BYTES
+                            + " for its processes");
+        }
+    }
+
     /**
      * The resource limits of a review sandbox: its initializer and then its runtime. The defaults and the review usage
      * they rest on are in docs/admin/sizing.mdx § Review sandbox limits.

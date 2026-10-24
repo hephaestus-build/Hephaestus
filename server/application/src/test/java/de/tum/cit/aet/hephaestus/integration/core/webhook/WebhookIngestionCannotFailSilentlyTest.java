@@ -63,7 +63,9 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
             "practiceReviewHealthIndicator",
             "practiceReview",
             "catalogProvenanceBackfillStartup",
-            "catalogProvenanceBackfillStartup");
+            "catalogProvenanceBackfillStartup",
+            "kubernetesSandboxHealthIndicator",
+            "kubernetesSandbox");
 
     /** What a webhook-only container has: the server role is off, so most of the group is absent. */
     private static final Set<String> WEBHOOK_ROLE_ONLY =

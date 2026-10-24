@@ -38,7 +38,9 @@ public interface SandboxBackend {
 
     /**
      * Waits until the sandbox reached the stage, or until the deadline. The runtime starts only after the initializer
-     * succeeded, and never after {@link #kill}; a backend may start it when it is first observed.
+     * succeeded, and never after a {@link #kill} by the launching process; a backend may start it when it is first
+     * observed. A kill by another process ends what runs: a backend whose runtime is a part of one workload, as a
+     * Kubernetes Pod is, starts nothing after it either.
      *
      * <ul>
      *   <li>{@link Stage#INITIALIZED}: the initializer ended, with its exit code.
@@ -104,8 +106,10 @@ public interface SandboxBackend {
      * @param id the review job, or the Heph host, the sandbox serves
      * @param attempt the claimed job's attempt; null for a host, or a caller that holds no claim
      * @param command the runtime's command; the initializer's is {@code SandboxLayout.INITIALIZER_COMMAND}
-     * @param deadline when a review attempt's upload window closes: the runtime ends the sandbox then, also when its
-     *     worker is gone. Null for a Heph host, which runs until it is removed
+     * @param deadline when a review attempt's upload window closes. A backend whose runtime enforces a deadline itself
+     *     ends the sandbox then, also when its worker is gone: a Kubernetes Job does. Docker has no such deadline; there
+     *     the runner's observation ends the sandbox, and the reconciler removes one whose worker is gone. Null for a
+     *     Heph host, which runs until it is removed
      * @param environment the environment of both processes, built for the gateway address the backend gives the sandbox
      */
     record Launch(

@@ -1,0 +1,183 @@
+name: Kubernetes
+
+# The chart on real clusters, with this run's images: an install, an upgrade that rolls every role,
+# and each worker's isolation probe. docs/admin/kubernetes.mdx § Supported clusters states what these
+# jobs show. They share scripts/kubernetes-cluster.ts with `vp run dev:kubernetes`.
+
+on:
+  workflow_call:
+    inputs:
+      commit:
+        description: The commit whose images the Docker jobs published under its tag
+        type: string
+        required: true
+      arm64:
+        description: Whether to run the arm64 clusters too; the caller sets it on main, whose images include arm64
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  # The schema sources of kubeconform, at pinned commits.
+  KUBERNETES_SCHEMAS: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/f7d855e49c34b039c9ef2196444910275e31e09e/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json
+  CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/501527ab9c40c827144c8f45945b25a023e344ce/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
+
+jobs:
+  schema:
+    name: "Chart schemas"
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - uses: ./.github/actions/setup-helm
+      - uses: ./.github/actions/setup-kubernetes-tools
+      - name: Validate every rendered resource on the lowest and the latest Kubernetes
+        run: |
+          set -euo pipefail
+          node scripts/kubernetes-cluster.ts render > manifests.yaml
+          for version in 1.34.0 1.37.0; do
+            kubeconform -strict -summary -kubernetes-version "$version" \
+              -schema-location "$KUBERNETES_SCHEMAS" -schema-location "$CRD_SCHEMAS" manifests.yaml
+          done
+
+  k3d:
+    name: "k3d ${{ matrix.cluster.kubernetes }} ${{ matrix.arch }}"
+    needs: [schema]
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # The lowest minor that the chart takes and the latest one. Each node image is pinned by digest.
+        # The latest one also runs the backup drill, on amd64.
+        cluster:
+          - kubernetes: v1.34.12-k3s1@sha256:4ea0adb6b0ffedab0c58ffe5c99a49f2f7be871f38636c8baa2692899648d8c5
+            backupDrill: false
+          - kubernetes: v1.37.1-k3s1@sha256:ca7f37d993d82ef0dcdcfecb2e0e2618ea541dbaffc620c8cedebe01a82acd0d
+            backupDrill: true
+        arch: [amd64, arm64]
+        exclude:
+          - arch: ${{ !inputs.arm64 && 'arm64' || 'none' }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - uses: ./.github/actions/setup-helm
+      - uses: ./.github/actions/setup-kubernetes-tools
+      - name: Resolve this run's images
+        env:
+          COMMIT: ${{ inputs.commit }}
+        run: node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+      # k3s enforces NetworkPolicy with its embedded controller, so the isolation probe judges it.
+      - name: Create the cluster
+        env:
+          NODE_IMAGE: docker.io/rancher/k3s:${{ matrix.cluster.kubernetes }}
+        run: |
+          set -euo pipefail
+          k3d cluster create hephaestus --agents 1 --image "$NODE_IMAGE" --wait \
+            --k3s-arg "--kubelet-arg=pod-max-pids=4096@all" --k3s-arg "--disable=traefik@server:*"
+      - name: Install, upgrade and verify
+        env:
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/kubernetes-cluster"
+          node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT"
+          node scripts/kubernetes-cluster.ts install --work "$work"
+          node scripts/kubernetes-cluster.ts verify
+          # A changed release identity rolls every role: new workers prove the cluster before an old one drains.
+          node scripts/kubernetes-cluster.ts install --work "$work" --set "release.version=v0.0.1-cluster"
+          node scripts/kubernetes-cluster.ts verify
+      # k3s gives Pods 10.42.0.0/16, where the drill's S3 server runs.
+      - name: Back up, then restore to a point in time
+        if: ${{ matrix.cluster.backupDrill && matrix.arch == 'amd64' }}
+        run: node scripts/kubernetes-cluster.ts backup-drill --work "$RUNNER_TEMP/kubernetes-cluster" --pod-cidr 10.42.0.0/16
+      - name: Record the cluster state
+        if: ${{ failure() }}
+        run: |
+          kubectl get pods -A -o wide || true
+          kubectl -n hephaestus describe pods || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --tail=300 --prefix || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
+          kubectl -n hephaestus get jobs,cronjobs -o wide || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql-backup --tail=200 --prefix || true
+          kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
+          kubectl -n hephaestus-sandboxes describe pods || true
+          kubectl describe nodes | grep -A 12 "Allocated resources" || true
+
+  calico:
+    name: "kind, Calico, three nodes, external PostgreSQL"
+    needs: [schema]
+    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    env:
+      NODE_IMAGE: docker.io/kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+      CALICO_URL: https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/calico.yaml
+      CALICO_SHA256: 2de8f47595fb9c41b3f47d7b767a1f8e72ecf84057af834738ff12689a234da5
+      # Calico's default pool, which the operator's PostgreSQL gets its address from.
+      POD_CIDR: 192.168.0.0/16
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - uses: ./.github/actions/setup-helm
+      - uses: ./.github/actions/setup-kubernetes-tools
+      - name: Resolve this run's images
+        env:
+          COMMIT: ${{ inputs.commit }}
+        run: node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+      - name: Create the cluster with Calico
+        run: |
+          set -euo pipefail
+          cat > kind.yaml <<EOF
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          networking:
+            disableDefaultCNI: true
+            podSubnet: "$POD_CIDR"
+          nodes:
+            - role: control-plane
+            - role: worker
+            - role: worker
+          EOF
+          kind create cluster --name hephaestus --image "$NODE_IMAGE" --config kind.yaml
+          curl -fsSL --proto '=https' --retry 5 --retry-all-errors -o calico.yaml "$CALICO_URL"
+          echo "$CALICO_SHA256  calico.yaml" | sha256sum -c -
+          kubectl apply -f calico.yaml
+          kubectl -n kube-system rollout status daemonset/calico-node --timeout=10m
+          kubectl wait --for=condition=Ready nodes --all --timeout=10m
+      - name: Install, upgrade and verify
+        env:
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/kubernetes-cluster"
+          node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT" \
+            --external-postgresql-cidr "$POD_CIDR"
+          node scripts/kubernetes-cluster.ts install --work "$work"
+          node scripts/kubernetes-cluster.ts verify
+          node scripts/kubernetes-cluster.ts install --work "$work" --set "release.version=v0.0.1-cluster"
+          node scripts/kubernetes-cluster.ts verify
+      - name: Record the cluster state
+        if: ${{ failure() }}
+        run: |
+          kubectl get pods -A -o wide || true
+          kubectl -n hephaestus describe pods || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --tail=300 --prefix || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
+          kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
+          kubectl -n hephaestus-sandboxes describe pods || true
+          kubectl describe nodes | grep -A 12 "Allocated resources" || true

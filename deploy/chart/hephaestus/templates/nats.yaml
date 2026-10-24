@@ -1,0 +1,133 @@
+{{- if .Values.nats.bundled }}
+{{- $name := include "hephaestus.name" (dict "root" . "component" "nats") }}
+{{- $maxFile := int64 .Values.nats.jetstream.maxFileBytes }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "nats") | nindent 4 }}
+data:
+  nats-server.conf: |
+    listen: "0.0.0.0:4222"
+    http_port: 8222
+
+    authorization {
+      user: $NATS_USERNAME
+      password: $NATS_PASSWORD
+    }
+
+    # A message the receiver admits but the broker refuses is verified, admitted and then lost.
+    max_payload: {{ int64 .Values.nats.maxPayloadBytes }}
+
+    jetstream {
+      store_dir: "/data"
+      max_mem: {{ .Values.nats.jetstream.maxMemory }}
+      # Per-message fsync protects R1 acknowledgements at a throughput cost.
+      sync_interval: always
+      # Shared with the webhook role's HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET.
+      max_file: {{ $maxFile }}
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "nats") | nindent 4 }}
+spec:
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "nats") | nindent 4 }}
+  ports:
+    - name: client
+      port: 4222
+      targetPort: client
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "nats") | nindent 4 }}
+spec:
+  # One JetStream server with R1 streams. The application has no stream replica setting, so a
+  # three-server cluster needs an external broker (docs/admin/kubernetes.mdx § Message broker).
+  replicas: 1
+  serviceName: {{ $name }}
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "nats") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.labels" (dict "root" . "component" "nats") | nindent 8 }}
+      annotations:
+        checksum/config: {{ printf "%d-%d-%s" $maxFile (int64 .Values.nats.maxPayloadBytes) .Values.nats.jetstream.maxMemory | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 1000 "group" 1000) | nindent 8 }}
+      containers:
+        - name: nats
+          image: {{ include "hephaestus.image" (dict "root" . "name" "nats") | quote }}
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "/etc/nats/nats-server.conf"]
+          env:
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "NATS_USERNAME") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "NATS_PASSWORD") | nindent 12 }}
+          ports:
+            - name: client
+              containerPort: 4222
+            - name: monitor
+              containerPort: 8222
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /healthz?js-enabled-only=true
+              port: monitor
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.nats.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nats
+              readOnly: true
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "hephaestus.selectorLabels" (dict "root" . "component" "nats") | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.nats.persistence.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            # max_file plus a quarter for the stream index and compaction headroom. Derived, so the
+            # volume cannot be sized below the budget the broker is told it may fill.
+            storage: {{ div (mul $maxFile 5) 4 }}
+{{- end }}

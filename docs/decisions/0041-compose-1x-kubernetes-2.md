@@ -1,6 +1,6 @@
 # ADR 0041: Compose for 1.x; Kubernetes only for 2.0
 
-**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-25 — Helm chart support and 1.x security fixes)
+**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [the Kubernetes runtime](#update--2026-10-24-the-kubernetes-runtime); 2026-10-25 — Helm chart support and 1.x security fixes)
 **Date:** 2026-09-03
 **Authors:** Hephaestus maintainers
 **Amends:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md),
@@ -382,6 +382,109 @@ session from PostgreSQL. Gateway capability 4 is now the Heph host's command cha
 (`/internal/llm/runtime/{hostId}/commands`) and its turn endpoints (`/internal/llm/turn/{id}/…`), not
 interactive frames. WSS carries no mentor frames. Heph no longer needs the Agent Sandbox CRD or its
 warm pools.
+
+## Update — 2026-10-24: the Kubernetes runtime
+
+Supersedes the JetStream sentence of § State and storage, and § Kubernetes batch and interactive execution.
+The other sections stand.
+[ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) owns the support promise.
+
+**Deployment.**
+The Helm chart and the Kubernetes runtime ship from 1.0.
+Before 1.0, the maintainers' staging instance runs the signed chart on k3s on its host, upgraded by the host's pull timer ([ADR 0042](0042-hosts-pull-their-own-releases.md)).
+Their production instance follows after one release qualified there.
+The chart supports a conformant Kubernetes cluster at a minor version that the Kubernetes project supports, from 1.34.
+The cluster needs a network plugin that enforces NetworkPolicy for egress and ingress, and a Gateway API controller for `HTTPRoute` `v1`.
+`kubeVersion` in the chart is a technical floor, not the support statement.
+CI installs and upgrades the chart on the lowest and the latest supported minor ([`docs/admin/kubernetes.mdx`](../admin/kubernetes.mdx#supported-clusters)).
+
+**State.**
+The bundled NATS is one JetStream server with R1 streams; the application has no stream replica setting.
+A lost NATS volume loses each delivery that the broker accepted and the server had not yet processed.
+The bundled PostgreSQL is one StatefulSet with an optional pgBackRest archive to one S3-compatible bucket, as in Compose.
+High availability for either is not a 1.0 promise.
+
+**Execution.**
+
+- A practice review attempt is one `batch/v1` Job, named after the job and the attempt, with `backoffLimit: 0` and `podReplacementPolicy: Failed`.
+  Its `activeDeadlineSeconds` is the attempt's upload deadline plus two minutes, so the Job ends without its worker.
+  The TTL controller removes a finished Job after 15 minutes.
+- The Heph host and Heph's turn sandboxes are Pods.
+  The host ends when its command channel closes; a turn sandbox has its turn's deadline.
+- No sandbox kind uses Agent Sandbox or another CRD.
+- The sandbox backend has `launch`, `observe`, `running`, `transcript`, `kill`, `remove` and `list` ([ADR 0007](0007-sandbox-spi-shape.md#update--2026-10-24-one-attempt-runner-over-a-narrow-backend)).
+  A handle is the Job's or the Pod's name, so any worker reaches any sandbox.
+  `ExecSandboxes` stays separate for turn sandboxes.
+
+**Workers.**
+Workers are a Deployment: two replicas by default, spread across nodes with `ScheduleAnyway`, a PodDisruptionBudget of one, and a rollout that starts the new workers before an old one drains (`maxSurge: 100%`, `maxUnavailable: 0`).
+A draining worker claims nothing new and serves its running attempts until its drain timeout.
+There is no StatefulSet, no per-worker Service and no workspace lease.
+The ledger decides custody: a review's sandbox belongs to its job while that job is queued or running.
+A Heph host or a turn sandbox belongs to its worker while that worker beats in `worker_registry`.
+Every worker removes what neither rule keeps.
+The sandbox namespace is the operator's, for one release alone.
+
+**Network.**
+One NetworkPolicy lets review and host sandboxes reach the worker Pods' gateway port, and nothing else.
+It selects the workers by their label, never by a Service address.
+A sandbox's credential, not the network, binds it to its own worker.
+Turn sandboxes have no network.
+The NetworkPolicy of a new Pod can take effect seconds after the Pod starts on some plugins, so each sandbox Pod first waits, in an init container, until it cannot reach the API server.
+
+**Verification gates.**
+Each worker runs the isolation probe at its start and then every 15 minutes by default.
+The probe gates, and the worker starts no sandbox while one gate fails:
+
+- The sandbox namespace enforces the Restricted Pod Security Standard.
+- A review sandbox reaches the gateway and not the worker's management port, the API server or the DNS server; a sandbox of no kind does not reach the gateway.
+- A sandbox has no service account token, a read-only root and a non-root user.
+- A named RuntimeClass exists.
+
+The probe records, without gating, the isolation tier: the RuntimeClass, whether user namespaces (`hostUsers: false`) take effect, and the per-Pod process limit of the nodes.
+Sandbox Pods run in user namespaces once the probe has shown them.
+The worker's log and its metrics show the tier.
+AppArmor is not a gate.
+A per-review record of the tier needs a schema change and is not part of 1.0.
+
+**Gaps against Docker.**
+Kubernetes has no field for `noexec` on an `emptyDir` and no private `/dev/shm` size; `/tmp`, `/run` and a turn sandbox's `/workspace` are therefore executable, and a sandbox keeps `/dev/shm` in its private IPC namespace.
+Every command starts through `prlimit`, which sets `nofile` and `core` as Docker's ulimits do.
+
+**Backups.**
+The bundled PostgreSQL archives its WAL with pgBackRest and takes scheduled full and differential backups.
+The backup Jobs read the data directory through pgBackRest's TLS server in the PostgreSQL Pod, with mutual TLS, so that no other Pod mounts the volume.
+A restore is a chart setting: it stops every database role and runs one restore Job on the volume.
+
+**Migrations.**
+A Job of each Helm revision runs the server image in its migrate run mode, and every role waits for the schema.
+The Job is a normal resource of the release, not a Helm hook, because the bundled PostgreSQL does not exist before the install.
+The documented upgrade is `helm upgrade --rollback-on-failure --wait=watcher --wait-for-jobs`, so a failed migration fails the upgrade.
+
+**Practice that the chart follows, and where it deviates.**
+Primary sources only.
+
+| Practice | Source | In the chart |
+| --- | --- | --- |
+| Restricted Pod Security Standard, enforced by Pod Security admission | [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/), [Pod Security Admission](https://kubernetes.io/docs/concepts/security/pod-security-admission/) | Every Pod meets Restricted. The operator labels both namespaces `enforce=restricted`; the probe proves enforcement in the sandbox namespace. |
+| Default-deny NetworkPolicy and explicit allows | [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) | Deny-all in both namespaces, then one allow per path. Policies select Pods by label. The worker's API egress is an `ipBlock` of the endpoint that the plugin sees, because the page leaves the order of Service translation and policy to the plugin. |
+| No service account token where none is needed | [Configure Service Accounts](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/), [NSA/CISA Kubernetes Hardening Guide](https://www.cisa.gov/news-events/alerts/2022/03/15/updated-kubernetes-hardening-guide) | Only the worker mounts a token; its Role is namespace-scoped. |
+| Seccomp, a sandboxed runtime, and user namespaces | [Seccomp](https://kubernetes.io/docs/tutorials/security/seccomp/), [RuntimeClass](https://kubernetes.io/docs/concepts/containers/runtime-class/), [User Namespaces](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/) | `RuntimeDefault` or the shipped Localhost profile; RuntimeClass by value; `hostUsers: false` once the probe shows that the nodes support it. |
+| Jobs for run-to-completion work with a deadline and a TTL | [Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/), [TTL after finished](https://kubernetes.io/docs/concepts/workloads/controllers/ttlafterfinished/) | `backoffLimit: 0` and `podReplacementPolicy: Failed`, because the ledger, not the Job controller, decides a retry. |
+| Rolling updates, disruption budgets, spread, and taint-based eviction | [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/), [Disruptions](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/), [Topology Spread Constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/), [Taints and Tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) | Workers: `maxSurge: 100%`, `maxUnavailable: 0`, PDB `maxUnavailable: 1`, spread with `ScheduleAnyway` so that a one-node cluster still schedules, `tolerationSeconds: 60`. |
+| Requests and limits; memory request equal to the limit for the JVM | [Resource Management](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/), [Paketo memory calculator](https://paketo.io/docs/reference/java-reference/) | The buildpack sizes the heap from the limit, so the JVM roles request their whole memory limit. CPU keeps a lower request. |
+| Probes, graceful shutdown and a preStop pause | [Spring Boot on Kubernetes](https://docs.spring.io/spring-boot/how-to/deployment/cloud.html), [Kubernetes probes](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html), [Graceful shutdown](https://docs.spring.io/spring-boot/reference/web/graceful-shutdown.html), [Container lifecycle hooks](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/) | Liveness and readiness groups on the management port; a five-second `preStop` sleep action on the roles behind Services; grace periods that cover Spring's shutdown phase and, for workers, the drain. |
+| Secrets by reference | [Good practices for Secrets](https://kubernetes.io/docs/concepts/security/secrets-good-practices/) | The chart reads one existing Secret and writes no secret value. |
+| Chart structure, schema and OCI distribution | [Chart Best Practices](https://helm.sh/docs/chart_best_practices/), [Charts: schema files](https://helm.sh/docs/topics/charts/), [OCI registries](https://helm.sh/docs/topics/registries/) | `values.schema.json` refuses unknown keys; images by digest; the chart is an OCI artifact of the release. |
+| Gateway API for exposure | [Gateway API](https://kubernetes.io/docs/concepts/services-networking/gateway/), [Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/), [conformance levels](https://gateway-api.sigs.k8s.io/docs/conformance/levels/) | One `HTTPRoute`. The four features that it needs are Extended, so the operator confirms them for the controller. |
+| PostgreSQL backups | [pgBackRest User Guide](https://pgbackrest.org/user-guide.html), [Configuration Reference](https://pgbackrest.org/configuration.html) | WAL archive, retention by full backups, encryption, and a TLS server with client certificates. |
+
+Deviations:
+
+- **No Helm hooks.** [Chart hooks](https://helm.sh/docs/topics/charts_hooks/) suit a migration Job, but the bundled PostgreSQL does not exist before an install, and a hook leaves no resource that `helm` tracks. The migration is therefore a plain Job of each revision.
+- **No chart-testing (`ct`).** `ct install --upgrade` installs the previous chart revision with the same values files; while the chart's schema still changes, those values do not fit both revisions. CI installs, then upgrades the same chart with changed values, with Helm itself (`scripts/kubernetes-cluster.ts`). Once a released chart exists, the upgrade starts from it.
+- **The chart creates no Namespace.** A release installs into the namespace that `--namespace` names, and the sandbox namespace is an input too, so that a platform that owns namespaces, their labels and their quotas (a Rancher project, for example) keeps them.
+- **One replica of the server, NATS and PostgreSQL.** Each needs work that 1.0 does not have: ordered event processing across server replicas, a stream replica setting, and a PostgreSQL operator.
 
 ## Update — 2026-10-25: Helm chart support and 1.x security fixes
 

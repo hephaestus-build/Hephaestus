@@ -4,10 +4,10 @@ title: Install (Self-Hosted)
 description: The one supported way to run your own Hephaestus — Docker Compose on a single host.
 ---
 
-This is the **only supported install path**: the Docker Compose stack in
+This page installs the Docker Compose stack in
 [`docker/self-host/`](https://github.com/hephaestus-build/Hephaestus/tree/main/docker/self-host)
-on one Linux host. Other setups (own reverse proxy, external database, Kubernetes, Podman)
-can work but are unsupported.
+on one Linux host. [Kubernetes](./kubernetes) is the other supported install path.
+Other setups (own reverse proxy, external database, Podman) can work but are unsupported.
 
 The stack you get:
 
@@ -29,7 +29,7 @@ The 2.0 release includes a migration guide for your database, event buffer, and 
 You lose none of your current configuration.
 See
 [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md)
-for the decision and the conditions that would reverse it.
+records the decision.
 
 ## Requirements
 

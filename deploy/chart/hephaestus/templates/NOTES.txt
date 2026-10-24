@@ -1,0 +1,18 @@
+Hephaestus {{ .Values.release.version }} ({{ .Values.release.commit }}) is installed as "{{ .Release.Name }}" in "{{ .Release.Namespace }}".
+
+The migration Job of this revision applies the database migrations, and every role waits for them.
+Follow it with:
+
+  kubectl --namespace {{ .Release.Namespace }} logs --follow job/{{ include "hephaestus.name" (dict "root" . "component" "migration") }}-{{ .Release.Revision }}
+
+Then open https://{{ .Values.host }}.
+
+{{ if .Values.worker.enabled -}}
+Each worker runs the sandbox isolation probe before it becomes ready. A worker that stays unready logs
+each check that the cluster failed:
+
+  kubectl --namespace {{ .Release.Namespace }} logs deployment/{{ include "hephaestus.name" (dict "root" . "component" "worker") }}
+{{ else -}}
+No worker is enabled, so practice reviews and Heph turns do not run.
+{{ end -}}
+https://docs.hephaestus.build/admin/kubernetes describes the installation and its troubleshooting.

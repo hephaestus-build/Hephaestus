@@ -75,6 +75,8 @@ dependencies {
     implementation(libs.docker.java.api)
     implementation(libs.docker.java.core)
     implementation(libs.docker.java.transport.httpclient5)
+    implementation(libs.fabric8.kubernetes.client)
+    testImplementation(libs.fabric8.kubernetes.server.mock)
     implementation(libs.bolt) {
         exclude(group = "com.squareup.okhttp3", module = "okhttp")
     }
@@ -98,6 +100,10 @@ dependencies {
     testCompileOnly(libs.immutables.value.annotations)
     // PostgreSQL test types carry Checker Framework annotations that javac must resolve.
     testCompileOnly(libs.checker.qual)
+    // The native Kubernetes transport fixture exposes Vert.x types with these class-file
+    // annotations.
+    testCompileOnly(libs.vertx.codegen.api)
+    testCompileOnly(libs.vertx.codegen.json)
     testAnnotationProcessor(libs.lombok)
     testAnnotationProcessor(libs.therapi.scribe)
     errorprone(libs.errorprone.core)

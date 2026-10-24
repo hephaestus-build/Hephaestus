@@ -5,63 +5,54 @@ import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxHosts;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntime;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.task.AsyncTaskExecutor;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
  * Spring configuration for the Docker sandbox subsystem.
  *
- * <p>The Docker sandbox <em>is</em> the worker capability (ADR 0005), so it is gated solely on the
- * worker role ({@link RuntimeRole#WORKER_PROPERTY}, {@code matchIfMissing=true} → present in the
- * single-JVM monolith). A non-worker pod (e.g. a webhook-only container) leaves the gate {@code
- * false} and these beans never wire. All sandbox beans are declared as {@code @Bean} methods so
- * they are only created when the role is active — no component-scanning surprises.
+ * <p>The sandbox is the worker capability (ADR 0005), so it is gated on the worker role
+ * ({@link RuntimeRole#WORKER_PROPERTY}, {@code matchIfMissing=true} → present in the single-JVM monolith), and on
+ * Docker as the selected {@link SandboxRuntime}, its default. A non-worker pod (e.g. a webhook-only container) leaves
+ * the gate {@code false} and these beans never wire. All sandbox beans are declared as {@code @Bean} methods so they
+ * are only created when the role is active — no component-scanning surprises. What every runtime shares is in
+ * {@link SandboxRuntimeConfiguration}.
  */
 @Configuration
 @ConditionalOnWorkerRole
+@ConditionalOnProperty(name = SandboxRuntime.PROPERTY, havingValue = "docker", matchIfMissing = true)
 @ConditionalOnClass(DockerClient.class)
 @EnableConfigurationProperties({SandboxProperties.class, DockerSandboxProperties.class})
 public class DockerSandboxConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxConfiguration.class);
 
-    private final Clock clock;
     private final Environment environment;
 
-    public DockerSandboxConfiguration(Clock clock, Environment environment) {
-        this.clock = clock;
+    public DockerSandboxConfiguration(Environment environment) {
         this.environment = environment;
     }
 
@@ -167,11 +158,6 @@ public class DockerSandboxConfiguration {
         return new SandboxNetworkManager(ops, properties, creator);
     }
 
-    @Bean
-    public SandboxWorkspaceManager sandboxWorkspaceManager() {
-        return new SandboxWorkspaceManager();
-    }
-
     /**
      * Dedicated platform thread pool for Docker blocking wait operations, one thread per sandbox that
      * may run at once.
@@ -232,24 +218,6 @@ public class DockerSandboxConfiguration {
                 gateway::port);
     }
 
-    @Bean
-    public SandboxManager sandboxAttemptRunner(
-            SandboxBackend backend,
-            SandboxWorkspaceManager workspaceManager,
-            SandboxGatewaySessions gatewaySessions,
-            MeterRegistry meterRegistry) {
-        return new SandboxAttemptRunner(backend, workspaceManager, gatewaySessions, meterRegistry);
-    }
-
-    @Bean
-    public HostSandbox sandboxHosts(
-            SandboxBackend backend,
-            SandboxWorkspaceManager workspaceManager,
-            SandboxGatewaySessions gatewaySessions,
-            AgentImageProperties agentImageProperties) {
-        return new SandboxHosts(backend, workspaceManager, gatewaySessions, agentImageProperties.reference());
-    }
-
     /**
      * Heph's turn sandboxes, with a Docker client of their own: a command can wait for output for a minute, and its
      * connections must not take the ones that the practice reviews wait on.
@@ -274,40 +242,11 @@ public class DockerSandboxConfiguration {
     }
 
     @Bean
-    public SandboxReconciler sandboxReconciler(
-            ReviewJobRepository jobRepository, SandboxBackend backend, MeterRegistry meterRegistry) {
-        return new SandboxReconciler(jobRepository, backend, meterRegistry, clock);
-    }
-
-    @Bean
     public DockerHealthIndicator dockerHealthIndicator(
             SandboxContainerManager containerManager,
             SandboxProperties properties,
             DockerSandboxProperties dockerProperties) {
         return new DockerHealthIndicator(containerManager, properties, dockerProperties);
-    }
-
-    /**
-     * Bounded platform thread pool for sandbox Docker operations.
-     *
-     * <p>Uses direct handoff ({@code queueCapacity=0}) so that when all threads are occupied,
-     * submissions are rejected immediately. That rejection is the backpressure: the claim is undone
-     * and the row goes back to QUEUED for a later poll.
-     */
-    @Bean(name = "sandboxExecutor")
-    public AsyncTaskExecutor sandboxExecutor(SandboxProperties properties) {
-        var executor = new ThreadPoolTaskExecutor();
-        int maxPool = properties.maxConcurrentContainers();
-        executor.setCorePoolSize(Math.min(2, maxPool));
-        executor.setMaxPoolSize(maxPool);
-        executor.setQueueCapacity(0);
-        executor.setAllowCoreThreadTimeOut(true);
-        executor.setThreadNamePrefix("sandbox-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
-        executor.setWaitForTasksToCompleteOnShutdown(true);
-        executor.setAwaitTerminationSeconds(60);
-        log.info("Sandbox executor configured: maxConcurrent={}", properties.maxConcurrentContainers());
-        return executor;
     }
 
     /**

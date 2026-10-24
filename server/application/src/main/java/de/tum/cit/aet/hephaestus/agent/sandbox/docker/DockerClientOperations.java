@@ -15,6 +15,7 @@ import com.github.dockerjava.api.model.Mount;
 import com.github.dockerjava.api.model.MountType;
 import com.github.dockerjava.api.model.Network;
 import com.github.dockerjava.api.model.Ulimit;
+import de.tum.cit.aet.hephaestus.agent.sandbox.BoundedTranscript;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import java.nio.charset.StandardCharsets;
@@ -46,14 +47,6 @@ public class DockerClientOperations
 
     /** A pull that has not finished by here is treated as failed; the RPC client's idle timeout sits above it. */
     static final Duration IMAGE_PULL_TIMEOUT = Duration.ofMinutes(5);
-
-    /**
-     * How much of a container's output is held in memory before its middle is dropped, split evenly
-     * between the beginning and the ending. A review's transcript is the only account of what it did,
-     * so the whole of it is kept unless a run is large enough to threaten the collecting process. None
-     * of it is written to the application's own log.
-     */
-    static final int MAX_LOG_CHARS = 8 * 1024 * 1024; // 8 MB
 
     private final DockerClient dockerClient;
 
@@ -326,7 +319,7 @@ public class DockerClientOperations
         // Best-effort log collection: an error returns nothing, and a timeout says so in the transcript.
         try {
             // Synchronised inside: onNext is called from a Docker callback thread.
-            BoundedTranscript logs = new BoundedTranscript(MAX_LOG_CHARS / 2, MAX_LOG_CHARS / 2);
+            BoundedTranscript logs = new BoundedTranscript();
             var callback = new ResultCallback.Adapter<Frame>() {
                 @Override
                 public void onNext(Frame frame) {

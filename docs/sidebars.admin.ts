@@ -9,6 +9,7 @@ const sidebars: SidebarsConfig = {
 			collapsed: false,
 			items: [
 				{ type: "doc", id: "install", label: "Docker Compose on one host" },
+				"kubernetes",
 				"pull-based-deployment",
 				"runtime-roles",
 				"reference-deployment",

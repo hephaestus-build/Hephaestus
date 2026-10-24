@@ -1,0 +1,28 @@
+# One small cluster: a single k3s node of 4 vCPU, 32 GiB and 150 GiB of disk. Bundled PostgreSQL and
+# NATS, one worker that runs one review at a time, bounded caches, and a sandbox quota for that worker.
+# docs/admin/kubernetes.mdx § Profiles gives the arithmetic; a chart test checks that the requests,
+# one upgrade beside them, and the quota fit.
+postgresql:
+  bundled: true
+nats:
+  bundled: true
+server:
+  gitCache:
+    sizeLimit: 10Gi
+  resources:
+    limits: { ephemeral-storage: 12Gi }
+worker:
+  replicas: 1
+  reviews: 1
+  gitCache:
+    sizeLimit: 10Gi
+  resources:
+    limits: { ephemeral-storage: 12Gi }
+  sandbox:
+    # While the old worker drains beside the new one: one review (3 GiB), two Heph hosts (2 x 2 GiB),
+    # two turn pools (2 x 3.3 GiB), and the new worker's isolation probe (1.5 GiB).
+    quota:
+      enabled: true
+      pods: 12
+      cpu: "12"
+      memory: 16Gi

@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
+package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -12,9 +12,13 @@ import java.util.Objects;
  * failed; keeping a suffix loses the beginning, where it says what it was asked and what it read. So
  * everything is kept until a run is large enough to threaten the collecting process, and past that
  * point both ends are kept with a line between them saying exactly how much is missing — a reader is
- * never left to wonder whether they are looking at the whole thing.
+ * never left to wonder whether they are looking at the whole thing. None of it is written to the
+ * application's own log.
  */
-final class BoundedTranscript {
+public final class BoundedTranscript {
+
+    /** The bound of every sandbox transcript, in characters: half for its beginning, half for its end. */
+    public static final int MAX_CHARS = 8 * 1024 * 1024;
 
     private final int headLimit;
     private final int tailLimit;
@@ -22,6 +26,11 @@ final class BoundedTranscript {
     private final Deque<String> tail = new ArrayDeque<>();
     private int tailChars;
     private long dropped;
+
+    /** A transcript with {@link #MAX_CHARS}. */
+    public BoundedTranscript() {
+        this(MAX_CHARS / 2, MAX_CHARS / 2);
+    }
 
     BoundedTranscript(int headLimit, int tailLimit) {
         if (headLimit <= 0 || tailLimit <= 0) {
@@ -31,8 +40,8 @@ final class BoundedTranscript {
         this.tailLimit = tailLimit;
     }
 
-    /** Frames arrive on a Docker callback thread while the caller waits on completion. */
-    synchronized void append(String chunk) {
+    /** Frames arrive on the runtime's callback thread while the caller waits on completion. */
+    public synchronized void append(String chunk) {
         if (chunk.isEmpty()) {
             return;
         }
