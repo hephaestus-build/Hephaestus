@@ -291,13 +291,14 @@ function evaluateTierOutput(
 	event: string,
 	full: string | undefined,
 	filter: Readonly<Record<string, string>> = {},
+	pullRequest: Readonly<Record<string, unknown>> = {},
 ): string {
 	const body = /^\$\{\{ (?<body>.+) \}\}$/u.exec(source)?.groups?.body;
 	assert.ok(isSet(body));
 	const parsed = new Parser(new Lexer(body).lex().tokens, ["github", "steps"], []).parse();
 	const context: unknown = JSON.parse(
 		JSON.stringify({
-			github: { event_name: event },
+			github: { event_name: event, event: { pull_request: pullRequest } },
 			steps: {
 				opt_in: { outputs: full === undefined ? {} : { full } },
 				filter: { outputs: filter },
@@ -814,6 +815,41 @@ void describe("CI contract", () => {
 				filter,
 			);
 		}
+
+		// A draft runs the fast tier only, unless it carries the label, and builds no image.
+		const outputs = (name: string) =>
+			String(orchestrator.getIn(["jobs", "detect-changes", "outputs", name]));
+		const draft = { draft: true, head: { repo: { full_name: "owner/repo" } } };
+		assert.equal(evaluateTierOutput(outputs("draft"), "pull_request", "false", {}, draft), "true");
+		assert.equal(evaluateTierOutput(outputs("draft"), "pull_request", "false"), "false");
+		assert.equal(
+			evaluateTierOutput(outputs("draft"), "merge_group", undefined, {}, draft),
+			"false",
+		);
+		assert.equal(
+			evaluateTierOutput(decision, "pull_request", "false", { "test-config": "true" }, draft),
+			"false",
+			"a draft that changes the tier's inputs still runs only the fast tier",
+		);
+		assert.equal(evaluateTierOutput(decision, "pull_request", "true", {}, draft), "true");
+		assert.match(outputs("previews"), /github\.event\.pull_request\.draft != true/u);
+		for (const name of [
+			"vulnerability-database",
+			"application-server-image",
+			"upstream-images",
+			"Docker",
+		]) {
+			assert.match(
+				String(orchestrator.getIn(["jobs", name, "if"])),
+				/needs\.detect-changes\.outputs\.draft != 'true'/u,
+				`${name} skips drafts`,
+			);
+		}
+		// Marking a draft ready starts the run it skipped; the gate reports on every run.
+		const types = orchestrator.getIn(["on", "pull_request", "types"]);
+		assert.ok(isSeq(types));
+		assert.deepEqual(types.toJSON(), ["opened", "synchronize", "reopened", "ready_for_review"]);
+		assert.equal(orchestrator.getIn(["jobs", "all-ci-passed", "if"]), "always()");
 		const optIn = namedStep(orchestrator, ["jobs", "detect-changes"], "Read the ci:full opt-in");
 		assert.equal(optIn.get("continue-on-error"), true);
 		assert.match(

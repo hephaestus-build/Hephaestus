@@ -763,7 +763,12 @@ The queue tier is most of a run's runner time, and GitHub's runner concurrency l
 A queue-tier failure removes the entry from the queue, and the failure comment links the run.
 Fix the failure and queue the pull request again.
 
-A pull request also runs the queue tier when it changes the tier's own inputs.
+A draft pull request runs the fast tier and builds no image. So it gets no preview, no host smoke and
+no image scan. The automatic queue tier for the tier's own inputs is also off, but `ci:full` still opts in.
+`CI Status Gate` still reports, so required checks resolve on a draft.
+Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run, with its images.
+
+A pull request that is not a draft also runs the queue tier when it changes the tier's own inputs.
 These inputs are the workflows and actions that define the tier, the database migrations, and the
 browser suites' specs and configuration.
 

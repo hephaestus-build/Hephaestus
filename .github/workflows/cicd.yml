@@ -11,6 +11,8 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["**"]
+    # The default types plus the end of a draft, which starts the run a draft skipped.
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
 
 # The Version PR has two possible triggers but one pre-merge verdict. Forks, ordinary PRs,
@@ -85,9 +87,12 @@ jobs:
       # inputs. A merge group, a push and a dispatch also run the queue tier: integration shards,
       # database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
       # ci-cd.mdx § Two verification tiers says why.
-      queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' || steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true' }}
+      queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' || (github.event.pull_request.draft != true && (steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true')) }}
+      # A draft runs the fast tier and builds no image: no preview, no host smoke, no image scan.
+      # Marking it ready starts a full pull-request run. ci-cd.mdx § Two verification tiers.
+      draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true }}
       publishable: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-      previews: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+      previews: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft != true }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
       # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
@@ -734,7 +739,7 @@ jobs:
     name: "Image advisory database"
     needs: [detect-changes]
     if: |
-      needs.detect-changes.outputs.should_skip != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
         needs.detect-changes.outputs.release-preflight == 'true' ||
         needs.detect-changes.outputs.release-images == 'true' ||
         (needs.detect-changes.outputs.publishable == 'true' && (
@@ -774,7 +779,7 @@ jobs:
   application-server-image:
     name: "App Server image"
     needs: [detect-changes, server-package, vulnerability-database]
-    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.server-package.result == 'success' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') }}
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.draft != 'true' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.server-package.result == 'success' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') }}
     uses: ./.github/workflows/reusable-docker-build.yml
     permissions:
       contents: read
@@ -820,7 +825,7 @@ jobs:
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      needs.detect-changes.outputs.should_skip != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
         needs.detect-changes.outputs.release-images == 'true' ||
         needs.detect-changes.outputs.unfiltered == 'true'
       )
@@ -920,7 +925,7 @@ jobs:
     # their image builds stay path-filtered.
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
-      needs.detect-changes.outputs.should_skip != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.previews == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
