@@ -6,7 +6,7 @@ description: Weekly lead time, deployment frequency, change failure rate and tim
 
 # Delivery Metrics
 
-The **Delivery metrics** workflow reports the four [DORA](https://dora.dev/guides/dora-metrics/) delivery metrics each Monday.
+The **Delivery metrics** workflow reports the [DORA](https://dora.dev/guides/dora-metrics/) delivery metrics each Monday.
 It reads only GitHub records that the delivery flow already writes.
 It uses no external service and gates nothing.
 
@@ -37,6 +37,8 @@ The `success` time is when the public webapp reported the promoted version.
 | Deployment frequency | Successful deployments per environment, per week, and the number of days with a deployment. |
 | Change failure rate | Deployments that ended in `failure` or `error`, or that the next deployment rolled back, divided by all decided deployments. Reported per environment. Reverted pull requests are reported beside it. |
 | Time to restore | For each failed deployment, the time from its failure to the next successful deployment to the same environment that did not fail. |
+| Rework | Patch releases (`vX.Y.Z` with Z above 0) as a share of published releases. A patch release fixes a release, so it stands in for DORA's deployment rework rate. |
+| Repeats of a deployed build | Deployments of a commit or release that the same environment already received. They show promotions that moved nothing new. |
 
 The Version PR is not a change. It consumes the changes it releases.
 A change that has not arrived yet is counted as waiting, not as a zero duration.

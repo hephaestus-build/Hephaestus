@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
 	deliveryMetrics,
 	duration,
+	isPatch,
 	isRevert,
 	parseDeployment,
 	renderDeliveryMetrics,
@@ -149,6 +150,27 @@ await test("a deployment's outcome skips the inactive status that replaced it", 
 	);
 });
 
+await test("a repeated deployment of one build and a patch release are counted", () => {
+	const metrics = deliveryMetrics(
+		window,
+		[],
+		[
+			deployment({ createdAt: 10 * MINUTE }),
+			deployment({ createdAt: 20 * MINUTE }),
+			deployment({ sha: "c", createdAt: 30 * MINUTE }),
+		],
+		[
+			{ tag: "v1.2.0", commit: "b", publishedAt: 10 * MINUTE },
+			{ tag: "v1.2.1", commit: "c", publishedAt: 20 * MINUTE },
+		],
+		position,
+	);
+	assert.equal(metrics.environments[0]?.repeats, 1);
+	assert.deepEqual(metrics.releases, { published: 2, patches: 1, patchShare: 0.5 });
+	assert.ok(isPatch("v0.94.10"));
+	assert.ok(!isPatch("v0.95.0"));
+});
+
 await test("reverts are recognized from either revert title", () => {
 	assert.ok(isRevert('Revert "fix(server): keep feedback current"'));
 	assert.ok(isRevert("revert(release): defer v0.75.0"));
@@ -162,6 +184,7 @@ await test("the report shows missing measurements as missing, not as zero", () =
 	);
 	assert.match(rendered, /\| Merged → running in production \| — \| — \| 0 \|/u);
 	assert.match(rendered, /\| Production \| 0 \| 0\.0 \| 0 \| — \(0\/0\)/u);
+	assert.match(rendered, /Patch releases \(rework\): 0 of 0 \(—\)/u);
 	assert.equal(duration(90 * MINUTE), "90 min");
 	assert.equal(duration(3 * 60 * MINUTE), "3.0 h");
 	assert.equal(duration(72 * 60 * MINUTE), "3.0 d");

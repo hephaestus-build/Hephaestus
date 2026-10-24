@@ -68,6 +68,11 @@ function firstArrival(
 	return first;
 }
 
+/** A `vX.Y.Z` release with Z above 0: the cheap stand-in for rework, a release that fixes a release. */
+export function isPatch(tag: string): boolean {
+	return /^v\d+\.\d+\.[1-9]\d*$/u.test(tag);
+}
+
 /** GitHub's revert button and the Conventional Commit `revert` type. */
 export function isRevert(title: string): boolean {
 	return /^(?:Revert "|revert(?:\([^)]*\))?:)/u.test(title);
@@ -185,9 +190,19 @@ export function deliveryMetrics(
 			}
 		}
 		const days = (window.until - window.since) / DAY;
+		const earlier = own.filter((deployment) => deployment.createdAt < window.since);
+		const seen = new Set(earlier.map((deployment) => deployment.sha));
+		let repeats = 0;
+		for (const deployment of decided.toSorted((left, right) => left.createdAt - right.createdAt)) {
+			if (seen.has(deployment.sha)) {
+				repeats += 1;
+			}
+			seen.add(deployment.sha);
+		}
 		return {
 			environment,
 			deployments: decided.length,
+			repeats,
 			successful: successes.length,
 			perWeek: (successes.length / days) * 7,
 			deploymentDays: new Set(
@@ -204,6 +219,8 @@ export function deliveryMetrics(
 	});
 
 	const reverts = merged.filter((change) => isRevert(change.title)).length;
+	const published = releases.filter((release) => inWindow(release.publishedAt, window));
+	const patches = published.filter((release) => isPatch(release.tag)).length;
 	return {
 		window: {
 			since: new Date(window.since).toISOString(),
@@ -218,7 +235,11 @@ export function deliveryMetrics(
 			awaitingRelease,
 			awaitingProduction,
 		},
-		releases: releases.filter((release) => inWindow(release.publishedAt, window)).length,
+		releases: {
+			published: published.length,
+			patches,
+			patchShare: published.length === 0 ? null : patches / published.length,
+		},
 		leadTime: {
 			commitToMerge: distribution(commitToMerge),
 			mergeToStaging: distribution(mergeToStaging),
@@ -254,7 +275,7 @@ export function renderDeliveryMetrics(title: string, metrics: Metrics): string {
 	return [
 		`## ${title}`,
 		"",
-		`${metrics.window.since.slice(0, 10)} to ${metrics.window.until.slice(0, 10)}: ${metrics.changes.merged} changes merged, ${metrics.releases} releases published.`,
+		`${metrics.window.since.slice(0, 10)} to ${metrics.window.until.slice(0, 10)}: ${metrics.changes.merged} changes merged, ${metrics.releases.published} releases published.`,
 		"",
 		"### Lead time for changes",
 		"",
@@ -278,14 +299,15 @@ export function renderDeliveryMetrics(title: string, metrics: Metrics): string {
 		"",
 		"### Deployments",
 		"",
-		"| Environment | Successful | Per week | Days with a deployment | Change failure rate | Time to restore (median) | Not restored |",
-		"|---|---:|---:|---:|---:|---:|---:|",
+		"| Environment | Successful | Per week | Days with a deployment | Change failure rate | Time to restore (median) | Not restored | Repeats of a deployed build |",
+		"|---|---:|---:|---:|---:|---:|---:|---:|",
 		...metrics.environments.map(
 			(environment) =>
-				`| ${environment.environment} | ${environment.successful} | ${environment.perWeek.toFixed(1)} | ${environment.deploymentDays} | ${percent(environment.changeFailureRate)} (${environment.failed}/${environment.deployments}) | ${duration(environment.timeToRestore.p50)} (n=${environment.timeToRestore.count}) | ${environment.unrestored} |`,
+				`| ${environment.environment} | ${environment.successful} | ${environment.perWeek.toFixed(1)} | ${environment.deploymentDays} | ${percent(environment.changeFailureRate)} (${environment.failed}/${environment.deployments}) | ${duration(environment.timeToRestore.p50)} (n=${environment.timeToRestore.count}) | ${environment.unrestored} | ${environment.repeats} |`,
 		),
 		"",
 		`Reverted changes: ${metrics.changes.reverts} of ${metrics.changes.merged} (${percent(metrics.changes.revertRate)}).`,
+		`Patch releases (rework): ${metrics.releases.patches} of ${metrics.releases.published} (${percent(metrics.releases.patchShare)}).`,
 		"",
 	].join("\n");
 }
