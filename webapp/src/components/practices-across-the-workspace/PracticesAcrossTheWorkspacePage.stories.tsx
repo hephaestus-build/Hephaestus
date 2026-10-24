@@ -23,13 +23,7 @@ import {
 } from "@/components/practice-focus/PracticeFocusFooter";
 import { EARLIER_REVIEWS_COUNTED } from "@/components/practice-vocabulary/standing-basis-defs";
 
-import {
-	FIGURES_LOAD_ERROR,
-	GROUPS_LOAD_ERROR,
-	LOADING_STATUS,
-	SLOW_LOAD_AFTER_MS,
-	SLOW_LOAD_SHORT,
-} from "./across-workspace-copy";
+import { FIGURES_LOAD_ERROR, GROUPS_LOAD_ERROR } from "./across-workspace-copy";
 import {
 	PracticesAcrossTheWorkspacePage,
 	type PracticesAcrossTheWorkspacePageProps,
@@ -94,13 +88,13 @@ export const Default: Story = {
 		const table = groupsTable(canvas);
 		await expect(
 			table.getByRole("img", {
-				name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
+				name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 			}),
 		).toBeVisible();
 		// A group with parts of one, two and none draws like any other.
 		await expect(
 			table.getByRole("img", {
-				name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. The You marker is on none yet.",
+				name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. You are in the none yet part.",
 			}),
 		).toBeVisible();
 		// Only the tiles read the window: the toggle sits in their section, and the bars name none.
@@ -139,7 +133,7 @@ export const OneDeveloper: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			groupsTable(canvas).getByRole("img", {
-				name: "1 developer in this workspace: 0 Needs attention, 1 Mixed feedback, 0 Going well, 0 none yet. The You marker is on Mixed feedback.",
+				name: "1 developer in this workspace: 0 Needs attention, 1 Mixed feedback, 0 Going well, 0 none yet. You are in the Mixed feedback part.",
 			}),
 		).toBeVisible();
 		await expect(canvas.getByText(/1 developer with a standing/u)).toBeVisible();
@@ -154,7 +148,7 @@ export const TwoDevelopers: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			groupsTable(canvas).getByRole("img", {
-				name: "2 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 1 Going well, 0 none yet. The You marker is on Going well.",
+				name: "2 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 1 Going well, 0 none yet. You are in the Going well part.",
 			}),
 		).toBeVisible();
 	},
@@ -238,43 +232,22 @@ export const Empty: Story = {
 	},
 };
 
-/** The drawn loading line, found by the (i) it ends with. */
-async function loadingLine(canvas: { findByRole: typeof screen.findByRole }) {
-	const tip = await canvas.findByRole("button", { name: "About the wait" });
-	const line = tip.closest<HTMLElement>("[data-slot=loading-line]");
-	if (line === null) {
-		throw new Error("The (i) About the wait sits outside the loading line");
-	}
-	return line;
-}
-
 const LOADING_ARGS = {
 	state: { status: "loading" },
 	tiles: { status: "loading" },
 } satisfies Partial<PracticesAcrossTheWorkspacePageProps>;
 
 /**
- * While the server counts: one calm line with a pulsing dot over skeletons in the loaded page's
- * shape, every region busy, and the page's one announcement in its live region.
+ * While the server reads: the skeletons in the loaded page's shape and every region busy, as the
+ * Practice profile loads; no counting line and no wait note.
  */
 export const Loading: Story = {
 	args: LOADING_ARGS,
 	play: async ({ canvas }) => {
 		await expect(figuresSection(canvas)).toHaveAttribute("aria-busy", "true");
 		await expect(groupsSection(canvas)).toHaveAttribute("aria-busy", "true");
-		await canvas.findByText(LOADING_STATUS, { selector: "[role=status]" });
-		const line = await loadingLine(canvas);
-		await expect(within(line).getByText(/^Counting /u)).toHaveAttribute("aria-hidden", "true");
-	},
-};
-
-/** The counts take longer than usual: the line says so, and the live region does not speak again. */
-export const LoadingSlow: Story = {
-	args: LOADING_ARGS,
-	play: async ({ canvas }) => {
-		await canvas.findByText(SLOW_LOAD_SHORT, undefined, { timeout: SLOW_LOAD_AFTER_MS + 2000 });
-		canvas.getByText(LOADING_STATUS, { selector: "[role=status]" });
-		await expect(canvas.queryByText(SLOW_LOAD_SHORT, { selector: "[role=status]" })).toBeNull();
+		await expect(canvas.queryByText(/^Counting /u)).toBeNull();
+		await expect(canvas.queryByRole("button", { name: "About the wait" })).toBeNull();
 	},
 };
 
@@ -283,14 +256,12 @@ export const LoadingDark: Story = {
 	globals: { theme: "dark" },
 };
 
-/** At 390px the line stays on one line in the gap under the header, and nothing overflows. */
+/** At 390px the skeletons keep to the page. */
 export const LoadingPhone: Story = {
 	args: LOADING_ARGS,
 	globals: { viewport: { value: "phone390" } },
-	play: async ({ canvas }) => {
+	play: async () => {
 		await expectNoPageOverflow();
-		const line = await loadingLine(canvas);
-		await expect(line.getBoundingClientRect().height).toBeLessThanOrEqual(24);
 	},
 };
 

@@ -8,6 +8,7 @@ import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { StandingBasisNote } from "@/components/practice-vocabulary/StandingBasisNote";
 import { DrawerBody } from "@/components/ui/drawer";
+import { Separator } from "@/components/ui/separator";
 
 import { GROUPS_LOAD_ERROR, OPEN_IN_YOUR_PROFILE } from "./across-workspace-copy";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
@@ -31,7 +32,7 @@ export interface WorkspaceGroupLevelProps {
 
 /**
  * One practice group over Practices across the workspace: the group's split beside the title, then
- * each practice's split. The reader shows only as the You marker. Their own standing, trend and
+ * each practice's split. The reader shows only as the You bracket. Their own standing, trend and
  * next step stay in their Practice profile, which every row link and the level's footer open.
  */
 export function WorkspaceGroupLevel({
@@ -79,9 +80,11 @@ export function WorkspaceGroupLevel({
 				}
 			/>
 			<DrawerBody
-				className="flex flex-col gap-4 pt-2"
+				className="flex flex-col gap-6 pt-2"
 				aria-busy={state.status === "loading" || undefined}
 			>
+				{/* The line under the header, as a practice group's level draws it on the Practice profile. */}
+				<Separator />
 				{state.status === "error" && (
 					<QueryErrorAlert error={state.error} title={GROUPS_LOAD_ERROR} onRetry={state.onRetry} />
 				)}
@@ -118,8 +121,9 @@ function GroupPractices({
 		yourBasis: practice.yourBasis ?? undefined,
 		split: practice.split,
 	}));
+	// The legend stays close to the bars it explains; the level's blocks keep the wider gap.
 	return (
-		<>
+		<div className="flex flex-col gap-4">
 			<SplitLegend scope="practice" />
 			<WorkspaceComparisonTable
 				aria-label={group === undefined ? "Practices" : `Practices of ${group.groupName}`}
@@ -135,6 +139,6 @@ function GroupPractices({
 				})}
 				markedKey={focusPracticeSlug}
 			/>
-		</>
+		</div>
 	);
 }

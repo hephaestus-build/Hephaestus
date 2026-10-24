@@ -249,15 +249,27 @@ function DrawerBody({ className, ...props }: React.ComponentProps<"div">) {
 	);
 }
 
-function DrawerFooter({ className, ...props }: React.ComponentProps<"div">) {
+const drawerFooterVariants = cva(
+	"mt-auto flex shrink-0 flex-col-reverse gap-2 border-t px-6 py-4 sm:flex-row sm:justify-end",
+	{
+		variants: {
+			// `band`: a gray ground, for a footer whose one action leads off the drawer and must be seen.
+			tone: { default: "", band: "bg-sidebar" },
+		},
+		defaultVariants: { tone: "default" },
+	},
+);
+
+function DrawerFooter({
+	className,
+	tone,
+	...props
+}: React.ComponentProps<"div"> & VariantProps<typeof drawerFooterVariants>) {
 	return (
 		// Bordered, unlike the header: body content scrolls under it.
 		<div
 			data-slot="drawer-footer"
-			className={cn(
-				"mt-auto flex shrink-0 flex-col-reverse gap-2 border-t px-6 py-4 sm:flex-row sm:justify-end",
-				className,
-			)}
+			className={cn(drawerFooterVariants({ tone }), className)}
 			{...props}
 		/>
 	);

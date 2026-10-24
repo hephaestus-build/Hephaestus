@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 
 import { cn } from "cn";
 
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/common/ActionButton";
 import { DrawerFooter } from "@/components/ui/drawer";
 
 export interface PracticeFocusFooterProps {
@@ -24,7 +24,8 @@ export interface PracticeFocusFooterProps {
 /**
  * The foot of a group or practice level on either practice page, with the one way to the same
  * group or practice on the other page. It sits in the same place on both pages, so the way there is
- * also the way back.
+ * also the way back. A muted band with an outline button that turns dark while pressed, so the way
+ * across is seen, not searched for, and stays quieter than the level's content.
  */
 export function PracticeFocusFooter({
 	sentence,
@@ -33,31 +34,36 @@ export function PracticeFocusFooter({
 	onSwitch,
 	placement = "drawer",
 }: PracticeFocusFooterProps) {
-	const Foot = placement === "drawer" ? DrawerFooter : PageFoot;
+	const Foot = placement === "drawer" ? DrawerFoot : PageFoot;
 	return (
 		<Foot className="sm:items-center sm:justify-between">
 			<p className="text-sm text-muted-foreground">{sentence}</p>
 			{/* The size of a drawer's own actions, and the width of the footer on a phone, where the
 			    footer stacks: the one way to the other page is easy to see and to hit. */}
-			<Button
-				variant="outline"
-				className="w-full sm:w-auto"
-				aria-label={accessibleLabel}
-				onClick={onSwitch}
-			>
+			{/* The action button of Reviews of your work, with words: white with a thin border at rest,
+			    dark on hover, focus and press. */}
+			<ActionButton className="w-full sm:w-auto" aria-label={accessibleLabel} onClick={onSwitch}>
 				{label}
 				<ArrowRightIcon aria-hidden />
-			</Button>
+			</ActionButton>
 		</Foot>
 	);
 }
 
-/** The page's own foot, laid out as a drawer's: the sentence, then the button, stacked on a phone. */
+/** The drawer's own foot, on its gray band. */
+function DrawerFoot(props: ComponentProps<"div">) {
+	return <DrawerFooter tone="band" {...props} />;
+}
+
+/**
+ * The page's own foot, laid out as a drawer's: the sentence, then the button, stacked on a phone. The
+ * same gray band, bordered all round, as the page has no edge for a top rule to separate it from.
+ */
 function PageFoot({ className, ...props }: ComponentProps<"div">) {
 	return (
 		<div
 			data-slot="page-focus-footer"
-			className={cn("flex flex-col gap-2 border-t pt-4 sm:flex-row", className)}
+			className={cn("flex flex-col gap-2 rounded-lg border bg-sidebar p-4 sm:flex-row", className)}
 			{...props}
 		/>
 	);

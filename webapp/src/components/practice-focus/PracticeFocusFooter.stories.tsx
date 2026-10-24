@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, within } from "storybook/test";
+import { expect, fireEvent, fn, waitFor, within } from "storybook/test";
 
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { composeGroupOverview } from "@/components/practice-profile/compose-overview";
@@ -73,6 +73,33 @@ export const ProfileGroupLevel: Story = {
 		});
 		await expectSettledVisible(button);
 		await expectFullSizeSwitch();
+		// An outline button at rest, as the admin Practice reviews' row actions are: not the dark
+		// primary fill, which only a press shows.
+		await expect(getComputedStyle(button).color).toBe(
+			getComputedStyle(level.getByRole("heading", { name: "Practices in this group" })).color,
+		);
+		// On hover and keyboard focus, and while pressed by key as by pointer, it takes the dark primary
+		// fill. Synthetic events reach no :hover, so the hover is read off the classes; a real browser
+		// shows it (screens under catalog-feedback).
+		await expect(button.className).toContain("hover:bg-primary");
+		await expect(button.className).toContain("focus-visible:bg-primary");
+		const rest = getComputedStyle(button).backgroundColor;
+		await fireEvent.keyDown(button, { key: "Enter" });
+		await waitFor(async () => {
+			await expect(getComputedStyle(button).backgroundColor).not.toBe(rest);
+		});
+		await expect(getComputedStyle(button).color).not.toBe(
+			getComputedStyle(level.getByRole("heading", { name: "Practices in this group" })).color,
+		);
+		await fireEvent.keyUp(button, { key: "Enter" });
+		await fireEvent.pointerDown(button);
+		await waitFor(async () => {
+			await expect(getComputedStyle(button).backgroundColor).not.toBe(rest);
+		});
+		await fireEvent.pointerUp(button);
+		await waitFor(async () => {
+			await expect(getComputedStyle(button).backgroundColor).toBe(rest);
+		});
 		button.click();
 		await expect(args.onSwitch).toHaveBeenCalledOnce();
 	},
