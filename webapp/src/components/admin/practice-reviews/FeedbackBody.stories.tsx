@@ -119,11 +119,12 @@ export const AsPostedOnTheWork: Story = {
 	args: { feedback: { body: postedBody, destination: "ON_WORK", textHidden: false } },
 	play: async ({ canvas, userEvent }) => {
 		const rendered = canvas.getByRole("tabpanel", { name: "Rendered" });
-		await expect(within(rendered).getByRole("link", { name: "Hephaestus" })).toHaveAttribute(
-			"href",
-			"https://example.com/respond",
-		);
-		within(rendered).getByRole("link", { name: "Why you see this and how to stop it" });
+		await expect(
+			within(rendered).getByRole("link", { name: "Hephaestus (opens in a new tab)" }),
+		).toHaveAttribute("href", "https://example.com/respond");
+		within(rendered).getByRole("link", {
+			name: "Why you see this and how to stop it (opens in a new tab)",
+		});
 		await expect(rendered.textContent).toContain("Practice review · Model.");
 		// Only the quote in the code block still carries the comment and the tags.
 		await expect(rendered.textContent.split(UUID)).toHaveLength(2);
@@ -156,10 +157,9 @@ export const UntrustedMarkdown: Story = {
 		await expect(canvasElement.querySelector("img")).toBeNull();
 		canvas.getByText("unsafe link");
 		await expect(canvas.queryByRole("link", { name: "unsafe link" })).not.toBeInTheDocument();
-		await expect(canvas.getByRole("link", { name: "safe link" })).toHaveAttribute(
-			"href",
-			"https://example.com/docs",
-		);
+		await expect(
+			canvas.getByRole("link", { name: "safe link (opens in a new tab)" }),
+		).toHaveAttribute("href", "https://example.com/docs");
 	},
 };
 
