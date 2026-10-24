@@ -800,7 +800,8 @@ void describe("CI contract", () => {
 	});
 
 	void test("a pull request runs the fast tier, and every other event also runs the queue tier", async () => {
-		const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const orchestratorSource = await readFile(".github/workflows/cicd.yml", "utf8");
+		const orchestrator = parseDocument(orchestratorSource);
 		const decision = String(
 			orchestrator.getIn(["jobs", "detect-changes", "outputs", "queue-tier"]),
 		);
@@ -838,6 +839,22 @@ void describe("CI contract", () => {
 				filter,
 			);
 		}
+		// What the queue tier replays, and what defines the shards, first runs on the pull request.
+		assert.deepEqual(
+			[
+				...pathFilter(orchestratorSource, "queue-tier-inputs").matchAll(
+					/^\s+- '(?<path>[^']+)'$/gmu,
+				),
+			].map((match) => match.groups?.path),
+			[
+				"server/application/build.gradle.kts",
+				"server/application/src/main/resources/db/**",
+				"webapp/e2e/**",
+				"webapp/playwright.config.ts",
+				"extension/e2e/**",
+				"extension/playwright.config.ts",
+			],
+		);
 
 		// The queue tier is exactly these jobs, and the latency report counts them by these names.
 		const guarded: string[] = [];
