@@ -76,6 +76,9 @@ It can capture evidence only for images that its run published.
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The PR body follows attribution policy | —                                                                        |
 
+`Build → App Server: Database`, the PostgreSQL drills, both E2E rows and the integration shards are
+the queue tier ([Two verification tiers](#two-verification-tiers)).
+
 The browser jobs retain `webapp-e2e-results` and `extension-e2e-results`, each including
 `e2e-server.log`, for seven days on success as well as failure. Inspect server startup and shutdown output even when browser assertions
 pass. A passing suite does not prove that background work started correctly. Its coverage summary
@@ -734,6 +737,71 @@ exact-match cache cannot refresh build outputs after source-only changes. Config
 reuse remains within a job: no encryption key is configured, so the
 action does not persist configuration-cache entries across jobs.
 
+## Two verification tiers
+
+A pull request runs the **fast tier**. A merge group, a push and a dispatch also run the **queue tier**.
+`detect-changes` publishes the decision once as `queue-tier`, and each queue-tier job adds it to its path condition.
+
+| Tier | Jobs |
+| --- | --- |
+| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, packaging, generated-artifact drift, the images, Security, Changesets, Compose, Actionlint, Zizmor |
+| Queue (merge group, push, dispatch) | the integration shards, the database contract tests, the PostgreSQL drills, webapp and extension E2E |
+
+Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
+The supported-host boot smoke stays on same-repository pull requests, because it boots the preview images.
+
+Main changes only through the merge queue, and the queue runs the required checks on the merged result
+([GitHub: managing a merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue)).
+bors and Prow's Tide apply the same rule. They test the merge candidate and advance the branch only when it passes
+([Rust forge: bors and rollups](https://forge.rust-lang.org/release/rollups.html),
+[Tide](https://docs.prow.k8s.io/docs/components/core/tide/maintainers/)).
+Thus, the queue tier guards main for every change, and a pull request does not repeat it.
+
+Google's presubmit applies the same split. It runs only fast, reliable tests before submission and the larger tests after
+([Software Engineering at Google, ch. 23](https://abseil.io/resources/swe-book/html/ch23.html)).
+
+When both tiers ran on each pull request, a merged change paid for the queue tier twice.
+The queue tier is most of a run's runner time, and GitHub's runner concurrency limit is shared by the queue and every pull request.
+
+A queue-tier failure removes the entry from the queue, and the failure comment links the run.
+Fix the failure and queue the pull request again.
+
+A draft pull request runs the fast tier and builds no image. So it gets no host smoke and no image
+scan. The `preview` label still builds its images, and a release candidate always builds its evidence.
+
+For a draft, the automatic queue tier for the tier's own inputs is off, but `ci:full` still opts in.
+`CI Status Gate` still reports, so required checks resolve on a draft.
+Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
+with its images. That run is never skipped as a duplicate of the draft's run.
+
+A pull request that is not a draft also runs the queue tier when it changes the tier's own inputs.
+These inputs are the workflows and actions that define the tier and the database migrations.
+They also include the server build script, which defines the shards and test tasks, and the browser
+suites' specs and configuration. A changed integration test or server class is not such an input, so its integration
+tests first run in the merge queue.
+
+To get the queue tier for any other change before you queue it, add the `ci:full` label to the pull request.
+Then push, or use **Re-run all jobs** on the latest CI/CD run.
+**Re-run failed jobs** keeps the earlier `Detect changes` result, so it does not see the label.
+`Detect changes` reads the label from the pull request when it runs, not from the event.
+A label read that fails runs the queue tier.
+
+There is no `labeled` trigger, because a label event would cancel the running CI.
+A run whose jobs all skip would also report **CI Status Gate** as passed on the head commit.
+That report would replace the verdict of the run that it cancelled.
+Locally, these commands run the queue tier's suites:
+
+- `vp run test:server:integration` for the integration shards.
+- The database contract tests: from `server/`, `./gradlew :application:databaseTest` with the `SPRING_DATASOURCE_*` settings of a running PostgreSQL (`server/AGENTS.md` § Test tiers).
+- `vp run test:postgres-restore` and `vp run test:postgres-pitr` for the drills.
+- `vp run --filter webapp test:e2e` and `vp run test:extension:e2e` for the browser suites.
+
+**Revert criterion.** [`report:ci-latency`](#full-verification-latency) reports the share of merge
+groups in the last 14 days in which a queue-tier job failed. It counts the groups in which only
+fast-tier jobs failed apart, and it gives no share for fewer than 20 groups. If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
+should have caught. Then run the queue tier on pull requests again: change `queue-tier` in
+`detect-changes` to `true` for every event.
+
 ## Path filters
 
 `detect-changes` in `cicd.yml` selects legs from changed paths for two diff events.
@@ -746,7 +814,7 @@ Ordinary main pushes omit Quality, Test, Security, Actionlint, Zizmor, and Compo
 They skip API, schema, database, and browser jobs inside `Build`.
 
 Release-version pushes repeat those checks. Main still packages and publishes images.
-Same-repository pull requests also run `Build` and `Docker` regardless of paths, because
+Same-repository pull requests, except drafts without the `preview` label, also run `Build` and `Docker` regardless of paths, because
 previews need every image at the head SHA. No other event has a preview.
 
 | Selects                    | Paths                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -998,14 +1066,16 @@ Missing timestamps remain unavailable.
 A reporting failure cannot change CI, Version PR maintenance, or release eligibility.
 JUnit results appear as `Test Results - …` check runs.
 
-### Pull-request latency
+### Full-verification latency
 
 The full-verification target is a six-minute median and a seven-minute p90, measured from workflow
-creation to completion of **CI Status Gate**. On the default branch, `CI profile` examines the latest 100 completed PR runs created in the last 28 days.
+creation to completion of **CI Status Gate**. A merge group always runs both
+[verification tiers](#two-verification-tiers), so the sample is merge groups.
+On the default branch, `CI profile` examines the latest 100 completed merge-group runs created in the last 28 days.
 It selects the ten most recent successful first-attempt runs with full server and browser verification.
 
-Lightweight changes and Version-PR runs cannot satisfy this
-cohort. Failed and canceled counts describe the bounded listing, not a repository-wide failure
+Lightweight changes and release-candidate groups, which also generate release evidence, cannot
+satisfy this cohort. Failed and canceled counts describe the bounded listing, not a repository-wide failure
 rate. Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
 qualifying runs produces an insufficient-data notice, not a pass or a regression.
 

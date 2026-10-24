@@ -19,7 +19,7 @@ import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { exitStatus } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { planRelease, releaseOutputs } from "./plan-release.ts";
-import { versionBranch } from "./report-ci-latency.ts";
+import { QUEUE_TIER_JOBS } from "./report-ci-latency.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
 import { planSubjects } from "./scan-main-images.ts";
 import { PLATFORMS, planUpstreamSubjects } from "./scan-upstream-images.ts";
@@ -283,6 +283,53 @@ function stepInputs(declaration: YAMLMap): YAMLMap {
 	const map = declaration.get("with");
 	assert.ok(isMap(map), "step declares no inputs");
 	return map;
+}
+
+/** The branch changesets maintains the Version PR on, from its configured base branch. */
+function versionBranch(config: unknown): string {
+	const baseBranch = asString(asRecord(config, "changeset config").baseBranch, "baseBranch");
+	assert.ok(baseBranch, "changeset config declares no baseBranch");
+	return `changeset-release/${baseBranch}`;
+}
+
+/** What a `detect-changes` expression reads about one run, apart from its event. */
+interface TierRun {
+	/** The live `ci:full` read; undefined is a read that failed and wrote no output. */
+	readonly full?: string;
+	readonly preview?: string;
+	readonly filter?: Readonly<Record<string, string>>;
+	readonly pullRequest?: Readonly<Record<string, unknown>>;
+	readonly action?: string;
+	readonly releaseCandidate?: string;
+}
+
+/** A `detect-changes` tier output for one event and run. */
+function evaluateTierOutput(source: string, event: string, run: TierRun = {}): string {
+	const body = /^\$\{\{ (?<body>.+) \}\}$/u.exec(source)?.groups?.body;
+	assert.ok(isSet(body));
+	const parsed = new Parser(new Lexer(body).lex().tokens, ["github", "steps"], []).parse();
+	const optIn = {
+		...(run.full === undefined ? {} : { full: run.full }),
+		...(run.preview === undefined ? {} : { preview: run.preview }),
+	};
+	const context: unknown = JSON.parse(
+		JSON.stringify({
+			github: {
+				event_name: event,
+				repository: "owner/repo",
+				event: { action: run.action ?? "synchronize", pull_request: run.pullRequest ?? {} },
+			},
+			steps: {
+				opt_in: { outputs: optIn },
+				filter: { outputs: run.filter ?? {} },
+				skip_check: { outputs: { should_skip: "true" } },
+				release_candidate: { outputs: { "release-candidate": run.releaseCandidate ?? "false" } },
+			},
+		}),
+		data.reviver,
+	);
+	assert.ok(context instanceof data.Dictionary);
+	return new Evaluator(parsed, context).evaluate().coerceString();
 }
 
 /** The shell a named `run` step ships. */
@@ -750,6 +797,196 @@ void describe("CI contract", () => {
 			/^\$\{\{ !cancelled\(\) \}\}$/u,
 			"shards start after the cold phase job, even when it fails",
 		);
+	});
+
+	void test("a pull request runs the fast tier, and every other event also runs the queue tier", async () => {
+		const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const decision = String(
+			orchestrator.getIn(["jobs", "detect-changes", "outputs", "queue-tier"]),
+		);
+		const skip = String(orchestrator.getIn(["jobs", "detect-changes", "outputs", "should_skip"]));
+		// `full` is the live label read; undefined is a read that failed and wrote no output.
+		for (const [event, full, queue, skipped] of [
+			["pull_request", "false", "false", "true"],
+			["pull_request", "true", "true", "false"],
+			["pull_request", undefined, "true", "false"],
+			["merge_group", undefined, "true", "false"],
+			["push", undefined, "true", "false"],
+			["workflow_dispatch", undefined, "true", "false"],
+		] as const) {
+			const label = full ?? "unreadable";
+			assert.equal(
+				evaluateTierOutput(decision, event, { full }),
+				queue,
+				`${event} with ci:full ${label}`,
+			);
+			// A duplicate is skipped only without the opt-in, so a re-run after the label runs the tier.
+			assert.equal(
+				evaluateTierOutput(skip, event, { full }),
+				skipped,
+				`duplicate skip, ${event} ${label}`,
+			);
+		}
+		// A change to the tier's own inputs runs it on the pull request, label or not.
+		for (const filter of ["queue-tier-inputs", "test-config", "build-config"]) {
+			assert.equal(
+				evaluateTierOutput(decision, "pull_request", {
+					full: "false",
+					filter: { [filter]: "true" },
+				}),
+				"true",
+				filter,
+			);
+		}
+
+		// The queue tier is exactly these jobs, and the latency report counts them by these names.
+		const guarded: string[] = [];
+		for (const [file, caller] of [
+			[".github/workflows/ci-build.yml", "Build"],
+			[".github/workflows/ci-tests.yml", "Test"],
+		] as const) {
+			const callee = parseDocument(await readFile(file, "utf8"));
+			const jobs = callee.get("jobs");
+			assert.ok(isMap(jobs));
+			for (const entry of jobs.items) {
+				if (isMap(entry.value) && String(entry.value.get("if")).includes("inputs.queue_tier")) {
+					const name = `${caller} / ${String(entry.value.get("name"))}`;
+					guarded.push(String(entry.key));
+					assert.ok(
+						QUEUE_TIER_JOBS.some((pattern) => pattern.test(name)),
+						`report-ci-latency.ts does not count ${name} as queue tier`,
+					);
+				}
+			}
+		}
+		assert.deepEqual(guarded.toSorted(), [
+			"extension-e2e",
+			"postgres-drill",
+			"server-database",
+			"server-integration",
+			"webapp-e2e",
+		]);
+		// A pull request packages for the browser suites only when it runs them.
+		assert.match(
+			String(orchestrator.getIn(["jobs", "server-package", "if"])),
+			/\(needs\.detect-changes\.outputs\.queue-tier == 'true' && \(needs\.detect-changes\.outputs\.e2e == 'true' \|\| needs\.detect-changes\.outputs\.extension-e2e == 'true'\)\)/u,
+		);
+
+		// A draft runs the fast tier only, unless it carries the label, and builds no image.
+		const outputs = (name: string) =>
+			String(orchestrator.getIn(["jobs", "detect-changes", "outputs", name]));
+		const draft = { draft: true, head: { repo: { full_name: "owner/repo" } } };
+		assert.equal(
+			evaluateTierOutput(outputs("draft"), "pull_request", { full: "false", pullRequest: draft }),
+			"true",
+		);
+		assert.equal(evaluateTierOutput(outputs("draft"), "pull_request", { full: "false" }), "false");
+		assert.equal(
+			evaluateTierOutput(outputs("draft"), "merge_group", { pullRequest: draft }),
+			"false",
+		);
+		assert.equal(
+			evaluateTierOutput(decision, "pull_request", {
+				full: "false",
+				filter: { "test-config": "true" },
+				pullRequest: draft,
+			}),
+			"false",
+			"a draft that changes the tier's inputs still runs only the fast tier",
+		);
+		assert.equal(
+			evaluateTierOutput(decision, "pull_request", { full: "true", pullRequest: draft }),
+			"true",
+		);
+		// The preview label is an explicit opt-in, and a release candidate always builds its evidence.
+		const labelled = { full: "false", preview: "true", pullRequest: draft };
+		assert.equal(evaluateTierOutput(outputs("draft"), "pull_request", labelled), "false");
+		assert.equal(evaluateTierOutput(outputs("previews"), "pull_request", labelled), "true");
+		assert.equal(
+			evaluateTierOutput(outputs("previews"), "pull_request", {
+				full: "false",
+				pullRequest: draft,
+			}),
+			"false",
+		);
+		assert.equal(
+			evaluateTierOutput(outputs("draft"), "pull_request", {
+				full: "false",
+				pullRequest: draft,
+				releaseCandidate: "true",
+			}),
+			"false",
+		);
+		// Marking a draft ready repeats its tree, so it must not be skipped as a duplicate.
+		assert.equal(
+			evaluateTierOutput(skip, "pull_request", { full: "false", action: "ready_for_review" }),
+			"false",
+		);
+		for (const name of [
+			"vulnerability-database",
+			"application-server-image",
+			"upstream-images",
+			"Docker",
+		]) {
+			assert.match(
+				String(orchestrator.getIn(["jobs", name, "if"])),
+				/needs\.detect-changes\.outputs\.draft != 'true'/u,
+				`${name} skips drafts`,
+			);
+		}
+		// Marking a draft ready starts the run it skipped; the gate reports on every run.
+		const types = orchestrator.getIn(["on", "pull_request", "types"]);
+		assert.ok(isSeq(types));
+		assert.deepEqual(types.toJSON(), ["opened", "synchronize", "reopened", "ready_for_review"]);
+		assert.equal(orchestrator.getIn(["jobs", "all-ci-passed", "if"]), "always()");
+		const optIn = namedStep(orchestrator, ["jobs", "detect-changes"], "Read the opt-in labels");
+		assert.equal(optIn.get("continue-on-error"), true);
+		assert.match(
+			String(optIn.get("run")),
+			/gh api "repos\/\$GITHUB_REPOSITORY\/pulls\/\$PR_NUMBER"/u,
+		);
+		const source = await readFile(".github/workflows/cicd.yml", "utf8");
+		// The event payload keeps the labels of the push, so a re-run would not see the opt-in.
+		assert.doesNotMatch(source, /github\.event\.pull_request\.labels/u);
+		assert.doesNotMatch(
+			JSON.stringify(orchestrator.getIn(["on", "pull_request"]) ?? {}),
+			/labeled/u,
+		);
+		for (const caller of ["Build", "Test"]) {
+			assert.equal(
+				orchestrator.getIn(["jobs", caller, "with", "queue_tier"]),
+				`\${{ needs.detect-changes.outputs.queue-tier }}`,
+				`${caller} receives the tier decision`,
+			);
+		}
+		for (const [file, queue, fast] of [
+			[
+				".github/workflows/ci-build.yml",
+				["server-database", "postgres-drill", "webapp-e2e", "extension-e2e"],
+				["server-api"],
+			],
+			[".github/workflows/ci-tests.yml", ["server-integration"], ["server-verification"]],
+		] as const) {
+			const workflow = parseDocument(await readFile(file, "utf8"));
+			assert.equal(
+				workflow.getIn(["on", "workflow_call", "inputs", "queue_tier", "required"]),
+				true,
+			);
+			for (const name of queue) {
+				assert.match(
+					String(workflow.getIn(["jobs", name, "if"])),
+					/&& inputs\.queue_tier == 'true'$/u,
+					`${name} belongs to the queue tier`,
+				);
+			}
+			for (const name of fast) {
+				assert.doesNotMatch(
+					String(workflow.getIn(["jobs", name, "if"])),
+					/queue_tier/u,
+					`${name} belongs to the fast tier`,
+				);
+			}
+		}
 	});
 
 	void test("the server package job is the only Gradle cache producer", async () => {
