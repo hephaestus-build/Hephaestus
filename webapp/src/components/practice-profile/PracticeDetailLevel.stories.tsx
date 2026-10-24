@@ -1,12 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
+import type { ResultList } from "@/api/types.gen";
 
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { DetailStackEntry } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import type { PracticeGuidanceState } from "@/components/practice-guidance/PracticeIntro";
-import { ReviewResultDetails, ReviewResultRow } from "@/components/profile/ReviewResultRow";
+import { ReviewResultDetails } from "@/components/profile/ReviewResultRow";
 import type { ReviewFeedState } from "@/components/profile/reviews";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +32,8 @@ import { expectNoPanelOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 import { precedes } from "@/test/dom";
 
+import { type ObservationFilter, observationLinkFilter } from "./observation-filter";
+import { newestFirst } from "./practice-feedback-cards";
 import {
 	DEFAULT_PRACTICE_TAB,
 	type PracticeProfileDetailLevelKind,
@@ -52,6 +56,9 @@ const describedPractice =
 interface LevelState {
 	stack: DetailStackEntry<PracticeProfileDetailLevelKind>[];
 	tab: PracticeTab;
+	filter: ObservationFilter;
+	/** The feedback card a link asked for, until the level lets go of it on arrival. */
+	marked?: string;
 }
 
 /** The bundled picture and guide; the introduction's own states are `PracticeIntro`'s stories. */
@@ -103,6 +110,8 @@ const meta = {
 					{ kind: "practice", id: args.practice?.slug ?? focusedChanges.slug },
 				],
 				tab: args.tab,
+				filter: args.observationFilter ?? {},
+				marked: args.markedFeedbackId,
 			}}
 		>
 			{(state, patch) => (
@@ -120,6 +129,10 @@ const meta = {
 									onClose: (depth) => patch({ stack: state.stack.slice(0, depth) }),
 								}}
 								tab={state.tab}
+								observationFilter={state.filter}
+								onObservationFilterChange={(filter) => patch({ filter })}
+								markedFeedbackId={state.marked}
+								onFeedbackArrivalShown={() => patch({ marked: undefined })}
 								onTabChange={(tab) => {
 									args.onTabChange?.(tab);
 									patch({ tab });
@@ -210,43 +223,48 @@ export const ObservationsTab: Story = {
 	},
 };
 
-/** The observation a review linked to, as the route reads it whole and hands it to the level. */
+const completeDetail = (result: ResultList) =>
+	result.id === detailResult.id ? <ReviewResultDetails result={detailResult} /> : undefined;
+
+/**
+ * Opened from a review's "Open observation": the link sets the filter to the observation's work and
+ * names the observation, which the route also reads on its own.
+ */
 const selectedArgs = {
 	tab: "results",
-	selectedObservationId: detailResult.id,
-	selectedObservation: (
-		<ol
-			aria-label="Selected observation"
-			className="overflow-hidden rounded-xl border bg-background"
-		>
-			<ReviewResultRow
-				result={detailResult}
-				defaultOpen
-				details={<ReviewResultDetails result={detailResult} />}
-			/>
-		</ol>
-	),
+	renderObservation: completeDetail,
+	observationFilter: observationLinkFilter(detailResult),
+	selectedObservation: { status: "ready", result: detailResult },
 } satisfies Partial<PracticeDetailLevelProps>;
 
 /**
- * Opened from a review at one observation: it leads the Observations tab, right under the tab
- * rail, though the practice has its introduction, picture and guide. They wait in the Guide tab,
- * and going there and back keeps the same observation in front.
+ * Opened from a review at one observation: the tab is filtered to that observation's work, the
+ * observation is open with its problems and next steps, and no other row is. It is in the history
+ * once, with no pinned copy. Going to the Guide tab and back keeps it.
  */
 export const SelectedObservation: Story = {
 	args: selectedArgs,
 	play: async () => {
-		const selected = await screen.findByRole("list", { name: "Selected observation" });
-		await expectSettledVisible(selected);
-		const observations = screen.getByRole("tabpanel", { name: "Observations" });
-		await expect(within(observations).getByRole("list", { name: "Selected observation" })).toBe(
-			selected,
+		const history = await screen.findByRole("list", { name: "Reviews" });
+		await expectSettledVisible(history);
+		const observations = screen.getByRole("tabpanel", { name: /^Observations/u });
+		await expect(within(observations).getByRole("searchbox", { name: "Search" })).toHaveValue(
+			detailResult.item.label,
 		);
+		await expect(within(history).getAllByText(newestSummary)).toHaveLength(1);
+		await expect(screen.queryByText(olderSummary)).not.toBeInTheDocument();
+		// The asked observation wears the accent's bar; no open row carries an outcome-colored rail.
+		await expect(history.querySelectorAll("[data-selected-rail]")).toHaveLength(1);
+		await expect(history.querySelector("[data-outcome-rail]")).toBeNull();
+		const open = within(history)
+			.getAllByRole("button", { expanded: true })
+			.filter((button) => button.hasAttribute("aria-controls"));
+		await expect(open).toHaveLength(1);
 		await expect(
-			within(selected).getByText("Move the class in one commit and add the cache in the next."),
+			within(history).getByText("Move the class in one commit and add the cache in the next."),
 		).toBeVisible();
 		await expect(screen.queryByRole("region", { name: "Introduction" })).not.toBeInTheDocument();
-		await expect(precedes(screen.getByRole("tablist", { name: "Practice" }), selected)).toBe(true);
+		await expect(precedes(screen.getByRole("tablist", { name: "Practice" }), history)).toBe(true);
 
 		await userEvent.click(screen.getByRole("tab", { name: "Guide" }));
 		const guide = await screen.findByRole("tabpanel", { name: "Guide" });
@@ -257,12 +275,211 @@ export const SelectedObservation: Story = {
 		await expect(
 			within(guide).getByRole("heading", { level: 3, name: "Practice guide" }),
 		).toBeVisible();
-		await expect(screen.queryByRole("list", { name: "Selected observation" })).toBeNull();
 
-		await userEvent.click(screen.getByRole("tab", { name: "Observations" }));
-		const back = await screen.findByRole("list", { name: "Selected observation" });
+		await userEvent.click(screen.getByRole("tab", { name: /^Observations/u }));
+		const back = await screen.findByRole("list", { name: "Reviews" });
 		await expect(within(back).getByText(newestSummary)).toBeVisible();
 		await expect(screen.queryByRole("region", { name: "Introduction" })).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * The linked observation's review is on a page not loaded yet: the observation joins the history
+ * once, in its place by time, read on its own.
+ */
+export const SelectedObservationNotLoaded: Story = {
+	args: {
+		...selectedArgs,
+		feed: { ...readyFeed, reviews: detailReviews.slice(1), hasMore: true },
+		observationFilter: { observationId: detailResult.id },
+	},
+	play: async () => {
+		const history = await screen.findByRole("list", { name: "Reviews" });
+		await expectSettledVisible(history);
+		await expect(within(history).getAllByText(newestSummary)).toHaveLength(1);
+		await expect(within(history).getByText(olderSummary)).toBeVisible();
+		await expect(
+			precedes(within(history).getByText(newestSummary), within(history).getByText(olderSummary)),
+		).toBe(true);
+	},
+};
+
+/**
+ * The linked observation, read on its own, stands while the rest of the history still loads: the
+ * history's placeholder follows it, and it does not wait for the pages.
+ */
+export const SelectedObservationWhileHistoryLoads: Story = {
+	args: {
+		...selectedArgs,
+		feed: { status: "loading" },
+		observationFilter: { observationId: detailResult.id },
+	},
+	play: async () => {
+		const history = await screen.findByRole("list", { name: "Reviews" });
+		await expectSettledVisible(history);
+		await expect(within(history).getAllByText(newestSummary)).toHaveLength(1);
+		await expect(history.querySelectorAll("li[aria-current=true]")).toHaveLength(1);
+	},
+};
+
+/** The rest of the history failed: the linked observation still stands, with the error beside it. */
+export const SelectedObservationWhenHistoryFailed: Story = {
+	args: {
+		...selectedArgs,
+		feed: { status: "error", error: new Error("offline"), onRetry: fn() },
+		observationFilter: { observationId: detailResult.id },
+	},
+	play: async () => {
+		const history = await screen.findByRole("list", { name: "Reviews" });
+		await expectSettledVisible(history);
+		await expect(within(history).getAllByText(newestSummary)).toHaveLength(1);
+		await expectSettledVisible(screen.getByText("We could not load reviews"));
+	},
+};
+
+/**
+ * The linked observation is still on its way and no loaded page holds an observation: the history
+ * shows the placeholder only, not a "No observations match" that the observation could still prove
+ * wrong.
+ */
+export const SelectedObservationStillLoading: Story = {
+	args: {
+		...selectedArgs,
+		feed: { ...readyFeed, reviews: [], hasMore: false },
+		observationFilter: { observationId: detailResult.id },
+		selectedObservation: { status: "loading" },
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Observations/u }));
+		screen.getByText("Loading the observation you opened…");
+		await expect(screen.queryByText("No observations match your filters")).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * The timeframe of Reviews of your work, in the tab row right of Guide: All time by default, so
+ * nothing is hidden; a choice is kept with the other filters and read by the server.
+ */
+export const ObservationsTimeframe: Story = {
+	args: { tab: "results", renderObservation: completeDetail },
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Observations/u }));
+		const range = screen.getByRole("toolbar", { name: "Timeframe" });
+		// In the tab row, right of Guide: one setting for the Feedback and the Observations tab.
+		await expect(screen.getByRole("tabpanel", { name: /^Observations/u })).not.toContainElement(
+			range,
+		);
+		await expect(screen.getByRole("tablist", { name: "Practice" }).parentElement).toContainElement(
+			range,
+		);
+		await expect(within(range).getByRole("button", { name: "All time" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await expect(
+			within(range)
+				.getAllByRole("button")
+				.map((button) => button.textContent),
+		).toStrictEqual(["Last 7 days", "Last 30 days", "Last 90 days", "All time"]);
+		await userEvent.click(within(range).getByRole("button", { name: "Last 30 days" }));
+		await expect(within(range).getByRole("button", { name: "Last 30 days" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		// The timeframe is not one of the tab's own filters: no Reset appears for it, and no line
+		// repeats the count the tab's name carries.
+		await expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
+		await expect(screen.queryByText(/match(?:es)? your filters/u)).not.toBeInTheDocument();
+		await expect(screen.getByRole("tab", { name: /^Observations \d/u })).toBeVisible();
+	},
+};
+
+/** A filter on the work: typing "#898" keeps that pull request's observation and opens it. */
+export const FilterByWork: Story = {
+	args: { tab: "results", renderObservation: completeDetail },
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		const search = await screen.findByRole("searchbox", { name: "Search" });
+		await userEvent.type(search, "#898");
+		const history = screen.getByRole("list", { name: "Reviews" });
+		await expect(within(history).getByText(olderSummary)).toBeVisible();
+		await expect(within(history).queryByText(newestSummary)).not.toBeInTheDocument();
+		// The tab's name carries the count; a screen reader hears it in a status of its own.
+		await expect(screen.getByRole("tab", { name: "Observations 1" })).toBeVisible();
+		await expect(screen.getByRole("status")).toHaveTextContent("1 observation shown.");
+		await expect(screen.queryByText(/match(?:es)? your filters/u)).not.toBeInTheDocument();
+		// Every observation the search found wears the accent's bar; none claims to be the current one,
+		// which only a link's observation is.
+		const observations = history.querySelectorAll("ul > li");
+		await expect(observations.length).toBeGreaterThan(0);
+		await expect(history.querySelectorAll("[data-selected-rail]")).toHaveLength(
+			observations.length,
+		);
+		await expect(history.querySelector("[aria-current]")).toBeNull();
+		// The search's own clear button, in the foreground like every control's icon.
+		await expect(screen.getByRole("button", { name: "Clear search" })).toBeVisible();
+		await userEvent.click(screen.getByRole("button", { name: "Reset" }));
+		await expectSettledVisible(await within(history).findByText(newestSummary));
+		await expect(screen.getByRole("tab", { name: "Observations 3" })).toBeVisible();
+		await expect(history.querySelectorAll("[data-selected-rail]")).toHaveLength(0);
+	},
+};
+
+/** A filter that keeps nothing says so and offers the way back. */
+export const FilterMatchesNothing: Story = {
+	args: {
+		tab: "results",
+		renderObservation: completeDetail,
+		observationFilter: { query: "no such work" },
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("No observations match your filters"));
+		await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+		await expect(await screen.findByText(newestSummary)).toBeVisible();
+	},
+};
+
+/**
+ * Only the timeframe narrows, and nothing falls in it: no Reset, as the timeframe has its own
+ * control, and the way back is a longer timeframe. Reset lets go of the search and keeps the timeframe.
+ */
+export const TimeframeMatchesNothing: Story = {
+	args: {
+		tab: "results",
+		renderObservation: completeDetail,
+		feed: { ...readyFeed, reviews: [] },
+		observationFilter: { since: "7d" },
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("No observations match your filters"));
+		await expect(screen.getByRole("tab", { name: "Observations 0" })).toBeVisible();
+		await expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
+		await userEvent.click(screen.getByRole("button", { name: "Show all time" }));
+		await expect(
+			within(screen.getByRole("toolbar", { name: "Timeframe" })).getByRole("button", {
+				name: "All time",
+			}),
+		).toHaveAttribute("aria-pressed", "true");
+	},
+};
+
+/** Reset clears the search and leaves the timeframe as chosen. */
+export const ResetKeepsTheTimeframe: Story = {
+	args: {
+		tab: "results",
+		renderObservation: completeDetail,
+		observationFilter: { since: "30d", query: "#898" },
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Observations/u }));
+		await userEvent.click(screen.getByRole("button", { name: "Reset" }));
+		await expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("");
+		await expect(
+			within(screen.getByRole("toolbar", { name: "Timeframe" })).getByRole("button", {
+				name: "Last 30 days",
+			}),
+		).toHaveAttribute("aria-pressed", "true");
+		await expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
 	},
 };
 
@@ -274,7 +491,7 @@ export const SelectedObservationWithoutStanding: Story = {
 		described: { name: "Pair on schema changes", ...bundledPractice },
 	},
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("list", { name: "Selected observation" }));
+		await expectSettledVisible(await screen.findByRole("list", { name: "Reviews" }));
 		await expect(screen.queryByText("Not reviewed")).toBeNull();
 		await expect(screen.queryByRole("region", { name: "Introduction" })).not.toBeInTheDocument();
 		await userEvent.click(screen.getByRole("tab", { name: "Guide" }));
@@ -289,10 +506,8 @@ export const SelectedObservationPhone: Story = {
 	play: async () => {
 		await expect(window.innerWidth).toBe(320);
 		await expect(window.innerHeight).toBe(568);
-		const selected = await screen.findByRole("list", { name: "Selected observation" });
-		await expectSettledVisible(selected);
-		// On arrival, before any scroll, the observation already starts inside the screen.
-		await expect(selected.getBoundingClientRect().top).toBeLessThan(window.innerHeight);
+		const history = await screen.findByRole("list", { name: "Reviews" });
+		await expectSettledVisible(history);
 		await expect(screen.queryByRole("region", { name: "Introduction" })).not.toBeInTheDocument();
 		await expectNoPanelOverflow(screen.getByRole("dialog", { name: focusedChanges.name }));
 	},
@@ -309,6 +524,103 @@ export const RequestedReviewClean: Story = {
 		await expect(
 			screen.getByText(/A requested review is evidence only and does not change your standing\./u),
 		).toBeVisible();
+	},
+};
+
+/**
+ * Arrived from an observation's "Read it on this practice's Feedback tab": the card its feedback
+ * became is scrolled into view and marked with the accent bar, and says it is the current one.
+ */
+export const FeedbackCardFromAnObservation: Story = {
+	args: {
+		tab: "feedback",
+		practice: describedPractice,
+		markedFeedbackId: [...ALL_FEEDBACK_CARDS]
+			.reverse()
+			.find((card) => card.practiceSlug === describedPractice.slug)?.feedbackId,
+	},
+	play: async ({ args }) => {
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Feedback/u }));
+		const marked = document.querySelector("[data-marked-feedback]");
+		await expect(marked).toHaveAttribute("aria-current", "true");
+		// Washed once on arrival, not barred for good.
+		await expect(marked?.querySelector("[data-arrival-highlight]")).not.toBeNull();
+		await expect(marked?.querySelector("[data-selected-rail]")).toBeNull();
+		await expect(marked?.querySelector("article")).not.toBeNull();
+		await expect(document.querySelectorAll("[data-marked-feedback]")).toHaveLength(
+			args.markedFeedbackId === undefined ? 0 : 1,
+		);
+		// Once per arrival: to Observations and back, the sheen does not play again.
+		await userEvent.click(screen.getByRole("tab", { name: /^Observations/u }));
+		await userEvent.click(screen.getByRole("tab", { name: /^Feedback/u }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Feedback/u }));
+		await expect(document.querySelector("[data-arrival-highlight]")).toBeNull();
+		await expect(document.querySelector("[data-marked-feedback]")).toBeNull();
+	},
+};
+
+/** A link may ask for a card the tab no longer lists: it says so instead of marking nothing. */
+export const FeedbackCardNoLongerListed: Story = {
+	args: {
+		tab: "feedback",
+		practice: describedPractice,
+		markedFeedbackId: "00000000-0000-4000-8000-00000000f0ff",
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Feedback/u }));
+		await expect(
+			screen.getByText(/The feedback you came from is no longer listed here/u),
+		).toBeVisible();
+		await expect(document.querySelector("[data-marked-feedback]")).toBeNull();
+	},
+};
+
+/** The level's timeframe narrows the Feedback tab's cards too, by the time each card shows. */
+export const FeedbackTimeframe: Story = {
+	args: { tab: "feedback", practice: describedPractice, observationFilter: { since: "7d" } },
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Feedback/u }));
+		const panel = screen.getByRole("tabpanel", { name: /^Feedback/u });
+		const narrowed = within(panel).queryAllByRole("article").length;
+		const range = screen.getByRole("toolbar", { name: "Timeframe" });
+		await userEvent.click(within(range).getByRole("button", { name: "All time" }));
+		await expect(within(panel).queryAllByRole("article").length).toBeGreaterThan(narrowed);
+	},
+};
+
+const oldestDescribedCard = newestFirst(
+	ALL_FEEDBACK_CARDS.filter((card) => card.practiceSlug === describedPractice.slug),
+).at(-1);
+
+/**
+ * A link to a card older than the level's timeframe: the card shows and is highlighted once, and
+ * it stays listed for the rest of the visit after the address lets go of its id; a visit to
+ * Observations and back does not replay the highlight.
+ */
+export const FeedbackCardOutsideTimeframe: Story = {
+	args: {
+		tab: "feedback",
+		practice: describedPractice,
+		observationFilter: { since: "7d" },
+		markedFeedbackId: oldestDescribedCard?.feedbackId,
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Feedback/u }));
+		const marked = document.querySelector("[data-marked-feedback]");
+		await expect(marked).not.toBeNull();
+		await expect(marked?.querySelector("[data-arrival-highlight]")).not.toBeNull();
+		const title = oldestDescribedCard?.headline ?? "";
+		// Once the highlight is over, the card is still listed.
+		await waitFor(
+			async () => expect(document.querySelector("[data-arrival-highlight]")).toBeNull(),
+			{ timeout: 5000 },
+		);
+		await expect(screen.getByRole("article", { name: title })).toBeVisible();
+		await userEvent.click(screen.getByRole("tab", { name: /^Observations/u }));
+		await userEvent.click(screen.getByRole("tab", { name: /^Feedback/u }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Feedback/u }));
+		await expect(screen.getByRole("article", { name: title })).toBeVisible();
+		await expect(document.querySelector("[data-arrival-highlight]")).toBeNull();
 	},
 };
 

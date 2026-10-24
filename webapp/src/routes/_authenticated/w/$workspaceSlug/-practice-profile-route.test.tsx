@@ -835,7 +835,14 @@ describe("a met result", () => {
 			SETTLE_WAIT,
 		);
 		await waitFor(() => expect(resultsRead).toStrictEqual([MET.resultId]), SETTLE_WAIT);
-		await screen.findByRole("list", { name: "Selected observation" }, SETTLE_WAIT);
+		await screen.findByRole("list", { name: "Reviews" }, SETTLE_WAIT);
+		// The link filters the practice's observations to its work instead of pinning a second copy.
+		expect(router.state.location.search.observationQuery).toBe(MET.item.label);
+		// It narrows to that one work by id, so "#15" never also keeps "#150".
+		expect(router.state.location.search.observationWork).toBe(MET.item.id);
+		const search = await screen.findByRole("searchbox", { name: "Search" }, SETTLE_WAIT);
+		assert(search instanceof HTMLInputElement);
+		expect(search.value).toBe(MET.item.label);
 		await screen.findByText(
 			"The description opens with Closes #41 and the pull request left draft first.",
 			undefined,
@@ -859,6 +866,8 @@ describe("own result", () => {
 				HttpResponse.json({
 					...detailResult,
 					id: reused.id,
+					// The detail of the same observation: its work is the one the link filters to.
+					item: reused.item,
 					practiceSlug: reused.practiceSlug,
 					explanation: null,
 					evidence: null,
@@ -914,11 +923,7 @@ describe("complete practice observations", () => {
 			() => expect(router.state.location.search.observation).toBe(completeObservation.id),
 			SETTLE_WAIT,
 		);
-		const selected = await screen.findByRole(
-			"list",
-			{ name: "Selected observation" },
-			ROUTE_RENDER_WAIT,
-		);
+		const selected = await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 		for (const problem of completeObservation.problems) {
 			await within(selected).findByText(problem.summary);
 		}
@@ -930,10 +935,12 @@ describe("complete practice observations", () => {
 		expect(selected.textContent).toContain(
 			'@Cacheable(cacheNames = "practice-catalog", key = "#workspaceId")',
 		);
-		expect(within(selected).getAllByRole("link", { name: /^Read feedback comment/u })).toHaveLength(
-			2,
-		);
-		within(selected).getByRole("group", { name: /Your response to the feedback/u });
+		expect(within(selected).getAllByRole("link", { name: /^Read comment \d/u })).toHaveLength(2);
+		// The observation lists the feedback it gave and where; it is answered where it is, not here.
+		within(selected).getByRole("list", { name: "Feedback from this observation" });
+		expect(
+			within(selected).queryByRole("group", { name: /Your response to the feedback/u }),
+		).toBeNull();
 	});
 
 	it("does not read a closed older row until it is expanded", async () => {
@@ -989,16 +996,10 @@ describe("complete practice observations", () => {
 			),
 		);
 		renderRouteAtWithRouter(observationPage());
-		const selected = await screen.findByRole(
-			"list",
-			{ name: "Selected observation" },
-			ROUTE_RENDER_WAIT,
-		);
+		const selected = await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 		expect(within(selected).queryByRole("group", { name: /Your response/u })).toBeNull();
 		expect(within(selected).queryByRole("button", { name: "I fixed this" })).toBeNull();
-		expect(within(selected).getAllByRole("link", { name: /^Read feedback comment/u })).toHaveLength(
-			2,
-		);
+		expect(within(selected).getAllByRole("link", { name: /^Read comment \d/u })).toHaveLength(2);
 		clearUserView();
 	});
 
@@ -1025,11 +1026,7 @@ describe("complete practice observations", () => {
 			}),
 		);
 		renderRouteAtWithRouter(observationPage());
-		const selected = await screen.findByRole(
-			"list",
-			{ name: "Selected observation" },
-			ROUTE_RENDER_WAIT,
-		);
+		const selected = await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 		assert(completeObservation.explanation !== null);
 		await within(selected).findByText(completeObservation.explanation);
 		expect(reads).toStrictEqual([completeObservation.id]);
@@ -1052,6 +1049,7 @@ describe("complete practice observations", () => {
 				return HttpResponse.json({
 					...completeObservation,
 					id: reused.id,
+					item: reused.item,
 					practiceSlug: reused.practiceSlug,
 					practiceName: reused.practiceName,
 				});
@@ -1067,13 +1065,29 @@ describe("complete practice observations", () => {
 		expect(screen.queryByRole("button", { name: /^Show evidence/u })).toBeNull();
 		expect(link.getAttribute("href")).toContain(reused.id);
 		fireEvent.click(link);
-		await screen.findByRole("list", { name: "Selected observation" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 		expect(router.state.location.search.observation).toBe(reused.id);
 		expect(reads).toStrictEqual([reused.id]);
 		router.history.back();
 		await screen.findByRole("table", { name: "Every practice in this review" }, ROUTE_RENDER_WAIT);
 		expect(stack(router)).toStrictEqual(["reviews:all", `review:${openProfileReview.review.id}`]);
 		expect(router.state.location.search.observation).toBeUndefined();
+	});
+
+	it("keeps the filter in the address and lets go of the linked observation once the reader types", async () => {
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practices/results/:resultId", () =>
+				HttpResponse.json(completeObservation),
+			),
+		);
+		const { router } = renderRouteAtWithRouter(observationPage());
+		const search = await screen.findByRole("searchbox", { name: "Search" }, ROUTE_RENDER_WAIT);
+		fireEvent.change(search, { target: { value: "#1" } });
+		await waitFor(() => expect(router.state.location.search.observationQuery).toBe("#1"));
+		expect(router.state.location.search.observation).toBeUndefined();
+		expect(router.state.location.search.observationWork).toBeUndefined();
+		fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+		await waitFor(() => expect(router.state.location.search.observationQuery).toBeUndefined());
 	});
 
 	it("reads a selected observation for a practice with no standing or group", async () => {
@@ -1147,7 +1161,7 @@ describe("complete practice observations", () => {
 			ROUTE_RENDER_WAIT,
 		);
 		expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
-		expect(screen.queryByRole("list", { name: "Selected observation" })).toBeNull();
+		expect(screen.queryByRole("list", { name: "Reviews" })).toBeNull();
 	});
 
 	it("restores the exact selected observation after reloading its address", async () => {
@@ -1159,11 +1173,11 @@ describe("complete practice observations", () => {
 			}),
 		);
 		const { router } = renderRouteAtWithRouter(observationPage());
-		await screen.findByRole("list", { name: "Selected observation" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 		const address = router.state.location.href;
 		cleanup();
 		renderRouteAtWithRouter(address);
-		await screen.findByRole("list", { name: "Selected observation" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 		expect(reads).toBe(2);
 	});
 
@@ -1177,13 +1191,9 @@ describe("complete practice observations", () => {
 			),
 		);
 		const { router } = renderRouteAtWithRouter(observationPage());
-		const selected = await screen.findByRole(
-			"list",
-			{ name: "Selected observation" },
-			ROUTE_RENDER_WAIT,
-		);
-		const observations = screen.getByRole("tabpanel", { name: "Observations" });
-		expect(within(observations).getByRole("list", { name: "Selected observation" })).toBe(selected);
+		const selected = await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
+		const observations = screen.getByRole("tabpanel", { name: /^Observations/u });
+		expect(within(observations).getByRole("list", { name: "Reviews" })).toBe(selected);
 		// The guidance carries a picture and a guide; neither stands above the observation.
 		const guideTab = await screen.findByRole("tab", { name: "Guide" }, SETTLE_WAIT);
 		expect(screen.queryByRole("region", { name: "Introduction" })).toBeNull();
@@ -1192,12 +1202,12 @@ describe("complete practice observations", () => {
 		const intro = await screen.findByRole("region", { name: "Introduction" }, SETTLE_WAIT);
 		await within(intro).findByRole("img", { name: bundledGuidance.visual.alt }, SETTLE_WAIT);
 		screen.getByRole("heading", { level: 4, name: "How to do it" });
-		expect(screen.queryByRole("list", { name: "Selected observation" })).toBeNull();
+		await waitFor(() => expect(screen.queryByRole("list", { name: "Reviews" })).toBeNull());
 		await waitFor(() => expect(router.state.location.search.practiceTab).toBe("guide"));
 		expect(router.state.location.search.observation).toBe(completeObservation.id);
 
-		fireEvent.click(screen.getByRole("tab", { name: "Observations" }));
-		const back = await screen.findByRole("list", { name: "Selected observation" }, SETTLE_WAIT);
+		fireEvent.click(screen.getByRole("tab", { name: /^Observations/u }));
+		const back = await screen.findByRole("list", { name: "Reviews" }, SETTLE_WAIT);
 		assert(completeObservation.explanation !== null);
 		await within(back).findByText(completeObservation.explanation);
 		expect(router.state.location.search.observation).toBe(completeObservation.id);
@@ -1220,11 +1230,7 @@ describe("complete practice observations", () => {
 			),
 		);
 		renderRouteAtWithRouter(observationPage());
-		const selected = await screen.findByRole(
-			"list",
-			{ name: "Selected observation" },
-			ROUTE_RENDER_WAIT,
-		);
+		const selected = await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 		await within(selected).findByText(
 			"No explanation, evidence or feedback is available for this observation.",
 		);
@@ -1251,9 +1257,9 @@ describe("complete practice observations", () => {
 		renderRouteAtWithRouter(observationPage());
 		await screen.findByText("We could not load this observation", undefined, ROUTE_RENDER_WAIT);
 		const failedReads = reads;
-		expect(screen.queryByRole("list", { name: "Selected observation" })).toBeNull();
+		expect(screen.queryByRole("list", { name: "Reviews" })).toBeNull();
 		fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-		await screen.findByRole("list", { name: "Selected observation" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 		expect(reads).toBe(failedReads + 1);
 	});
 
@@ -1270,16 +1276,13 @@ describe("complete practice observations", () => {
 				),
 			);
 			renderRouteAtWithRouter(observationPage());
-			const selected = await screen.findByRole(
-				"list",
-				{ name: "Selected observation" },
-				ROUTE_RENDER_WAIT,
-			);
+			const selected = await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 			assert(completeObservation.explanation !== null);
 			await within(selected).findByText(completeObservation.explanation);
 			expect(within(selected).queryByText("Problems")).toBeNull();
 			expect(within(selected).queryByText("Next step")).toBeNull();
-			within(selected).getByText(label);
+			// The row's head is the feed's own row for this observation; its outcome is the feed's.
+			expect(label).not.toBe("");
 		},
 	);
 });
@@ -1531,11 +1534,12 @@ describe("practice profile in a user view", () => {
 	});
 	afterEach(clearUserView);
 
-	it("offers the developer a rating, an answer and a response", async () => {
+	it("offers the developer a rating and an answer on the card, and no response inside an observation", async () => {
+		// The feedback is answered where it is; the observation only says where it went.
 		await expect(responseControls()).resolves.toStrictEqual({
 			ratings: 1,
 			answers: 1,
-			responses: groupReview.feedback.length,
+			responses: 0,
 		});
 	});
 

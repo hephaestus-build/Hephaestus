@@ -25,11 +25,14 @@ export interface ReviewCardProps {
 	/** Off on a practice's own level, where every row is that practice and no row repeats it. */
 	showPracticeName?: boolean;
 	/**
-	 * Which of this card's results arrive open: every one, only the first, or none. Whoever
-	 * places the card decides — a feed of one practice opens its newest row and leaves the reader
-	 * to open the rest.
+	 * Whether a result arrives open; without it every one does. Whoever places the card decides: a
+	 * practice's own level opens one row by its rule (`practice-profile/observation-filter.ts`).
 	 */
-	initiallyOpen?: "all" | "first" | "none";
+	openOnArrival?: (result: ResultList) => boolean;
+	/** The observation a link asked for, which its row marks as selected. */
+	selectedResultId?: string;
+	/** Every row is a match of the search, and wears the accent's bar. */
+	marksSearchMatches?: boolean;
 	/** Set on the last card while earlier reviews exist below the fold. */
 	tailContinues?: boolean;
 }
@@ -45,7 +48,9 @@ export function ReviewCard({
 	responses,
 	renderObservation,
 	showPracticeName = true,
-	initiallyOpen = "all",
+	openOnArrival,
+	selectedResultId,
+	marksSearchMatches = false,
 	tailContinues = false,
 }: ReviewCardProps) {
 	const [showAllResults, setShowAllResults] = useState(false);
@@ -69,16 +74,21 @@ export function ReviewCard({
 			}
 			tailContinues={tailContinues}
 		>
-			<div className="min-w-0 overflow-hidden rounded-xl border bg-background">
+			{/* The feedback card's edge, a stronger outline and a faint shadow, so each observation card
+			    stands off the page as a feedback card does. */}
+			<div className="min-w-0 overflow-hidden rounded-xl border border-foreground/15 bg-background shadow-sm">
 				{!merged && <ReviewedItem item={review.review.item} tone="head" />}
 				<ul className="divide-y">
-					{visibleResults.map((result, index) => (
+					{visibleResults.map((result) => (
 						<ReviewResultRow
-							key={result.id}
+							// A row whose arrival state changes starts again from it: the open state is the
+							// row's own, so a filter that moves the target must remount the row to move it.
+							key={`${result.id}:${String(openOnArrival?.(result) ?? true)}`}
 							result={result}
-							responses={responses}
+							selected={result.id === selectedResultId}
+							matched={marksSearchMatches}
 							details={renderObservation?.(result)}
-							defaultOpen={initiallyOpen === "all" || (initiallyOpen === "first" && index === 0)}
+							defaultOpen={openOnArrival?.(result) ?? true}
 							showPracticeName={showPracticeName}
 							work={merged ? <ReviewedItem item={review.review.item} tone="line" /> : undefined}
 						/>

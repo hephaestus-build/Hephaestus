@@ -15,7 +15,7 @@ import {
 	ReviewSortSelect,
 } from "@/components/admin/practice-reviews/ReviewSortSelect";
 import type { FacetOption } from "@/components/common/FacetMultiSelect";
-import { type FilterOption, FilterToggle } from "@/components/common/FilterToggle";
+import { FilterToggle } from "@/components/common/FilterToggle";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { ResultCount } from "@/components/common/ResultCount";
 import { statusFacetOptions } from "@/components/common/status-def";
@@ -37,23 +37,15 @@ import { nonEmpty } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 
 import {
+	ALL_TIME,
 	LISTED_REVIEW_STATUSES,
 	PROFILE_REVIEWS_PAGE_SIZE,
-	REVIEW_TIMEFRAMES,
-	REVIEW_TIMEFRAME_DEFS,
+	REVIEW_TIMEFRAME_OPTIONS,
 	REVIEWS_OF_YOUR_WORK,
 	type ReviewOrder,
 	type ReviewTimeframe,
 } from "./practice-profile-search";
 import { ReviewsTable, ReviewsTableSkeleton } from "./ReviewsTable";
-
-/** The choice that narrows nothing; it never reaches the address, where every review is the default. */
-const ALL_TIME = "all";
-
-const TIMEFRAME_OPTIONS: readonly FilterOption<ReviewTimeframe | typeof ALL_TIME>[] = [
-	...REVIEW_TIMEFRAMES.map((value) => ({ value, label: REVIEW_TIMEFRAME_DEFS[value].label })),
-	{ value: ALL_TIME, label: "All time" },
-];
 
 /** The statuses the list can hold, as the developer's own review surfaces name them, with their icons. */
 const STATUS_OPTIONS = statusFacetOptions(OWN_REVIEW_STATUS_DEFS).filter((option) =>
@@ -271,7 +263,7 @@ export function ProfileReviewsLevel({
 						<div className="flex basis-full flex-wrap items-center gap-3 sm:ml-auto sm:basis-auto">
 							<FilterToggle
 								label="Timeframe"
-								options={TIMEFRAME_OPTIONS}
+								options={REVIEW_TIMEFRAME_OPTIONS}
 								value={since ?? ALL_TIME}
 								onChange={(next) => onSinceChange(next === ALL_TIME ? undefined : next)}
 							/>

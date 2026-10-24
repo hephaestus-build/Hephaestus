@@ -21,7 +21,12 @@ import { ReviewTimeline, type ReviewTimelineProps } from "./ReviewTimeline";
 
 export interface ReviewFeedProps extends Pick<
 	ReviewTimelineProps,
-	"responses" | "showPracticeName" | "initiallyOpen" | "renderObservation"
+	| "responses"
+	| "showPracticeName"
+	| "openOnArrival"
+	| "selectedResultId"
+	| "marksSearchMatches"
+	| "renderObservation"
 > {
 	feed: ReviewFeedState;
 	/**
@@ -42,7 +47,9 @@ export function ReviewFeed({
 	skeletonRows,
 	responses,
 	showPracticeName,
-	initiallyOpen,
+	openOnArrival,
+	selectedResultId,
+	marksSearchMatches,
 	renderObservation,
 	emptyTitle,
 	emptyDescription,
@@ -113,7 +120,9 @@ export function ReviewFeed({
 				reviews={shown}
 				responses={responses}
 				showPracticeName={showPracticeName}
-				initiallyOpen={initiallyOpen}
+				openOnArrival={openOnArrival}
+				selectedResultId={selectedResultId}
+				marksSearchMatches={marksSearchMatches}
 				renderObservation={renderObservation}
 				continues={feed.hasMore}
 				loadingMore={loadingMore}
