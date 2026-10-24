@@ -1517,7 +1517,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
                 null,
                 Optional.empty(),
-                Optional.of(worker),
+                worker,
                 mock(ReviewJobClaimService.class),
                 recovery);
         executor.setCompositionContinuation(continuation);

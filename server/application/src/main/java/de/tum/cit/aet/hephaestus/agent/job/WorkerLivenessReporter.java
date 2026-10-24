@@ -9,6 +9,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -42,6 +43,10 @@ public class WorkerLivenessReporter {
     private int consecutiveFailures;
 
     private @Nullable ScheduledExecutorService scheduler;
+
+    // One thread, so a slow container stop delays later stops, never the heartbeat.
+    private final ExecutorService stops = Executors.newSingleThreadExecutor(
+            Thread.ofPlatform().name("agent-lost-attempt-stop").daemon(true).factory());
 
     public WorkerLivenessReporter(
             WorkerRegistryRepository repository,
@@ -99,7 +104,7 @@ public class WorkerLivenessReporter {
         }
         // The ledger, not the control channel, says which jobs this worker still runs.
         try {
-            executor.stopAttemptsNoLongerOwned();
+            for (var lost : executor.lostAttemptsToStop()) stops.execute(() -> executor.stopLostAttempt(lost));
         } catch (Exception e) {
             log.warn(
                     "Could not check which local jobs this worker still owns: workerId={}, error={}",
@@ -113,6 +118,7 @@ public class WorkerLivenessReporter {
         if (scheduler != null) {
             scheduler.shutdownNow();
         }
+        stops.shutdownNow();
         // Deliberately do NOT delete the registry row: drain is best-effort, so a job may still be
         // RUNNING, and deleting the row would orphan it into an immediate re-run by a sibling. Stopping
         // the heartbeat instead lets the lease expire, which recovers only genuinely-unfinished jobs.

@@ -145,14 +145,13 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @WorkspaceAgnostic("ID-based fenced transition; job ID + owner from worker-local execution context")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE ReviewJob j SET j.status = :newStatus, j.completedAt = :now, j.errorMessage = :error "
-            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.attempt = :attempt "
-            + "AND ((:workerId IS NULL AND j.workerId IS NULL) OR j.workerId = :workerId)")
+            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.attempt = :attempt")
     int transitionStatusOwnedBy(
             @Param("id") UUID id,
             @Param("newStatus") ReviewJobStatus newStatus,
             @Param("now") Instant now,
             @Param("error") @Nullable String error,
-            @Param("workerId") @Nullable String workerId,
+            @Param("workerId") String workerId,
             @Param("attempt") int attempt);
 
     /**

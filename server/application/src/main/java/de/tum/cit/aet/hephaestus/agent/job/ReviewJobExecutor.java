@@ -165,10 +165,12 @@ public class ReviewJobExecutor {
     private final Phaser inFlight = new Phaser(1); // 1 = the executor itself; deregistered on stop
     // The attempt each locally running job runs, so a later attempt of the same job is never mistaken for it.
     private final Map<UUID, Integer> localRunningJobs = new ConcurrentHashMap<>();
+    // Lost attempts whose sandbox stop was asked for and has not returned yet.
+    private final Set<UUID> stopping = ConcurrentHashMap.newKeySet();
 
     private final Optional<WorkerCapacityState> capacityState;
-    // Worker identity fences terminal writes; it is absent when the worker role is disabled.
-    private final @Nullable String workerId;
+    // Worker identity fences terminal writes.
+    private final String workerId;
 
     private @Nullable ReviewCompositionContinuation compositionContinuation;
 
@@ -194,7 +196,7 @@ public class ReviewJobExecutor {
             PracticeScriptRunRecorder practiceScriptRuns,
             @Nullable LlmAdmissionService llmAdmissionService,
             Optional<WorkerCapacityState> capacityState,
-            Optional<WorkerProperties> workerProperties,
+            WorkerProperties workerProperties,
             ReviewJobClaimService claims,
             ReviewJobRecovery recovery) {
         this.agentProperties = agentProperties;
@@ -214,7 +216,7 @@ public class ReviewJobExecutor {
         this.practiceScriptRuns = practiceScriptRuns;
         this.llmAdmissionService = llmAdmissionService;
         this.capacityState = capacityState;
-        this.workerId = workerProperties.map(WorkerProperties::resolvedWorkerId).orElse(null);
+        this.workerId = workerProperties.resolvedWorkerId();
 
         this.infraRetryRequeued = Counter.builder(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED)
                 .description("Jobs requeued (not failed) after a retryable preparation or infrastructure failure")
@@ -323,7 +325,6 @@ public class ReviewJobExecutor {
     }
 
     private boolean settleForDrain(UUID jobId, ReviewJobCancellationReason reason) {
-        if (workerId == null) return false;
         ReviewJob job = jobRepository.findById(jobId).orElse(null);
         return job != null
                 && recovery.recover(jobId, workerId, job.getAttempt(), reason) != ReviewJobRecovery.Outcome.NONE;
@@ -383,30 +384,37 @@ public class ReviewJobExecutor {
         }
     }
 
+    /** A local attempt that the job ledger no longer runs on this worker. */
+    public record LostAttempt(UUID jobId, int attempt) {}
+
     /**
-     * Stops the sandbox of each local attempt that the job ledger no longer runs on this worker: its job was
-     * cancelled, ended by another process, or requeued as a later attempt. A cancel from a server replica that holds
-     * no control session with this worker reaches the sandbox here. The stops run off the caller's thread, so a slow
-     * container stop cannot delay the liveness heartbeat that calls this.
+     * The local attempts that the job ledger no longer runs on this worker: their job was cancelled, ended by another
+     * process, or requeued as a later attempt. A cancel from a server replica that holds no control session with this
+     * worker reaches the sandbox through these. Each is marked as stopping until {@link #stopLostAttempt} returns, so a
+     * slow stop is never asked twice.
      */
-    public void stopAttemptsNoLongerOwned() {
-        if (workerId == null || localRunningJobs.isEmpty()) return;
+    public List<LostAttempt> lostAttemptsToStop() {
+        if (localRunningJobs.isEmpty()) return List.of();
         Map<UUID, Integer> local = Map.copyOf(localRunningJobs);
         Map<UUID, Integer> owned = new HashMap<>();
         jobRepository
                 .findRunningAttemptsOwnedBy(local.keySet(), workerId)
                 .forEach(running -> owned.put(running.getId(), running.getAttempt()));
+        List<LostAttempt> lost = new ArrayList<>();
         local.forEach((jobId, attempt) -> {
-            if (attempt.equals(owned.get(jobId))) return;
-            Thread.ofPlatform()
-                    .name("agent-lost-attempt-stop-" + jobId)
-                    .daemon(true)
-                    .start(() -> {
-                        // A later attempt of the job may have started here since the snapshot; it is not lost.
-                        if (attempt.equals(localRunningJobs.get(jobId)))
-                            cancelLocalJob(jobId, "attempt " + attempt + " no longer runs on this worker");
-                    });
+            if (!attempt.equals(owned.get(jobId)) && stopping.add(jobId)) lost.add(new LostAttempt(jobId, attempt));
         });
+        return List.copyOf(lost);
+    }
+
+    /** Stops a lost attempt's sandbox, unless a later attempt of its job has started here since it was found. */
+    public void stopLostAttempt(LostAttempt lost) {
+        try {
+            if (Integer.valueOf(lost.attempt()).equals(localRunningJobs.get(lost.jobId())))
+                cancelLocalJob(lost.jobId(), "attempt " + lost.attempt() + " no longer runs on this worker");
+        } finally {
+            stopping.remove(lost.jobId());
+        }
     }
 
     /** Used when no {@code WorkerDrainCoordinator} owns the worker lifecycle (monolith mode). */
@@ -1076,7 +1084,7 @@ public class ReviewJobExecutor {
             log.error("Agent job failed: jobId={}, error={}", jobId, errorMessage, e);
         }
 
-        if (workerId != null && isRetryableExecutionFailure(e)) {
+        if (isRetryableExecutionFailure(e)) {
             int currentRetryCount = job.getAttempt();
             if (requeueForAnotherAttempt(job, sandboxExecutionStarted)) {
                 log.warn(
@@ -1152,7 +1160,6 @@ public class ReviewJobExecutor {
 
     // Bill within the requeue transaction before it clears usage counters.
     private boolean requeueForAnotherAttempt(ReviewJob job, boolean bill) {
-        if (workerId == null) return false;
         Boolean updated = transactionTemplate.execute(status -> recovery.retryUnadmitted(job, workerId, bill));
         if (!Boolean.TRUE.equals(updated)) return false;
         infraRetryRequeued.increment();
@@ -1160,7 +1167,6 @@ public class ReviewJobExecutor {
     }
 
     private boolean continueComposition(ReviewJob job, AgentResult agentResult, SandboxResult result) {
-        if (workerId == null) return false;
         return Boolean.TRUE.equals(transactionTemplate.execute(status -> recovery.continueComposition(
                 job,
                 workerId,
