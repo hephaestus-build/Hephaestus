@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,13 +30,13 @@ public final class SandboxAttemptLauncher {
     private final SandboxContainerManager containerManager;
     private final SandboxGatewaySessions gatewaySessions;
     private final DockerVolumeOperations volumeOperations;
-    private final int gatewayPort;
+    private final IntSupplier gatewayPort;
 
     public SandboxAttemptLauncher(
             SandboxContainerManager containerManager,
             SandboxGatewaySessions gatewaySessions,
             DockerVolumeOperations volumeOperations,
-            int gatewayPort) {
+            IntSupplier gatewayPort) {
         this.containerManager = containerManager;
         this.gatewaySessions = gatewaySessions;
         this.volumeOperations = volumeOperations;
@@ -126,7 +127,7 @@ public final class SandboxAttemptLauncher {
         }
 
         public String runtimeUrl(String appServerIp) {
-            return "http://" + appServerIp + ":" + gatewayPort + "/internal/llm/runtime/" + session.id();
+            return "http://" + appServerIp + ":" + gatewayPort.getAsInt() + "/internal/llm/runtime/" + session.id();
         }
 
         /**

@@ -68,7 +68,7 @@ export const EvidenceNotRead: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByText(
-				/^Built-in review stopped without a result: its result was refused because it had not read the evidence it needed\./u,
+				/^Built-in review stopped without a candidate observation: its candidate observation was refused because it had not read the evidence it needed\./u,
 			),
 		).toBeVisible();
 		await expect(canvas.queryByText(/wrong format/u)).not.toBeInTheDocument();

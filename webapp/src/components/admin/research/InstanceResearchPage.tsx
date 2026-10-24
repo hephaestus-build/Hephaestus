@@ -272,10 +272,10 @@ function ReleaseDuties() {
 						You cannot pick people.
 					</li>
 					<li>
-						It holds structured results, problems, feedback states and usage. It holds nothing that
-						participants or models wrote, and no code, quotes or conversations. Its only text is the
-						public criteria of practices shipped with Hephaestus, where a version matches them.
-						Older results say where their record is incomplete.
+						It holds structured observations, problems, feedback states and usage. It holds nothing
+						that participants or models wrote, and no code, quotes or conversations. Its only text
+						is the public criteria of practices shipped with Hephaestus, where a version matches
+						them. Older observations say where their record is incomplete.
 					</li>
 					<li>
 						Hephaestus does not keep the file. Give it only to the research team, store it where
@@ -455,7 +455,7 @@ function ReleaseOutcome({ outcome }: { outcome: ResearchReleaseOutcome }) {
 				<dd>{lastDayBefore(receipt.useUntil)} (UTC)</dd>
 				<dt className="text-muted-foreground">Participants</dt>
 				<dd className="tabular-nums">{receipt.counts.participants}</dd>
-				<dt className="text-muted-foreground">Results, problems, feedback</dt>
+				<dt className="text-muted-foreground">Observations, problems, feedback</dt>
 				<dd className="tabular-nums">
 					{receipt.counts.results}, {receipt.counts.problems}, {receipt.counts.feedback}
 				</dd>

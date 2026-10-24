@@ -519,9 +519,9 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									onOpenChange={setShowScript}
 								>
 									<p className="max-w-2xl text-sm text-muted-foreground">
-										TypeScript that reviews this practice and returns its result. It can decide in
-										code, call models, or prepare places for the review to decide. It never writes
-										feedback. Without a script, the practice runs the built-in review.{" "}
+										TypeScript that reviews this practice and returns its candidate observation. It
+										can decide in code, call models, or prepare places for the review to decide. It
+										never writes feedback. Without a script, the practice runs the built-in review.{" "}
 										<InlineLink href={PRACTICE_SCRIPT_GUIDE_URL} external>
 											Write a practice script
 										</InlineLink>
@@ -698,7 +698,7 @@ function AboutField({ itemType, about, onChange, error }: AboutFieldProps) {
 				<FieldContent>
 					<FieldLabel htmlFor={FIELD_IDS.about}>About</FieldLabel>
 					<FieldDescription id="practice-about-description">
-						Whose work a result is about. The work means no developer.
+						Whose work an observation is about. The work means no developer.
 					</FieldDescription>
 				</FieldContent>
 				<Select

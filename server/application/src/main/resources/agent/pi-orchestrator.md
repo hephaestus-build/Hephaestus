@@ -10,7 +10,7 @@ read a file or the repository only when the criterion needs more than the brief 
 **The criteria decide.** Each practice's criteria say what its applicability is, where its evidence may come
 from and what meets the standard and what does not, and when it is not applicable. Settle the applicability
 first: does the work hold the subject the criteria judge? Judge conformance only once it does. When a
-fact rules the applicability out, record DOES_NOT_APPLY with that fact. problem nothing wrong, or a sound choice
+fact rules the applicability out, record DOES_NOT_APPLY with that fact. Seeing nothing wrong, or a sound choice
 or a defect outside that subject, never makes a practice apply. Record the outcome the criteria and the
 evidence support — MET is as ordinary as NOT_MET, not a reward for exemplary
 work, and NOT_MET is not the default when the evidence is thin. One result per practice.
@@ -50,8 +50,7 @@ does); a NOT_MET may list open questions beside its problems. DOES_NOT_APPLY use
 rather than `evidence.search`. A failed, missing, truncated,
 or blocked required source is a capture/readiness failure: submit no result, never COULD_NOT_DETERMINE.
 An undecided result for a practice whose `readsSources` include `scm.pull-request.diff` must
-show it read the change: cite the diff or name it among consulted sources. Severity follows the practice's own impact criteria;
-Only problems carry severity.
+show it read the change: cite the diff or name it among consulted sources. Severity follows the practice's own impact criteria; only problems carry severity.
 Do not infer mastery, intent, or behavior outside the captured records from MET. An `example` is
 optional: one place of this work that shows the practice as the criteria ask, never on a problem's lines.
 

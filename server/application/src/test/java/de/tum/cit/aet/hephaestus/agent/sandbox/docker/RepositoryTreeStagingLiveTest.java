@@ -97,7 +97,7 @@ class RepositoryTreeStagingLiveTest {
                 new SandboxWorkspaceManager(),
                 containerManager,
                 new ContainerSecurityPolicy(dockerProperties, null),
-                gateway.port(),
+                gateway::port,
                 new SimpleMeterRegistry(),
                 gateway.sessions(),
                 dockerOps);

@@ -47,7 +47,7 @@ const PROBLEM_WORDS: RecordResultsWords = {
 	icon: CircleAlertIcon,
 	emptyTitle: "No problems yet",
 	filteredTitle: "No problems match these filters",
-	emptyDescription: "Problems appear here when a Not met result records them.",
+	emptyDescription: "Problems appear here when a Not met observation records them.",
 };
 
 const HIDDEN_SUMMARY = "Details hidden";
@@ -120,7 +120,7 @@ export function ProblemRow({ problem }: ProblemRowProps) {
 				<RecordRowActions
 					record={{ kind: "result", id: problem.resultId }}
 					reviewId={problem.reviewId}
-					name={`result ${name}`}
+					name={`observation ${name}`}
 				/>
 			}
 		>

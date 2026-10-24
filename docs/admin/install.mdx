@@ -47,67 +47,9 @@ Before publication, each release passes qualification on both matrix cells.
 
 Only the listed native hosts and the unmodified self-hosted Compose topology are supported. Other hosts, runtimes, and topologies are outside release qualification.
 
-- **4 vCPUs, 24 GB RAM, 40 GB SSD** is a conservative initial budget for one concurrent review sandbox.
-  It is not a measured requirement.
-  It covers these memory limits, which are ceilings, not reservations:
-
-  | Container                      | Memory limit | Setting                                                                                     |
-  | ------------------------------ | ------------ | ------------------------------------------------------------------------------------------- |
-  | `application-server`           | 5 GiB        | `APPLICATION_SERVER_MEM_LIMIT`                                                              |
-  | `application-worker`           | 3 GiB        | `APPLICATION_WORKER_MEM_LIMIT`                                                              |
-  | `webhook-server`               | 2 GiB        | `WEBHOOK_SERVER_MEM_LIMIT`                                                                  |
-  | each concurrent review sandbox | 3 GiB        | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (1 in the self-hosted Compose file)        |
-  | the Heph host, one per worker  | 2 GiB        | Fixed. [Runtime roles](./runtime-roles.mdx#the-heph-host) gives the limits of the Heph host |
-
-  With the defaults of the self-hosted Compose file, these limits add up to 15 GiB, about 16 GB.
-  PostgreSQL, NATS, Traefik, and the webapp have no limit.
-  The rest of the 24 GB is for them and the operating system.
-
-  A limit caps a container but reserves nothing.
-  Each JVM sizes its heap from its own limit and can grow toward it.
-  The host must hold simultaneous use by all containers and sandboxes, plus the operating system and spare capacity.
-  If demand exceeds memory, the host swaps where swap is configured.
-  The kernel can kill a container or sandbox.
-
-  To use a smaller memory budget, lower the limits in `.env` before the first start.
-
-  A worker runs no more reviews at once than `SANDBOX_MAX_CONCURRENT` and its review capacity allow.
-  The application default of `SANDBOX_MAX_CONCURRENT` is 5.
-  The self-hosted Compose file sets 1.
-  The review capacity (`HEPHAESTUS_WORKER_REVIEW_MAX`) defaults to `auto`: the number of CPUs minus 1.
-
-  Each review sandbox also has a limit of 1 CPU (`SANDBOX_CPUS`) and 256 processes (`SANDBOX_PIDS_LIMIT`).
-  The CPU limit is a share of CPU time that the sandbox can use, not a reserved core.
-  The 3 GiB memory limit holds the sandbox's temporary file systems, which can grow to 2.06 GiB, and its processes.
-  Hephaestus refuses to start if `SANDBOX_MEMORY_BYTES` leaves less than 512 MiB beside those file systems.
-
-  These limits come from one measurement on release 0.82.0.
-  Later releases are not re-measured.
-  On that release, a review of a small course repository reached a cgroup `memory.peak` of 194 MiB.
-  It used at most 19 processes and 0.2 CPU, in samples taken once per second.
-  The workspace initializer used less than 1 MiB of its own memory for a 437 MB workspace.
-  The rest of its memory was file cache, which the kernel reclaims under the limit.
-
-  A larger repository or a review that runs heavy commands can need more memory.
-  If the kernel stops a review sandbox at its memory limit, the review fails with exit code 137.
-  Then increase `SANDBOX_MEMORY_BYTES`.
-
-- These are deployment limits, not a claim that all workloads fit. Before raising webhook volume,
-  Heph turn capacity (`HEPHAESTUS_WORKER_MENTOR_MAX`), or `SANDBOX_MAX_CONCURRENT`, reproduce the release's
-  [Compose capacity qualification](https://github.com/hephaestus-build/Hephaestus/tree/main/load-tests) on
-  your host shape. A release baseline is valid only with the raw k6 and container-resource evidence described there.
-  Without that evidence, keep the conservative defaults above.
-- **AI practice review adds memory demand**.
-  Each concurrent review sandbox may use up to `SANDBOX_MEMORY_BYTES` (default 3 GiB).
-  The self-hosted Compose file allows 1 concurrent sandbox.
-  Raise `SANDBOX_MAX_CONCURRENT` only with sufficient RAM.
-- The application server and worker each default to 4 CPUs / 512 PIDs.
-  The webhook server defaults to 2 CPUs / 256 PIDs. Override them with the corresponding `APPLICATION_SERVER_*`,
-  `APPLICATION_WORKER_*` or `WEBHOOK_SERVER_*` limit variables. Keep the worker's PID limit: it is the
-  role with Docker access.
-- Budget the database connection pool of each runtime role, plus headroom for migrations and operator access,
-  as [Runtime roles](./runtime-roles#database-connections) describes.
+- The CPU, memory, and disk that [Sizing](./sizing) gives.
 - A host in the supported matrix, plus `git` and `openssl`.
+- An NTP-synchronized clock. [Clocks](#clocks) explains why.
 - A **DNS A record** that points your hostname at the host.
   Ports **80 and 443** must be reachable from the internet for `Let's Encrypt` HTTP-01, OAuth callbacks, and webhooks.
 - Outbound HTTPS for these purposes:
@@ -117,6 +59,14 @@ Only the listed native hosts and the unmodified self-hosted Compose topology are
 - The [Node.js](https://nodejs.org/en/download) version pinned in `package.json#devEngines.runtime`
   and [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) for release-lock
   verification.
+
+### Clocks
+
+Keep the clock of every host that runs a Hephaestus role or PostgreSQL synchronized by NTP.
+Heph turn leases and person erasure compare times that different hosts write.
+If Slack does not answer when Heph starts a streamed reply, the server looks for that reply in the thread by time.
+Hephaestus assumes that Slack's clock and the server's clock differ by less than 2 seconds.
+[Heph runtime § Slack replies](/contributor/unified-pi-runtime#slack-replies) has the rule.
 
 ## 1. Get the files
 
@@ -152,7 +102,7 @@ It also generates these values:
 Everything below runs from `/opt/hephaestus/docker/self-host`.
 After step 2 supplies the remaining required values, `docker compose --env-file .env --env-file release-lock.env config` renders the effective configuration.
 Before then it exits at the first missing required variable, as does every other `docker compose` subcommand in this directory.
-See [Troubleshooting](#troubleshooting).
+See [Troubleshooting](./troubleshooting).
 
 ## 2. Configure `.env`
 
@@ -343,7 +293,7 @@ Both have procedures in
 
 All optional integrations are off by default.
 The Compose file already passes their variables through.
-Each has a variable reference in [Integrations & Reference Deployment](./production-setup).
+Each has a variable reference in [Integration settings](./production-setup).
 
 1. Enable the desired integrations in `.env`.
 2. Run:
@@ -414,98 +364,9 @@ The procedure runs one review and lets you read its feedback before anyone else 
 
 ## Upgrades
 
-Pre-1.0 upgrades may require an intermediate release or manual preparation.
-The [Compatibility Policy](./compatibility-policy) defines the guarantee and support window.
-The commands below do not prepare existing databases for the PostgreSQL 18/Liquibase baseline transition.
+<a id="update-checks"></a>
+<a id="rollback"></a>
+<a id="deployment-environment-and-release-history"></a>
 
-1. Before starting target images, read that release's migration instructions.
-2. If the database crosses the baseline transition, first complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md).
-3. Complete the [runbook silent deployment checklist](./production-operations-runbook#silent-deployment-checklist) through backup and staging validation.
-4. Acquire the tested release:
-
-   ```bash
-   (
-   set -eu
-   VERSION='<new-version>'
-   cd /opt/hephaestus
-   sudo git fetch --depth 1 origin tag "v$VERSION"
-   sudo git checkout "v$VERSION"
-   node scripts/prepare-release-lock.ts "v$VERSION"
-   cd docker/self-host
-   docker compose --env-file .env --env-file release-lock.env pull
-   )
-   ```
-
-5. Before startup, compare `.env` with the release's `.env.example`.
-6. Complete manual steps in [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md), especially PostgreSQL major-version changes.
-7. Return to **Validate then deploy** in the runbook for guarded startup.
-
-The [compatibility policy](./compatibility-policy#upgrade-guarantee) defines skip-version support.
-
-### Update checks
-
-**Instance administration → Overview** shows the release this server reports from its lock
-([runtime identity handoff](./release-image-lock#runtime-identity-handoff)) and whether GitHub has
-published a newer one. A failed, rate-limited, disabled or never-completed check is shown as exactly
-that, never as "up to date". For a newer release the card links its notes and the upgrade guide and
-says whether that release carries schema migrations. The flag describes the newest release only:
-read every release note between yours and it before upgrading. Nothing here verifies an artifact or
-performs an upgrade.
-
-The server asks GitHub a minute after start and then once a day. After a failure it retries after
-15 minutes, doubling up to a day, or later when GitHub names a longer wait. **Check now** ignores the
-daily cache, never delays the automatic retry, and only waits out a wait GitHub named. A restart
-forgets the last answer. A commit channel or a local build runs no release and is never checked.
-
-Each check is one unauthenticated HTTPS GET to
-`https://api.github.com/repos/hephaestus-build/Hephaestus/releases/latest` with the static user agent
-`Hephaestus-release-check` and, after the first answer, its ETag. It carries no version, credential,
-workspace data or configuration.
-GitHub sees the source IP and the time.
-
-1. On an air-gapped host, set `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` in `.env`.
-2. Recreate `application-server`.
-
-The overview then shows the identity without a check.
-A failed check reaches only instance administration, never health or readiness.
-
-### Deployment environment and release history
-
-Set `DEPLOYMENT_ENVIRONMENT` in `.env` to the name of the deployment, such as `production` or `staging`.
-Use lowercase letters, digits, `.`, `_` or `-`, at most 64 characters.
-Hephaestus refuses to start with another value.
-When it is unset, the instance reports `local`.
-The webapp, the **Release** card, log lines and exported traces all use this name.
-
-The **Release** card also says when this instance first started the release that it runs.
-**Show release history** lists the last ten releases that the server started, newest first.
-The server records a release when it starts one that differs from the last recorded release.
-A restart adds nothing.
-A rollback adds the older release again.
-
-The time is when the server first started that release, not when its images were pulled.
-The history names no person.
-Each worker and webhook server reports its own identity in `/actuator/info` only.
-
-## Rollback
-
-:::caution CAUTION: Images alone cannot reverse a schema change
-Reverting images alone is not a rollback.
-Never run an older release against a newer schema.
-Never reconstruct an old lock or resolve mutable image tags.
-:::
-
-1. Follow [failed-migration recovery](./production-operations-runbook#if-migration-fails) to restore the previous release's database, secrets, and signed lock.
-
-## Troubleshooting
-
-| Symptom                                                        | Cause / fix                                                                                                                                                                                                                                                                                               |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `application-server` exits: *ProxyTrustGuard*                  | `HEPHAESTUS_TRUSTED_PROXIES` is blank. The Compose default is non-blank. Your override therefore set it to empty. Unset the override. If you changed the network, you can instead set it to match `reverse-proxy`'s IP.                                                                                   |
-| Exits: encryption-key length error                             | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` must be exactly 32 printable, non-space ASCII characters. Restore the original key for an existing database. On a new installation, clear the invalid value. Then rerun `./setup.sh`.                                                                                |
-| Login page has no sign-in button                               | No login provider configured: both `GH_OAUTH_CLIENT_ID` **and** `_SECRET` must be non-empty (a half-filled pair is skipped and logged at ERROR).                                                                                                                                                          |
-| OAuth redirect loop / cookie never sticks                      | A proxy in front of Traefik is injecting a `Domain=` attribute on cookies, which browsers reject for `__Host-` cookies. Serve the stack directly on ports 80/443.                                                                                                                                         |
-| Signed in but not admin                                        | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` did not match. On the account's **first** login, the server logs (INFO) the exact `provider subject username` it saw. Copy that into the allowlist. Restart. (For an account that already existed, check that log line from its first sign-in, or use the numeric id.) |
-| GitHub webhook deliveries show `401`                           | `WEBHOOK_SECRET` on GitHub differs from `.env` — must be byte-identical.                                                                                                                                                                                                                                  |
-| Data appears only ~hourly                                      | No GitHub webhook configured (see step 6).                                                                                                                                                                                                                                                                |
-| `down` or `logs` aborts with "variable is missing" | Pass both `--env-file .env --env-file release-lock.env`. Every subcommand validates required variables. Restore the matching configuration if either file is missing.                                                                                                                                                                                             |
+[Upgrade](./upgrade) owns the upgrade procedure, failed-migration recovery, rollback, update checks, and the release history.
+[Troubleshooting](./troubleshooting) lists the common failures of an installation and their fixes.

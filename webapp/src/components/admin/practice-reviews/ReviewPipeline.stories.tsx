@@ -120,7 +120,7 @@ export const Default: Story = {
 			"1 replaced by newer",
 		]);
 		await expect(
-			within(canvas.getByRole("list", { name: "Results checked by an admin" })).getByRole(
+			within(canvas.getByRole("list", { name: "Observations checked by an admin" })).getByRole(
 				"listitem",
 			),
 		).toHaveTextContent("3 marked incorrect");
@@ -136,7 +136,7 @@ export const TitlesOpenTheirTabs: Story = {
 	play: async ({ canvas, userEvent }) => {
 		for (const [title, path] of [
 			["Reviews", "/w/demo/admin/practices/reviews"],
-			["Results", "/w/demo/admin/practices/reviews/results"],
+			["Observations", "/w/demo/admin/practices/reviews/results"],
 			["Feedback", "/w/demo/admin/practices/reviews/feedback"],
 		] as const) {
 			// The link's name is the title alone, not the title twice or with its icon.
@@ -147,7 +147,7 @@ export const TitlesOpenTheirTabs: Story = {
 			await expect(target.searchParams.get("to")).toBe(reviewOverviewScope.to);
 		}
 		// At rest it reads as a title, not as an underlined count.
-		const results = canvas.getByRole("link", { name: "Results" });
+		const results = canvas.getByRole("link", { name: "Observations" });
 		const restColor = getComputedStyle(results).color;
 		await expect(getComputedStyle(results).textDecorationLine).toBe("none");
 		// Reached by Tab like any link, and drawn as every link on the page is when focused (and

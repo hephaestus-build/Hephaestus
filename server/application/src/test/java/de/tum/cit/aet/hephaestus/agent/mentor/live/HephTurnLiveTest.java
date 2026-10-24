@@ -19,8 +19,6 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -56,8 +54,6 @@ class HephTurnLiveTest extends AbstractWorkspaceIntegrationTest {
     /** Signs in as the user with login {@code mentor}. */
     private static final String DEVELOPER = "mock-jwt-token-for-mentor-user";
 
-    private static final int GATEWAY_PORT = gatewayPort();
-
     /** The host starts on the first claim and may pull nothing; the model answers a one-line question. */
     private static final Duration ANSWER_DEADLINE = Duration.ofMinutes(4);
 
@@ -82,7 +78,8 @@ class HephTurnLiveTest extends AbstractWorkspaceIntegrationTest {
     @DynamicPropertySource
     static void worker(DynamicPropertyRegistry registry) {
         registry.add("hephaestus.runtime.worker.enabled", () -> "true");
-        registry.add("hephaestus.sandbox.gateway.port", () -> GATEWAY_PORT);
+        // Port 0 binds a free port; the worker hands the bound one to the host.
+        registry.add("hephaestus.sandbox.gateway.port", () -> System.getenv().getOrDefault("SANDBOX_API_PORT", "0"));
         registry.add(
                 "hephaestus.agent.image.reference",
                 () -> System.getenv()
@@ -92,18 +89,6 @@ class HephTurnLiveTest extends AbstractWorkspaceIntegrationTest {
     @BeforeAll
     static void requireDocker() {
         assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker is not available");
-    }
-
-    private static int gatewayPort() {
-        String configured = System.getenv("SANDBOX_API_PORT");
-        if (configured != null && !configured.isBlank()) {
-            return Integer.parseInt(configured);
-        }
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new IllegalStateException("No free port for the sandbox gateway", e);
-        }
     }
 
     @Test

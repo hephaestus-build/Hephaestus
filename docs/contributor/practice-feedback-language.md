@@ -82,15 +82,16 @@ This table records only their retired names.
 | **Example** | An optional place in the work that an observation cites to show the practice done well. |  |
 | **Open question** | A question about the work that the evidence cannot answer. It is never feedback. |  |
 | **Not reviewed** | A selected item/practice pair that a closed review did not judge or reuse. It is not an outcome. |  |
-| **Withheld result** | A candidate observation that [admission](./practice-review-pipeline.mdx#admit-results) did not accept. It records the reason. |  |
+| **Withheld candidate** | A candidate observation that [admission](./practice-review-pipeline.mdx#admit-results) did not accept. It records the reason. |  |
 | **Withheld feedback** | Feedback that the server did not deliver. Its state is `WITHHELD` and its stop reason records why. |  |
 | **Mark** | An admin record that an observation is incorrect or accepted. Removing the mark reverses it. | invalidation |
 | **Marked incorrect** | An observation that a workspace admin marked as wrong when made. It remains in history. | invalidated, deleted, retracted |
 | **Accepted** | An admin record that excludes an observation from open-problem lists. It does not change its outcome or cancel an incorrect mark. |  |
 | **Developer** | The person an observation concerns. Feedback based on that observation goes only to that person. | learner |
 
-Existing storage, API contracts and generated types name this record `Result`.
-The product calls it an observation.
+Storage, API contracts, generated types, routes, search params, and component and file names call this record `Result` or `result`.
+The product calls it an observation in UI text, user-facing responses and docs.
+Do not rename those identifiers without a change that starts at the API contract.
 
 ### Observation outcomes
 
@@ -158,7 +159,7 @@ Hephaestus never sends an open question as feedback.
 
 | Term | Meaning | Avoid for this concept |
 | --- | --- | --- |
-| **Feedback** | Guidance that Hephaestus writes from results for a developer. | message, feedbacks |
+| **Feedback** | Guidance that Hephaestus writes from observations for a developer. | message, feedbacks |
 | **Practice feedback** | The full name for feedback when the surrounding text does not establish its context. | message, AI feedback, feedback item, ledger unit |
 | **Destination** | Where feedback is intended to appear: on the work, on the practice page, or in conversation. | channel, location, surface |
 | **Delivery** | Whether feedback is awaiting approval, ready, delivered, withheld, rejected, replaced, failed or unconfirmed. | surface |
@@ -188,10 +189,10 @@ Unconfirmed means a write began and its visibility is unknown.
 A confirmed copy can retain its delivery time while another copy stays unknown.
 Unknown visibility never permits an automatic repeat write.
 
-A decision to withdraw feedback does not change its results.
+A decision to withdraw feedback does not change its observations.
 Restore reverses the withdrawal if the feedback remains eligible.
-A disagreement does not change a result or a standing by itself.
-An admin can inspect it and mark a result incorrect.
+A disagreement does not change an observation or a standing by itself.
+An admin can inspect it and mark an observation incorrect.
 Removing a usefulness answer does not remove the developer's disagreement.
 
 ## People and product surfaces
@@ -211,23 +212,23 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Practice page** | The page for one practice within the developer's Practice profile. |  |
 | **Standing** | Needs attention, Mixed feedback or Going well, read from the newest eligible decided work. | score, grade, rating |
 | **Early read** | A standing based on fewer than three decided pieces of work. | preliminary score, provisional grade |
-| **Practices across the workspace** | The page that counts, for each practice, the developers with current results and the outcomes of those results, without naming a developer. | course comparison, course figures, cohort view, benchmark, leaderboard |
-| **Current result** | A result from the last 90 days, recorded under the practice's current version, that nobody marked incorrect. Only current results count on Practices across the workspace. | recent result, valid result |
-| **No current results** | What Practices across the workspace shows for a practice or group with no current result. Older or unverifiable results can exist. | no data, no results yet, missing |
+| **Practices across the workspace** | The page that counts, for each practice, the developers with current observations and the outcomes of those observations, without naming a developer. | course comparison, course figures, cohort view, benchmark, leaderboard |
+| **Current observation** | An observation from the last 90 days, recorded under the practice's current version, that nobody marked incorrect. Only current observations count on Practices across the workspace. | recent result, valid result |
+| **No current observations** | What Practices across the workspace shows for a practice or group with no current observation. Older or unverifiable observations can exist. | no data, no results yet, missing |
 | **Typical range** | The middle half of the developers' values in a selected window. | percentile, quartile range, average, norm |
 | **Activity** | The developer's page of work that needs them and work they did. | profile, stats |
 | **Workspace activity** | Counts and lists of work for workspace developers or one team. | leaderboard, ranking, standings |
 | **Contributions** | Requests opened, other people's requests reviewed, and issues opened in a period. Each reviewed request counts once. | score, points, GitHub-style contributions, activity score |
 | **Position** | A developer's place when Workspace activity sorts a count. Equal counts share a place. | rank, placing, standing |
 | **Automation** | Provider bots and machine users that a workspace admin excludes from people counts. | bots (for machine users), service account |
-| **Public activity page** | Work counts and links from public repositories, available without sign-in. It has no practice results or feedback. | public leaderboard, public profile, public workspace |
+| **Public activity page** | Work counts and links from public repositories, available without sign-in. It has no practice observations or feedback. | public leaderboard, public profile, public workspace |
 | **Workspace address** | A workspace's own host. Sign-in stays on the instance host. | subdomain, vanity URL, tenant URL |
 | **Open work** | Open requests and assigned issues that need the developer or another person. | backlog, inbox, to-do |
 | **Needs you** | Open work that requires an action from the developer now. | inbox, to-do, action items |
 | **Covered** | A review request settled for now by another reviewer's decision, under the provider's approval state. | dismissed, done, resolved |
 | **Reviewed by you** | A provider review request that the developer already approved or returned for changes. | done, completed, handled |
 | **Requested from your team** | A GitHub review request to one of the developer's teams rather than to that developer. | team inbox, shared queue |
-| **Chrome extension** | The browser extension that shows recorded results for work open in a GitHub or GitLab tab. | plugin, add-on, Hephaestus overlay, extension channel |
+| **Chrome extension** | The browser extension that shows recorded observations for work open in a GitHub or GitLab tab. | plugin, add-on, Hephaestus overlay, extension channel |
 | **Instance admin** | A person with the admin role for the instance. |  |
 | **Workspace admin** | A person with the admin role in one workspace. |  |
 | **Instance operator** | The person or team that runs the deployment. |  |

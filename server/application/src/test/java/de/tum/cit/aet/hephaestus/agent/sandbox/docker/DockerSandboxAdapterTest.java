@@ -128,7 +128,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                 workspaceManager,
                 containerManager,
                 securityPolicy,
-                8081,
+                () -> 8081,
                 meterRegistry,
                 gatewaySessions,
                 volumeOperations);
@@ -432,7 +432,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     workspaceManager,
                     containerManager,
                     securityPolicy,
-                    8090,
+                    () -> 8090,
                     meterRegistry,
                     gatewaySessions,
                     volumeOperations);

@@ -5,11 +5,11 @@ description: Verify retained pilot history and diagnose a refused practice model
 ---
 
 The [release migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns the upgrade order, historical-proof rule, script preparation, and rollback boundary.
-The [production runbook](./production-operations-runbook#upgrade-and-failed-migration-recovery) owns isolation and recovery.
+The [production runbook](./upgrade) owns isolation and recovery.
 
 ## Rehearse the pilot upgrade
 
-1. Follow [Validate the actual production data](./production-operations-runbook#validate-the-actual-production-data) on a verified pilot restore.
+1. Follow [Validate the actual production data](./upgrade#validate-the-actual-production-data) on a verified pilot restore.
 2. Use the exact candidate release without diagnostic changes.
 3. Record the migration duration, locks, disk use, and WAL growth.
 4. Complete the history checks below before the production outage.
@@ -45,7 +45,7 @@ Do these checks before any deliberate new review or scan.
 
 The migration guide explains why retained results cannot establish current standing.
 A source-access restriction can withhold text without removing history.
-Use the [result-text contract](./practice-review-operations#result-text-availability) when text is unavailable.
+Use the [observation text contract](./practice-review-operations#observation-text-availability) when text is unavailable.
 Record expected transformations and relationships instead of requiring equal counts across old and new tables.
 Existing send or correction recovery can change state during startup.
 A state change alone does not prove a provider write.
@@ -53,7 +53,7 @@ A state change alone does not prove a provider write.
 ## Diagnose a refused cutover
 
 Keep the previous signed release and verified backup available.
-Preserve the failed changeset identity, error, and [Liquibase diagnostics](./production-operations-runbook#if-migration-fails).
+Preserve the failed changeset identity, error, and [Liquibase diagnostics](./upgrade#if-migration-fails).
 Use a restricted restore for diagnosis.
 Do not bypass a guard, delete product history, clear receipts, or invent source facts.
 
@@ -73,7 +73,7 @@ A clean query does not prove that every guard in its category passes.
 | Proof, capture, and reuse | Outcomes, evidence, pinned versions, capture/reuse references, or chat links cannot convert safely. Use [proof diagnostics](#proof-and-feedback). | Reproduce on the restore. Keep the old release and escalate with affected IDs. Obtain a supported conversion before retry. Do not rewrite immutable proof. |
 | Feedback support and copies | Support, copies, approved text, receipts, write keys, or accepted inline anchors disagree. Use [feedback diagnostics](#proof-and-feedback). | Compare retained proposals and actual provider writes under authorized read access. Keep uncertain copies fenced. Without a supported reconciliation, keep the old release and escalate. Never delete receipts or invent text. |
 | Scripts and current definitions | An active/catalog/comparison-base script is unsupported, or the current definition is incomplete. The refusal identifies a practice ID or catalog slug. | Follow **Custom practice scripts** in the migration guide. Save complete definitions first. For an incomplete definition without authoritative content, keep the old release and escalate. |
-| Native objects, preservation, and locks | An auth partition template is absent, a native constraint/preservation assertion fails, or lock acquisition exceeds 30 seconds. Use [native-object diagnostics](#native-objects-and-locks). | Keep writers stopped. For lock contention, identify remaining writers and repeat the rehearsal after a normal drain. For schema or preservation failures, keep the old release and escalate through [failed-migration recovery](./production-operations-runbook#if-migration-fails). |
+| Native objects, preservation, and locks | An auth partition template is absent, a native constraint/preservation assertion fails, or lock acquisition exceeds 30 seconds. Use [native-object diagnostics](#native-objects-and-locks). | Keep writers stopped. For lock contention, identify remaining writers and repeat the rehearsal after a normal drain. For schema or preservation failures, keep the old release and escalate through [failed-migration recovery](./upgrade#if-migration-fails). |
 
 ### Release and schema
 

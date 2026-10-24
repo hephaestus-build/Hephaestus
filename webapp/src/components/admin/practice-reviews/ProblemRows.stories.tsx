@@ -126,8 +126,8 @@ export const EvidenceHidden: Story = {
 		await expect(within(table).getAllByText("Details hidden")).toHaveLength(2);
 		for (const [role, name] of [
 			["link", /^Open problem Details hidden/u],
-			["button", /^Track result Details hidden/u],
-			["link", /^Trace result Details hidden/u],
+			["button", /^Track observation Details hidden/u],
+			["link", /^Trace observation Details hidden/u],
 		] as const) {
 			const controls = within(table).getAllByRole(role, { name });
 			await expect(

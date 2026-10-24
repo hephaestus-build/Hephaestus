@@ -34,7 +34,7 @@ export const REVIEW_READINESS_DEFS: StatusDefs<ReviewReadinessTone> = {
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
 		description:
-			"Practice reviews are on and a review model is ready. Each developer’s AI choice still decides whether it runs for them. Feedback mode decides separately where results become feedback.",
+			"Practice reviews are on and a review model is ready. Each developer’s AI choice still decides whether it runs for them. Feedback mode decides separately where observations become feedback.",
 	},
 	checking: {
 		label: "Checking reviews",
@@ -93,7 +93,7 @@ export function reviewReadinessDescription(readiness: ReviewReadinessState): str
 		tier === "UNDECLARED"
 			? "a review model is ready for members who have not chosen"
 			: `a review model declared as ${DATA_HANDLING_DEFS[tier].label} is ready`;
-	return `Practice reviews are on and ${model}. Each developer’s AI choice still decides whether it runs for them. Feedback mode decides separately where results become feedback.`;
+	return `Practice reviews are on and ${model}. Each developer’s AI choice still decides whether it runs for them. Feedback mode decides separately where observations become feedback.`;
 }
 
 export function availableReviewBinding(bindings: AgentBinding[]): AgentBinding | undefined {

@@ -89,7 +89,7 @@ class DockerSandboxLiveTest {
                 workspaceManager,
                 containerManager,
                 securityPolicy,
-                gateway.port(),
+                gateway::port,
                 new SimpleMeterRegistry(),
                 gateway.sessions(),
                 dockerOps);

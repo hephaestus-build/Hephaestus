@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import io.github.bucket4j.Bucket;
 import java.time.Duration;
-import org.apache.catalina.connector.Connector;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
@@ -33,13 +32,14 @@ public class SandboxGatewayConfiguration {
      * application and management connectors are the ones {@code server.address} keeps on loopback.
      */
     @Bean
-    WebServerFactoryCustomizer<TomcatServletWebServerFactory> sandboxGatewayConnector(
-            SandboxGatewayProperties properties) {
-        return factory -> {
-            Connector connector = new Connector(TomcatServletWebServerFactory.DEFAULT_PROTOCOL);
-            connector.setPort(properties.port());
-            factory.addAdditionalConnectors(connector);
-        };
+    SandboxGatewayConnector sandboxGatewayConnector(SandboxGatewayProperties properties) {
+        return new SandboxGatewayConnector(properties.port());
+    }
+
+    @Bean
+    WebServerFactoryCustomizer<TomcatServletWebServerFactory> sandboxGatewayConnectorCustomizer(
+            SandboxGatewayConnector gateway) {
+        return factory -> factory.addAdditionalConnectors(gateway.connector());
     }
 
     /**

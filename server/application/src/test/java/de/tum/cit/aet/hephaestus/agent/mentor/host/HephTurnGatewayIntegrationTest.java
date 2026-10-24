@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeExecSandboxes;
@@ -32,7 +33,6 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -126,7 +126,6 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 contexts, completion, dispatcher, new ProxyCallsInFlight(), WorkerPropertiesFixtures.minimal("1", "4"));
         var sandboxController = new HephTurnSandboxController(
                 contexts, dispatcher, HephTurnFixtures.folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0)));
-        gatewayPort = freePort();
         var application = new SpringApplication(
                 GatewayApplication.class,
                 Class.forName("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"));
@@ -151,7 +150,8 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 // The test JVM turns the worker role off; the gateway is a worker capability.
                 "--" + RuntimeRole.WORKER_PROPERTY + "=true",
                 "--" + RuntimeRole.SERVER_PROPERTY + "=false",
-                "--hephaestus.sandbox.gateway.port=" + gatewayPort);
+                "--hephaestus.sandbox.gateway.port=0");
+        gatewayPort = gateway.getBean(SandboxGatewayConnector.class).port();
     }
 
     @AfterEach
@@ -262,12 +262,6 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private static String contract(String name) throws IOException {
         return new ClassPathResource("agent/heph-turn-contract/" + name).getContentAsString(StandardCharsets.UTF_8);
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     /** Not a configuration class, so the test context does not load it as its own. */

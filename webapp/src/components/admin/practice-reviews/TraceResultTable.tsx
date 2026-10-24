@@ -87,9 +87,9 @@ export function ResultsStep({
 	const shownRows = capped ? rows.slice(0, RESULTS_OPEN) : rows;
 	const hiddenRows = rows.length - shownRows.length;
 	const folded = path !== undefined || self !== undefined;
-	let toggleText = `Show all ${countOf(numbered.length, "result", "results")} in the table`;
+	let toggleText = `Show all ${countOf(numbered.length, "observation", "observations")} in the table`;
 	if (listed) {
-		toggleText = folded ? "Show only the results on this path" : "Fold the table";
+		toggleText = folded ? "Show only the observations on this path" : "Fold the table";
 	}
 	const toggle = numbered.length > 0 && (listed || dotted.length > 0) && (
 		<Button
@@ -129,7 +129,7 @@ export function ResultsStep({
 							<TraceTable
 								kind="results"
 								times={display.times}
-								label={listed ? "Results of this review" : "Results on this path"}
+								label={listed ? "Observations of this review" : "Observations on this path"}
 							>
 								{shownRows.map((entry) => (
 									<ResultRow
@@ -150,7 +150,7 @@ export function ResultsStep({
 								className="mt-1 ml-1.5 text-muted-foreground"
 								onClick={() => onOthersOpenChange(true)}
 							>
-								{`Show ${countOf(hiddenRows, "more result", "more results")}`}
+								{`Show ${countOf(hiddenRows, "more observation", "more observations")}`}
 							</Button>
 						)}
 						{(dotted.length > 0 || toggle !== false) && (
@@ -159,8 +159,8 @@ export function ResultsStep({
 									<ul
 										aria-label={
 											shownRows.length === 0
-												? "Results by number"
-												: `${countOf(dotted.length, "other result", "other results")} of this review`
+												? "Observations by number"
+												: `${countOf(dotted.length, "other observation", "other observations")} of this review`
 										}
 										className="flex flex-wrap items-center gap-0.5"
 									>
@@ -207,7 +207,7 @@ function ResultsHead({
 	if (wholeTotal === 0) {
 		return (
 			<>
-				<span className="block font-medium">No results</span>
+				<span className="block font-medium">No observations</span>
 				{hasText(nothing) && <span className="block text-muted-foreground">{nothing}</span>}
 			</>
 		);
@@ -411,7 +411,7 @@ function TraceProblems({
 		<div className="pb-1.5 pl-9 text-xs">
 			<Collapsible defaultOpen={defaultOpen} className="min-w-0">
 				<CollapsibleTrigger
-					aria-label={`${summary}, of result ${String(number)}`}
+					aria-label={`${summary}, of observation ${String(number)}`}
 					className="group inline-flex min-h-6 items-center gap-1 rounded-sm px-1 text-muted-foreground outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					<ChevronRightIcon
@@ -438,13 +438,13 @@ function TraceProblemList({
 	const { open } = useStory();
 	return (
 		<ul
-			aria-label={`Problems of result ${String(number)}`}
+			aria-label={`Problems of observation ${String(number)}`}
 			className="flex min-w-0 flex-col gap-0.5"
 		>
 			{problems.map((problem, index) => {
 				const severity = SEVERITY_DEFS[problem.severity];
-				// Results can share a summary, so each name says which result and which of its problems.
-				const name = `Problem ${String(index + 1)} of result ${String(number)}: ${severity.label}, ${problem.summary}`;
+				// Observations can share a summary, so each name says which one and which of its problems.
+				const name = `Problem ${String(index + 1)} of observation ${String(number)}: ${severity.label}, ${problem.summary}`;
 				const words = (
 					<>
 						<ToneIcon def={severity} className="size-3 shrink-0" />

@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.IntSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,7 +84,7 @@ public class DockerSandboxAdapter implements SandboxManager {
     private final SandboxWorkspaceManager workspaceManager;
     private final SandboxContainerManager containerManager;
     private final ContainerSecurityPolicy securityPolicy;
-    private final int gatewayPort;
+    private final IntSupplier gatewayPort;
     private final SandboxAttemptLauncher launcher;
 
     private final Counter executionsSuccess;
@@ -104,7 +105,7 @@ public class DockerSandboxAdapter implements SandboxManager {
             SandboxWorkspaceManager workspaceManager,
             SandboxContainerManager containerManager,
             ContainerSecurityPolicy securityPolicy,
-            int gatewayPort,
+            IntSupplier gatewayPort,
             MeterRegistry meterRegistry,
             SandboxGatewaySessions gatewaySessions,
             DockerVolumeOperations volumeOperations) {
@@ -402,7 +403,7 @@ public class DockerSandboxAdapter implements SandboxManager {
         env.put("GIT_ATTR_NOSYSTEM", "1");
 
         if (spec.networkPolicy() != null) {
-            String gatewayUrl = "http://" + appServerIp + ":" + gatewayPort;
+            String gatewayUrl = "http://" + appServerIp + ":" + gatewayPort.getAsInt();
             if (spec.networkPolicy().llmProxyUrl() != null) {
                 String proxyUrl = spec.networkPolicy().llmProxyUrl();
                 if (proxyUrl.contains(PROXY_URL_PLACEHOLDER)) {

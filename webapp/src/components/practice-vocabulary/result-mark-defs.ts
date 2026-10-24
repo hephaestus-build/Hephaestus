@@ -18,16 +18,16 @@ export const RESULT_MARK_DEFS: Record<ResultMarkKind, StatusDef & { note: string
 		icon: CircleSlashIcon,
 		badgeVariant: "destructive",
 		description:
-			"A workspace admin marked this result incorrect. Its pending feedback stops and posted comments on the work are retracted.",
-		note: "Only results an admin found wrong are marked. An unmarked one is not confirmed correct.",
+			"A workspace admin marked this observation incorrect. Its pending feedback stops and posted comments on the work are retracted.",
+		note: "Only observations an admin found wrong are marked. An unmarked one is not confirmed correct.",
 	},
 	ACCEPTED: {
 		label: "Marked accepted",
 		icon: BadgeCheckIcon,
 		badgeVariant: "success",
 		description:
-			"A workspace admin accepted this result. It records the review’s quality and changes no feedback.",
-		note: "Accepted results leave the open lists. Acceptance does not change any outcome.",
+			"A workspace admin accepted this observation. It records the review’s quality and changes no feedback.",
+		note: "Accepted observations leave the open lists. Acceptance does not change any outcome.",
 	},
 };
 
@@ -46,12 +46,12 @@ export const DISAGREEMENT_DEFS: StatusDefs<Disagreement> = {
 		icon: MessageSquareWarningIcon,
 		badgeVariant: "warning",
 		description:
-			"The developer disagrees with feedback written from this result and explained why. Mark the result incorrect or withdraw the feedback if they are right.",
+			"The developer disagrees with feedback written from this observation and explained why. Mark the observation incorrect or withdraw the feedback if they are right.",
 	},
 	NOT_DISAGREED: {
 		label: "No disagreement",
 		icon: MessageSquareIcon,
 		badgeVariant: "outline",
-		description: "The developer disagrees with no feedback written from this result.",
+		description: "The developer disagrees with no feedback written from this observation.",
 	},
 };

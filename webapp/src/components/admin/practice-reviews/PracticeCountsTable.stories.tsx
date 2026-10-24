@@ -61,7 +61,7 @@ export const Default: Story = {
 				.map((header) => header.textContent.trim()),
 		).toEqual([
 			"Practice",
-			"Results",
+			"Observations",
 			"Not met",
 			"Does not apply",
 			"Could not determine",
@@ -121,9 +121,9 @@ export const Default: Story = {
 			"1 of 33",
 			"7 of 12",
 		]);
-		await userEvent.click(canvas.getByRole("button", { name: "How Results is counted" }));
+		await userEvent.click(canvas.getByRole("button", { name: "How Observations is counted" }));
 		await expect(
-			await screen.findByRole("dialog", { name: "How Results is counted" }),
+			await screen.findByRole("dialog", { name: "How Observations is counted" }),
 		).not.toHaveTextContent("percentage");
 		await userEvent.keyboard("{Escape}");
 		// A practice that fired twice and led to no feedback still reads as a row, its feedback a
@@ -215,14 +215,14 @@ export const NeedsALookFirst: Story = {
 			within(wiki).getByText("Mostly does not apply").closest("[data-marker]"),
 		).toHaveAttribute(
 			"title",
-			"Does not apply in 29 of 30 results. Consider turning it off for this workspace.",
+			"Does not apply in 29 of 30 observations. Consider turning it off for this workspace.",
 		);
 		const threads = canvas.getByRole("row", { name: /Open threads/u });
 		await expect(
 			within(threads).getByText("Often could not determine").closest("[data-marker]"),
 		).toHaveAttribute(
 			"title",
-			"Could not determine in 9 of 22 results. The review may lack the evidence to decide.",
+			"Could not determine in 9 of 22 observations. The review may lack the evidence to decide.",
 		);
 
 		const sort = canvas.getByRole("combobox", { name: "Sort" });
@@ -349,7 +349,9 @@ export const FilteredByGroup: Story = {
 		]);
 		// The totals stay those of every practice, and the line under the table says what is hidden.
 		await expect(
-			canvas.getByText("The totals include 3 practices that the filters hide, with 24 results."),
+			canvas.getByText(
+				"The totals include 3 practices that the filters hide, with 24 observations.",
+			),
 		).toBeVisible();
 	},
 };

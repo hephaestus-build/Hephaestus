@@ -125,8 +125,9 @@ function EditPracticeForm({
 						<div>
 							<h2 className="text-lg font-semibold">What the reviews recorded</h2>
 							<p className="text-sm text-muted-foreground">
-								How its results turned out and what feedback cited them, with the results most worth
-								acting on. Saving keeps them: the change becomes version {seeded.number + 1}.
+								How its observations turned out and what feedback cited them, with the observations
+								most worth acting on. Saving keeps them: the change becomes version{" "}
+								{seeded.number + 1}.
 							</p>
 						</div>
 						<Link

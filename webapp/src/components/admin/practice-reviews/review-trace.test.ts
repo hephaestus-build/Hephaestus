@@ -174,7 +174,7 @@ describe("the review's step", () => {
 		const labels = ["empty", "failed", "cancelled"].map((key) => stepOf(key).def.label);
 		expect(new Set(labels).size).toBe(labels.length);
 		expect(stepOf("empty").assessedNothing).toBe(
-			"The review ran to the end and recorded no result.",
+			"The review ran to the end and recorded no observation.",
 		);
 	});
 });

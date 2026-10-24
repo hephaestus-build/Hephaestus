@@ -28,15 +28,15 @@ Review on selects events. When selects their recorded state for automatic review
 Applies when governs every origin, including a request.
 
 The server checks these conditions against captured evidence before the practice script runs.
-If every condition is proven false, the result is Does not apply with your Otherwise explanation.
+If every condition is proven false, the observation is Does not apply with your Otherwise explanation.
 Incomplete or unavailable evidence cannot prove a condition false.
-Required capture failure withholds the practice without a result.
+Required capture failure withholds the practice without an observation.
 Issues offer no applicability conditions.
 
 A request does not bypass source access, scope or consent.
 
 About selects Author, Reviewer, Assignee or Merger.
-Choose The work when the result concerns no developer.
+Choose The work when the observation concerns no developer.
 A selected role must resolve to one eligible human account.
 A missing or ambiguous role withholds the practice instead of choosing a person.
 
@@ -54,7 +54,7 @@ Reviewed by has three choices:
 
 Keep the human reason and known limits with this choice.
 Do not duplicate them in a second rubric.
-Feedback mode is a separate delivery setting. Off does not stop eligible result recording.
+Feedback mode is a separate delivery setting. Off does not stop eligible observation recording.
 
 ## Add a script and scan support
 
@@ -66,7 +66,7 @@ An invalid custom script never falls back silently.
 Scan support declares selected files and context explicitly.
 It is available only for practices with a valid repository-state form.
 A duty at a change event cannot gain a scan form by ignoring that event.
-A scan result concerns the file and has no developer.
+A scan observation concerns the file and has no developer.
 
 ## Write a practice for a technology
 
@@ -84,7 +84,7 @@ Incomplete change evidence keeps the practice eligible.
 
 **Handle errors instead of swallowing them** applies to code in every language.
 Its script has a table of constructs for each language that it names.
-A match is a lead for the review, not a result.
+A match is a lead for the review, not an observation.
 A file in another language gets no lead, and the review still decides.
 The [script guide](./practice-scripts.mdx#test-a-script-locally) owns how to test these tables.
 
@@ -99,7 +99,7 @@ Later catalog changes arrive as offers that you can accept or decline.
 ### No practice variants
 
 Do not create a copy of one practice for each technology.
-Copies of one standard drift apart, and their results stop being comparable.
+Copies of one standard drift apart, and their observations stop being comparable.
 [ADR 0050](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0050-one-practice-standard-one-outcome.md) keeps one standard for each practice.
 Hephaestus also does not detect the technology stack of a repository.
 
@@ -112,7 +112,7 @@ Reopen this decision only when one of these conditions occurs:
 
 Why it matters explains the practice's purpose.
 What good looks like describes work that meets it.
-Going well describes what the developer keeps doing when supported results establish that pattern.
+Going well describes what the developer keeps doing when supported observations establish that pattern.
 Guidance does not add a new criterion or change the evidence standard.
 
 ## Add a visual and a guide
@@ -295,7 +295,7 @@ Return only the SVG markup and the description.
 ## Save or reset
 
 Saving a changed definition creates a fixed practice version.
-Earlier results retain their original definition.
+Earlier observations retain their original definition.
 A name, group or guidance change does not change the review standard digest.
 Reuse still requires the exact practice version and method.
 Reset removes local customization through the catalog comparison.

@@ -264,8 +264,8 @@ export function ReviewLineageGraph({
 								aria-expanded={expanded}
 								title={
 									expanded
-										? "Fold the results, the siblings and the facts"
-										: "Open every result, the siblings and every step’s facts"
+										? "Fold the observations, the siblings and the facts"
+										: "Open every observation, the siblings and every step’s facts"
 								}
 								onClick={() => setAllOpen(!expanded)}
 							>

@@ -65,7 +65,7 @@ class DockerGatewayTransportTest extends BaseUnitTest {
                 new SandboxWorkspaceManager(),
                 containers,
                 security,
-                8081,
+                () -> 8081,
                 new SimpleMeterRegistry(),
                 sessions,
                 volumes);

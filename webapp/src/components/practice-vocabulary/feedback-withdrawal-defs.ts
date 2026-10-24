@@ -8,5 +8,5 @@ export const FEEDBACK_WITHDRAWN_DEF: StatusDef = {
 	icon: EyeOffIcon,
 	badgeVariant: "destructive",
 	description:
-		"A workspace admin withdrew this from the developer’s practice pages. The results behind it are unchanged.",
+		"A workspace admin withdrew this from the developer’s practice pages. The observations behind it are unchanged.",
 };

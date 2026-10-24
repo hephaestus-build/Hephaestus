@@ -165,6 +165,30 @@ await test("profile CLI preserves diagnostics and fails when no tests were repor
 	assert.equal(ordinary.status, 0);
 });
 
+await test("a summary names the integration shard that Gradle selected", async (context) => {
+	const directory = await mkdtemp(path.join(tmpdir(), "shard-summary-"));
+	context.after(async () => rm(directory, { recursive: true, force: true }));
+	const reports = path.join(directory, "reports");
+	await mkdir(reports);
+	await writeFile(path.join(reports, "TEST-a.xml"), REPORT);
+	const output = path.join(directory, "summary.json");
+	const script = fileURLToPath(new URL("summarize-test-results.ts", import.meta.url));
+	const summarizeWith = async (shard: string) => {
+		const result = spawnSync(process.execPath, [script, "report", reports, output], {
+			encoding: "utf8",
+			env: {
+				...process.env,
+				GITHUB_STEP_SUMMARY: path.join(directory, "step-summary.md"),
+				HEPHAESTUS_INTEGRATION_SHARD: shard,
+			},
+		});
+		assert.equal(result.status, 0, result.stderr);
+		return readFile(output, "utf8");
+	};
+	assert.match(await summarizeWith("providers"), /"shard": "providers"/u);
+	assert.doesNotMatch(await summarizeWith(""), /"shard"/u);
+});
+
 await test("verification profiles allow no Spring contexts but still require successful executed tests", async (context) => {
 	const directory = await mkdtemp(path.join(tmpdir(), "verification-profile-"));
 	context.after(async () => rm(directory, { recursive: true, force: true }));
