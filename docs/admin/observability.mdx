@@ -216,6 +216,8 @@ Each exception line carries a hash, so you can count repeated failures of one ki
 
 A record names each exception in a stack trace, including causes and suppressed exceptions, by its class only.
 It contains no `error.message`.
+When the database changelog fails validation at startup, the `APPLICATION FAILED TO START` record gives the reason in its message.
+An example is a database from before v0.77.4 that needs the [baseline synchronization runbook](./liquibase-baseline-runbook.md).
 A database driver quotes rejected row values in its messages, an HTTP client the request URL, and a parser the input that it rejected.
 These boundaries have their own guard:
 

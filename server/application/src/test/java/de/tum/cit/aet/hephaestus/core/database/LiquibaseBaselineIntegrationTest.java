@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.diagnostics.FailureAnalysis;
 
 @Tag("integration")
 class LiquibaseBaselineIntegrationTest {
@@ -239,10 +241,16 @@ class LiquibaseBaselineIntegrationTest {
             CREATE EVENT TRIGGER reject_upgrade_ddl ON ddl_command_start EXECUTE FUNCTION reject_upgrade_ddl();
             """);
 
-        assertThatThrownBy(() -> update(database, "db/master.xml", context))
+        Throwable refusal = catchThrowable(() -> update(database, "db/master.xml", context));
+        assertThat(refusal)
                 .isInstanceOf(LiquibaseException.class)
                 .hasStackTraceContaining(
                         "install v0.77.4 and start it once, then follow the baseline synchronization runbook");
+        // Logs drop exception messages, so the startup failure analysis is where an operator reads the refusal.
+        assertThat(new LiquibaseValidationFailureAnalyzer().analyze(refusal))
+                .extracting(FailureAnalysis::getDescription)
+                .asString()
+                .contains("install v0.77.4 and start it once, then follow the baseline synchronization runbook");
         try (Liquibase liquibase = liquibase(database, "db/master.xml")) {
             assertThatThrownBy(() ->
                             liquibase.changeLogSync("baseline_v0_77_4", new Contexts(context), new LabelExpression()))
