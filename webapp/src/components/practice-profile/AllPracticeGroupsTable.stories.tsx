@@ -101,6 +101,20 @@ export const ManyEvents: Story = {
 			throw new Error("The group's name sits in its cell");
 		}
 		const items = within(cell).getAllByRole("listitem");
+		// A practice in the group's summary wears the row's label: the gray pill with the group's icon.
+		const labels = cell.querySelectorAll("li [data-practice-pill]");
+		await expect(labels.length).toBeGreaterThan(0);
+		for (const label of labels) {
+			await expect(label.querySelector("svg")).not.toBeNull();
+		}
+		// Pills on wrapped lines keep a gap between them.
+		const boxes = [...labels].map((label) => label.getBoundingClientRect());
+		for (const [index, box] of boxes.entries()) {
+			const next = boxes[index + 1];
+			if (next !== undefined && next.top > box.top + 1) {
+				await expect(next.top - box.bottom).toBeGreaterThanOrEqual(3);
+			}
+		}
 		// New feedback is the card's to say, so the cell has no bullet for it.
 		await expect(items).toHaveLength(5);
 		await expect(cell).not.toHaveTextContent(/new feedback/u);

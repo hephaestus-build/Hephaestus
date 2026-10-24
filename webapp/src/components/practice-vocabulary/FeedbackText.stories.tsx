@@ -7,6 +7,7 @@ import {
 	packagingGroup,
 	pullRequest,
 } from "@/stories/practice-profile-story-mock-data";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { group, practice, text, work } from "./feedback-text";
 import { FeedbackText } from "./FeedbackText";
@@ -111,5 +112,43 @@ export const StopAfterAWorkLink: Story = {
 		await expect(held?.lastChild?.textContent).toBe(".");
 		// The stop is not repeated in the text after the link.
 		await expect(held?.parentElement?.textContent.endsWith("tab).")).toBe(true);
+	},
+};
+
+const LONGEST_PRACTICE_NAME =
+	"Explain significant decisions where the reasoning cannot be recovered from the diff alone";
+
+/**
+ * The longest practice name in running text at 320 px, with a mark of punctuation after it: the
+ * plain gray pill keeps to the page and its name truncates, so nothing runs off the page.
+ */
+export const LongestPracticeInText: Story = {
+	args: {
+		segments: [text("You kept to "), practice(PRACTICE_SLUG, LONGEST_PRACTICE_NAME), text(".")],
+	},
+	parameters: {
+		viewport: { defaultViewport: "reflow" },
+		chromatic: { viewports: [320] },
+	},
+	play: async ({ args, canvas }) => {
+		await expectNoPageOverflow();
+		const name = canvas.getByText(LONGEST_PRACTICE_NAME);
+		await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
+		// The plain gray pill of running text, with no group mark before the name.
+		await expect(name.closest("[data-slot=badge]")).not.toBeNull();
+		await userEvent.click(canvas.getByRole("button", { name: LONGEST_PRACTICE_NAME }));
+		await expect(args.onOpenPractice).toHaveBeenCalledWith(PRACTICE_SLUG);
+	},
+};
+
+/** The same sentence with nowhere to open the practice: a word that still keeps to the page. */
+export const LongestPracticeInTextPlain: Story = {
+	...LongestPracticeInText,
+	args: { ...LongestPracticeInText.args, onOpenPractice: undefined },
+	play: async ({ canvas }) => {
+		await expectNoPageOverflow();
+		await expect(canvas.queryByRole("button")).toBeNull();
+		const name = canvas.getByText(LONGEST_PRACTICE_NAME);
+		await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
 	},
 };

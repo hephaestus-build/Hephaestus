@@ -2,7 +2,10 @@ import { XIcon } from "lucide-react";
 import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useMediaQuery } from "usehooks-ts";
 
+import { cn } from "cn";
+
 import type {
+	GroupRef,
 	PracticeGuidanceDto,
 	PracticeStanding,
 	ReviewedPractice,
@@ -32,6 +35,7 @@ import {
 } from "@/components/practice-guidance/PracticeIntro";
 import { REVIEW_FILTER_MAX_LENGTH } from "@/components/practice-trace/trace-format";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
+import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import {
 	type FeedbackRatingProps,
@@ -105,6 +109,8 @@ export interface PracticeDetailLevelProps {
 	markedFeedbackId?: string;
 	/** Called as soon as that card arrives, so the address lets go of it and nothing replays it. */
 	onFeedbackArrivalShown?: () => void;
+	/** The practice's group, whose icon leads the heading inside its pill; without it the pill holds the name alone. */
+	group?: GroupRef;
 	/**
 	 * The practice, as the standings carry it: the catalog's words and where the reader stands.
 	 * Absent for a practice with no standing, which the level shows from its words and guidance
@@ -188,6 +194,7 @@ export function PracticeDetailLevel({
 	onOpenGroup,
 	markedFeedbackId,
 	onFeedbackArrivalShown,
+	group,
 	practice,
 	described,
 	guidance,
@@ -207,6 +214,7 @@ export function PracticeDetailLevel({
 	onRetry,
 	neverApplied = false,
 }: PracticeDetailLevelProps) {
+	const groupVisual = group === undefined ? undefined : getGroupVisual(group.icon, group.color);
 	const reviews =
 		feed.status === "ready" && practice
 			? feed.reviews
@@ -398,6 +406,21 @@ export function PracticeDetailLevel({
 				path={path}
 				current="Practice"
 				title={practice?.name ?? described?.name ?? "Practice"}
+				// As the practice is named in its group's table: the gray pill with the group's icon
+				// inside, at the heading's size.
+				titleFrame="inline-block rounded-2xl bg-secondary px-3.5 py-1 text-secondary-foreground"
+				titleLead={
+					groupVisual !== undefined && (
+						<groupVisual.Icon
+							aria-hidden
+							className={cn(
+								"mr-2 inline-block size-6 align-[-0.2em]",
+								groupVisual.pill,
+								"bg-transparent dark:bg-transparent",
+							)}
+						/>
+					)
+				}
 				chips={
 					practice && <PracticeStandingChips practice={practice} neverApplied={neverApplied} />
 				}

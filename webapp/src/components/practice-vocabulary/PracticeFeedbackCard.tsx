@@ -14,7 +14,10 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { TipPopover } from "@/components/common/TipPopover";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { useNow } from "@/components/common/use-now";
-import { pillClasses } from "@/components/practice-vocabulary/group-visuals";
+import {
+	pillClasses,
+	UNASSIGNED_GROUP_VISUAL,
+} from "@/components/practice-vocabulary/group-visuals";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -32,6 +35,7 @@ import { FeedbackWorkTimeline } from "./FeedbackWorkTimeline";
 import type { Outcome } from "./outcome-defs";
 import { cleanProgress, timelinePieces } from "./practice-feedback-timeline";
 import { PracticeInGroup } from "./PracticeInGroup";
+import type { PracticeSquare } from "./PracticePill";
 
 export type FeedbackBand = "comment" | "disagreement";
 
@@ -64,6 +68,17 @@ export interface CleanWork {
 	ref: ItemRef;
 	/** When the piece was reviewed; the timeline orders and dates it by this. */
 	date: Date;
+}
+
+/** The practice's square carries its group's icon and color, muted like the group's name without one. */
+function practiceSquareOf(group?: PracticeFeedbackCardGroup): PracticeSquare | undefined {
+	if (group === undefined) {
+		return undefined;
+	}
+	return {
+		Icon: group.icon ?? PackageIcon,
+		pill: hasText(group.color) ? pillClasses(group.color) : UNASSIGNED_GROUP_VISUAL.pill,
+	};
 }
 
 /** The group a card's practice belongs to, with what the card draws its name in. */
@@ -331,6 +346,7 @@ export function PracticeFeedbackCard({
 		<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
 			<PracticeInGroup
 				practiceName={practiceName}
+				practiceSquare={practiceSquareOf(group)}
 				onOpenPractice={onOpenPractice && (() => onOpenPractice(practiceSlug))}
 				groupName={group?.name ?? "Unassigned"}
 				groupIcon={GroupIcon}

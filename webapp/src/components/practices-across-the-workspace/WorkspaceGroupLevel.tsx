@@ -3,6 +3,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { NoSuchGroup } from "@/components/practice-profile/practice-profile-blocks";
+import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { StandingBasisNote } from "@/components/practice-vocabulary/StandingBasisNote";
@@ -107,10 +108,12 @@ function GroupPractices({
 	focusPracticeSlug?: string;
 }) {
 	const group = state.status === "ready" ? state.group : undefined;
+	// Each practice row carries the square the header shows, so a row reads as part of this group.
+	const groupVisual = group && getGroupVisual(group.groupIcon, group.groupColor);
 	const rows: ComparisonRow[] = (group?.practices ?? []).map((practice) => ({
 		key: practice.practiceSlug,
 		name: practice.practiceName,
-		subject: <PracticePill name={practice.practiceName} />,
+		subject: <PracticePill name={practice.practiceName} group={groupVisual} />,
 		yourStanding: practice.yourStanding ?? undefined,
 		yourBasis: practice.yourBasis ?? undefined,
 		split: practice.split,

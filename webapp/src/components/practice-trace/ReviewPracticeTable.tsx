@@ -18,7 +18,7 @@ import {
 } from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
 import { type Outcome, OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
-import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
+import { PracticePill, type PracticeSquare } from "@/components/practice-vocabulary/PracticePill";
 import { OPEN_ROW_BAR } from "@/components/practice-vocabulary/PracticeTable";
 import { RESULT_MARK_DEFS } from "@/components/practice-vocabulary/result-mark-defs";
 import { StatusLabel, StatusTooltip } from "@/components/practice-vocabulary/StatusTooltip";
@@ -206,6 +206,7 @@ export function ReviewPracticeTable({
 								<ResultRow
 									key={result.id}
 									result={result}
+									square={group === undefined ? undefined : visual}
 									reviewId={reviewId}
 									onOpenPractice={onOpenPractice}
 									earlierReviewLink={earlierReviewLink}
@@ -260,6 +261,8 @@ function byGroup(
 
 interface ResultRowProps {
 	result: ResultList;
+	/** The group's icon and color for the practice's label; without it the label is neutral. */
+	square: PracticeSquare | undefined;
 	reviewId: string;
 	onOpenPractice?: (practiceSlug: string) => void;
 	earlierReviewLink?: (reviewId: string) => ReactNode;
@@ -276,6 +279,7 @@ interface ResultRowProps {
 
 function ResultRow({
 	result,
+	square,
 	reviewId,
 	onOpenPractice,
 	earlierReviewLink,
@@ -328,6 +332,7 @@ function ResultRow({
 					{/* The group heads the rows above, so the row names the practice alone. */}
 					<PracticePill
 						name={result.practiceName}
+						group={square}
 						onOpen={
 							onOpenPractice === undefined ? undefined : () => onOpenPractice(result.practiceSlug)
 						}

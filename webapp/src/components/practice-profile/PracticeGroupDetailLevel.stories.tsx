@@ -93,6 +93,15 @@ export const Default: Story = {
 		await expectSettledVisible(table);
 		const header = screen.getByRole("heading", { name: packagingGroup.name });
 		await expect(header).toBeVisible();
+		// The heading names the group as the All practice groups table does, its icon and name in the
+		// group's color, only larger: no tinted square.
+		const mark = header.parentElement?.querySelector("svg");
+		await expect(mark).not.toBeNull();
+		await expect(getComputedStyle(header).color).toBe(getComputedStyle(mark ?? header).color);
+		await expect(getComputedStyle(header).color).not.toBe(getComputedStyle(document.body).color);
+		await expect(getComputedStyle(mark?.parentElement ?? header).backgroundColor).toBe(
+			"rgba(0, 0, 0, 0)",
+		);
 		await expect(screen.getByText("Group")).toBeVisible();
 		// The practice count and its ring sit beside the title, over the line that closes the
 		// header, and the tabs start under it.
@@ -221,8 +230,10 @@ export const WithItsDescription: Story = {
 			"Work a reviewer can start on without asking first.",
 		);
 		await expectSettledVisible(description);
-		const heading = screen.getByRole("heading", { name: packagingGroup.name });
-		await expect(getComputedStyle(description).color).toBe(getComputedStyle(heading).color);
+		// The description is the foreground; the heading over it wears the group's color.
+		await expect(getComputedStyle(description).color).toBe(
+			getComputedStyle(screen.getByText("Practices in this group")).color,
+		);
 		// `text-sm`, the body size of the practice surfaces.
 		const rootSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
 		await expect(Number.parseFloat(getComputedStyle(description).fontSize)).toBe(0.875 * rootSize);

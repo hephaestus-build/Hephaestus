@@ -114,6 +114,8 @@ function GroupRow({
 				badge={<GroupName name={group.name} icon={Icon} pill={pill} />}
 				sentences={sentences}
 				onOpenPractice={onOpenPractice}
+				// Every practice a row's sentences name is in that row's group: its label shows the icon.
+				practiceGroup={{ Icon, pill }}
 			/>
 		</PracticeTableRow>
 	);

@@ -89,7 +89,7 @@ function FeedbackRow({ row, workspaceSlug }: { row: WeeklyDigestFeedback; worksp
 			<Item variant="outline" size="sm" role="listitem">
 				<ItemContent>
 					<ItemTitle>
-						<PracticePill name={row.practiceName} />
+						<PracticePill name={row.practiceName} size="sm" />
 						<StatusBadge def={FEEDBACK_WITHDRAWN_DEF} />
 					</ItemTitle>
 					<ItemDescription>A workspace admin withdrew this feedback.</ItemDescription>
@@ -104,7 +104,7 @@ function FeedbackRow({ row, workspaceSlug }: { row: WeeklyDigestFeedback; worksp
 			<Item variant="outline" size="sm" render={linkTo(row, workspaceSlug)}>
 				<ItemContent>
 					<ItemTitle>
-						<PracticePill name={row.practiceName} />
+						<PracticePill name={row.practiceName} size="sm" />
 						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[row.destination]} />
 					</ItemTitle>
 					{(work !== undefined || row.replaced) && (

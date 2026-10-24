@@ -245,6 +245,9 @@ export function PracticeGroupDetailDrawer({
 								// The group level is under the practice's whenever the group is known, so a
 								// card's group name goes back to it.
 								onOpenGroup={openGroup && (() => onClose(groupIndex + 1))}
+								// The group under the practice's level, or the one its standing names when the
+								// practice opened alone, as from a review.
+								group={openGroup ?? findGroup(detail.practice?.groupSlug ?? undefined)}
 								tab={practiceTab}
 								markedFeedbackId={markedFeedbackId}
 								onFeedbackArrivalShown={() => onSelectionChange({ feedbackCard: undefined })}

@@ -391,7 +391,7 @@ export const LATEST_REVIEW = "Latest review";
 /**
  * The latest review's row (`data-latest`), framed: the accent outline and the calm mentor wash of a
  * card's next step, with room at the top of each cell for the words in its corner. Below the frame's
- * `@2xl` the row is a grid and takes the room itself. Drawn by the table, as a row owns no colour.
+ * `@2xl` the row is a grid and takes the room itself. Drawn by the table, as a row owns no color.
  */
 const LATEST_ROW = [
 	"[&_tr[data-latest]]:bg-mentor/5 dark:[&_tr[data-latest]]:bg-mentor/10",

@@ -22,6 +22,18 @@ export interface LevelHeaderProps {
 	title?: ReactNode;
 	/** A picture of what the record is, leading the title: a group's pill, a member's avatar. */
 	mark?: ReactElement;
+	/**
+	 * The title drawn as its record is elsewhere, such as a group's color or a practice's gray pill;
+	 * the title's size and its three-line limit stay the header's.
+	 */
+	titleClassName?: string;
+	/** A mark inside the title, before its words: the group's icon inside a practice's pill. */
+	titleLead?: ReactNode;
+	/**
+	 * A shape around the title's words and its lead, drawn by a span inside the title so the title
+	 * itself keeps the header's shape: a practice's gray pill.
+	 */
+	titleFrame?: string;
 	/** The record's standing — badges, a trend — under the title, where text-like status goes. */
 	chips?: ReactNode;
 	/**
@@ -49,6 +61,9 @@ export function LevelHeader({
 	current,
 	title = current,
 	mark,
+	titleClassName,
+	titleLead,
+	titleFrame,
 	chips,
 	description,
 	aside,
@@ -70,10 +85,15 @@ export function LevelHeader({
 						title={!loading && typeof title === "string" ? title : undefined}
 						className={cn(
 							"line-clamp-3 min-w-0 text-2xl font-semibold tracking-tight break-words",
+							!loading && titleClassName,
 							loading && "sr-only",
 						)}
 					>
-						{loading ? `Loading ${current.toLowerCase()}` : title}
+						{loading ? (
+							`Loading ${current.toLowerCase()}`
+						) : (
+							<TitleWords frame={titleFrame} lead={titleLead} title={title} />
+						)}
 					</DrawerTitle>
 					{loading && <Skeleton aria-hidden className="h-7 w-full max-w-md" />}
 				</div>
@@ -89,5 +109,31 @@ export function LevelHeader({
 			</div>
 			{aside && <div className="w-full sm:w-auto">{aside}</div>}
 		</DetailDrawerHeader>
+	);
+}
+
+/** The title's words after its lead, in the frame a record's title wears, if any. */
+function TitleWords({
+	frame,
+	lead,
+	title,
+}: {
+	frame: string | undefined;
+	lead: ReactNode;
+	title: ReactNode;
+}) {
+	if (frame === undefined) {
+		return (
+			<>
+				{lead}
+				{title}
+			</>
+		);
+	}
+	return (
+		<span className={frame}>
+			{lead}
+			{title}
+		</span>
 	);
 }
