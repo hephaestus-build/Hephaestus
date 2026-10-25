@@ -419,23 +419,25 @@ If you set `HEPHAESTUS_METRICS_FILE`, a file without `hephaestus_deploy_free_byt
 Without the file, you can still follow these steps: they are safe on a newer reconciler too.
 Free the space once by hand:
 
-1. In `/var/lib/hephaestus/applied.json`, read `release` and, if it is there, `previous`.
-2. Open `/var/lib/hephaestus/release-locks/<release>.env` for each of them.
-   If a lock is missing, stop here. Do not guess which images to keep.
-3. Disable the timer with `sudo systemctl disable --now hephaestus-reconcile.timer`.
-4. Wait for an active tick to finish:
+1. Disable the timer with `sudo systemctl disable --now hephaestus-reconcile.timer`.
+2. Wait for an active tick to finish:
 
    ```bash
    while [ "$(systemctl show --property=ActiveState --value hephaestus-reconcile.service)" = activating ]; do sleep 5; done
    ```
 
+3. In `/var/lib/hephaestus/applied.json`, read `release` and, if it is there, `previous`.
+4. Open `/var/lib/hephaestus/release-locks/<release>.env` for each of them.
+   If a lock is missing, stop. Enable the timer again as step 11 shows. Do not guess which images to keep.
 5. For each `HEPHAESTUS_IMAGE_*` value in the locks, read its image ID with `docker image inspect --format '{{.Id}}' <reference>`.
    If Docker reports no such image, the host does not hold it. Skip it.
    These are the kept IDs. The agent image and the carried PostgreSQL image are among them.
 6. List the images on the host with `docker image ls --all --digests --no-trunc`.
-   Without `--all`, Docker hides the release images, because they have no tag.
+   Docker Engine 29 with the `overlay2` storage driver lists an image that has no tag only with `--all`.
+   A release image is pulled by digest, so it has no tag.
 7. Find the images of the locks' repositories whose `TAG` is `<none>` and whose `IMAGE ID` is not a kept ID.
-   A tagged image belongs to another workload. A `<none>` repository is a layer, not an image of these repositories.
+   Leave an image that has a tag: a release image never has one.
+   A `<none>` repository is a layer, not an image of these repositories.
 8. Remove each of them with `docker image rm <repository>@<digest>`.
    Do not force the removal.
    Docker refuses only an image that a container uses, and the agent image has no container between reviews.
@@ -445,7 +447,7 @@ Free the space once by hand:
     If they do not, free more space or extend the disk, and check again.
 11. Enable the timer again with `sudo systemctl enable --now hephaestus-reconcile.timer`.
 
-The next tick applies the release.
+The next tick applies a pending release.
 From then on, the reconciler keeps the images itself.
 
 ## Watching it
