@@ -25,6 +25,8 @@ import { cn } from "cn";
  *    viewport is `overflow-hidden` so the bleed pseudo-element stays off the page's scroll width.
  * 7. The popup is `surface-raised bg-background`, not `bg-popover`: the utility repaints the page and
  *    card colours inside the panel, so dark mode lifts the whole level, and a covered level recedes.
+ * 8. `DrawerFooter` takes `tone`: `band` lays the footer on the `bg-sidebar` ground, for a footer
+ *    whose one action leads off the drawer (`PracticeFocusFooter`).
  */
 interface DrawerContextProps {
 	hasSnapPoints: boolean;

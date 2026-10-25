@@ -73,7 +73,7 @@ const EMPTY_TRACK = cn("h-2 rounded-sm border border-dashed border-current", NEU
 
 /**
  * A bracket open toward the bar, as wide as the reader's part. Not a point: the bar knows only the
- * part the reader is in, never a place within it, and a pointer read as one (interview feedback).
+ * part the reader is in, never a place within it, and a pointer reads as one.
  */
 const YOU_BRACKET = "h-1.5 rounded-t-sm border-x-2 border-t-2 border-current";
 

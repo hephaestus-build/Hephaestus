@@ -101,7 +101,7 @@ describe("Practices across the workspace", () => {
 		});
 		// Parts of one and two show as they are; the reader without a verdict sits in none yet.
 		table.getByRole("img", {
-			name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. You are in the none yet part.",
+			name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. You are in the part with no standing yet.",
 		});
 		expect(overviewReads()).toHaveLength(1);
 		expect(profileReads()).toStrictEqual([]);

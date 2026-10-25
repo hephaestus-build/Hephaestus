@@ -4,6 +4,7 @@
 **Date:** 2026-10-02
 **Amended:** 2026-10-07, accepted. The page has no smallest count. *Amendment of 2026-10-07* gives the change.
 2026-10-09: standings and practices stay out of sorting and the public page. *Update — 2026-10-09* gives the limit.
+2026-10-25: the **You** marker is a bracket over the reader's part. *Update — 2026-10-25* gives the change.
 **Authors:** Valentin Grüner
 **Builds on:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md) (no score, no rank),
 [ADR 0047](0047-the-practice-profile-has-one-reader.md) (the Practice profile has one reader)
@@ -198,3 +199,11 @@ This update restores the decision above. It changes no rule about who and what i
   Quotes, delivery, Heph and every model input keep the full check, so **No AI** still refuses them.
 - Feedback mode **Off** stops delivery only. A practice that is off still has a standing.
   **Reviewed by People** or **Nobody** has no review and no standing.
+
+## Update — 2026-10-25 (the You bracket)
+
+The **You** marker above is now a bracket.
+It spans the whole part of a split that holds the reader.
+A split gives only the part that holds the reader, not a place inside it.
+A point marker suggested such a place, and the bracket does not.
+Nothing else above changes.

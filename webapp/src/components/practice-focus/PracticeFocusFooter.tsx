@@ -24,8 +24,8 @@ export interface PracticeFocusFooterProps {
 /**
  * The foot of a group or practice level on either practice page, with the one way to the same
  * group or practice on the other page. It sits in the same place on both pages, so the way there is
- * also the way back. A muted band with an outline button that turns dark while pressed, so the way
- * across is seen, not searched for, and stays quieter than the level's content.
+ * also the way back. A muted band with an outline button that turns dark on hover, focus and press,
+ * so the way across is seen, not searched for, and stays quieter than the level's content.
  */
 export function PracticeFocusFooter({
 	sentence,
@@ -38,10 +38,8 @@ export function PracticeFocusFooter({
 	return (
 		<Foot className="sm:items-center sm:justify-between">
 			<p className="text-sm text-muted-foreground">{sentence}</p>
-			{/* The size of a drawer's own actions, and the width of the footer on a phone, where the
-			    footer stacks: the one way to the other page is easy to see and to hit. */}
-			{/* The action button of Reviews of your work, with words: white with a thin border at rest,
-			    dark on hover, focus and press. */}
+			{/* The action button of Reviews of your work, with words, at the width of the footer on a
+			    phone, where the footer stacks: the one way to the other page is easy to see and to hit. */}
 			<ActionButton className="w-full sm:w-auto" aria-label={accessibleLabel} onClick={onSwitch}>
 				{label}
 				<ArrowRightIcon aria-hidden />

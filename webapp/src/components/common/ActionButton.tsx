@@ -17,7 +17,8 @@ const PRESSED_DARK = [
 /**
  * The one button of an action a reader takes from a list or a level's foot: the outline button,
  * white with a thin border at rest, dark on hover and keyboard focus and while pressed by pointer,
- * touch or key. The row actions of Reviews of your work use it with an icon alone.
+ * touch or key. The row actions of Reviews of your work use it with an icon alone, and the way
+ * across in a practice level's foot with words.
  */
 export function ActionButton({
 	className,

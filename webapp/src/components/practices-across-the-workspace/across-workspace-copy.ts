@@ -189,7 +189,7 @@ export function splitDescription(
 		return counts;
 	}
 	const yourPart = isSettledStanding(yourStanding)
-		? PRACTICE_GROUP_STANDING_DEFS[yourStanding].label
-		: NONE_YET_SEGMENT.inSentence;
-	return `${counts} You are in the ${yourPart} part.`;
+		? `the ${PRACTICE_GROUP_STANDING_DEFS[yourStanding].label} part`
+		: "the part with no standing yet";
+	return `${counts} You are in ${yourPart}.`;
 }

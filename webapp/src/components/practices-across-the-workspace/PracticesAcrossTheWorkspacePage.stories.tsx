@@ -94,7 +94,7 @@ export const Default: Story = {
 		// A group with parts of one, two and none draws like any other.
 		await expect(
 			table.getByRole("img", {
-				name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. You are in the none yet part.",
+				name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. You are in the part with no standing yet.",
 			}),
 		).toBeVisible();
 		// Only the tiles read the window: the toggle sits in their section, and the bars name none.

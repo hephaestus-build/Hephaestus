@@ -41,11 +41,11 @@ export const Default: Story = {
 		await expect(
 			Math.abs((bracket?.getBoundingClientRect().width ?? 0) - part.getBoundingClientRect().width),
 		).toBeLessThan(1);
-		// The bracket's corners stand clear of the part, not on it.
+		// The bracket's corners stand clear of the part: they end above it, not on it.
 		const bar = part.children[1];
-		await expect(
-			(bar?.getBoundingClientRect().top ?? 0) - (bracket?.getBoundingClientRect().bottom ?? 0),
-		).toBeGreaterThanOrEqual(4);
+		await expect(bracket?.getBoundingClientRect().bottom ?? Infinity).toBeLessThan(
+			bar?.getBoundingClientRect().top ?? 0,
+		);
 	},
 };
 
@@ -97,7 +97,7 @@ export const ReaderInNoneYet: Story = {
 	args: { yourStanding: "NO_OPPORTUNITY" },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			/, 8 none yet\. You are in the none yet part\.$/u,
+			/, 8 none yet\. You are in the part with no standing yet\.$/u,
 		);
 	},
 };
