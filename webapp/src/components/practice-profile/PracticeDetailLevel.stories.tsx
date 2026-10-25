@@ -248,9 +248,9 @@ export const SelectedObservation: Story = {
 		const history = await screen.findByRole("list", { name: "Reviews" });
 		await expectSettledVisible(history);
 		const observations = screen.getByRole("tabpanel", { name: /^Observations/u });
-		await expect(within(observations).getByRole("searchbox", { name: "Search" })).toHaveValue(
-			detailResult.item.label,
-		);
+		await expect(
+			within(observations).getByRole("searchbox", { name: "Search observations" }),
+		).toHaveValue(detailResult.item.label);
 		await expect(within(history).getAllByText(newestSummary)).toHaveLength(1);
 		await expect(screen.queryByText(olderSummary)).not.toBeInTheDocument();
 		// The asked observation wears the accent's bar; no open row carries an outcome-colored rail.
@@ -399,7 +399,7 @@ export const FilterByWork: Story = {
 	args: { tab: "results", renderObservation: completeDetail },
 	play: async () => {
 		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
-		const search = await screen.findByRole("searchbox", { name: "Search" });
+		const search = await screen.findByRole("searchbox", { name: "Search observations" });
 		await userEvent.type(search, "#898");
 		const history = screen.getByRole("list", { name: "Reviews" });
 		await expect(within(history).getByText(olderSummary)).toBeVisible();
@@ -473,7 +473,7 @@ export const ResetKeepsTheTimeframe: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Observations/u }));
 		await userEvent.click(screen.getByRole("button", { name: "Reset" }));
-		await expect(screen.getByRole("searchbox", { name: "Search" })).toHaveValue("");
+		await expect(screen.getByRole("searchbox", { name: "Search observations" })).toHaveValue("");
 		await expect(
 			within(screen.getByRole("toolbar", { name: "Timeframe" })).getByRole("button", {
 				name: "Last 30 days",
