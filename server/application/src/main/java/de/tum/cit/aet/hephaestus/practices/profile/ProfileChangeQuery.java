@@ -61,6 +61,10 @@ public class ProfileChangeQuery {
     private final ProfileOverviewRepository ledger;
 
     public List<ProfileChangeDTO> changes(long workspaceId, long accountId, OverviewWindow window) {
+        return visibility.asOneRead(workspaceId, () -> readChanges(workspaceId, accountId, window));
+    }
+
+    private List<ProfileChangeDTO> readChanges(long workspaceId, long accountId, OverviewWindow window) {
         var rows = read.forDevelopersSince(workspaceId, List.of(accountId), window.since(), false).stream()
                 .filter(r -> window.contains(r.getRecordedAt()))
                 .toList();

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -36,6 +37,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -65,6 +67,8 @@ class PracticeStandingServiceTest {
 
     @BeforeEach
     void data() {
+        when(visibility.asOneRead(anyLong(), any()))
+                .thenAnswer(i -> i.<Supplier<?>>getArgument(1).get());
         when(developer.currentDeveloperId()).thenReturn(Optional.of(7L));
         when(practices.findByWorkspaceId(1L))
                 .thenAnswer(i -> data.isEmpty()

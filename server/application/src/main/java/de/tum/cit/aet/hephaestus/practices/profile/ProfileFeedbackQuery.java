@@ -10,9 +10,11 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.trend.WorkResolution;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionAction;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -58,8 +60,15 @@ public class ProfileFeedbackQuery {
         var ids = recent.stream().map(Feedback::getId).toList();
         var raw = feedbackEvidence.visibleEvidence(ws, ids);
         var changed = feedbackEvidence.practiceChangedAt(raw);
+        var viewById = new HashMap<UUID, ResultView>();
+        views.views(ws, raw.values().stream().flatMap(List::stream).toList())
+                .forEach(view -> viewById.putIfAbsent(view.result().getId(), view));
         var projected = new LinkedHashMap<UUID, List<ResultView>>();
-        raw.forEach((id, r) -> projected.put(id, views.views(ws, r)));
+        raw.forEach((id, r) -> projected.put(
+                id,
+                r.stream()
+                        .map(row -> Objects.requireNonNull(viewById.get(row.getId())))
+                        .toList()));
         Map<UUID, Instant> addressed = ids.isEmpty()
                 ? Map.of()
                 : ledger.addressed(ws, ids, window.until()).stream()

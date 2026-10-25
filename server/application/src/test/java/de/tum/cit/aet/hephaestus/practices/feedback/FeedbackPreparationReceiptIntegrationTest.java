@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -55,7 +56,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -83,6 +86,12 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
     // mock's default. Only the label mapping test below names one.
     @MockitoBean
     RegisteredItemLabels itemLabels;
+
+    @BeforeEach
+    void readAsOne() {
+        when(resultVisibility.asOneRead(anyLong(), any()))
+                .thenAnswer(i -> i.<Supplier<?>>getArgument(1).get());
+    }
 
     @Test
     void shouldReturnOnePersistedPreparationTimeAndCanonicalOrderedPackageDigest() {

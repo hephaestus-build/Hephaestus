@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasis;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
@@ -16,8 +17,10 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.result.trend.WorkResolution;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,24 +79,41 @@ public class PracticePageFeedbackBasis {
     }
 
     public Map<UUID, Instant> practiceChangedAt(Map<UUID, List<Result>> evidenceByFeedback) {
+        Map<Long, PracticeVersion> pinnedById = new HashMap<>();
+        Map<Long, List<PracticeVersion>> versionsByPractice = new HashMap<>();
+        evidenceByFeedback.values().stream()
+                .flatMap(List::stream)
+                .collect(Collectors.groupingBy(Result::getWorkspaceId))
+                .forEach((workspaceId, evidence) -> {
+                    var pinnedIds = evidence.stream()
+                            .map(Result::getPracticeVersionId)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toSet());
+                    if (pinnedIds.isEmpty()) return;
+                    versions.findByWorkspaceIdAndIdIn(workspaceId, pinnedIds)
+                            .forEach(version -> pinnedById.put(Objects.requireNonNull(version.getId()), version));
+                    versions.findByWorkspaceIdAndPracticeIdInOrderByNumberAsc(
+                                    workspaceId,
+                                    evidence.stream().map(Result::getPracticeId).collect(Collectors.toSet()))
+                            .forEach(version -> versionsByPractice
+                                    .computeIfAbsent(
+                                            Objects.requireNonNull(
+                                                    version.getPractice().getId()),
+                                            ignored -> new ArrayList<>())
+                                    .add(version));
+                });
         Map<UUID, Instant> changed = new LinkedHashMap<>();
         evidenceByFeedback.forEach((feedbackId, evidence) -> {
             Instant first = null;
             for (Result result : evidence) {
                 Long pinnedId = result.getPracticeVersionId();
-                if (pinnedId == null) {
+                var pinned = pinnedId == null ? null : pinnedById.get(pinnedId);
+                if (pinned == null) {
                     continue;
                 }
-                var pinned = versions.findByIdAndWorkspaceId(pinnedId, result.getWorkspaceId());
-                if (pinned.isEmpty()) {
-                    continue;
-                }
-                var changedVersion = versions
-                        .findByWorkspaceIdAndPracticeIdOrderByNumberAsc(result.getWorkspaceId(), result.getPracticeId())
-                        .stream()
-                        .filter(version -> version.getNumber() > pinned.get().getNumber())
-                        .filter(version ->
-                                !version.getReviewDigest().equals(pinned.get().getReviewDigest()))
+                var changedVersion = versionsByPractice.getOrDefault(result.getPracticeId(), List.of()).stream()
+                        .filter(version -> version.getNumber() > pinned.getNumber())
+                        .filter(version -> !version.getReviewDigest().equals(pinned.getReviewDigest()))
                         .findFirst();
                 if (changedVersion.isPresent()
                         && (first == null || changedVersion.get().getCreatedAt().isBefore(first))) {
@@ -133,6 +153,16 @@ public class PracticePageFeedbackBasis {
         var developers = withEvidence.stream().map(Feedback::getDeveloperId).collect(Collectors.toSet());
         var later = basis.findLaterResults(workspaceId, developers, oldest.get(), now);
         var allowed = visibility.permitsAll(workspaceId, later, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var practiceIds = withEvidence.stream()
+                .map(piece -> Objects.requireNonNull(evidence.get(piece.getId())))
+                .filter(support -> !support.isEmpty())
+                .map(support -> support.getFirst().getPracticeId())
+                .collect(Collectors.toSet());
+        var opportunities = views.views(
+                workspaceId,
+                later.stream()
+                        .filter(row -> allowed.contains(row.getId()) && practiceIds.contains(row.getPracticeId()))
+                        .toList());
         Map<UUID, WorkResolution> resolved = new LinkedHashMap<>();
         for (Feedback piece : withEvidence) {
             List<Result> support = evidence.get(piece.getId());
@@ -140,15 +170,13 @@ public class PracticePageFeedbackBasis {
                 continue;
             }
             long practiceId = support.getFirst().getPracticeId();
-            var current = later.stream()
-                    .filter(row -> allowed.contains(row.getId()))
-                    .filter(row -> row.getPracticeId() == practiceId)
-                    .filter(row -> Objects.equals(row.getDeveloperId(), piece.getDeveloperId()))
+            var current = opportunities.stream()
+                    .filter(view -> view.result().getPracticeId() == practiceId)
+                    .filter(view -> Objects.equals(view.result().getDeveloperId(), piece.getDeveloperId()))
                     .toList();
             resolved.put(
                     piece.getId(),
-                    WorkResolution.Opportunities.of(views.views(workspaceId, current), Instant.EPOCH)
-                            .resolve(piece.getCreatedAt()));
+                    WorkResolution.Opportunities.of(current, Instant.EPOCH).resolve(piece.getCreatedAt()));
         }
         return resolved;
     }
