@@ -2,15 +2,17 @@ package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRun;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRunRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptUsageRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeScriptRunDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptNoResultCause;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
@@ -18,7 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ScriptStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -64,11 +66,12 @@ class ReviewPracticeScriptServiceTest extends BaseUnitTest {
         var runs = mock(ScriptRunRepository.class);
         var usage = mock(ScriptUsageRepository.class);
         var reviews = mock(ReviewService.class);
-        var review = mock(ReviewSnapshot.class);
-        when(review.practices()).thenReturn(List.of());
-        when(reviews.find(WORKSPACE, REVIEW)).thenReturn(Optional.of(review));
-        when(usage.findForReview(WORKSPACE, REVIEW)).thenReturn(List.of());
-        when(runs.findForReview(WORKSPACE, REVIEW))
+        var runtime = mock(ReviewRuntimeRepository.class);
+        when(reviews.findPinned(eq(WORKSPACE), anyCollection())).thenReturn(Map.of(REVIEW, List.of()));
+        when(runtime.jobsOf(eq(WORKSPACE), anyCollection()))
+                .thenReturn(List.of(new ReviewRuntimeRepository.JobOfReview(JOB, REVIEW)));
+        when(usage.findByWorkspaceIdAndJobIdIn(eq(WORKSPACE), anyCollection())).thenReturn(List.of());
+        when(runs.findByWorkspaceIdAndJobIdIn(eq(WORKSPACE), anyCollection()))
                 .thenReturn(List.of(
                         // Six model calls, four evidence refusals and one schema refusal, then a loop stop.
                         run(
@@ -103,7 +106,7 @@ class ReviewPracticeScriptServiceTest extends BaseUnitTest {
                                         "{\"modelCalls\":3,\"evidenceRefusals\":1,\"formatRefusals\":0}"))));
 
         List<PracticeScriptRunDTO> mapped =
-                new ReviewPracticeScriptService(usage, runs, reviews).forReview(WORKSPACE, REVIEW);
+                new ReviewPracticeScriptService(usage, runs, reviews, runtime).forReview(WORKSPACE, REVIEW);
 
         assertThat(mapped)
                 .extracting(

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewUsageAttempt;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,12 +32,6 @@ public interface ReviewRuntimeRepository extends Repository<ReviewJob, UUID> {
         ORDER BY j.availableAt,j.id
         """)
     List<ReviewJobSnapshot> snapshots(@Param("workspaceId") long workspaceId, @Param("reviewId") UUID reviewId);
-
-    @Query("""
-        SELECT new de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository$JobStateCount(j.status,COUNT(j))
-        FROM ReviewJob j WHERE j.workspaceId=:workspaceId AND j.reviewId=:reviewId GROUP BY j.status
-        """)
-    List<JobStateCount> jobCounts(@Param("workspaceId") long workspaceId, @Param("reviewId") UUID reviewId);
 
     @Query(value = """
         SELECT id FROM review_job WHERE workspace_id=:workspaceId AND review_id=:reviewId
@@ -124,7 +119,25 @@ public interface ReviewRuntimeRepository extends Repository<ReviewJob, UUID> {
         """, nativeQuery = true)
     Spend spent(@Param("workspaceId") long workspaceId, @Param("reviewId") UUID reviewId);
 
-    record JobStateCount(ReviewJobStatus status, long count) {}
+    /** Each review's jobs counted by status, for many reviews in one read. */
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository$ReviewJobStateCount(
+          j.reviewId,j.status,COUNT(j))
+        FROM ReviewJob j WHERE j.workspaceId=:workspaceId AND j.reviewId IN :reviewIds GROUP BY j.reviewId,j.status
+        """)
+    List<ReviewJobStateCount> jobCounts(
+            @Param("workspaceId") long workspaceId, @Param("reviewIds") Collection<UUID> reviewIds);
+
+    record ReviewJobStateCount(UUID reviewId, ReviewJobStatus status, long count) {}
+
+    /** The jobs of the given reviews, each with its review, in one read. */
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository$JobOfReview(j.id,j.reviewId)
+        FROM ReviewJob j WHERE j.workspaceId=:workspaceId AND j.reviewId IN :reviewIds
+        """)
+    List<JobOfReview> jobsOf(@Param("workspaceId") long workspaceId, @Param("reviewIds") Collection<UUID> reviewIds);
+
+    record JobOfReview(UUID jobId, UUID reviewId) {}
 
     record UsageRow(
             UUID reviewId,

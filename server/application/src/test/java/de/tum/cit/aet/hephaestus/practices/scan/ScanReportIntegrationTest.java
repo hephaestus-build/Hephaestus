@@ -267,8 +267,8 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                 .update();
         var adapter = new ReviewRuntimeQueryAdapter(
                 jobs, mock(ReviewAssignmentQuery.class), runtimeRows, mock(ReviewTimingFactsQuery.class));
-        when(runtime.jobCounts(scan.getWorkspaceId(), scan.getId()))
-                .thenAnswer(call -> adapter.jobCounts(scan.getWorkspaceId(), scan.getId()));
+        when(runtime.jobCounts(scan.getWorkspaceId(), List.of(scan.getId())))
+                .thenAnswer(call -> adapter.jobCounts(scan.getWorkspaceId(), List.of(scan.getId())));
         when(runtime.usage(scan.getWorkspaceId(), scan.getId()))
                 .thenAnswer(call -> adapter.usage(scan.getWorkspaceId(), scan.getId()));
         clearInvocations(statements);
@@ -281,10 +281,12 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         assertThat(adapter.activeJobIds(scan.getWorkspaceId(), scan.getId())).containsExactly(active);
         assertThat(jobs.findActiveId(scan.getId(), scan.getWorkspaceId(), Set.of(ReviewJobStatus.RUNNING)))
                 .contains(active);
-        assertThat(adapter.jobCounts(scan.getWorkspaceId(), scan.getId()))
+        assertThat(adapter.jobCounts(scan.getWorkspaceId(), List.of(scan.getId()))
+                        .get(scan.getId()))
                 .containsExactlyInAnyOrderEntriesOf(
                         Map.of(ReviewJobStatus.RUNNING, 1L, ReviewJobStatus.FAILED, 1L, ReviewJobStatus.COMPLETED, 1L));
-        assertThat(adapter.jobCounts(scan.getWorkspaceId() + 1, scan.getId())).isEmpty();
+        assertThat(adapter.jobCounts(scan.getWorkspaceId() + 1, List.of(scan.getId())))
+                .isEmpty();
         assertThat(adapter.runtime(scan.getWorkspaceId() + 1, scan.getId())).isEmpty();
         assertThat(adapter.activeJobIds(scan.getWorkspaceId() + 1, scan.getId()))
                 .isEmpty();

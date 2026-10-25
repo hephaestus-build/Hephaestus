@@ -1,17 +1,33 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
+import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.trace.ItemTraceQueryService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.function.IntConsumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
@@ -23,6 +39,24 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     WebTestClient http;
+
+    @Autowired
+    SqlReadMeasurement reads;
+
+    @Autowired
+    ReviewSummaryQueryService summaries;
+
+    @Autowired
+    ItemTraceQueryService traces;
+
+    @Autowired
+    PracticeVersionService versions;
+
+    @Autowired
+    ReviewPracticeRepository assignments;
+
+    @Autowired
+    JdbcClient jdbc;
 
     Scenario scenario;
 
@@ -44,6 +78,115 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .uri(root() + path)
                 .headers(h -> h.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
                 .exchange();
+    }
+
+    @Test
+    void shouldReadAPageOfReviewsAndTheirWorksTraceInAFixedNumberOfStatementsWhateverTheirPracticesAndRuns() {
+        var alongside = List.of(practice(), practice());
+        List<Result> recorded = new ArrayList<>();
+        Map<UUID, UUID> jobOfReview = new HashMap<>();
+        IntConsumer reviews = count -> {
+            for (int review = 0; review < count; review++) {
+                var at = Instant.now();
+                // Each new review of the work replaces the claim the previous one held, as the store does.
+                if (!recorded.isEmpty()) data.end(recorded.getLast(), at);
+                var result =
+                        data.result(scenario, recorded.size() % 2 == 0 ? ResultOutcome.MET : ResultOutcome.NOT_MET, at);
+                // The first reviews pin one practice alongside, the later ones two.
+                pinAlongside(result, recorded.size() < 2 ? alongside.subList(0, 1) : alongside);
+                jobOfReview.put(result.getReviewId(), scriptRun(result));
+                recorded.add(result);
+            }
+        };
+        long ws = scenario.workspace().getId();
+        long itemId = Objects.requireNonNull(scenario.item().getId());
+        var everything = new ReviewFilterParams(null, null, null, null, null, null, null, null, null, null, null);
+
+        reviews.accept(2);
+        var fewList = reads.measure(() -> summaries.list(ws, everything, PageRequest.of(0, 100)));
+        var fewTrace = reads.measure(() -> traces.trace(ws, itemId));
+        reviews.accept(8);
+        var manyList = reads.measure(() -> summaries.list(ws, everything, PageRequest.of(0, 100)));
+        var manyTrace = reads.measure(() -> traces.trace(ws, itemId));
+
+        assertThat(fewList.value().getContent()).hasSize(2);
+        assertThat(manyList.value().getContent()).hasSize(10);
+        for (int review = 0; review < recorded.size(); review++) {
+            var result = recorded.get(review);
+            var summary = manyList.value().getContent().stream()
+                    .filter(s -> s.id().equals(result.getReviewId()))
+                    .findFirst()
+                    .orElseThrow();
+            boolean met = result.getOutcome() == ResultOutcome.MET;
+            assertThat(summary.practices()).hasSize(review < 2 ? 2 : 3);
+            assertThat(summary.results().met()).isEqualTo(met ? 1 : 0);
+            assertThat(summary.results().notMet()).isEqualTo(met ? 0 : 1);
+            assertThat(summary.jobCount()).isEqualTo(1);
+            var reviewed = summary.practices().stream()
+                    .filter(practice ->
+                            practice.practiceSlug().equals(scenario.practice().getSlug()))
+                    .findFirst()
+                    .orElseThrow();
+            var script = Objects.requireNonNull(reviewed.script());
+            assertThat(script.jobId()).isEqualTo(jobOfReview.get(result.getReviewId()));
+            assertThat(script.models()).hasSize(1);
+        }
+        assertThat(manyTrace.value().reviews()).hasSize(10);
+        assertThat(manyList.cost().statements()).isEqualTo(fewList.cost().statements());
+        assertThat(manyTrace.cost().statements()).isEqualTo(fewTrace.cost().statements());
+    }
+
+    private Practice practice() {
+        return versions.create(new PracticeVersionService.NewPractice(
+                scenario.workspace(),
+                "pinned-alongside-" + UUID.randomUUID().toString().substring(0, 8),
+                scenario.item().getKind(),
+                DefinitionTestFixtures.definition(),
+                null,
+                0,
+                scenarioAccountId));
+    }
+
+    /** The review also pins {@code practices}, as a review of several practices on one work does. */
+    private void pinAlongside(Result result, List<Practice> practices) {
+        var first = assignments
+                .findByWorkspaceIdAndReviewIdOrderByPracticeIdAsc(result.getWorkspaceId(), result.getReviewId())
+                .getFirst();
+        practices.forEach(practice -> assignments.saveAndFlush(ReviewPractice.builder()
+                .workspaceId(result.getWorkspaceId())
+                .reviewId(result.getReviewId())
+                .practiceId(Objects.requireNonNull(practice.getId()))
+                .practiceVersionId(practice.getCurrentVersion().getId())
+                .status(first.getStatus())
+                .itemsListed(1)
+                .listingComplete(true)
+                .captureDecision(first.getCaptureDecision())
+                .method(first.getMethod())
+                .build()));
+    }
+
+    /** A finished job of the result's review that ran the reviewed practice's script and called one model. */
+    private UUID scriptRun(Result result) {
+        var job = data.job(result);
+        jdbc.sql("""
+            INSERT INTO review_job_script_run(job_id,attempt,practice_id,workspace_id,practice_version_id,status,
+                script_kind,finished_at)
+            VALUES(:job,1,:practice,:ws,:version,'OK','BUILTIN',now())
+            """)
+                .param("job", job)
+                .param("practice", result.getPracticeId())
+                .param("ws", result.getWorkspaceId())
+                .param("version", result.getPracticeVersionId())
+                .update();
+        jdbc.sql("""
+            INSERT INTO review_job_script_usage(job_id,attempt,model_kind,practice_id,workspace_id,calls)
+            VALUES(:job,1,'DECISION',:practice,:ws,1)
+            """)
+                .param("job", job)
+                .param("practice", result.getPracticeId())
+                .param("ws", result.getWorkspaceId())
+                .update();
+        return job;
     }
 
     @Test
