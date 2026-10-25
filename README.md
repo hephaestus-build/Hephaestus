@@ -3,7 +3,7 @@
     <img alt="Hephaestus" width="484" src="./docs/static/img/brand/hephaestus-lockup-dark.png#gh-dark-mode-only">
     <img alt="Hephaestus" width="484" src="./docs/static/img/brand/hephaestus-lockup-light.png#gh-light-mode-only">
   </h1>
-  <!-- The product tagline, word for word as every other surface shows it. -->
+  <!-- The product tagline, quoted verbatim. -->
   <!-- vale STE.Contractions = NO -->
   <p><strong>Learn from the work you’re already doing</strong></p>
   <!-- vale STE.Contractions = YES -->
@@ -55,7 +55,7 @@ People keep responsibility for the harder judgment and the relationships.
 ## What Hephaestus does
 
 - **Reviews contributions against engineering practices.** A curated set of practices ships with it.
-  They cover how developers scope, describe, and review work, and also testing, security, and recorded decisions.
+  They cover how developers scope work, write issues, and give reviews, and also testing, security, version control, and recorded decisions.
   A workspace adopts the groups it values.
   It can rewrite any practice inside them.
 - **Gets the feedback to the developer.** Feedback can appear on the work itself.
@@ -100,8 +100,7 @@ The feedback is advisory: it does not approve a change for merge or grade anyone
 - **Learn how it works:** read the [user guide](https://docs.hephaestus.build/user/overview).
 - **Run your own deployment:** follow the [installation guide](https://docs.hephaestus.build/admin/install).
   It starts with the [supported hosts and capacity guidance](https://docs.hephaestus.build/admin/install#requirements).
-  It ends when the first admin signs in.
-  Before you upgrade, read the release notes and the [migration guide](./MIGRATION.md).
+- **Upgrade:** read the release notes and the [upgrade guide](https://docs.hephaestus.build/admin/upgrade).
   Then test the upgrade in staging.
 - **Contribute:** start with the
   [local development guide](https://docs.hephaestus.build/contributor/local-development).

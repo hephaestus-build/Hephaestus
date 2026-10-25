@@ -142,9 +142,9 @@ const config: Config = {
 				docsRouteBasePath: ["user", "contributor", "admin"],
 				docsDir: ["user", "contributor", "admin"],
 				searchContextByPaths: [
-					{ label: { en: "User Guide" }, path: "user" },
-					{ label: { en: "Contributor Guide" }, path: "contributor" },
-					{ label: { en: "Admin Guide" }, path: "admin" },
+					{ label: { en: "User guide" }, path: "user" },
+					{ label: { en: "Contributor guide" }, path: "contributor" },
+					{ label: { en: "Admin guide" }, path: "admin" },
 				],
 				hideSearchBarWithNoSearchContext: false,
 				useAllContextsWithNoSearchContext: true,

@@ -22,7 +22,7 @@ const guides = [
 			{ label: "Activity", to: "/user/activity" },
 			{ label: "Practice feedback", to: "/user/ai-code-review" },
 			{ label: "Talk with Heph", to: "/user/ai-mentor" },
-			{ label: "Browser extension", to: "/user/browser-extension" },
+			{ label: "Chrome extension", to: "/user/browser-extension" },
 		],
 	},
 	{
