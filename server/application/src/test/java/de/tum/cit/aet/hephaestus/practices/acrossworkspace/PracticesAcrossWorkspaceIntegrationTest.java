@@ -46,9 +46,8 @@ class PracticesAcrossWorkspaceIntegrationTest extends BaseIntegrationTest {
         Mockito.when(evidenceAuthorization.permitsAll(
                         ArgumentMatchers.anyLong(), ArgumentMatchers.anyCollection(), ArgumentMatchers.any()))
                 .thenAnswer(i -> sameWorkspace(i.getArgument(0), i.getArgument(1)));
-        Mockito.when(evidenceAuthorization.asOneRead(
-                        ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.any()))
-                .thenAnswer(i -> i.<Supplier<?>>getArgument(2).get());
+        Mockito.when(evidenceAuthorization.asOneRead(ArgumentMatchers.anyLong(), ArgumentMatchers.any()))
+                .thenAnswer(i -> i.<Supplier<?>>getArgument(1).get());
         Mockito.when(sources.permitsHumanStanding(ArgumentMatchers.anyLong(), ArgumentMatchers.anyCollection()))
                 .thenAnswer(i -> sameWorkspace(i.getArgument(0), i.getArgument(1)));
     }

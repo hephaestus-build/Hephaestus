@@ -36,6 +36,16 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
         """, nativeQuery = true)
     boolean hasIncorrectBasis(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
 
+    /** The pieces among {@code feedbackIds} with a result marked incorrect: {@link #hasIncorrectBasis} for many. */
+    @Query(value = """
+        SELECT DISTINCT b.feedback_id FROM feedback_basis b JOIN result_mark m
+          ON m.result_id = b.result_id AND m.workspace_id = b.workspace_id
+         WHERE b.feedback_id IN (:feedbackIds) AND b.workspace_id = :workspaceId
+           AND m.kind = 'INCORRECT' AND m.removed_at IS NULL
+        """, nativeQuery = true)
+    List<UUID> incorrectBasisFeedbackIds(
+            @Param("workspaceId") long workspaceId, @Param("feedbackIds") Collection<UUID> feedbackIds);
+
     @Query(value = """
         SELECT EXISTS(SELECT 1 FROM result_mark m WHERE m.workspace_id=:workspaceId
           AND m.result_id IN (:resultIds) AND m.kind='INCORRECT' AND m.removed_at IS NULL)
