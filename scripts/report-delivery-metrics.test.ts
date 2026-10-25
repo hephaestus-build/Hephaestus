@@ -242,6 +242,7 @@ await test("GitHub's records parse at the trust boundary", () => {
 												],
 											},
 											checkSuites: {
+												pageInfo: { hasNextPage: false },
 												nodes: [
 													{ workflowRun: null },
 													{
@@ -307,6 +308,12 @@ await test("GitHub's records parse at the trust boundary", () => {
 		[undefined, undefined, 0],
 	);
 	assert.equal(searchCount(pages), 2);
+	// A truncated list of check suites could hide the CI/CD run, so the report refuses it.
+	const truncated = structuredClone(pages);
+	const suites = truncated[0]?.data.search.nodes[0]?.head.nodes[0]?.commit.checkSuites;
+	assert.ok(suites);
+	suites.pageInfo.hasNextPage = true;
+	assert.throws(() => parseChanges(truncated, "changeset-release/main"), /more check suites/u);
 	assert.throws(() => parseChanges([{ data: {} }], "changeset-release/main"), /search/u);
 
 	const releases = parseReleases([
@@ -366,6 +373,35 @@ await test("reverts are recognized from either revert title", () => {
 	assert.ok(!isRevert("fix(server): revert the cache to its old key"));
 });
 
+await test("a failed deployment of what runs is a failure, not a repeat", () => {
+	const deployments = [
+		deployment({ sha: "b", createdAt: 10 * MINUTE, finishedAt: 15 * MINUTE }),
+		deployment({ sha: "b", createdAt: 20 * MINUTE, outcome: "error", finishedAt: 25 * MINUTE }),
+		deployment({ sha: "b", createdAt: 30 * MINUTE, finishedAt: 35 * MINUTE }),
+		deployment({ sha: "b", createdAt: 40 * MINUTE, finishedAt: 45 * MINUTE }),
+		deployment({ sha: "b", createdAt: 50 * MINUTE, outcome: undefined, finishedAt: undefined }),
+	];
+	assert.deepEqual(
+		[...classify(deployments, position).values()],
+		["success", "failed", "success", "repeat", "repeat"],
+	);
+	const [staging] = deliveryMetrics(window, [], deployments, [], position).environments;
+	assert.equal(staging?.changeFailRate, 1 / 3);
+});
+
+await test("moving back after a failed redeployment is a recovery, not a rollback of the build before", () => {
+	const deployments = [
+		deployment({ sha: "c", createdAt: 10 * MINUTE, finishedAt: 15 * MINUTE }),
+		deployment({ sha: "c", createdAt: 20 * MINUTE, outcome: "failure", finishedAt: 25 * MINUTE }),
+		deployment({ sha: "b", createdAt: 30 * MINUTE, finishedAt: 40 * MINUTE }),
+	];
+	assert.deepEqual([...classify(deployments, position).values()], ["success", "failed", "success"]);
+	const [staging] = deliveryMetrics(window, [], deployments, [], position).environments;
+	assert.ok(staging);
+	assert.equal(staging.changeFailRate, 1 / 3);
+	assert.equal(staging.recoveryTime.p50, 15 * MINUTE);
+});
+
 await test("redeploying the last good build after a failure is a recovery and rework, not a repeat", () => {
 	const deployments = [
 		deployment({ sha: "a", createdAt: 10 * MINUTE, finishedAt: 15 * MINUTE }),
@@ -399,6 +435,36 @@ await test("a deployment or release outside the first-parent history is counted,
 	);
 	assert.match(rendered, /1 release commits are not on the default branch/u);
 	assert.match(rendered, /1 Staging deployments are not on the default branch/u);
+});
+
+await test("a deployment without a final status is reported, not counted", () => {
+	const rendered = renderDeliveryMetrics(
+		"Delivery metrics",
+		deliveryMetrics(
+			window,
+			[],
+			[deployment({ sha: "c", outcome: undefined, finishedAt: undefined })],
+			[],
+			position,
+		),
+	);
+	assert.match(rendered, /1 Staging deployments have no final status yet and are not counted/u);
+	// An undecided deployment of what runs is a repeat, and it still has no final status.
+	const repeated = renderDeliveryMetrics(
+		"Delivery metrics",
+		deliveryMetrics(
+			window,
+			[],
+			[
+				deployment({ sha: "c", createdAt: MINUTE }),
+				deployment({ sha: "c", createdAt: 2 * MINUTE, outcome: undefined, finishedAt: undefined }),
+			],
+			[],
+			position,
+		),
+	);
+	assert.match(repeated, /1 Staging deployments have no final status yet/u);
+	assert.match(rendered, /\| Staging \| 0 \| 0\.0 \| 0 \| — \(0\/0\)/u);
 });
 
 await test("the report shows missing measurements as missing, not as zero", () => {

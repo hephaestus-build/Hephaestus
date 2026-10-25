@@ -37,7 +37,7 @@ Where this report differs from DORA's definition, the report says **proxy**.
 
 | Metric | Definition here | DORA's definition |
 | --- | --- | --- |
-| Lead time for changes | Median and p90, per change, from its first commit (or from when its pull request opened) to when it first runs on staging, appears in a published release, and runs in production. A deployment that was rolled back does not count as the change running. Merge time is a stage too. | Commit to running in production. Same. |
+| Lead time for changes | Median and p90 per change: first commit to merged, to running on staging, and to running in production; merged to running on staging, to a published release, and to running in production; and pull request opened to running in production. A deployment that was rolled back does not count as the change running. | Commit to running in production. Same. |
 | Push to merge | Three stages per merged change: from the last push (CI/CD started on the merged head) to its `All CI Passed` status, from there to its last merge-queue entry, and from that entry to the merge. Also how many changes the queue dropped at least once. | Not a DORA metric. It splits the part of lead time before the merge. |
 | Deployment frequency | Successful deployments per environment, per week, and the number of days with a deployment. | Same. |
 | Change fail rate (proxy) | Deployments that ended in `failure` or `error`, or that the next deployment moved back, divided by decided deployments. | Deployments that cause a failure in production that needs remediation. Here, `failure` also covers a version check that a slow host failed. |
@@ -47,9 +47,10 @@ Where this report differs from DORA's definition, the report says **proxy**.
 A **rollback** is a successful deployment of a commit that is older on `main`'s first-parent history than the one it replaced.
 The request's rollback permission does not decide it.
 
-A **repeat** is a deployment of what the environment already runs, such as a re-promotion of the running build.
-After a failed deployment, what runs is unknown, so the next deployment of the last good build is a recovery, not a repeat.
+A **repeat** is a successful or undecided deployment of what the environment already runs, such as a re-promotion of the running build.
 It moves nothing, so it is neither a deployment nor a failure. The report counts repeats separately.
+A failed deployment counts as a failure, whatever it deployed.
+After a failure, what runs is unknown, so the next deployment of the last good build is a recovery, not a repeat.
 
 The Version PR is not a change. It consumes the changes it releases.
 A change that has not arrived yet is counted as waiting, not as a zero duration.
@@ -62,6 +63,7 @@ Reverted pull requests are reported beside the fail rate.
 - A failure that no deployment record shows, such as an incident that a forward fix resolved, is not counted.
 - GitHub's search lists at most 1,000 pull requests. The report fails instead of measuring fewer than it found.
 - The report reads deployments from 28 days back. The first of them has no predecessor, so it cannot be a rollback or a repeat.
+- A deployment without a final status, such as one still in progress, counts in no rate. The report gives the number.
 - Days with a deployment are calendar days in UTC.
 
 ## Run it locally
