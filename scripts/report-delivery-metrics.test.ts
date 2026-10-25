@@ -12,6 +12,7 @@ import {
 	parseReleases,
 	renderDeliveryMetrics,
 	searchCount,
+	versionBranch,
 	type Change,
 	type Deployment,
 } from "./report-delivery-metrics.ts";
@@ -332,6 +333,11 @@ await test("GitHub's records parse at the trust boundary", () => {
 	assert.deepEqual(releases, [
 		{ tag: "v1.0.1", commit: "c", publishedAt: Date.parse("2026-10-24T12:00:00Z") },
 	]);
+});
+
+await test("the Version PR branch follows the changeset base branch", () => {
+	assert.equal(versionBranch({ baseBranch: "main" }), "changeset-release/main");
+	assert.throws(() => versionBranch({ baseBranch: "" }), /no baseBranch/u);
 });
 
 await test("a deployment's outcome skips the inactive status that replaced it", () => {

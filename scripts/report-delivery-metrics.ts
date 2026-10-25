@@ -8,7 +8,15 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { asArray, asRecord, asString, at, isRecord, parseJson, readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 import { median, percentile } from "./lib/statistics.ts";
-import { versionBranch } from "./report-ci-latency.ts";
+
+/** The branch changesets maintains the Version PR on, from its configured base branch. */
+export function versionBranch(config: unknown): string {
+	const baseBranch = asString(asRecord(config, "changeset config").baseBranch, "baseBranch");
+	if (!baseBranch) {
+		throw new Error("changeset config declares no baseBranch");
+	}
+	return `changeset-release/${baseBranch}`;
+}
 
 const DAY = 24 * 60 * 60 * 1000;
 export const ENVIRONMENTS = ["Staging", "Production"] as const;
