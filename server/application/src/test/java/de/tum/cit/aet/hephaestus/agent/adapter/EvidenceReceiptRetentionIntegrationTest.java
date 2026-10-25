@@ -1,15 +1,18 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -62,8 +65,18 @@ class EvidenceReceiptRetentionIntegrationTest extends AbstractWorkspaceIntegrati
                         liveErased, "ERASED:cleared",
                         ready, "PURGE_REQUESTED:people",
                         capturing, "PURGE_REQUESTED:people",
-                        erasing, "ERASED:people",
                         requested, "ERASE_REQUESTED:people"));
+    }
+
+    @Test
+    void shouldFinishAnErasureWhoseReceiptRetentionAlreadyDeleted() {
+        var frozen = new PersonDataSelection(List.of(new PersonDataSelection.RowKey(Map.of(
+                "job_id", UUID.randomUUID().toString(),
+                "copy_id", UUID.randomUUID().toString(),
+                "workspace_id", "973210"))));
+
+        assertThatCode(() -> receipts.contributors().getFirst().prepareErasure(frozen))
+                .doesNotThrowAnyException();
     }
 
     private ReviewJob job(Workspace workspace) {

@@ -342,7 +342,7 @@ A receipt records the copy of review inputs that one attempt made on a worker vo
 - Person erasure finds the copies and the copied words of the erased person.
 - A later review can copy the job's words only while the receipt vouches for them. An erased or purged receipt keeps refusing those words.
 
-When retention deletes the review job row, 90 days after the job ends (`AGENT_ROW_RETENTION`), neither purpose remains: no result reaches the receipt any more. The next retention run asks the worker volume that holds the copy to confirm its removal. The worker then clears the identities, and the following run deletes the receipt. A worker volume that is offline keeps the identities until it returns and confirms. Before that, person erasure clears the identities of the receipts that name the person, and workspace purge clears all receipts of the workspace.
+When retention deletes the review job row, 90 days after the job ends (`AGENT_ROW_RETENTION`), neither purpose remains: no result reaches the receipt any more. The same retention run asks the worker volume that holds the copy to confirm its removal. The worker then clears the identities, and a later run deletes the receipt. From then on, a later review no longer copies words that came from that job: it keeps the facts of the history and leaves out its prose. A worker volume that is offline keeps the identities until it returns and confirms. Before that, person erasure clears the identities of the receipts that name the person, and workspace purge clears all receipts of the workspace.
 
 Source evidence retention
 

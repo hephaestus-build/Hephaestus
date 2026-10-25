@@ -828,9 +828,9 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
      * receipt (the review item's job reference is cleared), so the receipt vouches for nothing and keeps identities
      * without a purpose. A receipt that still names people asks its store to remove the copy, as a workspace purge
      * does, so a store that is offline keeps them until it returns and confirms. A receipt whose removal is confirmed
-     * and whose identities are cleared is deleted. A receipt that an erasure is processing is left to the erasure.
+     * is deleted, with any identities an erasure has not cleared yet; the erasure counts a deleted receipt as removed.
      *
-     * @return the receipts changed or deleted, at most twice {@code batchSize}
+     * @return the larger of the receipts requested and deleted, so a full batch of either asks for another
      */
     public int retireReceiptsOfDeletedJobs(int batchSize) {
         int requested = jdbc.update("""
@@ -843,11 +843,11 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         int deleted = jdbc.update("""
             DELETE FROM person_evidence_copy WHERE id IN (
               SELECT c.id FROM person_evidence_copy c
-              WHERE c.state='ERASED' AND c.payload='{}'::jsonb
+              WHERE c.state='ERASED'
                 AND NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
               LIMIT ?)
             """, batchSize);
-        return requested + deleted;
+        return Math.max(requested, deleted);
     }
 
     /** Queue removal in the workspace transaction; workers can acknowledge only after it commits. */
@@ -923,12 +923,13 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     Long.parseLong(key.columns().get("workspace_id")));
     }
 
+    /** A receipt that retention deleted is removed too: retention deletes only acknowledged receipts. */
     private boolean allRemoved(PersonDataSelection selection) {
         for (var key : selection.rows()) {
             Boolean remains = jdbc.queryForObject(
                     """
-                    SELECT NOT EXISTS(SELECT 1 FROM person_evidence_copy WHERE job_id=? AND workspace_id=?
-                      AND id=CAST(? AS uuid) AND state='ERASED')
+                    SELECT EXISTS(SELECT 1 FROM person_evidence_copy WHERE job_id=? AND workspace_id=?
+                      AND id=CAST(? AS uuid) AND state<>'ERASED')
                     """,
                     Boolean.class,
                     UUID.fromString(key.columns().get("job_id")),
