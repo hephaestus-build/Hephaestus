@@ -17,6 +17,9 @@ const status = (releases: unknown[], summary: string) => ({
 	changesets: [{ id: "note", releases, summary }],
 });
 const rootRelease = (type = "patch") => [{ name: "hephaestus", type }];
+const firstStable = (summary: string) => ({
+	changesets: [{ id: "release-1-0-0", releases: rootRelease("major"), summary }],
+});
 
 void test("accepts root releases and explained opt-outs", () => {
 	assert.doesNotThrow(() =>
@@ -31,6 +34,18 @@ void test("accepts root releases and explained opt-outs", () => {
 			[".changeset/note.md"],
 			false,
 		),
+	);
+});
+
+void test("accepts the one pre-1.0 major that cuts 1.0.0, under the same rules as any major", () => {
+	assert.doesNotThrow(() =>
+		verifyChangesets(firstStable("Hephaestus 1.0. **Operators:** follow the 1.0 upgrade guide."), [
+			".changeset/release-1-0-0.md",
+		]),
+	);
+	assert.throws(
+		() => verifyChangesets(firstStable("Hephaestus 1.0."), [".changeset/release-1-0-0.md"]),
+		/must contain \*\*Operators:/u,
 	);
 });
 

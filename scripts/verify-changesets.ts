@@ -46,6 +46,12 @@ export const verifyChangesetMigration = (
 	}
 };
 
+/**
+ * The one changeset that may carry a major bump while the version is 0.x: it cuts 1.0.0.
+ * `docs/contributor/release-management.mdx` § Cut 1.0.0 gives the procedure.
+ */
+const FIRST_STABLE_CHANGESET = "release-1-0-0";
+
 const changesetId = (file: string): string =>
 	path.posix.relative(".changeset", file).replace(/\.md$/u, "");
 
@@ -92,9 +98,9 @@ export const verifyChangesets = (
 		if (name !== "hephaestus") {
 			throw new Error(`${file}: must release only the root hephaestus package`);
 		}
-		if (preOne && bump === "major") {
+		if (preOne && bump === "major" && changesetId(file) !== FIRST_STABLE_CHANGESET) {
 			throw new Error(
-				`${file}: pre-1.0 major changesets are reserved for the deliberate 1.0 release; use minor`,
+				`${file}: pre-1.0 major changesets are reserved for the deliberate 1.0 release, the changeset ${FIRST_STABLE_CHANGESET}; use minor`,
 			);
 		}
 		if (bump === "major" && !summary.includes("**Operators:**")) {
