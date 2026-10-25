@@ -171,8 +171,8 @@ services:
     image: ${HEPHAESTUS_IMAGE_NATS:?verified release lock required}
     restart: unless-stopped
     ports:
-      # Publish on loopback by default.
-      - "${NATS_BIND_HOST:-127.0.0.1}:4222:4222"
+      # Loopback only. Stacks on this host join shared-network.
+      - "127.0.0.1:4222:4222"
     command: ["--config", "/etc/nats/nats-server.conf"]
     environment:
       NATS_USERNAME: ${NATS_USERNAME:?Set NATS_USERNAME}
