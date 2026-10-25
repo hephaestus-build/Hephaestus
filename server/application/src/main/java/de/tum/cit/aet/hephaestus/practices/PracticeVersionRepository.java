@@ -29,6 +29,9 @@ public interface PracticeVersionRepository extends JpaRepository<PracticeVersion
 
     List<PracticeVersion> findByWorkspaceIdAndPracticeIdOrderByNumberAsc(Long workspaceId, Long practiceId);
 
+    List<PracticeVersion> findByWorkspaceIdAndPracticeIdInOrderByNumberAsc(
+            long workspaceId, Collection<Long> practiceIds);
+
     Optional<PracticeVersion> findFirstByPracticeIdAndNumberLessThanOrderByNumberDesc(Long practiceId, int number);
 
     @Modifying

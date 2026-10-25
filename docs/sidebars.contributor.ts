@@ -45,6 +45,7 @@ const sidebars: SidebarsConfig = {
 			items: [
 				"release-management",
 				"ci-cd",
+				"delivery-metrics",
 				"buildpacks-cds-decision",
 				"vulnerability-remediation",
 			],

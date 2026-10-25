@@ -8,9 +8,11 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Local repository mirrors under the fabric root.
  *
+ * @param enabled Keeps local Git mirrors of monitored repositories, which practice reviews read code from. Turn it on
+ *     wherever agent jobs run. Without it, the practice review health check reports out of service.
  * @param maxConcurrentIngestions how many captured commits are written to PostgreSQL at once
- * @param maxSnapshotBytes the most a review's checkout plus reachable history may occupy; a repository
- *     above it is refused whole rather than captured in part
+ * @param maxSnapshotBytes The most disk that the checkout and reachable history of one review may use. Hephaestus
+ *                         refuses a larger repository whole and does not capture part of it.
  */
 @ConfigurationProperties(prefix = "hephaestus.git")
 @Validated

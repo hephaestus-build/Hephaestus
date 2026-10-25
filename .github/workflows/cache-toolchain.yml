@@ -22,7 +22,7 @@ jobs:
   install:
     name: Frozen install (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     strategy:

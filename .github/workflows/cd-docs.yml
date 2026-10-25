@@ -103,7 +103,7 @@ jobs:
     name: PR Preview
     needs: build-preview
     if: github.event_name == 'pull_request'
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -155,7 +155,7 @@ jobs:
     name: GitHub Pages
     needs: build-production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       id-token: write

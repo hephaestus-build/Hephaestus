@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,8 +37,8 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
                 .developerId(2L)
                 .evidence(AdmittedResultFixtures.evidence("docs.document.core"))
                 .build();
-        when(access.permits(1, result.getId(), SourceUsePurpose.CONVERSATIONAL_MENTORING))
-                .thenReturn(true);
+        when(access.permitsAll(1, List.of(result), SourceUsePurpose.CONVERSATIONAL_MENTORING))
+                .thenReturn(Set.of(result.getId()));
         when(sources.isSourceUsePermitted(any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING)))
                 .thenReturn(true);
         assertThat(authorization.permitsForNewDelivery(1, List.of(result), SourceUsePurpose.CONVERSATIONAL_MENTORING))
@@ -45,8 +46,8 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         result = resultBuilder(result).evidenceVersion((short) 0).build();
         assertThat(authorization.permitsForNewDelivery(1, List.of(result), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .isEmpty();
-        when(access.permits(1, result.getId(), SourceUsePurpose.CONVERSATIONAL_MENTORING))
-                .thenReturn(false);
+        when(access.permitsAll(1, List.of(result), SourceUsePurpose.CONVERSATIONAL_MENTORING))
+                .thenReturn(Set.of());
         assertThat(authorization.permits(1, result, SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .isFalse();
         assertThat(authorization.permits(9, result, SourceUsePurpose.CONVERSATIONAL_MENTORING))
@@ -63,8 +64,8 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
                 .workspaceId(1)
                 .evidenceVersion((short) 0)
                 .build();
-        when(access.permitsHistory(1, result.getId(), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
-                .thenReturn(true);
+        when(access.permitsAllHistory(1, List.of(result), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
+                .thenReturn(Set.of(result.getId()));
         assertThat(authorization.permits(1, result, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
                 .isTrue();
         assertThat(authorization.permitsForNewDelivery(1, List.of(result), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
@@ -97,9 +98,9 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
                 .citations(
                         AdmittedResultFixtures.evidence("scm.pull-request.core").path("citations"))
                 .build();
-        when(problems.findByWorkspaceIdAndResultIdOrderByPositionAsc(1, result.getId()))
+        when(problems.findByWorkspaceIdAndResultIdInOrderByResultIdAscPositionAsc(1, List.of(result.getId())))
                 .thenReturn(List.of(problem));
-        when(access.permits(1, result.getId(), purpose)).thenReturn(true);
+        when(access.permitsAll(1, List.of(result), purpose)).thenReturn(Set.of(result.getId()));
         when(sources.isSourceUsePermitted(any(), eq(purpose))).thenReturn(true);
 
         assertThat(authorization.permitsForNewDelivery(1, List.of(result), purpose))
@@ -110,7 +111,7 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         when(sources.isSourceUsePermitted(any(), eq(purpose))).thenReturn(true);
         assertThat(authorization.permitsForNewDelivery(1, List.of(result), purpose))
                 .containsExactly(result.getId());
-        when(access.permits(1, result.getId(), purpose)).thenReturn(false);
+        when(access.permitsAll(1, List.of(result), purpose)).thenReturn(Set.of());
         assertThat(authorization.permitsForNewDelivery(1, List.of(result), purpose))
                 .isEmpty();
     }
@@ -131,13 +132,13 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         var evidence = new JsonMapper()
                 .convertValue(AdmittedResultFixtures.evidence("scm.pull-request.core"), ObjectNode.class);
         evidence.withObject("/citations/0/verification").put("quoteSha256", "0".repeat(64));
-        when(problems.findByWorkspaceIdAndResultIdOrderByPositionAsc(1, result.getId()))
+        when(problems.findByWorkspaceIdAndResultIdInOrderByResultIdAscPositionAsc(1, List.of(result.getId())))
                 .thenReturn(List.of(Problem.builder()
                         .workspaceId(1)
                         .resultId(result.getId())
                         .citations(evidence.path("citations"))
                         .build()));
-        when(access.permits(1, result.getId(), purpose)).thenReturn(true);
+        when(access.permitsAll(1, List.of(result), purpose)).thenReturn(Set.of(result.getId()));
 
         assertThat(authorization.permitsForNewDelivery(1, List.of(result), purpose))
                 .isEmpty();

@@ -10,7 +10,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param batchSize how many items one driver tick offers to the review path. Kept small because the
  *     usage ledger only learns a job's cost once it ends, and a budget cap is only checked between batches.
  * @param maxWindow the longest window a single batch may cover.
- * @param maxItems the largest scope a batch may be confirmed for; refused at preflight.
+ * @param maxItems The largest number of items that one batch can be confirmed for. A larger batch is refused at
+ *                 preflight.
  * @param costHistoryWindow how far back the estimator looks for completed reviews to derive a per-review
  *     cost from. Long enough to survive a quiet fortnight, short enough that a model change moves it.
  */

@@ -18,6 +18,11 @@ import org.springframework.validation.annotation.Validated;
  *
  * <p>This connection serves webhook/sync ingest only. The agent job queue runs on PostgreSQL
  * (ADR 0025) and has no NATS connection of its own.
+ *
+ * @param username User name that the NATS connection authenticates with. Set it together with the password, or leave
+ *     both empty.
+ * @param password Password that the NATS connection authenticates with. Set it together with the user name, or leave
+ *     both empty.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.sync.nats")

@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -88,6 +89,11 @@ public class ResultVisibilityPolicy {
                                             .equals(currentVersion.getReviewDigest());
                         })
                         .toList());
+    }
+
+    /** Runs {@code read} as one read of the workspace, as {@link ResultSourceAuthorization#asOneRead} describes. */
+    public <T> T asOneRead(long workspaceId, Supplier<T> read) {
+        return sources.asOneRead(workspaceId, read);
     }
 
     private Set<UUID> incorrectAt(long workspaceId, List<Result> owned, Instant at) {

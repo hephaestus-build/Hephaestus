@@ -5,7 +5,22 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
-/** Encryption key configuration. */
+/**
+ * Encryption key configuration.
+ *
+ * @param encryptionKey Key that encrypts sensitive values at rest, such as login provider secrets, LLM connection keys
+ *     and JWT signing keys. Exactly 32 bytes, so 32 ASCII characters. Required in production.
+ * @param credentialEncryptionKey Active key that encrypts the stored credentials of integration connections. Exactly
+ *     32 bytes, so 32 ASCII characters. Required in production.
+ * @param credentialEncryptionKeyVersion Positive version number stored with each credential that the active credential
+ *     key encrypts. Must differ from prior-credential-encryption-key-version.
+ * @param priorCredentialEncryptionKey Previous credential key, still used to decrypt credentials stored under its
+ *     version during a key rotation. Exactly 32 bytes. Set it together with prior-credential-encryption-key-version.
+ * @param priorCredentialEncryptionKeyVersion Version number of the previous credential key. Set it together with
+ *     prior-credential-encryption-key.
+ * @param credentialRotationEnabled Re-encrypts stored credentials with the active credential key in batches on the
+ *     server role. Requires both the active and the prior credential key.
+ */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.security")
 public record SecurityProperties(

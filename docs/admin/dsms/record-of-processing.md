@@ -328,9 +328,9 @@ The ledger holds no message content and no free text. Its opaque source identifi
 
 Practice-review job records (`review_job`)
 
-These records include the queued job, the sandbox's captured stdout, and the practice results it produced. They can quote the contributor's code and discussion. The retention service strips the diagnostic payload (`container_logs`, `output`) to NULL 14 days after the job reaches a terminal state (`AGENT_PAYLOAD_RETENTION`, default `P14D`). The unreferenced row becomes eligible for deletion after 90 days (`AGENT_ROW_RETENTION`, default `P90D`). Operators can change both windows.
+These records include the queued job, the sandbox's captured stdout, and the practice results it produced. They can quote the contributor's code and discussion. The retention service strips the diagnostic payload (`capture`, `output`) to NULL 14 days after the job reaches a terminal state (`AGENT_PAYLOAD_RETENTION`, default `P14D`). The unreferenced row becomes eligible for deletion after 90 days (`AGENT_ROW_RETENTION`, default `P90D`). The supported Compose stack does not forward either variable, so both windows are fixed there.
 
-Pending delivery blocks both passes. Practice results or feedback that reference the job block row deletion. The scheduled service runs only with the server role and AGENT_ENABLED=true. If that service is disabled, retained jobs do not expire.
+Pending delivery blocks both passes. Row deletion sets the job reference of a reviewed item to NULL, so results and feedback stay. The scheduled service runs only with the server role and AGENT_ENABLED=true. If that service is disabled, retained jobs do not expire.
 
 1. Monitor the backlog.
 2. For individual requests, use verified person erasure.

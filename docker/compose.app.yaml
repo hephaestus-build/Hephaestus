@@ -8,7 +8,6 @@ x-practice-review-env:
   PRACTICE_REVIEW_COOLDOWN_MINUTES: ${PRACTICE_REVIEW_COOLDOWN_MINUTES:-15}
   # Feature visibility, separate from the review gate above.
   PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR: ${PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR:-5}
-  PRACTICE_REVIEW_PROGRESS_FOOTER: ${PRACTICE_REVIEW_PROGRESS_FOOTER:-false}
   # The sampling temperature of every review model call; unset leaves the model's own default.
   PRACTICE_REVIEW_SAMPLING_TEMPERATURE: ${PRACTICE_REVIEW_SAMPLING_TEMPERATURE:-}
   # The work one practice is owed in a review turn: model calls and output tokens.
@@ -22,13 +21,13 @@ x-practice-review-env:
   # Spend guardrails for reviewing past work. A campaign is priced before it runs; these bound what
   # an administrator can confirm in one.
   PRACTICE_REVIEW_BACKFILL_MAX_WINDOW: ${PRACTICE_REVIEW_BACKFILL_MAX_WINDOW:-400d}
-  PRACTICE_REVIEW_BACKFILL_MAX_ARTIFACTS: ${PRACTICE_REVIEW_BACKFILL_MAX_ARTIFACTS:-5000}
+  PRACTICE_REVIEW_BACKFILL_MAX_ITEMS: ${PRACTICE_REVIEW_BACKFILL_MAX_ITEMS:-5000}
   PRACTICE_REVIEW_BACKFILL_BATCH_SIZE: ${PRACTICE_REVIEW_BACKFILL_BATCH_SIZE:-25}
   PRACTICE_REVIEW_BACKFILL_COST_HISTORY_WINDOW: ${PRACTICE_REVIEW_BACKFILL_COST_HISTORY_WINDOW:-90d}
   # How long a recorded review opportunity may stay unsettled before it is retried, then given up on.
-  SIGNAL_LEDGER_PENDING_RETRY_AFTER: ${SIGNAL_LEDGER_PENDING_RETRY_AFTER:-1h}
-  SIGNAL_LEDGER_PENDING_LAPSE_AFTER: ${SIGNAL_LEDGER_PENDING_LAPSE_AFTER:-7d}
-  SIGNAL_LEDGER_SWEEP_BATCH_SIZE: ${SIGNAL_LEDGER_SWEEP_BATCH_SIZE:-200}
+  ITEM_EVENT_LEDGER_PENDING_RETRY_AFTER: ${ITEM_EVENT_LEDGER_PENDING_RETRY_AFTER:-1h}
+  ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER: ${ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER:-7d}
+  ITEM_EVENT_LEDGER_SWEEP_BATCH_SIZE: ${ITEM_EVENT_LEDGER_SWEEP_BATCH_SIZE:-200}
 
 # Both application roles reach the SCM: the server clones on a push, the worker fetches the commit a
 # review pins before it can read a diff. Anchored for the same reason as the block above — a role

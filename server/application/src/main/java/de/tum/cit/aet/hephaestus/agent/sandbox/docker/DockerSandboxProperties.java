@@ -12,10 +12,11 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Docker adapter configuration.
  *
- * @param host Docker daemon endpoint; the single-host deployment uses the local Unix socket
+ * @param host Endpoint of the Docker daemon. The single-host deployment uses the local Unix socket.
  * @param tlsVerify enable mutual TLS for TCP connections
  * @param certPath directory containing Docker client TLS certificates
- * @param containerRuntime Docker runtime name (unset uses the daemon default; runsc selects gVisor)
+ * @param containerRuntime Docker runtime name for the sandboxes. Unset uses the default of the daemon. {@code runsc}
+ *                         selects gVisor.
  * @param owner stable installation identifier, shared by roles using the same database
  */
 @Validated

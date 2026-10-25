@@ -395,14 +395,13 @@ Dependabot's alerts. The [pinned action's dependencies](https://github.com/ossf/
 turns every component's group, name and version in `server/gradle/verification-metadata.xml` into a
 package, ignoring its artifact entries and whether Gradle selected that version.
 
-That file is a checksum allowlist, not a resolved dependency graph. Gradle can need an older
-version's POM or module descriptor while selecting a patched JAR. Metadata generation also retains
-previously trusted artifacts. For example, resolution reads Jackson 2.15.3 module descriptors and the Commons Lang 3.16.0 POM, although the lockfile selects patched versions.
-Their verification entries contain only `.module` or `.pom` artifacts, not JARs.
+That file is a checksum allowlist, not a resolved dependency graph.
+Gradle can read an older version's POM or module descriptor while it selects a patched JAR.
+Metadata generation also only adds entries. It keeps the entry of a version that no build downloads any more.
+OSV reports both kinds as dependencies.
 
-Removing their checksums to quiet OSV
-would break fresh dependency verification, not fix a dependency. Pruning obsolete JAR hashes alone
-would still leave these descriptor-only entries in OSV's inventory.
+[Updating Java dependencies](local-development.mdx#updating-java-dependencies) removes the entries that no build downloads.
+Do not remove an entry that a fresh build reads: dependency verification then fails.
 
 Reproduce the distinction for the Gradle sources from the repository root with the
 [OSV Scanner release used by the action](https://github.com/google/osv-scanner/releases/tag/v2.3.2):
@@ -436,9 +435,8 @@ other gates. The baseline records that reason. Its other exclusions have separat
 The [dependency vulnerability gate](#security-and-supply-chain-controls) and release image policy remain
 enforced.
 
-Restore the check when its input distinguishes verified descriptors and historical hashes
-from selected dependencies. Do not alter dependency submission or disable checksum verification to
-change its score.
+Restore the check when the OSV Scanner run above reports no advisory.
+Do not alter dependency submission or disable checksum verification to change its score.
 
 ## Environments
 
@@ -624,6 +622,7 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `rescan-release-images.yml`           | Weekly, manual                                                                | Rescans the latest published release's images and reports drift on the vulnerability response issue                                                                                                                              |
 | `ci-diagnostics.yml`                  | Completed CI/CD runs                                                          | Reports exact-attempt job and step timings without changing the required CI verdict                                                                                                                                              |
 | `ci-profile.yml`                      | Weekly, manual                                                                | Reports advisory performance budgets and profiles server test tiers                                                                                                                                                              |
+| `delivery-metrics.yml`                | Weekly, manual                                                                | Reports lead time, deployment frequency, and change fail, recovery and rework proxies. See [Delivery Metrics](./delivery-metrics.mdx)                                                                                                 |
 | `ci-server-clean-reference.yml`       | Weekly, manual                                                                | Records cold server phases and compares generated JARs                                                                                                                                                                           |
 | `scorecard-ratchet.yml`               | Push to main, branch-protection change, weekly, manual                        | Fails when a Scorecard check drops below the committed baseline. A push fails only for the checks its own commit decides                                                                                                         |
 | `deploy-preview.yml`                  | `preview` label added, reopen or ready-for-review, or CI/CD completion, on a labelled PR | Deploys this commit's attested CI images once they exist, and registers the native GitHub deployment                                                                                                                  |
@@ -1016,6 +1015,22 @@ If no such default-branch commit exists, the run builds every image itself. `det
   merge, signing, attestation and per-platform scan path. Pull requests and merge groups build only
   changed images and alias the rest. The Version PR's branch builds them all. `detect-changes`
   decides both once, as `platforms` and `all-images`, and hands them to every image build in the run.
+- A job's `timeout-minutes` is a hang detector of at least 15 minutes.
+  This holds whatever the job's usual duration is.
+  GitHub documents only that it cancels a job that runs longer than its limit
+  ([`jobs.<job_id>.timeout-minutes`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes)).
+  On 2026-10-24, the steps of one job finished in seconds.
+  About 6 minutes later, the job was marked cancelled for exceeding its 5-minute limit.
+  The cause is unknown.
+  A cancelled prerequisite fails `CI Status Gate` and removes a pull request from the merge queue.
+  The gate cannot tell that cancellation from a real hang.
+  The floor of 15 minutes is a chosen margin over that one delay, not a value that GitHub documents.
+  Revisit it when more delays are measured.
+  The 15-minute limit of `ubuntu-slim` jobs
+  ([GitHub-hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners))
+  is a ceiling for those jobs, not the basis of the floor.
+  This rule covers job limits only. A step limit stops the step's process on the runner.
+  `ci-contract.test.ts` holds every job to the floor, and every number in an expression limit too.
 - Action and composite setup steps run sequentially within each job. The runner writes the shared
   event file before each action. The action SDK reads that file. Concurrent action starts can expose
   incomplete event data. Jobs and matrix entries still run independently. Standalone shell work
@@ -1292,8 +1307,8 @@ Extend the pipeline at the ownership boundary that changed. Do not copy an exist
 1. Add the service's paths to `detect-changes` in `cicd.yml`, including the shared files that can
    affect it. Expose the result as a reusable-workflow input.
 2. Add purpose-named jobs to `ci-quality-gates.yml`, `ci-tests.yml` or `ci-build.yml`. Declare
-   `needs` only when a job consumes another job's artifact, and give every runnable job a timeout and
-   least-privilege permissions.
+   `needs` only when a job consumes another job's artifact.
+   Give every runnable job least-privilege permissions and a timeout of [at least 15 minutes](#parallelism-and-concurrency).
 3. Use `setup-toolchain` with an explicit install mode.
    Use `frozen` for any job that calls `vp`, because Vite+ loads the task graph from workspace configs. `none` only for jobs that run
    `node scripts/…` or shell alone. Java jobs use a validated `setup-caches`
