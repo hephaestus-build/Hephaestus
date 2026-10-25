@@ -97,8 +97,11 @@ export const Default: Story = {
 		// group's color, only larger: no tinted square.
 		const mark = header.parentElement?.querySelector("svg");
 		await expect(mark).not.toBeNull();
-		await expect(getComputedStyle(header).color).toBe(getComputedStyle(mark ?? header).color);
-		await expect(getComputedStyle(header).color).not.toBe(getComputedStyle(document.body).color);
+		const name = within(header).getByText(packagingGroup.name);
+		await expect(getComputedStyle(name).color).toBe(getComputedStyle(mark ?? header).color);
+		await expect(getComputedStyle(name).color).not.toBe(getComputedStyle(document.body).color);
+		// The header's three-line limit can cut the name short, so the full name is its title.
+		await expect(name).toHaveAttribute("title", packagingGroup.name);
 		await expect(getComputedStyle(mark?.parentElement ?? header).backgroundColor).toBe(
 			"rgba(0, 0, 0, 0)",
 		);

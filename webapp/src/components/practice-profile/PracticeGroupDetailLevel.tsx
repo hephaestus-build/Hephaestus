@@ -277,7 +277,12 @@ export function PracticeGroupDetailLevel({
 				current="Group"
 				// As the group is named in the All practice groups table, its icon and name in its
 				// color, at the heading's size.
-				title={<span className={heading.ink}>{group?.name ?? "Practice group"}</span>}
+				// The full name as the node's own title, as the header's three-line limit can cut it short.
+				title={
+					<span title={group?.name ?? "Practice group"} className={heading.ink}>
+						{group?.name ?? "Practice group"}
+					</span>
+				}
 				mark={<heading.Icon aria-hidden className={cn("size-6 shrink-0", heading.ink)} />}
 				chips={
 					showsStanding &&

@@ -138,9 +138,11 @@ export const AsHeading: Story = {
 			<PracticeTitlePill name={args.name} group={args.group} />
 		</h2>
 	),
-	play: async ({ canvas }) => {
+	play: async ({ args, canvas }) => {
 		const heading = canvas.getByRole("heading", { name: /Explain significant decisions where/u });
 		await expect(heading.querySelector("svg")).not.toBeNull();
+		// The three-line limit can cut the name short, so the full name is its title.
+		await expect(heading.querySelector(`[title="${args.name}"]`)).not.toBeNull();
 		await expectNoPageOverflow();
 		// More than one line, each inside the heading's width.
 		await expect(heading.getBoundingClientRect().height).toBeGreaterThan(

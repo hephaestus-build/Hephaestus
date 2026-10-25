@@ -438,6 +438,8 @@ export function SubjectCell({
 			<div className="flex min-w-0 flex-col items-start gap-2">
 				{badge}
 				{sentences !== undefined && sentences.length > 0 && (
+					// `w-full`: in the cell's `items-start` column the list would shrink to its words, and
+					// a row pill in a sentence would then wrap at its own width instead of the column's.
 					<ul className="w-full max-w-md list-disc space-y-1 pl-4 text-sm marker:text-muted-foreground">
 						{sentences.map((sentence, index) => (
 							<li key={index}>

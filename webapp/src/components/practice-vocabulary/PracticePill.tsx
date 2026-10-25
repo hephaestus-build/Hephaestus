@@ -62,12 +62,16 @@ export function PracticeTextPill({ name, onOpen, className }: Omit<PracticePillP
 
 /**
  * A practice's name as its level's heading: the row's gray pill at the heading's size, with its
- * group's icon before the words. Inside the header's three-line limit the pill flows as text, so a
- * long name wraps inside it.
+ * group's icon before the words. Drawn as an inline span rather than a `Badge`, which is a box of one
+ * line: inside the header's three-line limit the pill flows as text, so a long name wraps inside it.
+ * The full name is its `title`, as the limit can cut it short.
  */
 export function PracticeTitlePill({ name, group }: Pick<PracticePillProps, "name" | "group">) {
 	return (
-		<span className="rounded-2xl bg-secondary [box-decoration-break:clone] px-3.5 py-1 text-secondary-foreground">
+		<span
+			title={name}
+			className="rounded-2xl bg-secondary [box-decoration-break:clone] px-3.5 py-1 text-secondary-foreground"
+		>
 			{group !== undefined && (
 				<group.Icon
 					aria-hidden
