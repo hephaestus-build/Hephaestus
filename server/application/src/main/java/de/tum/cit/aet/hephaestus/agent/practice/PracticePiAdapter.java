@@ -98,12 +98,17 @@ public class PracticePiAdapter {
 
     /**
      * A review launch's environment for the launch that composes only the review on the work, within the time the
-     * attempt has left. With none left, its runner records that review as stopped, so a later attempt composes it.
+     * attempt has left.
      */
     public static Map<String, String> publicReviewEnvironment(Map<String, String> review, Duration left) {
         Map<String, String> environment = new LinkedHashMap<>(withTimeLeft(review, left));
         environment.put(COMPOSITION_PHASES_ENV, "PUBLIC_REVIEW");
         return Map.copyOf(environment);
+    }
+
+    /** Whether the time the attempt has left still holds agent time beyond the runner's buffer. */
+    public static boolean leavesAgentTime(Duration left) {
+        return left.minusSeconds(PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS).isPositive();
     }
 
     /** A launch's environment whose agent budget is the time the attempt has left, less the runner's buffer. */

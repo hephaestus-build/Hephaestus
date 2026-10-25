@@ -149,6 +149,30 @@ public class ReviewJobRecovery {
             AgentResult.@Nullable LlmUsage runnerUsage,
             byte @Nullable [] scriptReport,
             byte @Nullable [] feedbackReport) {
+        return continueComposition(job, workerId, runnerUsage, scriptReport, feedbackReport, false);
+    }
+
+    /**
+     * Continues the admitting attempt whose launch for the review on the work had no time to start or was stopped
+     * before it reported. The server staged that launch, so its own observation stands in for the report; the same
+     * fences decide.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean continueUnfinishedReviewOnTheWork(
+            ReviewJob job,
+            String workerId,
+            AgentResult.@Nullable LlmUsage runnerUsage,
+            byte @Nullable [] scriptReport) {
+        return continueComposition(job, workerId, runnerUsage, scriptReport, null, true);
+    }
+
+    private boolean continueComposition(
+            ReviewJob job,
+            String workerId,
+            AgentResult.@Nullable LlmUsage runnerUsage,
+            byte @Nullable [] scriptReport,
+            byte @Nullable [] feedbackReport,
+            boolean reviewOnTheWorkUnfinished) {
         if (continuation.isEmpty()) return false;
         continuation.get().holdRecoveryCustody();
         ReviewJob locked = jobs.lockById(job.getId()).orElse(null);
@@ -157,7 +181,8 @@ public class ReviewJobRecovery {
         if (!ResultAdmissionService.isAdmitted(owned)) return false;
         boolean owed = owned.getPublicReviewDigest() != null
                 ? continuation.get().privateFeedbackOwed(owned)
-                : !ResultAdmissionService.isContinuation(owned) && reviewOnTheWorkStopped(owned, feedbackReport);
+                : !ResultAdmissionService.isContinuation(owned)
+                        && (reviewOnTheWorkUnfinished || reviewOnTheWorkStopped(owned, feedbackReport));
         if (!owed) return false;
         // Read before the requeue zeroes them; they only start a measurement no proxied call registered.
         ReviewJobLlmUsage counts = counts(owned);

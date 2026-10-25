@@ -1037,6 +1037,34 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(usageCalls(jobId)).containsExactly(3);
     }
 
+    @Test
+    @DisplayName(
+            "an unfinished review on the work continues from the admitting attempt without a report, and only once")
+    void shouldContinueAnUnfinishedReviewOnTheWorkOnceFromTheAdmittingAttempt() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 0);
+        admitWithResult(jobId);
+        keepOriginalInputs(jobId, 0, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
+        ReviewJob owing = jobRepository.findById(jobId).orElseThrow();
+
+        // Without the server's observation, a missing report asks for nothing.
+        assertThat(continueComposition(owing, "live-owner")).isFalse();
+        assertThat(continueUnfinishedReviewOnTheWork(owing, "live-owner")).isTrue();
+
+        ReviewJob continuing = jobRepository.findById(jobId).orElseThrow();
+        assertThat(continuing.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(continuing.getAttempt()).isEqualTo(1);
+        assertThat(continuing.getPublicReviewDigest()).isNull();
+        assertThat(ResultAdmissionService.citationAttempt(continuing)).isZero();
+
+        jdbc.update(
+                "UPDATE review_job SET status = 'RUNNING', worker_id = 'next-worker', started_at = now(),"
+                        + " execution_started_at = now() WHERE id = ?",
+                jobId);
+        ReviewJob claimed = jobRepository.findById(jobId).orElseThrow();
+        assertThat(continueUnfinishedReviewOnTheWork(claimed, "next-worker")).isFalse();
+        assertThat(jobRepository.findById(jobId).orElseThrow().getAttempt()).isEqualTo(1);
+    }
+
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"SAFETY", "STALL"})
     @DisplayName("an admission on a later attempt is still the admitting attempt, and hands the review on once")
@@ -1769,6 +1797,11 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             byte @Nullable [] feedbackReport) {
         return Boolean.TRUE.equals(transactionTemplate.execute(
                 status -> recovery.continueComposition(job, workerId, runnerUsage, scriptReport, feedbackReport)));
+    }
+
+    private boolean continueUnfinishedReviewOnTheWork(ReviewJob job, String workerId) {
+        return Boolean.TRUE.equals(transactionTemplate.execute(
+                status -> recovery.continueUnfinishedReviewOnTheWork(job, workerId, null, null)));
     }
 
     // The runner's feedback report, as it writes it before asking for the attempt to continue.

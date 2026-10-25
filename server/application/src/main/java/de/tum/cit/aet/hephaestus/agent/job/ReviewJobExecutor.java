@@ -739,7 +739,8 @@ public class ReviewJobExecutor {
         // A continuing attempt composes private feedback only after the review on the work is accepted, and only in the
         // time the attempt has left. A public launch that did not end cleanly ends the attempt itself.
         boolean continuation = ResultAdmissionService.isContinuation(job);
-        SandboxResult publicReview = continuation ? executePublicReview(jobId, job, sandboxSpec, false) : null;
+        ReviewJob owing = continuation ? owingReviewOnTheWork(jobId, job, sandboxSpec) : null;
+        SandboxResult publicReview = owing == null ? null : executePublicReview(jobId, owing, sandboxSpec, false);
         SandboxResult result = publicReview == null
                 ? sandboxManager.execute(sandboxSpec)
                 : endedCleanly(publicReview) ? sandboxManager.execute(inTimeLeft(sandboxSpec)) : publicReview;
@@ -759,7 +760,22 @@ public class ReviewJobExecutor {
                     job.getAttempt() + 1);
             return null;
         }
-        if (!continuation && !result.timedOut()) publicReview = executePublicReview(jobId, job, sandboxSpec, true);
+        owing = continuation || result.timedOut() ? null : owingReviewOnTheWork(jobId, job, sandboxSpec);
+        if (owing != null) {
+            publicReview = executePublicReview(jobId, owing, sandboxSpec, true);
+            // A launch with no time to start, or one the sandbox stopped before it reported, cannot say that the review
+            // on the work is owed; the server staged it, so its own observation continues the attempt.
+            if ((publicReview == null
+                            || (publicReview.timedOut()
+                                    && !publicReview.outputFiles().containsKey(SandboxLayout.FEEDBACK_FILENAME)))
+                    && continueUnfinishedReviewOnTheWork(job, agentResult, result)) {
+                log.warn(
+                        "Requeuing job {}: the review on the work did not finish (attempt {})",
+                        jobId,
+                        job.getAttempt() + 1);
+                return null;
+            }
+        }
         // An admitted run that stopped composing its feedback continues it as a new attempt when the locked job owes it
         // and its fences hold. A run the sandbox stopped at its time limit had no chance to say so; the same locked
         // job, its recorded preparation and the same fences decide. The review on the work is the one a later attempt
@@ -776,7 +792,8 @@ public class ReviewJobExecutor {
 
         // A review on the work that timed out or crashed ends the attempt as the review launch would have.
         SandboxResult ended = publicReview != null && !endedCleanly(publicReview) ? publicReview : result;
-        ReviewJobStatus terminalStatus = persistTerminalState(jobId, agentResult, ended);
+        ReviewJobStatus terminalStatus = persistTerminalState(
+                jobId, agentResult, ended, result.outputFiles().get(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE));
         ReviewCompositionContinuation kept = compositionContinuation;
         if (terminalStatus != null && kept != null) {
             // Its result is recorded: no writer reads the original inputs again. The retention sweep removes
@@ -801,26 +818,17 @@ public class ReviewJobExecutor {
 
     /**
      * Composes the review on the work in a launch of its own: its sessions have no shell, and only its credential may
-     * prepare that review. It runs while the attempt still owns its admitted job, before the work deadline, and only
-     * when the review asks for feedback on the work that no earlier attempt prepared. A launch that cannot start fails
-     * the attempt as any launch failure does.
+     * prepare that review. It starts for an attempt that still owes it ({@link #owingReviewOnTheWork}) and only while
+     * the attempt has agent time left; otherwise it returns null. A launch that cannot start fails the attempt as any
+     * launch failure does.
      *
      * @param admitting whether the review launch admitted the results now, so this launch is staged with that admission
      */
     private @Nullable SandboxResult executePublicReview(
-            UUID jobId, ReviewJob claimed, SandboxSpec review, boolean admitting) {
-        ReviewCompositionContinuation staging = compositionContinuation;
-        ReviewJob current = jobRepository.findById(jobId).orElse(null);
-        if (staging == null
-                || current == null
-                || current.getStatus() != ReviewJobStatus.RUNNING
-                || current.getAttempt() != claimed.getAttempt()
-                || !Objects.equals(current.getWorkerId(), workerId)
-                || !ResultAdmissionService.isAdmitted(current)
-                || current.getPublicReviewDigest() != null
-                || !requestsReviewOnTheWork(review)) return null;
+            UUID jobId, ReviewJob current, SandboxSpec review, boolean admitting) {
+        ReviewCompositionContinuation staging = Objects.requireNonNull(compositionContinuation);
         Instant workDeadline = workDeadline(review);
-        if (!workDeadline.isAfter(Instant.now())) return null;
+        if (!PracticePiAdapter.leavesAgentTime(Duration.between(Instant.now(), workDeadline))) return null;
         String token = workerJwtIssuer.issueForJobUntil(
                 jobId,
                 current.getWorkspaceId(),
@@ -836,6 +844,20 @@ public class ReviewJobExecutor {
                         review.environment(), Duration.between(Instant.now(), workDeadline)),
                 token,
                 inputs));
+    }
+
+    /** The attempt's job while it still owes the review on the work that its review requests; otherwise null. */
+    private @Nullable ReviewJob owingReviewOnTheWork(UUID jobId, ReviewJob claimed, SandboxSpec review) {
+        ReviewJob current = jobRepository.findById(jobId).orElse(null);
+        if (compositionContinuation == null
+                || current == null
+                || current.getStatus() != ReviewJobStatus.RUNNING
+                || current.getAttempt() != claimed.getAttempt()
+                || !Objects.equals(current.getWorkerId(), workerId)
+                || !ResultAdmissionService.isAdmitted(current)
+                || current.getPublicReviewDigest() != null
+                || !requestsReviewOnTheWork(review)) return null;
+        return current;
     }
 
     /** The review launch with its agent budget cut to the time the attempt has left. */
@@ -1235,6 +1257,15 @@ public class ReviewJobExecutor {
         return true;
     }
 
+    private boolean continueUnfinishedReviewOnTheWork(ReviewJob job, AgentResult agentResult, SandboxResult review) {
+        if (workerId == null) return false;
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> recovery.continueUnfinishedReviewOnTheWork(
+                job,
+                workerId,
+                agentResult.usage(),
+                review.outputFiles().get(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE))));
+    }
+
     /** The review launch reports the practice script runs; the launch whose composition stopped reports that stop. */
     private boolean continueComposition(
             ReviewJob job, AgentResult agentResult, SandboxResult review, SandboxResult stopped) {
@@ -1306,7 +1337,7 @@ public class ReviewJobExecutor {
     // Retain RUNNING state if accounting cannot commit; rerunning completed provider work would bill it twice.
     // The sweeper ends the attempt and records proxy usage.
     private @Nullable ReviewJobStatus persistTerminalState(
-            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult) {
+            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult, byte @Nullable [] scriptReport) {
         JsonNode output = objectMapper.valueToTree(agentResult.output());
         boolean storable = textRepresentableInJsonb(output);
         if (!storable) {
@@ -1315,14 +1346,19 @@ public class ReviewJobExecutor {
         try {
             return terminalPersistRetries.execute(named(
                     "Terminal persistence for jobId=" + jobId,
-                    () -> persistTerminalStateOnce(jobId, agentResult, sandboxResult, output, storable)));
+                    () -> persistTerminalStateOnce(jobId, agentResult, sandboxResult, scriptReport, output, storable)));
         } catch (RetryException e) {
             throw new TerminalPersistenceException(e);
         }
     }
 
     private @Nullable ReviewJobStatus persistTerminalStateOnce(
-            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult, JsonNode output, boolean storable) {
+            UUID jobId,
+            AgentResult agentResult,
+            SandboxResult sandboxResult,
+            byte @Nullable [] scriptReport,
+            JsonNode output,
+            boolean storable) {
         return transactionTemplate.execute(status -> {
             ReviewJob locked = jobRepository.lockById(jobId).orElse(null);
             if (locked == null) return null;
@@ -1382,11 +1418,7 @@ public class ReviewJobExecutor {
 
             jobRepository.saveAndFlush(freshJob);
 
-            practiceScriptRuns.record(
-                    freshJob,
-                    sandboxResult.outputFiles().get(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE),
-                    snapshot.practiceScriptModels(),
-                    finishedAt);
+            practiceScriptRuns.record(freshJob, scriptReport, snapshot.practiceScriptModels(), finishedAt);
             return terminalStatus;
         });
     }

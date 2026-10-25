@@ -270,6 +270,18 @@ class ReviewCredentialScopeIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldServeTheReviewLaunchsCredentialItsPrivateFeedback() throws Exception {
+        assertThat(call(
+                        "/internal/llm/prepare-feedback",
+                        credential(JobCredentialScope.REVIEW),
+                        preparation(false, conversation("Talk about the failure case."))))
+                .isEqualTo(200);
+
+        assertThat(feedbackRows()).isEqualTo(1);
+        assertNoPublicReview();
+    }
+
+    @Test
     void shouldRefuseAReviewOnTheWorkThatIsNotPreparedAsThePublicReview() throws Exception {
         // The review launch may prepare private feedback, but a piece on the work outside the public review is refused.
         assertThat(call(

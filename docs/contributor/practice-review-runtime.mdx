@@ -58,7 +58,10 @@ The sessions of the public review launch have no shell.
 A continuing attempt runs the public review launch first and then composes private feedback.
 
 Each later launch gets only the time that the attempt has left.
-If the public review launch times out or exits with a failure, the attempt ends with that outcome.
+If no agent time is left for the public review launch, it does not start.
+The admitting attempt then continues as a later attempt, under the same fences as a stopped composition.
+The same applies when the sandbox stops that launch before it writes its report.
+Otherwise, a public review launch that times out or exits with a failure ends the attempt with that outcome.
 If it cannot start, the attempt fails as for any other launch failure.
 
 Each launch has a credential with one job scope: `review` or `public_review`.

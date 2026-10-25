@@ -364,6 +364,10 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
     /** A review launch as the executor prepares it, whose composition request may ask for a review on the work. */
     private static SandboxSpec reviewLaunch(ReviewJob job, boolean onWork) {
+        return reviewLaunch(job, onWork, Instant.now().plusSeconds(600));
+    }
+
+    private static SandboxSpec reviewLaunch(ReviewJob job, boolean onWork, Instant workDeadline) {
         String destinations = onWork ? "{\"ON_WORK\":{\"maxPieces\":1}}" : "{\"PRACTICE_PAGE\":{\"maxPieces\":1}}";
         return new SandboxSpec(
                 job.getId(),
@@ -373,7 +377,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 Map.of("PI_COMPOSITION_PHASES", "PRIVATE_FEEDBACK"),
                 "review-token",
                 SandboxTestLimits.ATTEMPT,
-                Instant.now().plusSeconds(600),
+                workDeadline,
                 Map.of(
                         SandboxLayout.FEEDBACK_COMPOSITION_PATH,
                         ("{\"destinations\":" + destinations + "}").getBytes(StandardCharsets.UTF_8)),
@@ -513,8 +517,10 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldEndTheAttemptAsItsReviewOnTheWorkEndedWhenThatLaunchTimesOut() {
         var job = owedJob();
+        recovery = mock(ReviewJobRecovery.class);
         var executor = twoLaunchExecutor(job, mock(ReviewCompositionContinuation.class));
-        var review = new SandboxResult(0, Map.of(), "", false, Duration.ofMinutes(1));
+        var review = new SandboxResult(
+                0, Map.of(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE, scriptReport()), "", false, Duration.ofMinutes(1));
         var timedOut = new SandboxResult(124, Map.of(), "", true, Duration.ofMinutes(9));
         when(sandbox.execute(any())).thenReturn(review, timedOut);
         when(practiceAgent.parseResult(review)).thenReturn(new AgentResult(true, Map.of(), RETURNED_USAGE));
@@ -522,6 +528,48 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
         assertThat(executor.executePrepared(job.getId(), job, reviewLaunch(job, true)))
                 .isEqualTo(ReviewJobStatus.TIMED_OUT);
+
+        // The fences refused to continue it; the review launch's script runs are still recorded.
+        verify(recovery)
+                .continueUnfinishedReviewOnTheWork(eq(job), eq("worker-1"), eq(RETURNED_USAGE), aryEq(scriptReport()));
+        verify(practiceScriptRuns).record(eq(job), aryEq(scriptReport()), any(), any());
+    }
+
+    @Test
+    void shouldContinueAReviewOnTheWorkThatTheSandboxStoppedBeforeItReported() {
+        var job = owedJob();
+        recovery = mock(ReviewJobRecovery.class);
+        when(recovery.continueUnfinishedReviewOnTheWork(
+                        eq(job), eq("worker-1"), eq(RETURNED_USAGE), aryEq(scriptReport())))
+                .thenReturn(true);
+        var executor = twoLaunchExecutor(job, mock(ReviewCompositionContinuation.class));
+        var review = new SandboxResult(
+                0, Map.of(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE, scriptReport()), "", false, Duration.ofMinutes(1));
+        var timedOut = new SandboxResult(124, Map.of(), "", true, Duration.ofMinutes(9));
+        when(sandbox.execute(any())).thenReturn(review, timedOut);
+        when(practiceAgent.parseResult(review)).thenReturn(new AgentResult(true, Map.of(), RETURNED_USAGE));
+
+        assertThat(executor.executePrepared(job.getId(), job, reviewLaunch(job, true)))
+                .isNull();
+
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldStartNoReviewOnTheWorkWithoutAgentTimeAndContinueIt() {
+        var job = owedJob();
+        recovery = mock(ReviewJobRecovery.class);
+        when(recovery.continueUnfinishedReviewOnTheWork(eq(job), eq("worker-1"), eq(RETURNED_USAGE), any()))
+                .thenReturn(true);
+        var executor = twoLaunchExecutor(job, mock(ReviewCompositionContinuation.class));
+
+        // Less than the runner's shutdown buffer is left after the review launch.
+        assertThat(executor.executePrepared(
+                        job.getId(), job, reviewLaunch(job, true, Instant.now().plusSeconds(30))))
+                .isNull();
+
+        verify(sandbox, times(1)).execute(any());
+        verify(jwtIssuer, never()).issueForJobUntil(any(), any(), anyInt(), any(), any(), any());
     }
 
     @Test
