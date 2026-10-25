@@ -170,13 +170,12 @@ public final class CandidateParser {
         boolean search = searchNode != null;
         boolean inapplicability = inapplicabilityNode != null;
         boolean undecidability = questions != null;
-        boolean warrants =
-                switch (outcome) {
-                    case MET -> !inapplicability && !undecidability;
-                    case NOT_MET -> !inapplicability;
-                    case DOES_NOT_APPLY -> inapplicability && !search && !undecidability;
-                    case COULD_NOT_DETERMINE -> !inapplicability && undecidability;
-                };
+        boolean warrants = switch (outcome) {
+            case MET -> !inapplicability && !undecidability;
+            case NOT_MET -> !inapplicability;
+            case DOES_NOT_APPLY -> inapplicability && !search && !undecidability;
+            case COULD_NOT_DETERMINE -> !inapplicability && undecidability;
+        };
         if (!warrants) {
             throw refuse(
                     CandidateRefusal.WARRANT_OUTCOME_MISMATCH,
@@ -191,11 +190,10 @@ public final class CandidateParser {
         if (outcome != ResultOutcome.NOT_MET && citations.isEmpty()) {
             throw refuse(CandidateRefusal.RESULT_CITATIONS_REQUIRED, "a " + outcome + " result cites what it rests on");
         }
-        boolean complete =
-                switch (coverage) {
-                    case HostCoverage host -> host.complete();
-                    case ClaimedCoverage claimed -> claimed.complete();
-                };
+        boolean complete = switch (coverage) {
+            case HostCoverage host -> host.complete();
+            case ClaimedCoverage claimed -> claimed.complete();
+        };
         if (outcome == ResultOutcome.MET && !complete) {
             throw refuse(CandidateRefusal.MET_COVERAGE_INCOMPLETE, "a MET result needs complete coverage");
         }

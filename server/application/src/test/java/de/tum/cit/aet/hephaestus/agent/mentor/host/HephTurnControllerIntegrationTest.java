@@ -236,12 +236,11 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private ResultActions call(String method, String endpoint, int attempt, String body) throws Exception {
-        var request =
-                switch (method) {
-                    case "POST" -> post(TURN_PATH + endpoint, turn.getId());
-                    case "PUT" -> put(TURN_PATH + endpoint, turn.getId());
-                    default -> throw new IllegalArgumentException(method);
-                };
+        var request = switch (method) {
+            case "POST" -> post(TURN_PATH + endpoint, turn.getId());
+            case "PUT" -> put(TURN_PATH + endpoint, turn.getId());
+            default -> throw new IllegalArgumentException(method);
+        };
         return gateway.perform(request.header(HttpHeaders.AUTHORIZATION, "Bearer " + credential(attempt))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));

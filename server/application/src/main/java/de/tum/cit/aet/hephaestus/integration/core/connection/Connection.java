@@ -326,14 +326,13 @@ public class Connection {
         if (kind == null || config == null) {
             return;
         }
-        IntegrationKind expected =
-                switch (config) {
-                    case ConnectionConfig.GitHubAppConfig ignored -> IntegrationKind.GITHUB;
-                    case ConnectionConfig.GitHubPatConfig ignored -> IntegrationKind.GITHUB;
-                    case ConnectionConfig.GitLabConfig ignored -> IntegrationKind.GITLAB;
-                    case ConnectionConfig.SlackConfig ignored -> IntegrationKind.SLACK;
-                    case ConnectionConfig.OutlineConfig ignored -> IntegrationKind.OUTLINE;
-                };
+        IntegrationKind expected = switch (config) {
+            case ConnectionConfig.GitHubAppConfig ignored -> IntegrationKind.GITHUB;
+            case ConnectionConfig.GitHubPatConfig ignored -> IntegrationKind.GITHUB;
+            case ConnectionConfig.GitLabConfig ignored -> IntegrationKind.GITLAB;
+            case ConnectionConfig.SlackConfig ignored -> IntegrationKind.SLACK;
+            case ConnectionConfig.OutlineConfig ignored -> IntegrationKind.OUTLINE;
+        };
         if (kind != expected) {
             throw new IllegalStateException("Connection kind=" + kind
                     + " incompatible with config="

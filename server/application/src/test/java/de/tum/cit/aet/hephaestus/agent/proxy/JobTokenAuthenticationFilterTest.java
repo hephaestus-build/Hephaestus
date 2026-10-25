@@ -143,12 +143,11 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     void turnTokenReachesNoOtherTurnAndNoSandboxRuntime(String target) throws Exception {
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
-        var path =
-                switch (target) {
-                    case "other-turn" -> "/internal/llm/turn/" + UUID.randomUUID() + "/end";
-                    case "runtime" -> "/internal/llm/runtime/" + jwt.turnId();
-                    default -> "/internal/llm/runtime/" + jwt.turnId() + "/commands";
-                };
+        var path = switch (target) {
+            case "other-turn" -> "/internal/llm/turn/" + UUID.randomUUID() + "/end";
+            case "runtime" -> "/internal/llm/runtime/" + jwt.turnId();
+            default -> "/internal/llm/runtime/" + jwt.turnId() + "/commands";
+        };
         var response = new MockHttpServletResponse();
         filter.doFilter(request(path, "Bearer turn-token"), response, (incoming, outgoing) -> {
             throw new AssertionError("Turn token served outside its turn");

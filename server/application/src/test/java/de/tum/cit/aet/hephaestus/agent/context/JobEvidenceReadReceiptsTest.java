@@ -208,12 +208,11 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
     void shouldRefuseAReadWhoseWitnessOrCapturedTextCannotBeAuthenticated(String defect) {
         var files = files();
         var job = job();
-        var roots =
-                switch (defect) {
-                    case "ambiguous-directory" -> List.of("repository/", "repository/nested/");
-                    case "unrelated-directory" -> List.of("other/", "repository");
-                    default -> List.<String>of();
-                };
+        var roots = switch (defect) {
+            case "ambiguous-directory" -> List.of("repository/", "repository/nested/");
+            case "unrelated-directory" -> List.of("other/", "repository");
+            default -> List.<String>of();
+        };
         String sourcePath = defect.equals("ambiguous-directory") ? "repository/nested/HEAD" : WITNESS;
         if (!defect.equals("no-capture"))
             job.setCapture(mapper.createObjectNode().set("directories", mapper.valueToTree(roots)));
@@ -245,16 +244,15 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
         try {
             var read = new ReadReceipt(
                     SOURCE, sourcePath, "file.txt", "commit-one", ReadReceiptStatus.COMPLETE, DIGEST, null, null);
-            var message =
-                    switch (defect) {
-                        case "absent-witness", "wrong-source", "missing-witness-file" ->
-                            "The host read has no authenticated source witness";
-                        case "changed-witness" -> "Captured evidence digest mismatch";
-                        case "missing-content" -> "The host read content is unavailable";
-                        case "ambiguous-text" -> "Ambiguous host read text";
-                        case "changed-text" -> "The host read digest differs from its captured text";
-                        default -> "The host read has no unique captured directory";
-                    };
+            var message = switch (defect) {
+                case "absent-witness", "wrong-source", "missing-witness-file" ->
+                    "The host read has no authenticated source witness";
+                case "changed-witness" -> "Captured evidence digest mismatch";
+                case "missing-content" -> "The host read content is unavailable";
+                case "ambiguous-text" -> "Ambiguous host read text";
+                case "changed-text" -> "The host read digest differs from its captured text";
+                default -> "The host read has no unique captured directory";
+            };
             assertThatThrownBy(
                             () -> files.registerReadReceipts(job, manifest(texts, witnesses), List.of(read), catalogs))
                     .isInstanceOf(

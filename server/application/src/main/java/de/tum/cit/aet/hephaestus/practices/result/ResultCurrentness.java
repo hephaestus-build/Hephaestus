@@ -47,15 +47,12 @@ public class ResultCurrentness {
     private void reconcile(ProductItemQuery.CurrentWorkVersion source, List<Result> current, Instant at) {
         boolean changed = false;
         for (var result : current) {
-            ResultEndReason reason =
-                    switch (source) {
-                        case ProductItemQuery.CurrentWorkVersion.Known known ->
-                            Objects.equals(known.value(), result.getItemVersion())
-                                    ? null
-                                    : ResultEndReason.WORK_CHANGED;
-                        case ProductItemQuery.CurrentWorkVersion.Removed.INSTANCE -> ResultEndReason.REMOVED;
-                        case ProductItemQuery.CurrentWorkVersion.Unknown.INSTANCE -> null;
-                    };
+            ResultEndReason reason = switch (source) {
+                case ProductItemQuery.CurrentWorkVersion.Known known ->
+                    Objects.equals(known.value(), result.getItemVersion()) ? null : ResultEndReason.WORK_CHANGED;
+                case ProductItemQuery.CurrentWorkVersion.Removed.INSTANCE -> ResultEndReason.REMOVED;
+                case ProductItemQuery.CurrentWorkVersion.Unknown.INSTANCE -> null;
+            };
             if (reason != null) {
                 result.end(reason, at.isBefore(result.getRecordedAt()) ? result.getRecordedAt() : at);
                 changed = true;

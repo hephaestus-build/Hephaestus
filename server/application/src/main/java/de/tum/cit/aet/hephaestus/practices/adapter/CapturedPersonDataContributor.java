@@ -48,17 +48,16 @@ final class CapturedPersonDataContributor implements PersonDataContributor {
     @Override
     public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
         var rows = store.export(selection, frozenScope);
-        String ownerTable =
-                switch (store.store()) {
-                    case "result", "problem", "result_mark", "review_item" -> "result";
-                    case "feedback",
-                            "feedback_basis",
-                            "feedback_send",
-                            "feedback_response",
-                            "feedback_copy",
-                            "feedback_decision" -> "feedback";
-                    default -> "";
-                };
+        String ownerTable = switch (store.store()) {
+            case "result", "problem", "result_mark", "review_item" -> "result";
+            case "feedback",
+                    "feedback_basis",
+                    "feedback_send",
+                    "feedback_response",
+                    "feedback_copy",
+                    "feedback_decision" -> "feedback";
+            default -> "";
+        };
         if (ownerTable.isEmpty() || rows.isEmpty()) return rows;
         String ownerColumn = store.store().equals(ownerTable) ? "developer_id" : ownerTable + "_id";
         Long accountId = frozenScope.accountId();

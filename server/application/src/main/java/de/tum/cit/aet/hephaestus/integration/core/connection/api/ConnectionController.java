@@ -161,14 +161,13 @@ public class ConnectionController {
             @Nullable Authentication authentication) {
         Connection connection = admin.findInWorkspaceOrThrow(workspace.id(), id);
         IntegrationState target = body.state();
-        String eventType =
-                switch (target) {
-                    case ACTIVE -> "REACTIVATE";
-                    case SUSPENDED -> "SUSPEND";
-                    case UNINSTALLED -> "DISCONNECT";
-                    case PENDING ->
-                        throw new IllegalArgumentException("An admin cannot set a connection to the state PENDING.");
-                };
+        String eventType = switch (target) {
+            case ACTIVE -> "REACTIVATE";
+            case SUSPENDED -> "SUSPEND";
+            case UNINSTALLED -> "DISCONNECT";
+            case PENDING ->
+                throw new IllegalArgumentException("An admin cannot set a connection to the state PENDING.");
+        };
 
         String correlationId = eventType.toLowerCase(Locale.ROOT) + "-" + connection.getId() + "-" + UUID.randomUUID();
         TransitionRequest request = TransitionRequest.byAccount(
