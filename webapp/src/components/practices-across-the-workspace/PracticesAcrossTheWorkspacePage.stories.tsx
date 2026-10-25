@@ -101,7 +101,9 @@ export const Default: Story = {
 		await expect(figuresSection(canvas)).toContainElement(
 			canvas.getByRole("toolbar", { name: "Time range" }),
 		);
-		await expect(groupsSection(canvas)?.textContent).not.toMatch(/30 days|90 days|All time/u);
+		await expect(groupsSection(canvas)?.textContent).not.toMatch(
+			/7 days|30 days|90 days|All time/u,
+		);
 		// The open feedback reads now, whatever the window.
 		await expect(canvas.getByText("pieces open now")).toBeVisible();
 		// Every standing here is current, so the page says nothing about earlier reviews.

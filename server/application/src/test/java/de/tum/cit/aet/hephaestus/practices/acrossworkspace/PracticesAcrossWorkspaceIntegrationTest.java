@@ -110,8 +110,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldReadTheTilesOverTheLastSevenDays() {
+    void shouldCountOnlyTheLastSevenDaysWhenTheTilesAskForThatWindow() {
         data.result(scenario, ResultOutcome.MET, Instant.now().minus(Duration.ofDays(10)));
+        data.result(data.onOtherWork(scenario), ResultOutcome.MET, Instant.now().minus(Duration.ofDays(2)));
         get("/practices/tiles?window=DAYS_7")
                 .expectStatus()
                 .isOk()
@@ -119,13 +120,13 @@ class PracticesAcrossWorkspaceIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.window")
                 .isEqualTo("DAYS_7")
                 .jsonPath("$.reviewedWork.yours")
-                .isEqualTo(0);
+                .isEqualTo(1);
         get("/practices/tiles?window=DAYS_30")
                 .expectStatus()
                 .isOk()
                 .expectBody()
                 .jsonPath("$.reviewedWork.yours")
-                .isEqualTo(1);
+                .isEqualTo(2);
     }
 
     @Test

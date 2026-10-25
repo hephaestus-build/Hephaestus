@@ -199,10 +199,15 @@ This update restores the decision above. It changes no rule about who and what i
 - Feedback mode **Off** stops delivery only. A practice that is off still has a standing.
   **Reviewed by People** or **Nobody** has no review and no standing.
 
-## Update — 2026-10-25 (the You bracket)
+## Update — 2026-10-25 (the You bracket and a seven-day window)
 
 The **You** marker above is now a bracket.
 It spans the whole part of a split that holds the reader.
 A split gives only the part that holds the reader, not a place inside it.
 A point marker suggested such a place, and the bracket does not.
+
+The three tiles also offer a window of 7 days, before 30 days, 90 days, and all time.
+It is the narrowest window, so its counts are likely smaller.
+The decision of 2026-10-07 to show every count, however small, covers it.
+That decision is about small counts, not about windows.
 Nothing else above changes.
