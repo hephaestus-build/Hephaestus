@@ -199,4 +199,14 @@ describe("workspaceDetailsSchema", () => {
 		const slugErrors = result.error.issues.filter((i) => i.path[0] === "workspaceSlug");
 		expect(slugErrors.some((e) => e.message.includes("Start with"))).toBe(true);
 	});
+
+	it.each([
+		["", "Enter a URL slug of 3 to 51 characters: a to z, 0 to 9, or hyphens"],
+		["ab", "Enter a URL slug of 3 to 51 characters: a to z, 0 to 9, or hyphens"],
+		["-a_", "Use only lowercase letters, digits, and hyphens"],
+		["a--b", "Do not use two hyphens in a row"],
+	])("names the first problem with the slug %j", (workspaceSlug, message) => {
+		const result = workspaceDetailsSchema.safeParse({ displayName: "Test", workspaceSlug });
+		expect(result.error?.issues[0]?.message).toBe(message);
+	});
 });

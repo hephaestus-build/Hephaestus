@@ -102,16 +102,15 @@ class EmailRendererTest extends BaseUnitTest {
         String unsubscribeUrl = EmailTestSupport.WEBAPP_URL + "/unsubscribe?token=opaque-token";
         if (kind.optional()) model.put("unsubscribeUrl", unsubscribeUrl);
         RenderedEmail rendered = renderer.render(kind, model);
-        String actionPath =
-                switch (kind) {
-                    case TEST_MESSAGE, ACCOUNT_DELETION_SCHEDULED -> "";
-                    case ACCOUNT_SECURITY_CHANGED -> "/settings";
-                    case PRODUCT_FEEDBACK -> "/admin/feedback";
-                    case SURVEY_ENDED_SUMMARY -> "/admin/surveys";
-                    case SURVEY_INVITATION -> "/w/survey-team?survey=7bc509de-ce47-498f-bec3-2a5ea141c241";
-                    case WORKSPACE_ALERT -> "/w/delivery-team/admin/settings";
-                    case MENTOR_DIGEST -> "/w/delivery-team/mentor?entry=0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4";
-                };
+        String actionPath = switch (kind) {
+            case TEST_MESSAGE, ACCOUNT_DELETION_SCHEDULED -> "";
+            case ACCOUNT_SECURITY_CHANGED -> "/settings";
+            case PRODUCT_FEEDBACK -> "/admin/feedback";
+            case SURVEY_ENDED_SUMMARY -> "/admin/surveys";
+            case SURVEY_INVITATION -> "/w/survey-team?survey=7bc509de-ce47-498f-bec3-2a5ea141c241";
+            case WORKSPACE_ALERT -> "/w/delivery-team/admin/settings";
+            case MENTOR_DIGEST -> "/w/delivery-team/mentor?entry=0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4";
+        };
         String actionUrl = EmailTestSupport.WEBAPP_URL + actionPath;
         assertThat(rendered.text()).contains(actionUrl);
         assertThat(rendered.html()).contains("href=\"" + actionUrl + "\"");
@@ -147,18 +146,16 @@ class EmailRendererTest extends BaseUnitTest {
                         kind.name(),
                         "unsubscribeUrl",
                         EmailTestSupport.WEBAPP_URL + "/unsubscribe?token=test"));
-        String expected =
-                switch (kind) {
-                    case BUG -> "Someone reported a bug";
-                    case IDEA -> "Someone suggested an idea";
-                    case FEEDBACK -> "Someone shared general feedback";
-                };
-        String expectedSubject =
-                switch (kind) {
-                    case BUG -> "New bug report in Hephaestus";
-                    case IDEA -> "New idea for Hephaestus";
-                    case FEEDBACK -> "New product feedback in Hephaestus";
-                };
+        String expected = switch (kind) {
+            case BUG -> "Someone reported a bug";
+            case IDEA -> "Someone suggested an idea";
+            case FEEDBACK -> "Someone shared general feedback";
+        };
+        String expectedSubject = switch (kind) {
+            case BUG -> "New bug report in Hephaestus";
+            case IDEA -> "New idea for Hephaestus";
+            case FEEDBACK -> "New product feedback in Hephaestus";
+        };
         assertThat(rendered.subject()).isEqualTo(expectedSubject);
         assertThat(rendered.text()).contains(expected);
         assertThat(rendered.html()).contains(expected);

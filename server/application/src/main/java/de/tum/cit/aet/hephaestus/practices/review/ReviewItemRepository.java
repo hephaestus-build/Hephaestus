@@ -126,6 +126,9 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         """, nativeQuery = true)
     List<ReviewItem> findByWorkspaceIdAndReviewedItems(long workspaceId, UUID[] reviewIds, Long[] itemIds);
 
+    /** The assignments bound to the given jobs, from any of their reviews, in one read. */
+    List<ReviewItem> findByWorkspaceIdAndJobIdIn(long workspaceId, Collection<UUID> jobIds);
+
     /** Every assignment that retains one of the given results, from any review, in one read. */
     List<ReviewItem> findByWorkspaceIdAndResultIdInOrderByReviewIdAscPracticeIdAscItemIdAsc(
             long workspaceId, Collection<UUID> resultIds);

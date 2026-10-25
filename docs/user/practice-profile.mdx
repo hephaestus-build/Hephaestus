@@ -46,8 +46,8 @@ A ring counts your practices by standing:
 - **Going well**
 - **Mixed feedback**
 - **Needs attention**
-- **Nothing to report yet**
-- **Not reviewed**
+- **No standing yet**: no review has given the practice a standing yet.
+  It did not apply to your work, could not be judged, or no review has looked at it.
 
 **See all practice groups** opens the table of practice groups.
 [Your feedback](#your-feedback) follows the header.
@@ -133,17 +133,20 @@ Nobody else sees your other notes.
 Each card has four parts:
 
 1. The top part says what the feedback is about.
+   Beside its state, it names the work the pattern recurs in, for example *Recurring in three pull requests*. Hover, focus or tap it to see each piece of work, linked.
    Its explanation is under **Why this was raised**.
 2. **Next step** says what to do.
-3. **Work reviewed for this practice** says how the feedback resolves.
-   For example, it resolves after three pieces of reviewed work come back clean.
+3. **Work reviewed for this practice** shows how close the feedback is to resolving.
+   The (i) beside it gives the rule. For example, the feedback resolves after three pieces of reviewed work come back clean.
    It shows your reviewed work along a line, oldest to newest, with the date of each piece under it.
-   On the right are the count of clean work and your answers.
+   On the right, a gray line above the bar counts the clean work in a row.
+   For example: *2 clean in a row · 1 more resolves it*.
+   Your answers are under the bar.
    On a narrow screen they are under the line.
 4. The bottom part gives the date and your rating.
 
 The line shows up to five of the most recent pieces of work behind this feedback, ordered by when they were reviewed.
-One mark at its start counts the earlier pieces that are not shown.
+A short line with **…** at its start shows that earlier pieces are not shown.
 Each piece has the same icon as its observations.
 A wrench shows work that needed attention, and a check in a circle shows clean work.
 
@@ -160,7 +163,6 @@ The links, the buttons, and the work on the line keep their own action.
 
 The title chip opens the reviews that recorded an observation about your work, newest first and grouped by day.
 A review that still runs may not appear yet, because a review appears only after it records an observation about your work.
-The newest review has the **Latest** tag.
 
 A review that someone requested has the **Requested** tag.
 It is a real review and retains earlier observations in history.
@@ -169,43 +171,61 @@ An older review cannot replace newer proof.
 A marked current observation does not make an earlier observation current again.
 Repository scans have no developer and do not move your personal standing.
 
+A review that a schedule started has the **Scheduled** tag.
+A review that caught up on work from before the connection has the **Backfilled** tag.
+
 Each row names the work and links to the original.
-It starts with the practices to improve: the first two by name, then a count of the rest.
-If there are none, a complete or partial review says *Some practices could not be determined* when a practice could not be determined.
-Otherwise a complete review says *Nothing to improve*, and a partial review says *Nothing to improve in what it reached*.
-A review that failed or was cancelled says *Stopped before it finished*.
-A review that waits or runs says so.
+Its sequence on the work, such as *Review 2 of 3*, sits under the work, and its status stands over the time of the review.
+Your latest review is framed in blue and says **Latest review** in its top left corner.
 
-Below that, it counts each practice once by its outcome: **Met**, **Does not apply**, or **Could not determine**.
-It then counts the practices the review reached, including those with no recorded observation about you.
+**What it saw** counts the practices the review recorded about you on its first line, such as *8 practices*.
+The line under it counts each outcome, such as *5 met · 2 not met · 1 does not apply*.
+A review that is waiting or running and has recorded nothing yet says *No practices yet*.
+A review that ended with nothing recorded says *No practices*.
 
-For feedback on GitLab, **Read the feedback on the merge request** opens the comment or diff discussion.
+The list does not link the feedback a review gave. Open an observation of the review to read its feedback.
 
-Line notes appear on the reviewed diff line.
-If GitLab cannot attach a note there, it appears as a comment with a link to the reviewed code.
+The filters work as on the admin **Reviews** tab:
 
-Elsewhere, the row counts the pieces of feedback that reached you.
-**Show** filters the list by kind of work.
-**Timeframe** filters it to the last 7, 30, or 90 days.
-**All time** is the initial value.
-With either filter on, no row shows the **Latest** tag, because the newest included review might not be your latest.
+- **Work** selects one or more kinds of work.
+- **Status** selects one or more statuses: **Running**, **Completed**, **Partial**, **Failed** or **Cancelled**.
+  The list holds only reviews that recorded an observation about your work.
+  Thus, a review that failed or was cancelled before it recorded anything is not in it.
+- The timeframe shows the last 7, 30, or 90 days, or **All time**, the initial value.
+- **Sort** lists the newest review first, or the oldest.
+- **Reset** clears every filter, and a line counts the reviews that match.
+
+Each row ends in icon buttons: the play button is **Request another review**, the crosshair is **Track this work**.
+A line above the table says what each one does, and hovering or focusing a button shows its name.
+When a work has more than one review, its rows offer **Track this work**.
+
+**Track this work** narrows the list to every review of that work.
+**Tracking** above the table names the work. Its close button removes the work filter. **Reset** clears every filter.
+With any filter on, or oldest first, no row is framed as the **Latest review**, because the top review might not be your latest.
 
 Older reviews load when you scroll to the end of the list.
 You can also select **View earlier reviews**.
 If older reviews cannot load, select **Retry**.
-After the whole list loads without filters, later reviews of the same work show their sequence, such as *2nd review*.
-**Request review** appears beside a row when you may request another review as author, assignee, or workspace admin.
 
-**Open review** opens a review.
-It shows the link to the original work, the date, and the number of practices reached.
-It also shows **Request review** when you may request a review.
-Two tabs follow:
+Every review of a work reviewed more than once shows its sequence, such as *Review 2 of 3*, whatever the filters keep.
+**Request another review** appears in the row of a work's latest review when you may ask for one as author, assignee, or workspace admin.
+While a review runs and has recorded nothing, it does not count.
+The review before it offers **Request another review** until it records something.
+If a filter hides that review, no row of the work offers it.
 
-- **Every practice** lists the review's observations. Each shows its outcome and a count when it records problems. Select **Open observation** to read that exact observation in its practice. During a review, practices appear as the review reaches them.
-- **What we noticed** shows recent recorded activity on the work, oldest first.
+**See the reviewed practices** opens a review.
+Its header names the work as a link to the original.
+The date and the status follow, then its sequence on the work when the list below it holds the review.
+To ask for another review, use **Request another review** in the list.
 
-In **Every practice**, these filters apply:
+A table lists every practice the review reached, with its outcome, under a gray heading for each practice group.
+Select **Open observation** to read that observation in its practice.
+When you come back to the review, the row of the observation you opened last keeps a blue bar on its left edge.
+During a review, practices appear as the review reaches them.
 
+These filters apply to the table:
+
+- **Outcome** selects one or more outcomes, as on the admin **Observations** tab.
 - **Group** selects one practice group.
 - **Practice** filters names by the text you enter.
 
@@ -213,18 +233,22 @@ In **Every practice**, these filters apply:
 
 **See all practice groups** opens the **All practice groups** panel.
 Each row shows a workspace practice group, its standing, and a ring that splits its practices by standing.
+A practice group is a named set of related practices.
+The (i) beside the **Practice group** heading says so.
+
 A sentence describes what changed since the previous review.
 New feedback has no sentence here, because its card says it.
 The rows appear by standing, with groups that need attention first.
 
 1. To reverse the order, select the **Standing** heading.
 
-Some practices and groups have nothing to report yet.
-They fold into lines at the end of their table, so that they do not read as a gap:
+Some practices and groups have no standing yet.
+They fold into one line at the end of their table, so that they do not read as a gap.
+The line reads **Practices with no standing yet** or **Practice groups with no standing yet**.
 
-- **Does not apply to your work yet**: every review in the last 90 days found that they do not apply.
-- **Practices not reviewed** and **Practice groups not reviewed**: no review in the last 90 days has reviewed them.
-  A group also folds here when none of its practices applies or was reviewed.
+- A practice folds here when no review in the last 90 days gave it a standing.
+  The reviews found that it does not apply, could not judge it, or did not look at it.
+- A group folds here when none of its practices has a standing yet.
   A group with no practice to review also folds here.
   That is a group with no practices, with all of them switched off, or with only practices that people review.
   A group that your workspace hides from developers is not listed.
@@ -232,7 +256,11 @@ They fold into lines at the end of their table, so that they do not read as a ga
 To see the rows of a fold, select its line.
 The rows open in the table above it.
 Select a row to open the practice or the group.
-A practice or group that does not apply to your work yet says so in its row and in its own panel.
+
+Each folded row reads **No standing yet**.
+To see why, point at the label or select it.
+A practice reads **No standing yet** in its own panel too.
+If it does not apply to your work yet, its **Guide** tab says so.
 
 ## Opening a group and a practice
 
@@ -244,8 +272,33 @@ It lists each practice with its standing, trend and what changed.
 The practice panel shows the practice's name and your standing on it, when available, then its tabs:
 
 - **Feedback** shows the feedback about this practice. The panel opens on it.
-- **Observations** shows observations by review, newest first. Open an observation to read its available explanation, problems and next steps, evidence, and recorded feedback links. Response controls appear when you can respond. When you select **Open observation** on a review, that observation comes first.
+- **Observations** shows observations by review, newest first. Open an observation to read its available explanation, problems and next steps, evidence, and recorded feedback links.
 - **Guide** explains the practice. It appears when the practice has something to explain.
+
+In an open observation, each problem shows its number and its severity.
+When the observation gave feedback that reached you, a box per piece says where it went.
+It names the work, the practice page or your conversation with Heph, and it links to the feedback there.
+You answer the feedback where it is, not in the observation.
+
+The newest observation opens on arrival.
+When you select **Open observation** on a review, the tab shows that work's observations, with the selected one open.
+An observation does not repeat how its review started, such as **Requested**.
+The list of reviews and the review itself show that.
+
+The search field filters by words, by work such as *#15*, and by problem.
+Every observation the search finds has a blue bar on its left edge.
+**Outcome** selects one or more outcomes, as on a review.
+**Reset** appears once you search or choose an outcome, and it clears only those.
+The timeframe stays as you chose it.
+
+The timeframe in the tab row, right of **Guide**, shows the last 7, 30 or 90 days, or **All time**, the initial value.
+It narrows both the feedback cards and the observations.
+Your open feedback card always shows, whatever the timeframe.
+A resolved card falls in the timeframe by the time it shows.
+An observation or card that you arrive at by a link shows even when it lies outside the timeframe.
+When the timeframe hides every card, the **Feedback** tab says so and offers **Show all time**.
+
+The number beside **Feedback** and **Observations** counts what each tab shows, with the timeframe and the tab's filters applied.
 
 The **Guide** tab starts with an introduction:
 
@@ -270,9 +323,18 @@ Feedback posted on a pull request, merge request, or issue stays on that work, n
 2. Select the **Observations** tab.
 3. Open the observation to read its available explanation, problems and next steps, evidence, and recorded feedback links.
 
-Under **Feedback**, select **Read the feedback comment** to open a recorded comment.
-If several comments carry the feedback, their links appear together.
+Under **Feedback from this observation**, each piece the observation delivered to you is numbered.
+It says where it went and when it was delivered.
+Feedback that was not delivered does not appear.
+For feedback on the work, select **Read the comment on the work** to open the recorded comment.
+If several comments carry it, they read **Read comment 1**, **Read comment 2** and so on.
 If no comment link was recorded, use the observation’s link to the original work.
+
+For feedback on the practice page, the link opens the practice’s Feedback tab at that card, and a blue sheen crosses the card once.
+The tab keeps your newest feedback and drops closed feedback a month after it closed.
+If the tab no longer lists the card, a line says so.
+For feedback in your conversation with Heph, the link opens the conversation.
+Back on the Observations tab, the observation is still open.
 
 Feedback that a workspace admin withdrew does not appear here, in **Reviews of your work**, or on a review.
 If the admin restores it, it returns with your earlier response.
@@ -283,7 +345,9 @@ A standing is read from your newest reviewed work, up to four pieces for each pr
 Your latest work counts most, and older work counts less.
 
 To see how much work a standing rests on, point at its badge, move to it with the keyboard, or tap it.
-The trend beside the badge opens its own sentence in the same way.
+The trend beside the badge, such as *More positive recently*, opens its own sentence in the same way.
+That sentence says what a trend compares: your latest reviewed work with the work before it, in the last 90 days.
+A practice or group with no standing yet shows **Not enough to compare yet** as its trend.
 A tap opens the sentence, not the row.
 To close the sentence, press Escape or select a different part of the page.
 
@@ -296,10 +360,11 @@ Eligible decided observations provide the evidence for these counts.
 Your standing uses automatic reviews first.
 Requested reviews contribute where those reviews establish no standing.
 
-A practice or group marked **Based on earlier reviews** includes historical assessments.
+A practice or group marked **Based on earlier reviews, the criteria might have changed** includes historical assessments.
 Those assessments do not show whether the current criteria are met.
 They contribute no trend or feedback quotes.
-**Based on earlier reviews, criteria unknown** means that the original criterion version is unavailable.
+The mark reads the same when the original criterion version is unavailable.
+Only its icon differs.
 
 A group counts each piece of work once, even when several of its practices judged it.
 
@@ -341,7 +406,7 @@ Open feedback can also count developers without a standing.
 A blue marker shows your value.
 
 - **Pieces of work reviewed**, **Practices going well**, and **Practices needing attention** use the selected time range.
-  Select **30 days**, **90 days**, or **All time**.
+  Select **Last 7 days**, **Last 30 days**, **Last 90 days**, or **All time**.
 - **Open feedback** counts the feedback that is open now, whatever the time range.
 
 ### The bars
@@ -349,15 +414,17 @@ A blue marker shows your value.
 **All practice groups** has one bar for each practice group.
 Each bar counts the developers with a standing by the standing that their Practice profile shows.
 Each developer counts once, however much of their work was reviewed.
-The **You** marker shows your part, but only when the bar counts you.
+The **You** bracket spans the part you are in, but only when the bar counts you.
+It marks the part, not a point within it.
 The bars show standings now, so the time range does not change them.
+
+The colors of the group names only tell the groups apart, here and in **All practice groups** of your profile. They are not a rating.
 
 A practice that is reviewed only by people, or by nobody, has no standing and is not on the page.
 Turning feedback off does not remove the practice's standing.
 
 If some standings include earlier assessments, the page says so.
-When your standing includes them, your own row carries **Based on earlier reviews**, as your profile does.
-If the original criterion version is unavailable, the mark reads **Based on earlier reviews, criteria unknown**.
+When your standing includes them, your own row carries **Based on earlier reviews, the criteria might have changed**, as your profile does.
 
 ### Small counts
 
@@ -381,7 +448,7 @@ At the end of the page, **See your own standing** opens **All practice groups** 
 
 ## When nothing has been reviewed yet
 
-Before the first review, each practice counts as **Not reviewed**.
+Before the first review, each practice counts as **No standing yet**.
 The chip reads **No review yet** and no feedback appears.
 The first review with a recorded observation fills the page.
 To request a review of eligible work, use **Request review** on [Activity](./activity.mdx#request-a-review).

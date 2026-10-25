@@ -69,21 +69,19 @@ public final class DefinitionTestFixtures {
     }
 
     public static PracticeDefinition definition(ItemKind kind, String name, String criteria, @Nullable String script) {
-        String event =
-                switch (kind.value()) {
-                    case "docs.document" -> "published";
-                    case "chat.thread" -> "settled";
-                    default -> "opened";
-                };
-        String source =
-                switch (kind.value()) {
-                    case "scm.pull_request", "scm.pull_request_review" -> "scm.pull-request.core";
-                    case "scm.issue" -> "scm.issue.core";
-                    case "chat.thread" -> "slack.conversation.thread";
-                    case "docs.document" -> "docs.document.core";
-                    case "scm.file", "scm.repository" -> "scm.repository.tree";
-                    default -> throw new IllegalArgumentException("Unsupported fixture kind");
-                };
+        String event = switch (kind.value()) {
+            case "docs.document" -> "published";
+            case "chat.thread" -> "settled";
+            default -> "opened";
+        };
+        String source = switch (kind.value()) {
+            case "scm.pull_request", "scm.pull_request_review" -> "scm.pull-request.core";
+            case "scm.issue" -> "scm.issue.core";
+            case "chat.thread" -> "slack.conversation.thread";
+            case "docs.document" -> "docs.document.core";
+            case "scm.file", "scm.repository" -> "scm.repository.tree";
+            default -> throw new IllegalArgumentException("Unsupported fixture kind");
+        };
         return new PracticeDefinition(
                 name,
                 new ReviewOn(List.of(new ItemEventName(kind.value() + "." + event)), Map.of()),

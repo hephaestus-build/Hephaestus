@@ -141,10 +141,46 @@ await test("a downgrade requires an explicit rollback on a new channel commit", 
 	);
 });
 
-await test("a frozen channel holds the host where it is, even against a newer release", () => {
+await test("a frozen channel moves the host to what it names, and freezing what runs restarts nothing", () => {
 	assert.deepEqual(
 		decide({ release: "v0.99.0", freeze: true }, current, "c".repeat(40), newRequest, true),
-		{ action: "noop", reason: "channel is frozen" },
+		{ action: "apply", release: "v0.99.0" },
+	);
+	assert.deepEqual(
+		decide({ release: "v0.75.2", freeze: true }, current, "c".repeat(40), newRequest, true),
+		{ action: "noop", reason: "already running v0.75.2" },
+	);
+	// A freeze that also asks for the commit's database image is a request the host must apply.
+	assert.deepEqual(
+		decide(
+			{ release: "v0.75.2", freeze: true, refreshDatabaseImage: true },
+			current,
+			"c".repeat(40),
+			newRequest,
+			true,
+		),
+		{ action: "apply", release: "v0.75.2" },
+	);
+	// A freeze bypasses neither the channel's ancestry nor a commit that runs behind what is applied.
+	assert.equal(
+		decide({ release: "v0.75.2", freeze: true }, current, "c".repeat(40), newRequest, false).action,
+		"refuse",
+	);
+	assert.equal(
+		decide(
+			{ release: "a".repeat(40), freeze: true },
+			current,
+			"c".repeat(40),
+			newRequest,
+			true,
+			true,
+		).action,
+		"refuse",
+	);
+	// A freeze is no rollback permission.
+	assert.equal(
+		decide({ release: "v0.75.1", freeze: true }, current, "c".repeat(40), newRequest, true).action,
+		"refuse",
 	);
 });
 
@@ -764,7 +800,7 @@ async function reconcilerFixture(directory: string) {
 	for (const [release, services] of [
 		["v0.8.0", { app: {} }],
 		["v0.9.0", { app: {}, "application-worker": { stop_grace_period: "6m" } }],
-		["v1.0.0", { app: {} }],
+		["v1.0.0", { app: {}, "database-migration": {} }],
 	] as const) {
 		await writeFile(appCompose, JSON.stringify({ services }));
 		if (release === "v1.0.0") {
@@ -825,7 +861,8 @@ console.log(JSON.stringify({ services: Object.fromEntries(Object.entries(declare
 }
 const images = (process.env.DOCKER_IMAGES ?? "").split("\\n").filter(Boolean).map((line) => JSON.parse(line));
 if (args[0] === "info") console.log(process.env.STATE_DIRECTORY);
-if (args[0] === "image" && args[1] === "ls") process.stdout.write(process.env.DOCKER_IMAGES ?? "");
+// Like Docker, the listing hides an untagged image unless asked for all of them.
+if (args[0] === "image" && args[1] === "ls") process.stdout.write(images.map((listed) => ({ Tag: "<none>", ...listed })).filter((listed) => args.includes("--all") || listed.Tag !== "<none>").map((listed) => JSON.stringify(listed)).join("\\n"));
 if (args[0] === "image" && args[1] === "inspect") {
 const found = images.find((listed) => listed.Repository + "@" + listed.Digest === args.at(-1));
 if (found === undefined) process.exit(1);
@@ -833,6 +870,8 @@ console.log(found.ID);
 }
 if (args[0] === "image" && args[1] === "rm" && process.env.IMAGE_IN_USE === args[2]) process.exit(1);
 if (args.includes("pull") && process.env.FAIL_PULL === args[args.indexOf("--project-name") + 1]) process.exit(1);
+if (args.includes("run") && process.env.FAIL_RUN === args.at(-1)) process.exit(1);
+if (args.includes("ps") && process.env.POSTGRES_RUNNING === "1") console.log("postgres-container");
 if (args.includes("stop")) {
 const service = declared[args.at(-1)];
 if (service === undefined || process.env.FAIL_WORKER_STOP === "1") process.exit(1);
@@ -889,6 +928,8 @@ await main(${JSON.stringify(units)});\n`,
 			failWorktreeRemove = false,
 			failWorkerStop = false,
 			failPull,
+			failRun,
+			postgresRunning = false,
 			unlockedStack,
 			channel = "test",
 			environment = {},
@@ -899,6 +940,9 @@ await main(${JSON.stringify(units)});\n`,
 			failWorkerStop?: boolean;
 			/** The stack whose image pull fails. */
 			failPull?: string;
+			/** The service whose `docker compose run` fails. */
+			failRun?: string;
+			postgresRunning?: boolean;
 			channel?: string;
 			unlockedStack?: string;
 			/** More of the host's environment, such as what the fake Docker lists. */
@@ -923,6 +967,8 @@ await main(${JSON.stringify(units)});\n`,
 						FAIL_WORKTREE_REMOVE: failWorktreeRemove ? "1" : "0",
 						FAIL_WORKER_STOP: failWorkerStop ? "1" : "0",
 						FAIL_PULL: failPull,
+						FAIL_RUN: failRun,
+						POSTGRES_RUNNING: postgresRunning ? "1" : "0",
 						UNLOCKED_STACK: unlockedStack,
 						...environment,
 					}),
@@ -1058,7 +1104,7 @@ await test(
 			assert.equal(calls[1], "trusted verifier");
 			const docker = calls.filter((line) => line.startsWith("docker compose"));
 			// A first install runs no worker yet, so nothing is stopped.
-			assert.equal(docker.length, 10);
+			assert.equal(docker.length, 12);
 			for (const [index, stack] of ["app", "core", "proxy"].entries()) {
 				assert.match(
 					docker[index] ?? "",
@@ -1070,10 +1116,13 @@ await test(
 					new RegExp(`--project-name ${stack} .* pull --policy missing$`, "u"),
 				);
 			}
-			assert.match(docker[6] ?? "", /--project-name core .* up .* nats-server$/u);
+			// The migration ends before any stack replaces its roles. Nothing runs yet, so it starts PostgreSQL.
+			assert.match(docker[6] ?? "", /--project-name app .* ps --status running --quiet postgres$/u);
+			assert.match(docker[7] ?? "", /--project-name app .* run --rm -T database-migration$/u);
+			assert.match(docker[8] ?? "", /--project-name core .* up .* nats-server$/u);
 			for (const [index, stack] of ["app", "core", "proxy"].entries()) {
 				assert.match(
-					docker[index + 7] ?? "",
+					docker[index + 9] ?? "",
 					new RegExp(`--project-name ${stack} .* up .* --remove-orphans$`, "u"),
 				);
 			}
@@ -1174,6 +1223,40 @@ await test(
 );
 
 await test(
+	"a failed migration leaves the previous roles, the applied release and the tooling untouched",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-migration-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const previous = { ...fixture.record, release: "v0.9.0", commit: fixture.commitOf("v0.9.0") };
+			await writeFile(path.join(directory, "applied.json"), JSON.stringify(previous));
+			await fixture.retainLock("v0.9.0", previous.commit);
+			const adopted = fixture.run();
+			assert.equal(adopted.status, 0, adopted.stderr);
+			const beforeCalls = await fixture.calls();
+
+			const result = fixture.run({ failRun: "database-migration" });
+
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, /docker exited with code 1/u);
+			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), previous);
+			assert.equal(
+				await readlink(path.join(directory, "tooling")),
+				path.join(directory, "releases/v0.9.0"),
+			);
+			const afterCalls = await fixture.calls();
+			const calls = afterCalls.slice(beforeCalls.length);
+			assert.match(calls, /--project-name app .* run --rm -T database-migration$/mu);
+			// v0.9.0 runs the worker; it keeps running.
+			assert.doesNotMatch(calls, / stop | up /u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
 	"a worker that cannot be stopped leaves every stack, the applied release and the tooling untouched",
 	reconcilerSubprocess,
 	async () => {
@@ -1229,7 +1312,7 @@ await test(
 			assert.doesNotMatch(await fixture.calls(), / pull | up | stop /u);
 
 			await fixture.retainLock("v0.9.0", previous.commit);
-			const result = fixture.run();
+			const result = fixture.run({ postgresRunning: true });
 			assert.equal(result.status, 0, result.stderr);
 			const record = await readApplied(path.join(directory, "applied.json"));
 			assert.equal(record?.release, "v1.0.0");
@@ -1254,6 +1337,12 @@ await test(
 			// The running worker keeps working while every target image downloads.
 			assert.equal(pulls.length, 3, lines.join("\n"));
 			assert.ok(lastRender < Math.min(...pulls) && Math.max(...pulls) < stop, lines.join("\n"));
+			// PostgreSQL runs, so the migration leaves it to the `up` that replaces the roles.
+			const migration = lines.findIndex((line) =>
+				line.endsWith(" run --rm -T --no-deps database-migration"),
+			);
+			// The previous worker keeps working until the migration ends.
+			assert.ok(Math.max(...pulls) < migration && migration < stop, lines.join("\n"));
 			assert.ok(stop < firstUp, lines.join("\n"));
 			assert.match(lines[firstUp] ?? "", /--project-name core .* up .* nats-server$/u);
 		} finally {
@@ -1544,15 +1633,16 @@ await test(
 			assert.doesNotMatch(calls, imageOrServiceChanges);
 			assert.deepEqual(await host.record(), reapplied);
 
-			// A hold is accepted without becoming the request that runs, in a record of either kind.
+			// Freezing what runs restarts nothing and becomes the request that runs.
 			await host.promote(built, { freeze: true });
-			assert.match(host.apply(), /No change: channel is frozen/u);
-			const held = await host.record();
-			assert.deepEqual(held, { ...reapplied, channelCommit: held?.channelCommit });
-			await writeFile(appliedFile, JSON.stringify({ ...held, channelIdentity: undefined }));
-			assert.match(host.apply(), /No change: channel is frozen/u);
-			const stillHeld = await host.record();
-			assert.equal(stillHeld?.channelIdentity, undefined);
+			calls = await callsDuring(() => {
+				assert.match(host.apply(), /No change: already running/u);
+			});
+			assert.doesNotMatch(calls, imageOrServiceChanges);
+			const frozen = await host.record();
+			assert.equal(frozen?.release, built);
+			assert.notEqual(frozen.channelIdentity, reapplied.channelIdentity);
+			assert.match(host.apply(), /No change: already running/u);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -1682,16 +1772,18 @@ await test("only images of this deployment's repositories that no kept lock name
 	assert.deepEqual(
 		unkeptImages(
 			[
-				{ repository: "ghcr.io/o/application-server", digest: sha("1"), id: "one" },
-				{ repository: "ghcr.io/o/application-server", digest: sha("4"), id: "four" },
-				{ repository: "ghcr.io/o/application-server", digest: sha("5"), id: "five" },
+				{ tag: "<none>", repository: "ghcr.io/o/application-server", digest: sha("1"), id: "one" },
+				{ tag: "<none>", repository: "ghcr.io/o/application-server", digest: sha("4"), id: "four" },
+				{ tag: "<none>", repository: "ghcr.io/o/application-server", digest: sha("5"), id: "five" },
 				// Listed under a platform digest, but the same image as a kept index.
-				{ repository: "ghcr.io/o/postgres", digest: sha("8"), id: "three" },
+				{ tag: "<none>", repository: "ghcr.io/o/postgres", digest: sha("8"), id: "three" },
 				// Docker lists a Docker Hub image without its registry and namespace.
-				{ repository: "traefik", digest: sha("2"), id: "two" },
-				{ repository: "traefik", digest: sha("6"), id: "six" },
+				{ tag: "<none>", repository: "traefik", digest: sha("2"), id: "two" },
+				{ tag: "<none>", repository: "traefik", digest: sha("6"), id: "six" },
+				// A tagged image is another workload's, even in a repository a lock names.
+				{ tag: "v3.7.4", repository: "traefik", digest: sha("9"), id: "nine" },
 				// Nothing the locks name: another workload's image is never this host's to remove.
-				{ repository: "redis", digest: sha("7"), id: "seven" },
+				{ tag: "<none>", repository: "redis", digest: sha("7"), id: "seven" },
 			],
 			kept,
 			new Set(["three"]),
@@ -1699,7 +1791,11 @@ await test("only images of this deployment's repositories that no kept lock name
 		[`ghcr.io/o/application-server@${sha("5")}`, `traefik@${sha("6")}`],
 	);
 	assert.deepEqual(
-		unkeptImages([{ repository: "redis", digest: sha("7"), id: "seven" }], [], new Set()),
+		unkeptImages(
+			[{ tag: "<none>", repository: "redis", digest: sha("7"), id: "seven" }],
+			[],
+			new Set(),
+		),
 		[],
 	);
 	assert.deepEqual(lockImages([`HEPHAESTUS_RELEASE_COMMIT=${"c".repeat(40)}\nX=a@${sha("1")}\n`]), [

@@ -124,6 +124,19 @@ groups:
           severity: warning
         annotations:
           summary: A scraped webhook receiver exports no stream poll age
+      - alert: HephaestusWebhookPublishFailing
+        expr: sum(increase(webhook_publish_total{job="hephaestus",outcome="failure"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The webhook receiver cannot store deliveries on the broker
+      - alert: HephaestusWebhookEventsUnrecovered
+        expr: max(github_webhook_unrecovered{job="hephaestus"}) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: GitHub events failed every delivery attempt and were not received
       - alert: HephaestusBudgetExhausted
         expr: sum(increase(llm_budget_exhausted_total{job="hephaestus"}[10m])) > 0
         labels:
@@ -227,7 +240,7 @@ These boundaries have their own guard:
 - Tomcat's request parser, `org.apache.coyote.http11.Http11Processor`, logs at `WARN` and above only.
   At `INFO` and `DEBUG` it writes the raw target of a request that it cannot parse, query string included.
 
-When the database migration stops at startup because the changelog fails validation or a changeset precondition fails, the `APPLICATION FAILED TO START` record gives the reason in its message.
+When the [database migration](./runtime-roles#database-migrations) stops because the changelog fails validation or a changeset precondition fails, its `APPLICATION FAILED TO START` record gives the reason in its message.
 An example is a database from before v0.77.4 that needs the [baseline synchronization runbook](./liquibase-baseline-runbook.md).
 A changeset precondition that cannot run, or a failed migration statement, quotes the driver message, so its record names the exception class only.
 
@@ -561,7 +574,7 @@ process termination can all leave partial coverage. A trace describes when calls
 they ended. It is not a record of what a review read or said.
 
 Durable review records retain admitted results, their problems and citation checks, not raw inputs,
-model requests or session transcripts. `AGENT_PAYLOAD_RETENTION` strips diagnostic job output.
+model requests or session transcripts. The [payload retention](./data-retention#postgresql) strips diagnostic job output.
 
 The worker can separately retain bounded debug session transcripts. The
 [retention decision](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-09-debug-transcripts)

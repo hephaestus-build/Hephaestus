@@ -62,7 +62,7 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param initDefault whether to initialize a default GitHub PAT workspace at startup (default: {@code false})
  * @param defaultProperties configuration for the default GitHub workspace; required when {@code initDefault} is {@code true}
- * @param initGitlabDefault whether to initialize a default GitLab PAT workspace at startup (default: {@code false})
+ * @param initGitlabDefault Creates a default GitLab workspace with a personal access token at startup.
  * @param gitlabDefault configuration for the default GitLab workspace; required when {@code initGitlabDefault} is {@code true}
  * @see DefaultProperties
  */

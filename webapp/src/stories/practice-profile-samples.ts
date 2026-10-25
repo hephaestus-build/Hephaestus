@@ -51,6 +51,7 @@ function card(
 		reviewedWork: work.map((ref, index) => ({
 			ref,
 			date: new Date(now - (hoursAgo + 24 * (work.length - index)) * HOUR),
+			outcome: "NOT_MET" as const,
 		})),
 		cleanWork: clean.map((ref, index) => ({
 			ref,

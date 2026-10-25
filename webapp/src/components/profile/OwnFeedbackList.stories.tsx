@@ -55,6 +55,42 @@ export const Default: Story = {
 	},
 };
 
+/**
+ * Feedback that never reached the reader is not listed: a withheld, awaiting, rejected or failed
+ * piece is not shown as posted on the work, even with a recorded comment link.
+ */
+export const OnlyDeliveredFeedback: Story = {
+	args: {
+		feedback: [
+			ratedHelpful,
+			...(["WITHHELD", "AWAITING_APPROVAL", "REJECTED", "FAILED"] as const).map((state, index) =>
+				ownFeedback(`00000000-0000-4000-8000-0000000006a${index}`, {
+					state,
+					deliveredAt: null,
+					copies: detailFeedback.copies,
+				}),
+			),
+		],
+	},
+	play: async ({ canvas }) => {
+		const list = canvas.getByRole("list", { name: "Your feedback" });
+		await expect(list.querySelectorAll(":scope > li")).toHaveLength(1);
+		await expect(canvas.getAllByText("On the work")).toHaveLength(1);
+	},
+};
+
+/** Nothing reached the reader: no list at all, not an empty one. */
+export const NothingDelivered: Story = {
+	args: {
+		feedback: [
+			ownFeedback("00000000-0000-4000-8000-0000000006b0", { state: "WITHHELD", deliveredAt: null }),
+		],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("list", { name: "Your feedback" })).toBeNull();
+	},
+};
+
 export const RecordsAResponse: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Addressed" }));

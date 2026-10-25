@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -107,42 +108,102 @@ public class ReviewAssignmentQueryService implements ReviewAssignmentQuery {
      */
     @Override
     public List<Retained> retained(long workspaceId, UUID reviewId, UUID jobId, Collection<ReviewAssignmentId> ids) {
-        if (ids.stream().anyMatch(id -> !id.reviewId().equals(reviewId))) return List.of();
-        var review = reviews.findByIdAndWorkspaceId(reviewId, workspaceId);
-        if (review.isEmpty()) return List.of();
-        List<ReviewItem> rows;
-        if (ids.isEmpty()) {
-            rows = items.findByWorkspaceIdAndReviewIdAndJobIdOrderByPracticeIdAscItemIdAsc(
-                    workspaceId, reviewId, jobId);
-        } else {
-            var wanted = Set.copyOf(ids);
-            var itemIds = ids.stream().map(ReviewAssignmentId::itemId).collect(Collectors.toSet());
-            rows = items.findByWorkspaceIdAndReviewIdAndItemIdIn(workspaceId, reviewId, itemIds).stream()
-                    .filter(row ->
-                            wanted.contains(new ReviewAssignmentId(reviewId, row.getPracticeId(), row.getItemId())))
-                    .sorted(Comparator.comparingLong(ReviewItem::getPracticeId)
-                            .thenComparingLong(ReviewItem::getItemId))
-                    .toList();
-            if (rows.size() != wanted.size()) return List.of();
+        return retained(workspaceId, List.of(new RetainedRun(reviewId, jobId, ids)))
+                .getOrDefault(jobId, List.of());
+    }
+
+    @Override
+    public Map<UUID, List<Retained>> retained(long workspaceId, Collection<RetainedRun> runs) {
+        var readable = runs.stream()
+                .filter(run -> run.ids().stream().allMatch(id -> id.reviewId().equals(run.reviewId())))
+                .toList();
+        if (readable.isEmpty()) return Map.of();
+        var reviewById = reviews
+                .findByWorkspaceIdAndIdIn(
+                        workspaceId,
+                        readable.stream().map(RetainedRun::reviewId).distinct().toList())
+                .stream()
+                .collect(Collectors.toMap(Review::getId, Function.identity()));
+        // Only each run's own rows: a scan's review holds every file it lists, and a run reviews one of them.
+        var known = readable.stream()
+                .filter(run -> reviewById.containsKey(run.reviewId()))
+                .toList();
+        Map<ReviewItem.Id, ReviewItem> selected = new LinkedHashMap<>();
+        var keyed = known.stream()
+                .flatMap(run -> run.ids().stream())
+                .map(id -> new ReviewedItem(id.reviewId(), id.itemId()))
+                .distinct()
+                .toList();
+        if (!keyed.isEmpty())
+            items.findByWorkspaceIdAndReviewedItems(
+                            workspaceId,
+                            keyed.stream().map(ReviewedItem::reviewId).toArray(UUID[]::new),
+                            keyed.stream().map(ReviewedItem::itemId).toArray(Long[]::new))
+                    .forEach(row -> selected.put(
+                            new ReviewItem.Id(row.getReviewId(), row.getPracticeId(), row.getItemId()), row));
+        var bound = known.stream()
+                .filter(run -> run.ids().isEmpty())
+                .map(RetainedRun::jobId)
+                .toList();
+        if (!bound.isEmpty())
+            items.findByWorkspaceIdAndJobIdIn(workspaceId, bound)
+                    .forEach(row -> selected.put(
+                            new ReviewItem.Id(row.getReviewId(), row.getPracticeId(), row.getItemId()), row));
+        Map<UUID, List<ReviewItem>> rowsByReview =
+                selected.values().stream().collect(Collectors.groupingBy(ReviewItem::getReviewId));
+        var refs = itemQuery.findAll(
+                workspaceId,
+                rowsByReview.values().stream()
+                        .flatMap(List::stream)
+                        .map(ReviewItem::getItemId)
+                        .distinct()
+                        .toList());
+        Map<UUID, List<Retained>> retained = new HashMap<>();
+        for (var run : readable) {
+            var review = reviewById.get(run.reviewId());
+            if (review == null) continue;
+            var reviewRows = rowsByReview.getOrDefault(run.reviewId(), List.of());
+            List<ReviewItem> rows;
+            if (run.ids().isEmpty()) {
+                rows = reviewRows.stream()
+                        .filter(row -> run.jobId().equals(row.getJobId()))
+                        .sorted(BY_ASSIGNMENT)
+                        .toList();
+            } else {
+                var wanted = Set.copyOf(run.ids());
+                rows = reviewRows.stream()
+                        .filter(row -> wanted.contains(
+                                new ReviewAssignmentId(run.reviewId(), row.getPracticeId(), row.getItemId())))
+                        .sorted(BY_ASSIGNMENT)
+                        .toList();
+                if (rows.size() != wanted.size()) continue;
+            }
+            attributed(run.reviewId(), review.getKind() == ReviewKind.SCAN, rows, refs)
+                    .ifPresent(list -> retained.put(run.jobId(), list));
         }
-        boolean scan = review.orElseThrow().getKind() == ReviewKind.SCAN;
-        Map<Long, Optional<ItemRef>> refs = new HashMap<>();
+        return retained;
+    }
+
+    private static final Comparator<ReviewItem> BY_ASSIGNMENT =
+            Comparator.comparingLong(ReviewItem::getPracticeId).thenComparingLong(ReviewItem::getItemId);
+
+    /** The run's rows as retained assignments, or empty when a row's item or attribution cannot be read. */
+    private Optional<List<Retained>> attributed(
+            UUID reviewId, boolean scan, List<ReviewItem> rows, Map<Long, ItemRef> refs) {
         var retained = new ArrayList<Retained>();
         for (var row : rows) {
-            var ref = refs.computeIfAbsent(row.getItemId(), itemId -> itemQuery.find(workspaceId, itemId));
-            if (ref.isEmpty()) return List.of();
+            var ref = refs.get(row.getItemId());
+            if (ref == null) return Optional.empty();
             Long developer = null;
             if (!scan) {
                 var named = attribution(row.getDetail());
-                if (named.isEmpty()) return List.of();
+                if (named.isEmpty()) return Optional.empty();
                 developer = named.orElseThrow().developerId();
             }
             retained.add(new Retained(
-                    new ReviewAssignmentId(reviewId, row.getPracticeId(), row.getItemId()),
-                    ref.orElseThrow(),
-                    developer));
+                    new ReviewAssignmentId(reviewId, row.getPracticeId(), row.getItemId()), ref, developer));
         }
-        return List.copyOf(retained);
+        return Optional.of(List.copyOf(retained));
     }
 
     /**

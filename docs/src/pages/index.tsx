@@ -22,6 +22,7 @@ const guides = [
 			{ label: "Activity", to: "/user/activity" },
 			{ label: "Practice feedback", to: "/user/ai-code-review" },
 			{ label: "Talk with Heph", to: "/user/ai-mentor" },
+			{ label: "Chrome extension", to: "/user/browser-extension" },
 		],
 	},
 	{
@@ -54,14 +55,14 @@ function HomepageHeader() {
 			<div className="container">
 				<div className={styles.heroGrid}>
 					<div className={styles.heroCopy}>
-						<span className={styles.heroKicker}>Documentation</span>
+						<span className={styles.heroKicker}>Hephaestus documentation</span>
 						<Heading as="h1" className={styles.heroTitle}>
-							Hephaestus
+							Learn from the work you’re already doing
 						</Heading>
 						<p className={styles.heroSubtitle}>
-							An open-source AI mentor for software teams. It reads the work developers already do
-							against the engineering practices their project cares about, and writes back feedback
-							they can act on.
+							Hephaestus is an open-source AI mentor for software teams. It checks the issues, pull
+							requests, and reviews that your team already writes against the engineering practices
+							that you choose. Each developer gets feedback with evidence and a next step.
 						</p>
 						<div className={styles.heroActions}>
 							<Link className="button button--primary button--lg" to="/user/overview">
@@ -76,8 +77,8 @@ function HomepageHeader() {
 						<ThemedImage
 							sources={{ light: feedbackSceneLight, dark: feedbackSceneDark }}
 							width={1792}
-							height={1412}
-							alt="Four cards from one change — an issue, a pull request, a review and the merge — each with the practice feedback Hephaestus attached to it."
+							height={1426}
+							alt="Four cards from one change: an issue, a pull request, a review and the merge. Each card has the practice feedback that Hephaestus attached to it."
 						/>
 					</figure>
 				</div>

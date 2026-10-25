@@ -1,5 +1,6 @@
 /** Configure the Vite+ dispatcher during install without changing local hook preferences. */
 import { execFileSync, spawnSync } from "node:child_process";
+import path from "node:path";
 
 import { CAPTURE_LIMIT_BYTES, repositoryCli } from "./lib/process.ts";
 
@@ -31,8 +32,24 @@ function git(...args: string[]): string {
 	}
 }
 
+/**
+ * Whether `core.hooksPath` names some checkout's dispatcher by an absolute path. Every worktree
+ * shares that setting, and Git resolves only a relative one against the worktree it runs in, so an
+ * absolute one runs a single checkout's dispatcher, hooks and launcher in all of them. Older Vite+
+ * releases wrote it, and `vp config` keeps a path that is already set.
+ */
+export function namesAnotherDispatcher(configured: string): boolean {
+	// The rule is the same on every host, whichever platform wrote the path.
+	const absolute = path.posix.isAbsolute(configured) || path.win32.isAbsolute(configured);
+	return absolute && /[\\/]\.vite-hooks[\\/]_[\\/]?$/u.test(configured);
+}
+
 // An image build or a source tarball has no work tree, and no hooks to enable.
-if (git("rev-parse", "--is-inside-work-tree") === "true") {
+if (import.meta.main && git("rev-parse", "--is-inside-work-tree") === "true") {
+	// Unset rather than rewritten, so `vp config` keeps a `vp hooks disable` preference.
+	if (namesAnotherDispatcher(git("config", "--local", "--get", "core.hooksPath"))) {
+		git("config", "--local", "--unset", "core.hooksPath");
+	}
 	const enabled = spawnSync(
 		process.execPath,
 		[repositoryCli(), "config", "--no-agent", "--hooks-dir", HOOKS_DIR],

@@ -71,7 +71,7 @@ it("names the saved choice when no Heph model is set up for it", async () => {
 		),
 		...new MentorFake().handlers(),
 	);
-	renderRouteAtWithRouter("/w/acme/mentor");
+	const { queryClient } = renderRouteAtWithRouter("/w/acme/mentor");
 	await screen.findByRole(
 		"heading",
 		{ name: "Heph is not set up for your AI choice yet" },
@@ -83,6 +83,9 @@ it("names the saved choice when no Heph model is set up for it", async () => {
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
 		"/w/acme/onboarding?returnTo=/w/acme/mentor",
 	);
+	// The empty conversation under the notice adds no second empty state: the notice says it all.
+	await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+	expect(screen.queryByText("No messages yet")).toBeNull();
 });
 
 it("says Heph is not set up, and offers no choice to change, to a member without a choice whom no model serves", async () => {

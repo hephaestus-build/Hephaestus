@@ -15,7 +15,7 @@ jobs:
       ${{ github.event.workflow_run.conclusion == 'success'
         && github.event.workflow_run.event == 'push' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       actions: write # dispatch the promotion workflow
     steps:

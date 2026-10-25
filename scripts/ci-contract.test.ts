@@ -34,6 +34,20 @@ function job(source: string, name: string): string {
 	return match[0];
 }
 
+/**
+ * Every number in a `timeout-minutes` value. A quoted number counts too, because `fromJSON('5')`
+ * yields 5, so a number that is not a limit can only make the check stricter.
+ */
+function limitMinutes(limit: unknown): number[] {
+	if (typeof limit === "number") {
+		return [limit];
+	}
+	if (typeof limit !== "string") {
+		return [];
+	}
+	return [...limit.matchAll(/\d+/gu)].map(Number);
+}
+
 function pathFilter(source: string, name: string): string {
 	const match = new RegExp(
 		`^            ${name}:\\n(?:[\\s\\S]*?)(?=^            [\\w-]+:\\s*$)`,
@@ -822,12 +836,19 @@ void describe("CI contract", () => {
 				`${event} with ci:full ${label}`,
 			);
 			// A duplicate is skipped only without the opt-in, so a re-run after the label runs the tier.
+			// A read that succeeds also reports the preview label, here absent.
+			const preview = full === undefined ? undefined : "false";
 			assert.equal(
-				evaluateTierOutput(skip, event, { full }),
+				evaluateTierOutput(skip, event, { full, preview }),
 				skipped,
 				`duplicate skip, ${event} ${label}`,
 			);
 		}
+		// A labelled preview repeats a tree whose earlier run may have published no image.
+		assert.equal(
+			evaluateTierOutput(skip, "pull_request", { full: "false", preview: "true" }),
+			"false",
+		);
 		// A change to the tier's own inputs runs it on the pull request, label or not.
 		for (const filter of ["queue-tier-inputs", "test-config", "build-config"]) {
 			assert.equal(
@@ -918,14 +939,66 @@ void describe("CI contract", () => {
 		// The preview label is an explicit opt-in, and a release candidate always builds its evidence.
 		const labelled = { full: "false", preview: "true", pullRequest: draft };
 		assert.equal(evaluateTierOutput(outputs("draft"), "pull_request", labelled), "false");
-		assert.equal(evaluateTierOutput(outputs("previews"), "pull_request", labelled), "true");
+		assert.equal(evaluateTierOutput(outputs("head-images"), "pull_request", labelled), "true");
 		assert.equal(
-			evaluateTierOutput(outputs("previews"), "pull_request", {
+			evaluateTierOutput(outputs("head-images"), "pull_request", {
 				full: "false",
 				pullRequest: draft,
 			}),
 			"false",
 		);
+		// A pull request builds images only for its preview, the host boot smoke or release evidence;
+		// the merge group builds every other changed image. An unreadable label builds them, except on
+		// a draft. A fork builds none.
+		const ready = { head: { repo: { full_name: "owner/repo" } } };
+		const fork = { head: { repo: { full_name: "fork/repo" } } };
+		for (const [event, run, images, head] of [
+			["pull_request", { preview: "false", pullRequest: ready }, "false", "false"],
+			["pull_request", { preview: "true", pullRequest: ready }, "true", "true"],
+			["pull_request", { pullRequest: ready }, "true", "true"],
+			["pull_request", { pullRequest: draft }, "false", "false"],
+			[
+				"pull_request",
+				{ preview: "false", pullRequest: ready, filter: { "supported-host-smoke": "true" } },
+				"true",
+				"true",
+			],
+			[
+				"pull_request",
+				{ preview: "false", pullRequest: draft, filter: { "supported-host-smoke": "true" } },
+				"false",
+				"false",
+			],
+			[
+				"pull_request",
+				{ preview: "false", pullRequest: ready, releaseCandidate: "true" },
+				"true",
+				"false",
+			],
+			[
+				"pull_request",
+				{ preview: "false", pullRequest: draft, releaseCandidate: "true" },
+				"true",
+				"false",
+			],
+			[
+				"pull_request",
+				{ preview: "true", pullRequest: fork, filter: { "supported-host-smoke": "true" } },
+				"false",
+				"false",
+			],
+			["merge_group", {}, "true", "false"],
+			["push", {}, "true", "false"],
+			["workflow_dispatch", {}, "true", "false"],
+		] as const) {
+			const label = `${event} ${JSON.stringify(run)}`;
+			assert.equal(evaluateTierOutput(outputs("images"), event, run), images, `images: ${label}`);
+			assert.equal(
+				evaluateTierOutput(outputs("head-images"), event, run),
+				head,
+				`head-images: ${label}`,
+			);
+		}
 		assert.equal(
 			evaluateTierOutput(outputs("draft"), "pull_request", {
 				full: "false",
@@ -2249,12 +2322,17 @@ void describe("CI contract", () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const orchestrator = parseDocument(source);
 		const condition = String(orchestrator.getIn(["jobs", "Supported-host-smoke", "if"]));
-		// A fork publishes no images, so there is nothing for this job to pull.
-		assert.match(condition, /needs\.detect-changes\.outputs\.previews == 'true'/u);
+		// A fork publishes no images, so there is nothing for this job to pull. The smoke selects the
+		// head images itself, so it does not wait for a preview label.
+		assert.match(condition, /needs\.detect-changes\.outputs\.head-images == 'true'/u);
+		const headImages = String(
+			orchestrator.getIn(["jobs", "detect-changes", "outputs", "head-images"]),
+		);
 		assert.match(
-			String(orchestrator.getIn(["jobs", "detect-changes", "outputs", "previews"])),
+			headImages,
 			/github\.event_name == 'pull_request' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository/u,
 		);
+		assert.match(headImages, /steps\.filter\.outputs\.supported-host-smoke == 'true'/u);
 		assert.match(condition, /needs\.detect-changes\.outputs\.supported-host-smoke == 'true'/u);
 
 		const smoke = job(source, "Supported-host-smoke");
@@ -3888,6 +3966,8 @@ void describe("CI contract", () => {
 		// step holds a runner for a working day and reports nothing until it is killed. A job that
 		// only `uses:` a reusable workflow runs no step here: its bound is on the callee's jobs.
 		const unbounded: string[] = [];
+		const tight: string[] = [];
+		const MIN_JOB_TIMEOUT_MINUTES = 15;
 		for (const [file, source] of await workflowSources()) {
 			const jobs = parseDocument(source).get("jobs");
 			if (!isMap(jobs)) {
@@ -3898,12 +3978,26 @@ void describe("CI contract", () => {
 				if (!isMap(definition) || !isSeq(definition.get("steps"))) {
 					continue;
 				}
-				if (definition.get("timeout-minutes") === undefined) {
+				const limit = definition.get("timeout-minutes");
+				if (limit === undefined) {
 					unbounded.push(`${file}#${String(entry.key)}`);
+				} else {
+					// A job limit below the floor can cancel a finished job (ci-cd.mdx § Parallelism and
+					// concurrency). An expression limit, such as a matrix-dependent one, is held to it
+					// through every number in it.
+					const minutes = limitMinutes(limit);
+					if (minutes.length === 0 || minutes.some((value) => value < MIN_JOB_TIMEOUT_MINUTES)) {
+						tight.push(`${file}#${String(entry.key)}: ${JSON.stringify(limit)}`);
+					}
 				}
 			}
 		}
 		assert.deepEqual(unbounded, [], "these jobs run steps without bounding how long they may run");
+		assert.deepEqual(
+			tight,
+			[],
+			`a job's limit is a hang detector of at least ${MIN_JOB_TIMEOUT_MINUTES} minutes (ci-cd.mdx)`,
+		);
 	});
 });
 

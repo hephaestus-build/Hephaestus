@@ -27,6 +27,12 @@ const LAYOUTS: Record<StandingSummaryLayout, { box: string; text: string; legend
 	},
 };
 
+/**
+ * The hairline frame of a level's summary beside its title. Practices across the workspace frames
+ * its split in it too, so the two pages' summaries read as one kind of box.
+ */
+export const SUMMARY_FRAME = "rounded-xl border bg-background p-4";
+
 export interface StandingSummaryBoxProps {
 	/** "12 practices in 4 groups", "5 practices in this group". */
 	label: string;
@@ -57,7 +63,7 @@ export function StandingSummaryBox({
 }: StandingSummaryBoxProps) {
 	const { box, text, legend } = LAYOUTS[layout];
 	return (
-		<div className={cn("items-center rounded-xl border bg-background p-4", box, className)}>
+		<div className={cn("items-center", SUMMARY_FRAME, box, className)}>
 			{isLoading ? (
 				<Skeleton className="size-15 shrink-0 rounded-full" />
 			) : (

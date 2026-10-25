@@ -1,9 +1,12 @@
 import { CircleDashedIcon } from "lucide-react";
 
 import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit } from "@/api/types.gen";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
 import type { FilterOption } from "@/components/common/FilterToggle";
 import { statusValues } from "@/components/common/status-def";
+import {
+	REVIEW_TIMEFRAME_DEFS,
+	type ReviewTimeframe,
+} from "@/components/practice-profile/practice-profile-search";
 import { count } from "@/components/practice-vocabulary/feedback-text";
 import {
 	isSettledStanding,
@@ -19,34 +22,32 @@ export type AcrossWorkspaceWindow = PracticesAcrossWorkspaceTiles["window"];
 
 interface WindowDef {
 	label: string;
-	shortLabel: string;
 	/** The window as the tail of a sentence: "with a standing so far". */
 	phrase: string;
 }
 
-function activityWindow(range: ActivityRange): WindowDef {
-	const def = ACTIVITY_RANGE_DEFS[range];
-	return { label: def.label, shortLabel: def.shortLabel, phrase: `in ${def.inSentence}` };
+/** A window that reaches back some days from now, named as the reviews list's timeframe names it. */
+function lastDays(timeframe: ReviewTimeframe): WindowDef {
+	const { days, label } = REVIEW_TIMEFRAME_DEFS[timeframe];
+	return { label, phrase: `in the last ${days} days` };
 }
 
 /**
- * Shortest first, as Apple Health orders its ranges, and in Activity's words for the same span. A
- * total `Record`, so a window the server adds fails to compile instead of rendering blank.
+ * Shortest first, as the timeframe of Reviews of your work orders and words them ("Last 7 days |
+ * Last 30 days | Last 90 days | All time"). A total `Record`, so a window the server adds fails to
+ * compile instead of rendering blank.
  */
 const WINDOW_DEFS: Record<AcrossWorkspaceWindow, WindowDef> = {
-	DAYS_30: activityWindow("30d"),
-	DAYS_90: activityWindow("90d"),
-	ALL_TIME: { label: "All time", shortLabel: "All time", phrase: "so far" },
+	DAYS_7: lastDays("7d"),
+	DAYS_30: lastDays("30d"),
+	DAYS_90: lastDays("90d"),
+	ALL_TIME: { label: "All time", phrase: "so far" },
 };
 
 export const WINDOW_VALUES = statusValues(WINDOW_DEFS);
 
 export const WINDOW_OPTIONS: readonly FilterOption<AcrossWorkspaceWindow>[] = WINDOW_VALUES.map(
-	(value) => ({
-		value,
-		label: WINDOW_DEFS[value].label,
-		shortLabel: WINDOW_DEFS[value].shortLabel,
-	}),
+	(value) => ({ value, label: WINDOW_DEFS[value].label }),
 );
 
 export const DEFAULT_WINDOW: AcrossWorkspaceWindow = "DAYS_30";
@@ -60,18 +61,6 @@ export const ACROSS_THE_WORKSPACE = "Across the workspace";
 
 /** One action from the group's header and from each practice row, so one label. */
 export const OPEN_IN_YOUR_PROFILE = "Open in your Practice profile";
-
-/** Delay before the page explains a slow read. */
-export const SLOW_LOAD_AFTER_MS = 4000;
-
-/**
- * Delay before the loading line shows and is announced: a read that is in by then only flashes
- * the skeletons, and the live region is already in the page when its message arrives.
- */
-export const LOADING_LINE_AFTER_MS = 200;
-
-/** The loading line above the skeletons, and the page's one announcement while it counts. */
-export const LOADING_STATUS = "Counting where everyone stands…";
 
 /** The page's one visible line under its title; {@link PAGE_INTRO} says the rest behind an (i). */
 export const PAGE_INTRO_SHORT = "Where the developers in this workspace stand. Not a grade.";
@@ -87,21 +76,6 @@ export const PAGE_INTRO: readonly InfoLine[] = [
 		text: "each standing comes from AI review of their work and can be wrong.",
 	},
 	{ term: "Your next step:", text: "it is in your Practice profile." },
-];
-
-/**
- * The loading line once the counts take longer than {@link SLOW_LOAD_AFTER_MS}; {@link SLOW_LOAD_NOTE}
- * says the rest behind an (i). Short enough to stay on one line at 390px.
- */
-export const SLOW_LOAD_SHORT = "Counting takes longer than usual…";
-
-/** Behind the (i) of the loading line. */
-export const SLOW_LOAD_NOTE: readonly InfoLine[] = [
-	{
-		term: "A large course:",
-		text: "counting where everyone in the workspace stands takes a moment.",
-	},
-	{ term: "Then:", text: "the page fills in when the counts are ready." },
 ];
 
 /** Keep completed queries fresh across window changes and brief focus changes. */
@@ -162,9 +136,13 @@ export const FIGURES_PLAIN: readonly InfoGroup[] = [
 	},
 ];
 
-/** The part of a split for developers with a standing elsewhere on the page but no verdict here. */
+/**
+ * The part of a split for developers with a standing elsewhere on the page but no verdict here. Its
+ * label is the Practice profile's "No standing yet"; the text alternative keeps the shorter "none
+ * yet" inside its list of counts.
+ */
 export const NONE_YET_SEGMENT = {
-	label: "None yet",
+	label: "No standing yet",
 	inSentence: "none yet",
 	icon: CircleDashedIcon,
 	colorClass: NEUTRAL_GREY,
@@ -174,8 +152,8 @@ export const NONE_YET_SEGMENT = {
  * The plain reading of a bar's colours, first in the legend's (i). Grey is no standing, never "okay".
  */
 export const NONE_YET_PLAIN: InfoLine = {
-	term: "Grey, None yet:",
-	text: "no standing yet. No review has judged this in their work, or there was nothing to judge. Grey does not mean okay.",
+	term: "Grey, No standing yet:",
+	text: "no review has judged this in their work, or there was nothing to judge. Grey does not mean okay.",
 };
 
 /** The lines in the legend's (i) after the colours, in the words of `docs/user/practice-profile.mdx` § The bars. */
@@ -183,7 +161,7 @@ export function barsHint(scope: StandingScope): string {
 	return [
 		`Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it.`,
 		"Each developer counts once, however much of their work was reviewed.",
-		"The You marker shows your part.",
+		"The You bracket spans your part: you are somewhere in it, not at one point.",
 		"Every bar shows all its counts, however small.",
 		"So a small count can let others tell where you stand.",
 	].join(" ");
@@ -197,7 +175,7 @@ export const splitTotalText = (split: WorkspaceSplit): string => developers(spli
 
 /**
  * The bar's text alternative: the reference group, every count in the registry's words and the
- * server's order, and the part the You marker is on, so the bar's text says what its legend says.
+ * server's order, and the part the You bracket spans, so the bar's text says what its legend says.
  */
 export function splitDescription(
 	split: WorkspaceSplit,
@@ -216,7 +194,7 @@ export function splitDescription(
 		return counts;
 	}
 	const yourPart = isSettledStanding(yourStanding)
-		? PRACTICE_GROUP_STANDING_DEFS[yourStanding].label
-		: NONE_YET_SEGMENT.inSentence;
-	return `${counts} The You marker is on ${yourPart}.`;
+		? `the ${PRACTICE_GROUP_STANDING_DEFS[yourStanding].label} part`
+		: "the part with no standing yet";
+	return `${counts} You are in ${yourPart}.`;
 }

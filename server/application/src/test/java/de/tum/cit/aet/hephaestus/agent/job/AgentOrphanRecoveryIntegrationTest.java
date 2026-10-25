@@ -1081,12 +1081,11 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             })
     @DisplayName("an unaccepted review on the work stays with its attempt when a fence does not hold")
     void shouldNotContinueAnUnacceptedReviewOnTheWorkWhenAFenceDoesNotHold(String why) {
-        int attempt =
-                switch (why) {
-                    case "continuing attempt" -> 1;
-                    case "retry limit reached" -> 5;
-                    default -> 0;
-                };
+        int attempt = switch (why) {
+            case "continuing attempt" -> 1;
+            case "retry limit reached" -> 5;
+            default -> 0;
+        };
         int admittedAt = why.equals("continuing attempt") ? 0 : attempt;
         if (why.equals("no retries")) when(properties.maxRetries()).thenReturn(0);
         UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), attempt);
@@ -1191,22 +1190,20 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         spentBeforeItWasLost(jobId, 2);
         ReviewJob owing = jobRepository.findById(jobId).orElseThrow();
         String stopped = failure("PUBLIC_REVIEW", "SAFETY");
-        byte @Nullable [] report =
-                switch (why) {
-                    case "no report" -> null;
-                    case "malformed report" -> "{\"admissionDigest\":".getBytes(StandardCharsets.UTF_8);
-                    case "trailing tokens" ->
-                        (new String(publicStop("SAFETY"), StandardCharsets.UTF_8) + " {}")
-                                .getBytes(StandardCharsets.UTF_8);
-                    case "not an object" -> ("[" + stopped + "]").getBytes(StandardCharsets.UTF_8);
-                    case "another admission" -> feedbackReport("another-admission-digest", stopped);
-                    case "no failures" -> "{\"admissionDigest\":\"admitted-digest\"}".getBytes(StandardCharsets.UTF_8);
-                    case "public budget" -> publicStop("BUDGET");
-                    case "unknown public reason" -> publicStop("TIME");
-                    case "conflicting public reasons" ->
-                        feedbackReport("admitted-digest", stopped, failure("PUBLIC_REVIEW", "BUDGET"));
-                    default -> throw new IllegalArgumentException("Unknown report case: " + why);
-                };
+        byte @Nullable [] report = switch (why) {
+            case "no report" -> null;
+            case "malformed report" -> "{\"admissionDigest\":".getBytes(StandardCharsets.UTF_8);
+            case "trailing tokens" ->
+                (new String(publicStop("SAFETY"), StandardCharsets.UTF_8) + " {}").getBytes(StandardCharsets.UTF_8);
+            case "not an object" -> ("[" + stopped + "]").getBytes(StandardCharsets.UTF_8);
+            case "another admission" -> feedbackReport("another-admission-digest", stopped);
+            case "no failures" -> "{\"admissionDigest\":\"admitted-digest\"}".getBytes(StandardCharsets.UTF_8);
+            case "public budget" -> publicStop("BUDGET");
+            case "unknown public reason" -> publicStop("TIME");
+            case "conflicting public reasons" ->
+                feedbackReport("admitted-digest", stopped, failure("PUBLIC_REVIEW", "BUDGET"));
+            default -> throw new IllegalArgumentException("Unknown report case: " + why);
+        };
 
         assertThat(continueComposition(owing, "live-owner", null, null, report)).isEqualTo(accepted);
 
@@ -1519,7 +1516,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
                 null,
                 Optional.empty(),
-                Optional.of(worker),
+                worker,
                 mock(ReviewJobClaimService.class),
                 recovery);
         executor.setCompositionContinuation(continuation);
@@ -1618,8 +1615,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 ReviewJobStatus.FAILED,
                 Instant.now(),
                 "The original capture no longer permits composition",
-                Set.of(ReviewJobStatus.RUNNING),
-                "next-worker"));
+                "next-worker",
+                claimed.getAttempt()));
         assertThat(failed).isEqualTo(1);
 
         completion.tick();

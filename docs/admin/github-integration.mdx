@@ -471,7 +471,7 @@ For a GitHub App:
 5. Select **Redeliver**.
 
 For a manual webhook, use **Settings → Webhooks → webhook → Recent Deliveries** in the organization or repository instead.
-[Webhook ingestion operations](./webhook-ingestion-operations) describes redelivery limits, including the time window and events GitHub will never redeliver.
+Hephaestus redelivers failed GitHub App deliveries of the past hour by itself. [Webhook ingestion operations](./webhook-ingestion-operations#failed-github-deliveries) describes the limits.
 Do not rely on scheduled polling to recover event-only history, such as CI state at merge or security-response timestamps.
 
 | Symptom                          | Check / action                                                                                                                                                                                                                                           |

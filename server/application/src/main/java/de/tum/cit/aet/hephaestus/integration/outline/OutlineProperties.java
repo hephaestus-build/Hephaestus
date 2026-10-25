@@ -20,8 +20,7 @@ import org.springframework.boot.convert.DurationUnit;
  *
  * @param sync      scheduling and pacing of the reconcile passes
  * @param cache     bound on the per-workspace mirrored-body footprint
- * @param staleness how long a document that has vanished upstream is kept as a tombstone before its row is
- *                  dropped entirely (defence-in-depth ceiling on stale rows; default 30 days)
+ * @param staleness How long a document that was deleted in Outline stays as a tombstone before its row is dropped.
  */
 @ConfigurationProperties(prefix = "hephaestus.integration.outline")
 public record OutlineProperties(
@@ -33,16 +32,14 @@ public record OutlineProperties(
      * {@code @Scheduled} SpEL in {@code OutlineDocumentSyncScheduler} (matching the Slack sibling), so they
      * are deliberately not bound here — a record component would be dead config.
      *
-     * @param exportBudget max document exports one workspace pass may spend (default 500). Bounds the
-     *                     cost of a huge corpus's first sync; a collection whose pass ran out of budget
-     *                     stays {@code PENDING} and the catch-up tick resumes it next cycle
+     * @param exportBudget Most document exports that one pass over a workspace may use. A collection that runs out of
+     *                     budget stays pending, and the next catch-up pass continues it.
      */
     public record Sync(@DefaultValue("500") int exportBudget) {}
 
     /**
-     * @param maxSizeMb per-workspace cap on the total size of mirrored Markdown bodies; when exceeded, the
-     *                  least-recently-materialized bodies are evicted (nulled) until the mirror is back under
-     *                  the cap. The row survives as a directory marker (default 200 MB)
+     * @param maxSizeMb Cap, for each workspace, on the total size of mirrored document bodies. Above it, the bodies
+     *                  that were materialized longest ago are evicted, and their rows stay.
      */
     public record Cache(@DefaultValue("200") int maxSizeMb) {}
 }

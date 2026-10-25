@@ -158,7 +158,9 @@ public class MentorTurnService {
     @Transactional
     public Optional<MentorTurn> claimNext(String workerId, Duration lease) {
         return turns.lockClaimable().map(turn -> {
-            turn.start(workerId, turns.databaseNow(), clock.instant().plus(lease));
+            // The lease ends on the database clock, the clock the server's reaper judges it by (expireLease).
+            Instant now = turns.databaseNow();
+            turn.start(workerId, now, now.plus(lease));
             changed(turn);
             return turn;
         });
@@ -167,7 +169,7 @@ public class MentorTurnService {
     @Transactional
     public MentorTurn renewLease(UUID turnId, int attempt, String workerId, Duration lease) {
         MentorTurn turn = held(turnId, attempt, workerId);
-        turn.renew(clock.instant().plus(lease));
+        turn.renew(turns.databaseNow().plus(lease));
         return turn;
     }
 
@@ -294,7 +296,7 @@ public class MentorTurnService {
     /** The turns whose lease expired, oldest first. */
     @Transactional(readOnly = true)
     public List<UUID> expiredLeases() {
-        return turns.findExpiredLeases(clock.instant());
+        return turns.findExpiredLeases(turns.databaseNow());
     }
 
     /**
@@ -308,7 +310,7 @@ public class MentorTurnService {
             return Optional.empty();
         }
         MentorTurn turn = locked.get();
-        Instant now = clock.instant();
+        Instant now = turns.databaseClock();
         Instant leasedUntil = turn.getLeasedUntil();
         if (!turn.isLeased() || leasedUntil == null || !leasedUntil.isBefore(now)) {
             return Optional.empty();

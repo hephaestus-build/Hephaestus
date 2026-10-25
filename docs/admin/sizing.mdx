@@ -22,6 +22,8 @@ It covers these memory limits, which are ceilings, not reservations:
 | the Heph host, one per worker  | 2 GiB        | Fixed. [Runtime roles](./runtime-roles.mdx#the-heph-host) gives the limits of the Heph host |
 
 With the defaults of the self-hosted Compose file, these limits add up to 15 GiB, about 16 GB.
+During an upgrade, the one-shot `database-migration` container runs beside the previous roles for a few minutes.
+Keep 1 GiB free for it (`DATABASE_MIGRATION_MEM_LIMIT`).
 PostgreSQL, NATS, Traefik, and the webapp have no limit.
 The rest of the 24 GB is for them and the operating system.
 
@@ -91,6 +93,10 @@ Without that evidence, keep the conservative defaults above.
 Preparing code evidence can hold two database connections.
 The worker also needs connections for its control traffic and to record results.
 Thus, the worker's pool must hold two connections for each review that can prepare code evidence at the same time, plus room for the rest.
+
+The scheduled GitHub and GitLab syncs together run at most four workspace syncs at the same time on each server.
+A workspace sync can hold two connections, so the scheduled syncs use at most eight connections of the server's pool.
+The rest stays free for requests.
 
 The worker profile gives the worker a pool of 32 connections, in Compose and on any other deployment.
 The other roles keep the application default of 20.

@@ -55,6 +55,18 @@ rename are evaluated. Git documents the underlying change statuses in
 It preserves a custom `core.hooksPath` and the local preference set by `vp hooks disable`.
 `vp hooks enable` re-enables the dispatcher. `vp hooks status` shows which hooks are active.
 
+Every worktree of a clone shares `core.hooksPath`.
+The install sets it to the dispatcher's path relative to the worktree root.
+Git resolves a relative hooks path against the worktree that runs the hook
+([`core.hooksPath`](https://git-scm.com/docs/git-config#Documentation/git-config.txt-corehooksPath)).
+So each worktree runs its own dispatcher, its own hooks and its own `vp`.
+The install removes an absolute dispatcher path, which older Vite+ releases wrote, before it configures the relative one.
+
+Each worktree needs its own `vp install`, which creates that worktree's dispatcher in `.vite-hooks/`.
+A worktree without one has no dispatcher, so Git runs no hook in it.
+`vp hooks status` reports the dispatcher as missing.
+It never falls back to another checkout's `vp` or to one on `PATH`, because that `vp` may not read this worktree's configuration.
+
 The pre-push hook runs `vp run check`.
 `git push --no-verify` skips it. With custom hooks, run
 `vp run check` yourself before pushing.

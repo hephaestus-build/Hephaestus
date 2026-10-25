@@ -251,6 +251,10 @@ From v0.86.2, `SHA256SUMS` covers that evidence set and is signed with the relea
 The archived evidence reader verifies its Cosign bundle before checking the bytes or evaluating native file identities, advisory snapshots and policy.
 Trusted capture validation runs before signing and does not authenticate an archive.
 
+Each release also carries `release-vX.Y.Z.intoto.jsonl`, the Sigstore bundle of its release attestation.
+The attestation is a signed in-toto statement over the image lock and every first-party image digest.
+The [release image lock](../admin/release-image-lock#independent-verification) page gives the command that checks it.
+
 ## Current migration-guide instructions
 
 Edit `scripts/templates/migration-guide.md` for current operator instructions, not `MIGRATION.md`.
@@ -292,12 +296,39 @@ No TTY (agents, CI)? `vp exec changeset` is interactive — write the file by ha
 
 :::caution Pre-1.0
 Never pick a `major` bump while the version is `0.x`.
-It would cut 1.0.0, which CI rejects. Breaking changes use `minor` instead.
+It would cut 1.0.0, and CI accepts that only from the planned changeset in [Cut 1.0.0](#cut-100).
+Breaking changes use `minor` instead.
 
 Thus, a pre-1.0 `minor` does **not** guarantee zero-action upgrades.
 If operator action is required, state it in the summary.
 Add a migration fragment exactly as for a `major`.
 :::
+
+### Cut 1.0.0
+
+1.0.0 is the one release that a `major` changeset cuts from `0.x`.
+`verify-changesets` accepts a `major` changeset before 1.0 only under the slug `release-1-0-0`.
+The usual rules still apply: the summary needs `**Operators:**`, and a migration fragment of the same slug must exist.
+After 1.0.0, a `major` changeset is ordinary.
+Only review stops an early `release-1-0-0`: it decides when 1.0 ships.
+
+1. Make sure that every action before the tag in the 1.0 tracking issue is done.
+2. Make sure that every change for 1.0 is on `main` and in the Version PR.
+3. In one pull request, add the changeset `release-1-0-0` with `"hephaestus": major`.
+   Its summary states what 1.0 promises.
+   Its `**Operators:**` line points to [Upgrade from 0.x to 1.0](/admin/upgrade-to-1-0).
+4. In the same pull request, add the migration fragment `release-1-0-0` with the `#### 🔴 …` entry that points to the same page.
+5. In the same pull request, replace each pre-1.0 statement with the 1.x statement.
+   Find them with `git grep -n -i 'pre-1\.0\|before 1\.0'`.
+   Skip release history: `CHANGELOG.md`, the version sections of `MIGRATION.md`, decision records and archives.
+   `MIGRATION.md` is generated from `scripts/templates/migration-guide.md`, so change the template.
+   A skill in `.claude/skills/` and its mirror in `.agents/skills/` must stay byte-identical.
+6. Merge that pull request.
+   From this merge until the cut, no 0.x release can ship: every release is 1.0.0.
+7. Wait until the Version PR shows the version `1.0.0`. Then merge it.
+   Its merge cuts `v1.0.0`.
+   The docs publish from `main`, so the 1.x statements are live from step 6. Keep the time between the two merges short.
+8. After `v1.0.0` is published, remove the 1.0 exception from `scripts/verify-changesets.ts` and its test.
 
 We version the whole app as one product. Changesets target only the root `hephaestus` package.
 We never version `webapp` and `docs` individually.
@@ -320,7 +351,6 @@ Hotfixes use the normal process: PR → changeset → merge → merge the Versio
 Each promotion that moves an environment records one GitHub deployment of the release or commit that its channel names.
 `scripts/record-deployment.ts` records it before the channel is published.
 Thus, a promotion that fails still leaves its record.
-A freeze moves nothing, so it records no deployment.
 If GitHub refuses the record, the promotion continues, and its run shows the error.
 The signed channel, not the record, decides what a host runs.
 

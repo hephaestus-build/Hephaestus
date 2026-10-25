@@ -20,14 +20,13 @@ public record PersonSourceNamespace(String providerType, String serverUrl) {
     }
 
     public static Optional<PersonSourceNamespace> from(String kind, @Nullable String configuredUrl) {
-        String url =
-                switch (kind) {
-                    case "GITHUB" -> configuredUrl == null ? GITHUB_DEFAULT_URL : configuredUrl;
-                    case "GITLAB" -> configuredUrl == null ? GITLAB_DEFAULT_URL : configuredUrl;
-                    case "SLACK" -> "https://slack.com";
-                    case "OUTLINE" -> configuredUrl;
-                    default -> throw new IllegalArgumentException("Unsupported source provider type");
-                };
+        String url = switch (kind) {
+            case "GITHUB" -> configuredUrl == null ? GITHUB_DEFAULT_URL : configuredUrl;
+            case "GITLAB" -> configuredUrl == null ? GITLAB_DEFAULT_URL : configuredUrl;
+            case "SLACK" -> "https://slack.com";
+            case "OUTLINE" -> configuredUrl;
+            default -> throw new IllegalArgumentException("Unsupported source provider type");
+        };
         return Optional.ofNullable(url).map(value -> new PersonSourceNamespace(kind, value));
     }
 }

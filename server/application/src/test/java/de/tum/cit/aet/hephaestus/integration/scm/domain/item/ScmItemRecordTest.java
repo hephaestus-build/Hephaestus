@@ -339,16 +339,15 @@ class ScmItemRecordTest extends BaseUnitTest {
         ItemRef item = kind.equals(ScmItemEvents.FILE)
                 ? new ItemRef(1, 2, kind, null, 4L, "src/a.ts")
                 : new ItemRef(1, 2, kind, 3L, kind.equals(ScmItemEvents.REPOSITORY) ? null : 4L, null);
-        ItemVersion version =
-                switch (value) {
-                    case "scm.file" -> new ItemVersion("scm.file:v1:" + BLOB + ":" + "e".repeat(64), HEAD);
-                    case "scm.repository" -> new ItemVersion(HEAD, null);
-                    case "scm.pull_request" -> ScmVersion.pullRequest(BASE, HEAD, "Title", null);
-                    case "scm.pull_request_review" ->
-                        ScmVersion.pullRequestReview(
-                                BASE, HEAD, "Title", null, new ScmVersion.ReviewContent(HEAD, "Review", "COMMENTED"));
-                    default -> new ItemVersion("opaque", null);
-                };
+        ItemVersion version = switch (value) {
+            case "scm.file" -> new ItemVersion("scm.file:v1:" + BLOB + ":" + "e".repeat(64), HEAD);
+            case "scm.repository" -> new ItemVersion(HEAD, null);
+            case "scm.pull_request" -> ScmVersion.pullRequest(BASE, HEAD, "Title", null);
+            case "scm.pull_request_review" ->
+                ScmVersion.pullRequestReview(
+                        BASE, HEAD, "Title", null, new ScmVersion.ReviewContent(HEAD, "Review", "COMMENTED"));
+            default -> new ItemVersion("opaque", null);
+        };
         return ItemFixtures.snapshot(item, Map.of())
                 .version(version)
                 .integration(new IntegrationRef(IntegrationKind.GITHUB, 1, null))

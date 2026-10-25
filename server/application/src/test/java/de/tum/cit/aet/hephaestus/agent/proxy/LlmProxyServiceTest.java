@@ -676,13 +676,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
             var tracer = new OtelTracer(provider.get("test"), new OtelCurrentTraceContext(), event -> {});
             var buffer =
                     DefaultDataBufferFactory.sharedInstance.wrap("data: response\n\n".getBytes(StandardCharsets.UTF_8));
-            Flux<DataBuffer> body =
-                    switch (outcome) {
-                        case "STREAM_FAILED" -> Flux.error(new IOException("private-provider-token"));
-                        // A typed timeout cause; the span keeps the closed outcome and never the words.
-                        case "TIMED_OUT" -> Flux.error(new TimeoutException("private-provider-token"));
-                        default -> Flux.just(buffer);
-                    };
+            Flux<DataBuffer> body = switch (outcome) {
+                case "STREAM_FAILED" -> Flux.error(new IOException("private-provider-token"));
+                // A typed timeout cause; the span keeps the closed outcome and never the words.
+                case "TIMED_OUT" -> Flux.error(new TimeoutException("private-provider-token"));
+                default -> Flux.just(buffer);
+            };
             var upstreamResponse = ClientResponse.create(HttpStatusCode.valueOf(status))
                     .header(HttpHeaders.CONTENT_TYPE, status == 200 ? "text/event-stream" : "application/json")
                     .body(body)

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ShieldCheck, ShieldOff } from "lucide-react";
-import { expect, fn, screen, userEvent } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { AdminAccountView } from "@/api/types.gen";
 
@@ -58,11 +58,28 @@ export const RevokeAdmin: Story = {
 	},
 };
 
-/** In flight — the confirm action is disabled to block a double-submit. */
+/** In flight: the confirm action blocks a double-submit, and Cancel still lets the reader leave (ADR 0027). */
 export const Pending: Story = {
 	args: { user: regularUser, icon: ShieldCheck, isPending: true },
-	play: async () => {
+	play: async ({ args }) => {
 		await screen.findByRole("alertdialog");
 		await expect(screen.getByRole("button", { name: /grant instance admin/iu })).toBeDisabled();
+		await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+		await expect(args.onOpenChange).toHaveBeenCalledWith(false, expect.anything());
+	},
+};
+
+/** The server refused: the reason stays in the open dialog. */
+export const Refused: Story = {
+	args: {
+		user: adminUser,
+		icon: ShieldOff,
+		errorMessage: "At least one instance admin must remain.",
+	},
+	play: async () => {
+		const dialog = within(await screen.findByRole("alertdialog"));
+		await expect(dialog.getByRole("alert")).toHaveTextContent(
+			"At least one instance admin must remain.",
+		);
 	},
 };

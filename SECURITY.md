@@ -31,6 +31,8 @@ We consider good-faith security research conducted under this policy to be autho
 
 Hephaestus is pre-1.0 and released continuously from `main`; **only the latest release is supported**. There are no maintenance branches or backports.
 
+From 1.0.0, the latest 1.x release is supported, and after 2.0.0 the last 1.x minor release gets security fixes for a fixed period, as the [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy#support-for-1x) states.
+
 ## Scope
 
 In scope: the code in this repository — the Spring Boot application server (including the webhook receiver), the React webapp, and the deployment/Docker configuration we ship.

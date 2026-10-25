@@ -1064,13 +1064,12 @@ public class GitLabWorkspaceInitializationService {
         if (handle == null || result.status() == SyncResult.Status.COMPLETED) {
             return;
         }
-        String outcome =
-                switch (result.status()) {
-                    case ABORTED_RATE_LIMIT -> " stopped at the provider rate limit.";
-                    case COMPLETED_WITH_WARNINGS -> " completed with warnings.";
-                    case ABORTED_ERROR -> " did not complete.";
-                    case COMPLETED -> throw new IllegalStateException("Completed result already excluded");
-                };
+        String outcome = switch (result.status()) {
+            case ABORTED_RATE_LIMIT -> " stopped at the provider rate limit.";
+            case COMPLETED_WITH_WARNINGS -> " completed with warnings.";
+            case ABORTED_ERROR -> " did not complete.";
+            case COMPLETED -> throw new IllegalStateException("Completed result already excluded");
+        };
         handle.reportWarnings(SyncProgress.ofResource(phase, operation + outcome, resource, null, null));
     }
 }

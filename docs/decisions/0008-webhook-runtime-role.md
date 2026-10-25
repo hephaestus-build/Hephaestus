@@ -106,7 +106,8 @@ Option 1. Concretely:
   `SERVER_PROPERTY`; only the application-server pod runs PAT workspace creation and GitHub App
   installation activation.
 - **Liquibase migrations remain owned by application-server.** The webhook profile sets
-  `spring.liquibase.enabled=false`. No race between the two pods at boot.
+  `spring.liquibase.enabled=false`. No race between the two pods at boot. (Superseded: the
+  [migrate run mode](../admin/runtime-roles.mdx#database-migrations) now migrates, and no role migrates at start.)
 - **DB connection retained on the webhook pod.** Cheaper than gating every workspace-context
   bean; the receiver itself never touches the DB. Operational cost: ~150 MB extra heap and one
   Hikari pool — acceptable.
@@ -476,3 +477,38 @@ The "mentor in-flight reaper" of § Consequences is now `MentorTurnLeaseReaper`.
 server-role scheduled task with a ShedLock lock, so the webhook role does not run it. The same applies
 to the new `WeeklyDigestSchedulingJob` and `SlackMentorReconciler`. The sticky cookie that § Revisit
 trigger names is removed: no mentor state needs request affinity.
+
+## Update — 2026-10-25 (failed GitHub deliveries are redelivered)
+
+Corrects fact 1 of § Context for GitHub. GitHub can redeliver deliveries of the past three days, and
+its documentation names no event that it excludes. Its App webhook API lists and redelivers them
+([Redelivering webhooks](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks),
+[REST API endpoints for GitHub App webhooks](https://docs.github.com/en/rest/apps/webhooks)). GitHub still
+never retries on its own, and it fails a delivery that gets no answer in 10 seconds
+([Best practices](https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks)).
+
+On staging, a broker stall of about one minute failed 36 GitHub deliveries. Every durable on the
+`github` stream was caught up, and the stream shed only acknowledged messages that were 27 days old.
+So the loss came from the edge, not from `discard: old` or the byte bound: the receiver cannot store
+a delivery while the broker does not answer, and GitHub does not ask again.
+
+Decision: the server role runs `GitHubWebhookRedelivery` every 10 minutes under a ShedLock lock. It
+follows GitHub's documented procedure: group the past hour's deliveries by GUID, and redeliver the
+latest attempt of each GUID whose original delivery is in that hour, has no success, and was not
+refused with a `4xx`, up to four attempts in total. The stream's duplicate window keeps a redelivery of
+a stored delivery from being stored twice within 10 minutes. `github.webhook.redelivery{outcome}`
+counts requested, refused and unreadable runs. The `github.webhook.unrecovered` gauge counts GitHub
+events that failed every attempt; it is the first loss signal measured where loss happens.
+
+Considered and rejected:
+
+- **`discard: new`.** It rejects publishes at the bound and stops ingestion for every workspace, as the
+  2026-08-22 update found. It also does not help while the broker stalls below the bound.
+- **Interest or work-queue retention.** It keeps the stream small, but it changes the stream's shape on
+  existing deployments and does not stop the loss: a stalled broker fails the delivery before any
+  retention applies.
+- **A receiver-side spool.** It adds a second store on the receiver to cover what GitHub already
+  keeps for three days.
+
+GitLab, Slack and Outline are not covered by this job. Their missed events recover through
+reconciliation, as before. Why the broker stalls is a sizing question, not part of this decision.

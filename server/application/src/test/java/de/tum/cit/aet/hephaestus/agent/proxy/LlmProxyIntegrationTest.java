@@ -734,13 +734,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private ReviewJob practiceScriptJob(String baseUrl) {
         Map<ModelKind, CatalogModel> catalog = new EnumMap<>(ModelKind.class);
         for (ModelKind kind : ModelKind.values()) {
-            LlmApiProtocol protocol =
-                    switch (kind) {
-                        case CHAT -> LlmApiProtocol.OPENAI_COMPLETIONS;
-                        case DECISION -> LlmApiProtocol.OPENAI_DECISIONS;
-                        case EMBEDDING -> LlmApiProtocol.OPENAI_EMBEDDINGS;
-                        case RERANKING -> LlmApiProtocol.COHERE_RERANK;
-                    };
+            LlmApiProtocol protocol = switch (kind) {
+                case CHAT -> LlmApiProtocol.OPENAI_COMPLETIONS;
+                case DECISION -> LlmApiProtocol.OPENAI_DECISIONS;
+                case EMBEDDING -> LlmApiProtocol.OPENAI_EMBEDDINGS;
+                case RERANKING -> LlmApiProtocol.COHERE_RERANK;
+            };
             String name = kind.name().toLowerCase(Locale.ROOT);
             LlmConnection connection = LlmCatalogTestFixtures.connection(name + "-" + System.nanoTime());
             connection.setBaseUrl(baseUrl);

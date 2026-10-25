@@ -17,7 +17,7 @@ In-place downgrades are unsupported.
 ## Validate the actual production data
 
 Use a restricted staging copy of production with the backup's access and retention rules.
-Starting the target release's application server with the production profile runs Spring Boot's Liquibase update against staging.
+Running the target release's [migrate run mode](./runtime-roles#database-migrations) with the production profile runs the Liquibase update against staging.
 The update must use that exact release's changelog, contexts, PostgreSQL image/extensions, secrets, and role configuration.
 
 1. Apply [pre-boot isolation](./production-operations-runbook#pre-boot-isolation--mandatory-for-every-restore) **before** restoring secrets or starting application code.
@@ -74,7 +74,7 @@ The commands below do not prepare existing databases for the PostgreSQL 18/Liqui
 :::caution CAUTION: Failed migration
 Do not clear checksums, edit released changelogs, or mark the changeset as run.
 Do not run an older binary against the partly migrated database.
-Do not release a Liquibase lock until you prove that no migrator is alive.
+Do not release a Liquibase lock by hand except as [One migration at a time](./runtime-roles#one-migration-at-a-time) allows.
 Removal of a stale lock does not repair a failed migration.
 :::
 
@@ -92,9 +92,11 @@ Removal of a stale lock does not repair a failed migration.
 12. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the [silent checklist](./production-operations-runbook#silent-deployment-checklist).
 13. Report actual recovery point/time and any lost writes.
 14. Preserve the failed database until investigation/retention permits removal.
-15. Before you resume reconciliation, make sure the channel matches the recovered release or is frozen.
-
-    Otherwise, the next tick can reapply the failed upgrade.
+15. Promote the recovered release, with **allow-rollback** if it is older than the failed upgrade.
+    Until the channel names it, the next tick can reapply the failed upgrade.
+16. When the promotion has published the channel, re-enable the reconcile timer.
+    The promotion's version check passes when the host applies the channel.
+    It fails if the timer stays off for 15 minutes.
 
 **Drill**
 

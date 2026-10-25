@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { paintedLayers } from "@/stories/focus";
 
 /**
  * The `⚠️ Diverges` axes under `ui/` whose loss no page would surface — a dropped variant still
@@ -296,14 +297,6 @@ export const BareTextareaHasNoEdgeOrRing: Story = {
 		await expect(extents.every((length) => px(length) === 0)).toBe(true);
 	},
 };
-
-// Tailwind composes a ring from five shadow slots, and a slot not in use serialises as a
-// zero-extent layer, so the layers that paint are the ones with any length above 0px. Layers
-// and the channels inside an `rgb(…)` are both comma-separated.
-const paintedLayers = (shadow: string) =>
-	shadow
-		.split(/,(?![^(]*\))/u)
-		.filter((layer) => (layer.match(/-?\d*\.?\d+px/gu) ?? []).some((length) => px(length) !== 0));
 
 export const OutlineMenuButtonRingsOnFocus: Story = {
 	render: () => (

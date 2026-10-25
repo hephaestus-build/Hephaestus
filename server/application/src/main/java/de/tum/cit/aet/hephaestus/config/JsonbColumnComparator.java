@@ -52,12 +52,11 @@ public class JsonbColumnComparator extends ColumnComparator {
     private boolean isEmptyObject(@Nullable Object value) {
         // PostgreSQL's column snapshot removes a JSONB literal's quotes and cast.
         @Nullable
-        String expression =
-                switch (value) {
-                    case DatabaseFunction function -> function.getValue();
-                    case String text -> text;
-                    case null, default -> null;
-                };
+        String expression = switch (value) {
+            case DatabaseFunction function -> function.getValue();
+            case String text -> text;
+            case null, default -> null;
+        };
         return "{}".equals(expression) || "'{}'".equals(expression) || "'{}'::jsonb".equals(expression);
     }
 }

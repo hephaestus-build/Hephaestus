@@ -8,6 +8,12 @@ import { TipPopover } from "@/components/common/TipPopover";
 export interface InfoTipProps {
 	/** Names the button and the explanation it opens, and heads the panel: "About your figures". */
 	label: string;
+	/**
+	 * What this (i) belongs to, after the label in the button's name only, where a page repeats the
+	 * same (i) once per card: "How this feedback resolves: <the card's headline>". The panel keeps
+	 * the short label as its heading.
+	 */
+	nameContext?: string;
 	/** The explanation the page keeps out of its running text, best as {@link InfoLines}. */
 	children: ReactNode;
 	className?: string;
@@ -90,7 +96,7 @@ export function InfoGroups({ groups }: { groups: readonly InfoGroup[] }) {
  * pointer, a keyboard and a touch screen all reach it ({@link TipPopover}). The trigger is
  * `StatusIcon`'s: a chromeless button with a 24 px target and the focus ring.
  */
-export function InfoTip({ label, children, className }: InfoTipProps) {
+export function InfoTip({ label, nameContext, children, className }: InfoTipProps) {
 	return (
 		<TipPopover
 			label={label}
@@ -98,7 +104,7 @@ export function InfoTip({ label, children, className }: InfoTipProps) {
 			trigger={
 				<button
 					type="button"
-					aria-label={label}
+					aria-label={nameContext === undefined ? label : `${label}: ${nameContext}`}
 					className={cn(
 						// 24 px drawn, as WCAG 2.2 SC 2.5.8 asks, and not widened by a pseudo-element: the
 						// legend's (i) ends its row, where a wider target would push the page sideways.

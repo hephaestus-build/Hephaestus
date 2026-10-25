@@ -22,8 +22,8 @@ import { output, run, succeeds } from "./lib/process.ts";
 export type Stack = "proxy" | "core" | "app";
 
 /**
- * The application server runs the Liquibase migration the webhook runtime in `core` reads, and the
- * edge comes last so it never routes to a stack that is still starting.
+ * The `app` stack's migration service applies the schema the webhook runtime in `core` waits for, and
+ * the edge comes last so it never routes to a stack that is still starting.
  */
 const STACK_ORDER: readonly Stack[] = ["app", "core", "proxy"];
 
@@ -35,6 +35,14 @@ const STACK_ORDER: readonly Stack[] = ["app", "core", "proxy"];
 const FOUNDATION: Partial<Record<Stack, readonly string[]>> = {
 	core: ["nats-server"],
 };
+
+/**
+ * The `app` stack's one-shot migration, run before the worker stops and any stack replaces its
+ * services (docs/admin/runtime-roles.mdx#database-migrations). `run` returns its exit status;
+ * `up --wait` returns once it starts, and `wait` fails once it has exited. A release from before the
+ * migrate run mode declares no such service.
+ */
+const MIGRATION_SERVICE = "database-migration";
 
 /**
  * A black-holed connection must not hold a tick until the unit's start timeout; the next tick
@@ -234,8 +242,8 @@ export function requestIdentity(channelJson: string, signature: string): string 
 /**
  * Whether the channel's request is the one `applied` records. Promoting another environment moves the
  * channel commit too, so only this channel's own request says whether anything was asked. A record
- * written before requests were kept has only the commit it accepted, and an unfrozen channel at that
- * commit is the request it applied.
+ * written before requests were kept has only the commit it accepted, and the channel at that commit
+ * is the request it applied.
  */
 function isAppliedRequest(
 	applied: AppliedState,
@@ -263,14 +271,14 @@ export function decide(
 			reason: `channel commit ${channelCommit.slice(0, 8)} does not descend from the last accepted channel`,
 		};
 	}
-	if (channel.freeze === true) {
-		return { action: "noop", reason: "channel is frozen" };
-	}
 	// A new request naming the release already applied is a re-promotion, and re-applying is how a
-	// host that was hand-patched during an incident converges.
+	// host that was hand-patched during an incident converges. A freeze only keeps automatic
+	// promotion away, so freezing what already runs asks the host for nothing, unless the same
+	// request also asks for the commit's database image.
+	const freezesWhatRuns = channel.freeze === true && channel.refreshDatabaseImage !== true;
 	if (
 		applied?.release === channel.release &&
-		isAppliedRequest(applied, channelCommit, channelIdentity)
+		(freezesWhatRuns || isAppliedRequest(applied, channelCommit, channelIdentity))
 	) {
 		return { action: "noop", reason: `already running ${channel.release}` };
 	}
@@ -449,9 +457,11 @@ export function lockImages(lockEnvs: readonly string[]): string[] {
 	);
 }
 
-/** One image as `docker image ls --digests` lists it. */
+/** One image as `docker image ls --all --digests` lists it. */
 export interface ListedImage {
 	repository: string;
+	/** `<none>` for an image pulled by digest, as every release image is. */
+	tag: string;
 	digest: string;
 	id: string;
 }
@@ -459,8 +469,9 @@ export interface ListedImage {
 /**
  * The images a host may remove: those of a repository a kept lock uses that are neither named by a
  * kept lock nor the same image as one it names. An image of any other repository is not this
- * deployment's to judge. The image ID decides sameness, because the digest Docker lists can be a
- * platform manifest's where the lock names the index.
+ * deployment's to judge, and so is a tagged image: a release image is pulled by digest and carries no
+ * tag. The image ID decides sameness, because the digest Docker lists can be a platform manifest's
+ * where the lock names the index.
  *
  * `docker image prune` cannot express this. Without `-a`, it removes only untagged images that
  * nothing references; with `-a`, it also removes the previous release's images and every idle image
@@ -480,9 +491,14 @@ export function unkeptImages(
 		named.add(`${repository}${reference.slice(at)}`);
 	}
 	return listed
-		.filter(({ repository, digest, id }) => {
+		.filter(({ repository, tag, digest, id }) => {
 			const name = repositoryName(repository);
-			return repositories.has(name) && !named.has(`${name}@${digest}`) && !keptIds.has(id);
+			return (
+				tag === "<none>" &&
+				repositories.has(name) &&
+				!named.has(`${name}@${digest}`) &&
+				!keptIds.has(id)
+			);
 		})
 		.map(({ repository, digest }) => `${repository}@${digest}`);
 }
@@ -534,9 +550,11 @@ async function removeUnkeptImages(keptLockEnvs: readonly string[]): Promise<numb
 			keptIds.add(id);
 		}
 	}
+	// Docker hides untagged images from the listing unless asked, and every release image is one.
 	const listing = await output("docker", [
 		"image",
 		"ls",
+		"--all",
 		"--digests",
 		"--no-trunc",
 		"--format",
@@ -549,6 +567,7 @@ async function removeUnkeptImages(keptLockEnvs: readonly string[]): Promise<numb
 		.filter((image) => typeof image.Digest === "string" && image.Digest.startsWith("sha256:"))
 		.map((image) => ({
 			repository: asString(image.Repository, "image repository"),
+			tag: asString(image.Tag, "image tag"),
 			digest: asString(image.Digest, "image digest"),
 			id: asString(image.ID, "image ID"),
 		}));
@@ -1055,6 +1074,27 @@ async function appliedWorker(
 		: undefined;
 }
 
+async function migrate(
+	releaseTree: string,
+	composeArgsByStack: ReadonlyMap<Stack, RenderedStack>,
+): Promise<void> {
+	const app = composeArgsByStack.get("app");
+	if (app?.services.includes(MIGRATION_SERVICE) !== true) {
+		return;
+	}
+	// `run` starts the dependencies, and recreates PostgreSQL if the release changed it, under the
+	// running roles. A running PostgreSQL is left to the `up` that replaces the roles.
+	const postgres = await output(
+		"docker",
+		[...app.composeArgs, "ps", "--status", "running", "--quiet", "postgres"],
+		{ cwd: releaseTree },
+	);
+	const deps = postgres.trim() === "" ? [] : ["--no-deps"];
+	await run("docker", [...app.composeArgs, "run", "--rm", "-T", ...deps, MIGRATION_SERVICE], {
+		cwd: releaseTree,
+	});
+}
+
 async function startStacks(
 	config: HostConfig,
 	releaseTree: string,
@@ -1132,16 +1172,9 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	}
 	if (decision.action === "noop") {
 		console.log(`No change: ${decision.reason}`);
-		// Unfrozen, a no-op means this request is the one that runs, which a record from before requests
-		// were kept learns here. A hold applies nothing, so it never becomes the request that runs.
-		await recordUnchanged(
-			config,
-			appliedFile,
-			applied,
-			channelCommit,
-			channel.freeze === true ? applied?.channelIdentity : channelIdentity,
-			startedAt,
-		);
+		// A no-op means this request is the one that runs, which a record from before requests were kept
+		// learns here.
+		await recordUnchanged(config, appliedFile, applied, channelCommit, channelIdentity, startedAt);
 		return;
 	}
 
@@ -1189,6 +1222,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		);
 	}
 	await pullStacks(releaseTree, composeArgsByStack);
+	await migrate(releaseTree, composeArgsByStack);
 	if (worker !== undefined) {
 		await run("docker", [...worker.composeArgs, "stop", WORKER_SERVICE], { cwd: worker.tree });
 	}

@@ -10,7 +10,7 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Instance-wide LLM knobs, bound from {@code hephaestus.llm.*}.
  *
- * @param displayCurrency the code USD spend figures are additionally shown in, or empty for USD only
+ * @param displayCurrency Code of the second currency in which spend in USD is also shown. Empty shows USD only.
  * @param egress          what the SSRF guard will let an admin point a provider connection at
  * @param fx              where the daily reference rates come from
  */
@@ -35,10 +35,9 @@ public record LlmProperties(
     public static final String ECB_DAILY_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
 
     /**
-     * @param allowLoopback whether {@code http://localhost}-style provider base URLs are accepted; belongs
-     *                      in local/dev profiles only, since it lets a workspace admin aim a "provider" at
-     *                      host-local services. Does not relax the unconditional private/link-local/CGNAT
-     *                      check
+     * @param allowLoopback Accepts provider base URLs on {@code http://localhost}. Use it only in local development,
+     *                      because it lets a workspace admin send provider requests to services on the host. The
+     *                      private, link-local and CGNAT checks still apply.
      */
     public record Egress(@DefaultValue("false") boolean allowLoopback) {}
 

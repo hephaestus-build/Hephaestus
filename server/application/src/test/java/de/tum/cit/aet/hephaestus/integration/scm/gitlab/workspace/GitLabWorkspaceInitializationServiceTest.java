@@ -352,13 +352,12 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             Repository found = createRepo("my-group/project-a");
             stubDiscovery(new GitLabSyncResult(status, List.of(found), 1, 1, 0, 0));
 
-            SyncResult expected =
-                    switch (status) {
-                        case COMPLETED_WITH_ERRORS -> SyncResult.completedWithWarnings(1);
-                        case ABORTED_RATE_LIMIT -> SyncResult.abortedRateLimit(1);
-                        case ABORTED_ERROR -> SyncResult.abortedError(1);
-                        case COMPLETED -> SyncResult.completed(1);
-                    };
+            SyncResult expected = switch (status) {
+                case COMPLETED_WITH_ERRORS -> SyncResult.completedWithWarnings(1);
+                case ABORTED_RATE_LIMIT -> SyncResult.abortedRateLimit(1);
+                case ABORTED_ERROR -> SyncResult.abortedError(1);
+                case COMPLETED -> SyncResult.completed(1);
+            };
             assertThat(initService.initialize(workspace)).isEqualTo(expected);
 
             verify(repositoryMonitors).monitorAll(workspace, List.of(found));

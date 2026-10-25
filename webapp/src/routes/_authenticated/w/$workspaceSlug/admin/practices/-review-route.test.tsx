@@ -519,6 +519,43 @@ describe("review route", () => {
 		);
 	});
 
+	it("deletes a recurring check only after the reader confirms, with its version as the ETag", async () => {
+		let schedules: ReviewSchedule[] = [reviewSchedule({ version: "5" })];
+		const deletes: (string | null)[] = [];
+		stubWorkspace([
+			http.get("*/workspaces/:workspaceSlug/practices/review-schedules", () =>
+				HttpResponse.json(schedules),
+			),
+			http.delete(
+				"*/workspaces/:workspaceSlug/practices/review-schedules/:scheduleId",
+				({ request }) => {
+					deletes.push(request.headers.get("If-Match"));
+					schedules = [];
+					return new HttpResponse(null, { status: 204 });
+				},
+			),
+		]);
+		renderRouteAt("/w/acme/admin/practices/review?section=automated-review");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole(
+				"button",
+				{ name: "Delete the recurring check on pull or merge requests" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Delete the recurring check on pull or merge requests?",
+		});
+		expect(deletes).toStrictEqual([]);
+
+		await user.click(within(dialog).getByRole("button", { name: "Delete recurring check" }));
+
+		await waitFor(() => expect(deletes).toStrictEqual(['"5"']));
+		await screen.findByText("Nothing is checked on a schedule", undefined, ROUTE_RENDER_WAIT);
+	});
+
 	it("saves and clears generated patterns through the settings API with its ETag", async () => {
 		const settings = stubSettings(reviewSettings({ generatedPaths: { "101": ["old/**"] } }));
 		stubWorkspace(settings.handlers(false));

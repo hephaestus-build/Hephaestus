@@ -113,6 +113,18 @@ public class ReviewIntegrationData {
         return new Scenario(workspace, account, practice, item);
     }
 
+    /** The same developer and practice in the same workspace, on another piece of work. */
+    @Transactional
+    public Scenario onOtherWork(Scenario s) {
+        var item = new Item();
+        item.setWorkspaceId(s.workspace().getId());
+        item.setKind(s.item().getKind());
+        item.setSourceId(ThreadLocalRandom.current().nextLong(1000000000000L, Long.MAX_VALUE));
+        item.setCreatedAt(Instant.now().minusSeconds(3600));
+        items.saveAndFlush(item);
+        return new Scenario(s.workspace(), s.account(), s.practice(), item);
+    }
+
     @Transactional
     public Account member(long workspaceId) {
         var workspace = workspaces.findById(workspaceId).orElseThrow();

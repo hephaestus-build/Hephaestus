@@ -23,13 +23,7 @@ import {
 } from "@/components/practice-focus/PracticeFocusFooter";
 import { EARLIER_REVIEWS_COUNTED } from "@/components/practice-vocabulary/standing-basis-defs";
 
-import {
-	FIGURES_LOAD_ERROR,
-	GROUPS_LOAD_ERROR,
-	LOADING_STATUS,
-	SLOW_LOAD_AFTER_MS,
-	SLOW_LOAD_SHORT,
-} from "./across-workspace-copy";
+import { FIGURES_LOAD_ERROR, GROUPS_LOAD_ERROR } from "./across-workspace-copy";
 import {
 	PracticesAcrossTheWorkspacePage,
 	type PracticesAcrossTheWorkspacePageProps,
@@ -63,6 +57,7 @@ const groupsSection = (canvas: {
 	getByRole: (role: "heading", options: { level: number; name: string }) => HTMLElement;
 }) => canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section");
 
+/** The note's title as it renders, with its period, so its absence is checked on the real words. */
 const EARLIER_NOTE = `${EARLIER_REVIEWS_COUNTED.title}.`;
 
 /** Presses an (i) and returns its panel, which opens in a portal outside the canvas. */
@@ -94,24 +89,32 @@ export const Default: Story = {
 		const table = groupsTable(canvas);
 		await expect(
 			table.getByRole("img", {
-				name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
+				name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 			}),
 		).toBeVisible();
 		// A group with parts of one, two and none draws like any other.
 		await expect(
 			table.getByRole("img", {
-				name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. The You marker is on none yet.",
+				name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. You are in the part with no standing yet.",
 			}),
 		).toBeVisible();
 		// Only the tiles read the window: the toggle sits in their section, and the bars name none.
 		await expect(figuresSection(canvas)).toContainElement(
 			canvas.getByRole("toolbar", { name: "Time range" }),
 		);
-		await expect(groupsSection(canvas)?.textContent).not.toMatch(/30 days|90 days|All time/u);
+		await expect(groupsSection(canvas)?.textContent).not.toMatch(
+			/7 days|30 days|90 days|All time/u,
+		);
 		// The open feedback reads now, whatever the window.
 		await expect(canvas.getByText("pieces open now")).toBeVisible();
 		// Every standing here is current, so the page says nothing about earlier reviews.
 		await expect(canvas.queryByText(EARLIER_NOTE)).toBeNull();
+		// Under the groups, one quiet line says that a group's color carries no rating.
+		const colorsNote = canvas.getByText(
+			"The colors of the group names only tell the groups apart. They are not a rating.",
+		);
+		await expect(colorsNote).toBeVisible();
+		await expect(groupsSection(canvas)).toContainElement(colorsNote);
 		await userEvent.click(
 			table.getByRole("button", { name: "Open group Packaging work for review" }),
 		);
@@ -139,7 +142,7 @@ export const OneDeveloper: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			groupsTable(canvas).getByRole("img", {
-				name: "1 developer in this workspace: 0 Needs attention, 1 Mixed feedback, 0 Going well, 0 none yet. The You marker is on Mixed feedback.",
+				name: "1 developer in this workspace: 0 Needs attention, 1 Mixed feedback, 0 Going well, 0 none yet. You are in the Mixed feedback part.",
 			}),
 		).toBeVisible();
 		await expect(canvas.getByText(/1 developer with a standing/u)).toBeVisible();
@@ -154,7 +157,7 @@ export const TwoDevelopers: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			groupsTable(canvas).getByRole("img", {
-				name: "2 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 1 Going well, 0 none yet. The You marker is on Going well.",
+				name: "2 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 1 Going well, 0 none yet. You are in the Going well part.",
 			}),
 		).toBeVisible();
 	},
@@ -176,21 +179,28 @@ export const ReaderNotCounted: Story = {
 
 /**
  * Some counted standings rest on earlier reviews: the page says so once, and the reader's own row
- * carries the same mark as their Practice profile, criteria unknown included.
+ * carries the same words as their Practice profile.
  */
 export const EarlierReviews: Story = {
 	args: { state: { status: "ready", overview: EARLIER_REVIEWS_WORKSPACE } },
 	play: async ({ canvas }) => {
+		// One quiet line, not an alert: nothing is wrong, so a screen reader is not interrupted.
 		await expect(canvas.getByText(EARLIER_NOTE)).toBeVisible();
-		const mark = groupsTable(canvas).getByRole("button", {
-			name: "Based on earlier reviews, criteria unknown",
-		});
-		await expect(mark).toBeVisible();
-		// Earlier assessments do not establish whether the current criteria are met.
-		await expect(mark).toHaveAccessibleDescription(
-			/They do not show whether the current criteria are met\./u,
+		await expect(canvas.queryByRole("alert")).toBeNull();
+		// Earlier assessments do not establish whether the current criteria are met; the words say so.
+		const mark = groupsTable(canvas).getByText(
+			"Based on earlier reviews, the criteria might have changed",
 		);
+		await expect(mark).toBeVisible();
+		// The words are the whole message, so none of them is cut off.
+		await expect(mark.scrollWidth).toBeLessThanOrEqual(mark.clientWidth);
 	},
+};
+
+/** On a phone, the mark still reads in full. */
+export const EarlierReviewsPhone: Story = {
+	...EarlierReviews,
+	globals: { viewport: { value: "phone390" } },
 };
 
 /** Nobody has a standing yet: no tile has a range, and no bar counts anybody. */
@@ -235,18 +245,10 @@ export const Empty: Story = {
 	args: { state: { status: "ready", overview: EMPTY_WORKSPACE } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
+		// No group, no colors to explain.
+		await expect(canvas.queryByText(/colors of the group names/u)).toBeNull();
 	},
 };
-
-/** The drawn loading line, found by the (i) it ends with. */
-async function loadingLine(canvas: { findByRole: typeof screen.findByRole }) {
-	const tip = await canvas.findByRole("button", { name: "About the wait" });
-	const line = tip.closest<HTMLElement>("[data-slot=loading-line]");
-	if (line === null) {
-		throw new Error("The (i) About the wait sits outside the loading line");
-	}
-	return line;
-}
 
 const LOADING_ARGS = {
 	state: { status: "loading" },
@@ -254,27 +256,16 @@ const LOADING_ARGS = {
 } satisfies Partial<PracticesAcrossTheWorkspacePageProps>;
 
 /**
- * While the server counts: one calm line with a pulsing dot over skeletons in the loaded page's
- * shape, every region busy, and the page's one announcement in its live region.
+ * While the server reads: the skeletons in the loaded page's shape and every region busy, as the
+ * Practice profile loads; no counting line and no wait note.
  */
 export const Loading: Story = {
 	args: LOADING_ARGS,
 	play: async ({ canvas }) => {
 		await expect(figuresSection(canvas)).toHaveAttribute("aria-busy", "true");
 		await expect(groupsSection(canvas)).toHaveAttribute("aria-busy", "true");
-		await canvas.findByText(LOADING_STATUS, { selector: "[role=status]" });
-		const line = await loadingLine(canvas);
-		await expect(within(line).getByText(/^Counting /u)).toHaveAttribute("aria-hidden", "true");
-	},
-};
-
-/** The counts take longer than usual: the line says so, and the live region does not speak again. */
-export const LoadingSlow: Story = {
-	args: LOADING_ARGS,
-	play: async ({ canvas }) => {
-		await canvas.findByText(SLOW_LOAD_SHORT, undefined, { timeout: SLOW_LOAD_AFTER_MS + 2000 });
-		canvas.getByText(LOADING_STATUS, { selector: "[role=status]" });
-		await expect(canvas.queryByText(SLOW_LOAD_SHORT, { selector: "[role=status]" })).toBeNull();
+		await expect(canvas.queryByText(/^Counting /u)).toBeNull();
+		await expect(canvas.queryByRole("button", { name: "About the wait" })).toBeNull();
 	},
 };
 
@@ -283,14 +274,12 @@ export const LoadingDark: Story = {
 	globals: { theme: "dark" },
 };
 
-/** At 390px the line stays on one line in the gap under the header, and nothing overflows. */
+/** At 390px the skeletons keep to the page. */
 export const LoadingPhone: Story = {
 	args: LOADING_ARGS,
 	globals: { viewport: { value: "phone390" } },
-	play: async ({ canvas }) => {
+	play: async () => {
 		await expectNoPageOverflow();
-		const line = await loadingLine(canvas);
-		await expect(line.getBoundingClientRect().height).toBeLessThanOrEqual(24);
 	},
 };
 

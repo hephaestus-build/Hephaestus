@@ -217,6 +217,31 @@ it("opens a thread as a view over the conversation, and carries it to the mentor
 	await waitFor(() => expect(router.state.location.search).toMatchObject({ thread: parent.id }));
 });
 
+it("goes back from a thread to the conversation on Escape, and closes the panel on the next", async () => {
+	const user = userEvent.setup();
+	const { acme } = mockHephPanel(hephReady());
+	const parent = acme.add({ kind: "HEPH", text: "Three pull requests left the reason out." });
+	acme.add({ kind: "USER", text: "Which ones?", parentEntryId: parent.id });
+	renderRouteAtWithRouter("/w/acme/teams");
+	await user.click(
+		await screen.findByRole("button", { name: "Open Heph, AI mentor" }, ROUTE_RENDER_WAIT),
+	);
+	const summary = await screen.findByRole("button", { name: /^1 reply/u });
+	await user.click(summary);
+	await screen.findByText("Which ones?");
+
+	await user.keyboard("{Escape}");
+	await waitFor(() => expect(screen.queryByText("Which ones?")).toBeNull());
+	// One level only: the panel stays open on the conversation, with focus where the thread opened.
+	screen.getByRole("dialog");
+	screen.getByText("Three pull requests left the reason out.");
+	expect(document.activeElement).toBe(summary);
+
+	await user.keyboard("{Escape}");
+	await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+	screen.getByRole("button", { name: "Open Heph, AI mentor" });
+});
+
 /** The live stream the closed panel's launcher keeps open, after its first snapshot. */
 async function openStream(fake: MentorFake): Promise<FakeEventSource> {
 	await screen.findByRole("button", { name: "Open Heph, AI mentor" }, ROUTE_RENDER_WAIT);
@@ -568,7 +593,8 @@ it.each([
 	{
 		closing: "closing the panel",
 		close: async (user: ReturnType<typeof userEvent.setup>) => {
-			await user.keyboard("{Escape}");
+			// Close, not Escape: Escape in a thread goes back to the conversation first.
+			await user.click(screen.getByRole("button", { name: "Close Heph, AI mentor" }));
 			// Closing hands focus back to the launcher, and nothing in the closing panel takes it.
 			await waitFor(() =>
 				expect(document.activeElement).toBe(

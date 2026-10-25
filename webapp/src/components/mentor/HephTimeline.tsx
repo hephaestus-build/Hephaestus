@@ -130,7 +130,9 @@ const JUMP_READ_LIMIT = 250;
 
 /**
  * Above the oldest loaded message: loads the older page once that message comes into view. The
- * button serves a keyboard and a failed load.
+ * button serves a keyboard and a failed load. Show earlier messages stands alone on the separator's
+ * line, so it is 24 px tall (WCAG 2.5.8). Retry follows a sentence, where the inline exception
+ * would allow less; it takes the same size, so the recovery actions in Heph read as one kind.
  */
 function EarlierMessagesControl({
 	earlier,
@@ -156,7 +158,7 @@ function EarlierMessagesControl({
 			return (
 				<Marker variant="separator">
 					<MarkerContent>
-						<Button variant="link" size="inline" onClick={earlier.onLoad}>
+						<Button variant="outline" size="xs" onClick={earlier.onLoad}>
 							Show earlier messages
 						</Button>
 					</MarkerContent>
@@ -175,7 +177,7 @@ function EarlierMessagesControl({
 				<Marker variant="separator">
 					<MarkerContent>
 						We could not load earlier messages.{" "}
-						<Button variant="link" size="inline" onClick={earlier.onRetry}>
+						<Button variant="outline" size="xs" onClick={earlier.onRetry}>
 							Retry
 						</Button>
 					</MarkerContent>
@@ -359,14 +361,15 @@ function useAnchorKeys(rows: TimelineRow[], ready: boolean): AnchorKeys {
 }
 
 /**
- * What deleting a message does, and what it leaves: the replies in its thread, each with its own
- * Delete, and the copy in Slack of a message asked there.
+ * What deleting a message does, what it leaves (the replies in its thread, each with its own
+ * Delete, and the copy in Slack of a message asked there), and that it is final.
  */
 function deleteDescription(entry: MentorEntry): string {
 	return [
 		"Heph forgets it. If Heph has not answered it yet, Heph does not answer it.",
 		(entry.thread?.replyCount ?? 0) > 0 ? "The replies in its thread stay." : undefined,
 		entry.surface === "SLACK" ? "It and Heph's answer stay in Slack." : undefined,
+		"You cannot undo this.",
 	]
 		.filter(hasText)
 		.join(" ");
@@ -469,7 +472,10 @@ export function HephTimeline(props: HephTimelineProps) {
 												row={row}
 												nextDay={next !== undefined && next.kind !== "live" ? next.day : undefined}
 												subject={subjects.get(row.key) ?? ""}
-												stopLabel={stopLabel}
+												// One Stop while Heph answers: the composer's, beside Send. The status line
+												// offers its own only where no composer shows, such as a thread on a
+												// deleted message.
+												stopLabel={composer === undefined ? stopLabel : undefined}
 												props={props}
 												onDelete={setDeleting}
 											/>

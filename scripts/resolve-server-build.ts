@@ -81,6 +81,17 @@ function serverBuildArtifact(
 type Api = (path: string) => Promise<unknown>;
 
 /**
+ * The job that publishes each image's index in a CI/CD run, by the image key that the image builds
+ * of a default-branch push read from `reuse_images`.
+ */
+export const imageManifests = {
+	"application-server": "App Server image / Create manifest",
+	webapp: "Docker / Webapp / Create manifest",
+	"agent-pi": "Docker / Agent: Pi / Create manifest",
+	postgres: "Docker / Postgres (pg_partman) / Create manifest",
+} as const;
+
+/**
  * The successful merge-queue CI/CD runs of exactly `commit` in which every job in `jobNames`
  * succeeded. The queue squashes, so a merge group's commit is the one its push to the default
  * branch carries.
@@ -91,7 +102,7 @@ async function* queueRuns(
 	defaultBranch: string,
 	api: Api,
 	jobNames: readonly string[],
-): AsyncGenerator<{ runId: number; repositoryId: number }> {
+): AsyncGenerator<{ runId: number; repositoryId: number; jobs: Record<string, unknown>[] }> {
 	if (!/^[a-f\d]{40}$/u.test(commit)) {
 		throw new Error("Expected an exact commit SHA");
 	}
@@ -126,19 +137,30 @@ async function* queueRuns(
 		) {
 			continue;
 		}
-		yield { runId, repositoryId };
+		yield { runId, repositoryId, jobs };
 	}
 }
 
-/** The merge-queue run whose images and verdict a push of the same commit may reuse. */
+/**
+ * The merge-queue run whose images and verdict a push of the same commit may reuse, and the images
+ * it published. A merge group does not build an image that its diff left alone, so only these can
+ * pass the push's same-commit provenance check.
+ */
 export async function resolveQueueRun(
 	repository: string,
 	commit: string,
 	defaultBranch: string,
 	api: Api,
-): Promise<number | undefined> {
+): Promise<{ runId: number; images: string[] } | undefined> {
 	const first = await queueRuns(repository, commit, defaultBranch, api, ["CI Status Gate"]).next();
-	return first.done === true ? undefined : first.value.runId;
+	if (first.done === true) {
+		return undefined;
+	}
+	const { runId, jobs } = first.value;
+	const images = Object.entries(imageManifests)
+		.filter(([, name]) => jobs.some((job) => job.name === name && job.conclusion === "success"))
+		.map(([image]) => image);
+	return { runId, images };
 }
 
 export async function resolveServerBuild(

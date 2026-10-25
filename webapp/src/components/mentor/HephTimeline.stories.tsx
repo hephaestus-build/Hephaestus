@@ -1,12 +1,14 @@
 import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
 import { useEffect, useState } from "react";
-import { expect, fn, spyOn, waitFor, within } from "storybook/test";
+import { expect, fn, screen, spyOn, waitFor, within } from "storybook/test";
 
 import type { MentorEntry } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { isRecord } from "@/lib/is-record";
 import type { PendingMessage } from "@/lib/mentor-entry";
 
+import { expectSettledVisible } from "@/stories/overlay";
+import { expectTargetSize } from "@/stories/reflow";
 import { earlierToday, minutesBefore } from "@/stories/story-clock";
 import { nextFrame } from "@/test/async";
 
@@ -130,6 +132,18 @@ function Paged(props: HephTimelineProps) {
 	return <HephTimeline {...props} state={state} />;
 }
 
+const stopRunning = fn();
+
+/** The composer as the conversation passes it while Heph answers: Stop sits beside Send. */
+const BUSY_COMPOSER = (
+	<HephComposer
+		label="Message Heph"
+		placeholder="Message Heph"
+		onSend={fn()}
+		stop={{ label: "Stop Heph", onStop: stopRunning }}
+	/>
+);
+
 const meta = {
 	component: HephTimeline,
 	parameters: { layout: "fullscreen" },
@@ -178,6 +192,7 @@ export const Default: Story = {
 		await expect(summary).toHaveAccessibleName(
 			/^3 replies · Last reply about 1 hour ago \(Ada Lovelace, .+\)$/u,
 		);
+		await expectTargetSize(summary);
 		await userEvent.click(summary);
 		await expect(args.threads?.onOpen).toHaveBeenCalledWith(SLACK_QUESTION.id, "heading");
 	},
@@ -216,7 +231,10 @@ export const Empty: Story = {
 export const Loading: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Loading the conversation…")).toBeVisible();
+		// The skeleton waits a second, so a read from the cache shows none.
+		await expect(
+			await canvas.findByText("Loading the conversation…", undefined, { timeout: 3000 }),
+		).toBeVisible();
 		await expect(canvas.queryByRole("textbox", { name: "Message Heph" })).toBeNull();
 		await expect(canvas.queryByText(/^Heph can make mistakes/u)).toBeNull();
 	},
@@ -240,24 +258,51 @@ export const LoadError: Story = {
 	},
 };
 
-/** Before Heph shows words, its place in the conversation says what it does. */
+/**
+ * Before Heph shows words, its place in the conversation says what it does. One Stop ends the
+ * answer: the composer's, beside Send, where the developer just asked. The status line offers none
+ * of its own, so two controls never do the same thing.
+ */
 export const Thinking: Story = {
 	args: {
 		state: ready({
 			entries: [...BEFORE_FOLLOW_UP, FOLLOW_UP],
 			turns: [turn({ id: FOLLOW_UP.turnId ?? "", status: "RUNNING" })],
 		}),
+		composer: BUSY_COMPOSER,
 	},
-	play: async ({ args, canvas, userEvent }) => {
+	play: async ({ canvas, userEvent }) => {
 		const log = canvas.getByRole("log");
 		await expect(log).toHaveAttribute("aria-busy", "true");
 		await expect(canvas.getByText("Thinking…", { selector: "p" })).toHaveAttribute(
 			"role",
 			"status",
 		);
-		await userEvent.click(
-			within(log).getByRole("button", { name: /^Stop Heph \(Ada Lovelace, /u }),
-		);
+		await expect(within(log).queryByRole("button", { name: /^Stop/u })).toBeNull();
+		await expect(canvas.getAllByRole("button", { name: /^Stop/u })).toHaveLength(1);
+		await userEvent.click(canvas.getByRole("button", { name: "Stop Heph" }));
+		await expect(stopRunning).toHaveBeenCalledOnce();
+	},
+};
+
+/**
+ * Where no composer shows, such as a thread on a deleted message, the status line offers Stop, and
+ * it names the question it ends.
+ */
+export const ThinkingWithoutComposer: Story = {
+	args: {
+		state: ready({
+			entries: [...BEFORE_FOLLOW_UP, FOLLOW_UP],
+			turns: [turn({ id: FOLLOW_UP.turnId ?? "", status: "RUNNING" })],
+		}),
+		composer: undefined,
+	},
+	play: async ({ args, canvas, userEvent }) => {
+		const stop = within(canvas.getByRole("log")).getByRole("button", {
+			name: /^Stop Heph \(Ada Lovelace, /u,
+		});
+		await expectTargetSize(stop);
+		await userEvent.click(stop);
 		await expect(args.actions?.onStop).toHaveBeenCalledWith(FOLLOW_UP.turnId);
 	},
 };
@@ -265,6 +310,7 @@ export const Thinking: Story = {
 /** A follow-up written while Heph answers waits under its question. Its Stop is not the running answer's. */
 export const QueuedFollowUp: Story = {
 	args: {
+		composer: BUSY_COMPOSER,
 		state: ready({
 			entries: [...BEFORE_FOLLOW_UP, FOLLOW_UP],
 			turns: [
@@ -281,10 +327,9 @@ export const QueuedFollowUp: Story = {
 		await expect(canvas.getByText("Queued. Heph answers this next.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: /^Stop queued message \(/u }));
 		await expect(args.actions?.onStop).toHaveBeenCalledWith(FOLLOW_UP.turnId);
-		await userEvent.click(
-			within(canvas.getByRole("log")).getByRole("button", { name: /^Stop Heph/u }),
-		);
-		await expect(args.actions?.onStop).toHaveBeenLastCalledWith("t-running");
+		await userEvent.click(canvas.getByRole("button", { name: "Stop Heph" }));
+		await expect(stopRunning).toHaveBeenCalledOnce();
+		await expect(args.actions?.onStop).toHaveBeenCalledOnce();
 	},
 };
 
@@ -738,7 +783,9 @@ export const Failed: Story = {
 	},
 	play: async ({ args, canvas, userEvent }) => {
 		await expect(canvas.getByText("Heph took too long to answer.")).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: /^Try again \(/u }));
+		const tryAgain = canvas.getByRole("button", { name: /^Try again \(/u });
+		await expectTargetSize(tryAgain);
+		await userEvent.click(tryAgain);
 		await expect(args.actions?.ask?.onTryAgain).toHaveBeenCalledWith(FAILED_FOLLOW_UP);
 	},
 };
@@ -830,7 +877,9 @@ export const NotSent: Story = {
 	},
 	play: async ({ args, canvas, userEvent }) => {
 		const pending = within(rowOf(await canvas.findByText("Can you check my newest one?")));
-		await userEvent.click(pending.getByRole("button", { name: /^Retry \(/u }));
+		const retry = pending.getByRole("button", { name: /^Retry \(/u });
+		await expectTargetSize(retry);
+		await userEvent.click(retry);
 		await expect(args.actions?.ask?.onRetrySend).toHaveBeenCalledWith("r-unsent");
 		// The composer was cleared on send, so the words stay reachable here: Copy them, or delete the
 		// message from this device instead of retrying.
@@ -866,13 +915,28 @@ export const LoadsEarlier: Story = {
 	},
 };
 
+const loadOlder = fn();
+
+/** Older messages wait above the oldest loaded one. The control sits on its own line, 24 px tall. */
+export const EarlierAvailable: Story = {
+	args: { state: ready({ earlier: { status: "available", onLoad: loadOlder } }) },
+	play: async ({ canvas, userEvent }) => {
+		const show = await canvas.findByRole("button", { name: "Show earlier messages" });
+		await expectTargetSize(show);
+		await userEvent.click(show);
+		await expect(loadOlder).toHaveBeenCalled();
+	},
+};
+
 /** Older messages failed to load; the rest of the conversation stays usable. */
 const retryEarlier = fn();
 
 export const EarlierError: Story = {
 	args: { state: ready({ earlier: { status: "error", onRetry: retryEarlier } }) },
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(await canvas.findByRole("button", { name: "Retry" }));
+		const retry = await canvas.findByRole("button", { name: "Retry" });
+		await expectTargetSize(retry);
+		await userEvent.click(retry);
 		await expect(retryEarlier).toHaveBeenCalledOnce();
 	},
 };
@@ -927,6 +991,24 @@ export const LinkedMessageNotFound: Story = {
 			await canvas.findByText("We could not find that message. It may have been deleted."),
 		).toBeVisible();
 		await expect(loadEarlier).not.toHaveBeenCalled();
+	},
+};
+
+/**
+ * Delete asks first, says what stays (the replies in the thread, the copy in Slack), and says that
+ * it is final.
+ */
+export const DeleteMessage: Story = {
+	play: async ({ args, canvas, userEvent }) => {
+		const row = within(rowOf(canvas.getByText(SLACK_QUESTION.text)));
+		await userEvent.click(row.getByRole("button", { name: /^Delete message \(/u }));
+		const dialog = await screen.findByRole("alertdialog", { name: "Delete this message?" });
+		await expectSettledVisible(dialog);
+		await expect(dialog).toHaveAccessibleDescription(
+			"Heph forgets it. If Heph has not answered it yet, Heph does not answer it. The replies in its thread stay. It and Heph's answer stay in Slack. You cannot undo this.",
+		);
+		await userEvent.click(within(dialog).getByRole("button", { name: "Delete message" }));
+		await expect(args.actions?.onDelete).toHaveBeenCalledWith(SLACK_QUESTION);
 	},
 };
 

@@ -121,11 +121,11 @@ for (const [scenario, expectedError] of [
 	["modern-previous", undefined],
 	["sync-accepted", "Expected cut-point refusal from changeLogSyncToTag"],
 	["sync-unrelated-error", "Expected cut-point refusal from changeLogSyncToTag"],
-	["startup-accepted", "Expected cut-point refusal at startup"],
-	["startup-unrelated-error", "Expected cut-point refusal at startup"],
+	["migration-accepted", "Expected cut-point refusal from the migration"],
+	["migration-unrelated-error", "Expected cut-point refusal from the migration"],
 	["history-changed", "Refused synchronization changed migration history or seeded data"],
-	["startup-history-changed", "Refused startup changed migration history or seeded data"],
-	["startup-data-changed", "Refused startup changed migration history or seeded data"],
+	["migration-history-changed", "Refused migration changed migration history or seeded data"],
+	["migration-data-changed", "Refused migration changed migration history or seeded data"],
 	["lock-held", "Refused upgrade left the Liquibase lock held"],
 	["native-previous", "The pinned refusal path requires the legacy people layout, found native"],
 	["mixed-layout", "Unknown or ambiguous people layout"],
@@ -178,15 +178,16 @@ mock.module("node:child_process", { exports: {
       stderr = scenario === "sync-unrelated-error" ? "connection failed" : message;
       status = scenario === "sync-accepted" ? 0 : 1;
     }
-    else if (args[0] === "port") stdout = "127.0.0.1:18080";
-    else if (args[0] === "inspect") {
-      if (args.includes("{{.State.ExitCode}}")) stdout = scenario === "startup-accepted" ? "0" : "1";
-      else stdout = args.at(-1).endsWith("-refused") ? "exited" : "running";
+    else if (args.includes("SPRING_PROFILES_ACTIVE=e2e,migrate")) {
+      stderr = scenario === "migration-unrelated-error" ? "unrelated failure" : message;
+      status = scenario === "migration-accepted" ? 0 : 1;
     }
-    else if (args[0] === "logs") stderr = scenario === "startup-unrelated-error" ? "unrelated failure" : message;
+    else if (args[0] === "port") stdout = "127.0.0.1:18080";
+    else if (args[0] === "inspect") stdout = "running";
+    else if (args[0] === "logs") stderr = message;
     else if (args.includes("--command")) {
       const sql = args.at(-1);
-      const started = readFileSync(commands, "utf8").includes("-refused");
+      const started = readFileSync(commands, "utf8").includes("e2e,migrate");
       if (sql.includes("information_schema.tables")) {
         stdout = scenario === "native-previous" ? "identity\\nmembership\\nuser"
           : scenario === "mixed-layout" ? "identity\\nidentity_link\\nmembership\\nuser\\nworkspace_membership"
@@ -197,13 +198,13 @@ mock.module("node:child_process", { exports: {
         stdout = scenario === "link-missed" ? "" : args.includes("--quiet") ? "7" : "7\\nINSERT 0 1";
       }
       else if (sql.includes("SELECT kind ||")) {
-        stdout = "account|" + (scenario === "startup-data-changed" && started ? "changed" : "1") +
+        stdout = "account|" + (scenario === "migration-data-changed" && started ? "changed" : "1") +
           "\\nidentity|1\\nuser|1\\nworkspace|1\\nmembership|1\\nconnection|1";
       }
       else if (sql.includes("row_to_json")) {
         const synced = readFileSync(commands, "utf8").includes("changeLogSyncToTag");
         stdout = (scenario === "history-changed" && synced) ||
-          (scenario === "startup-history-changed" && started) ? "changed" : "history";
+          (scenario === "migration-history-changed" && started) ? "changed" : "history";
       }
       else if (sql.includes("databasechangeloglock")) stdout = scenario === "lock-held" ? "1" : "0";
       else if (sql.includes("1788679885460-1")) stdout = "0";

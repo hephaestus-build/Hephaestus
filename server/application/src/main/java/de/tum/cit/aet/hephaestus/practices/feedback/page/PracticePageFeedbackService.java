@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponse;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponseRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.result.trend.WorkResolution;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
@@ -29,17 +30,16 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +61,7 @@ public class PracticePageFeedbackService {
     private final PracticePageFeedbackBasis basis;
     private final FeedbackResponseRepository responses;
     private final FeedbackVisibilityService visibility;
+    private final ResultVisibilityPolicy resultVisibility;
     private final ProductReferenceQuery items;
     private final CurrentDeveloperLookup currentDeveloperLookup;
     private final WorkspaceReviewDefaultsProvider defaults;
@@ -89,15 +90,13 @@ public class PracticePageFeedbackService {
         }
         List<Feedback> feedback = feedbackRepository.findReadablePracticePage(workspaceId, List.of(developerId));
         if (view == null) {
-            for (Feedback piece : feedback.stream()
-                    .sorted(Comparator.comparing(piece -> piece.getId().toString()))
-                    .toList()) {
-                Objects.requireNonNull(entityManager).refresh(piece, LockModeType.PESSIMISTIC_WRITE);
-            }
+            feedback = lockedAsTheyStand(workspaceId, feedback);
         }
-        feedback = eligibleReady(feedback, view == null);
+        var readable = feedback;
         Instant now = clock.instant();
-        var page = page(workspaceId, feedback, now);
+        // The gate and the page check the same evidence, so they share one read of its sources.
+        var page = resultVisibility.asOneRead(
+                workspaceId, () -> page(workspaceId, eligibleReady(readable, view == null), now));
         var itemIds = page.stream()
                 .flatMap(card -> Stream.concat(
                         card.evidence().stream().map(Result::getItemId),
@@ -123,6 +122,28 @@ public class PracticePageFeedbackService {
                     }
                     return toCard(card, references, readAt);
                 })
+                .toList();
+    }
+
+    /**
+     * The same feedback, locked for the first-read record and read as it stands under the lock. The rows leave the
+     * persistence context first, because a query hands back a managed entity as it was loaded, not as the lock found it.
+     */
+    private List<Feedback> lockedAsTheyStand(long workspaceId, List<Feedback> feedback) {
+        if (feedback.isEmpty()) {
+            return feedback;
+        }
+        var entities = Objects.requireNonNull(entityManager);
+        feedback.forEach(entities::detach);
+        var locked =
+                feedbackRepository
+                        .lockAllByIdInAndWorkspaceId(
+                                feedback.stream().map(Feedback::getId).toList(), workspaceId)
+                        .stream()
+                        .collect(Collectors.toMap(Feedback::getId, Function.identity()));
+        return feedback.stream()
+                .map(piece -> locked.get(piece.getId()))
+                .filter(Objects::nonNull)
                 .toList();
     }
 

@@ -1,6 +1,7 @@
 import { CircleAlertIcon, CircleStopIcon, ClockIcon, RotateCcwIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { statusToneClass } from "@/components/common/status-def";
 import { Button } from "@/components/ui/button";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 
@@ -21,18 +22,34 @@ export type MessageState =
 	| { kind: "failed"; reason: string; onTryAgain?: () => void }
 	| { kind: "notSent"; reason: string; onRetry?: () => void };
 
+/**
+ * The states that leave the developer something to do: an answer that failed, or a message that was
+ * not sent. Their icon takes the `destructive` tone from the status tone helper, so the line stands
+ * out from the lines that only report, such as Queued and Stopped. The words keep the line's muted
+ * colour: a status colour reaches the icon, never the prose.
+ *
+ * A message not sent because too many follow-ups wait is a refusal rather than a failure, but the
+ * app has only the server's words for why, the same state as a message the server could not store.
+ * Either way the message is not sent and needs the developer, so both take one tone.
+ */
+const NEEDS_ACTION: ReadonlySet<MessageState["kind"]> = new Set(["failed", "notSent"]);
+
 function Line({
+	kind,
 	icon,
 	children,
 	action,
 }: {
+	kind: MessageState["kind"];
 	icon: ReactNode;
 	children: ReactNode;
 	action?: ReactNode;
 }) {
 	return (
 		<Marker>
-			<MarkerIcon>{icon}</MarkerIcon>
+			<MarkerIcon className={NEEDS_ACTION.has(kind) ? statusToneClass("destructive") : undefined}>
+				{icon}
+			</MarkerIcon>
 			<MarkerContent>{children}</MarkerContent>
 			{action}
 		</Marker>
@@ -50,8 +67,10 @@ function ActionButton({
 	subject: string;
 	children: ReactNode;
 }) {
+	// An action after the line's words, not a link in them, so its target is 24 px tall
+	// (WCAG 2.5.8), as the running turn's Stop is.
 	return (
-		<Button variant="link" size="inline" aria-label={`${label} (${subject})`} onClick={onClick}>
+		<Button variant="outline" size="xs" aria-label={`${label} (${subject})`} onClick={onClick}>
 			{children}
 		</Button>
 	);
@@ -69,6 +88,7 @@ export function MessageStatus({ state, subject }: MessageStatusProps) {
 		case "queued": {
 			return (
 				<Line
+					kind={state.kind}
 					icon={<ClockIcon />}
 					action={
 						state.onStop && (
@@ -83,11 +103,15 @@ export function MessageStatus({ state, subject }: MessageStatusProps) {
 			);
 		}
 		case "stopped": {
-			return <Line icon={<CircleStopIcon />}>Stopped</Line>;
+			return (
+				<Line kind={state.kind} icon={<CircleStopIcon />}>
+					Stopped
+				</Line>
+			);
 		}
 		case "notFullyInSlack": {
 			return (
-				<Line icon={<CircleAlertIcon />}>
+				<Line kind={state.kind} icon={<CircleAlertIcon />}>
 					Not fully delivered to Slack. The full answer is here.
 				</Line>
 			);
@@ -95,6 +119,7 @@ export function MessageStatus({ state, subject }: MessageStatusProps) {
 		case "failed": {
 			return (
 				<Line
+					kind={state.kind}
 					icon={<CircleAlertIcon />}
 					action={
 						state.onTryAgain && (
@@ -112,6 +137,7 @@ export function MessageStatus({ state, subject }: MessageStatusProps) {
 		case "notSent": {
 			return (
 				<Line
+					kind={state.kind}
 					icon={<CircleAlertIcon />}
 					action={
 						state.onRetry && (

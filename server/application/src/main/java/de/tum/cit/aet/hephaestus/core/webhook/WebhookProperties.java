@@ -18,6 +18,11 @@ import org.springframework.validation.annotation.Validated;
  * <p>Incoming request size is capped at the {@code WebhookPayloadSizeFilter} before Spring
  * buffers the body — {@code server.tomcat.max-http-post-size} only enforces on form-encoded
  * payloads, so we don't rely on it for JSON webhooks.
+ *
+ * @param externalUrl Public base URL of this instance that GitLab webhooks are registered against. GitLab webhook
+ *     registration is skipped when it is unset.
+ * @param secret Shared secret that verifies GitHub webhook signatures and legacy GitLab webhook tokens. GitLab webhook
+ *     registration needs at least 32 characters. Must differ from both routing secrets.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.webhook")
@@ -99,6 +104,13 @@ public record WebhookProperties(
                 + "]");
     }
 
+    /**
+     * Rotation of the access token that each GitLab connection holds.
+     *
+     * @param thresholdDays Days before a GitLab connection token expires at which Hephaestus rotates it. Set 0 to only
+     *     report the expiring token without rotating it.
+     * @param validityDays Lifetime in days of the new token that a GitLab token rotation requests. Must be at least 1.
+     */
     public record TokenRotation(
             @DefaultValue("7") int thresholdDays,
             @DefaultValue("90") int validityDays) {
@@ -140,19 +152,21 @@ public record WebhookProperties(
      * inside that window a shed webhook is recoverable from the provider API and outside it, by
      * nothing (ADR 0008: webhook deliveries are not redeliverable).
      *
-     * @param maxBytesByStream per-stream {@link #maxBytes} overrides keyed by stream name — {@code github} dwarfs the
-     *     rest
-     * @param storageBudget what the broker may hold for all webhook streams together, which must stay at or below
-     *     the free space on its volume. Keeping the per-stream bounds inside it is what keeps a full stream a stream
-     *     that refuses messages rather than a broker that cannot write at all.
-     * @param allowDestructiveLimitUpdates lets startup apply a limit change that would delete messages the stream
-     *     already holds. Off by default: bounding a stream that has outgrown the new limit deletes the excess
-     *     immediately, so it is a decision an operator makes rather than one a deploy makes for them.
-     * @param limitUpdateTimeout how long startup waits for one stream limit update. Bounding a stream that has
-     *     outgrown the new limit deletes the excess before the broker answers, so the work is proportional to the
-     *     bytes being shed rather than to the size of the request — tens of GB take far longer than the request
-     *     timeout the health probes want. This is deliberately separate from the consumer request timeout so a
-     *     slow admin call cannot slow a readiness answer.
+     * @param maxAge Longest time a webhook stream keeps a message, for each stream without an entry in
+     *     max-age-by-stream. Must be positive.
+     * @param maxBytes Storage bound of each webhook stream without an entry in max-bytes-by-stream. At the bound,
+     *     JetStream deletes the oldest messages to admit new ones. Must be at least 4 times http.max-payload-bytes.
+     * @param maxBytesByStream Storage bounds keyed by stream name that override max-bytes for that stream. The github
+     *     stream carries most of the traffic. Each entry must be at least 4 times http.max-payload-bytes.
+     * @param storageBudget What the broker may hold for all webhook streams together. Keep it at or below the free
+     *                      space on the broker volume. The per-stream bounds must stay inside it, so a full stream
+     *                      refuses messages instead of stopping the broker.
+     * @param allowDestructiveLimitUpdates Lets startup apply a limit change that deletes messages that the stream
+     *                                     already holds. A smaller bound deletes the excess at once, so the operator
+     *                                     must turn this on deliberately.
+     * @param limitUpdateTimeout How long startup waits for one stream limit update. A smaller bound deletes the
+     *                           excess before the broker answers, so a large stream can take long. It is separate
+     *                           from the consumer request timeout, so a slow update does not delay readiness.
      * @param monitorInterval how often the stream monitor reads stream and consumer state
      * @see <a href="https://docs.hephaestus.build/admin/webhook-ingestion-operations">Webhook
      *     ingestion operations</a>
@@ -273,6 +287,11 @@ public record WebhookProperties(
      * Signing keys for the connection-scoped GitLab webhook credential. {@code secret} signs new hooks;
      * {@code previousSecret} is still accepted while an operator rotates, until every hook signed with it has been
      * replaced. Without {@code secret} no connection-scoped hook is registered.
+     *
+     * @param secret Key that signs the webhook token of each GitLab connection. At least 32 characters, and must differ
+     *     from the webhook secret. GitLab webhook registration is skipped when it is unset.
+     * @param previousSecret Previous routing key that the receiver still accepts during a rotation. Keep it until every
+     *     hook signed with it is replaced. Requires routing.secret and must differ from it.
      */
     public record Routing(@Nullable String secret, @Nullable String previousSecret) {
         public Routing {

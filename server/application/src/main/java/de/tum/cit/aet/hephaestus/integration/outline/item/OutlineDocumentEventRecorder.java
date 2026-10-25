@@ -35,13 +35,12 @@ public class OutlineDocumentEventRecorder {
         if (document == null || document.isDeleted()) return Optional.empty();
         String hash = document.contentHash();
         if (hash == null || hash.isBlank()) return Optional.empty();
-        ItemEventName event =
-                switch (outlineEventName == null ? "" : outlineEventName) {
-                    case "documents.publish" -> DocumentEvents.PUBLISHED;
-                    case "documents.update" -> DocumentEvents.UPDATED;
-                    case "documents.archive" -> DocumentEvents.ARCHIVED;
-                    default -> null;
-                };
+        ItemEventName event = switch (outlineEventName == null ? "" : outlineEventName) {
+            case "documents.publish" -> DocumentEvents.PUBLISHED;
+            case "documents.update" -> DocumentEvents.UPDATED;
+            case "documents.archive" -> DocumentEvents.ARCHIVED;
+            default -> null;
+        };
         if (event == null) return Optional.empty();
         var item = items.upsert(new ItemRegistration(workspaceId, DocumentEvents.DOCUMENT, document.id(), null, null));
         var version = DocumentEvents.version(

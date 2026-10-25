@@ -67,6 +67,7 @@ import {
 	type ModelFailureKind,
 	modelFailure,
 	newModelCallTiming,
+	refusesAttempt,
 } from "./pi-model-failure.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { executionReport } from "./pi-practice-scripts-report.ts";
@@ -515,6 +516,14 @@ function recordOnceMoreText(slug: string): string {
 }
 
 type PrivateDestination = (typeof PRIVATE_DESTINATIONS)[number];
+
+/** The gateway refuses every call of an attempt that no longer runs: nothing it does can be admitted. */
+function stopIfAttemptRefused(stopReason: string, message: unknown): void {
+	if (stopReason === "error" && refusesAttempt(modelFailure(message))) {
+		console.error("[pi-runner] STOPPED: the gateway refused this attempt; it no longer runs");
+		process.exit(1);
+	}
+}
 
 function recordModelResponse(trace: TurnTrace, stopReason: string, message: unknown): void {
 	const failed = stopReason === "error" || stopReason === "aborted";
@@ -2746,6 +2755,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						) {
 							measurementReply.received = true;
 						}
+						stopIfAttemptRefused(stopReason, event.message);
 						if (scope.currentTurn) {
 							scope.currentTurn.modelError = stopReason === "error";
 							recordModelResponse(scope.currentTurn, stopReason, event.message);

@@ -53,7 +53,8 @@ function ThreadSummary({
 		<Button
 			variant="link"
 			size="inline"
-			className="self-start"
+			// On a line of its own, so its target is 24 px tall (WCAG 2.5.8).
+			className="min-h-6 self-start"
 			aria-label={`${shown} (${subject})`}
 			aria-expanded={open}
 			aria-controls={open ? panelId : undefined}
@@ -151,7 +152,8 @@ export function HephTimelineRow({
 	nextDay: Date | undefined;
 	/** As `MessageActions` takes it. */
 	subject: string;
-	stopLabel: string;
+	/** Names the running answer's Stop on its status line. Absent where the composer offers Stop. */
+	stopLabel: string | undefined;
 	props: RowProps;
 	onDelete: (entry: MentorEntry) => void;
 }) {
@@ -254,7 +256,11 @@ export function HephTimelineRow({
 			return (
 				<HephTurnStatus
 					turn={turn}
-					stop={actions && { label: stopLabel, onStop: () => actions.onStop(turn.id) }}
+					stop={
+						actions && stopLabel !== undefined
+							? { label: stopLabel, onStop: () => actions.onStop(turn.id) }
+							: undefined
+					}
 				/>
 			);
 		}

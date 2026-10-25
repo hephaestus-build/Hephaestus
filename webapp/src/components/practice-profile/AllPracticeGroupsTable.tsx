@@ -3,10 +3,15 @@ import { Fragment } from "react";
 
 import { cn } from "cn";
 import type { GroupRef, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
+import { InfoTip } from "@/components/common/InfoTip";
 import type { LoadState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { FeedbackTextSegment } from "@/components/practice-vocabulary/feedback-text";
-import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
+import {
+	GROUP_COLORS_NOTE,
+	getGroupVisual,
+	groupMark,
+} from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
 import type { SortDirection } from "@/components/practice-vocabulary/practice-group-list-order";
 import { PracticeGroupStandingRing } from "@/components/practice-vocabulary/PracticeGroupStandingRing";
@@ -21,8 +26,8 @@ import { StandingCountsList } from "@/components/practice-vocabulary/StandingCou
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell } from "@/components/ui/table";
 
-import { type FoldReason, FoldedPractices, FoldedStandingCell } from "./FoldedPractices";
-import { groupNeverApplied, groupNotReviewedYet } from "./practice-folds";
+import { FoldedPractices, FoldedStandingCell } from "./FoldedPractices";
+import { groupHasNoStandingYet, groupNoStandingYetReason } from "./practice-folds";
 import { ALL_PRACTICE_GROUPS, NO_PRACTICE_GROUPS } from "./practice-profile-search";
 
 export interface AllPracticeGroupsTableProps {
@@ -43,7 +48,7 @@ export interface AllPracticeGroupsTableProps {
 	state: LoadState;
 	/**
 	 * Groups with no practice to show: none added, or all switched off. They join the fold of groups
-	 * not reviewed yet, so the reader can still open them.
+	 * with no standing yet, so the reader can still open them.
 	 */
 	emptyGroups?: GroupRef[];
 }
@@ -54,10 +59,10 @@ interface GroupRowProps {
 	practices: PracticeStanding[];
 	sentences?: FeedbackTextSegment[][];
 	/**
-	 * A row of a fold: the standing badge alone, with no trend, ring or counts, since the fold
-	 * already says why the group is there.
+	 * A row of the fold: the "No standing yet" badge alone, with no trend, ring or counts, since the
+	 * fold already says why the group is there.
 	 */
-	folded?: FoldReason;
+	folded?: boolean;
 	open: boolean;
 	onOpenGroup?: (group: GroupRef) => void;
 	onOpenPractice?: (practiceSlug: string) => void;
@@ -68,7 +73,7 @@ function GroupRow({
 	standing,
 	practices,
 	sentences = NO_SENTENCES,
-	folded,
+	folded = false,
 	open,
 	onOpenGroup,
 	onOpenPractice,
@@ -88,7 +93,7 @@ function GroupRow({
 			}
 		>
 			{folded ? (
-				<FoldedStandingCell scope="group" reason={folded} />
+				<FoldedStandingCell reason={groupNoStandingYetReason(practices, standing?.standing)} />
 			) : (
 				<StandingCell
 					standing={standing?.standing ?? "NOT_OBSERVED"}
@@ -114,6 +119,8 @@ function GroupRow({
 				badge={<GroupName name={group.name} icon={Icon} pill={pill} />}
 				sentences={sentences}
 				onOpenPractice={onOpenPractice}
+				// Every practice a row's sentences name is in that row's group: its label shows the icon.
+				practiceGroup={groupMark({ Icon, pill })}
 			/>
 		</PracticeTableRow>
 	);
@@ -153,6 +160,21 @@ const STACKED_HIDDEN = "@max-[38rem]:hidden";
 
 const NO_GROUPS: GroupRef[] = [];
 
+/**
+ * What a practice group is, beside the column's heading: the page names groups everywhere and
+ * explains them nowhere else. The words are the vocabulary's (`practice-feedback-language.md`). In
+ * the stacked layout the heading is for a screen reader only, so the (i) leaves it rather than take
+ * a keyboard's focus out of sight.
+ */
+const PRACTICE_GROUP_INFO = (
+	<InfoTip label="About practice groups" className="font-normal @max-[38rem]:hidden">
+		<p>
+			A practice group is a named set of related practices. Its row sums up your standing on the
+			practices in it.
+		</p>
+	</InfoTip>
+);
+
 const HEADS = [{ label: <span className="sr-only">Practices by standing</span>, span: 2 }];
 
 /**
@@ -185,26 +207,19 @@ export function AllPracticeGroupsTable({
 		);
 	}
 
-	// Groups whose every practice never applied, and groups no review has reviewed a practice of
-	// yet (the rest never applied), leave the table for one folded line each under it.
-	const neverApplied = groups.filter((group) =>
-		groupNeverApplied(practicesByGroup[group.slug] ?? []),
-	);
-	// A group with nothing in it has nothing to act on, so it is folded away with the groups nothing
-	// reviewed yet rather than left out: it still opens.
-	const notReviewed = [
-		...groups.filter((group) => groupNotReviewedYet(practicesByGroup[group.slug] ?? [])),
+	// Groups in which no practice has a standing yet, whether they never applied or no review has
+	// reviewed them, leave the table for one folded line under it. A group with nothing in it has
+	// nothing to act on, so it is folded away with them rather than left out: it still opens.
+	const noStandingYet = [
+		...groups.filter((group) => groupHasNoStandingYet(practicesByGroup[group.slug] ?? [])),
 		...emptyGroups,
 	];
-	const shown = groups.filter(
-		(group) => !neverApplied.includes(group) && !notReviewed.includes(group),
-	);
-	// Every group with practices sits in a fold: the workspace has practices, so "No practices set
-	// up yet" would be wrong. The folds stand open instead and their own sentences say why. Groups
+	const shown = groups.filter((group) => !noStandingYet.includes(group));
+	// Every group with practices sits in the fold: the workspace has practices, so "No practices set
+	// up yet" would be wrong. The fold stands open instead and its own sentence says why. Groups
 	// with no practices do not count: with only those, nothing is set up to review.
-	const onlyFolded =
-		shown.length === 0 && neverApplied.length + notReviewed.length > emptyGroups.length;
-	const renderGroupRow = (group: GroupRef, folded?: FoldReason) => (
+	const onlyFolded = shown.length === 0 && noStandingYet.length > emptyGroups.length;
+	const renderGroupRow = (group: GroupRef, folded = false) => (
 		<GroupRow
 			group={group}
 			standing={standings[group.slug]}
@@ -217,43 +232,44 @@ export function AllPracticeGroupsTable({
 			onOpenPractice={onOpenPractice}
 		/>
 	);
-	// A fold: a toggle row and the folded rows, as sections of the table itself, so they share its
+	// The fold: a toggle row and the folded rows, as sections of the table itself, so they share its
 	// columns.
-	const fold = (folded: GroupRef[], reason: FoldReason, columns: number) => (
+	const fold = (columns: number) => (
 		<FoldedPractices
-			count={folded.length}
+			count={noStandingYet.length}
 			noun="group"
-			reason={reason}
 			columns={columns}
 			defaultOpen={onlyFolded}
 		>
-			{folded.map((group) => (
-				<Fragment key={group.slug}>{renderGroupRow(group, reason)}</Fragment>
+			{noStandingYet.map((group) => (
+				<Fragment key={group.slug}>{renderGroupRow(group, true)}</Fragment>
 			))}
 		</FoldedPractices>
 	);
 
 	return (
-		<PracticeTable
-			aria-label={ALL_PRACTICE_GROUPS}
-			sort={sort}
-			onSortChange={onSortChange}
-			heads={HEADS}
-			subjectHead="Practice group"
-			rows={shown}
-			rowKey={(group) => group.slug}
-			renderRow={(group) => renderGroupRow(group)}
-			empty={onlyFolded ? null : { icon: <ClipboardCheckIcon />, ...NO_PRACTICE_GROUPS }}
-			isLoading={state.status === "loading"}
-			loadingRow={loadingRow}
-			sections={(columns) =>
-				state.status === "loading" ? undefined : (
-					<>
-						{fold(neverApplied, "never-applied", columns)}
-						{fold(notReviewed, "not-reviewed", columns)}
-					</>
-				)
-			}
-		/>
+		<div className="flex flex-col gap-2">
+			<PracticeTable
+				aria-label={ALL_PRACTICE_GROUPS}
+				sort={sort}
+				onSortChange={onSortChange}
+				heads={HEADS}
+				subjectHead="Practice group"
+				subjectInfo={PRACTICE_GROUP_INFO}
+				rows={shown}
+				rowKey={(group) => group.slug}
+				renderRow={(group) => renderGroupRow(group)}
+				empty={onlyFolded ? null : { icon: <ClipboardCheckIcon />, ...NO_PRACTICE_GROUPS }}
+				isLoading={state.status === "loading"}
+				loadingRow={loadingRow}
+				sections={(columns) => (state.status === "loading" ? undefined : fold(columns))}
+			/>
+			{/* Only where colored group names are in the table. */}
+			{state.status !== "loading" && groups.length + emptyGroups.length > 0 && (
+				<p data-group-colors-note="" className="px-1 text-xs text-muted-foreground">
+					{GROUP_COLORS_NOTE}
+				</p>
+			)}
+		</div>
 	);
 }

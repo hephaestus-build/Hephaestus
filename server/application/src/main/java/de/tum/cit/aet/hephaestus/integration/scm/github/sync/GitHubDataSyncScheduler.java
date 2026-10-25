@@ -216,17 +216,19 @@ public class GitHubDataSyncScheduler {
 
         // Each workspace has its own GitHub App installation with separate rate limits, so syncing
         // them in parallel (virtual threads via monitoringExecutor) is safe; one workspace's failure
-        // can't block the rest.
+        // can't block the rest. ScopeSyncFanOut limits how many run at once, for the database pool.
         //
         // No global timeout: large repositories (10k+ issues) combined with rate limits can
         // legitimately take many hours. Individual GraphQL calls have their own timeouts for transient
         // failures.
-        ScopeSyncFanOut.Outcome outcome = ScopeSyncFanOut.run(sessions, this::syncScope, monitoringExecutor);
+        ScopeSyncFanOut.Outcome outcome =
+                ScopeSyncFanOut.run(sessions, this::syncScope, monitoringExecutor, syncJobService::isRunning);
         log.info(
-                "Completed scheduled sync: scopeCount={}, successful={}, failed={}, interrupted={}",
+                "Completed scheduled sync: scopeCount={}, successful={}, failed={}, notStarted={}, interrupted={}",
                 sessions.size(),
                 outcome.succeeded(),
                 outcome.failed(),
+                outcome.notStarted(),
                 Thread.currentThread().isInterrupted());
     }
 

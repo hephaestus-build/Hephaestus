@@ -12,7 +12,7 @@ import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feed
 import { count } from "@/components/practice-vocabulary/feedback-text";
 import { FEEDBACK_WITHDRAWN_DEF } from "@/components/practice-vocabulary/feedback-withdrawal-defs";
 import { FeedbackText } from "@/components/practice-vocabulary/FeedbackText";
-import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
+import { PracticeTextPill } from "@/components/practice-vocabulary/PracticePill";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item";
@@ -89,7 +89,7 @@ function FeedbackRow({ row, workspaceSlug }: { row: WeeklyDigestFeedback; worksp
 			<Item variant="outline" size="sm" role="listitem">
 				<ItemContent>
 					<ItemTitle>
-						<PracticePill name={row.practiceName} />
+						<PracticeTextPill name={row.practiceName} />
 						<StatusBadge def={FEEDBACK_WITHDRAWN_DEF} />
 					</ItemTitle>
 					<ItemDescription>A workspace admin withdrew this feedback.</ItemDescription>
@@ -104,7 +104,7 @@ function FeedbackRow({ row, workspaceSlug }: { row: WeeklyDigestFeedback; worksp
 			<Item variant="outline" size="sm" render={linkTo(row, workspaceSlug)}>
 				<ItemContent>
 					<ItemTitle>
-						<PracticePill name={row.practiceName} />
+						<PracticeTextPill name={row.practiceName} />
 						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[row.destination]} />
 					</ItemTitle>
 					{(work !== undefined || row.replaced) && (

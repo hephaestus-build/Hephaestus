@@ -10,6 +10,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * Bound to {@code hephaestus.worker.hub.token.*}. JWK rotation: list every key (active + previous)
  * in {@link #keys()} and point {@link #activeKid()} at the signing key; keep the previous key for
  * one TTL window so already-issued tokens stay verifiable.
+ *
+ * @param registrationToken Token that workers present to the server to obtain their access token. Give each worker
+ *     the same value as hephaestus.worker.control.registration-token. Worker registration is closed when it is unset.
  */
 @ConfigurationProperties(prefix = "hephaestus.worker.hub.token")
 public record WorkerTokenProperties(

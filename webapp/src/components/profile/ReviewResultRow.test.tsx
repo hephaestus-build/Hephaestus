@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { EvidenceCitation, ResultDetail } from "@/api/types.gen";
@@ -151,13 +151,7 @@ describe("ReviewResultRow", () => {
 		expect(screen.queryByRole("group")).toBeNull();
 	});
 
-	it("answers each piece of a result's feedback on its own", () => {
-		const responses = {
-			write: vi.fn(),
-			clear: vi.fn(),
-			responseOf: () => ({}),
-			pendingResponses: new Map(),
-		};
+	it("lists each piece of a result's feedback with where it went, and offers no response there", () => {
 		renderOpen({
 			result: {
 				...detailResult,
@@ -168,16 +162,18 @@ describe("ReviewResultRow", () => {
 						destination: "PRACTICE_PAGE",
 						state: "DELIVERED",
 						deliveredAt: detailResult.recordedAt,
-						response: null,
+						response: { resolution: "ADDRESSED", usefulness: null, comment: null, createdAt: null },
 						copies: [],
 					},
 				],
 			},
-			responses,
 		});
 
-		expect(screen.getAllByRole("group", { name: /^Your response to the feedback/u })).toHaveLength(
-			2,
-		);
+		const list = screen.getByRole("list", { name: "Feedback from this observation" });
+		expect(within(list).getAllByRole("listitem")).toHaveLength(detailResult.feedback.length + 1);
+		within(list).getByText("On the practice page");
+		// A response already given reads as a line, not as controls.
+		within(list).getByText("Your response:");
+		expect(screen.queryByRole("group", { name: /^Your response to the feedback/u })).toBeNull();
 	});
 });

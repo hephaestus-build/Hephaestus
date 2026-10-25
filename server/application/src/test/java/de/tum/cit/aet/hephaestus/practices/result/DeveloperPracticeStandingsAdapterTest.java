@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -31,6 +32,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -60,6 +62,8 @@ class DeveloperPracticeStandingsAdapterTest {
 
     @BeforeEach
     void data() {
+        when(visibility.asOneRead(anyLong(), any()))
+                .thenAnswer(i -> i.<Supplier<?>>getArgument(1).get());
         when(practices.findByWorkspaceId(1L))
                 .thenAnswer(i -> List.of(data.getFirst().practice()));
         when(results.forDevelopersSince(eq(1L), anyCollection(), any(Instant.class), anyBoolean()))

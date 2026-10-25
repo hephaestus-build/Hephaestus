@@ -72,11 +72,12 @@ it("opens the viewed member's conversation read-only, without a live stream", as
 	expect(FakeEventSource.instances).toHaveLength(0);
 });
 
-it("says that a viewed member with no conversation has no messages, rather than show an empty log", async () => {
+it("says that a viewed member with no conversation has no messages, and whose they would be", async () => {
 	server.use(...new MentorFake("engineering").handlers());
 
 	renderRouteAt("/w/engineering/mentor", queryClient);
 	await screen.findByText("No messages yet", {}, ROUTE_RENDER_WAIT);
+	screen.getByText("Questions Alex asks Heph, here or in Slack, show up with Heph’s answers.");
 	// The greeting invites the reader to ask, which a view cannot.
 	expect(screen.queryByRole("textbox")).toBeNull();
 });

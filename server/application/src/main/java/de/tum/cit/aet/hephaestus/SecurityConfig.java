@@ -133,12 +133,11 @@ public class SecurityConfig {
      * A verified passkey supplies its own separate factor.
      */
     private static Optional<GrantedAuthority> signInFactor(@Nullable Object authTime) {
-        Instant issuedAt =
-                switch (authTime) {
-                    case Instant instant -> instant;
-                    case Number epochSeconds -> Instant.ofEpochSecond(epochSeconds.longValue());
-                    case null, default -> null;
-                };
+        Instant issuedAt = switch (authTime) {
+            case Instant instant -> instant;
+            case Number epochSeconds -> Instant.ofEpochSecond(epochSeconds.longValue());
+            case null, default -> null;
+        };
         return Optional.ofNullable(issuedAt)
                 .map(at -> FactorGrantedAuthority.withAuthority(FactorGrantedAuthority.AUTHORIZATION_CODE_AUTHORITY)
                         .issuedAt(at)

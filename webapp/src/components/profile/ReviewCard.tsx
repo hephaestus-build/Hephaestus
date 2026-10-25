@@ -2,7 +2,7 @@ import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { cn } from "cn";
-import type { ItemRef, ProfileReview, ResultList } from "@/api/types.gen";
+import type { ItemRef, ResultList } from "@/api/types.gen";
 import { DotSeparator } from "@/components/common/DotSeparator";
 import { InlineLink } from "@/components/common/InlineLink";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
@@ -11,13 +11,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { formatShortDay, formatTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
+import { deliveredOnly } from "./ObservationFeedback";
 import { OwnFeedbackList } from "./OwnFeedbackList";
 import { ReviewResultRow } from "./ReviewResultRow";
-import type { FeedbackResponseControls } from "./reviews";
+import type { FeedbackResponseControls, ReviewEntry } from "./reviews";
 import { TimelineItem } from "./TimelineItem";
 
 export interface ReviewCardProps {
-	review: ProfileReview;
+	review: ReviewEntry;
 	/** The reader's response to each piece of feedback; absent leaves no response controls. */
 	responses?: FeedbackResponseControls;
 	/** Route-owned, lazy detail for one observation. */
@@ -25,11 +26,14 @@ export interface ReviewCardProps {
 	/** Off on a practice's own level, where every row is that practice and no row repeats it. */
 	showPracticeName?: boolean;
 	/**
-	 * Which of this card's results arrive open: every one, only the first, or none. Whoever
-	 * places the card decides — a feed of one practice opens its newest row and leaves the reader
-	 * to open the rest.
+	 * Whether a result arrives open; without it every one does. Whoever places the card decides: a
+	 * practice's own level opens one row by its rule (`practice-profile/observation-filter.ts`).
 	 */
-	initiallyOpen?: "all" | "first" | "none";
+	openOnArrival?: (result: ResultList) => boolean;
+	/** The observation a link asked for, which its row marks as selected. */
+	selectedResultId?: string;
+	/** Every row is a match of the search, and wears the accent's bar. */
+	marksSearchMatches?: boolean;
 	/** Set on the last card while earlier reviews exist below the fold. */
 	tailContinues?: boolean;
 }
@@ -45,11 +49,15 @@ export function ReviewCard({
 	responses,
 	renderObservation,
 	showPracticeName = true,
-	initiallyOpen = "all",
+	openOnArrival,
+	selectedResultId,
+	marksSearchMatches = false,
 	tailContinues = false,
 }: ReviewCardProps) {
 	const [showAllResults, setShowAllResults] = useState(false);
 	const { results, feedback } = review;
+	// Only feedback that reached the reader is listed; the band goes when none did.
+	const delivered = deliveredOnly(feedback);
 	const at = review.review.createdAt;
 	const merged = results.length === 1;
 	const hiddenCount = Math.max(0, results.length - COLLAPSED_RESULT_COUNT);
@@ -69,16 +77,21 @@ export function ReviewCard({
 			}
 			tailContinues={tailContinues}
 		>
-			<div className="min-w-0 overflow-hidden rounded-xl border bg-background">
+			{/* The feedback card's edge, a stronger outline and a faint shadow, so each observation card
+			    stands off the page as a feedback card does. */}
+			<div className="min-w-0 overflow-hidden rounded-xl border border-foreground/15 bg-background shadow-sm">
 				{!merged && <ReviewedItem item={review.review.item} tone="head" />}
 				<ul className="divide-y">
-					{visibleResults.map((result, index) => (
+					{visibleResults.map((result) => (
 						<ReviewResultRow
-							key={result.id}
+							// A row whose arrival state changes starts again from it: the open state is the
+							// row's own, so a filter that moves the target must remount the row to move it.
+							key={`${result.id}:${String(openOnArrival?.(result) ?? true)}`}
 							result={result}
-							responses={responses}
+							selected={result.id === selectedResultId}
+							matched={marksSearchMatches}
 							details={renderObservation?.(result)}
-							defaultOpen={initiallyOpen === "all" || (initiallyOpen === "first" && index === 0)}
+							defaultOpen={openOnArrival?.(result) ?? true}
 							showPracticeName={showPracticeName}
 							work={merged ? <ReviewedItem item={review.review.item} tone="line" /> : undefined}
 						/>
@@ -104,9 +117,9 @@ export function ReviewCard({
 						</Button>
 					</div>
 				)}
-				{renderObservation === undefined && feedback.length > 0 && (
+				{renderObservation === undefined && delivered.length > 0 && (
 					<div className="border-t bg-sidebar px-4 py-3">
-						<OwnFeedbackList feedback={feedback} responses={responses} />
+						<OwnFeedbackList feedback={delivered} responses={responses} />
 					</div>
 				)}
 			</div>

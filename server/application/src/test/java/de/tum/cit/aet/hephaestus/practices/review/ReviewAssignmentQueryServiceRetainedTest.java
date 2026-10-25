@@ -2,7 +2,9 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
+import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -26,7 +28,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.LongStream;
@@ -62,13 +64,21 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
             json);
 
     private void itemReview() {
-        when(reviews.findByIdAndWorkspaceId(REVIEW, WORKSPACE))
-                .thenReturn(Optional.of(Review.builder()
+        when(reviews.findByWorkspaceIdAndIdIn(eq(WORKSPACE), anyCollection()))
+                .thenReturn(List.of(Review.builder()
                         .id(REVIEW)
                         .workspaceId(WORKSPACE)
                         .itemId(ITEM)
                         .kind(ReviewKind.ITEM)
                         .build()));
+        when(itemQuery.findAll(eq(WORKSPACE), anyCollection())).thenReturn(Map.of(ITEM, REF));
+    }
+
+    private void keyedRows(List<ReviewItem> first, List<ReviewItem> second) {
+        when(items.findByWorkspaceIdAndReviewedItems(
+                        eq(WORKSPACE), aryEq(new UUID[] {REVIEW}), aryEq(new Long[] {ITEM})))
+                .thenReturn(first)
+                .thenReturn(second);
     }
 
     private ReviewItem row(long practiceId) {
@@ -82,6 +92,7 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
                 .practiceId(practiceId)
                 .itemId(ITEM)
                 .itemVersion("retained-work-version")
+                .jobId(JOB)
                 .detail(detail)
                 .build();
     }
@@ -97,9 +108,7 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
         itemReview();
         var rows = new ArrayList<ReviewItem>();
         LongStream.rangeClosed(1, 38).forEach(practice -> rows.add(row(practice)));
-        when(items.findByWorkspaceIdAndReviewIdAndItemIdIn(WORKSPACE, REVIEW, Set.of(ITEM)))
-                .thenReturn(rows);
-        when(itemQuery.find(WORKSPACE, ITEM)).thenReturn(Optional.of(REF));
+        keyedRows(rows, rows);
 
         var retained = service.retained(WORKSPACE, REVIEW, JOB, keys(37));
 
@@ -111,13 +120,12 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
             assertThat(entry.developerId()).isEqualTo(DEVELOPER);
             assertThat(entry.item()).isEqualTo(REF);
         });
-        verify(reviews, times(1)).findByIdAndWorkspaceId(REVIEW, WORKSPACE);
-        verify(items, times(1)).findByWorkspaceIdAndReviewIdAndItemIdIn(WORKSPACE, REVIEW, Set.of(ITEM));
+        verify(reviews, times(1)).findByWorkspaceIdAndIdIn(eq(WORKSPACE), anyCollection());
+        verify(items, times(1)).findByWorkspaceIdAndReviewedItems(eq(WORKSPACE), any(), any());
         verify(items, never())
                 .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(anyLong(), any(), anyLong(), anyLong());
-        verify(items, never())
-                .findByWorkspaceIdAndReviewIdAndJobIdOrderByPracticeIdAscItemIdAsc(anyLong(), any(), any());
-        verify(itemQuery, times(1)).find(WORKSPACE, ITEM);
+        verify(items, never()).findByWorkspaceIdAndJobIdIn(anyLong(), anyCollection());
+        verify(itemQuery, times(1)).findAll(eq(WORKSPACE), anyCollection());
     }
 
     @Test
@@ -126,10 +134,7 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
         var rows = new ArrayList<ReviewItem>();
         LongStream.rangeClosed(1, 37).forEach(practice -> rows.add(row(practice)));
         rows.set(20, row(21, json.createObjectNode().put("developerId", "5")));
-        when(items.findByWorkspaceIdAndReviewIdAndItemIdIn(WORKSPACE, REVIEW, Set.of(ITEM)))
-                .thenReturn(rows)
-                .thenReturn(rows.subList(0, 36));
-        when(itemQuery.find(WORKSPACE, ITEM)).thenReturn(Optional.of(REF));
+        keyedRows(rows, rows.subList(0, 36));
 
         assertThat(service.retained(WORKSPACE, REVIEW, JOB, keys(37)))
                 .as("a developer that is not a number makes the whole run unattributed, not a partial answer")
@@ -145,18 +150,17 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
         foreign.add(new ReviewAssignmentId(UUID.randomUUID(), 3, ITEM));
 
         assertThat(service.retained(WORKSPACE, REVIEW, JOB, foreign)).isEmpty();
-        verify(reviews, never()).findByIdAndWorkspaceId(any(), anyLong());
-        verify(items, never()).findByWorkspaceIdAndReviewIdAndItemIdIn(anyLong(), any(), any());
+        verify(reviews, never()).findByWorkspaceIdAndIdIn(anyLong(), anyCollection());
+        verify(items, never()).findByWorkspaceIdAndReviewedItems(anyLong(), any(), any());
     }
 
     @Test
     void shouldAttributeABoundRunWithoutRecordedKeysOnlyWhenEveryBoundRowIsReadable() {
         itemReview();
         var unreadable = row(2, null);
-        when(items.findByWorkspaceIdAndReviewIdAndJobIdOrderByPracticeIdAscItemIdAsc(WORKSPACE, REVIEW, JOB))
+        when(items.findByWorkspaceIdAndJobIdIn(WORKSPACE, List.of(JOB)))
                 .thenReturn(List.of(row(1)))
                 .thenReturn(List.of(row(1), unreadable));
-        when(itemQuery.find(WORKSPACE, ITEM)).thenReturn(Optional.of(REF));
 
         assertThat(service.retained(WORKSPACE, REVIEW, JOB, List.of()))
                 .extracting(ReviewAssignmentQuery.Retained::developerId)
@@ -164,7 +168,38 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
         assertThat(service.retained(WORKSPACE, REVIEW, JOB, List.of()))
                 .as("one bound row without attribution makes the run unattributed")
                 .isEmpty();
-        verify(items, never()).findByWorkspaceIdAndReviewIdAndItemIdIn(anyLong(), any(), any());
+        verify(items, never()).findByWorkspaceIdAndReviewedItems(anyLong(), any(), any());
+    }
+
+    @Test
+    void shouldAttributeEachRunOfOneBatchFromItsOwnRowsOnly() {
+        itemReview();
+        var boundJob = UUID.randomUUID();
+        var shared = row(3);
+        shared.setJobId(boundJob);
+        when(items.findByWorkspaceIdAndReviewedItems(
+                        eq(WORKSPACE), aryEq(new UUID[] {REVIEW}), aryEq(new Long[] {ITEM})))
+                .thenReturn(List.of(row(1), row(2), shared));
+        when(items.findByWorkspaceIdAndJobIdIn(eq(WORKSPACE), anyCollection())).thenReturn(List.of(shared));
+        var keyed = List.of(new ReviewAssignmentId(REVIEW, 1, ITEM), new ReviewAssignmentId(REVIEW, 3, ITEM));
+        var missingReview = UUID.randomUUID();
+
+        var retained = service.retained(
+                WORKSPACE,
+                List.of(
+                        new ReviewAssignmentQuery.RetainedRun(REVIEW, JOB, keyed),
+                        new ReviewAssignmentQuery.RetainedRun(REVIEW, boundJob, List.of()),
+                        new ReviewAssignmentQuery.RetainedRun(missingReview, UUID.randomUUID(), List.of())));
+
+        assertThat(retained).as("a run whose review is gone is not answered").containsOnlyKeys(JOB, boundJob);
+        assertThat(retained.get(JOB))
+                .as("the keyed run reads exactly its recorded keys, the shared row once")
+                .extracting(ReviewAssignmentQuery.Retained::id)
+                .containsExactlyElementsOf(keyed);
+        assertThat(retained.get(boundJob))
+                .as("the bound run reads only the row bound to it, not the keyed run's rows")
+                .extracting(ReviewAssignmentQuery.Retained::id)
+                .containsExactly(new ReviewAssignmentId(REVIEW, 3, ITEM));
     }
 
     private static Review partialReview() {

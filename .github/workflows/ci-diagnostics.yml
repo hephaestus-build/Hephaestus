@@ -11,7 +11,7 @@ jobs:
   report:
     name: "Completed CI diagnostics"
     runs-on: ubuntu-slim
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       actions: read
     # Read metadata only. Never check out upstream source or consume executable artifacts here.

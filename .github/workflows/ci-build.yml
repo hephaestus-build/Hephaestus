@@ -84,6 +84,17 @@ jobs:
             echo "| API specs sync | :x: Out of sync | \`vp run generate:api\` |" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
+      - name: Configuration reference
+        id: configuration-reference
+        continue-on-error: true
+        env:
+          HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
+        run: |
+          vp run generate:configuration-reference
+          if ! node scripts/assert-generated-clean.ts docs/admin/configuration-reference.mdx; then
+            echo "::error::Configuration reference out of sync. Run: vp run generate:configuration-reference"
+            exit 1
+          fi
       - name: Migration chain, schema drift and ERD
         id: schema
         continue-on-error: true
@@ -125,10 +136,11 @@ jobs:
         if: always()
         env:
           OPENAPI: ${{ steps.openapi.outcome }}
+          CONFIGURATION_REFERENCE: ${{ steps.configuration-reference.outcome }}
           SCHEMA: ${{ steps.schema.outcome }}
         run: |
-          if [ "$OPENAPI" != "success" ] || [ "$SCHEMA" != "success" ]; then
-            echo "::error::OpenAPI or schema validation failed; review both independently reported steps."
+          if [ "$OPENAPI" != "success" ] || [ "$CONFIGURATION_REFERENCE" != "success" ] || [ "$SCHEMA" != "success" ]; then
+            echo "::error::OpenAPI, configuration reference or schema validation failed; review the independently reported steps."
             exit 1
           fi
 

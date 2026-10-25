@@ -19,7 +19,7 @@ jobs:
     permissions:
       contents: read
       deployments: read
-    timeout-minutes: 5
+    timeout-minutes: 15
     outputs:
       previews: ${{ steps.candidates.outputs.previews }}
     steps:
@@ -57,7 +57,7 @@ jobs:
       group: hephaestus-preview-lifecycle-${{ matrix.pr }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
     env:
       COOLIFY_URL: ${{ vars.COOLIFY_URL }}
       COOLIFY_APP_UUID: ${{ vars.COOLIFY_APP_UUID }}

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { split } from "@/stories/practices-across-the-workspace-story-data";
 
@@ -49,24 +49,24 @@ export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByRole("img", {
-				name: "28 developers in this workspace: 4 Needs attention, 5 Mixed feedback, 12 Going well, 7 none yet. The You marker is on Mixed feedback.",
+				name: "28 developers in this workspace: 4 Needs attention, 5 Mixed feedback, 12 Going well, 7 none yet. You are in the Mixed feedback part.",
 			}),
 		).toBeVisible();
 		// Only the row whose own standing rests on earlier reviews says so.
 		await expect(
-			canvas.getAllByRole("button", { name: /^Based on earlier reviews/u }),
+			canvas.getAllByText("Based on earlier reviews, the criteria might have changed"),
 		).toHaveLength(1);
 	},
 };
 
-const onOpenRow = fn();
-
-/** The mark on an earlier-reviews row opens its sentence without following the row's link. */
-export const EarlierReviewsMarkDoesNotOpenTheRow: Story = {
-	args: { rowLink: () => ({ text: "Open", onOpen: onOpenRow }) },
+/** The mark on an earlier-reviews row is words only: no control of its own competes with the row. */
+export const EarlierReviewsMarkIsWordsOnly: Story = {
+	args: { rowLink: () => ({ text: "Open", onOpen: fn() }) },
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Based on earlier reviews" }));
-		await expect(onOpenRow).not.toHaveBeenCalled();
+		await expect(canvas.queryByRole("button", { name: /^Based on earlier reviews/u })).toBeNull();
+		await expect(
+			canvas.getByText("Based on earlier reviews, the criteria might have changed"),
+		).toBeVisible();
 	},
 };
 

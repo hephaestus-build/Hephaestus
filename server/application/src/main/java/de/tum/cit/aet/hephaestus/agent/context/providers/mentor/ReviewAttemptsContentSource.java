@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
@@ -16,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -112,8 +112,17 @@ public class ReviewAttemptsContentSource implements ContentSource {
                 .put("scope", "RETAINED_REVIEW_JOBS_ABOUT_DEVELOPER")
                 .put("lookbackDays", LOOKBACK_DAYS)
                 .put("maxEntries", MAX_ATTEMPTS);
-        var candidates = jobs.findByWorkspaceIdAndAvailableAtGreaterThanEqualOrderByAvailableAtDesc(
+        var candidates = jobs.findAttemptsByWorkspaceIdAndAvailableAtGreaterThanEqualOrderByAvailableAtDesc(
                 workspaceId, now.minus(LOOKBACK_DAYS, ChronoUnit.DAYS), PageRequest.of(0, 201));
+        var read = candidates.stream().limit(200).toList();
+        // Every run's assignments in one read; each work item's mentoring permission once, however many runs it had.
+        var retainedByJob = assignments.retained(
+                workspaceId,
+                read.stream()
+                        .map(job -> new ReviewAssignmentQuery.RetainedRun(
+                                job.getReviewId(), job.getId(), job.getInput().assignments()))
+                        .toList());
+        Map<ItemRef, Boolean> permitted = new HashMap<>();
         coverage.put("listingComplete", candidates.size() <= 200);
         var rows = root.putArray("attempts");
         List<Listed> listed = new ArrayList<>();
@@ -122,9 +131,9 @@ public class ReviewAttemptsContentSource implements ContentSource {
         // flag
         // says so, so another developer's runs are not counted here.
         boolean attributionComplete = true;
-        for (ReviewJob job : candidates.stream().limit(200).toList()) {
+        for (var job : read) {
             var asked = job.getInput().assignments();
-            var retained = assignments.retained(workspaceId, job.getReviewId(), job.getId(), asked);
+            var retained = retainedByJob.getOrDefault(job.getId(), List.of());
             if (retained.isEmpty() || (!asked.isEmpty() && retained.size() != asked.size())) {
                 attributionComplete = false;
                 continue;
@@ -135,11 +144,7 @@ public class ReviewAttemptsContentSource implements ContentSource {
                             || (entry.item().kind().equals(selection.get().kind())
                                     && Long.valueOf(selection.get().sourceId())
                                             .equals(entry.item().sourceId())))
-                    .filter(entry -> sources.stream()
-                            .filter(source ->
-                                    source.kinds().contains(entry.item().kind()))
-                            .anyMatch(
-                                    source -> source.permits(entry.item(), SourceUsePurpose.CONVERSATIONAL_MENTORING)))
+                    .filter(entry -> permitted.computeIfAbsent(entry.item(), this::permitsMentoring))
                     .findFirst();
             if (pinned.isEmpty()) continue;
             if (rows.size() == MAX_ATTEMPTS) {
@@ -189,6 +194,12 @@ public class ReviewAttemptsContentSource implements ContentSource {
         if (selection.isPresent() && rows.isEmpty())
             root.put("status", attributionComplete && candidates.size() <= 200 ? "NOT_FOUND" : "UNAVAILABLE");
         return root;
+    }
+
+    private boolean permitsMentoring(ItemRef item) {
+        return sources.stream()
+                .filter(source -> source.kinds().contains(item.kind()))
+                .anyMatch(source -> source.permits(item, SourceUsePurpose.CONVERSATIONAL_MENTORING));
     }
 
     private record Listed(ObjectNode row, ItemRef item, ReviewAssignmentQuery.ReviewedItem reviewed) {}

@@ -248,7 +248,7 @@ export const TWO_DEVELOPERS_WORKSPACE: PracticesAcrossWorkspace = {
 	],
 };
 
-/** Two developers are counted, and the reader is not one of them: no You marker anywhere. */
+/** Two developers are counted, and the reader is not one of them: no You bracket anywhere. */
 export const READER_NOT_COUNTED_WORKSPACE: PracticesAcrossWorkspace = {
 	...TWO_DEVELOPERS_WORKSPACE,
 	openFeedback: { yours: 0, middle: { low: 1, high: 2 } },
@@ -310,6 +310,15 @@ export const TILES_BY_WINDOW: Record<
 	PracticesAcrossWorkspaceTiles["window"],
 	PracticesAcrossWorkspaceTiles
 > = {
+	DAYS_7: {
+		window: "DAYS_7",
+		developersWithAStandingInWindow: 12,
+		yourPractices: 18,
+		includesEarlierReviews: false,
+		reviewedWork: figure(3, 1, 4),
+		practicesGoingWell: figure(5, 3, 7),
+		practicesNeedingAttention: figure(2, 1, 4),
+	},
 	DAYS_30: {
 		window: "DAYS_30",
 		developersWithAStandingInWindow: 21,

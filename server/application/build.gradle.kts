@@ -209,6 +209,15 @@ val packagedServer = providers.gradleProperty("packagedServer").map(String::toBo
 val criteriaCases = providers.gradleProperty("criteriaCases")
 // Optional ceiling on the upstream model requests that each selected live case sends.
 val criteriaRequestLimit = providers.gradleProperty("criteriaRequestLimit")
+// Optional model settings for selected live cases; an absent one keeps the harness default.
+val criteriaTokenSettings = listOf("criteriaContextWindow", "criteriaMaxOutputTokens")
+val criteriaReasoningEffort = providers.gradleProperty("criteriaReasoningEffort")
+
+// Fails at configuration, before any test JVM starts. The live test checks the same values again
+// when it runs.
+fun requirePositiveInt(name: String, value: String) =
+    require((value.toIntOrNull() ?: 0) > 0) { "$name must be a positive integer, not '$value'" }
+
 val testTiers =
     mapOf(
         "test" to "unit",
@@ -358,10 +367,23 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
         if (tag == "live" && criteriaRequestLimit.isPresent) {
             val limit = criteriaRequestLimit.get()
             require(criteriaCases.isPresent) { "criteriaRequestLimit needs criteriaCases" }
-            require((limit.toIntOrNull() ?: 0) > 0) {
-                "criteriaRequestLimit must be a positive integer, not '$limit'"
-            }
+            requirePositiveInt("criteriaRequestLimit", limit)
             systemProperty("hephaestus.live.criteriaRequestLimit", limit)
+        }
+        if (tag == "live") {
+            for (name in criteriaTokenSettings) {
+                val value = providers.gradleProperty(name).orNull ?: continue
+                require(criteriaCases.isPresent) { "$name needs criteriaCases" }
+                requirePositiveInt(name, value)
+                systemProperty("hephaestus.live.$name", value)
+            }
+            if (criteriaReasoningEffort.isPresent) {
+                require(criteriaCases.isPresent) { "criteriaReasoningEffort needs criteriaCases" }
+                systemProperty(
+                    "hephaestus.live.criteriaReasoningEffort",
+                    criteriaReasoningEffort.get(),
+                )
+            }
         }
     }
 }

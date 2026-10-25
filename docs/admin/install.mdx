@@ -22,6 +22,7 @@ The stack you get:
 | `nats-server`        | NATS JetStream event buffer                                                                  |
 
 Docker Compose on one Linux host supports all 1.x releases.
+[Support for 1.x](./compatibility-policy#support-for-1x) gives the supported installs and the security-fix period after 2.0.
 **Hephaestus 2.0 runs on Kubernetes only**.
 It includes one Helm chart and removes the Compose stack described here.
 The 2.0 release includes a migration guide for your database, event buffer, and secrets.
@@ -72,13 +73,7 @@ To see which Docker Engine and Docker Compose a release ran, download the `host-
 - An NTP-synchronized clock. [Clocks](#clocks) explains why.
 - A **DNS A record** that points your hostname at the host.
   Ports **80 and 443** must be reachable from the internet for `Let's Encrypt` HTTP-01, OAuth callbacks, and webhooks.
-- Outbound HTTPS for these purposes:
-  - Images: `ghcr.io` and `docker.io`.
-  - Release lock: `github.com` and `api.github.com`.
-  - Keyless signature verification: `fulcio.sigstore.dev`, `rekor.sigstore.dev`, and `tuf-repo-cdn.sigstore.dev`.
-
-  Database migrations do not fetch or send Liquibase usage analytics.
-  Set `LIQUIBASE_ANALYTICS_ENABLED=true` to send them.
+- Outbound HTTPS to the destinations in [Network egress](./network-egress).
 - The [Node.js](https://nodejs.org/en/download) version pinned in `package.json#devEngines.runtime`
   and [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) for release-lock
   verification.
@@ -267,10 +262,11 @@ For the break-glass bootstrap token, see [Instance admin](./instance-admin#boots
 
 ```bash
 docker compose --env-file .env --env-file release-lock.env up -d
-docker compose --env-file .env --env-file release-lock.env logs -f application-server
+docker compose --env-file .env --env-file release-lock.env logs -f database-migration application-server
 ```
 
-First startup pulls about 2 GB of images and runs all database migrations.
+First startup pulls about 2 GB of images, and the one-shot `database-migration` service runs all database migrations.
+The application server starts after it completes. A failed migration shows in its log.
 It can take a few minutes.
 
 1. Open `https://<APP_HOSTNAME>`.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cleanLabel } from "@/components/practice-vocabulary/practice-feedback-timeline";
+import { cleanProgress } from "@/components/practice-vocabulary/practice-feedback-timeline";
 import { SAMPLE_PATTERN, sampleOpenCards } from "@/stories/practice-profile-samples";
 import { practicePatternOf } from "./practice-pattern";
 
@@ -23,7 +23,7 @@ describe("practicePatternOf", () => {
 			cleanCount: 1,
 			cleanNeeded: 3,
 		});
-		expect(cleanLabel(SAMPLE_PATTERN)).toBe("1 of 3 clean");
+		expect(cleanProgress(SAMPLE_PATTERN)).toBe("1 clean in a row · 2 more resolve it");
 	});
 
 	it("reads the pattern from an open card that rests on one piece of work", () => {

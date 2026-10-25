@@ -61,10 +61,10 @@ export function SurveyActions({
 	const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 	const availability = surveyAvailability(survey, now);
 	const { responded, declined } = survey.participation;
-	const deleteTitle =
+	const deleteDescription =
 		responded + declined === 0
-			? "Delete this survey?"
-			: `Delete this survey and its ${counted(responded, "response")} and ${counted(declined, "decline")}?`;
+			? "You cannot undo this."
+			: `This deletes its ${counted(responded, "response")} and ${counted(declined, "decline")}. You cannot undo this.`;
 
 	return (
 		<>
@@ -140,8 +140,8 @@ export function SurveyActions({
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>{deleteTitle}</AlertDialogTitle>
-						<AlertDialogDescription>You cannot undo this.</AlertDialogDescription>
+						<AlertDialogTitle>Delete survey “{survey.title}”?</AlertDialogTitle>
+						<AlertDialogDescription>{deleteDescription}</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>Cancel</AlertDialogCancel>

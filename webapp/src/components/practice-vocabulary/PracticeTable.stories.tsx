@@ -3,8 +3,10 @@ import { ClipboardCheckIcon } from "lucide-react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import type { PracticeStanding } from "@/api/types.gen";
+import { InfoTip } from "@/components/common/InfoTip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell } from "@/components/ui/table";
+import { expectSettledVisible } from "@/stories/overlay";
 import { practicesByGroup } from "@/stories/practice-profile-story-mock-data";
 import { Stateful } from "@/stories/stateful";
 
@@ -115,6 +117,27 @@ export const Default: Story = {
 	},
 };
 
+/**
+ * `subjectInfo`, an (i) beside the subject's heading for a page that says nowhere else what the
+ * subject is. The heading's words keep the foreground; the (i) opens its sentence.
+ */
+export const SubjectInfo: Story = {
+	args: {
+		subjectInfo: (
+			<InfoTip label="About practices">A practice is a way of working that reviews check.</InfoTip>
+		),
+	},
+	globals: { viewport: { value: "reflow" } },
+	play: async ({ canvas }) => {
+		const info = canvas.getByRole("button", { name: "About practices" });
+		await expect(info.closest("th")).toHaveTextContent(/Practice/u);
+		await userEvent.click(info);
+		await expectSettledVisible(
+			await within(document.body).findByText("A practice is a way of working that reviews check."),
+		);
+	},
+};
+
 export const MobileSort: Story = {
 	decorators: [
 		(Story) => (
@@ -158,7 +181,14 @@ export const OpensFromTheStandingCell: Story = {
 		const badge = within(row).getByRole("button", { name: "Mixed feedback" });
 		await userEvent.click(badge);
 		await expect(onOpen).toHaveBeenLastCalledWith("describe-what-and-why");
-		await userEvent.click(within(row).getByRole("button", { name: "Not enough to compare yet" }));
+		// The chip names itself a trend, and its sentence says what a trend compares.
+		const trend = within(row).getByRole("button", { name: "Not enough to compare yet" });
+		await expect(trend).toHaveAccessibleDescription(
+			expect.stringContaining(
+				"The trend compares your latest reviewed work with the work before it",
+			),
+		);
+		await userEvent.click(trend);
 		await expect(onOpen).toHaveBeenCalledTimes(2);
 
 		onOpen.mockClear();

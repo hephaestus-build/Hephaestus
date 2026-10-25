@@ -169,13 +169,12 @@ public class EmailGateway {
 
     private static boolean isPermanentFailure(Throwable failure) {
         for (Throwable current = failure; current != null; current = current.getCause()) {
-            int code =
-                    switch (current) {
-                        case SMTPSendFailedException smtp -> smtp.getReturnCode();
-                        case SMTPSenderFailedException smtp -> smtp.getReturnCode();
-                        case SMTPAddressFailedException smtp -> smtp.getReturnCode();
-                        default -> 0;
-                    };
+            int code = switch (current) {
+                case SMTPSendFailedException smtp -> smtp.getReturnCode();
+                case SMTPSenderFailedException smtp -> smtp.getReturnCode();
+                case SMTPAddressFailedException smtp -> smtp.getReturnCode();
+                default -> 0;
+            };
             if (code >= 400 && code < 600) {
                 return code >= 500;
             }

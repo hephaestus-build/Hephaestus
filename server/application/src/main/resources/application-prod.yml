@@ -8,6 +8,8 @@ spring:
             ddl-auto: none
     liquibase:
         contexts: prod
+        # The migrate run mode applies the changelog before a release starts; every role waits for it.
+        enabled: false
 
     # No resourceserver.jwt.issuer-uri in prod: tokens are issued + verified by Hephaestus
     # itself (core.auth). Required prod env: HEPHAESTUS_AUTH_ISSUER,

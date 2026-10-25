@@ -12,7 +12,7 @@ import { HephTimelineSkeleton } from "@/components/mentor/HephTimelineSkeleton";
 import { ThreadGone } from "@/components/mentor/ThreadPanel";
 import { liveTurnOf } from "@/components/mentor/timeline-rows";
 import { WeeklyDigestCard } from "@/components/mentor/WeeklyDigestCard";
-import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Marker, MarkerContent } from "@/components/ui/marker";
 import {
 	type HephActions,
@@ -30,7 +30,7 @@ import { useAuth } from "@/runtime/auth/AuthContext";
  * they read the conversation through the hooks and hand the components plain props.
  */
 
-const copy = (text: string) => copyToClipboard(text, "Copied.");
+const copy = (text: string) => copyToClipboard(text, "Message copied");
 
 /** Signs the developer's messages: the viewed member's in a user view, else the signed-in account's. */
 function useDeveloper(): MessageAuthor {
@@ -55,15 +55,30 @@ function offeredActions(actions: HephActions, { readOnly, canAsk }: Conversation
 	return canAsk ? actions : { ...actions, ask: undefined };
 }
 
-/** Stands in for a conversation with no message, where nobody can ask in it from here. */
-function NoMessages() {
+/** A user view of a conversation with no message: whose conversation it is, and what appears in it. */
+function NoMessagesYet({ name }: { name: string }) {
 	return (
 		<Empty>
 			<EmptyHeader>
 				<EmptyTitle>No messages yet</EmptyTitle>
+				<EmptyDescription>
+					Questions {name} asks Heph, here or in Slack, show up with Heph’s answers.
+				</EmptyDescription>
 			</EmptyHeader>
 		</Empty>
 	);
+}
+
+/**
+ * What stands in for a conversation with no message. Where the developer cannot ask, the notice
+ * above the conversation already says why and what to do, so a second empty state under it would
+ * only repeat that nothing is there.
+ */
+function emptyConversation({ readOnly, canAsk }: ConversationAccess, developer: MessageAuthor) {
+	if (canAsk) {
+		return <Greeting />;
+	}
+	return readOnly ? <NoMessagesYet name={developer.name} /> : undefined;
 }
 
 /** The turn the composer's Stop ends: the live one. */
@@ -118,7 +133,7 @@ export function MainConversation({
 			livePaused={livePaused}
 			jumpTo={jumpTo}
 			actions={offeredActions(actions, { readOnly, canAsk })}
-			empty={canAsk ? <Greeting /> : <NoMessages />}
+			empty={emptyConversation({ readOnly, canAsk }, developer)}
 			composer={
 				canAsk ? (
 					<HephComposer

@@ -81,10 +81,15 @@ class PracticeRunnerLiveLlmTest {
 
     private static final String PRACTICE = "avoids-insecure-defaults-and-over-broad-permissions";
 
+    // Read once in installPiSdk, so every case of this class sends the same settings.
+    private static LiveModelSettings modelSettings = LiveModelSettings.DEFAULTS;
+
     @BeforeAll
     static void installPiSdk() throws Exception {
-        // An invalid request limit fails here, before the SDK install, the credentials or any model request.
+        // An invalid request limit or model setting fails here, before the SDK install, the credentials or any model
+        // request.
         ProxyStandIn.requestLimit(System.getProperty(ProxyStandIn.REQUEST_LIMIT_PROPERTY));
+        modelSettings = LiveModelSettings.fromSystemProperties();
         PiSdkInstallation.ensureInstalled();
     }
 
@@ -256,8 +261,10 @@ class PracticeRunnerLiveLlmTest {
     }
 
     private Map<String, String> stageWorkspace(LiveLlmCredentials creds, @Nullable JsonNode scenario) throws Exception {
+        System.out.printf("[practice-live] model settings: %s%n", modelSettings);
         PracticeSandboxSpec spec = LiveRunnerWorkspace.adapter()
-                .buildSandboxSpec(LiveRunnerWorkspace.request(creds.model(), "live-test-job-token", Map.of()));
+                .buildSandboxSpec(
+                        LiveRunnerWorkspace.request(creds.model(), "live-test-job-token", Map.of(), modelSettings));
         LiveRunnerWorkspace.stageSpec(WORKSPACE, spec.inputFiles());
         String kind = "scm.pull_request";
         Map<String, JsonNode> definitions;
@@ -413,21 +420,7 @@ class PracticeRunnerLiveLlmTest {
 
         /** The request limit named by {@code value}, a positive {@code int}; absent when the value is. */
         static OptionalInt requestLimit(@Nullable String value) {
-            if (value == null) {
-                return OptionalInt.empty();
-            }
-            int limit;
-            try {
-                limit = Integer.parseInt(value);
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(
-                        REQUEST_LIMIT_PROPERTY + " must be a positive integer, not '" + value + "'", e);
-            }
-            if (limit < 1) {
-                throw new IllegalArgumentException(
-                        REQUEST_LIMIT_PROPERTY + " must be a positive integer, not '" + value + "'");
-            }
-            return OptionalInt.of(limit);
+            return LiveProperty.positiveInt(REQUEST_LIMIT_PROPERTY, value);
         }
 
         /**

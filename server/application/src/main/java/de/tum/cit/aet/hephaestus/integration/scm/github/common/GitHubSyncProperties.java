@@ -44,23 +44,18 @@ import org.springframework.validation.annotation.Validated;
  *                               reactive GraphQL client responses (default: 30 seconds)
  * @param extendedGraphqlTimeout extended timeout for complex GraphQL operations such as syncing
  *                               review comments with nested thread structures (default: 60 seconds)
- * @param backfillGraphqlTimeout timeout for historical backfill operations which fetch large amounts
- *                               of embedded data (PRs with reviews, threads, comments); needs to be
- *                               longer than regular timeout for large repositories like Artemis
- *                               (default: 120 seconds)
+ * @param backfillGraphqlTimeout Timeout for backfill operations, which fetch pull requests with their reviews,
+ *                               threads and comments. Large repositories need a longer timeout than regular sync.
  * @param paginationThrottle     delay between pagination requests to avoid hammering GitHub's API;
  *                               reduces 502/504 errors caused by rapid-fire complex queries
  *                               (default: 200 milliseconds)
  * @param incrementalSyncEnabled whether to use incremental sync based on last sync timestamp;
  *                               when enabled, sync operations fetch only items updated since the
  *                               last sync (default: true)
- * @param incrementalSyncBuffer  safety buffer subtracted from the last sync timestamp to handle
- *                               clock skew between the application server and GitHub; ensures items
- *                               updated just before the recorded timestamp are still fetched
- *                               (default: 5 minutes)
- * @param backfillPrPageSize     page size for PR backfill queries; smaller than regular PR sync
- *                               because backfill includes embedded reviews/threads/comments which
- *                               creates very large responses for complex repos (default: 10)
+ * @param incrementalSyncBuffer  Time subtracted from the last sync time, so that items updated shortly before it are
+ *                               still fetched despite clock differences with GitHub.
+ * @param backfillPrPageSize     Page size of pull request backfill queries. It is smaller than in regular sync,
+ *                               because backfill responses include reviews, threads and comments.
  * @see <a href="https://docs.github.com/en/graphql/overview/rate-limits-and-node-limits-for-the-graphql-api">
  *      GitHub GraphQL Rate Limits</a>
  */

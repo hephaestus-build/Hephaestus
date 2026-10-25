@@ -7,6 +7,8 @@ import type { StatusDef } from "./status-def";
 
 interface StatusBadgeOwnProps {
 	def: StatusDef;
+	/** Lets a label whose words are the whole message wrap onto a second line instead of being cut. */
+	wrap?: boolean;
 }
 
 export type StatusBadgeProps = StatusBadgeOwnProps &
@@ -17,12 +19,16 @@ export type StatusBadgeProps = StatusBadgeOwnProps &
  * the words, the colour and the icon travel together and cannot be recombined at a call site; a
  * per-enum wrapper exists only to pick the entry, never to re-decide how a badge looks.
  */
-export function StatusBadge({ def, className, ...props }: StatusBadgeProps) {
+export function StatusBadge({ def, wrap = false, className, ...props }: StatusBadgeProps) {
 	const { icon: Icon, label, badgeVariant } = def;
 	return (
-		<Badge variant={badgeVariant} className={cn("max-w-full", className)} {...props}>
+		<Badge
+			variant={badgeVariant}
+			className={cn("max-w-full", wrap && "h-auto whitespace-normal", className)}
+			{...props}
+		>
 			<Icon aria-hidden />
-			<span className="truncate">{label}</span>
+			<span className={wrap ? "min-w-0" : "truncate"}>{label}</span>
 		</Badge>
 	);
 }

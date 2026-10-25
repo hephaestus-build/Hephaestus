@@ -364,12 +364,11 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 "onboarding-heph-states-" + tier.name().toLowerCase(Locale.ROOT).replace('_', '-'),
                 persistUser("testuser"));
         var binding = bindHeph(workspace, tier);
-        var initial =
-                switch (tier) {
-                    case IN_HOUSE -> choose(workspace.getWorkspaceSlug(), "IN_HOUSE_ONLY");
-                    case CLOUD -> choose(workspace.getWorkspaceSlug(), "CLOUD");
-                    case UNDECLARED -> state(workspace.getWorkspaceSlug());
-                };
+        var initial = switch (tier) {
+            case IN_HOUSE -> choose(workspace.getWorkspaceSlug(), "IN_HOUSE_ONLY");
+            case CLOUD -> choose(workspace.getWorkspaceSlug(), "CLOUD");
+            case UNDECLARED -> state(workspace.getWorkspaceSlug());
+        };
         assertThat(initial.mentorRefusal()).isNull();
         if (tier == DataHandlingTier.UNDECLARED) {
             assertThat(initial.aiChoice()).isNull();

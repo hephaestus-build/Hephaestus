@@ -1,3 +1,5 @@
+import type { ComponentType } from "react";
+
 import {
 	Activity,
 	AlertTriangle,
@@ -103,6 +105,13 @@ import {
 
 import { humanizeToken } from "@/lib/humanize";
 import { hasText } from "@/lib/text";
+
+/**
+ * Said under a table of colored group names: the color names the group and carries no rating. The
+ * standings beside them have colors that carry meaning, so the group colors need saying apart.
+ */
+export const GROUP_COLORS_NOTE =
+	"The colors of the group names only tell the groups apart. They are not a rating.";
 
 export interface GroupVisual {
 	Icon: LucideIcon;
@@ -273,6 +282,33 @@ export function pillClasses(color?: string | null): string {
 
 export const DEFAULT_GROUP_ICON = "Folder";
 export const DEFAULT_GROUP_COLOR = "slate";
+
+/**
+ * A group's color on its icon or name alone, without the pill's ground: the pill's own text
+ * classes, so the color has one home in `PILL`.
+ */
+export function groupInk(pill: string): string {
+	return pill
+		.split(" ")
+		.filter((name) => !/(?:^|:)bg-/u.test(name))
+		.join(" ");
+}
+
+/** A group as a mark inside or beside another name: its icon, and its color without a ground. */
+export interface GroupMark {
+	Icon: ComponentType<{ className?: string }>;
+	ink: string;
+}
+
+export function groupMark({
+	Icon,
+	pill,
+}: {
+	Icon: ComponentType<{ className?: string }>;
+	pill: string;
+}): GroupMark {
+	return { Icon, ink: groupInk(pill) };
+}
 
 export function getGroupVisual(icon?: string | null, color?: string | null): GroupVisual {
 	const Icon = resolveIcon(icon) ?? Folder;

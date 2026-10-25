@@ -106,11 +106,10 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
      */
     private static Authentication unsignedSession(
             SandboxGatewaySessions.UnsignedSession session, JobTokenAuthenticationFilter.RequestIdentity request) {
-        boolean permitted =
-                switch (session.kind()) {
-                    case HEPH_HOST -> request.commands() || request.workspaceRead();
-                    case REVIEW -> false;
-                };
+        boolean permitted = switch (session.kind()) {
+            case HEPH_HOST -> request.commands() || request.workspaceRead();
+            case REVIEW -> false;
+        };
         if (!permitted || !session.id().toString().equals(request.runtimeJobId())) throw invalid();
         return new JobTokenAuthentication(ProxyIdentity.hostSession(session.id()), Set.of(), null);
     }

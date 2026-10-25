@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
-import type { ProfileReview, ResultList } from "@/api/types.gen";
+import type { ResultList } from "@/api/types.gen";
 
 import { ReviewCard } from "./ReviewCard";
-import type { FeedbackResponseControls } from "./reviews";
+import type { FeedbackResponseControls, ReviewEntry } from "./reviews";
 import { TimelineItemSkeleton } from "./TimelineItem";
 
 export interface ReviewTimelineProps {
-	reviews: ProfileReview[];
+	reviews: ReviewEntry[];
 	/** The reader's response to each piece of feedback, handed to every card. */
 	responses?: FeedbackResponseControls;
 	/** Route-owned, lazy detail for one observation. */
@@ -14,12 +14,14 @@ export interface ReviewTimelineProps {
 	/** Off on a practice's own level, where every row is that practice and no row repeats it. */
 	showPracticeName?: boolean;
 	/**
-	 * Which results arrive open. `"all"` is a feed the reader skims for what it found;
-	 * `"newest"` opens the newest review's first row alone and leaves every earlier one to a press,
-	 * which is what a practice's own level wants — its rows are all the same practice, so the
-	 * latest is the one the reader came for and the rest are its history.
+	 * Whether a result arrives open; without it every one does, a feed the reader skims for what it
+	 * found. A practice's own level opens one row by its rule (`practice-profile/observation-filter.ts`).
 	 */
-	initiallyOpen?: "all" | "newest";
+	openOnArrival?: (result: ResultList) => boolean;
+	/** The observation a link asked for, which its row marks as selected. */
+	selectedResultId?: string;
+	/** True while the search narrows the history: every observation shown matched it and wears the bar. */
+	marksSearchMatches?: boolean;
 	/** True while earlier reviews exist below the fold: the rail then ends in a dashed tail. */
 	continues?: boolean;
 	/** Placeholder cards after the last review while the next page loads; the list is then busy. */
@@ -31,7 +33,9 @@ export function ReviewTimeline({
 	responses,
 	renderObservation,
 	showPracticeName = true,
-	initiallyOpen = "all",
+	openOnArrival,
+	selectedResultId,
+	marksSearchMatches = false,
 	continues = false,
 	loadingMore = 0,
 }: ReviewTimelineProps) {
@@ -48,7 +52,9 @@ export function ReviewTimeline({
 					responses={responses}
 					renderObservation={renderObservation}
 					showPracticeName={showPracticeName}
-					initiallyOpen={cardInitiallyOpen(initiallyOpen, index)}
+					openOnArrival={openOnArrival}
+					selectedResultId={selectedResultId}
+					marksSearchMatches={marksSearchMatches}
 					tailContinues={continues && index === reviews.length - 1}
 				/>
 			))}
@@ -57,14 +63,4 @@ export function ReviewTimeline({
 			))}
 		</ol>
 	);
-}
-
-function cardInitiallyOpen(
-	initiallyOpen: "all" | "newest",
-	index: number,
-): "all" | "first" | "none" {
-	if (initiallyOpen === "all") {
-		return "all";
-	}
-	return index === 0 ? "first" : "none";
 }
