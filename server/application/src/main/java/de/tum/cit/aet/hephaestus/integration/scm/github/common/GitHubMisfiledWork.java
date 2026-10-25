@@ -47,51 +47,44 @@ public class GitHubMisfiledWork {
             Repository repository, long providerId, long nativeId, int number, String issueType, ItemKind kind) {
         var holding = issues.findHolding(providerId, nativeId, issueType).orElse(null);
         if (holding == null || holding.getRepositoryId() == repository.getId()) return Outcome.IN_PLACE;
-        if (issues.registeredAsItem(kind.value(), holding.getId())) {
-            count(issueType, "skipped");
-            log.warn(
-                    "Skipped misfiled work: reason=itemRegistered, type={}, number={}, rowId={}, holdingRepositoryId={},"
-                            + " repositoryId={}",
+        if (issues.moveToRepository(providerId, nativeId, issueType, number, repository.getId(), kind.value()) == 1) {
+            count(issueType, "moved", "none");
+            log.info(
+                    "Moved misfiled work to the repository GitHub reports: type={}, number={}, rowId={},"
+                            + " fromRepositoryId={}, repositoryId={}",
                     issueType,
                     number,
                     holding.getId(),
                     holding.getRepositoryId(),
                     repository.getId());
-            return Outcome.SKIPPED;
+            return Outcome.MOVED;
         }
-        if (issues.moveToRepository(providerId, nativeId, issueType, number, repository.getId()) != 1) {
-            var now = issues.findHolding(providerId, nativeId, issueType).orElse(null);
-            if (now == null || now.getRepositoryId() == repository.getId()) return Outcome.IN_PLACE;
-            count(issueType, "skipped");
-            log.warn(
-                    "Skipped misfiled work: reason=idHeldByAnotherRepository, type={}, number={}, rowId={},"
-                            + " holdingRepositoryId={}, repositoryId={}",
-                    issueType,
-                    number,
-                    now.getId(),
-                    now.getRepositoryId(),
-                    repository.getId());
-            return Outcome.SKIPPED;
-        }
-        count(issueType, "moved");
-        log.info(
-                "Moved misfiled work to the repository GitHub reports: type={}, number={}, rowId={},"
-                        + " fromRepositoryId={}, repositoryId={}",
+        var now = issues.findHolding(providerId, nativeId, issueType).orElse(null);
+        if (now == null || now.getRepositoryId() == repository.getId()) return Outcome.IN_PLACE;
+        String reason =
+                issues.registeredAsItem(kind.value(), now.getId()) ? "itemRegistered" : "idHeldByAnotherRepository";
+        count(issueType, "skipped", reason);
+        log.warn(
+                "Skipped misfiled work: reason={}, type={}, number={}, rowId={}, holdingRepositoryId={},"
+                        + " repositoryId={}",
+                reason,
                 issueType,
                 number,
-                holding.getId(),
-                holding.getRepositoryId(),
+                now.getId(),
+                now.getRepositoryId(),
                 repository.getId());
-        return Outcome.MOVED;
+        return Outcome.SKIPPED;
     }
 
-    private void count(String issueType, String outcome) {
+    private void count(String issueType, String outcome, String reason) {
         meters.counter(
                         GitHubMetrics.GITHUB_MISFILED_WORK,
                         "type",
                         issueType.toLowerCase(Locale.ROOT),
                         "outcome",
-                        outcome)
+                        outcome,
+                        "reason",
+                        reason)
                 .increment();
     }
 }

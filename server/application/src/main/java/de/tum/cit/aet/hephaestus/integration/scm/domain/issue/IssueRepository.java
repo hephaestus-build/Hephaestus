@@ -43,7 +43,8 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
 
     /**
      * Moves the row with the provider's id to {@code repositoryId} when it is stored under another repository with
-     * the same number and that repository has no row of this type for the number yet. A provider never moves an issue
+     * the same number, that repository has no row of this type for the number yet, and no workspace registered an
+     * item for it. A provider never moves an issue
      * or a pull request between repositories under the same id, so such a row was filed under a stale repository name.
      *
      * @return 1 when the row moved, else 0
@@ -56,13 +57,15 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
           AND number = :number AND repository_id <> :repositoryId
           AND NOT EXISTS (SELECT 1 FROM issue o WHERE o.repository_id = :repositoryId
             AND o.issue_type = :issueType AND o.number = :number)
+          AND NOT EXISTS (SELECT 1 FROM item i WHERE i.kind = :itemKind AND i.source_id = issue.id)
         """, nativeQuery = true)
     int moveToRepository(
             @Param("providerId") long providerId,
             @Param("nativeId") long nativeId,
             @Param("issueType") String issueType,
             @Param("number") int number,
-            @Param("repositoryId") long repositoryId);
+            @Param("repositoryId") long repositoryId,
+            @Param("itemKind") String itemKind);
 
     @Query(value = "SELECT id FROM issue WHERE id = :id FOR SHARE", nativeQuery = true)
     Optional<Long> lockForReview(@Param("id") long id);

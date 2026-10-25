@@ -16,6 +16,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.dto.GitHubIssueCommentEventDTO.GitHubCommentDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -47,6 +49,9 @@ class GitHubMisfiledWorkIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private GitHubIssueProcessor issueProcessor;
+
+    @Autowired
+    private GitHubIssueCommentProcessor comments;
 
     @Autowired
     private IssueRepository issues;
@@ -95,7 +100,7 @@ class GitHubMisfiledWorkIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldSkipAMisfiledPullRequestThatAWorkspaceAlreadyRegistered() {
         long nativeId = ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE);
-        double skipped = count("pull_request", "skipped");
+        double skipped = count("pull_request", "skipped", "itemRegistered");
         var misfiled = Objects.requireNonNull(
                 pullRequests.process(pullRequest(nativeId, 40, "2026-10-01T09:00:00Z"), sync(renamed)));
         assertThat(parentOf(ScmItemEvents.PULL_REQUEST, misfiled.getId())).isEqualTo(itemOf(renamed));
@@ -105,28 +110,53 @@ class GitHubMisfiledWorkIntegrationTest extends BaseIntegrationTest {
 
         assertThat(repositoryOf(misfiled.getId())).isEqualTo(renamed.getId());
         assertThat(parentOf(ScmItemEvents.PULL_REQUEST, misfiled.getId())).isEqualTo(itemOf(renamed));
-        assertThat(count("pull_request", "skipped")).isEqualTo(skipped + 1);
+        assertThat(count("pull_request", "skipped", "itemRegistered")).isEqualTo(skipped + 1);
     }
 
     @Test
     void shouldSkipAMisfiledIssueThatAWorkspaceAlreadyRegistered() {
         long nativeId = ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE);
+        double skipped = count("issue", "skipped", "itemRegistered");
         var misfiled = Objects.requireNonNull(
                 issueProcessor.process(issue(nativeId, 41, "2026-10-01T09:00:00Z"), sync(renamed)));
         assertThat(parentOf(ScmItemEvents.ISSUE, misfiled.getId())).isEqualTo(itemOf(renamed));
 
         assertThat(issueProcessor.process(issue(nativeId, 41, "2026-10-02T09:00:00Z"), sync(current)))
                 .isNull();
+        assertThat(count("issue", "skipped", "itemRegistered")).isEqualTo(skipped + 1);
 
         assertThat(repositoryOf(misfiled.getId())).isEqualTo(renamed.getId());
         assertThat(parentOf(ScmItemEvents.ISSUE, misfiled.getId())).isEqualTo(itemOf(renamed));
     }
 
     @Test
+    void shouldNotStubAnIssueForACommentWhileItsRowStaysUnderTheRenamedRepository() {
+        long nativeId = ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE);
+        Objects.requireNonNull(issueProcessor.process(issue(nativeId, 44, "2026-10-01T09:00:00Z"), sync(renamed)));
+        double skipped = count("issue", "skipped", "itemRegistered");
+        var comment = new GitHubCommentDTO(
+                ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE),
+                "comment-node",
+                "https://github.com/" + current.getNameWithOwner() + "/issues/44#issuecomment-1",
+                "A comment",
+                null,
+                "OWNER",
+                Instant.parse("2026-10-02T09:00:00Z"),
+                Instant.parse("2026-10-02T09:00:00Z"));
+
+        assertThat(comments.processWithParentCreation(
+                        comment, issue(nativeId, 44, "2026-10-02T09:00:00Z"), sync(current)))
+                .isNull();
+
+        assertThat(issues.findByRepositoryIdAndNumber(current.getId(), 44)).isEmpty();
+        assertThat(count("issue", "skipped", "itemRegistered")).isEqualTo(skipped + 1);
+    }
+
+    @Test
     void shouldMoveAMisfiledIssueThatNoWorkspaceRegistered() {
         Repository unmonitored = repository(renamed.getNameWithOwner() + "-old", false);
         long nativeId = ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE);
-        double moved = count("issue", "moved");
+        double moved = count("issue", "moved", "none");
         var misfiled = Objects.requireNonNull(
                 issueProcessor.process(issue(nativeId, 43, "2026-10-01T09:00:00Z"), sync(unmonitored)));
         assertThat(parentOf(ScmItemEvents.ISSUE, misfiled.getId())).isNull();
@@ -136,14 +166,14 @@ class GitHubMisfiledWorkIntegrationTest extends BaseIntegrationTest {
         assertThat(synced).isNotNull();
         assertThat(synced.getId()).isEqualTo(misfiled.getId());
         assertThat(repositoryOf(misfiled.getId())).isEqualTo(current.getId());
-        assertThat(count("issue", "moved")).isEqualTo(moved + 1);
+        assertThat(count("issue", "moved", "none")).isEqualTo(moved + 1);
     }
 
     @Test
     void shouldSkipAndCountAMisfiledIssueWhoseRepositoryAlreadyHasTheNumber() {
         long nativeId = ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE);
         Repository unmonitored = repository(renamed.getNameWithOwner() + "-older", false);
-        double skipped = count("issue", "skipped");
+        double skipped = count("issue", "skipped", "idHeldByAnotherRepository");
         var misfiled = Objects.requireNonNull(
                 issueProcessor.process(issue(nativeId, 42, "2026-10-01T09:00:00Z"), sync(unmonitored)));
         var other = Objects.requireNonNull(issueProcessor.process(
@@ -155,7 +185,7 @@ class GitHubMisfiledWorkIntegrationTest extends BaseIntegrationTest {
 
         assertThat(repositoryOf(misfiled.getId())).isEqualTo(unmonitored.getId());
         assertThat(issues.findById(other.getId()).orElseThrow().getNativeId()).isNotEqualTo(nativeId);
-        assertThat(count("issue", "skipped")).isEqualTo(skipped + 1);
+        assertThat(count("issue", "skipped", "idHeldByAnotherRepository")).isEqualTo(skipped + 1);
     }
 
     private Repository repository(String nameWithOwner) {
@@ -202,10 +232,11 @@ class GitHubMisfiledWorkIntegrationTest extends BaseIntegrationTest {
                 .getId();
     }
 
-    private double count(String type, String outcome) {
+    private double count(String type, String outcome, String reason) {
         var counter = meters.find("github.misfiled.work")
                 .tag("type", type)
                 .tag("outcome", outcome)
+                .tag("reason", reason)
                 .counter();
         return counter == null ? 0 : counter.count();
     }
