@@ -12,6 +12,7 @@ import {
 	readEnvExample,
 	readPage,
 	readSpringBindings,
+	readStack,
 	renderPage,
 	type Sources,
 } from "./lib/configuration-reference.ts";
@@ -237,4 +238,38 @@ await test("a field that a later file replaces with `!override` drops what earli
 		["compose.single-host.yaml", "services:\n  nats:\n    ports: !override []\n"],
 	]);
 	assert.deepEqual(compose.uses, []);
+});
+
+await test("a later file overrides the value of an environment variable instead of adding a second default", () => {
+	const compose = readCompose([
+		["compose.app.yaml", `services:\n  worker:\n    environment:\n      LIMIT: \${LIMIT:-5}\n`],
+		[
+			"compose.single-host.yaml",
+			`services:\n  worker:\n    environment:\n      LIMIT: \${LIMIT:-1}\n`,
+		],
+	]);
+	assert.deepEqual(
+		compose.uses.map((use) => use.placeholder.fallback),
+		["1"],
+	);
+});
+
+await test("each placeholder of one template and of an overriding sequence counts", () => {
+	const compose = readStack(
+		[
+			[
+				"compose.core.yaml",
+				`configs:\n  broker:\n    content: |\n      a: \${A:-1}\n      b: \${B:-2}\n`,
+			],
+			[
+				"compose.single-host.yaml",
+				`services:\n  proxy:\n    command: !override\n      - --email=\${EMAIL:?set}\n`,
+			],
+		],
+		[],
+	);
+	assert.deepEqual(
+		compose.uses.map((use) => `${use.service} ${use.field} ${use.placeholder.name}`),
+		["configs.broker content A", "configs.broker content B", "proxy command[0] EMAIL"],
+	);
 });

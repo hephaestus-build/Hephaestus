@@ -18,7 +18,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { parseAllDocuments, type Tags } from "yaml";
+import { isMap, isSeq, parseAllDocuments, type Tags } from "yaml";
 
 import { isRecord } from "./json.ts";
 
@@ -36,15 +36,15 @@ export const APPLICATION_FILES = [
 /** Documents of these profiles run only on a developer's machine. */
 const DEVELOPER_PROFILES = new Set(["local", "e2e", "playwright", "test"]);
 
-/**
- * The supported self-hosted stack: `docker/self-host/compose.yaml` includes the first four files, and
- * the backup, restore and journald files are its optional overlays.
- */
+/** The supported self-hosted stack: `docker/self-host/compose.yaml` includes these files, in this order. */
 export const COMPOSE_FILES = [
 	"docker/compose.proxy.yaml",
 	"docker/compose.core.yaml",
 	"docker/compose.app.yaml",
 	"docker/self-host/compose.single-host.yaml",
+];
+/** Optional overlays of that stack. An operator adds one at a time, so none overrides another. */
+export const COMPOSE_OVERLAYS = [
 	"docker/self-host/compose.backup.yaml",
 	"docker/self-host/compose.restore.yaml",
 	"docker/observability/compose.journald.yaml",
@@ -176,10 +176,13 @@ interface Replaced {
 const isReplaced = (value: unknown): value is Replaced =>
 	isRecord(value) && value.replaced === true;
 
+/** A tagged collection arrives as a YAML node, which the document's own conversion does not reach. */
+const plain = (value: unknown): unknown => (isSeq(value) || isMap(value) ? value.toJSON() : value);
+
 const COMPOSE_TAGS: Tags = ["!override", "!reset"].flatMap((tag) => {
 	const resolve = (value: unknown): Replaced => ({
 		replaced: true,
-		value: tag === "!reset" ? undefined : value,
+		value: tag === "!reset" ? undefined : plain(value),
 	});
 	return [
 		{ tag, collection: "map" as const, resolve },
@@ -351,6 +354,30 @@ function dropReplaced(
 	}
 }
 
+/**
+ * A later file overrides an earlier one key by key: an environment variable, or a scalar field such
+ * as `mem_limit`. Its uses replace the earlier file's uses of that key. Sequences such as `ports` merge.
+ */
+function dropOverridden(
+	uses: ComposeUse[],
+	service: string,
+	declared: Record<string, unknown>,
+): void {
+	const keys = new Set(
+		Object.entries(declared)
+			.filter(([, value]) => !isRecord(value) && !Array.isArray(value))
+			.map(([field]) => field),
+	);
+	for (const [variable] of environmentEntries(declared.environment)) {
+		keys.add(`${ENVIRONMENT}${variable}`);
+	}
+	uses.splice(
+		0,
+		uses.length,
+		...uses.filter((use) => use.service !== service || !keys.has(use.field)),
+	);
+}
+
 /** Services, their container environment, and every interpolation, with Compose's own merges resolved. */
 export function readCompose(
 	files: readonly (readonly [file: string, text: string])[],
@@ -359,7 +386,7 @@ export function readCompose(
 	const uses: ComposeUse[] = [];
 	for (const [file, text] of files) {
 		for (const document of yamlDocuments(text, file, COMPOSE_TAGS)) {
-			if (!isRecord(document) || !isRecord(document.services)) {
+			if (!isRecord(document)) {
 				continue;
 			}
 			// A top-level `configs:` entry is file content that Compose interpolates, such as the broker's.
@@ -367,11 +394,13 @@ export function readCompose(
 			for (const [name, definition] of Object.entries(configs)) {
 				uses.push(...interpolations(file, `configs.${name}`, definition));
 			}
-			for (const [name, declared] of Object.entries(document.services)) {
+			const declaredServices = isRecord(document.services) ? document.services : {};
+			for (const [name, declared] of Object.entries(declaredServices)) {
 				if (!isRecord(declared)) {
 					continue;
 				}
 				dropReplaced(uses, services, name, declared);
+				dropOverridden(uses, name, declared);
 				const definition = Object.fromEntries(
 					Object.entries(declared).map(([field, value]) => [
 						field,
@@ -935,9 +964,38 @@ export async function readSources(root = REPO_ROOT): Promise<Sources> {
 	const examples = await readAll(root, ENV_EXAMPLES);
 	return {
 		bindings: readSpringBindings(await readAll(root, APPLICATION_FILES)),
-		compose: readCompose(await readAll(root, COMPOSE_FILES)),
+		compose: readStack(await readAll(root, COMPOSE_FILES), await readAll(root, COMPOSE_OVERLAYS)),
 		envExamples: examples.flatMap(([file, text]) => readEnvExample(file, text)),
 	};
+}
+
+/** The stack alone and with each overlay, merged: a use counts when any supported combination has it. */
+export function readStack(
+	base: readonly (readonly [file: string, text: string])[],
+	overlays: readonly (readonly [file: string, text: string])[],
+): ComposeModel {
+	const models = [readCompose(base), ...overlays.map((overlay) => readCompose([...base, overlay]))];
+	const services = new Map<string, ComposeService>();
+	for (const model of models) {
+		for (const [name, service] of model.services) {
+			const known = services.get(name);
+			services.set(name, {
+				name,
+				java: (known?.java ?? false) || service.java,
+				environment: new Map([...(known?.environment ?? []), ...service.environment]),
+			});
+		}
+	}
+	const seen = new Set<string>();
+	const uses = models
+		.flatMap((model) => model.uses)
+		.filter((use) => {
+			const key = `${use.service}|${use.field}|${use.template}|${use.placeholder.name}`;
+			const fresh = !seen.has(key);
+			seen.add(key);
+			return fresh;
+		});
+	return { services, uses };
 }
 
 /** Every variable the sources name, which the page must therefore have a row for. */
