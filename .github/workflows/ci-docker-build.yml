@@ -60,13 +60,43 @@ on:
         required: false
         type: string
         default: ""
+      dockerfile_images:
+        description: "Whether this run builds and aliases the Dockerfile images at all; the *_changed inputs select among them"
+        required: true
+        type: string
+      application_server_image:
+        description: "Whether this run builds the application-server image from the package job's executable JAR"
+        required: true
+        type: string
+      application-artifact:
+        description: "Artifact holding the executable JAR for the application-server image"
+        required: false
+        type: string
+        default: ""
+      project-descriptor:
+        description: "Buildpacks project descriptor for the application-server image"
+        required: false
+        type: string
+        default: ""
+      run-image:
+        description: "Digest-pinned run image for the application-server image"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      application-server-digest:
+        description: "Published application-server image index digest"
+        value: ${{ jobs.images.outputs.application-server-digest }}
 
 permissions: {}
 
 jobs:
-  webapp-build:
-    name: "Webapp"
-    if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true'
+  # One build job per platform and one manifest job for every image the run publishes.
+  images:
+    name: "Images"
+    if: >-
+      inputs.application_server_image == 'true' || (inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' &&
+      (inputs.webapp_changed == 'true' || inputs.agent_images_changed == 'true' || inputs.postgres_image_changed == 'true'))
     uses: ./.github/workflows/reusable-docker-build.yml
     permissions:
       contents: read
@@ -76,79 +106,19 @@ jobs:
       artifact-metadata: write
     with:
       database-artifact: ${{ inputs.database-artifact }}
-      image-name: "hephaestus-build/webapp"
-      docker-file: "./webapp/Dockerfile"
-      docker-context: "."
-      registry: "ghcr.io"
-      # Use the PR source branch; ref_name identifies GitHub's synthetic merge ref on pull requests.
-      # A merge group builds the image its push to the default branch reuses, so it names that branch.
-      build-args: |
-        SOURCE_COMMIT=${{ github.sha }}
-        SOURCE_BRANCH=${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}
-      publish: ${{ inputs.publish }}
-      platforms: ${{ inputs.platforms }}
-      reuse-run: ${{ contains(fromJSON(inputs.reuse_images), 'webapp') && inputs.reuse_run || '' }}
-      scan-images: ${{ inputs.scan-images }}
-      labels: |
-        org.opencontainers.image.title=Hephaestus Webapp
-        org.opencontainers.image.description=Web client for Hephaestus
-        org.opencontainers.image.vendor=AET TUM
-        org.opencontainers.image.licenses=MIT
-        hephaestus.component=webapp
-
-  agent-pi-build:
-    name: "Agent: Pi"
-    if: inputs.should_skip != 'true' && inputs.agent_images_changed == 'true'
-    uses: ./.github/workflows/reusable-docker-build.yml
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    with:
-      database-artifact: ${{ inputs.database-artifact }}
-      image-name: "hephaestus-build/agent-pi"
-      docker-file: "./docker/agents/pi/Dockerfile"
-      docker-context: "./docker/agents"
+      application-server: ${{ inputs.application_server_image == 'true' }}
+      webapp: ${{ inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' && inputs.webapp_changed == 'true' }}
+      agent-pi: ${{ inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' && inputs.agent_images_changed == 'true' }}
+      postgres: ${{ inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' && inputs.postgres_image_changed == 'true' }}
+      application-artifact: ${{ inputs.application-artifact }}
+      project-descriptor: ${{ inputs.project-descriptor }}
+      run-image: ${{ inputs.run-image }}
       registry: "ghcr.io"
       publish: ${{ inputs.publish }}
       platforms: ${{ inputs.platforms }}
-      reuse-run: ${{ contains(fromJSON(inputs.reuse_images), 'agent-pi') && inputs.reuse_run || '' }}
+      reuse-run: ${{ inputs.reuse_run }}
+      reuse-images: ${{ inputs.reuse_images }}
       scan-images: ${{ inputs.scan-images }}
-      labels: |
-        org.opencontainers.image.title=Hephaestus Agent - Pi
-        org.opencontainers.image.description=Sandboxed Pi coding agent for AI-powered code review
-        org.opencontainers.image.vendor=AET TUM
-        org.opencontainers.image.licenses=MIT
-        hephaestus.component=agent-pi
-
-  postgres-build:
-    name: "Postgres (pg_partman)"
-    if: inputs.should_skip != 'true' && inputs.postgres_image_changed == 'true'
-    uses: ./.github/workflows/reusable-docker-build.yml
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    with:
-      database-artifact: ${{ inputs.database-artifact }}
-      image-name: "hephaestus-build/postgres"
-      docker-file: "./docker/postgres/Dockerfile"
-      docker-context: "./docker/postgres"
-      registry: "ghcr.io"
-      publish: ${{ inputs.publish }}
-      platforms: ${{ inputs.platforms }}
-      reuse-run: ${{ contains(fromJSON(inputs.reuse_images), 'postgres') && inputs.reuse_run || '' }}
-      scan-images: ${{ inputs.scan-images }}
-      labels: |
-        org.opencontainers.image.title=Hephaestus Postgres
-        org.opencontainers.image.description=PostgreSQL + pg_partman for all environments (dev/preview/prod)
-        org.opencontainers.image.vendor=AET TUM
-        org.opencontainers.image.licenses=MIT
-        hephaestus.component=postgres
 
   # A pull request with the `preview` label or the host boot smoke needs every component at its head
   # SHA; alias verified digests for the components this pull request left alone. They are aliased
@@ -157,7 +127,7 @@ jobs:
   tag-unchanged-images:
     name: "Tag unchanged images"
     if: >-
-      inputs.should_skip != 'true' && inputs.publish && github.event_name == 'pull_request' &&
+      inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' && inputs.publish && github.event_name == 'pull_request' &&
       (inputs.webapp_changed != 'true' || inputs.application_server_changed != 'true' ||
        inputs.agent_images_changed != 'true' ||
        inputs.postgres_image_changed != 'true')

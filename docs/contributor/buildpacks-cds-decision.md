@@ -100,7 +100,7 @@ The Dockerfile path builds from the checkout, not from the packaged JAR.
 The build-once guarantee does not apply until that path also downloads `application-artifact`.
 
 1. Add a `Dockerfile` for `server/application` again.
-2. In `.github/workflows/cicd.yml`, change the `application-server-image` job from `use-buildpacks: true` to `docker-file`.
+2. Add an `application-server` target to `docker/docker-bake.hcl`, and remove the Buildpacks steps from `.github/workflows/reusable-docker-build.yml`.
 3. Use the [upgrade rollback procedure](/admin/upgrade#rollback).
 
 Detection uses an error spike in the logs of the new `service.version` or a Prometheus alert.

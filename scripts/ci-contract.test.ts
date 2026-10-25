@@ -556,32 +556,50 @@ void describe("CI contract", () => {
 		const reusable = parseDocument(
 			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 		);
-		const build = namedStep(reusable, ["jobs", "build"], "Build and push (Dockerfile)");
-		assert.equal(build.getIn(["with", "no-cache-filters"]), "os-packages,runtime");
-		assert.match(String(build.getIn(["with", "cache-from"])), /cache-main-/u);
-		assert.match(String(build.getIn(["with", "cache-to"])), /mode=max/u);
+		const build = namedStep(reusable, ["jobs", "build"], "Build and push the Dockerfile images");
+		assert.equal(String(build.getIn(["with", "files"])).split("\n")[0], "./docker/docker-bake.hcl");
 		// Only trusted runs write the shared cache: main, and the merge group whose images main reuses.
-		assert.match(
-			String(build.getIn(["with", "cache-to"])),
-			/^\$\{\{ \(github\.ref == 'refs\/heads\/main' \|\| github\.event_name == 'merge_group'\) && format\(/u,
+		assert.equal(
+			build.getIn(["env", "WRITE_CACHE"]),
+			`\${{ github.ref == 'refs/heads/main' || github.event_name == 'merge_group' }}`,
 		);
-
-		const caller = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
-		const jobs = caller.get("jobs");
-		assert.ok(isMap(jobs));
+		const bake = await readFile("docker/docker-bake.hcl", "utf8");
+		assert.match(
+			bake,
+			/target "image" \{\n(?:\s*#.*\n)*\s*no-cache-filter = \["os-packages", "runtime"\]/u,
+		);
+		const targets = [...bake.matchAll(/^target "(?<name>[a-z-]+)" \{\n(?<body>(?:.*\n)*?)\}/gmu)]
+			.map(({ groups }) => ({ name: groups?.name ?? "", body: groups?.body ?? "" }))
+			.filter(({ name }) => name !== "image");
+		assert.deepEqual(
+			targets.map(({ name }) => name),
+			["webapp", "agent-pi", "postgres"],
+		);
 		const dockerfiles = new Set(await posixGlob("{docker,webapp}/**/Dockerfile"));
 		assert.ok(dockerfiles.size > 0);
-		for (const entry of jobs.items) {
-			assert.ok(isMap(entry.value));
-			const file = entry.value.getIn(["with", "docker-file"]);
-			if (typeof file !== "string") {
-				continue;
-			}
-			dockerfiles.delete(file.replace(/^\.\//u, ""));
+		for (const { name, body } of targets) {
+			assert.match(body, new RegExp(`inherits\\s*= \\["image", "${name}-metadata"\\]`, "u"));
+			assert.ok(
+				body.includes(
+					`cache-from = ["type=registry,ref=\${repository("${name}")}:cache-main-\${PLATFORM_PAIR}"]`,
+				),
+				name,
+			);
+			assert.ok(
+				body.includes(
+					`cache-to   = WRITE_CACHE == "true" ? ["type=registry,ref=\${repository("${name}")}:cache-main-\${PLATFORM_PAIR},mode=max"] : []`,
+				),
+				name,
+			);
+			const context = /context\s*= "(?<path>[^"]+)"/u.exec(body)?.groups?.path;
+			const dockerfilePath = /dockerfile = "(?<path>[^"]+)"/u.exec(body)?.groups?.path;
+			assert.ok(context !== undefined && dockerfilePath !== undefined, name);
+			const file = path.posix.join(context, dockerfilePath);
+			dockerfiles.delete(file);
 			const dockerfile = await readFile(file, "utf8");
 			const stages = dockerfile.split(/^FROM /mu);
 			const packages = stages.find((stage) => /^.* AS os-packages$/mu.test(stage));
-			assert.ok(packages !== undefined, `${file} must have the stage named by no-cache-filters`);
+			assert.ok(packages !== undefined, `${file} must have the stage named by no-cache-filter`);
 			assert.match(stages.at(-1) ?? "", /^os-packages AS runtime$/mu);
 			assert.match(packages, /^RUN .*?(?:apt-get|apk)/msu);
 			assert.doesNotMatch(packages, /^COPY |^ARG SOURCE_COMMIT/mu);
@@ -592,7 +610,23 @@ void describe("CI contract", () => {
 				assert.doesNotMatch(stage, /\b(?:apt-get|apk) (?:update|upgrade|install|add)\b/u);
 			}
 		}
-		assert.deepEqual([...dockerfiles], [], "every Dockerfile must use the shared build workflow");
+		assert.deepEqual(
+			[...dockerfiles],
+			[],
+			"every Dockerfile must be a target of docker/docker-bake.hcl",
+		);
+		// The bake file decides how every Dockerfile image builds, so a change to it rebuilds them all.
+		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
+		assert.match(
+			pathFilter(orchestrator, "docker-config"),
+			/^ {14}- 'docker\/docker-bake\.hcl'$/mu,
+		);
+		for (const input of ["webapp_changed", "agent_images_changed", "postgres_image_changed"]) {
+			assert.match(
+				job(orchestrator, "Docker"),
+				new RegExp(`${input}: .*docker-config == 'true'`, "u"),
+			);
+		}
 	});
 
 	void test("the webapp image copies every file its Vite config reads", async () => {
@@ -1015,12 +1049,7 @@ void describe("CI contract", () => {
 			evaluateTierOutput(skip, "pull_request", { full: "false", action: "ready_for_review" }),
 			"false",
 		);
-		for (const name of [
-			"vulnerability-database",
-			"application-server-image",
-			"upstream-images",
-			"Docker",
-		]) {
+		for (const name of ["vulnerability-database", "upstream-images", "Docker"]) {
 			assert.match(
 				String(orchestrator.getIn(["jobs", name, "if"])),
 				/needs\.detect-changes\.outputs\.draft != 'true'/u,
@@ -1309,12 +1338,10 @@ void describe("CI contract", () => {
 			workflow.getIn(["jobs", "detect-changes", "outputs", "release-preflight"]),
 			`\${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}`,
 		);
-		for (const name of ["application-server-image", "Docker"]) {
-			assert.equal(
-				workflow.getIn(["jobs", name, "with", "scan-images"]),
-				`\${{ needs.detect-changes.outputs.release-preflight != 'true' }}`,
-			);
-		}
+		assert.equal(
+			workflow.getIn(["jobs", "Docker", "with", "scan-images"]),
+			`\${{ needs.detect-changes.outputs.release-preflight != 'true' }}`,
+		);
 		for (const file of ["ci-docker-build.yml", "reusable-docker-build.yml"]) {
 			const reusable = parseDocument(await readFile(`.github/workflows/${file}`, "utf8"));
 			assert.equal(
@@ -1729,9 +1756,11 @@ void describe("CI contract", () => {
 				new RegExp(`needs\\.detect-changes\\.outputs\\.${escapeRegExp(filter)} == 'true'`, "u"),
 			);
 		}
-		const image = job(orchestrator, "application-server-image");
-		assert.match(image, /needs: \[detect-changes, server-package, vulnerability-database\]/u);
-		assert.match(image, /use-buildpacks: true/u);
+		// The application-server image is built from this run's packaged JAR, never recompiled.
+		const image = job(orchestrator, "Docker");
+		assert.match(image, /needs: \[detect-changes, vulnerability-database, server-package\]/u);
+		assert.match(image, /application-artifact: server-build-\$\{\{ github\.run_id \}\}/u);
+		assert.match(image, /needs\.server-package\.result == 'success'/u);
 
 		// The suites run the packaged classes rather than compiling the tests once per job.
 		const tests = await readFile(".github/workflows/ci-tests.yml", "utf8");
@@ -1783,21 +1812,21 @@ void describe("CI contract", () => {
 
 	void test("image consumers do not wait for unrelated artifact checks, but the final verdict does", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-		for (const name of ["Build", "application-server-image"]) {
-			const dependencies = workflow.getIn(["jobs", name, "needs"]);
-			assert.ok(isSeq(dependencies));
-			assert.deepEqual(dependencies.toJSON(), [
-				"detect-changes",
-				"server-package",
-				...(name === "application-server-image" ? ["vulnerability-database"] : []),
-			]);
-		}
+		const build = workflow.getIn(["jobs", "Build", "needs"]);
+		assert.ok(isSeq(build));
+		assert.deepEqual(build.toJSON(), ["detect-changes", "server-package"]);
+		const docker = workflow.getIn(["jobs", "Docker", "needs"]);
+		assert.ok(isSeq(docker));
+		assert.deepEqual(docker.toJSON(), [
+			"detect-changes",
+			"vulnerability-database",
+			"server-package",
+		]);
 		for (const name of ["Supported-host-smoke", "Release-preflight"]) {
 			const dependencies = workflow.getIn(["jobs", name, "needs"]);
 			assert.ok(isSeq(dependencies));
 			assert.deepEqual(dependencies.toJSON(), [
 				"detect-changes",
-				"application-server-image",
 				"Docker",
 				...(name === "Release-preflight" ? ["vulnerability-database"] : []),
 			]);
@@ -1806,7 +1835,6 @@ void describe("CI contract", () => {
 		assert.ok(isSeq(gate));
 		for (const name of [
 			"server-package",
-			"application-server-image",
 			"Build",
 			"Test",
 			"Docker",
@@ -2092,23 +2120,16 @@ void describe("CI contract", () => {
 		// The platform list is one decision, taken in cicd.yml and handed to every image build, so
 		// a run cannot evidence one image on both platforms and its sibling on one. The test below
 		// owns what that decision is; this owns that nothing decides it locally.
-		for (const image of [
-			job(docker, "webapp-build"),
-			job(docker, "agent-pi-build"),
-			job(docker, "postgres-build"),
-		]) {
-			assert.match(image, /platforms: \$\{\{ inputs\.platforms \}\}/u);
-			assert.doesNotMatch(image, /^\s+tags:/mu);
-		}
+		const images = job(docker, "images");
+		assert.match(images, /platforms: \$\{\{ inputs\.platforms \}\}/u);
+		assert.doesNotMatch(images, /^\s+tags:/mu);
 		// Required, and with no default: a caller that forgets it fails to start, rather than
 		// silently publishing one architecture where a release needs two.
 		assert.match(docker, /^ {6}platforms:\n(?: {8}.*\n)*? {8}required: true$/mu);
-		for (const caller of ["application-server-image", "Docker"]) {
-			assert.match(
-				job(source, caller),
-				/platforms: \$\{\{ needs\.detect-changes\.outputs\.platforms \}\}/u,
-			);
-		}
+		assert.match(
+			job(source, "Docker"),
+			/platforms: \$\{\{ needs\.detect-changes\.outputs\.platforms \}\}/u,
+		);
 		for (const text of [source, docker]) {
 			assert.doesNotMatch(text, /single[-_]arch/u);
 		}
@@ -2134,7 +2155,7 @@ void describe("CI contract", () => {
 			`\${{ fromJSON(inputs.platforms) }}`,
 		);
 		assert.equal(
-			namedStep(parsed, ["jobs", "merge"], "Create manifest and push").getIn(["env", "PLATFORMS"]),
+			namedStep(parsed, ["jobs", "merge"], "Create manifests and push").getIn(["env", "PLATFORMS"]),
 			`\${{ inputs.platforms }}`,
 		);
 		// Each platform builds natively on its own runner; no emulation.
@@ -2212,12 +2233,10 @@ void describe("CI contract", () => {
 			String(orchestrator.getIn(["jobs", "detect-changes", "outputs", "publishable"])),
 			/^\$\{\{ github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}$/u,
 		);
-		for (const caller of ["application-server-image", "Docker"]) {
-			assert.match(
-				String(orchestrator.getIn(["jobs", caller, "with", "publish"])),
-				/^\$\{\{ needs\.detect-changes\.outputs\.publishable == 'true' \}\}$/u,
-			);
-		}
+		assert.match(
+			String(orchestrator.getIn(["jobs", "Docker", "with", "publish"])),
+			/^\$\{\{ needs\.detect-changes\.outputs\.publishable == 'true' \}\}$/u,
+		);
 
 		const reusable = parseDocument(
 			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
@@ -2231,33 +2250,37 @@ void describe("CI contract", () => {
 		assert.equal(declaration.get("default"), undefined);
 
 		const build = ["jobs", "build"];
-		for (const name of ["Log in to Container Registry", "Export digest", "Upload digest"]) {
+		for (const name of ["Log in to Container Registry", "Export digests", "Upload digests"]) {
 			assert.match(
 				String(namedStep(reusable, build, name).get("if")),
 				/inputs\.publish/u,
 				`${name} writes to the registry and must be gated on publish`,
 			);
 		}
-		assert.match(
-			String(namedStep(reusable, build, "Set up Docker Buildx").getIn(["with", "driver"])),
-			/^\$\{\{ inputs\.use-buildpacks && 'docker' \|\| 'docker-container' \}\}$/u,
+		// BuildKit builds the Dockerfile images in a container; Buildpacks use the daemon directly.
+		assert.equal(
+			namedStep(reusable, build, "Set up Docker Buildx").getIn(["with", "driver"]),
+			"docker-container",
 		);
 		assert.equal(
 			namedStep(reusable, ["jobs", "merge"], "Set up Docker Buildx").getIn(["with", "driver"]),
 			"docker",
 		);
-		const buildx = namedStep(reusable, build, "Build and push (Dockerfile)");
-		const inputs = buildx.get("with");
+		const bake = namedStep(reusable, build, "Build and push the Dockerfile images");
+		const inputs = bake.get("with");
 		assert.ok(isMap(inputs));
-		assert.match(String(inputs.get("push")), /^\$\{\{ inputs\.publish \}\}$/u);
 		// An untagged local image is one nothing can name, so a fork loads nothing into the daemon.
-		assert.equal(inputs.has("load"), false);
-		assert.equal(inputs.has("tags"), false);
-		assert.match(String(inputs.get("outputs")), /inputs\.publish &&/u);
+		for (const input of ["push", "load", "tags"]) {
+			assert.equal(inputs.has(input), false, input);
+		}
+		assert.equal(bake.getIn(["env", "PUBLISH"]), `\${{ inputs.publish }}`);
+		// Without publication each target exports to the build cache only.
+		const definition = await readFile("docker/docker-bake.hcl", "utf8");
+		assert.equal((definition.match(/: \["type=cacheonly"\]/gu) ?? []).length, 3);
 		assert.match(String(reusable.getIn(["jobs", "merge", "if"])), /inputs\.publish/u);
-		assert.match(
-			String(namedStep(reusable, build, "Resolve the platform subject").get("if")),
-			/inputs\.publish/u,
+		assert.equal(
+			namedStep(reusable, build, "Enforce the release vulnerability policy").get("if"),
+			"inputs.publish && inputs.scan-images",
 		);
 
 		const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
@@ -2371,7 +2394,7 @@ void describe("CI contract", () => {
 		const smoke = job(source, "Supported-host-smoke");
 		assert.match(
 			smoke,
-			/APPLICATION_DIGEST: \$\{\{ needs\.application-server-image\.outputs\.manifest-digest \}\}/u,
+			/APPLICATION_DIGEST: \$\{\{ needs\.Docker\.outputs\.application-server-digest \}\}/u,
 		);
 		// The worker pulls and checks this commit's own agent image, never a placeholder.
 		assert.match(smoke, /scripts\/resolve-release-images\.ts "\$HEAD_SHA"/u);
@@ -2402,7 +2425,7 @@ void describe("CI contract", () => {
 			/scripts\/prepare-host-smoke-env\.ts/u,
 		);
 		// The paths that trigger the smoke also have to rebuild the images it boots.
-		assert.match(job(source, "application-server-image"), /if:.*supported-host-smoke/u);
+		assert.match(job(source, "Docker"), /application_server_image: .*supported-host-smoke/u);
 		assert.match(source, /application_server_changed:.*supported-host-smoke/u);
 		assertNeeds(source, "all-ci-passed", "Supported-host-smoke");
 	});
@@ -2535,32 +2558,31 @@ void describe("CI contract", () => {
 		assert.ok(isSeq(steps));
 		const names = asArray(steps.toJSON(), "steps").map((item) => asRecord(item, "step").name);
 		const at = (name: string) => names.indexOf(name);
-		// Scanned after the digest is exported and before it is handed to the merge.
-		assert.ok(at("Export digest") < at("Resolve the platform subject"));
-		assert.ok(at("Enforce the release vulnerability policy") < at("Upload digest"));
-		const subject = namedStep(workflow, build, "Resolve the platform subject");
-		assert.equal(subject.get("run"), "node scripts/resolve-image-scan-subject.ts");
-		assert.equal(
-			subject.getIn(["env", "DIGEST_DIRECTORY"]),
-			`\${{ runner.temp }}/digests/\${{ steps.prep.outputs.platform_pair }}`,
-		);
-		assert.equal(subject.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
+		// Scanned after the digests are exported and before they are handed to the merge.
+		assert.ok(at("Export digests") < at("Enforce the release vulnerability policy"));
+		assert.ok(at("Enforce the release vulnerability policy") < at("Upload digests"));
 		const enforce = namedStep(workflow, build, "Enforce the release vulnerability policy");
+		assert.match(String(enforce.get("run")), /node scripts\/resolve-image-scan-subject\.ts/u);
 		// The same script and the same policy file the release and the rescan call. A second
 		// copy of the policy is the failure this gate exists to prevent.
 		assert.match(
 			String(enforce.get("run")),
-			/node scripts\/check-release-vulnerabilities\.ts "\$IMAGE" "\$SCAN_PLATFORM"[\s\S]*security\/vulnerability-policy\.json/u,
+			/node scripts\/check-release-vulnerabilities\.ts "\$image" "\$SCAN_PLATFORM"[\s\S]*security\/vulnerability-policy\.json/u,
 		);
 		assert.equal(enforce.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
 		assert.doesNotMatch(String(enforce.get("run")), /github\.(?:run_id|run_attempt)/u);
 		// A gate that cannot say what it rejected is not finished.
-		const report = namedStep(workflow, build, "Upload the vulnerability policy result");
+		const report = namedStep(workflow, build, "Upload the vulnerability policy results");
 		assert.equal(
 			report.getIn(["with", "name"]),
-			`vulnerability-policy-\${{ steps.subject.outputs.report-stem }}-\${{ github.run_attempt }}`,
+			`vulnerability-policy-\${{ steps.prep.outputs.platform_pair }}-\${{ github.run_attempt }}`,
 		);
-		assert.equal(report.get("if"), `\${{ !cancelled() && steps.subject.outcome == 'success' }}`);
+		assert.equal(
+			report.get("if"),
+			`\${{ !cancelled() && (steps.scan.outcome == 'success' || steps.scan.outcome == 'failure') }}`,
+		);
+		// Every image is scanned before the step fails, so one refusal does not hide another's.
+		assert.match(String(enforce.get("run")), /refused\+=\("\$name"\)/u);
 		assert.match(job(reusable, "build"), /uses: \.\/\.github\/actions\/download-trivy-db/u);
 		// The scanners pull through the registry login, not with the token in their environment.
 		assert.equal(enforce.hasIn(["env", "TRIVY_PASSWORD"]), false);
@@ -3295,8 +3317,11 @@ void describe("CI contract", () => {
 
 		// One home for that decision too: an input that selects an image reads it, and no input
 		// re-tests the event on its own. The package and server image selectors read it directly.
-		for (const name of ["server-package", "application-server-image"]) {
-			const condition = String(workflow.getIn(["jobs", name, "if"]));
+		for (const at of [
+			["jobs", "server-package", "if"],
+			["jobs", "Docker", "with", "application_server_image"],
+		]) {
+			const condition = String(workflow.getIn(at));
 			assert.match(condition, /needs\.detect-changes\.outputs\.all-images == 'true'/u);
 			assert.doesNotMatch(condition, /github\.event_name/u);
 		}

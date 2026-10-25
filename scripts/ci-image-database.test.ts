@@ -13,7 +13,17 @@ function runs(
 	results: Record<string, string> = {},
 	cancelled = false,
 ) {
-	const condition = main.getIn(["jobs", job, "if"]);
+	return evaluates(["jobs", job, "if"], outputs, results, cancelled) === "true";
+}
+
+/** Evaluates the expression at `at` in cicd.yml, such as a job condition or a job input. */
+function evaluates(
+	at: string[],
+	outputs: Record<string, string>,
+	results: Record<string, string> = {},
+	cancelled = false,
+) {
+	const condition = main.getIn(at);
 	assert.ok(typeof condition === "string");
 	const functions = new Map([
 		[
@@ -31,13 +41,10 @@ function runs(
 			github: { event_name: "pull_request" },
 			needs: {
 				...Object.fromEntries(
-					[
-						"detect-changes",
-						"server-package",
-						"vulnerability-database",
-						"application-server-image",
-						"Docker",
-					].map((name) => [name, { result: results[name] ?? "success" }]),
+					["detect-changes", "server-package", "vulnerability-database", "Docker"].map((name) => [
+						name,
+						{ result: results[name] ?? "success" },
+					]),
 				),
 				"detect-changes": { result: results["detect-changes"] ?? "success", outputs },
 			},
@@ -45,7 +52,7 @@ function runs(
 		data.reviver,
 	);
 	assert.ok(context instanceof data.Dictionary);
-	return new Evaluator(expression, context, functions).evaluate().coerceString() === "true";
+	return new Evaluator(expression, context, functions).evaluate().coerceString();
 }
 
 void test("one advisory snapshot is selected for every image-policy consumer, not unpublished fork builds", () => {
@@ -89,7 +96,7 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 	for (const result of ["skipped", "failure", "cancelled"]) {
 		// Security reads no advisory snapshot, so it does not wait for one.
 		assert.ok(runs("Security", fork, { "vulnerability-database": result }), `Security: ${result}`);
-		for (const job of ["Docker", "application-server-image", "upstream-images"]) {
+		for (const job of ["Docker", "upstream-images"]) {
 			assert.equal(
 				runs(job, fork, { "vulnerability-database": result }),
 				result === "skipped",
@@ -110,14 +117,23 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 		),
 	);
 	// A pull request that needs no head images builds none; the merge group builds them.
-	for (const job of ["Docker", "application-server-image"]) {
-		assert.ok(
-			!runs(job, { "any-code": "true", "all-images": "true", images: "false" }),
-			`${job} without images`,
-		);
+	assert.ok(!runs("Docker", { "any-code": "true", "all-images": "true", images: "false" }));
+	// The application-server image needs this run's packaged JAR. The other images do not, so the
+	// job still builds them when packaging failed or did not run.
+	const serverImage = ["jobs", "Docker", "with", "application_server_image"];
+	const dockerfileImages = ["jobs", "Docker", "with", "dockerfile_images"];
+	assert.equal(evaluates(serverImage, fork), "true");
+	for (const result of ["failure", "skipped"]) {
+		assert.ok(runs("Docker", fork, { "server-package": result }), result);
+		assert.equal(evaluates(serverImage, fork, { "server-package": result }), "false", result);
+		assert.equal(evaluates(dockerfileImages, fork, { "server-package": result }), "true", result);
 	}
-	assert.ok(!runs("application-server-image", fork, { "server-package": "failure" }));
-	assert.ok(!runs("application-server-image", fork, { "server-package": "skipped" }));
+	// The application-server image alone, for a change no Dockerfile image reads.
+	const serverOnly = { images: "true", "application-server-image": "true" };
+	assert.ok(runs("Docker", serverOnly));
+	assert.equal(evaluates(serverImage, serverOnly), "true");
+	assert.equal(evaluates(dockerfileImages, serverOnly), "false");
+	assert.ok(!runs("Docker", serverOnly, { "server-package": "skipped" }));
 	assert.ok(runs("Release-preflight", { "release-preflight": "true" }));
 	assert.ok(!runs("Release-preflight", { "release-preflight": "false" }));
 	assert.ok(
@@ -127,7 +143,7 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 			{ "vulnerability-database": "failure" },
 		),
 	);
-	for (const prerequisite of ["application-server-image", "Docker"]) {
+	for (const prerequisite of ["Docker"]) {
 		assert.ok(
 			!runs("Release-preflight", { "release-preflight": "true" }, { [prerequisite]: "failure" }),
 		);
@@ -138,7 +154,7 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 });
 
 void test("every CI image scan receives the producer's immutable artifact ID across reusable workflows", async () => {
-	for (const job of ["application-server-image", "Docker", "upstream-images"]) {
+	for (const job of ["Docker", "upstream-images"]) {
 		if (job !== "upstream-images") {
 			assert.equal(
 				main.getIn(["jobs", job, "with", "database-artifact"]),
@@ -174,12 +190,10 @@ void test("every CI image scan receives the producer's immutable artifact ID acr
 			undefined,
 		);
 		if (name === "ci-docker-build.yml") {
-			for (const job of ["webapp-build", "agent-pi-build", "postgres-build"]) {
-				assert.equal(
-					workflow.getIn(["jobs", job, "with", "database-artifact"]),
-					`\${{ inputs.database-artifact }}`,
-				);
-			}
+			assert.equal(
+				workflow.getIn(["jobs", "images", "with", "database-artifact"]),
+				`\${{ inputs.database-artifact }}`,
+			);
 		} else {
 			const steps = workflow.getIn(["jobs", "build", "steps"]);
 			assert.ok(isSeq(steps));

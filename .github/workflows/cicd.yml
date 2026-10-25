@@ -564,6 +564,7 @@ jobs:
             docker-config:
               - '.github/workflows/ci-docker-build.yml'
               - '.github/workflows/reusable-docker-build.yml'
+              - 'docker/docker-bake.hcl'
             pmd-canary:
               - 'scripts/check-pmd-canary.ts'
               - 'scripts/check-pmd-canary.test.ts'
@@ -808,31 +809,6 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  application-server-image:
-    name: "App Server image"
-    needs: [detect-changes, server-package, vulnerability-database]
-    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.draft != 'true' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.server-package.result == 'success' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') }}
-    uses: ./.github/workflows/reusable-docker-build.yml
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    with:
-      database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
-      image-name: "hephaestus-build/application-server"
-      use-buildpacks: true
-      application-artifact: server-build-${{ github.run_id }}
-      project-descriptor: "server/application/project.toml"
-      # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny
-      run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:dc90cbdbbff35916ff5a26409f29f0525cbc7fa76cc317adca856c4127ebf2ba"
-      registry: "ghcr.io"
-      publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
-      platforms: ${{ needs.detect-changes.outputs.platforms }}
-      reuse-run: ${{ contains(fromJSON(needs.detect-changes.outputs.queue-images), 'application-server') && needs.detect-changes.outputs.queue-run || '' }}
-      scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
-
   Build:
     uses: ./.github/workflows/ci-build.yml
     needs: [detect-changes, server-package]
@@ -948,19 +924,17 @@ jobs:
     permissions:
       contents: read
 
+  # Every image of the run: one build job per platform and one manifest job. The application-server
+  # image is built from the package job's executable JAR, so the job waits for it.
+  # The `preview` label and the host boot smoke need every image at the head tag; unchanged images
+  # are aliased here. Other runs' image builds stay path-filtered.
   Docker:
     uses: ./.github/workflows/ci-docker-build.yml
-    needs: [detect-changes, vulnerability-database]
-    # The `preview` label and the host boot smoke need every image at the head tag; unchanged images are
-    # aliased here and the application image is built by Build. Other runs' image builds stay
-    # path-filtered.
+    needs: [detect-changes, vulnerability-database, server-package]
     if: |
-      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
-      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (
-        needs.detect-changes.outputs.unfiltered == 'true' ||
-        needs.detect-changes.outputs.head-images == 'true' ||
-        needs.detect-changes.outputs.any-code == 'true' ||
-        needs.detect-changes.outputs.ci-config == 'true'
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && (
+        (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) ||
+        (needs.detect-changes.outputs.draft != 'true' && needs.server-package.result == 'success' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     permissions:
       contents: read
@@ -981,12 +955,19 @@ jobs:
       agent_images_changed: ${{ (needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       alias_base: ${{ needs.detect-changes.outputs.alias-base }}
+      dockerfile_images: ${{ (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) && 'true' || 'false' }}
+      application_server_image: ${{ (needs.detect-changes.outputs.draft != 'true' && needs.server-package.result == 'success' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false' }}
+      application-artifact: server-build-${{ github.run_id }}
+      project-descriptor: "server/application/project.toml"
+      # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny
+      run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:dc90cbdbbff35916ff5a26409f29f0525cbc7fa76cc317adca856c4127ebf2ba"
 
   Supported-host-smoke:
     name: "Supported-host boot smoke"
-    # `Docker` publishes no output this job reads, but it is what puts `postgres:<head sha>` in the
-    # registry — by building it, or by aliasing the base image when the diff left it alone.
-    needs: [detect-changes, application-server-image, Docker]
+    # `Docker` builds the application-server image this job boots by digest, and puts the other
+    # images at the head tag — by building them, or by aliasing the base image when the diff left
+    # one alone.
+    needs: [detect-changes, Docker]
     # A fork pull request builds its images without publishing them, so there is nothing to pull
     # and no boot to check; the release path exercises a fork's install path once it is on `main`.
     if: >-
@@ -1024,7 +1005,7 @@ jobs:
       - name: Boot the operator installation path
         working-directory: docker/self-host
         env:
-          APPLICATION_DIGEST: ${{ needs.application-server-image.outputs.manifest-digest }}
+          APPLICATION_DIGEST: ${{ needs.Docker.outputs.application-server-digest }}
           AGENT_PI_DIGEST: ${{ steps.images.outputs.agent-pi-digest }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -1070,8 +1051,8 @@ jobs:
   # release-management.mdx owns the evidence contract.
   Release-preflight:
     name: "Release evidence preflight"
-    needs: [detect-changes, application-server-image, Docker, vulnerability-database]
-    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.application-server-image.result == 'success' && needs.Docker.result == 'success' && (needs.detect-changes.outputs.release-preflight == 'true') }}
+    needs: [detect-changes, Docker, vulnerability-database]
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.Docker.result == 'success' && (needs.detect-changes.outputs.release-preflight == 'true') }}
     timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
@@ -1146,7 +1127,6 @@ jobs:
         zizmor,
         Quality,
         server-package,
-        application-server-image,
         Build,
         upstream-images,
         Security,
@@ -1170,7 +1150,6 @@ jobs:
           echo "zizmor:        ${{ needs.zizmor.result }}"
           echo "Quality:        ${{ needs.Quality.result }}"
           echo "Package:        ${{ needs.server-package.result }}"
-          echo "Server image:   ${{ needs.application-server-image.result }}"
           echo "Build:          ${{ needs.Build.result }}"
           echo "Upstream:       ${{ needs.upstream-images.result }}"
           echo "Security:       ${{ needs.Security.result }}"

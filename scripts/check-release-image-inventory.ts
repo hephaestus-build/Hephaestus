@@ -20,10 +20,15 @@ function isUpstreamImage(value: unknown): value is UpstreamImage {
 	);
 }
 
+/** The images the CI image workflow can publish, as its image selection names them. */
 export function releaseImages(workflow: string): string[] {
-	return [...workflow.matchAll(/image-name:\s*["']hephaestus-build\/(?<image>[^"']+)["']/gu)].map(
+	const images = [...workflow.matchAll(/then "(?<image>[a-z0-9-]+)" else empty end/gu)].map(
 		(match) => match.groups?.image ?? "",
 	);
+	if (images.length === 0) {
+		throw new Error("the image workflow selects no images");
+	}
+	return images;
 }
 
 export function validateInventory(inventory: unknown, workflow: string): string[] {
@@ -53,7 +58,7 @@ if (import.meta.main) {
 	const inventory = JSON.parse(readFileSync("security/release-images.json", "utf8")) as unknown;
 	const missing = validateInventory(
 		inventory,
-		readFileSync(".github/workflows/ci-docker-build.yml", "utf8"),
+		readFileSync(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
 	if (missing.length > 0) {
 		throw new Error(`release images missing from evidence inventory: ${missing.join(", ")}`);

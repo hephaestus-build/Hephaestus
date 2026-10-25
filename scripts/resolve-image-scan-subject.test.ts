@@ -349,22 +349,22 @@ void test("the image workflow shares the resolver and retains its immutable subj
 	);
 	const steps = workflow.getIn(["jobs", "build", "steps"]);
 	assert.ok(isSeq(steps));
-	const subject = steps.items.find((item) => isMap(item) && item.get("id") === "subject");
-	assert.ok(isMap(subject));
-	assert.equal(subject.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
-	assert.equal(subject.get("run"), "node scripts/resolve-image-scan-subject.ts");
-	assert.equal(subject.getIn(["env", "INPUT_IMAGE_NAME"]), `\${{ inputs.image-name }}`);
-	assert.equal(
-		subject.getIn(["env", "DIGEST_DIRECTORY"]),
-		`\${{ runner.temp }}/digests/\${{ steps.prep.outputs.platform_pair }}`,
+	const scan = steps.items.find((item) => isMap(item) && item.get("id") === "scan");
+	assert.ok(isMap(scan));
+	assert.equal(scan.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
+	assert.equal(scan.getIn(["env", "IMAGES"]), `\${{ steps.prep.outputs.images }}`);
+	const run = String(scan.get("run"));
+	// Each image resolves its own subject from the directory its build exported.
+	assert.match(
+		run,
+		/GITHUB_OUTPUT="\$subject" DIGEST_DIRECTORY="\$RUNNER_TEMP\/digests\/\$name\/\$PLATFORM_PAIR" \\\n\s+IMAGE_REPOSITORY="\$REGISTRY\/hephaestus-build\/\$name" INPUT_IMAGE_NAME="hephaestus-build\/\$name" \\\n\s+node scripts\/resolve-image-scan-subject\.ts/u,
 	);
-	assert.equal(
-		subject.getIn(["env", "IMAGE_REPOSITORY"]),
-		`\${{ inputs.registry }}/\${{ inputs.image-name }}`,
-	);
+	// The scan and the policy read the resolved subject, never a tag.
+	assert.match(run, /"\$repository@\$digest"/u);
+	assert.doesNotMatch(run, /\$repository:/u);
 });
 
-void test("every digest artifact carries its platform directory, however many a download matches", () => {
+void test("every digest artifact carries its image and platform directories, however many a download matches", () => {
 	const workflow = parseDocument(
 		readFileSync(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
@@ -378,18 +378,22 @@ void test("every digest artifact carries its platform directory, however many a 
 		return found;
 	};
 	const directory = mkdtempSync(path.join(tmpdir(), "digest-artifact-"));
+	const buildpacks = "b".repeat(64);
 	try {
 		const exported = spawnSync(
 			"bash",
-			["-e", "-c", String(step("build", "Export digest").get("run"))],
+			["-e", "-c", String(step("build", "Export digests").get("run"))],
 			{
 				encoding: "utf8",
 				env: {
 					...process.env,
 					RUNNER_TEMP: directory,
 					PLATFORM_PAIR: "linux-arm64",
-					DOCKERFILE_DIGEST: `sha256:${artifact}`,
-					BUILDPACKS_DIGEST: "",
+					IMAGES: JSON.stringify(["application-server", "webapp"]),
+					BAKE_METADATA: JSON.stringify({
+						webapp: { "containerimage.digest": `sha256:${artifact}` },
+					}),
+					BUILDPACKS_DIGEST: `sha256:${buildpacks}`,
 				},
 			},
 		);
@@ -400,24 +404,45 @@ void test("every digest artifact carries its platform directory, however many a 
 		});
 		assert.deepEqual(
 			entries.toSorted((left, right) => left.localeCompare(right)),
-			["linux-arm64", path.join("linux-arm64", artifact)],
+			[
+				"application-server",
+				path.join("application-server", "linux-arm64"),
+				path.join("application-server", "linux-arm64", buildpacks),
+				"webapp",
+				path.join("webapp", "linux-arm64"),
+				path.join("webapp", "linux-arm64", artifact),
+			],
 		);
+		// An image the build did not report refuses the export instead of publishing without it.
+		const missing = spawnSync(
+			"bash",
+			["-e", "-c", String(step("build", "Export digests").get("run"))],
+			{
+				encoding: "utf8",
+				env: {
+					...process.env,
+					RUNNER_TEMP: directory,
+					PLATFORM_PAIR: "linux-arm64",
+					IMAGES: JSON.stringify(["webapp", "postgres"]),
+					BAKE_METADATA: JSON.stringify({
+						webapp: { "containerimage.digest": `sha256:${artifact}` },
+					}),
+					BUILDPACKS_DIGEST: "",
+				},
+			},
+		);
+		assert.notEqual(missing.status, 0);
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
 	}
-	// The upload's root is the digests directory, so the artifact holds `<platform>/<digest>`.
+	// The upload's root is the digests directory, so the artifact holds `<image>/<platform>/<digest>`.
 	assert.equal(
-		step("build", "Upload digest").getIn(["with", "path"]),
+		step("build", "Upload digests").getIn(["with", "path"]),
 		`\${{ runner.temp }}/digests`,
 	);
 	assert.equal(step("merge", "Download digests").getIn(["with", "merge-multiple"]), true);
 	assert.match(
-		String(step("merge", "Create manifest and push").get("run")),
-		/files=\("linux-\$arch"\/\*\)/u,
-	);
-	// The scan reads the same platform directory in the job that exported it.
-	assert.equal(
-		step("build", "Resolve the platform subject").getIn(["env", "DIGEST_DIRECTORY"]),
-		`\${{ runner.temp }}/digests/\${{ steps.prep.outputs.platform_pair }}`,
+		String(step("merge", "Create manifests and push").get("run")),
+		/files=\("\$name\/linux-\$arch"\/\*\)/u,
 	);
 });

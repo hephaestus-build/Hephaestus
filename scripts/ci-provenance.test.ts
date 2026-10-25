@@ -11,8 +11,8 @@ import { asArray, asRecord } from "./lib/json.ts";
 
 void test("image provenance can persist storage records through every reusable-workflow caller", async () => {
 	const callers = {
-		"cicd.yml": ["application-server-image", "Docker"],
-		"ci-docker-build.yml": ["webapp-build", "agent-pi-build", "postgres-build"],
+		"cicd.yml": ["Docker"],
+		"ci-docker-build.yml": ["images"],
 		"reusable-docker-build.yml": ["merge"],
 	};
 	for (const [file, jobs] of Object.entries(callers)) {
@@ -39,15 +39,25 @@ void test("image provenance can persist storage records through every reusable-w
 		for (const job of jobs) {
 			const steps = workflow.getIn(["jobs", job, "steps"]);
 			assert.ok(isSeq(steps));
-			const attestation = asArray(steps.toJSON(), "steps")
+			// One attestation per image: the action pushes one registry attestation per call.
+			const attestations = asArray(steps.toJSON(), "steps")
 				.map((step) => asRecord(step, "step"))
-				.find((step) => step.name === "Generate build provenance attestation");
-			assert.ok(attestation);
-			assert.match(String(attestation.uses), /^actions\/attest@[a-f0-9]{40}$/u);
-			const inputs = asRecord(attestation.with, "attestation inputs");
-			assert.equal(inputs["push-to-registry"], true);
-			assert.notEqual(inputs["create-storage-record"], false);
-			assert.match(String(inputs["subject-digest"]), /outputs\.(?:manifest-digest|digest)/u);
+				.filter((step) => String(step.name).startsWith("Attest the "));
+			assert.deepEqual(
+				attestations.map((step) => step.name),
+				["application-server", "webapp", "agent-pi", "postgres"].map(
+					(name) => `Attest the ${name} image`,
+				),
+			);
+			for (const attestation of attestations) {
+				assert.match(String(attestation.uses), /^actions\/attest@[a-f0-9]{40}$/u);
+				const inputs = asRecord(attestation.with, "attestation inputs");
+				assert.equal(inputs["push-to-registry"], true);
+				assert.notEqual(inputs["create-storage-record"], false);
+				const name = String(attestation.name).slice("Attest the ".length, -" image".length);
+				assert.equal(inputs["subject-name"], `\${{ inputs.registry }}/hephaestus-build/${name}`);
+				assert.equal(inputs["subject-digest"], `\${{ steps.digest.outputs.${name} }}`);
+			}
 		}
 	}
 });
@@ -65,7 +75,7 @@ const digest = `sha256:${"a".repeat(64)}`;
 const image = `ghcr.io/${owner}/webapp`;
 const immutable = `${image}@${digest}`;
 const verificationSites = [
-	{ file: "reusable-docker-build.yml", job: "merge", step: "Verify signature + attestation" },
+	{ file: "reusable-docker-build.yml", job: "merge", step: "Verify signatures + attestations" },
 	{
 		file: "ci-docker-build.yml",
 		job: "tag-unchanged-images",
@@ -106,10 +116,7 @@ for (const site of verificationSites) {
 					assert.equal(step.getIn(["env", "REPOSITORY_OWNER"]), `\${{ github.repository_owner }}`);
 					assert.equal(step.getIn(["env", "ALIAS_BASE"]), `\${{ inputs.alias_base }}`);
 				} else {
-					assert.equal(
-						step.getIn(["env", "IMAGE_REF"]),
-						`\${{ inputs.registry }}/\${{ inputs.image-name }}@\${{ steps.digest.outputs.manifest-digest }}`,
-					);
+					assert.equal(step.getIn(["env", "DIGESTS"]), `\${{ toJSON(steps.digest.outputs) }}`);
 				}
 				const publication: unknown = steps.items.find(
 					(item) => isMap(item) && item.get("name") === "Publish verified image tags",
@@ -117,7 +124,7 @@ for (const site of verificationSites) {
 				if (site.job !== "tag-unchanged-images") {
 					assert.ok(isMap(publication));
 					assert.ok(steps.items.indexOf(publication) > steps.items.indexOf(step));
-					assert.equal(publication.getIn(["env", "IMAGE_REF"]), step.getIn(["env", "IMAGE_REF"]));
+					assert.equal(publication.getIn(["env", "DIGESTS"]), step.getIn(["env", "DIGESTS"]));
 				}
 				const script = (
 					String(step.get("run")) + (isMap(publication) ? String(publication.get("run")) : "")
@@ -167,7 +174,9 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 								: JSON.stringify({
 										tags: failure === "emptyTags" ? [] : [`${image}:commit`, `${image}:ci`],
 									}),
-						IMAGE_REF: immutable,
+						IMAGES: JSON.stringify(["webapp"]),
+						DIGESTS: JSON.stringify({ webapp: digest }),
+						INPUTS_REGISTRY: "ghcr.io",
 						REPOSITORY: repository,
 						REPOSITORY_OWNER: owner,
 						ALIAS_BASE: "b".repeat(40),
@@ -233,7 +242,7 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 						"--tag",
 						`${image}:ci`,
 						"--metadata-file",
-						path.join(directory, "published-image.json"),
+						path.join(directory, "published-webapp.json"),
 						immutable,
 					]);
 				}
@@ -277,7 +286,7 @@ void test("registry-only merge and alias jobs remain checkout-free and signing k
 	const steps = workflow.getIn(["jobs", "merge", "steps"]);
 	assert.ok(isSeq(steps));
 	const sign: unknown = steps.items.find(
-		(item) => isMap(item) && item.get("name") === "Sign image with cosign",
+		(item) => isMap(item) && item.get("name") === "Sign images with cosign",
 	);
 	assert.ok(isMap(sign));
 	// --recursive signs each platform leaf as well as the index.
@@ -300,7 +309,7 @@ for (const [captured, reused] of [
 		const steps = workflow.getIn(["jobs", "merge", "steps"]);
 		assert.ok(isSeq(steps));
 		const capture: unknown = steps.items.find(
-			(item) => isMap(item) && item.get("name") === "Capture manifest digest",
+			(item) => isMap(item) && item.get("name") === "Capture manifest digests",
 		);
 		assert.ok(isMap(capture));
 		const directory = await mkdtemp(path.join(tmpdir(), "publication-subject-"));
@@ -308,14 +317,20 @@ for (const [captured, reused] of [
 		const output = path.join(directory, "output");
 		await writeFile(output, "");
 		const descriptor = { "containerimage.descriptor": { digest: captured } };
-		await writeFile(path.join(directory, "merged-image.json"), JSON.stringify(descriptor));
+		await writeFile(path.join(directory, "merged-webapp.json"), JSON.stringify(descriptor));
 		const result = spawnSync("bash", ["-e", "-c", String(capture.get("run"))], {
 			encoding: "utf8",
-			env: { ...process.env, RUNNER_TEMP: directory, GITHUB_OUTPUT: output, REUSED_DIGEST: reused },
+			env: {
+				...process.env,
+				RUNNER_TEMP: directory,
+				GITHUB_OUTPUT: output,
+				IMAGES: JSON.stringify(["webapp"]),
+				REUSED_DIGESTS: JSON.stringify(reused === "" ? {} : { webapp: reused }),
+			},
 		});
 		// A reused digest is the subject on its own; a build's merge output cannot replace it.
 		assert.equal(result.status === 0, valid, result.stderr);
-		assert.equal(await readFile(output, "utf8"), valid ? `manifest-digest=${digest}\n` : "");
+		assert.equal(await readFile(output, "utf8"), valid ? `webapp=${digest}\n` : "");
 	});
 }
 
@@ -331,24 +346,36 @@ void test("canonical tags are withheld until verification for both image builder
 		build.some((step) => step.name === "Publish verified image tags"),
 		false,
 	);
-	const dockerfile = build.find((step) => step.name === "Build and push (Dockerfile)");
+	const dockerfile = build.find((step) => step.name === "Build and push the Dockerfile images");
 	assert.ok(dockerfile);
 	const inputs = asRecord(dockerfile.with, "build inputs");
-	assert.equal(inputs.tags, undefined);
-	assert.match(String(inputs.outputs), /inputs\.publish && format/u);
-	assert.match(String(inputs.outputs), /push-by-digest=true/u);
+	assert.equal(inputs.push, undefined);
+	assert.equal(asRecord(dockerfile.env, "build environment").PUBLISH, `\${{ inputs.publish }}`);
+	// Each bake target names no tag and pushes by digest only when the run publishes.
+	const bake = await readFile("docker/docker-bake.hcl", "utf8");
+	assert.doesNotMatch(bake, /\btags\s*=/u);
+	for (const target of ["webapp", "agent-pi", "postgres"]) {
+		assert.ok(
+			bake.includes(
+				`output     = PUBLISH == "true" ? ["type=image,\\"name=\${repository("${target}")}\\",push-by-digest=true,name-canonical=true,push=true"] : ["type=cacheonly"]`,
+			),
+			target,
+		);
+	}
 
 	const mergeSteps = workflow.getIn(["jobs", "merge", "steps"]);
 	assert.ok(isSeq(mergeSteps));
 	const values = asArray(mergeSteps.toJSON(), "steps").map((step) => asRecord(step, "step"));
 	const publication = values.findIndex((step) => step.name === "Publish verified image tags");
-	const verification = values.findIndex((step) => step.name === "Verify signature + attestation");
+	const verification = values.findIndex((step) => step.name === "Verify signatures + attestations");
 	assert.ok(publication > verification && verification !== -1);
-	const staging = values.find((step) => step.name === "Create manifest and push");
+	const staging = values.find((step) => step.name === "Create manifests and push");
 	assert.ok(staging);
 	assert.ok(values.indexOf(staging) < publication);
-	const env = asRecord(staging.env, "staging environment");
-	assert.match(String(env.STAGING_IMAGE), /github\.run_id.*github\.run_attempt/u);
+	assert.match(
+		String(staging.run),
+		/--tag "\$repository:ci-\$GITHUB_RUN_ID-\$GITHUB_RUN_ATTEMPT-index"/u,
+	);
 	assert.doesNotMatch(String(staging.run), /DOCKER_METADATA_OUTPUT_JSON/u);
 });
 
@@ -480,16 +507,18 @@ for (const scenario of [
 			const steps = workflow.getIn(["jobs", "merge", "steps"]);
 			assert.ok(isSeq(steps));
 			const create = steps.items.find(
-				(step) => isMap(step) && step.get("name") === "Create manifest and push",
+				(step) => isMap(step) && step.get("name") === "Create manifests and push",
 			);
 			assert.ok(isMap(create));
 			const directory = await mkdtemp(path.join(tmpdir(), "manifest-leaf-custody-"));
 			t.after(async () => rm(directory, { recursive: true, force: true }));
 			const artifactRoot = path.join(directory, "digests");
-			await mkdir(artifactRoot);
+			// One directory per image, holding one directory per platform.
+			const imageRoot = path.join(artifactRoot, "webapp");
+			await mkdir(imageRoot, { recursive: true });
 			for (const arch of architectures) {
 				const sourceDigest = arch === "arm64" ? armLeaf : buildIndex;
-				const artifactDirectory = path.join(artifactRoot, `linux-${arch}`);
+				const artifactDirectory = path.join(imageRoot, `linux-${arch}`);
 				await mkdir(artifactDirectory);
 				if ("artifact" in scenario && scenario.artifact === "missing" && arch === "amd64") {
 					continue;
@@ -504,7 +533,7 @@ for (const scenario of [
 				}
 			}
 			if ("artifact" in scenario && scenario.artifact === "extra") {
-				await mkdir(path.join(artifactRoot, "unexpected"));
+				await mkdir(path.join(imageRoot, "unexpected"));
 			}
 			const docker = path.join(directory, "docker");
 			await writeFile(
@@ -533,9 +562,10 @@ process.stdout.write(ref.endsWith(process.env.MERGED_DIGEST) ? process.env.FINAL
 					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 					RUNNER_TEMP: directory,
 					INPUTS_REGISTRY: "ghcr.io",
-					INPUTS_IMAGE_NAME: "hephaestus-build/webapp",
+					BUILT: JSON.stringify(["webapp"]),
 					PLATFORMS: JSON.stringify(platforms),
-					STAGING_IMAGE: `${image}:ci-test-index`,
+					GITHUB_RUN_ID: "77",
+					GITHUB_RUN_ATTEMPT: "1",
 					CALL_LOG: callLog,
 					BUILD_INDEX: buildIndex,
 					MERGED_DIGEST: mergedIndex,
@@ -567,6 +597,7 @@ process.stdout.write(ref.endsWith(process.env.MERGED_DIGEST) ? process.env.FINAL
 					(arch) => `${image}@${arch === "arm64" ? armLeaf : buildIndex}`,
 				);
 				assert.deepEqual(created.slice(-sources.length), sources);
+				assert.deepEqual(created.slice(3, 5), ["--tag", `${image}:ci-77-1-index`]);
 				assert.notEqual(created.at(-sources.length - 1), `${image}@${armLeaf}`);
 				assert.deepEqual(calls.at(-1), [
 					"buildx",
@@ -579,7 +610,7 @@ process.stdout.write(ref.endsWith(process.env.MERGED_DIGEST) ? process.env.FINAL
 			assert.ok(
 				steps.items.indexOf(create) <
 					steps.items.findIndex(
-						(step) => isMap(step) && step.get("name") === "Generate build provenance attestation",
+						(step) => isMap(step) && step.get("name") === "Attest the webapp image",
 					),
 			);
 		},
@@ -614,9 +645,10 @@ for (const scenario of [
 			const reuseSteps = workflow.getIn(["jobs", "reuse", "steps"]);
 			assert.ok(isSeq(reuseSteps));
 			const step: unknown = reuseSteps.items.find(
-				(item) => isMap(item) && item.get("name") === "Verify the merge-queue image",
+				(item) => isMap(item) && item.get("name") === "Verify the merge-queue images",
 			);
 			assert.ok(isMap(step));
+			const select = String(workflow.getIn(["env", "SELECT_IMAGES"]));
 			const verify = String(step.get("run"))
 				.replaceAll(`\${{ github.repository }}`, repository)
 				.replaceAll(`\${{ github.repository_owner }}`, owner)
@@ -672,7 +704,13 @@ if (tool === 'docker' && args.includes('--format')) {
 					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 					CALL_LOG: log,
 					GITHUB_OUTPUT: output,
-					IMAGE: image,
+					SELECT_IMAGES: select,
+					SELECTED_SERVER: "false",
+					SELECTED_WEBAPP: "true",
+					SELECTED_PI: "false",
+					SELECTED_POSTGRES: "false",
+					REUSE_IMAGES: JSON.stringify(["webapp", "postgres"]),
+					REGISTRY: "ghcr.io",
 					COMMIT: pushCommit,
 					QUEUE_RUN: "queue" in scenario ? scenario.queue : queueRun,
 					PLATFORMS: JSON.stringify(["linux/amd64", "linux/arm64"]),
@@ -689,9 +727,13 @@ if (tool === 'docker' && args.includes('--format')) {
 					}),
 				},
 			});
+			// An image that fails any check is not an error: the run builds it instead.
 			const reused = Object.keys(scenario).length === 1;
-			assert.equal(result.status === 0, reused, result.stderr);
-			assert.equal(await readFile(output, "utf8"), reused ? `digest=${digest}\n` : "");
+			assert.equal(result.status, 0, result.stderr);
+			assert.equal(
+				await readFile(output, "utf8"),
+				reused ? `digests={"webapp":"${digest}"}\nbuild=[]\n` : `digests={}\nbuild=["webapp"]\n`,
+			);
 			if (reused) {
 				const recorded = await readFile(log, "utf8");
 				const calls = recorded
@@ -726,27 +768,39 @@ void test("a reused image skips only building, merging and attesting", async () 
 	const workflow = parseDocument(
 		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
-	assert.equal(workflow.getIn(["jobs", "reuse", "if"]), "inputs.publish && inputs.reuse-run != ''");
-	// Any unverified answer leaves the digest empty, and the image is built instead.
+	assert.equal(
+		workflow.getIn(["jobs", "reuse", "if"]),
+		"inputs.publish && inputs.reuse-run != '' && inputs.reuse-images != '[]'",
+	);
+	// The step verifies each image on its own; an unverified one is left for the build.
 	const reuse = workflow.getIn(["jobs", "reuse", "steps"]);
 	assert.ok(isSeq(reuse));
 	const verify = reuse.items.find(
-		(item) => isMap(item) && item.get("name") === "Verify the merge-queue image",
+		(item) => isMap(item) && item.get("name") === "Verify the merge-queue images",
 	);
 	assert.ok(isMap(verify));
-	assert.equal(verify.get("continue-on-error"), true);
+	assert.equal(verify.get("continue-on-error"), undefined);
 	assert.equal(
-		workflow.getIn(["jobs", "reuse", "outputs", "digest"]),
-		`\${{ steps.verify.outputs.digest }}`,
+		workflow.getIn(["jobs", "reuse", "outputs", "digests"]),
+		`\${{ steps.verify.outputs.digests }}`,
+	);
+	assert.equal(
+		workflow.getIn(["jobs", "reuse", "outputs", "build"]),
+		`\${{ steps.verify.outputs.build }}`,
 	);
 	assert.equal(workflow.getIn(["jobs", "build", "needs"]), "reuse");
+	// A reuse job that did not succeed reuses nothing: every selected image is built.
 	assert.equal(
 		workflow.getIn(["jobs", "build", "if"]),
-		`\${{ !cancelled() && needs.reuse.outputs.digest == '' }}`,
+		`\${{ !cancelled() && (inputs.application-server || inputs.webapp || inputs.agent-pi || inputs.postgres) && (needs.reuse.result != 'success' || needs.reuse.outputs.build != '[]') }}`,
 	);
 	assert.equal(
 		workflow.getIn(["jobs", "merge", "if"]),
-		`\${{ inputs.publish && !cancelled() && (needs.reuse.outputs.digest != '' || needs.build.result == 'success') }}`,
+		`\${{ inputs.publish && !cancelled() && (needs.build.result == 'success' || (needs.build.result == 'skipped' && needs.reuse.result == 'success' && needs.reuse.outputs.build == '[]')) }}`,
+	);
+	assert.equal(
+		workflow.getIn(["jobs", "merge", "env", "REUSED_DIGESTS"]),
+		`\${{ needs.reuse.result == 'success' && needs.reuse.outputs.digests || '{}' }}`,
 	);
 	// The queue run already scanned the image it built, in the build this skips, and its verdict
 	// gated the merge.
@@ -758,18 +812,20 @@ void test("a reused image skips only building, merging and attesting", async () 
 			.map((step) => asRecord(step, "step"))
 			.map((step) => [String(step.name), step.if]),
 	);
-	for (const skipped of [
-		"Download digests",
-		"Create manifest and push",
-		"Generate build provenance attestation",
-	]) {
-		assert.equal(conditions[skipped], "needs.reuse.outputs.digest == ''", skipped);
+	for (const skipped of ["Download digests", "Create manifests and push"]) {
+		assert.equal(conditions[skipped], "steps.prep.outputs.built != '[]'", skipped);
+	}
+	for (const name of ["application-server", "webapp", "agent-pi", "postgres"]) {
+		assert.equal(
+			conditions[`Attest the ${name} image`],
+			`contains(fromJSON(steps.prep.outputs.built), '${name}')`,
+		);
 	}
 	// The release accepts only the default-branch identity, so a reused image is signed again.
 	for (const always of [
-		"Capture manifest digest",
-		"Sign image with cosign",
-		"Verify signature + attestation",
+		"Capture manifest digests",
+		"Sign images with cosign",
+		"Verify signatures + attestations",
 		"Publish verified image tags",
 	]) {
 		assert.equal(conditions[always], undefined, always);

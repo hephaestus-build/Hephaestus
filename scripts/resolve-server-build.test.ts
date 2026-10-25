@@ -4,7 +4,12 @@ import { test } from "node:test";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
-import { imageManifests, resolveQueueRun, resolveServerBuild } from "./resolve-server-build.ts";
+import {
+	imageAttestations,
+	imageManifestJob,
+	resolveQueueRun,
+	resolveServerBuild,
+} from "./resolve-server-build.ts";
 
 const repository = "hephaestus-build/Hephaestus";
 const commit = "a".repeat(40);
@@ -14,8 +19,8 @@ const requiredJobs = [
 	"Build / App Server: Database",
 	"Build / App Server: PostgreSQL drills",
 	"Build / Webapp: E2E",
-	"App Server image / Build linux/amd64 Docker Image",
-	"App Server image / Build linux/arm64 Docker Image",
+	"Docker / Images / Build linux/amd64 images",
+	"Docker / Images / Build linux/arm64 images",
 	"Test / App Server: Unit and architecture",
 	"Test / App Server: Integration (application)",
 	"Test / App Server: Integration (providers)",
@@ -24,6 +29,14 @@ const requiredJobs = [
 	"Security / Dependencies, secrets, and policy",
 	"CI Status Gate",
 ];
+/** A successful manifest job whose attestation steps for `attested` succeeded. */
+function manifests(attested: readonly string[], conclusion = "success") {
+	return {
+		name: imageManifestJob,
+		conclusion,
+		steps: attested.map((name) => ({ name, conclusion: "success" })),
+	};
+}
 function fixture() {
 	return {
 		run: {
@@ -37,10 +50,13 @@ function fixture() {
 			repository: { id: 7, full_name: repository },
 			head_repository: { id: 7, full_name: repository },
 		},
-		jobs: [...requiredJobs, "Release evidence preflight"].map((name) => ({
-			name,
-			conclusion: "success",
-		})),
+		jobs: [
+			...[...requiredJobs, "Release evidence preflight"].map((name) => ({
+				name,
+				conclusion: "success",
+			})),
+			manifests([imageAttestations["application-server"]]),
+		],
 		artifact: {
 			id: 202,
 			name: "server-build-101",
@@ -202,26 +218,44 @@ await test("main reuses immutable verified artifacts without bypassing validatio
 });
 
 await test("a push reuses the images of the successful queue run of its exact commit", async () => {
-	const lookup = async (data = fixture()) =>
+	const lookup = async (data: { run: unknown; jobs: unknown[] } = fixture()) =>
 		resolveQueueRun(repository, commit, "main", async (path) => {
 			if (path.includes("/workflows/")) {
 				return { workflow_runs: [data.run] };
 			}
 			return [{ jobs: data.jobs }];
 		});
-	assert.deepEqual(await lookup(), { runId: 101, images: [] });
+	assert.deepEqual(await lookup(), { runId: 101, images: ["application-server"] });
 	// Its verdict covers every image job and scan, so the final gate is all it needs.
 	const gateOnly = fixture();
 	gateOnly.jobs = [{ name: "CI Status Gate", conclusion: "success" }];
 	assert.deepEqual(await lookup(gateOnly), { runId: 101, images: [] });
-	// Only the images whose index the run published are reusable; it did not build the rest.
+	// Only the images whose index the run attested are reusable; it did not build the rest.
+	const steps = [
+		{ name: imageAttestations.webapp, conclusion: "success" },
+		{ name: imageAttestations.postgres, conclusion: "skipped" },
+		{ name: imageAttestations["agent-pi"], conclusion: "success" },
+	];
 	const published = fixture();
-	published.jobs.push(
-		{ name: imageManifests.webapp, conclusion: "success" },
-		{ name: imageManifests.postgres, conclusion: "skipped" },
-		{ name: imageManifests["agent-pi"], conclusion: "success" },
+	const others = published.jobs.filter((job) => job.name !== imageManifestJob);
+	assert.deepEqual(
+		await lookup({
+			run: published.run,
+			jobs: [...others, { name: imageManifestJob, conclusion: "success", steps }],
+		}),
+		{ runId: 101, images: ["webapp", "agent-pi"] },
 	);
-	assert.deepEqual(await lookup(published), { runId: 101, images: ["webapp", "agent-pi"] });
+	// A manifest job that did not succeed published nothing reusable, whatever its steps did.
+	for (const conclusion of ["failure", "cancelled", "skipped"]) {
+		assert.deepEqual(
+			await lookup({
+				run: published.run,
+				jobs: [...others, { name: imageManifestJob, conclusion, steps }],
+			}),
+			{ runId: 101, images: [] },
+			conclusion,
+		);
+	}
 	for (const conclusion of ["failure", "skipped", "cancelled"]) {
 		const data = fixture();
 		data.jobs = data.jobs.map((job) =>
@@ -268,10 +302,6 @@ await test("the image builds receive the queue run a default-branch push resolve
 		`\${{ steps.queue_run.outputs.images || '[]' }}`,
 	);
 	assert.equal(
-		workflow.getIn(["jobs", "application-server-image", "with", "reuse-run"]),
-		`\${{ contains(fromJSON(needs.detect-changes.outputs.queue-images), 'application-server') && needs.detect-changes.outputs.queue-run || '' }}`,
-	);
-	assert.equal(
 		workflow.getIn(["jobs", "Docker", "with", "reuse_run"]),
 		`\${{ needs.detect-changes.outputs.queue-run }}`,
 	);
@@ -280,35 +310,57 @@ await test("the image builds receive the queue run a default-branch push resolve
 		`\${{ needs.detect-changes.outputs.queue-images }}`,
 	);
 	const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+	assert.equal(docker.getIn(["jobs", "images", "with", "reuse-run"]), `\${{ inputs.reuse_run }}`);
+	assert.equal(
+		docker.getIn(["jobs", "images", "with", "reuse-images"]),
+		`\${{ inputs.reuse_images }}`,
+	);
 	const build = parseDocument(
 		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
-	const manifest = String(build.getIn(["jobs", "merge", "name"]));
-	// Each key names the job whose success the lookup reads, as GitHub names it in the run. A
-	// caller job without a name shows its ID.
+	// The job and step names the lookup reads, as GitHub names them in the run. A caller job without
+	// a name shows its ID.
 	assert.equal(workflow.hasIn(["jobs", "Docker", "name"]), false);
 	assert.equal(
-		imageManifests["application-server"],
-		`${String(workflow.getIn(["jobs", "application-server-image", "name"]))} / ${manifest}`,
+		imageManifestJob,
+		`Docker / ${String(docker.getIn(["jobs", "images", "name"]))} / ${String(build.getIn(["jobs", "merge", "name"]))}`,
 	);
-	for (const [image, job] of [
-		["webapp", "webapp-build"],
-		["agent-pi", "agent-pi-build"],
-		["postgres", "postgres-build"],
-	] as const) {
-		assert.equal(
-			docker.getIn(["jobs", job, "with", "reuse-run"]),
-			`\${{ contains(fromJSON(inputs.reuse_images), '${image}') && inputs.reuse_run || '' }}`,
-			job,
+	const mergeSteps = build.getIn(["jobs", "merge", "steps"]);
+	assert.ok(isSeq(mergeSteps));
+	for (const [image, step] of Object.entries(imageAttestations)) {
+		const attest: unknown = mergeSteps.items.find(
+			(item) => isMap(item) && item.get("name") === step,
 		);
+		assert.ok(isMap(attest), step);
 		assert.equal(
-			imageManifests[image],
-			`Docker / ${String(docker.getIn(["jobs", job, "name"]))} / ${manifest}`,
+			attest.getIn(["with", "subject-name"]),
+			`\${{ inputs.registry }}/hephaestus-build/${image}`,
 		);
+		assert.equal(attest.get("if"), `contains(fromJSON(steps.prep.outputs.built), '${image}')`);
 	}
 	// The webapp records its branch at build time, and the merge group's build is the one that ships.
-	assert.match(
-		String(docker.getIn(["jobs", "webapp-build", "with", "build-args"])),
-		/SOURCE_BRANCH=\$\{\{ github\.head_ref \|\| \(github\.event_name == 'merge_group' && github\.event\.repository\.default_branch\) \|\| github\.ref_name \}\}/u,
+	const buildSteps = build.getIn(["jobs", "build", "steps"]);
+	assert.ok(isSeq(buildSteps));
+	const bake = buildSteps.items.find((item) => isMap(item) && item.get("id") === "bake");
+	assert.ok(isMap(bake));
+	assert.equal(
+		bake.getIn(["env", "COOLIFY_BRANCH"]),
+		`\${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}`,
 	);
+});
+
+await test("reuses the packaged server only from a run that published its App Server image", async () => {
+	// The platform builds also succeed for a run that built only Dockerfile images.
+	for (const job of [
+		manifests([imageAttestations.webapp]),
+		manifests([imageAttestations["application-server"]], "failure"),
+		manifests([]),
+	]) {
+		const data = fixture();
+		data.jobs = [...data.jobs.filter((entry) => entry.name !== imageManifestJob), job];
+		assert.equal(await resolve(data), undefined, JSON.stringify(job));
+	}
+	const data = fixture();
+	data.jobs = data.jobs.filter((entry) => entry.name !== imageManifestJob);
+	assert.equal(await resolve(data), undefined, "no manifest job");
 });
