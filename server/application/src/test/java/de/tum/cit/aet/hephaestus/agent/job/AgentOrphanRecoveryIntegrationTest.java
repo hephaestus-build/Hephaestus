@@ -5,8 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
@@ -1500,11 +1498,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         var timedOut = new SandboxResult(124, Map.of(), "stopped", true, Duration.ofMinutes(15));
         var sandbox = mock(SandboxManager.class);
         when(sandbox.execute(any())).thenReturn(timedOut);
-        return executorOwnedBy(workerId, sandbox, mock(ReviewJobClaimService.class));
-    }
-
-    private ReviewJobExecutor executorOwnedBy(String workerId, SandboxManager sandbox, ReviewJobClaimService claims) {
-        var timedOut = new SandboxResult(124, Map.of(), "stopped", true, Duration.ofMinutes(15));
         var agent = mock(PracticePiAdapter.class);
         when(agent.parseResult(timedOut)).thenReturn(new AgentResult(false, Map.of()));
         var worker = mock(WorkerProperties.class);
@@ -1527,33 +1520,10 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 null,
                 Optional.empty(),
                 worker,
-                claims,
+                mock(ReviewJobClaimService.class),
                 recovery);
         executor.setCompositionContinuation(continuation);
         return executor;
-    }
-
-    @Test
-    @DisplayName("the heartbeat check stops only the local attempt that the ledger no longer runs on this worker")
-    void shouldStopOnlyTheLocalAttemptThatTheLedgerNoLongerRunsHere() {
-        UUID kept = runningJobOwnedBy("live-owner", Instant.now(), 0);
-        UUID lost = runningJobOwnedBy("live-owner", Instant.now(), 0);
-        var sandbox = mock(SandboxManager.class);
-        var claims = mock(ReviewJobClaimService.class);
-        var executor = executorOwnedBy("live-owner", sandbox, claims);
-        for (UUID id : List.of(kept, lost)) {
-            when(claims.claimJob(id))
-                    .thenReturn(new ReviewJobClaimService.ClaimResult(
-                            jobRepository.findById(id).orElseThrow(), mock(ConfigSnapshot.class), "scm.pull_request"));
-            assertThat(executor.processJob(id)).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-        }
-        // The sweeper requeued one job, and another worker runs it as a later attempt.
-        jdbc.update("UPDATE review_job SET attempt = 1, worker_id = 'next-worker' WHERE id = ?", lost);
-
-        executor.lostAttemptsToStop().forEach(executor::stopLostAttempt);
-
-        verify(sandbox).cancel(lost);
-        verify(sandbox, never()).cancel(kept);
     }
 
     @ParameterizedTest(name = "retained task envelope: {0}")

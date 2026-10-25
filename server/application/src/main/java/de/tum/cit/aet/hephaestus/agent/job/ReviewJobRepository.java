@@ -172,23 +172,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("reason") ReviewJobCancellationReason reason,
             @Param("fromStatuses") Collection<ReviewJobStatus> fromStatuses);
 
-    /** A job's attempt that runs now. */
-    interface RunningAttempt {
-        UUID getId();
-
-        int getAttempt();
-    }
-
-    /**
-     * Of the given jobs, the attempts that still run on this worker. A job that is missing was cancelled, ended, or
-     * requeued; one with another attempt was requeued and claimed again.
-     */
-    @WorkspaceAgnostic("ID-based custody check; job IDs from worker-local execution state")
-    @Query("SELECT j.id AS id, j.attempt AS attempt FROM ReviewJob j "
-            + "WHERE j.id IN :ids AND j.status = 'RUNNING' AND j.workerId = :workerId")
-    List<RunningAttempt> findRunningAttemptsOwnedBy(
-            @Param("ids") Collection<UUID> ids, @Param("workerId") String workerId);
-
     /** The state of a job row that a usage settlement holds: whether the call's attempt is still the running one. */
     interface UsageOwner {
         String getStatus();

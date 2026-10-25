@@ -11,7 +11,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -533,8 +532,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(executor(pool).computeCapacity()).isEqualTo(2);
     }
 
-    /** A job this worker claimed as attempt 2, whose execution the pool has not run yet. */
-    private ReviewJobExecutor claimedOnWorker(ReviewJob job) {
+    @Test
+    void shouldStopTheLocalAttemptOfARequeuedJobInsteadOfClaimingItAgain() {
+        var job = configuredJob();
         job.setAttempt(2);
         var properties = mock(WorkerProperties.class);
         when(properties.resolvedWorkerId()).thenReturn("worker-1");
@@ -548,59 +548,14 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(policy.binding(job)).thenReturn(Optional.of(binding));
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        // The pool has not run attempt 2 yet, so it still runs here when the job is offered again.
         var executor = executor(mock(AsyncTaskExecutor.class));
         assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-        return executor;
-    }
-
-    private record Running(UUID getId, int getAttempt) implements ReviewJobRepository.RunningAttempt {}
-
-    @Test
-    void shouldStopTheSandboxWhenTheLedgerNoLongerRunsTheJobOnThisWorker() {
-        var job = configuredJob();
-        var executor = claimedOnWorker(job);
-        when(jobs.findRunningAttemptsOwnedBy(any(), eq("worker-1"))).thenReturn(List.of());
-
-        var lost = executor.lostAttemptsToStop();
-        assertThat(lost).containsExactly(new ReviewJobExecutor.LostAttempt(job.getId(), 2));
-        lost.forEach(executor::stopLostAttempt);
-
-        verify(sandbox).cancel(job.getId());
-    }
-
-    @Test
-    void shouldStopTheSandboxWhenTheLedgerRunsALaterAttemptOfTheJob() {
-        var job = configuredJob();
-        var executor = claimedOnWorker(job);
-        when(jobs.findRunningAttemptsOwnedBy(any(), eq("worker-1"))).thenReturn(List.of(new Running(job.getId(), 3)));
-
-        executor.lostAttemptsToStop().forEach(executor::stopLostAttempt);
-
-        verify(sandbox).cancel(job.getId());
-    }
-
-    @Test
-    void shouldNotClaimAJobAgainWhileItsLostAttemptStillRunsHereButStopThatAttempt() {
-        var job = configuredJob();
-        var executor = claimedOnWorker(job);
-        // The sweeper requeued the job while attempt 2 still runs here, and the poll offers it again.
-        job.setAttempt(3);
 
         assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
-        verify(jobs, times(1)).findByIdQueuedForUpdateSkipLocked(eq(job.getId()), any());
 
-        when(jobs.findRunningAttemptsOwnedBy(any(), eq("worker-1"))).thenReturn(List.of());
-        executor.lostAttemptsToStop().forEach(executor::stopLostAttempt);
         verify(sandbox).cancel(job.getId());
-    }
-
-    @Test
-    void shouldKeepTheSandboxWhileTheLedgerRunsTheSameAttemptOnThisWorker() {
-        var job = configuredJob();
-        var executor = claimedOnWorker(job);
-        when(jobs.findRunningAttemptsOwnedBy(any(), eq("worker-1"))).thenReturn(List.of(new Running(job.getId(), 2)));
-
-        assertThat(executor.lostAttemptsToStop()).isEmpty();
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
     }
 
     @Test

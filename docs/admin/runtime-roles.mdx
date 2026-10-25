@@ -207,10 +207,9 @@ deployment silently does half its job. They do **not** share a gate:
   It therefore does not run twice on a dedicated worker pod.
 - **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
   Worker admission and server preparation read the same practice-page feedback support, so that read exists in every role.
-  At each liveness heartbeat, the worker reads the status of the jobs that it runs.
-  It stops the sandbox of each job that the database no longer shows as its own running attempt.
-  Thus, a cancel from any server pod stops the review at the worker's next heartbeats.
-  This is also true if the worker has no control connection to that pod.
+  A review attempt that was cancelled, requeued or moved to another worker writes nothing more.
+  The gateway refuses its next model call, and its sandbox stops.
+  A sandbox that makes no further call holds its capacity until its deadline.
 
 `AGENT_ENABLED` is `false` on all roles until you set it, regardless of how the pod starts.
 

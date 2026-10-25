@@ -67,6 +67,7 @@ import {
 	type ModelFailureKind,
 	modelFailure,
 	newModelCallTiming,
+	refusesAttempt,
 } from "./pi-model-failure.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { executionReport } from "./pi-practice-scripts-report.ts";
@@ -527,6 +528,13 @@ function recordModelResponse(trace: TurnTrace, stopReason: string, message: unkn
 		}
 		trace.lastModelFailureAt = failure.at ?? trace.lastModelFailureAt;
 		trace.finalModelFailure = { ...failure, retryEndedUnsuccessfully: false };
+		// A sandbox that makes no further call runs to its deadline instead.
+		if (refusesAttempt(failure)) {
+			console.error(
+				`[pi-runner] STOPPED: the gateway refused this attempt (${failure.status}); it no longer runs`,
+			);
+			process.exit(1);
+		}
 	} else {
 		trace.finalModelFailure = null;
 	}

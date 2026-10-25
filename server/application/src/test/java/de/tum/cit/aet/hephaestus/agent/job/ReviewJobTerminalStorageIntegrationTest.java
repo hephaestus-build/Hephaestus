@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult.LlmUsage;
@@ -204,26 +203,6 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     private @Nullable Timestamp executionStartedAt(ReviewJob job) {
         return jdbc.queryForObject(
                 "SELECT execution_started_at FROM review_job WHERE id = ?", Timestamp.class, job.getId());
-    }
-
-    @Test
-    void shouldReportOnlyTheAttemptsThatStillRunOnTheWorker() {
-        var current = running("runtime-custody-current");
-        var requeued = running("runtime-custody-requeued");
-        var cancelled = running("runtime-custody-cancelled");
-        var foreign = running("runtime-custody-foreign");
-        jdbc.update("UPDATE review_job SET attempt = attempt + 1 WHERE id = ?", requeued.getId());
-        jdbc.update("UPDATE review_job SET status = 'CANCELLED' WHERE id = ?", cancelled.getId());
-        jdbc.update("UPDATE review_job SET worker_id = 'other' WHERE id = ?", foreign.getId());
-
-        var owned = jobs.findRunningAttemptsOwnedBy(
-                List.of(current.getId(), requeued.getId(), cancelled.getId(), foreign.getId()), "owner");
-
-        assertThat(owned)
-                .extracting(ReviewJobRepository.RunningAttempt::getId, ReviewJobRepository.RunningAttempt::getAttempt)
-                .containsExactlyInAnyOrder(
-                        tuple(current.getId(), current.getAttempt()),
-                        tuple(requeued.getId(), requeued.getAttempt() + 1));
     }
 
     @Test

@@ -62,7 +62,7 @@ public class ReviewJobLifecycleService {
         CancelOutcome outcome = transactionTemplate.execute(status -> cancelTransition(workspaceId, jobId));
 
         // Split deployment: ask the owning worker to stop its container over the WSS channel (ADR 0009).
-        // No-op if that worker isn't connected here: it then stops the container at its next liveness heartbeats.
+        // No-op if that worker isn't connected here — the DB transition + backstops still finish the cancel.
         if (outcome.stopContainer()) {
             String workerId = outcome.job().getWorkerId();
             if (workerId != null) {

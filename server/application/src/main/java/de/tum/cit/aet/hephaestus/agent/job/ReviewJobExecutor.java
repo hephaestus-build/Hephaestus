@@ -367,8 +367,8 @@ public class ReviewJobExecutor {
     }
 
     /**
-     * Stops the container only; whoever ended the attempt already wrote its status, and the attempt's own terminal
-     * write then finds it no longer owns the job.
+     * Stops the container only; the authoritative status transition already happened hub-side before
+     * the {@code CancelJob} frame was sent.
      *
      * @return true if this worker owns the job and a stop was requested
      */
@@ -376,7 +376,7 @@ public class ReviewJobExecutor {
         if (!localRunningJobs.containsKey(jobId)) {
             return false;
         }
-        log.info("Stopping locally running job {}: {}", jobId, reason);
+        log.info("Hub-initiated cancel for locally-running job {}: {}", jobId, reason);
         try {
             sandboxManager.cancel(jobId);
             return true;
@@ -384,34 +384,6 @@ public class ReviewJobExecutor {
             log.warn("Local cancel failed for job {}: {}", jobId, e.getClass().getSimpleName());
             return false;
         }
-    }
-
-    /** A local attempt that the job ledger no longer runs on this worker. */
-    public record LostAttempt(UUID jobId, int attempt) {}
-
-    /**
-     * The local attempts that the job ledger no longer runs on this worker: their job was cancelled, ended by another
-     * process, or requeued as a later attempt. A cancel from a server replica that holds no control session with this
-     * worker reaches the sandbox through these.
-     */
-    public List<LostAttempt> lostAttemptsToStop() {
-        if (localRunningJobs.isEmpty()) return List.of();
-        Map<UUID, Integer> local = Map.copyOf(localRunningJobs);
-        Map<UUID, Integer> owned = new HashMap<>();
-        jobRepository
-                .findRunningAttemptsOwnedBy(local.keySet(), workerId)
-                .forEach(running -> owned.put(running.getId(), running.getAttempt()));
-        List<LostAttempt> lost = new ArrayList<>();
-        local.forEach((jobId, attempt) -> {
-            if (!attempt.equals(owned.get(jobId))) lost.add(new LostAttempt(jobId, attempt));
-        });
-        return List.copyOf(lost);
-    }
-
-    /** Stops a lost attempt's sandbox, unless a later attempt of its job has started here since it was found. */
-    public void stopLostAttempt(LostAttempt lost) {
-        if (Integer.valueOf(lost.attempt()).equals(localRunningJobs.get(lost.jobId())))
-            cancelLocalJob(lost.jobId(), "attempt " + lost.attempt() + " no longer runs on this worker");
     }
 
     /** Used when no {@code WorkerDrainCoordinator} owns the worker lifecycle (monolith mode). */
@@ -498,9 +470,13 @@ public class ReviewJobExecutor {
     }
 
     StartOutcome processJob(UUID jobId) {
-        // An attempt of this job still runs here: it was lost and requeued. The next heartbeat stops it, and the job is
-        // claimed only after it unwound, so one job never has two attempts on this worker.
-        if (localRunningJobs.containsKey(jobId)) return StartOutcome.SKIPPED;
+        // The job is offered again while an attempt of it still runs here, so the ledger requeued that attempt: stop
+        // it,
+        // and claim the job once it has ended. One job never has two sandboxes on this worker.
+        if (localRunningJobs.containsKey(jobId)) {
+            cancelLocalJob(jobId, "the job was requeued while this attempt still ran");
+            return StartOutcome.SKIPPED;
+        }
         ReviewJobClaimService.ClaimAttempt attempt;
         try {
             attempt = claims.claimJob(jobId);

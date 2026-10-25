@@ -112,6 +112,14 @@ export function modelFailure(message: unknown): ModelFailure {
 	};
 }
 
+/**
+ * Whether the gateway refused this attempt's credential: the attempt ended, was requeued or moved to another worker,
+ * so nothing it does can still be admitted.
+ */
+export function refusesAttempt(failure: ModelFailure): boolean {
+	return failure.kind === "HTTP_ERROR" && (failure.status === 401 || failure.status === 409);
+}
+
 /** A message's call span, or null when it has no readable one: a response time beyond the span is dropped. */
 export function modelCall(message: unknown): ModelCall | null {
 	const diagnostic = lastDiagnostic(message, CALL_DIAGNOSTICS);

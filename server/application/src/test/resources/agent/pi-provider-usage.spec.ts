@@ -9,6 +9,7 @@ import test from "node:test";
 
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 
+import { modelFailure, refusesAttempt } from "../../../main/resources/agent/pi-model-failure.ts";
 import { registerHephaestusProvider } from "../../../main/resources/agent/pi-provider.ts";
 import {
 	addAssistantUsage,
@@ -704,4 +705,23 @@ void test("openai-responses times a call across an adapter request retry and wai
 	const { responseMs } = assertCall(message, true, "openai-responses");
 	assert.ok(responseMs !== undefined && responseMs >= 80);
 	assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
+});
+
+test("a credential that the gateway refuses stops the attempt; other failures do not", async () => {
+	for (const [status, refused] of [
+		[401, true],
+		[409, true],
+		[403, false],
+		[500, false],
+	] as const) {
+		const message = await completeWith(
+			"openai-completions",
+			(response) => {
+				response.writeHead(status, { "content-type": "text/plain" });
+				response.end("refused");
+			},
+			{ maxRetries: 0 },
+		);
+		assert.equal(refusesAttempt(modelFailure(message)), refused, `status ${status}`);
+	}
 });
