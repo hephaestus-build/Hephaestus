@@ -311,7 +311,9 @@ class GitHubSubIssuesMessageHandlerIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldNotStoreASubIssueFromAnotherRepositoryUnderTheDeliveringOne() throws Exception {
         ObjectNode payload = (ObjectNode) objectMapper.readTree(json("sub_issues.sub_issue_added"));
-        ((ObjectNode) payload.required("sub_issue_repo")).put("full_name", "HephaestusTest/Unsynchronized");
+        ((ObjectNode) payload.required("sub_issue_repo"))
+                .put("id", 1L)
+                .put("full_name", "HephaestusTest/Unsynchronized");
         GitHubSubIssuesEventDTO event = objectMapper.treeToValue(payload, GitHubSubIssuesEventDTO.class);
         createTestIssue(
                 required(event.parentIssue().getDatabaseId()),

@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigInteger;
 import java.net.URI;
 import java.time.Duration;
@@ -108,6 +109,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IssueRepository issueRepository;
+
+    @Autowired
+    private MeterRegistry meters;
 
     @Autowired
     private TeamRepository teamRepository;
@@ -690,6 +694,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         @Test
         void shouldMoveAPullRequestFiledUnderAStaleRepositoryNameToTheRepositoryGitHubReports() {
             Repository stale = staleRepository();
+            double moved = misfiledCount("moved", "none");
             PullRequest misfiled = Objects.requireNonNull(processor.process(
                     createBasicPullRequestDto(PULL_REQUEST_ID, 40),
                     ProcessingContext.forSync(testWorkspace.getId(), stale)));
@@ -703,11 +708,13 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(stored(40).getBody()).isEqualTo("synced body");
             assertThat(pullRequestRepository.findByRepositoryIdAndNumber(stale.getId(), 40))
                     .isEmpty();
+            assertThat(misfiledCount("moved", "none")).isEqualTo(moved + 1);
         }
 
         @Test
         void shouldSkipOnlyThatPullRequestWhenItsRepositoryAlreadyHasARowForTheNumber() {
             Repository stale = staleRepository();
+            double skipped = misfiledCount("skipped", "idHeldByAnotherRepository");
             PullRequest misfiled = Objects.requireNonNull(processor.process(
                     createBasicPullRequestDto(PULL_REQUEST_ID, 41),
                     ProcessingContext.forSync(testWorkspace.getId(), stale)));
@@ -725,6 +732,16 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     .isEqualTo(misfiled.getId());
             assertThat(stored(41).getId()).isEqualTo(stubbed.getId());
             assertThat(stored(41).getBody()).isEqualTo("stub body");
+            assertThat(misfiledCount("skipped", "idHeldByAnotherRepository")).isEqualTo(skipped + 1);
+        }
+
+        private double misfiledCount(String outcome, String reason) {
+            var counter = meters.find("github.misfiled.work")
+                    .tag("type", "pull_request")
+                    .tag("outcome", outcome)
+                    .tag("reason", reason)
+                    .counter();
+            return counter == null ? 0 : counter.count();
         }
     }
 

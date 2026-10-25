@@ -44,8 +44,8 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
     /**
      * Moves the row with the provider's id to {@code repositoryId} when it is stored under another repository with
      * the same number, that repository has no row of this type for the number yet, and no workspace registered an
-     * item for it. A provider never moves an issue
-     * or a pull request between repositories under the same id, so such a row was filed under a stale repository name.
+     * item for it. A provider never moves an issue or a pull request between repositories under the same id, so such
+     * a row was filed under a stale repository name.
      *
      * @return 1 when the row moved, else 0
      */
