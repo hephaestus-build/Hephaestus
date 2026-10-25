@@ -203,17 +203,15 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-  # Each drill migrates its own named containers from the packaged JAR, so it takes its own job
-  # rather than queueing behind databaseTest's Gradle invocation.
+  # The drills migrate their own named containers from the packaged JAR, so they take a job of
+  # their own rather than queueing behind databaseTest's Gradle invocation. They share one job:
+  # together they are shorter than the integration shards, and a job of its own costs each a
+  # runner's setup.
   postgres-drill:
-    name: "App Server: PostgreSQL drill (${{ matrix.drill }})"
+    name: "App Server: PostgreSQL drills"
     if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        drill: [backup-restore, pitr]
     permissions:
       contents: read
     steps:
@@ -233,17 +231,27 @@ jobs:
           base-sha: ${{ inputs.postgres_base_sha }}
           image-changed: ${{ inputs.postgres_image_changed }}
           tag: hephaestus-postgres:ci
-      - name: Run the PostgreSQL ${{ matrix.drill }} drill
+      - name: Run the PostgreSQL backup-restore drill
+        id: backup_restore
         env:
-          DRILL: ${{ matrix.drill }}
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
-        run: node "scripts/postgres-$DRILL-test.ts" --target-image hephaestus-postgres:ci
+        run: node scripts/postgres-backup-restore-test.ts --target-image hephaestus-postgres:ci
+      # The PITR drill reports on its own even when the backup-restore drill failed, but not after a
+      # failed setup step.
+      - name: Run the PostgreSQL pitr drill
+        if: ${{ !cancelled() && (success() || steps.backup_restore.outcome == 'failure') }}
+        env:
+          HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
+        run: node scripts/postgres-pitr-test.ts --target-image hephaestus-postgres:ci
 
+  # Both browser suites run Playwright against the same packaged JAR, each with its own server and
+  # database, so they share one job's setup: the toolchain, the browsers, the JAR and the PostgreSQL
+  # image.
   webapp-e2e:
-    name: "Webapp: E2E"
-    if: inputs.should_skip != 'true' && inputs.e2e_changed == 'true' && inputs.queue_tier == 'true'
+    name: "Webapp and extension: E2E"
+    if: inputs.should_skip != 'true' && (inputs.e2e_changed == 'true' || inputs.extension_e2e_changed == 'true') && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -273,6 +281,8 @@ jobs:
           image-changed: ${{ inputs.postgres_image_changed }}
           tag: ghcr.io/hephaestus-build/postgres:dev
       - name: Run end-to-end tests against the built server
+        id: webapp_e2e
+        if: inputs.e2e_changed == 'true'
         run: |
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
           cleanup() {
@@ -306,8 +316,8 @@ jobs:
             psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql
           timeout --kill-after=30s 10m vp run --filter webapp test:e2e
       # A green browser suite can still hide server startup failures. Preserve the raw log too.
-      - name: Upload diagnostics
-        if: always()
+      - name: Upload webapp diagnostics
+        if: always() && inputs.e2e_changed == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: webapp-e2e-results
@@ -316,47 +326,15 @@ jobs:
             e2e-server.log
           if-no-files-found: warn
           retention-days: 7
-
-  # The extension's `e2e` build — the development key, loopback access and pre-granted fixture
-  # origins, with the dev client login — against the same packaged server. It is not the production
-  # zip: the Extension quality leg builds that and checks its manifest (check:extension-package).
-  extension-e2e:
-    name: "Extension: E2E"
-    if: inputs.should_skip != 'true' && inputs.extension_e2e_changed == 'true' && inputs.queue_tier == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "frozen"
-      # This job runs the packaged JAR, never Gradle; it needs no wrapper validation or build cache.
-      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
-        with:
-          distribution: "temurin"
-          java-version-file: .java-version
-          cache-jdk: false
-      # The browser install runs node and vp, so it starts after the toolchain.
-      - uses: ./.github/actions/setup-browsers
-      - name: Download the packaged server
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ${{ env.SERVER_BUILD_ARTIFACT }}
-          path: server
-      # `server/compose.yaml` resolves the database by the `dev` tag, so that is the name it needs.
-      - uses: ./.github/actions/postgres-image
-        with:
-          base-sha: ${{ inputs.postgres_base_sha }}
-          image-changed: ${{ inputs.postgres_image_changed }}
-          tag: ghcr.io/hephaestus-build/postgres:dev
+      # The extension's `e2e` build — the development key, loopback access and pre-granted fixture
+      # origins, with the dev client login — against the same packaged server. It is not the production
+      # zip: the Extension quality leg builds that and checks its manifest (check:extension-package).
       # `test:extension:e2e` builds the `e2e` bundle, then runs every Playwright project: the
       # fixture-provider pages, and the real-server project, which fails rather than skips when the
       # server below does not answer.
+      # It runs even when the webapp suite failed, but not after a failed setup step.
       - name: Run extension end-to-end tests against the built server
+        if: ${{ !cancelled() && (success() || steps.webapp_e2e.outcome == 'failure') && inputs.extension_e2e_changed == 'true' }}
         env:
           E2E_SERVER_URL: http://127.0.0.1:8080
           E2E_WEB_APP_URL: http://localhost:4200
@@ -384,7 +362,7 @@ jobs:
           SERVER_PORT=8080 MANAGEMENT_PORT=9090 POSTGRES_PORT=5432 \
             SPRING_DOCKER_COMPOSE_ENABLED=false APPLICATION_HOST_URL=http://localhost:4200 \
             setsid java -jar "$SERVER_JAR" --spring.profiles.active=e2e,playwright \
-            --hephaestus.integration.gitlab.enabled=true > e2e-server.log 2>&1 &
+            --hephaestus.integration.gitlab.enabled=true > extension-e2e-server.log 2>&1 &
           SERVER_PID=$!
           # Liveness precedes ApplicationRunner completion; readiness includes signing-key initialization.
           timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/readyz >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
@@ -398,14 +376,13 @@ jobs:
           docker compose -f server/compose.yaml exec -T postgres \
             psql -v ON_ERROR_STOP=1 -U root -d hephaestus < extension/e2e/seed.sql
           timeout --kill-after=30s 10m vp run test:extension:e2e
-      # A green browser suite can still hide server startup failures. Preserve the raw log too.
-      - name: Upload diagnostics
-        if: always()
+      - name: Upload extension diagnostics
+        if: always() && inputs.extension_e2e_changed == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: extension-e2e-results
           path: |
             extension/test-results
-            e2e-server.log
+            extension-e2e-server.log
           if-no-files-found: warn
           retention-days: 7

@@ -111,18 +111,33 @@ function integration(...shards: string[]) {
 
 void test("lightweight runs cannot make full verification's latency budget pass", () => {
 	for (const shards of [
+		["providers", "practices-and-agent", "application"],
 		["providers", "runtime-and-startup", "practices-and-agent", "application"],
 		["providers", "runtime-and-startup", "application"],
 		["providers-and-startup", "application"],
 	]) {
 		const names = [...verificationJobs, ...integration(...shards)];
-		for (const webappName of ["Quality / Webapp", "Quality / Webapp / Gates"]) {
-			const jobs = names.map((name) => ({ name: name === "Quality / Webapp" ? webappName : name }));
+		for (const renamed of [
+			{
+				"Quality / Webapp": "Quality / Webapp",
+				"Build / Webapp: E2E": "Build / Webapp and extension: E2E",
+			},
+			{
+				"Quality / Webapp": "Quality / Webapp / Gates",
+				"Build / Webapp: E2E": "Build / Webapp: E2E",
+			},
+		]) {
+			const rename = new Map<string, string>(Object.entries(renamed));
+			const jobs = names.map((name) => ({ name: rename.get(name) ?? name }));
 			assert.equal(isFullVerification(jobs), true, shards.join(","));
 			for (const { name } of jobs) {
-				// The four-shard layout without its fourth shard is the historical three-shard layout.
+				// The four-shard layout without one of its middle shards is an earlier three-shard layout.
 				const historical =
-					shards.length === 4 && name === "Test / App Server: Integration (practices-and-agent)";
+					shards.length === 4 &&
+					[
+						"Test / App Server: Integration (runtime-and-startup)",
+						"Test / App Server: Integration (practices-and-agent)",
+					].includes(name);
 				assert.equal(isFullVerification(jobs.filter((job) => job.name !== name)), historical, name);
 			}
 		}

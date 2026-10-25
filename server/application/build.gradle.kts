@@ -242,7 +242,6 @@ val testTiers =
 val integrationInventories =
     mapOf(
         "integrationProvidersInventory" to "providers",
-        "integrationRuntimeAndStartupInventory" to "runtime-and-startup",
         "integrationPracticesAndAgentInventory" to "practices-and-agent",
         "integrationApplicationInventory" to "application",
     )
@@ -310,31 +309,14 @@ tasks.test {
 
 fun Test.selectIntegrationShard(shard: String) {
     val providerTests = listOf("de.tum.cit.aet.hephaestus.integration.*")
-    val runtimeAndStartupTests =
-        listOf(
-            "de.tum.cit.aet.hephaestus.StartupBudgetIntegrationTest",
-            "de.tum.cit.aet.hephaestus.core.database.*",
-            "de.tum.cit.aet.hephaestus.agent.job.*",
-            "de.tum.cit.aet.hephaestus.core.privacy.*",
-        )
     val practicesAndAgentTests =
         listOf("de.tum.cit.aet.hephaestus.practices.*", "de.tum.cit.aet.hephaestus.agent.*")
     when (shard) {
         "" -> Unit
         "providers" -> filter { providerTests.forEach(::includeTestsMatching) }
-        "runtime-and-startup" -> filter { runtimeAndStartupTests.forEach(::includeTestsMatching) }
-        // A Gradle exclusion wins over an inclusion, so agent.job stays in runtime-and-startup.
-        "practices-and-agent" ->
-            filter {
-                practicesAndAgentTests.forEach(::includeTestsMatching)
-                runtimeAndStartupTests.forEach(::excludeTestsMatching)
-            }
+        "practices-and-agent" -> filter { practicesAndAgentTests.forEach(::includeTestsMatching) }
         "application" ->
-            filter {
-                (providerTests + runtimeAndStartupTests + practicesAndAgentTests).forEach(
-                    ::excludeTestsMatching
-                )
-            }
+            filter { (providerTests + practicesAndAgentTests).forEach(::excludeTestsMatching) }
         else -> error("Unknown integration shard: $shard")
     }
 }

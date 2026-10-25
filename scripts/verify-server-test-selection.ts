@@ -83,7 +83,6 @@ async function main(): Promise<void> {
 	];
 	const shardInventories = [
 		"integrationProvidersInventory",
-		"integrationRuntimeAndStartupInventory",
 		"integrationPracticesAndAgentInventory",
 		"integrationApplicationInventory",
 	];

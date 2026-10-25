@@ -62,9 +62,8 @@ It can capture evidence only for images that its run published.
 | Build → App Server: Package                                             | `./gradlew :application:bootJar :application:testClasses`. Uploads the classes and JARs once                                                                                                              | —                                                                        |
 | Build → App Server: Generated artifacts                                 | `generate:api` diff against the packaged JAR. `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff                                                                              | `vp run generate:api`, `db:check-drift`, `db:generate-erd-docs`          |
 | Build → App Server: Database                                            | Gradle `databaseTest` task against PostgreSQL                                                                                                                                                             | —                                                                        |
-| Build → App Server: PostgreSQL drill                                    | `test:postgres-restore` and `test:postgres-pitr`, one job each, beside `databaseTest`                                                                                                                     | `vp run test:postgres-restore`, `test:postgres-pitr`                     |
-| Build → Webapp: E2E                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
-| Build → Extension: E2E                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                                           | `vp run test:extension:e2e`                                              |
+| Build → App Server: PostgreSQL drills                                   | `test:postgres-restore`, then `test:postgres-pitr`, in one job beside `databaseTest`                                                                                                                      | `vp run test:postgres-restore`, `test:postgres-pitr`                     |
+| Build → Webapp and extension: E2E                                       | Playwright against the packaged JAR: the webapp suite, then the extension's `e2e` build (not the production zip), each with its own server                                                                | `vp run --filter webapp test:e2e`, `test:extension:e2e`                  |
 | Build → App Server image                                                | `pack build` from the packaged JAR, signed, attested and policy-scanned                                                                                                                                   | —                                                                        |
 | Test → App Server: Unit and architecture, App Server: Integration       | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
 | Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
@@ -76,11 +75,11 @@ It can capture evidence only for images that its run published.
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The PR body follows attribution policy | —                                                                        |
 
-`Build → App Server: Database`, the PostgreSQL drills, both E2E rows and the integration shards are
+`Build → App Server: Database`, the PostgreSQL drills, the E2E row and the integration shards are
 the queue tier ([Two verification tiers](#two-verification-tiers)).
 
-The browser jobs retain `webapp-e2e-results` and `extension-e2e-results`, each including
-`e2e-server.log`, for seven days on success as well as failure. Inspect server startup and shutdown output even when browser assertions
+The browser job retains `webapp-e2e-results` and `extension-e2e-results`, each including
+its server log, for seven days on success as well as failure. Inspect server startup and shutdown output even when browser assertions
 pass. A passing suite does not prove that background work started correctly. Its coverage summary
 names credential-gated live checks and their skipped reasons. The ordinary suite is not evidence
 of live-provider behavior.
@@ -908,12 +907,11 @@ If no such default-branch commit exists, the run builds every image itself. `det
 
 - `Quality` legs start from source. `Test` suites and `Build` gates start when `App Server: Package`
   uploads its artifact.
-- `App Server: Integration` has four shards.
+- `App Server: Integration` has three shards.
   `providers` selects the `integration` package.
-  `runtime-and-startup` selects the `core.database`, `agent.job` and `core.privacy` packages, plus `StartupBudgetIntegrationTest`.
   `practices-and-agent` selects the `practices` and `agent` packages.
-  It excludes the `runtime-and-startup` selection, so `agent.job` stays in that shard.
-  Package patterns include their subpackages. `application` excludes the selections of all other shards.
+  Package patterns include their subpackages. `application` excludes the selections of both other shards.
+  Each further shard adds a runner's setup and fixed start-up cost to every merge group.
   All shards retain the `integration` tag
   filter and run in separate JVMs and Testcontainers databases. The startup test and the
   `core.database` tests own databases separate from other Spring contexts. Gradle's native test filters partition
