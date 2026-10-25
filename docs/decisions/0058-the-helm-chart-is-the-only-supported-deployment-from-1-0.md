@@ -132,11 +132,21 @@ A GitOps controller cannot replace the reconciler.
 It reads a mutable tag, and ADR 0042 rejects the replay gap of a mutable tag.
 The move of these hosts to the Helm apply can follow 1.0.
 
+The channel kind of ADR 0042 sets the chart that a host applies:
+
+- A release channel applies the published chart of that release, after it verifies the chart signature.
+- A commit channel applies the chart from the repository at the commit that the channel names.
+  That commit is also the commit whose image digests the channel deploys, and the channel signature covers these digests.
+  A commit has no published chart, and the project does not sign a chart for each commit.
+
+Thus, only the release channel needs a published, signed chart.
+
 ### Migration of a Compose install
 
 An operator changes the substrate or the version, never both in one step.
 First, the operator upgrades on Compose to the last 0.x release.
 Then the operator moves to the chart at the same version, on a new host.
+Gate 5 makes the signed chart of that version a prerequisite.
 The old host stays unchanged, and it is the rollback.
 
 | State | Migration |
@@ -166,20 +176,21 @@ The tag waits for all of these:
    The published support names only the Kubernetes versions, architectures, and network plugins that chart CI tests.
 3. A practice review completes on the chart, also across a `helm upgrade`.
 4. The release publishes a signed chart with pinned images.
-5. The one-host install has complete values: TLS, PostgreSQL certificates and their renewal, secrets, and an enabled worker.
-6. The one-host install checks DNS and the firewall before it starts.
-7. On a fresh VM, the one-host install passes a first install, a reboot, a certificate renewal, and an upgrade.
-8. The k3s recipe passes on a clean runner on both architectures, and it runs a practice review.
-9. The previous server, worker, and webhook server boot on the new schema, and the previous server claims a review. A failed migration recovers by the restore of the matched backup.
-10. Staging runs one release cycle on the chart. The rollback and restore drills pass.
-11. The backup page states the measured RTO and RPO. No webhook was lost in the move.
-12. A restore after total host loss onto empty storage passes, with the keys from off-host storage.
-13. After a restore, PostgreSQL and JetStream agree, and the provider replay completes.
-14. Persistent volumes are kept as the chart declares, secrets stay in their custody, and the alerts are tested.
-15. The migration guide is published and rehearsed.
-16. No admin doc presents Compose as an install.
-17. The fit test counts the measured peaks on the recommended host shape.
-18. A person who did not write the docs installs on a fresh VM with only the docs.
+5. A signed chart is published for the last 0.x release. The migration of a Compose install needs it, because the operator moves to the chart at the same version.
+6. The one-host install has complete values: TLS, PostgreSQL certificates and their renewal, secrets, and an enabled worker.
+7. The one-host install checks DNS and the firewall before it starts.
+8. On a fresh VM, the one-host install passes a first install, a reboot, a certificate renewal, and an upgrade.
+9. The k3s recipe passes on a clean runner on both architectures, and it runs a practice review.
+10. The previous server, worker, and webhook server boot on the new schema, and the previous server claims a review. A failed migration recovers by the restore of the matched backup.
+11. Staging runs one release cycle on the chart. The rollback and restore drills pass.
+12. The backup page states the measured RTO and RPO. No webhook was lost in the move.
+13. A restore after total host loss onto empty storage passes, with the keys from off-host storage.
+14. After a restore, PostgreSQL and JetStream agree, and the provider replay completes.
+15. Persistent volumes are kept as the chart declares, secrets stay in their custody, and the alerts are tested.
+16. The migration guide is published and rehearsed.
+17. No admin doc presents Compose as an install.
+18. The fit test counts the measured peaks on the recommended host shape.
+19. A person who did not write the docs installs on a fresh VM with only the docs.
 
 ## Consequences
 
@@ -191,7 +202,7 @@ The tag waits for all of these:
 - The `small` profile is provisional. A 16 GiB profile can qualify separately, with bounded concurrency and upgrades in a planned outage.
 - An existing Compose install must migrate before it upgrades to 1.0. The release notes of 0.95.0 and the migration guide give notice.
 - Until a later change adds a rolling update, the server role uses the `Recreate` strategy. Its outage for each upgrade is the same as on Compose today. Upgrades without an outage are a later goal.
-- A failed `helm upgrade` returns the workloads to the previous release, not the database. After a successful migration, this is safe because the previous release runs on the new schema (gate 9). After a failed migration, the recovery is the restore of the matched backup, as [If migration fails](../admin/upgrade.mdx#if-migration-fails) describes.
+- A failed `helm upgrade` returns the workloads to the previous release, not the database. After a successful migration, this is safe because the previous release runs on the new schema (gate 10). After a failed migration, the recovery is the restore of the matched backup, as [If migration fails](../admin/upgrade.mdx#if-migration-fails) describes.
 - The sandbox boundary no longer depends on the Docker socket in a supported deployment.
 - Previews are not available until they return on the staging k3s.
 

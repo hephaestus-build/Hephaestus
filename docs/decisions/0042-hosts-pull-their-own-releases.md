@@ -125,7 +125,8 @@ on staging first.
 ADR 0058 § Supported deployment changes what the hosts apply.
 This decision keeps its trust model: the signed channel, the descent check, and the identity of `promote.yml`.
 Only the apply step changes.
-The reconciler verifies the signed chart and runs `helm upgrade --install` with the flags in ADR 0058 § Upgrades.
+The reconciler runs `helm upgrade --install` with the flags in ADR 0058 § Upgrades.
+That section also states which chart each channel kind applies.
 It no longer runs `docker compose`.
 
 These parts change when the Helm apply ships:
