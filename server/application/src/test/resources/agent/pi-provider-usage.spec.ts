@@ -733,6 +733,8 @@ void test("the runner and the gateway share the text of the attempt-ended refusa
 void test("classifies only the gateway's attempt-ended 409 as a refused attempt, not a provider's 401 or 409", async () => {
 	for (const [status, body, refused] of [
 		[409, ATTEMPT_ENDED, true],
+		// The gateway's error advice wraps a refusal that a later check raised in a problem document.
+		[409, JSON.stringify({ title: "Conflict", status: 409, detail: ATTEMPT_ENDED }), true],
 		[409, "conflict", false],
 		[401, "Incorrect API key provided", false],
 		[401, ATTEMPT_ENDED, false],
