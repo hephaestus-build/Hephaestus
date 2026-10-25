@@ -15,17 +15,19 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
+import { type ChartImage, type ChartValues, renderChartValues } from "./kubernetes-chart.ts";
 import { isSet, requiredEnv } from "./lib/env.ts";
 import { asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 
-export type Stack = "proxy" | "core" | "app";
+export type Stack = "proxy" | "core" | "app" | "chart";
 
 /**
  * The `app` stack's migration service applies the schema the webhook runtime in `core` waits for, and
- * the edge comes last so it never routes to a stack that is still starting.
+ * the edge comes last so it never routes to a stack that is still starting. `chart` is the whole
+ * release on Kubernetes and stands alone.
  */
-const STACK_ORDER: readonly Stack[] = ["app", "core", "proxy"];
+const STACK_ORDER: readonly Stack[] = ["app", "core", "proxy", "chart"];
 
 /**
  * The application server never reports ready without the broker, and the broker lives in the `core`
@@ -645,12 +647,118 @@ export function parseStacks(value: string | undefined): Stack[] {
 	if (unknown.length > 0) {
 		throw new Error(`unknown stack(s): ${unknown.join(", ")}`);
 	}
-	return STACK_ORDER.filter((stack) => names.includes(stack));
+	const stacks = STACK_ORDER.filter((stack) => names.includes(stack));
+	if (stacks.includes("chart") && stacks.length > 1) {
+		throw new Error(
+			"the chart stack runs the whole release: HEPHAESTUS_STACKS=chart takes no other stack",
+		);
+	}
+	return stacks;
+}
+
+/** How a host that follows its channel with the Helm chart installs it. */
+export interface ChartSettings {
+	release: string;
+	namespace: string;
+	/** A values file in the chart's `profiles/`, without `.yaml`. */
+	profile: string;
+	helm: string;
+}
+
+const KUBERNETES_NAME = /^[a-z0-9](?:[a-z0-9-]{0,51}[a-z0-9])?$/u;
+
+export function chartSettings(environment: NodeJS.ProcessEnv): ChartSettings {
+	const setting = (name: string, fallback: string): string => {
+		const value = environment[name];
+		return isSet(value) ? value : fallback;
+	};
+	const settings = {
+		release: setting("HEPHAESTUS_CHART_RELEASE", "hephaestus"),
+		namespace: setting("HEPHAESTUS_CHART_NAMESPACE", "hephaestus"),
+		profile: setting("HEPHAESTUS_CHART_PROFILE", "small"),
+		helm: setting("HEPHAESTUS_HELM", "helm"),
+	};
+	for (const [name, value] of [
+		["HEPHAESTUS_CHART_RELEASE", settings.release],
+		["HEPHAESTUS_CHART_NAMESPACE", settings.namespace],
+		["HEPHAESTUS_CHART_PROFILE", settings.profile],
+	] as const) {
+		if (!KUBERNETES_NAME.test(value)) {
+			throw new Error(`${name} must be lowercase letters, digits and hyphens, not ${value}`);
+		}
+	}
+	return settings;
+}
+
+/**
+ * The chart's release and images, taken from the verified lock alone: the chart runs nothing that
+ * the channel's signature or the release lock does not name. A commit channel has no version, so
+ * the instance reports its commit as a prerelease of 0.0.0.
+ */
+export function chartImageValues(lockEnv: string, release: string): ChartValues {
+	const commit = lockedReleaseCommit(lockEnv);
+	const reference = (name: ChartImage): string => {
+		// The lock's key for an image, as release-image-lock and commit-image-lock write it.
+		const values = lockValues(
+			lockEnv,
+			`HEPHAESTUS_IMAGE_${name.toUpperCase().replaceAll("-", "_")}`,
+		);
+		if (values.length !== 1 || !IMAGE_DIGEST.test(values[0] ?? "")) {
+			throw new Error(`the lock names no single ${name} digest, which the chart runs`);
+		}
+		return values[0] ?? "";
+	};
+	return {
+		release: { version: RELEASE_TAG.test(release) ? release : `v0.0.0-${commit}`, commit },
+		images: {
+			"agent-pi": reference("agent-pi"),
+			"application-server": reference("application-server"),
+			nats: reference("nats"),
+			postgres: reference("postgres"),
+			webapp: reference("webapp"),
+		},
+	};
+}
+
+/**
+ * One `helm upgrade --install` of the release tree's chart: the profile, the operator's site values,
+ * and last the lock's images and release, so that no site value can run an image the lock does not
+ * name.
+ */
+export function helmArguments(
+	settings: ChartSettings,
+	releaseTree: string,
+	imagesFile: string,
+	siteValuesFile: string,
+	timeoutSeconds: number,
+): string[] {
+	const chart = path.join(releaseTree, "deploy/chart/hephaestus");
+	return [
+		"upgrade",
+		"--install",
+		settings.release,
+		chart,
+		"--namespace",
+		settings.namespace,
+		"--values",
+		path.join(chart, "profiles", `${settings.profile}.yaml`),
+		"--values",
+		siteValuesFile,
+		"--values",
+		imagesFile,
+		"--rollback-on-failure",
+		"--wait=watcher",
+		"--wait-for-jobs",
+		"--timeout",
+		`${timeoutSeconds}s`,
+	];
 }
 
 interface HostConfig {
 	channel: string;
 	stacks: Stack[];
+	/** Set only on a host whose one stack is `chart`. */
+	chart?: ChartSettings;
 	checkout: string;
 	/** A link to the tree whose tooling this host runs: the checkout until the first apply. */
 	tooling: string;
@@ -676,9 +784,11 @@ function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
 	if (!Number.isFinite(minimumFreeGiB) || minimumFreeGiB <= 0) {
 		throw new Error("HEPHAESTUS_MIN_FREE_GIB must be a positive number");
 	}
+	const stacks = parseStacks(environment.HEPHAESTUS_STACKS);
 	return {
 		channel,
-		stacks: parseStacks(environment.HEPHAESTUS_STACKS),
+		stacks,
+		...(stacks.includes("chart") ? { chart: chartSettings(environment) } : {}),
 		checkout: path.join(stateDirectory, "checkout"),
 		tooling: path.join(stateDirectory, "tooling"),
 		stateDirectory,
@@ -736,9 +846,9 @@ export async function readApplied(file: string): Promise<AppliedState | undefine
 }
 
 /** Renamed into place: a scrape landing mid-write would otherwise publish a truncated series. */
-async function writeAtomic(file: string, contents: string): Promise<void> {
+async function writeAtomic(file: string, contents: string, mode = 0o644): Promise<void> {
 	const temporary = `${file}.tmp`;
-	await writeFile(temporary, contents, { mode: 0o644 });
+	await writeFile(temporary, contents, { mode });
 	await rename(temporary, file);
 }
 
@@ -1205,33 +1315,37 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		releaseCommit,
 		releaseTree,
 	);
-	const composeArgsByStack = await verifiedComposeArgs(
-		config,
-		config.stacks,
-		releaseTree,
-		lockFile,
-		lockEnv,
-	);
-	const worker = await appliedWorker(config, applied);
-	// A rollback or re-promotion whose images are all on the host pulls nothing, so a full disk
-	// must not stop it.
-	const needed = lockImages([lockEnv]);
-	const present = await Promise.all(needed.map(async (image) => localImageId(image)));
-	if (present.includes(undefined)) {
-		await guardFreeSpace(config.minimumFreeBytes, dockerFreeBytes, async () =>
-			removeUnkeptImages([...runningLocks, lockEnv]),
-		);
-	}
-	await pullStacks(releaseTree, composeArgsByStack);
-	await migrate(releaseTree, composeArgsByStack);
-	if (worker !== undefined) {
-		await run("docker", [...worker.composeArgs, "stop", WORKER_SERVICE], { cwd: worker.tree });
-	}
-	await startStacks(config, releaseTree, composeArgsByStack);
-
-	const finishedAt = new Date();
 	// A re-promotion of the running release keeps the rollback target the host already had.
 	const previous = applied?.release === decision.release ? applied.previous : applied?.release;
+	if (config.chart === undefined) {
+		const composeArgsByStack = await verifiedComposeArgs(
+			config,
+			config.stacks,
+			releaseTree,
+			lockFile,
+			lockEnv,
+		);
+		const worker = await appliedWorker(config, applied);
+		// A rollback or re-promotion whose images are all on the host pulls nothing, so a full disk
+		// must not stop it.
+		const needed = lockImages([lockEnv]);
+		const present = await Promise.all(needed.map(async (image) => localImageId(image)));
+		if (present.includes(undefined)) {
+			await guardFreeSpace(config.minimumFreeBytes, dockerFreeBytes, async () =>
+				removeUnkeptImages([...runningLocks, lockEnv]),
+			);
+		}
+		await pullStacks(releaseTree, composeArgsByStack);
+		await migrate(releaseTree, composeArgsByStack);
+		if (worker !== undefined) {
+			await run("docker", [...worker.composeArgs, "stop", WORKER_SERVICE], { cwd: worker.tree });
+		}
+		await startStacks(config, releaseTree, composeArgsByStack);
+	} else {
+		await applyChart(config, config.chart, decision.release, previous, releaseTree, lockEnv);
+	}
+
+	const finishedAt = new Date();
 	await writeAtomic(
 		appliedFile,
 		`${JSON.stringify({ release: decision.release, channelCommit, channelIdentity, appliedAt: finishedAt.toISOString(), commit: releaseCommit, previous }, null, "\t")}\n`,
@@ -1256,7 +1370,47 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	// Last, so a prune that fails leaves this release running, recorded and adopted; the next apply
 	// prunes again.
 	await pruneReleases(config, [decision.release, previous]);
-	await removeUnkeptImages(await readLocks(config, [decision.release, previous]));
+	// On a chart host the kubelet's image garbage collection owns the images, in containerd.
+	if (config.chart === undefined) {
+		await removeUnkeptImages(await readLocks(config, [decision.release, previous]));
+	}
+}
+
+/**
+ * Installs or upgrades the release tree's chart with the lock's images. Helm migrates in the
+ * revision's Job, waits for every Pod and that Job, and rolls back to the previous revision when
+ * either fails; the thrown error then fails this tick as a failed Compose apply does.
+ */
+async function applyChart(
+	config: HostConfig,
+	settings: ChartSettings,
+	release: string,
+	previous: string | undefined,
+	releaseTree: string,
+	lockEnv: string,
+): Promise<void> {
+	const directory = path.join(config.stateDirectory, "chart");
+	await mkdir(directory, { recursive: true, mode: 0o700 });
+	const imagesFile = path.join(directory, `${release}.images.yaml`);
+	await writeAtomic(imagesFile, renderChartValues(chartImageValues(lockEnv, release)), 0o600);
+	await run(
+		settings.helm,
+		helmArguments(
+			settings,
+			releaseTree,
+			imagesFile,
+			path.join(config.secretsDirectory, "chart.yaml"),
+			config.waitTimeoutSeconds,
+		),
+		{ cwd: releaseTree, stdin: "ignore" },
+	);
+	// The previous release's file stays for a manual rollback, as its tree does.
+	const kept = new Set([release, previous ?? release].map((name) => `${name}.images.yaml`));
+	for (const entry of await readdir(directory)) {
+		if (entry.endsWith(".images.yaml") && !kept.has(entry)) {
+			await rm(path.join(directory, entry), { force: true });
+		}
+	}
 }
 
 const DAY_SECONDS = 24 * 60 * 60;

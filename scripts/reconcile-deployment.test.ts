@@ -10,6 +10,7 @@ import {
 	readFile,
 	readlink,
 	rm,
+	stat,
 	symlink,
 	writeFile,
 } from "node:fs/promises";
@@ -26,8 +27,11 @@ import {
 	appliedCommit,
 	carriesToolingLink,
 	carryPostgresImage,
+	chartImageValues,
+	chartSettings,
 	commitImages,
 	commitLockEnvironment,
+	helmArguments,
 	ensureReleaseTree,
 	decide,
 	isTarget,
@@ -247,6 +251,102 @@ await test("stacks come up in dependency order regardless of how they were confi
 	assert.deepEqual(parseStacks("proxy, core, app"), ["app", "core", "proxy"]);
 	assert.throws(() => parseStacks("app database"), /unknown stack/u);
 	assert.throws(() => parseStacks(""), /at least one stack/u);
+});
+
+await test("the chart stack is the whole release, so it takes no Compose stack beside it", () => {
+	assert.deepEqual(parseStacks("chart"), ["chart"]);
+	assert.throws(() => parseStacks("chart app"), /takes no other stack/u);
+	assert.throws(() => parseStacks("core, chart"), /takes no other stack/u);
+});
+
+const chartLock = (commit: string, omit?: string): string =>
+	commitLockEnvironment(
+		commit,
+		Object.fromEntries(
+			(
+				[
+					[
+						"HEPHAESTUS_IMAGE_AGENT_PI",
+						`ghcr.io/hephaestus-build/agent-pi@sha256:${"1".repeat(64)}`,
+					],
+					[
+						"HEPHAESTUS_IMAGE_APPLICATION_SERVER",
+						`ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
+					],
+					["HEPHAESTUS_IMAGE_NATS", `docker.io/synadia/nats-server@sha256:${"3".repeat(64)}`],
+					[
+						"HEPHAESTUS_IMAGE_POSTGRES",
+						`ghcr.io/hephaestus-build/postgres@sha256:${"4".repeat(64)}`,
+					],
+					["HEPHAESTUS_IMAGE_WEBAPP", `ghcr.io/hephaestus-build/webapp@sha256:${"5".repeat(64)}`],
+					["HEPHAESTUS_IMAGE_TRAEFIK", `docker.io/library/traefik@sha256:${"6".repeat(64)}`],
+				] satisfies [string, string][]
+			).filter(([key]) => key !== omit),
+		),
+	);
+
+await test("the chart runs exactly the lock's images, and a commit reports itself as a prerelease", () => {
+	const commit = "a".repeat(40);
+	const values = chartImageValues(chartLock(commit), commit);
+	assert.deepEqual(values, {
+		release: { version: `v0.0.0-${commit}`, commit },
+		images: {
+			"agent-pi": `ghcr.io/hephaestus-build/agent-pi@sha256:${"1".repeat(64)}`,
+			"application-server": `ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
+			nats: `docker.io/synadia/nats-server@sha256:${"3".repeat(64)}`,
+			postgres: `ghcr.io/hephaestus-build/postgres@sha256:${"4".repeat(64)}`,
+			webapp: `ghcr.io/hephaestus-build/webapp@sha256:${"5".repeat(64)}`,
+		},
+	});
+	// The chart's schema takes the version: a tag, with the commit as its prerelease.
+	assert.match(
+		values.release.version,
+		/^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/u,
+	);
+	assert.equal(chartImageValues(chartLock(commit), "v1.2.3").release.version, "v1.2.3");
+	assert.throws(
+		() => chartImageValues(chartLock(commit, "HEPHAESTUS_IMAGE_NATS"), commit),
+		/no single nats digest/u,
+	);
+});
+
+await test("a chart host installs the release tree's chart with its profile, the lock's images and the site values", () => {
+	assert.deepEqual(chartSettings({}), {
+		release: "hephaestus",
+		namespace: "hephaestus",
+		profile: "small",
+		helm: "helm",
+	});
+	assert.throws(() => chartSettings({ HEPHAESTUS_CHART_PROFILE: "../small" }), /PROFILE/u);
+	assert.deepEqual(
+		helmArguments(
+			chartSettings({ HEPHAESTUS_HELM: "/usr/local/bin/helm" }),
+			"/var/lib/hephaestus/releases/abc",
+			"/var/lib/hephaestus/chart/abc.images.yaml",
+			"/etc/hephaestus/chart.yaml",
+			1200,
+		),
+		[
+			"upgrade",
+			"--install",
+			"hephaestus",
+			"/var/lib/hephaestus/releases/abc/deploy/chart/hephaestus",
+			"--namespace",
+			"hephaestus",
+			"--values",
+			"/var/lib/hephaestus/releases/abc/deploy/chart/hephaestus/profiles/small.yaml",
+			"--values",
+			"/etc/hephaestus/chart.yaml",
+			// Last: Helm merges later files over earlier ones, so the lock's images always win.
+			"--values",
+			"/var/lib/hephaestus/chart/abc.images.yaml",
+			"--rollback-on-failure",
+			"--wait=watcher",
+			"--wait-for-jobs",
+			"--timeout",
+			"1200s",
+		],
+	);
 });
 
 await test("the version rides in labels so a dashboard can group by it", () => {
@@ -773,7 +873,13 @@ async function reconcilerFixture(directory: string) {
 	for (const tree of [checkout, bootstrap]) {
 		await mkdir(path.join(tree, "scripts/lib"), { recursive: true });
 		await writeFile(path.join(tree, "package.json"), '{"type":"module"}\n');
-		for (const file of ["reconcile-deployment.ts", "lib/env.ts", "lib/json.ts", "lib/process.ts"]) {
+		for (const file of [
+			"reconcile-deployment.ts",
+			"kubernetes-chart.ts",
+			"lib/env.ts",
+			"lib/json.ts",
+			"lib/process.ts",
+		]) {
 			await copyFile(path.join(import.meta.dirname, file), path.join(tree, "scripts", file));
 		}
 	}
@@ -1074,6 +1180,80 @@ await test(
 			assert.deepEqual(await readApplied(path.join(directory, "applied.json")), accepted);
 			// The failure metric reads where Docker keeps its data; nothing else touches Docker.
 			assert.doesNotMatch(await fixture.calls(), /docker (?!info --format)|systemctl/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"a chart host applies the verified lock with one Helm upgrade and touches no Compose stack",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-chart-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const lock = chartLock(fixture.releaseCommit).replace(/^IMAGE_TAG=.*\n/mu, "");
+			await writeFile(
+				path.join(fixture.bootstrap, "scripts/prepare-release-lock.ts"),
+				`import { writeFileSync } from "node:fs";\nwriteFileSync(process.argv[3], ${JSON.stringify(lock)});\n`,
+			);
+			const helmCalls = path.join(directory, "helm-calls");
+			const helm = path.join(directory, "helm");
+			await writeFile(
+				helm,
+				`#!/usr/bin/env -S node --\nimport { appendFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(helmCalls)}, process.argv.slice(2).join(" ") + "\\n");\nprocess.exit(process.env.FAIL_HELM === "1" ? 1 : 0);\n`,
+				{ mode: 0o755 },
+			);
+			const environment = {
+				HEPHAESTUS_STACKS: "chart",
+				HEPHAESTUS_HELM: helm,
+				HEPHAESTUS_SECRETS: directory,
+			};
+
+			const failed = fixture.run({ environment: { ...environment, FAIL_HELM: "1" } });
+			assert.notEqual(failed.status, 0, "a failed upgrade fails the tick");
+			assert.match(failed.stderr, /exited with code 1/u);
+			assert.equal(await readApplied(path.join(directory, "applied.json")), undefined);
+			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
+
+			const result = fixture.run({ environment });
+			assert.equal(result.status, 0, result.stderr);
+			const tree = path.join(directory, "releases/v1.0.0");
+			const imagesFile = path.join(directory, "chart/v1.0.0.images.yaml");
+			const helmLog = await readFile(helmCalls, "utf8");
+			assert.equal(
+				helmLog.trim().split("\n").at(-1),
+				[
+					"upgrade --install hephaestus",
+					path.join(tree, "deploy/chart/hephaestus"),
+					"--namespace hephaestus --values",
+					path.join(tree, "deploy/chart/hephaestus/profiles/small.yaml"),
+					"--values",
+					path.join(directory, "chart.yaml"),
+					"--values",
+					imagesFile,
+					"--rollback-on-failure --wait=watcher --wait-for-jobs --timeout 600s",
+				].join(" "),
+			);
+			// A comment line, then JSON, which Helm reads as YAML.
+			const written = await readFile(imagesFile, "utf8");
+			const values = asRecord(parseJson(written.replace(/^#.*\n/u, "")), "images values");
+			assert.deepEqual(at(values, ["release"], "images values"), {
+				version: "v1.0.0",
+				commit: fixture.releaseCommit,
+			});
+			assert.equal(
+				at(values, ["images", "application-server"], "images values"),
+				`ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
+			);
+			const { mode } = await stat(imagesFile);
+			assert.equal(mode.toString(8).slice(-3), "600");
+			const record = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(record?.release, "v1.0.0");
+			assert.equal(await readlink(path.join(directory, "tooling")), tree);
+			// The kubelet owns the cluster's images: no Compose stack, pull or image removal runs.
+			assert.doesNotMatch(await fixture.calls(), /^docker (?!info --format)/mu);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
