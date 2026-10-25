@@ -23,6 +23,7 @@ import {
 	renderRouteAtWithRouter,
 	testQueryClient,
 } from "@/test/router-harness";
+import { switchWorkspace } from "@/test/workspace-switcher";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
 // deadlock backstop, not a budget these renders were meant to fit inside.
@@ -519,8 +520,8 @@ const HIDDEN_ADA = {
 };
 
 /**
- * Two workspaces an admin moves between with the normal switcher shortcut: Ctrl+1 is acme, Ctrl+2
- * is beta. Each case adds the reads and writes it holds.
+ * Two workspaces, acme and beta, that an admin moves between with the switcher. Each case adds the
+ * reads and writes it holds.
  */
 function renderTwoWorkspaces() {
 	server.use(
@@ -566,8 +567,8 @@ describe("workspace settings lifetime", () => {
 				await screen.findByRole("switch", { name: "Publish the page" }, ROUTE_RENDER_WAIT),
 			);
 			await waitFor(() => expect(requests).toStrictEqual(["/workspaces/acme/public-activity"]));
-			// The normal workspace-switcher shortcut keeps this portable settings route.
-			await user.keyboard("{Control>}2{/Control}");
+			// The workspace switcher keeps this portable settings route.
+			await switchWorkspace(user, "acme", "beta");
 			await waitFor(() => expect(router.state.location.pathname).toBe("/w/beta/admin/settings"));
 			await screen.findByRole("switch", { name: "Allow search engines" }, ROUTE_RENDER_WAIT);
 			expect(publishSwitch().getAttribute("aria-checked")).toBe("true");
@@ -590,7 +591,7 @@ describe("workspace settings lifetime", () => {
 					getWorkspacePublicActivitySettingsQueryKey({ path: { workspaceSlug: "beta" } }),
 				),
 			).toStrictEqual(betaSettings);
-			await user.keyboard("{Control>}1{/Control}");
+			await switchWorkspace(user, "beta", "acme");
 			await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/admin/settings"));
 			await waitFor(() => expect(publishSwitch().getAttribute("aria-checked")).toBe("false"));
 			expect(requests).toStrictEqual(["/workspaces/acme/public-activity"]);
@@ -626,7 +627,7 @@ describe("workspace settings lifetime", () => {
 				).toBe("true"),
 			);
 
-			await user.keyboard("{Control>}2{/Control}");
+			await switchWorkspace(user, "acme", "beta");
 			await waitFor(() => expect(router.state.location.pathname).toBe("/w/beta/admin/settings"));
 			await waitFor(() => expect(publishSwitch().getAttribute("aria-checked")).toBe("false"));
 			expect(publishSwitch().getAttribute("aria-readonly")).not.toBe("true");
@@ -644,7 +645,7 @@ describe("workspace settings lifetime", () => {
 				),
 			).toStrictEqual(betaSettings);
 
-			await user.keyboard("{Control>}1{/Control}");
+			await switchWorkspace(user, "beta", "acme");
 			await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/admin/settings"));
 			const searchEngines = await screen.findByRole("switch", { name: "Allow search engines" });
 			expect(searchEngines.getAttribute("aria-checked")).toBe("false");
@@ -707,7 +708,7 @@ describe("workspace settings lifetime", () => {
 					).toBe("true"),
 				);
 
-				await user.keyboard("{Control>}2{/Control}");
+				await switchWorkspace(user, "acme", "beta");
 				await waitFor(() => expect(router.state.location.pathname).toBe("/w/beta/admin/settings"));
 				const betaShowAgain = await screen.findByRole(
 					"button",
@@ -727,7 +728,7 @@ describe("workspace settings lifetime", () => {
 					screen.getByRole("button", { name: "Show again" }).getAttribute("aria-disabled"),
 				).not.toBe("true");
 
-				await user.keyboard("{Control>}1{/Control}");
+				await switchWorkspace(user, "beta", "acme");
 				await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/admin/settings"));
 				await waitFor(() =>
 					expect(screen.queryAllByRole("button", { name: "Show again" })).toHaveLength(
@@ -765,7 +766,14 @@ describe("workspace settings lifetime", () => {
 			await screen.findByRole("switch", { name: "Publish the page" }, ROUTE_RENDER_WAIT),
 		);
 		await screen.findByRole("alertdialog");
-		await user.keyboard("{Control>}2{/Control}");
+		// The dialog covers the switcher, so the other workspace's address arrives some other way, such
+		// as from the browser's history.
+		await act(async () => {
+			await router.navigate({
+				to: "/w/$workspaceSlug/admin/settings",
+				params: { workspaceSlug: "beta" },
+			});
+		});
 		await waitFor(() => expect(router.state.location.pathname).toBe("/w/beta/admin/settings"));
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
 		await screen.findByRole("switch", { name: "Publish the page" }, ROUTE_RENDER_WAIT);

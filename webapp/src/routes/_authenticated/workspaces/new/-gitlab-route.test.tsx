@@ -333,6 +333,41 @@ describe("GitLab workspace wizard", () => {
 	});
 });
 
+describe("GitLab workspace wizard: workspace address", () => {
+	const shortSlug = "Use at least 3 characters: a to z, 0 to 9, or hyphens";
+
+	it.each([
+		["a short name", "QA", "qa"],
+		["a name with no letters from a to z", "Команда", ""],
+	])("says how to fix the slug made from %s", async (_case, name, slug) => {
+		const user = userEvent.setup();
+		const requests = serveGitLab();
+		renderRouteAt("/workspaces/new/gitlab");
+		await configure(user);
+
+		await user.clear(screen.getByRole("textbox", { name: "Display name" }));
+		await user.type(screen.getByRole("textbox", { name: "Display name" }), name);
+
+		// The reader never entered the slug field, and it still says what is wrong.
+		const slugField = screen.getByRole<HTMLInputElement>("textbox", { name: "URL slug" });
+		expect(slugField.value).toBe(slug);
+		expect(slugField.getAttribute("aria-invalid")).toBe("true");
+		screen.getByRole("textbox", { name: "URL slug", description: shortSlug });
+		const create = screen.getByRole<HTMLButtonElement>("button", {
+			name: "Create workspace",
+			description: shortSlug,
+		});
+		expect(create.disabled).toBe(true);
+
+		await user.clear(slugField);
+		await user.type(slugField, "qa-team");
+		expect(slugField.getAttribute("aria-invalid")).toBe("false");
+		await user.click(createButton());
+		await screen.findByText(`Workspace “${name}” created`);
+		expect(requests.create.map((body) => body.workspaceSlug)).toStrictEqual(["qa-team"]);
+	});
+});
+
 /** Validates a token, chooses `group` and arrives at the configure step. */
 async function configure(user: ReturnType<typeof userEvent.setup>, group = /Hephaestus/u) {
 	await user.type(

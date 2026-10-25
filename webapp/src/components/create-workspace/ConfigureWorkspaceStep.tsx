@@ -26,65 +26,55 @@ export interface ConfigureWorkspaceStepProps {
 	projects: ReactNode;
 }
 
+/** The ids of the field errors, so the create button can point to what stops it. */
+export const WORKSPACE_DETAILS_ERROR_IDS = "workspace-display-name-error workspace-slug-error";
+
+/** The first problem with each field, in the order the schema checks them. */
+function detailErrors(
+	details: WorkspaceDetailsData,
+): Partial<Record<keyof WorkspaceDetailsData, string>> {
+	const result = workspaceDetailsSchema.safeParse(details);
+	const errors: Partial<Record<keyof WorkspaceDetailsData, string>> = {};
+	for (const issue of result.error?.issues ?? []) {
+		const field = DETAIL_FIELDS.find((candidate) => candidate === issue.path[0]);
+		if (field && errors[field] === undefined) {
+			errors[field] = issue.message;
+		}
+	}
+	return errors;
+}
+
 export function ConfigureWorkspaceStep({ projects }: ConfigureWorkspaceStepProps) {
 	const { state, dispatch } = useWizard();
-	const [fieldErrors, setFieldErrors] = useState<
-		Partial<Record<keyof WorkspaceDetailsData, string>>
-	>({});
 	const [touched, setTouched] = useState<Partial<Record<keyof WorkspaceDetailsData, boolean>>>({});
 
 	// Focus is managed by the parent page via headingRef on step change.
 
-	const validate = (overrides: Partial<Record<keyof WorkspaceDetailsData, string>> = {}) => {
-		const result = workspaceDetailsSchema.safeParse({
-			displayName: overrides.displayName ?? state.displayName,
-			workspaceSlug: overrides.workspaceSlug ?? state.workspaceSlug,
-		});
-		if (result.success) {
-			setFieldErrors({});
-		} else {
-			const errors: Partial<Record<keyof WorkspaceDetailsData, string>> = {};
-			for (const issue of result.error.issues) {
-				const field = DETAIL_FIELDS.find((candidate) => candidate === issue.path[0]);
-				if (field) {
-					errors[field] = issue.message;
-				}
-			}
-			setFieldErrors(errors);
-		}
-	};
+	const errors = detailErrors({
+		displayName: state.displayName,
+		workspaceSlug: state.workspaceSlug,
+	});
+	const displayNameError = touched.displayName === true ? errors.displayName : undefined;
+	// The reader did not enter a slug made from the name and may not look at it. Thus, its problem
+	// shows at once: otherwise "Create workspace" turns off with no reason on the screen.
+	const slugMadeFromName = !state.slugManuallyEdited && hasText(state.displayName.trim());
+	const slugError =
+		touched.workspaceSlug === true || slugMadeFromName ? errors.workspaceSlug : undefined;
 
 	const handleDisplayNameChange = (value: string) => {
 		dispatch({ type: "SET_DISPLAY_NAME", value });
-		const slug = state.slugManuallyEdited ? state.workspaceSlug : generateSlug(value);
 		if (!state.slugManuallyEdited) {
-			dispatch({ type: "SET_SLUG", value: slug, manual: false });
-		}
-		// Only re-validate if user already blurred this field (eager after first blur)
-		if (touched.displayName === true) {
-			validate({ displayName: value, workspaceSlug: slug });
-		}
-	};
-
-	const handleSlugChange = (value: string) => {
-		dispatch({ type: "SET_SLUG", value, manual: true });
-		if (touched.workspaceSlug === true) {
-			validate({ workspaceSlug: value });
+			dispatch({ type: "SET_SLUG", value: generateSlug(value), manual: false });
 		}
 	};
 
 	const handleBlur = (field: keyof WorkspaceDetailsData) => {
 		setTouched((prev) => ({ ...prev, [field]: true }));
-		validate();
 	};
 
 	return (
 		<div className="flex flex-col gap-4">
-			<Field
-				data-invalid={
-					hasText(fieldErrors.displayName) && touched.displayName === true ? "true" : undefined
-				}
-			>
+			<Field data-invalid={hasText(displayNameError) ? "true" : undefined}>
 				<FieldLabel htmlFor="workspace-display-name">Display name</FieldLabel>
 				<Input
 					id="workspace-display-name"
@@ -93,9 +83,9 @@ export function ConfigureWorkspaceStep({ projects }: ConfigureWorkspaceStepProps
 					onChange={(e) => handleDisplayNameChange(e.target.value)}
 					onBlur={() => handleBlur("displayName")}
 					aria-required="true"
-					aria-invalid={hasText(fieldErrors.displayName) && touched.displayName === true}
+					aria-invalid={hasText(displayNameError)}
 					aria-describedby={
-						hasText(fieldErrors.displayName) && touched.displayName === true
+						hasText(displayNameError)
 							? "workspace-display-name-error"
 							: "workspace-display-name-description"
 					}
@@ -103,37 +93,35 @@ export function ConfigureWorkspaceStep({ projects }: ConfigureWorkspaceStepProps
 				<FieldDescription id="workspace-display-name-description">
 					The name shown in navigation and headers.
 				</FieldDescription>
-				{hasText(fieldErrors.displayName) && touched.displayName === true && (
-					<FieldError id="workspace-display-name-error">{fieldErrors.displayName}</FieldError>
+				{hasText(displayNameError) && (
+					<FieldError id="workspace-display-name-error">{displayNameError}</FieldError>
 				)}
 			</Field>
 
-			<Field
-				data-invalid={
-					hasText(fieldErrors.workspaceSlug) && touched.workspaceSlug === true ? "true" : undefined
-				}
-			>
+			<Field data-invalid={hasText(slugError) ? "true" : undefined}>
 				<FieldLabel htmlFor="workspace-slug">URL slug</FieldLabel>
 				<Input
 					id="workspace-slug"
 					placeholder="my-workspace"
 					aria-required="true"
 					value={state.workspaceSlug}
-					onChange={(e) => handleSlugChange(e.target.value)}
+					onChange={(e) => dispatch({ type: "SET_SLUG", value: e.target.value, manual: true })}
 					onBlur={() => handleBlur("workspaceSlug")}
-					aria-invalid={hasText(fieldErrors.workspaceSlug) && touched.workspaceSlug === true}
+					aria-invalid={hasText(slugError)}
 					aria-describedby={
-						hasText(fieldErrors.workspaceSlug) && touched.workspaceSlug === true
-							? "workspace-slug-error"
-							: "workspace-slug-description"
+						hasText(slugError) ? "workspace-slug-error" : "workspace-slug-description"
 					}
 				/>
 				<FieldDescription id="workspace-slug-description">
-					Used in URLs: /w/<strong>{state.workspaceSlug || "my-workspace"}</strong>
+					{hasText(state.workspaceSlug) ? (
+						<>
+							Used in URLs: /w/<strong>{state.workspaceSlug}</strong>
+						</>
+					) : (
+						"Used in URLs, such as /w/my-workspace."
+					)}
 				</FieldDescription>
-				{hasText(fieldErrors.workspaceSlug) && touched.workspaceSlug === true && (
-					<FieldError id="workspace-slug-error">{fieldErrors.workspaceSlug}</FieldError>
-				)}
+				{hasText(slugError) && <FieldError id="workspace-slug-error">{slugError}</FieldError>}
 			</Field>
 
 			{projects}

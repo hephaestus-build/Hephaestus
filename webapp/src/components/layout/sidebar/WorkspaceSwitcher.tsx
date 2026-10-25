@@ -1,5 +1,5 @@
 import { ChevronsUpDown, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { WorkspaceListItem } from "@/api/types.gen";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,7 +10,6 @@ import {
 	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
-	DropdownMenuShortcut,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -51,26 +50,6 @@ export function WorkspaceSwitcher({
 }) {
 	const { isMobile } = useSidebar();
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-
-	useEffect(() => {
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.metaKey || event.ctrlKey) {
-				const keyNum = Number.parseInt(event.key, 10);
-				if (!Number.isNaN(keyNum) && keyNum >= 1 && keyNum <= 9) {
-					const selectedWorkspace = workspaces[keyNum - 1];
-					if (selectedWorkspace) {
-						event.preventDefault();
-						onWorkspaceChange?.(selectedWorkspace);
-					}
-				}
-			}
-		};
-
-		document.addEventListener("keydown", handleKeyDown);
-		return () => {
-			document.removeEventListener("keydown", handleKeyDown);
-		};
-	}, [workspaces, onWorkspaceChange]);
 
 	if (isLoading) {
 		return (
@@ -178,7 +157,7 @@ export function WorkspaceSwitcher({
 							<DropdownMenuLabel className="text-xs text-muted-foreground">
 								Workspaces
 							</DropdownMenuLabel>
-							{workspaces.map((workspace, index) => {
+							{workspaces.map((workspace) => {
 								const login = distinctLogin(workspace);
 								return (
 									<DropdownMenuItem
@@ -215,10 +194,6 @@ export function WorkspaceSwitcher({
 												</span>
 											)}
 										</div>
-										<DropdownMenuShortcut>
-											{navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl"}
-											{index + 1}
-										</DropdownMenuShortcut>
 									</DropdownMenuItem>
 								);
 							})}

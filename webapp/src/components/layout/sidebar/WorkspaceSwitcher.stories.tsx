@@ -18,7 +18,8 @@ const meta = {
 		layout: "centered",
 		docs: {
 			description: {
-				component: "Switch workspaces with the menu or ⌘1–9 on macOS and Ctrl+1–9 elsewhere.",
+				component:
+					"Switch workspaces with the menu. The switcher takes no Cmd or Ctrl number keys, because the browser switches tabs with them.",
 			},
 		},
 	},
@@ -59,9 +60,6 @@ type Story = StoryObj<typeof meta>;
 
 export const SingleWorkspace: Story = {};
 
-/** The menu shortcut's words, which differ by platform: "⌘1" on macOS, "Ctrl1" elsewhere. */
-const SHORTCUT = "(⌘|Ctrl)";
-
 /**
  * A workspace named the same as its account says the name once, on the button and in the menu. The
  * avatar repeats what the words already say, so it adds nothing to either name.
@@ -88,7 +86,7 @@ export const SameNameAndLogin: Story = {
 		await userEvent.click(trigger);
 		const menu = within(await screen.findByRole("menu"));
 		const item = within(menu.getByRole("group", { name: "Workspaces" })).getByRole("menuitem", {
-			name: new RegExp(`^HephaestusTest ${SHORTCUT}1$`, "u"),
+			name: "HephaestusTest",
 		});
 		await expectSettledVisible(item);
 		await expect(within(item).getAllByText("HephaestusTest")).toHaveLength(1);
@@ -210,19 +208,22 @@ export const MultipleWorkspaces: Story = {
 			...featureFlags,
 		},
 	},
-	play: async ({ canvas }) => {
+	play: async ({ args, canvas }) => {
+		// The browser's tab keys switch tabs, not workspaces.
+		await userEvent.keyboard("{Control>}2{/Control}{Meta>}3{/Meta}");
+		await expect(args.onWorkspaceChange).not.toHaveBeenCalled();
+
 		// A login that differs from the name tells two workspaces apart, so it stays on every line.
 		await userEvent.click(canvas.getByRole("button", { name: "AET aet-org" }));
 		const menu = within(await screen.findByRole("menu"));
-		await expectSettledVisible(
-			menu.getByRole("menuitem", { name: new RegExp(`^AET aet-org ${SHORTCUT}1$`, "u") }),
+		await expectSettledVisible(menu.getByRole("menuitem", { name: "AET aet-org" }));
+		await expect(menu.getByRole("menuitem", { name: "Personal personal" })).toBeVisible();
+		await expect(menu.getByRole("menuitem", { name: "Team B team-b" })).toBeVisible();
+
+		await userEvent.click(menu.getByRole("menuitem", { name: "Personal personal" }));
+		await expect(args.onWorkspaceChange).toHaveBeenCalledWith(
+			expect.objectContaining({ workspaceSlug: "personal" }),
 		);
-		await expect(
-			menu.getByRole("menuitem", { name: new RegExp(`^Personal personal ${SHORTCUT}2$`, "u") }),
-		).toBeVisible();
-		await expect(
-			menu.getByRole("menuitem", { name: new RegExp(`^Team B team-b ${SHORTCUT}3$`, "u") }),
-		).toBeVisible();
 	},
 };
 

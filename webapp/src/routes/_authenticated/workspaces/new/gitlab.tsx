@@ -13,7 +13,10 @@ import {
 	listWorkspacesQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceListItem } from "@/api/types.gen";
-import { ConfigureWorkspaceStep } from "@/components/create-workspace/ConfigureWorkspaceStep";
+import {
+	ConfigureWorkspaceStep,
+	WORKSPACE_DETAILS_ERROR_IDS,
+} from "@/components/create-workspace/ConfigureWorkspaceStep";
 import { ConnectGitLabStep } from "@/components/create-workspace/ConnectGitLabStep";
 import {
 	type ProjectChoices,
@@ -315,14 +318,12 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 
 	const canAdvanceFromStep1 = state.preflightResult?.valid === true;
 	const canAdvanceFromStep2 = state.selectedGroup !== null;
+	const detailsValid = workspaceDetailsSchema.safeParse({
+		displayName: state.displayName,
+		workspaceSlug: state.workspaceSlug,
+	}).success;
 	const canSubmit =
-		state.step === 3 &&
-		state.selectedGroup !== null &&
-		hasProjectChoice(state) &&
-		workspaceDetailsSchema.safeParse({
-			displayName: state.displayName,
-			workspaceSlug: state.workspaceSlug,
-		}).success;
+		state.step === 3 && state.selectedGroup !== null && hasProjectChoice(state) && detailsValid;
 
 	const handleNext = () => {
 		if (state.step === 1 && canAdvanceFromStep1) {
@@ -474,7 +475,11 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 					</Button>
 				)}
 				{state.step === 3 && (
-					<Button onClick={handleSubmit} disabled={!canSubmit || isCreating}>
+					<Button
+						onClick={handleSubmit}
+						disabled={!canSubmit || isCreating}
+						aria-describedby={detailsValid ? undefined : WORKSPACE_DETAILS_ERROR_IDS}
+					>
 						{isCreating && <Spinner className="mr-2" />}
 						Create workspace
 					</Button>
