@@ -320,7 +320,6 @@ Hotfixes use the normal process: PR → changeset → merge → merge the Versio
 Each promotion that moves an environment records one GitHub deployment of the release or commit that its channel names.
 `scripts/record-deployment.ts` records it before the channel is published.
 Thus, a promotion that fails still leaves its record.
-A freeze moves nothing, so it records no deployment.
 If GitHub refuses the record, the promotion continues, and its run shows the error.
 The signed channel, not the record, decides what a host runs.
 
