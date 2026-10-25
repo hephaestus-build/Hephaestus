@@ -196,6 +196,7 @@ This distinction does not establish complete call coverage.
 Each review job attempt has one measurement, `ReviewAttemptUsage`, and one frozen charge per model kind, `ReviewAttemptCharge`.
 
 The proxy registers a call before it forwards it. Registration needs the attempt to still run on its worker. It freezes the model kind's charge, and it counts no call.
+Several calls of one attempt can register at the same time. One of them creates the measurement, and none of them fails because of the others.
 
 A returned call settles on the attempt that authenticated it, also after a cancellation or a requeue. A practice script row and the attempt's proxy total change in one transaction.
 The ledger rows of the attempt are its projection. `TerminalUsage.resolve` selects the vector again at each projection.
