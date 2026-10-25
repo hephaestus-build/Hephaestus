@@ -90,9 +90,13 @@ accDescr: The diagram separates independently controlled systems, the operator e
 ```
 
 Arrows show permitted logical flows, not network-level reachability.
-Only `application-worker` holds the Docker socket and joins each internal sandbox network.
+The [architecture and network diagram](./overview#architecture-and-network) shows the containers and their connections.
+[Network egress](./network-egress) lists every outbound destination.
+
+Only `application-worker` starts containers through the Docker socket and joins each internal sandbox network.
 That container carries the worker role.
 The application server runs without the worker role and joins none of those networks.
+`reverse-proxy` mounts the socket read-only to discover its routes.
 
 Without internet access, a sandbox's network has only the worker's sandbox gateway as a listener.
 The worker's application and management listeners bind to other addresses.

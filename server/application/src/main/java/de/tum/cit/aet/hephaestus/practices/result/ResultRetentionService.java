@@ -27,7 +27,7 @@ public class ResultRetentionService {
     private final Clock clock;
 
     @Scheduled(cron = "0 0 3 * * *")
-    @SchedulerLock(name = "result-retention", lockAtMostFor = "PT30M")
+    @SchedulerLock(name = "result-retention", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     @WorkspaceAgnostic("Enumerates workspaces before each workspace's scoped proof-retention transaction")
     public void purge() {
         var cutoff = clock.instant().minus(Duration.ofDays(400));

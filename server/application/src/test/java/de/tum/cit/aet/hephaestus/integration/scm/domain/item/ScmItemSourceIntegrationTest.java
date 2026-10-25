@@ -64,6 +64,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultCurrentness;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
@@ -74,9 +76,12 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -87,12 +92,14 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -982,6 +989,66 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IdentityRepository identityRows;
+
+    @Autowired
+    private SqlReadMeasurement reads;
+
+    @Autowired
+    private PracticeStandingService standings;
+
+    @Test
+    void shouldReadAStandingThroughTheRealSourceAtAFixedStatementCountWhenMoreResultsArriveOnTheWork() {
+        var fixture = fixture(IdentityProviderType.GITHUB);
+        long workspaceId = fixture.workspace().getId();
+        var issue = progressIssue(fixture, 150, null);
+        var holder = writer.upsert(new ItemRegistration(
+                workspaceId, ScmItemEvents.REPOSITORY, fixture.repository().getId(), null, null));
+        var item = writer.upsert(
+                new ItemRegistration(workspaceId, ScmItemEvents.ISSUE, issue.getId(), holder.itemId(), null));
+        var scenario = parentScenario(fixture, item);
+        long developer = Objects.requireNonNull(scenario.account().getId());
+        var start = Instant.now().minus(1, ChronoUnit.HOURS);
+        List<Result> recorded = new ArrayList<>();
+        var json = new JsonMapper();
+        var completeCustody = json.createObjectNode()
+                .set("custody", json.valueToTree(new HistoryCustody(true, false, List.of(), List.of(), List.of())))
+                .toString();
+        Runnable more = () -> {
+            for (int index = 0; index < 3; index++) {
+                var at = start.plusSeconds(60L * recorded.size());
+                if (!recorded.isEmpty()) resultData.end(recorded.getLast(), at);
+                var result = resultData.result(
+                        scenario, recorded.size() % 3 == 0 ? ResultOutcome.NOT_MET : ResultOutcome.MET, at);
+                recorded.add(result);
+                // Only capture writes custody receipts; the guard that refuses other writers stays on.
+                transactions.executeWithoutResult(status -> {
+                    jdbc.execute("SET LOCAL session_replication_role=replica");
+                    jdbc.update(
+                            "UPDATE review_item SET detail=detail||CAST(? AS jsonb) WHERE workspace_id=? AND result_id=?",
+                            completeCustody,
+                            workspaceId,
+                            result.getId());
+                });
+            }
+        };
+        Supplier<Long> cost = () -> {
+            var read = reads.measure(() -> standings
+                    .getStandingSnapshots(workspaceId, developer, List.of(Instant.now()))
+                    .getFirst());
+            assertThat(read.value().practices().get(scenario.practice().getSlug()))
+                    .satisfies(standing -> assertThat(standing.dto().standing())
+                            .isNotIn(PracticeStanding.NOT_OBSERVED, PracticeStanding.NO_OPPORTUNITY));
+            return read.cost().statements();
+        };
+
+        more.run();
+        long few = cost.get();
+        more.run();
+        more.run();
+        more.run();
+
+        assertThat(cost.get()).isEqualTo(few);
+    }
 
     @ParameterizedTest
     @EnumSource(

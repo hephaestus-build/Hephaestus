@@ -1,0 +1,42 @@
+---
+id: network-egress
+title: Network egress
+description: Every outbound destination of the self-hosted stack, which part of it connects, and when.
+---
+
+This page lists every destination that the self-hosted Compose stack and its host connect to.
+Use it to build a firewall allowlist.
+The [architecture diagram](./overview#architecture-and-network) shows where the main connections start and which ports the stack publishes.
+
+Sandboxes have no internet access.
+A review sandbox and the Heph host reach only the sandbox gateway of their worker.
+A turn sandbox has no network.
+The [threat model](./threat-model#boundary-3-outbound-egress) gives the controls that limit the destinations below.
+
+## Host
+
+The host connects to these destinations during installation, upgrades, and each run of [pull-based deployment](./pull-based-deployment).
+
+| Destination | Purpose |
+| --- | --- |
+| `ghcr.io` and `docker.io` | Pull the release images by digest. Registry authentication and download redirects use more hosts of these registries, so an allowlist of the two names alone is not sufficient. |
+| `github.com`, `api.github.com`, and the GitHub release-asset download hosts | Download the signed release lock and its assets. |
+| `fulcio.sigstore.dev`, `rekor.sigstore.dev`, and `tuf-repo-cdn.sigstore.dev` | Verify the keyless signatures of the release lock. |
+
+## Containers
+
+| Destination | Purpose | Container | When |
+| --- | --- | --- | --- |
+| The `Let's Encrypt` ACME API | Issue and renew the TLS certificate. | `reverse-proxy` | Always. |
+| The API of your DNS provider | Answer the DNS-01 challenge. | `reverse-proxy` | Only when `ACME_CHALLENGE` selects DNS-01. |
+| `github.com` and `api.github.com` | Sign-in, repository sync, feedback delivery, and Git fetches. | `application-server`, `application-worker` | When GitHub sign-in or a GitHub workspace is configured. |
+| The GitLab instance (`GITLAB_DEFAULT_SERVER_URL`, `GITLAB_OAUTH_BASE_URL`) | Sign-in, sync, group hook registration, feedback delivery, and Git fetches. | `application-server`, `application-worker` | When GitLab is configured. |
+| `slack.com`, the Slack API base | Slack API calls and Slack account linking. | `application-server`, `application-worker` | When `HEPHAESTUS_INTEGRATION_SLACK_ENABLED` is `true`. |
+| The Outline origins in `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | Document sync and Outline account linking. | `application-server` | When `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` is `true`. |
+| The base URL of each AI provider connection | Model calls of practice reviews and Heph go through the LLM proxy of the worker. The server tests a connection when an admin selects **Test and fetch models**. | `application-worker`, `application-server` | When an admin registers a provider connection ([Connect an AI Provider](./ai-providers)). |
+| `api.github.com` | The [update check](./upgrade#update-checks). | `application-server` | By default, on a release. A commit channel or a local build is never checked. `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` turns it off. |
+| `www.ecb.europa.eu` | Daily currency rates for the second display currency. | `application-server` | Only when `HEPHAESTUS_LLM_DISPLAY_CURRENCY` is set. `HEPHAESTUS_LLM_FX_DAILY_URL` points it at a mirror. |
+| Your SMTP relay (`SPRING_MAIL_HOST`) | Email. | `application-server` | Only when `SPRING_MAIL_HOST` is set. |
+| Your OTLP endpoint (`TRACING_OTLP_ENDPOINT`) | Traces. | `application-server`, `application-worker`, `webhook-server` | Only when `TRACING_OTLP_ENABLED` is `true` ([Observability](./observability#exporting-opentelemetry-traces)). |
+| Your Loki push endpoint (`LOKI_PUSH_URL`) | Logs. | The optional log shipper | Only when you run it ([Collecting logs](./observability#collecting-logs)). |
+| `config.liquibase.com` and the usage analytics of Liquibase | Liquibase product usage data during database migrations. | `application-server` | Never in the supported stack, which does not set `LIQUIBASE_ANALYTICS_ENABLED`. Only when you set it to `true` in the container environment. |

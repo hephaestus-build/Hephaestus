@@ -75,6 +75,9 @@ jobs:
       # The successful merge-queue run of a default-branch push's exact commit, whose images the push
       # reuses instead of rebuilding; empty after a direct push, which builds every image.
       queue-run: ${{ steps.queue_run.outputs.run-id }}
+      # The images that run published. The push builds any other image at once, without a reuse job
+      # that would find nothing: the queue run did not build it.
+      queue-images: ${{ steps.queue_run.outputs.images || '[]' }}
       # The commit an unchanged image is aliased from; scripts/resolve-alias-base.ts says how it is
       # found and docs/contributor/ci-cd.mdx the rule.
       alias-base: ${{ steps.alias_base.outputs.commit }}
@@ -102,7 +105,7 @@ jobs:
       # run without the opt-in may be skipped as a duplicate.
       # A pull request marked ready repeats the draft's tree but builds what the draft skipped.
       should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && github.event.action != 'ready_for_review' }}
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -305,6 +308,15 @@ jobs:
               # schema; a preview cannot rehearse it, because the controller refuses to deploy a
               # head that changes docker/preview/.
               - 'docker/preview/compose.app.yaml'
+              # The generated configuration reference reads these, and its drift check runs on this leg.
+              - 'docker/compose.proxy.yaml'
+              - 'docker/self-host/compose*.yaml'
+              - 'docker/self-host/.env.example'
+              - 'docker/observability/compose.journald.yaml'
+              - 'docs/admin/configuration-reference.mdx'
+              - 'scripts/generate-configuration-reference.ts'
+              - 'scripts/lib/configuration-reference.ts'
+              - 'scripts/lib/application-jar.ts'
               - '!server/**/AGENTS.md'
               - '!server/**/CLAUDE.md'
             tooling:
@@ -555,7 +567,7 @@ jobs:
   # the same guarantee, stated where a reader and a scanner can both see it.
   gradle-wrapper:
     name: "Gradle wrapper"
-    timeout-minutes: 5
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -567,7 +579,7 @@ jobs:
 
   workflow-lint:
     name: "Actionlint"
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: [detect-changes]
     if: |
@@ -607,7 +619,7 @@ jobs:
   # A required context as well; the note above `workflow-lint` says why filtering one is safe.
   zizmor:
     name: "Zizmor"
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: [detect-changes]
     if: |
@@ -707,8 +719,6 @@ jobs:
           digest-mismatch: error
       - uses: ./.github/actions/setup-caches
         if: steps.reuse.outputs.artifact-id == ''
-        with:
-          cache-write: "true"
       - name: Package the server
         if: steps.reuse.outputs.artifact-id == ''
         working-directory: server
@@ -761,7 +771,7 @@ jobs:
         ))
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
@@ -806,7 +816,7 @@ jobs:
       registry: "ghcr.io"
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
       platforms: ${{ needs.detect-changes.outputs.platforms }}
-      reuse-run: ${{ needs.detect-changes.outputs.queue-run }}
+      reuse-run: ${{ contains(fromJSON(needs.detect-changes.outputs.queue-images), 'application-server') && needs.detect-changes.outputs.queue-run || '' }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
 
   Build:
@@ -950,6 +960,7 @@ jobs:
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
       platforms: ${{ needs.detect-changes.outputs.platforms }}
       reuse_run: ${{ needs.detect-changes.outputs.queue-run }}
+      reuse_images: ${{ needs.detect-changes.outputs.queue-images }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
@@ -1090,7 +1101,7 @@ jobs:
 
   all-ci-passed:
     name: "CI Status Gate"
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-slim
     permissions:
       statuses: write
@@ -1210,7 +1221,7 @@ jobs:
     # only a failure says anything about this pull request.
     if: ${{ !cancelled() && github.event_name == 'merge_group' && needs.all-ci-passed.result == 'failure' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       pull-requests: write
     steps:

@@ -29,6 +29,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * (prod), which rewrites {@code getRemoteAddr()} to the real client before the filter runs; the filter
  * keys IP buckets purely off {@code getRemoteAddr()}. Configure proxy topology via
  * {@code server.tomcat.remoteip.*}, not here.
+ *
+ * @param enabled Turns on rate limits for sign-in, session and other sensitive endpoints. Turn it off only for load
+ *     tests.
  */
 @ConfigurationProperties(prefix = "hephaestus.auth.rate-limit")
 public record AuthRateLimitProperties(
@@ -63,8 +66,8 @@ public record AuthRateLimitProperties(
     /**
      * A single token-bucket limit: {@code capacity} requests per {@code period}.
      *
-     * @param capacity max requests permitted within one {@code period}; must be {@code >= 1}.
-     * @param period   refill window; must be positive.
+     * @param capacity Most requests that one key may send within one period. Must be at least 1.
+     * @param period   Refill window of the limit. Must be positive.
      */
     public record Limit(
             @DefaultValue("20") long capacity,

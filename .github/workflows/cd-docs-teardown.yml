@@ -10,7 +10,7 @@ permissions:
 jobs:
   teardown:
     name: Teardown Preview
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     env:
       PREVIEW_URL: hephaestus-build-docs-pr-${{ github.event.number }}.surge.sh

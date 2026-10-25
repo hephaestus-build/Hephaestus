@@ -125,6 +125,8 @@ class PracticesAcrossWorkspaceServiceTest {
 
     @BeforeEach
     void setUp() {
+        when(visibility.asOneRead(anyLong(), any()))
+                .thenAnswer(i -> i.<Supplier<?>>getArgument(1).get());
         off.setFeedbackMode(FeedbackMode.OFF);
         when(practices.findByWorkspaceId(1L)).thenReturn(List.of(reviewed, off, nobody, unreviewed));
         when(groups.listGroups(context, true)).thenReturn(List.of(group, peopleOnly));

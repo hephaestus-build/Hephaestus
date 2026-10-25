@@ -92,9 +92,11 @@ Removal of a stale lock does not repair a failed migration.
 12. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the [silent checklist](./production-operations-runbook#silent-deployment-checklist).
 13. Report actual recovery point/time and any lost writes.
 14. Preserve the failed database until investigation/retention permits removal.
-15. Before you resume reconciliation, make sure the channel matches the recovered release or is frozen.
-
-    Otherwise, the next tick can reapply the failed upgrade.
+15. Promote the recovered release, with **allow-rollback** if it is older than the failed upgrade.
+    Until the channel names it, the next tick can reapply the failed upgrade.
+16. When the promotion has published the channel, re-enable the reconcile timer.
+    The promotion's version check passes when the host applies the channel.
+    It fails if the timer stays off for 15 minutes.
 
 **Drill**
 

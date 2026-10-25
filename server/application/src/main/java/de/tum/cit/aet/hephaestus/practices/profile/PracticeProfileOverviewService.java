@@ -32,6 +32,10 @@ public class PracticeProfileOverviewService {
     private final ProfileChangeQuery profileChanges;
 
     public PracticeProfileOverviewDTO getOverview(WorkspaceContext ws) {
+        return visibility.asOneRead(ws.id(), () -> readOverview(ws));
+    }
+
+    private PracticeProfileOverviewDTO readOverview(WorkspaceContext ws) {
         var now = clock.instant();
         var account = currentDeveloperLookup.currentDeveloperId();
         if (account.isEmpty()) {

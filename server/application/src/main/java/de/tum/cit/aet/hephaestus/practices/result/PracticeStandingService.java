@@ -114,6 +114,13 @@ public class PracticeStandingService {
 
     private List<StandingSnapshot> standingSnapshots(
             Long workspaceId, Long developerId, List<Instant> edges, SourceReadAudience audience) {
+        // Every edge reads the same work, so its sources are checked once for all of them.
+        return visibilityPolicy.asOneRead(
+                workspaceId, () -> readStandingSnapshots(workspaceId, developerId, edges, audience));
+    }
+
+    private List<StandingSnapshot> readStandingSnapshots(
+            Long workspaceId, Long developerId, List<Instant> edges, SourceReadAudience audience) {
         SourceUsePurpose purpose = purpose(audience);
         // One instant for the evidence and the trend, so no result lies inside the read but before the trend.
         Instant since = practiceTrendService.horizon();

@@ -141,10 +141,46 @@ await test("a downgrade requires an explicit rollback on a new channel commit", 
 	);
 });
 
-await test("a frozen channel holds the host where it is, even against a newer release", () => {
+await test("a frozen channel moves the host to what it names, and freezing what runs restarts nothing", () => {
 	assert.deepEqual(
 		decide({ release: "v0.99.0", freeze: true }, current, "c".repeat(40), newRequest, true),
-		{ action: "noop", reason: "channel is frozen" },
+		{ action: "apply", release: "v0.99.0" },
+	);
+	assert.deepEqual(
+		decide({ release: "v0.75.2", freeze: true }, current, "c".repeat(40), newRequest, true),
+		{ action: "noop", reason: "already running v0.75.2" },
+	);
+	// A freeze that also asks for the commit's database image is a request the host must apply.
+	assert.deepEqual(
+		decide(
+			{ release: "v0.75.2", freeze: true, refreshDatabaseImage: true },
+			current,
+			"c".repeat(40),
+			newRequest,
+			true,
+		),
+		{ action: "apply", release: "v0.75.2" },
+	);
+	// A freeze bypasses neither the channel's ancestry nor a commit that runs behind what is applied.
+	assert.equal(
+		decide({ release: "v0.75.2", freeze: true }, current, "c".repeat(40), newRequest, false).action,
+		"refuse",
+	);
+	assert.equal(
+		decide(
+			{ release: "a".repeat(40), freeze: true },
+			current,
+			"c".repeat(40),
+			newRequest,
+			true,
+			true,
+		).action,
+		"refuse",
+	);
+	// A freeze is no rollback permission.
+	assert.equal(
+		decide({ release: "v0.75.1", freeze: true }, current, "c".repeat(40), newRequest, true).action,
+		"refuse",
 	);
 });
 
@@ -825,7 +861,8 @@ console.log(JSON.stringify({ services: Object.fromEntries(Object.entries(declare
 }
 const images = (process.env.DOCKER_IMAGES ?? "").split("\\n").filter(Boolean).map((line) => JSON.parse(line));
 if (args[0] === "info") console.log(process.env.STATE_DIRECTORY);
-if (args[0] === "image" && args[1] === "ls") process.stdout.write(process.env.DOCKER_IMAGES ?? "");
+// Like Docker, the listing hides an untagged image unless asked for all of them.
+if (args[0] === "image" && args[1] === "ls") process.stdout.write(images.map((listed) => ({ Tag: "<none>", ...listed })).filter((listed) => args.includes("--all") || listed.Tag !== "<none>").map((listed) => JSON.stringify(listed)).join("\\n"));
 if (args[0] === "image" && args[1] === "inspect") {
 const found = images.find((listed) => listed.Repository + "@" + listed.Digest === args.at(-1));
 if (found === undefined) process.exit(1);
@@ -1544,15 +1581,16 @@ await test(
 			assert.doesNotMatch(calls, imageOrServiceChanges);
 			assert.deepEqual(await host.record(), reapplied);
 
-			// A hold is accepted without becoming the request that runs, in a record of either kind.
+			// Freezing what runs restarts nothing and becomes the request that runs.
 			await host.promote(built, { freeze: true });
-			assert.match(host.apply(), /No change: channel is frozen/u);
-			const held = await host.record();
-			assert.deepEqual(held, { ...reapplied, channelCommit: held?.channelCommit });
-			await writeFile(appliedFile, JSON.stringify({ ...held, channelIdentity: undefined }));
-			assert.match(host.apply(), /No change: channel is frozen/u);
-			const stillHeld = await host.record();
-			assert.equal(stillHeld?.channelIdentity, undefined);
+			calls = await callsDuring(() => {
+				assert.match(host.apply(), /No change: already running/u);
+			});
+			assert.doesNotMatch(calls, imageOrServiceChanges);
+			const frozen = await host.record();
+			assert.equal(frozen?.release, built);
+			assert.notEqual(frozen.channelIdentity, reapplied.channelIdentity);
+			assert.match(host.apply(), /No change: already running/u);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -1682,16 +1720,18 @@ await test("only images of this deployment's repositories that no kept lock name
 	assert.deepEqual(
 		unkeptImages(
 			[
-				{ repository: "ghcr.io/o/application-server", digest: sha("1"), id: "one" },
-				{ repository: "ghcr.io/o/application-server", digest: sha("4"), id: "four" },
-				{ repository: "ghcr.io/o/application-server", digest: sha("5"), id: "five" },
+				{ tag: "<none>", repository: "ghcr.io/o/application-server", digest: sha("1"), id: "one" },
+				{ tag: "<none>", repository: "ghcr.io/o/application-server", digest: sha("4"), id: "four" },
+				{ tag: "<none>", repository: "ghcr.io/o/application-server", digest: sha("5"), id: "five" },
 				// Listed under a platform digest, but the same image as a kept index.
-				{ repository: "ghcr.io/o/postgres", digest: sha("8"), id: "three" },
+				{ tag: "<none>", repository: "ghcr.io/o/postgres", digest: sha("8"), id: "three" },
 				// Docker lists a Docker Hub image without its registry and namespace.
-				{ repository: "traefik", digest: sha("2"), id: "two" },
-				{ repository: "traefik", digest: sha("6"), id: "six" },
+				{ tag: "<none>", repository: "traefik", digest: sha("2"), id: "two" },
+				{ tag: "<none>", repository: "traefik", digest: sha("6"), id: "six" },
+				// A tagged image is another workload's, even in a repository a lock names.
+				{ tag: "v3.7.4", repository: "traefik", digest: sha("9"), id: "nine" },
 				// Nothing the locks name: another workload's image is never this host's to remove.
-				{ repository: "redis", digest: sha("7"), id: "seven" },
+				{ tag: "<none>", repository: "redis", digest: sha("7"), id: "seven" },
 			],
 			kept,
 			new Set(["three"]),
@@ -1699,7 +1739,11 @@ await test("only images of this deployment's repositories that no kept lock name
 		[`ghcr.io/o/application-server@${sha("5")}`, `traefik@${sha("6")}`],
 	);
 	assert.deepEqual(
-		unkeptImages([{ repository: "redis", digest: sha("7"), id: "seven" }], [], new Set()),
+		unkeptImages(
+			[{ tag: "<none>", repository: "redis", digest: sha("7"), id: "seven" }],
+			[],
+			new Set(),
+		),
 		[],
 	);
 	assert.deepEqual(lockImages([`HEPHAESTUS_RELEASE_COMMIT=${"c".repeat(40)}\nX=a@${sha("1")}\n`]), [

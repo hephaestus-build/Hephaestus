@@ -19,6 +19,7 @@ const sidebars: SidebarsConfig = {
 			label: "Configure",
 			collapsed: false,
 			items: [
+				"configuration-reference",
 				"configuration-readiness",
 				"production-setup",
 				"integrations",
@@ -75,6 +76,8 @@ const sidebars: SidebarsConfig = {
 			collapsed: false,
 			items: [
 				"threat-model",
+				"network-egress",
+				"data-retention",
 				"credential-key-rotation",
 				"release-image-lock",
 				"legal-pages",

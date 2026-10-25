@@ -28,9 +28,10 @@ It restarts nothing.
 
 If its own request is not applied yet, for example after a failed apply, the host tries it again.
 Each promotion signs again, so a promotion of the target that already runs applies again.
+A frozen promotion of the target that already runs is the exception: it restarts nothing, unless it also asks for **refresh-database-image**.
+A frozen promotion that does not ask for it also replaces a request for that target that the host has not applied yet.
 
 `applied.json` records the last-applied request as `channelIdentity`.
-A hold never becomes the applied request.
 A record without `channelIdentity` was written by an earlier release.
 For such a record, only its accepted commit counts as the applied request.
 The first unchanged run records the identity.
@@ -44,9 +45,9 @@ If another environment was promoted first, the host applies its own request once
 
 | Field           | Effect                                                                                         |
 | --------------- | ---------------------------------------------------------------------------------------------- |
-| `release`       | the `vX.Y.Z` release to apply when not frozen                                                  |
+| `release`       | the `vX.Y.Z` release to apply                                                                  |
 | `allowRollback` | lets the host apply an older release or commit. It does not restore the database or any volume |
-| `freeze`        | holds the environment where it is, for an incident                                             |
+| `freeze`        | keeps a following environment on this target: automatic promotion leaves the channel alone     |
 
 Staging can follow successful builds of `main` instead of releases. Its channel names a full
 `commit` SHA instead of `release`, plus an `images` map of digest-pinned references and a
@@ -57,8 +58,15 @@ the channel. Upstream image pins come from that commit's inventory.
 Automatic promotions check the latest channel while holding the promotion lock. A frozen channel,
 an already-promoted commit, or an older completed build leaves the channel unchanged, including
 when switching from a release to a commit. An unreadable channel or failed history comparison stops
-promotion rather than clearing a hold. Establish the initial channel with a manual promotion before
-enabling continuous staging.
+promotion rather than clearing a freeze.
+Establish the initial channel with a manual promotion before enabling continuous staging.
+
+A host applies a frozen channel like any other: `freeze` matters only to automatic promotion.
+Thus, one promotion moves Staging to a release or commit and keeps it there.
+Only Staging follows `main`, so only Staging can be frozen.
+A host that runs tooling from before this rule ignores a frozen channel.
+On such a host, a frozen promotion to a new target fails its version check.
+Promote that host once without **freeze** first, to a commit that includes this rule.
 
 An automatic promotion that would advance the channel checks the most recent successful CI/CD run of a push to `main` in the same repository.
 If that run's commit strictly descends from the requested commit, the promotion is skipped.
@@ -71,12 +79,7 @@ Manual promotions never do this lookup.
 2. Install `git` and Cosign in the [tested version](./install#tested-versions).
 3. Install the Node.js version pinned in `package.json#devEngines.runtime`.
 4. Verify downloaded tools against their published checksums.
-5. Allow outbound HTTPS to GitHub and its release-asset download hosts.
-6. Allow outbound HTTPS to Sigstore trust services.
-7. Allow outbound HTTPS to the lock's image registries, including GHCR and Docker Hub.
-
-Registry authentication and download redirects may use additional hosts.
-An allowlist with only `github.com` and `ghcr.io` is insufficient.
+5. Allow outbound HTTPS to the host destinations in [Network egress](./network-egress#host).
 
 ## Install
 
@@ -241,8 +244,8 @@ Do not change the checkout underneath a tick.
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Move an environment                                    | Run the **Promote** workflow: pick the environment and release or commit                                                                                     |
 | Roll back                                              | Pause reconciliation, then follow [Rollback](./upgrade#rollback). After the database matches the older release, promote that release with **allow-rollback** |
-| Hold an environment                                    | Promote with **freeze**                                                                                                                                      |
-| Resume a held environment                              | Manually promote the desired release or commit with **freeze** cleared                                                                                       |
+| Keep Staging on a release or commit                    | Promote it with **freeze**                                                                                                                                   |
+| Let Staging follow `main` again                        | Promote a commit of `main` with **freeze** cleared. The next successful build moves it on. Promoting the commit that runs applies it again                   |
 | Reapply Compose configuration                          | Promote the release or commit the host already runs                                                                                                          |
 | Move a following host onto the commit's database image | Promote the commit with **refresh-database-image**                                                                                                           |
 | Prevent new reconciliation runs                        | Use the timer-disable command below                                                                                                                          |
@@ -393,8 +396,8 @@ This prevents another pass from using a worktree that pruning removes.
 ### Images and free space
 
 After it prunes the worktrees, the reconciler removes the images that neither the release just applied nor the previous release names.
-It considers only the repositories that these two releases name.
-In such a repository, it also removes an unused image that another workload pulled.
+It considers only the repositories that these two releases name, and only images without a tag.
+A release image is pulled by digest and has no tag, so a tagged image of another workload stays.
 Docker refuses to remove an image that a container uses, running or stopped.
 The journal names each image that is removed or kept.
 
@@ -408,6 +411,47 @@ Below `HEPHAESTUS_MIN_FREE_GIB`, it first removes the images that neither the ru
 If the space is still too small, it refuses the apply, stops nothing and records nothing.
 The journal states the free space and the threshold, and the next tick tries again.
 [Sizing § Disk](./sizing.mdx#disk) gives the default threshold and the disk budget.
+
+#### Recover a host that is already full
+
+A host runs the reconciler of the release it last applied.
+A reconciler from before the image cleanup removes no images.
+When such a host is full, its pull fails with `no space left on device`, and it cannot pull the release that brings the cleanup.
+
+If you set `HEPHAESTUS_METRICS_FILE`, a file without `hephaestus_deploy_free_bytes` shows a reconciler from before the cleanup.
+Without the file, you can still follow these steps: they are safe on a newer reconciler too.
+Free the space once by hand:
+
+1. Disable the timer with `sudo systemctl disable --now hephaestus-reconcile.timer`.
+2. Wait for an active tick to finish:
+
+   ```bash
+   while [ "$(systemctl show --property=ActiveState --value hephaestus-reconcile.service)" = activating ]; do sleep 5; done
+   ```
+
+3. In `/var/lib/hephaestus/applied.json`, read `release` and, if it is there, `previous`.
+4. Open `/var/lib/hephaestus/release-locks/<release>.env` for each of them.
+   If a lock is missing, stop. Enable the timer again as step 11 shows. Do not guess which images to keep.
+5. For each `HEPHAESTUS_IMAGE_*` value in the locks, read its image ID with `docker image inspect --format '{{.Id}}' <reference>`.
+   If Docker reports no such image, the host does not hold it. Skip it.
+   These are the kept IDs. The agent image and the carried PostgreSQL image are among them.
+6. List the images on the host with `docker image ls --all --digests --no-trunc`.
+   Docker Engine 29 with the `overlay2` storage driver lists an image that has no tag only with `--all`.
+   A release image is pulled by digest, so it has no tag.
+7. Find the images of the locks' repositories whose `TAG` is `<none>` and whose `IMAGE ID` is not a kept ID.
+   Leave an image that has a tag: a release image never has one.
+   A `<none>` repository is a layer, not an image of these repositories.
+8. Remove each of them with `docker image rm <repository>@<digest>`.
+   Do not force the removal.
+   Docker refuses only an image that a container uses, and the agent image has no container between reviews.
+9. Find Docker's data directory with `docker info --format '{{.DockerRootDir}}'`.
+10. Check the free space with `df -h` on that directory and on `/var/lib/containerd`, if it exists.
+    Both need at least the free space that [Sizing § Disk](./sizing.mdx#disk) sets as the default threshold.
+    If they do not, free more space or extend the disk, and check again.
+11. Enable the timer again with `sudo systemctl enable --now hephaestus-reconcile.timer`.
+
+The next tick applies a pending release.
+From then on, the reconciler keeps the images itself.
 
 ## Watching it
 
@@ -430,25 +474,25 @@ Warn when it falls below twice `HEPHAESTUS_MIN_FREE_GIB`, before the reconciler 
 
 Alert when `time() - hephaestus_deploy_reconcile_timestamp_seconds` exceeds ten minutes, when
 `hephaestus_deploy_reconcile_success` is `0`, or when the host's reconciliation metrics are absent.
-`hephaestus_deploy_last_success_timestamp_seconds` records the last successful **apply**. Unchanged
-and frozen channels do not advance it, so its age is not a reconciliation-liveness check.
+`hephaestus_deploy_last_success_timestamp_seconds` records the last successful **apply**. An
+unchanged channel does not advance it, so its age is not a reconciliation-liveness check.
 Alert as well when `hephaestus_deploy_tooling_pending` stays `1`: the host runs tooling no apply has
 recorded yet, and a promotion of the release it runs ends that.
 
-A promotion without **freeze** waits for the public webapp to report the requested version. This
+A promotion waits for the public webapp to report the requested version. This
 checks the webapp version, not the readiness of every service. Use host metrics and logs for the
-Compose result. A promotion with **freeze** records the hold without waiting for a version change.
+Compose result.
 
-A promotion without **freeze** also records a GitHub deployment of the release or commit that it promotes.
+A promotion also records a GitHub deployment of the release or commit that it promotes.
 The record names who requested the promotion.
 Its final state tells whether the public webapp reported the version.
 Its time is when the promotion ran, not when a host applied it.
 
 Host metrics remain the record of what each host runs.
-A hold and a skipped automatic promotion record no deployment.
+A skipped automatic promotion records no deployment.
 [Release Management § Deployment history](/contributor/release-management#deployment-history) lists the recorded fields.
 
-The promotion job summary explicitly names this boundary, including when a version check fails or a hold skips it.
+The promotion job summary explicitly names this boundary, including when a version check fails.
 It does not fetch host metrics.
 The textfile collector and authenticated monitoring access belong to the host, not the public application.
 A matching frontend version does not establish server, worker, webhook, database, NATS, or integration readiness.

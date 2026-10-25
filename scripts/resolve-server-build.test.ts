@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
-import { resolveQueueRun, resolveServerBuild } from "./resolve-server-build.ts";
+import { imageManifests, resolveQueueRun, resolveServerBuild } from "./resolve-server-build.ts";
 
 const repository = "hephaestus-build/Hephaestus";
 const commit = "a".repeat(40);
@@ -210,11 +210,19 @@ await test("a push reuses the images of the successful queue run of its exact co
 			}
 			return [{ jobs: data.jobs }];
 		});
-	assert.equal(await lookup(), 101);
+	assert.deepEqual(await lookup(), { runId: 101, images: [] });
 	// Its verdict covers every image job and scan, so the final gate is all it needs.
 	const gateOnly = fixture();
 	gateOnly.jobs = [{ name: "CI Status Gate", conclusion: "success" }];
-	assert.equal(await lookup(gateOnly), 101);
+	assert.deepEqual(await lookup(gateOnly), { runId: 101, images: [] });
+	// Only the images whose index the run published are reusable; it did not build the rest.
+	const published = fixture();
+	published.jobs.push(
+		{ name: imageManifests.webapp, conclusion: "success" },
+		{ name: imageManifests.postgres, conclusion: "skipped" },
+		{ name: imageManifests["agent-pi"], conclusion: "success" },
+	);
+	assert.deepEqual(await lookup(published), { runId: 101, images: ["webapp", "agent-pi"] });
 	for (const conclusion of ["failure", "skipped", "cancelled"]) {
 		const data = fixture();
 		data.jobs = data.jobs.map((job) =>
@@ -255,17 +263,49 @@ await test("the image builds receive the queue run a default-branch push resolve
 		workflow.getIn([...detect, "outputs", "queue-run"]),
 		`\${{ steps.queue_run.outputs.run-id }}`,
 	);
+	// A run that published nothing, or no run, leaves every image to build without a reuse job.
+	assert.equal(
+		workflow.getIn([...detect, "outputs", "queue-images"]),
+		`\${{ steps.queue_run.outputs.images || '[]' }}`,
+	);
 	assert.equal(
 		workflow.getIn(["jobs", "application-server-image", "with", "reuse-run"]),
-		`\${{ needs.detect-changes.outputs.queue-run }}`,
+		`\${{ contains(fromJSON(needs.detect-changes.outputs.queue-images), 'application-server') && needs.detect-changes.outputs.queue-run || '' }}`,
 	);
 	assert.equal(
 		workflow.getIn(["jobs", "Docker", "with", "reuse_run"]),
 		`\${{ needs.detect-changes.outputs.queue-run }}`,
 	);
+	assert.equal(
+		workflow.getIn(["jobs", "Docker", "with", "reuse_images"]),
+		`\${{ needs.detect-changes.outputs.queue-images }}`,
+	);
 	const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
-	for (const job of ["webapp-build", "agent-pi-build", "postgres-build"]) {
-		assert.equal(docker.getIn(["jobs", job, "with", "reuse-run"]), `\${{ inputs.reuse_run }}`, job);
+	const build = parseDocument(
+		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+	);
+	const manifest = String(build.getIn(["jobs", "merge", "name"]));
+	// Each key names the job whose success the lookup reads, as GitHub names it in the run. A
+	// caller job without a name shows its ID.
+	assert.equal(workflow.hasIn(["jobs", "Docker", "name"]), false);
+	assert.equal(
+		imageManifests["application-server"],
+		`${String(workflow.getIn(["jobs", "application-server-image", "name"]))} / ${manifest}`,
+	);
+	for (const [image, job] of [
+		["webapp", "webapp-build"],
+		["agent-pi", "agent-pi-build"],
+		["postgres", "postgres-build"],
+	] as const) {
+		assert.equal(
+			docker.getIn(["jobs", job, "with", "reuse-run"]),
+			`\${{ contains(fromJSON(inputs.reuse_images), '${image}') && inputs.reuse_run || '' }}`,
+			job,
+		);
+		assert.equal(
+			imageManifests[image],
+			`Docker / ${String(docker.getIn(["jobs", job, "name"]))} / ${manifest}`,
+		);
 	}
 	// The webapp records its branch at build time, and the merge group's build is the one that ships.
 	assert.match(

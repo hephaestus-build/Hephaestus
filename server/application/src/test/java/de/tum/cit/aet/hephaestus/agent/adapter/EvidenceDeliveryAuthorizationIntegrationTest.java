@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,8 +71,8 @@ class EvidenceDeliveryAuthorizationIntegrationTest extends BaseIntegrationTest {
                 Instant.now());
         var stored = results.findByIdAndWorkspaceId(result.getId(), result.getWorkspaceId())
                 .orElseThrow();
-        when(access.permits(eq(stored.getWorkspaceId()), eq(stored.getId()), any()))
-                .thenReturn(true);
+        when(access.permitsAll(eq(stored.getWorkspaceId()), eq(List.of(stored)), any()))
+                .thenReturn(Set.of(stored.getId()));
 
         for (var purpose : SourceUsePurpose.values())
             assertThat(authorization.permitsForNewDelivery(stored.getWorkspaceId(), List.of(stored), purpose))

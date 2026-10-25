@@ -60,7 +60,7 @@ public class ReviewJobRetentionService {
     /**
      * {@code @SchedulerLock} single-flights this across replicas: concurrent passes cannot go faster (the
      * batches serialize on row-level contention anyway) and only multiply lock/WAL pressure.
-     * {@code lockAtMostFor} must stay above both passes' {@link BoundedBatchPass#DEFAULT_BUDGET}.
+     * {@code lockAtMostFor} must stay above the three passes' combined {@link BoundedBatchPass#DEFAULT_BUDGET}.
      */
     @Scheduled(fixedDelay = 6, initialDelay = 1, timeUnit = TimeUnit.HOURS)
     @SchedulerLock(name = "agent-job-retention", lockAtMostFor = "PT20M", lockAtLeastFor = "PT10S")

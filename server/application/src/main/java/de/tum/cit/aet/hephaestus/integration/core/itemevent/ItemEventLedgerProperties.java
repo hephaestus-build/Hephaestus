@@ -9,6 +9,15 @@ import org.springframework.validation.annotation.Validated;
 
 // Pending events depend on operator changes, so fast retries only repeat the refusal.
 // Retirement bounds the queue lifetime; batch size bounds each sweep's queued work.
+/**
+ * Bounds of the item event ledger.
+ *
+ * @param pendingRetryAfter How long the ledger waits before it offers a recorded or waiting item event for review
+ *     again.
+ * @param pendingLapseAfter Age at which an item event that is still recorded or waiting expires with the reason
+ *     PENDING_DEADLINE_EXCEEDED. The age counts from when the event occurred.
+ * @param sweepBatchSize Most item events that each step of the ledger sweep handles. The sweep runs every 15 minutes.
+ */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.item-event-ledger")
 public record ItemEventLedgerProperties(

@@ -10,10 +10,10 @@ import org.springframework.validation.annotation.Validated;
  * Sender identity for every email Hephaestus sends. The SMTP transport itself is Boot's
  * {@code spring.mail.*}; this record only says who the email is from.
  *
- * @param from the envelope and header sender address; required once {@code spring.mail.host} is set,
- *     and the relay must be allowed to send for its domain (SPF/DKIM are the operator's)
+ * @param from The sender address in the envelope and the header. Required when {@code spring.mail.host} is set. The
+ *             relay must be allowed to send for its domain through SPF and DKIM.
  * @param fromName the display name shown next to {@code from}
- * @param replyTo where a human reply lands; blank means replies go to {@code from}
+ * @param replyTo The address that receives human replies. When it is blank, replies go to the sender address.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.email")
