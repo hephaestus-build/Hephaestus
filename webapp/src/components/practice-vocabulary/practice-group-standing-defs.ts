@@ -60,25 +60,26 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		predicate: { one: "is going well", many: "are going well" },
 		practicesTitle: "Practices going well",
 	},
-	// Both unsettled standings share the short label: the counts a developer reads hold them as one.
+	// Both unsettled standings have one name, No standing yet: a developer reads them as one. The
+	// sentence keeps why, and the icon tells them apart.
 	NO_OPPORTUNITY: {
 		shortLabel: "No standing yet",
-		label: "Nothing to report yet",
+		label: "No standing yet",
 		icon: CircleSlashIcon,
 		badgeVariant: "outline",
 		description:
 			"Your work was reviewed, but nothing here could be judged. Either these practices did not apply to it, or the evidence did not settle the question.",
-		predicate: { one: "has nothing to report", many: "have nothing to report" },
-		practicesTitle: "Practices with nothing to report yet",
+		predicate: { one: "has no standing yet", many: "have no standing yet" },
+		practicesTitle: "Practices with no standing yet",
 	},
 	NOT_OBSERVED: {
 		shortLabel: "No standing yet",
-		label: "Not reviewed",
+		label: "No standing yet",
 		icon: CircleDashedIcon,
 		badgeVariant: "outline",
 		description: "No review has looked at a practice in this group in your work yet.",
-		predicate: { one: "is not reviewed yet", many: "are not reviewed yet" },
-		practicesTitle: "Practices not reviewed",
+		predicate: { one: "has no standing yet", many: "have no standing yet" },
+		practicesTitle: "Practices with no standing yet",
 	},
 };
 

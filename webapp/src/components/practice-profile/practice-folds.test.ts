@@ -3,10 +3,15 @@ import { describe, expect, it } from "vitest";
 import type { PracticeStanding } from "@/api/types.gen";
 import { practiceStandingOf } from "@/stories/practice-profile-story-mock-data";
 
+import { standingDefs } from "@/components/practice-vocabulary/practice-group-standing-defs";
+
 import {
 	groupHasNoStandingYet,
 	groupNeverApplied,
-	noStandingYetReason,
+	groupNoStandingYetReason,
+	NEVER_APPLIED,
+	NO_STANDING_YET,
+	practiceNoStandingYetReason,
 	splitFoldedPractices,
 } from "./practice-folds";
 
@@ -51,22 +56,43 @@ describe("splitFoldedPractices", () => {
 	});
 });
 
-describe("noStandingYetReason", () => {
-	it("says a practice never applied, or why its standing is unsettled", () => {
-		expect(noStandingYetReason("NO_OPPORTUNITY", "practice", true)).toMatch(
-			/found that this practice did not apply to your work/u,
+describe("practiceNoStandingYetReason", () => {
+	it("says a practice never applied, or gives its unsettled standing's own reason", () => {
+		expect(practiceNoStandingYetReason(standing("a", "NO_OPPORTUNITY", true))).toBe(
+			NEVER_APPLIED.description,
 		);
-		expect(noStandingYetReason("NOT_OBSERVED", "practice", false)).toBe(
-			"No review has looked at this practice in your work yet.",
+		expect(practiceNoStandingYetReason(standing("a", "NOT_OBSERVED"))).toBe(
+			standingDefs("practice").NOT_OBSERVED.description,
 		);
-		expect(noStandingYetReason("NO_OPPORTUNITY", "practice", false)).toMatch(
-			/could not be judged on it/u,
+		expect(practiceNoStandingYetReason(standing("a", "NO_OPPORTUNITY"))).toBe(
+			standingDefs("practice").NO_OPPORTUNITY.description,
 		);
-		expect(noStandingYetReason(undefined, "group", false)).toBe(
-			"No review has looked at a practice in this group in your work yet.",
+	});
+});
+
+describe("groupNoStandingYetReason", () => {
+	it("reads the same practices that fold the group", () => {
+		expect(
+			groupNoStandingYetReason([standing("a", "NO_OPPORTUNITY", true)], "NO_OPPORTUNITY"),
+		).toBe(NEVER_APPLIED.oneGroupDescription);
+		expect(groupNoStandingYetReason([standing("a", "NOT_OBSERVED")], undefined)).toBe(
+			NO_STANDING_YET.oneGroupDescription,
 		);
-		expect(noStandingYetReason("NO_OPPORTUNITY", "group", true)).toMatch(
-			/practices of this group did not apply/u,
+	});
+
+	it("never gives a settled group standing's sentence when its practices have no standing", () => {
+		const practices = [standing("a", "NOT_OBSERVED"), standing("b", "NO_OPPORTUNITY")];
+		expect(groupHasNoStandingYet(practices)).toBe(true);
+		for (const settled of ["STRENGTH", "MIXED", "DEVELOPING"] as const) {
+			expect(groupNoStandingYetReason(practices, settled)).toBe(
+				NO_STANDING_YET.oneGroupDescription,
+			);
+		}
+	});
+
+	it("gives the group standing's own sentence when only the group has none", () => {
+		expect(groupNoStandingYetReason([standing("a", "MIXED")], "NOT_OBSERVED")).toBe(
+			standingDefs("group").NOT_OBSERVED.description,
 		);
 	});
 });

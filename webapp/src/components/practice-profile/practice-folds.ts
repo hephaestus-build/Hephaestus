@@ -8,13 +8,12 @@ import type { PracticeStanding } from "@/api/types.gen";
 import type { StatusDef } from "@/components/common/status-def";
 import {
 	isSettledStanding,
-	type StandingScope,
 	standingDefs,
 } from "@/components/practice-vocabulary/practice-group-standing-defs";
-import { STANDING_LOOKBACK_DAYS } from "@/components/practice-vocabulary/practice-trend-presentation";
+import { LOOKBACK_DAYS } from "@/components/practice-vocabulary/practice-trend-presentation";
 
 // The server reads only this window, so every sentence names it: older evidence does not count.
-const WINDOW = `in the last ${STANDING_LOOKBACK_DAYS} days`;
+const WINDOW = `in the last ${LOOKBACK_DAYS} days`;
 
 export const NEVER_APPLIED = {
 	description: `Every review ${WINDOW} found that this practice did not apply to your work. This is not a gap: it gets a standing once a piece of work calls for it.`,
@@ -34,6 +33,8 @@ export const NO_STANDING_YET = {
 	groupLabel: "Practice groups with no standing yet",
 	practiceDescription: `No review ${WINDOW} has given these practices a standing in your work. This is not a gap.`,
 	groupDescription: `No review ${WINDOW} has given a practice of these groups a standing in your work. This is not a gap: open a group to see why.`,
+	/** The sentence behind one group's badge when none of its practices has a standing. */
+	oneGroupDescription: `No review ${WINDOW} has given a practice of this group a standing in your work. This is not a gap.`,
 } as const;
 
 /** The badge of a practice or group without a standing; its sentence says why, per row. */
@@ -70,16 +71,30 @@ export const groupHasNoStandingYet = (practices: readonly PracticeStanding[]): b
 	practices.length > 0 && practices.every(hasNoStandingYet);
 
 /**
- * Why a practice, or a group, has no standing yet: the sentence behind its "No standing yet"
- * badge. A practice that never applied says so; otherwise the standing's own sentence does.
+ * Why a practice has no standing yet: the sentence behind its "No standing yet" badge. A practice
+ * that never applied says so; otherwise the standing's own sentence does.
  */
-export function noStandingYetReason(
+export function practiceNoStandingYetReason(practice: PracticeStanding): string {
+	return isNeverApplied(practice)
+		? NEVER_APPLIED.description
+		: standingDefs("practice")[practice.standing].description;
+}
+
+/**
+ * Why a group has no standing yet, from the same practices that fold it: every practice never
+ * applied, or none has a standing. Only a group whose practices have a standing but whose own
+ * standing does not falls back to the group standing's sentence, so the sentence never praises or
+ * blames work the badge says has no standing.
+ */
+export function groupNoStandingYetReason(
+	practices: readonly PracticeStanding[],
 	standing: PracticeStanding["standing"] | undefined,
-	scope: StandingScope,
-	neverApplied: boolean,
 ): string {
-	if (neverApplied) {
-		return scope === "group" ? NEVER_APPLIED.oneGroupDescription : NEVER_APPLIED.description;
+	if (groupNeverApplied(practices)) {
+		return NEVER_APPLIED.oneGroupDescription;
 	}
-	return standingDefs(scope)[standing ?? "NOT_OBSERVED"].description;
+	if (groupHasNoStandingYet(practices) || standing === undefined || isSettledStanding(standing)) {
+		return NO_STANDING_YET.oneGroupDescription;
+	}
+	return standingDefs("group")[standing].description;
 }

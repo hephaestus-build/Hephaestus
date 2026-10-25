@@ -39,9 +39,8 @@ import { capitalise, hasText } from "@/lib/text";
 import { FoldedPractices, FoldedStandingCell, NoStandingYetBadge } from "./FoldedPractices";
 import {
 	groupHasNoStandingYet,
-	groupNeverApplied,
-	isNeverApplied,
-	noStandingYetReason,
+	groupNoStandingYetReason,
+	practiceNoStandingYetReason,
 	splitFoldedPractices,
 } from "./practice-folds";
 import type { PracticePattern } from "./practice-pattern";
@@ -117,8 +116,8 @@ function rowGroupMark(group?: GroupRef) {
 const NO_SENTENCES: NonNullable<PracticeGroupDetailLevelProps["practiceSentences"]> = {};
 
 /**
- * The group's standing beside its title. A group with no standing yet, "Not reviewed" and "Nothing
- * to report yet" alike, reads as its folded row does: one "No standing yet", with why behind it.
+ * The group's standing beside its title. A group with no standing yet reads as its folded row
+ * does: one "No standing yet", with why behind it, from the same practices that fold the row.
  */
 function GroupStandingChips({
 	standing,
@@ -134,9 +133,7 @@ function GroupStandingChips({
 		// With no standing there is nothing to compare, and the trend chip says so with its sentence.
 		return (
 			<span className="inline-flex flex-wrap items-center gap-x-5 gap-y-2">
-				<NoStandingYetBadge
-					reason={noStandingYetReason(standing?.standing, "group", groupNeverApplied(practices))}
-				/>
+				<NoStandingYetBadge reason={groupNoStandingYetReason(practices, standing?.standing)} />
 				<TrendNote scope="group" />
 			</span>
 		);
@@ -214,9 +211,7 @@ export function PracticeGroupDetailLevel({
 				}
 			>
 				{folded ? (
-					<FoldedStandingCell
-						reason={noStandingYetReason(practice.standing, "practice", isNeverApplied(practice))}
-					/>
+					<FoldedStandingCell reason={practiceNoStandingYetReason(practice)} />
 				) : (
 					<StandingCell
 						standing={practice.standing}

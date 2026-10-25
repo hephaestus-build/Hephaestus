@@ -15,7 +15,7 @@ import { expectFoldOnTableColumns } from "@/stories/fold-columns";
 import { SAMPLE_NEVER_APPLIED, SAMPLE_NOT_OBSERVED } from "@/stories/practice-profile-samples";
 import { practiceStandingOf } from "@/stories/practice-profile-story-mock-data";
 import { FoldedPractices, type FoldedPracticesProps, FoldedStandingCell } from "./FoldedPractices";
-import { isNeverApplied, noStandingYetReason } from "./practice-folds";
+import { practiceNoStandingYetReason } from "./practice-folds";
 
 const onOpen = fn();
 
@@ -73,9 +73,7 @@ function PracticeRow({
 			}}
 		>
 			{folded ? (
-				<FoldedStandingCell
-					reason={noStandingYetReason(practice.standing, "practice", isNeverApplied(practice))}
-				/>
+				<FoldedStandingCell reason={practiceNoStandingYetReason(practice)} />
 			) : (
 				<StandingCell
 					standing={practice.standing}

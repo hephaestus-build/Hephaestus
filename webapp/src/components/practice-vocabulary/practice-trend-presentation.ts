@@ -28,24 +28,19 @@ export function shownTrendDirection(
 }
 
 /**
- * How far back a trend reads, in days: the server's look-back (`PracticeTrendService.LOOKBACK_DAYS`).
+ * How far back the profile reads a trend and a standing, in days: the server's one look-back
+ * (`PracticeTrendService.LOOKBACK_DAYS`, which `OverviewWindow.LOOKBACK` takes for the standing).
  */
-export const TREND_LOOKBACK_DAYS = 90;
+export const LOOKBACK_DAYS = 90;
 
 /**
  * What every trend is, said before its own evidence: the latest reviewed work against the work
  * before it. A chip's words alone ("Not enough to compare yet") do not say they are a trend.
  */
-export const TREND_EXPLAINED = `The trend compares your latest reviewed work with the work before it, in the last ${TREND_LOOKBACK_DAYS} days.`;
+export const TREND_EXPLAINED = `The trend compares your latest reviewed work with the work before it, in the last ${LOOKBACK_DAYS} days.`;
 
 /** Below this many decided pieces of work, a settled standing is an early read (product vocabulary). */
 export const EARLY_READ_BELOW = 3;
-
-/**
- * How far back the profile reads a standing, in days: the server's look-back
- * (`PracticeStandingService.LOOKBACK_DAYS`), which bounds the reviewed work a standing counts.
- */
-export const STANDING_LOOKBACK_DAYS = 90;
 
 /**
  * The server's count of the reviewed work a standing is read from: each practice's newest decided
@@ -87,7 +82,7 @@ export function explainStanding(
 		return n === 1 ? ANY_WORK.one : ANY_WORK.many;
 	};
 	const subject = scope === "group" ? "this group" : "this practice";
-	const window = `in the last ${STANDING_LOOKBACK_DAYS} days`;
+	const window = `in the last ${LOOKBACK_DAYS} days`;
 
 	if (reviewed === work) {
 		const all = allWork(work);
@@ -103,7 +98,7 @@ export function explainStanding(
 		scope === "group"
 			? `the last reviewed ${noun(2)} of each practice here, ${spell(work, digits)} in all`
 			: `your last ${spell(work, digits)} reviewed ${noun(work)}`;
-	const total = `In the last ${STANDING_LOOKBACK_DAYS} days, ${spell(reviewed, digits)} ${noun(reviewed)} ${
+	const total = `In the last ${LOOKBACK_DAYS} days, ${spell(reviewed, digits)} ${noun(reviewed)} ${
 		reviewed === 1 ? "was" : "were"
 	} reviewed for ${subject}.`;
 	return work < EARLY_READ_BELOW

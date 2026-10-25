@@ -27,7 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell } from "@/components/ui/table";
 
 import { FoldedPractices, FoldedStandingCell } from "./FoldedPractices";
-import { groupHasNoStandingYet, groupNeverApplied, noStandingYetReason } from "./practice-folds";
+import { groupHasNoStandingYet, groupNoStandingYetReason } from "./practice-folds";
 import { ALL_PRACTICE_GROUPS, NO_PRACTICE_GROUPS } from "./practice-profile-search";
 
 export interface AllPracticeGroupsTableProps {
@@ -93,9 +93,7 @@ function GroupRow({
 			}
 		>
 			{folded ? (
-				<FoldedStandingCell
-					reason={noStandingYetReason(standing?.standing, "group", groupNeverApplied(practices))}
-				/>
+				<FoldedStandingCell reason={groupNoStandingYetReason(practices, standing?.standing)} />
 			) : (
 				<StandingCell
 					standing={standing?.standing ?? "NOT_OBSERVED"}

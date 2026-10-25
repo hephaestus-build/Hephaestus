@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-state-defs";
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
@@ -9,6 +10,7 @@ import {
 	REVIEW_JOB_PROCESSING_DEFS,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
+import { STANDING_BASIS_DEFS } from "@/components/practice-vocabulary/standing-basis-defs";
 import { WITHHOLDING_FAMILY_DEFS } from "@/components/practice-vocabulary/withholding-defs";
 import { type StatusDef, type StatusDefs, statusValues } from "./status-def";
 import { StatusBadge } from "./StatusBadge";
@@ -92,4 +94,23 @@ export const LongLabelTruncates: Story = {
 			<StatusBadge def={args.def} />
 		</div>
 	),
+};
+
+/**
+ * `wrap`, for a label whose words are the whole message: in a narrow column it wraps onto a second
+ * line instead of being cut.
+ */
+export const LongLabelWraps: Story = {
+	args: { def: STANDING_BASIS_DEFS.EARLIER_REVIEWS },
+	render: (args: { def: StatusDef }) => (
+		<div className="w-40 border p-2">
+			<StatusBadge wrap def={args.def} />
+		</div>
+	),
+	play: async ({ canvas }) => {
+		const words = canvas.getByText(STANDING_BASIS_DEFS.EARLIER_REVIEWS.label);
+		// Nothing is cut: the whole label is laid out, not ended in an ellipsis.
+		await expect(words.scrollWidth).toBeLessThanOrEqual(words.clientWidth);
+		await expect(getComputedStyle(words).textOverflow).not.toBe("ellipsis");
+	},
 };

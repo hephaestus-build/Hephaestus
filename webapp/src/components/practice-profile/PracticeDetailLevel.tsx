@@ -83,7 +83,7 @@ import {
 	shownObservations,
 } from "./observation-filter";
 import { newestFirst } from "./practice-feedback-cards";
-import { NEVER_APPLIED, noStandingYetReason } from "./practice-folds";
+import { NEVER_APPLIED, practiceNoStandingYetReason } from "./practice-folds";
 import { FeedbackEmpty, LabelledBlock } from "./practice-profile-blocks";
 import {
 	ALL_TIME,
@@ -96,8 +96,8 @@ import {
 import { requestedReviewNote } from "./requested-review-note";
 
 /**
- * What each tab holds, said on the tab itself (tooltip and accessible description), so a panel
- * starts with its content rather than a heading that repeats the tab's name.
+ * What each tab holds, said in a line under the tab bar for the open tab, so a panel starts with
+ * its content rather than a heading that repeats the tab's name.
  */
 const TAB_DESCRIPTIONS: Record<PracticeTab, string> = {
 	feedback:
@@ -317,12 +317,7 @@ export function PracticeDetailLevel({
 				<PracticeTabsRail>
 					<PracticeTabsList aria-label="Practice">
 						{tabs.map((candidate) => (
-							<PracticeTabsTrigger
-								key={candidate}
-								value={candidate}
-								count={counts[candidate]}
-								description={TAB_DESCRIPTIONS[candidate]}
-							>
+							<PracticeTabsTrigger key={candidate} value={candidate} count={counts[candidate]}>
 								{TAB_LABELS[candidate]}
 							</PracticeTabsTrigger>
 						))}
@@ -346,6 +341,9 @@ export function PracticeDetailLevel({
 						</div>
 					)}
 				</PracticeTabsRail>
+				{/* What the open tab holds, as a line anyone can read, touch included: the panel has no
+				    heading repeating the tab's name. */}
+				<p className="max-w-2xl text-sm text-muted-foreground">{TAB_DESCRIPTIONS[shownTab]}</p>
 				<TabsContent value="feedback" className="min-w-0">
 					<PracticeFeedbackSection
 						feedback={feedback}
@@ -431,9 +429,7 @@ export function PracticeDetailLevel({
 						}
 					/>
 				}
-				chips={
-					practice && <PracticeStandingChips practice={practice} neverApplied={neverApplied} />
-				}
+				chips={practice && <PracticeStandingChips practice={practice} />}
 			/>
 			<DrawerBody className="flex flex-col gap-6 pt-2">{body}</DrawerBody>
 		</>
@@ -445,20 +441,12 @@ export function PracticeDetailLevel({
  * whether it never applied, nobody reviewed it or there was nothing to report, reads as its folded row
  * does: one "No standing yet", with why behind it and no trend.
  */
-function PracticeStandingChips({
-	practice,
-	neverApplied,
-}: {
-	practice: PracticeStanding;
-	neverApplied: boolean;
-}) {
+function PracticeStandingChips({ practice }: { practice: PracticeStanding }) {
 	if (!isSettledStanding(practice.standing)) {
 		// With no standing there is nothing to compare, and the trend chip says so with its sentence.
 		return (
 			<span className="inline-flex flex-wrap items-center gap-x-5 gap-y-2">
-				<NoStandingYetBadge
-					reason={noStandingYetReason(practice.standing, "practice", neverApplied)}
-				/>
+				<NoStandingYetBadge reason={practiceNoStandingYetReason(practice)} />
 				<TrendNote scope="practice" />
 			</span>
 		);

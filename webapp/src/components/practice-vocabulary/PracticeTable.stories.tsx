@@ -3,8 +3,10 @@ import { ClipboardCheckIcon } from "lucide-react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import type { PracticeStanding } from "@/api/types.gen";
+import { InfoTip } from "@/components/common/InfoTip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell } from "@/components/ui/table";
+import { expectSettledVisible } from "@/stories/overlay";
 import { practicesByGroup } from "@/stories/practice-profile-story-mock-data";
 import { Stateful } from "@/stories/stateful";
 
@@ -112,6 +114,27 @@ export const Default: Story = {
 		]);
 		await userEvent.click(canvas.getByRole("button", { name: "Standing" }));
 		await expect(names()[0]).toBe("Open practice Mark the change ready and link its issue");
+	},
+};
+
+/**
+ * `subjectInfo`, an (i) beside the subject's heading for a page that says nowhere else what the
+ * subject is. The heading's words keep the foreground; the (i) opens its sentence.
+ */
+export const SubjectInfo: Story = {
+	args: {
+		subjectInfo: (
+			<InfoTip label="About practices">A practice is a way of working that reviews check.</InfoTip>
+		),
+	},
+	globals: { viewport: { value: "reflow" } },
+	play: async ({ canvas }) => {
+		const info = canvas.getByRole("button", { name: "About practices" });
+		await expect(info.closest("th")).toHaveTextContent(/Practice/u);
+		await userEvent.click(info);
+		await expectSettledVisible(
+			await within(document.body).findByText("A practice is a way of working that reviews check."),
+		);
 	},
 };
 

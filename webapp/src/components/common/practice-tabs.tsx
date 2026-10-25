@@ -1,12 +1,11 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
-import { type ComponentProps, useId } from "react";
+import type { ComponentProps } from "react";
 
 import { cn } from "cn";
 import { FOCUS_RING } from "@/components/common/focus";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /**
  * What a practice line tab changes about the primitive's line tab — its size, its padding and the
@@ -66,28 +65,16 @@ export function PracticeTabsList({ className, ...props }: ComponentProps<typeof 
 export interface PracticeTabsTriggerProps extends ComponentProps<typeof TabsTrigger> {
 	/** How many the tab lists; left out while that is not yet known. */
 	count?: number;
-	/**
-	 * What the tab holds, in one sentence: shown as the tab's tooltip on hover and keyboard focus,
-	 * and given to the tab as its accessible description, so the panel needs no heading repeating
-	 * the tab's name.
-	 */
-	description?: string;
 }
 
 export function PracticeTabsTrigger({
 	count,
-	description,
 	className,
 	children,
 	...props
 }: PracticeTabsTriggerProps) {
-	const descriptionId = useId();
-	const trigger = (
-		<TabsTrigger
-			className={cn(LINE_TAB_SHAPE, "data-active:font-semibold", className)}
-			aria-describedby={description === undefined ? undefined : descriptionId}
-			{...props}
-		>
+	return (
+		<TabsTrigger className={cn(LINE_TAB_SHAPE, "data-active:font-semibold", className)} {...props}>
 			{children}
 			{count !== undefined && (
 				// Accessible names need a space between the label and count.
@@ -97,23 +84,6 @@ export function PracticeTabsTrigger({
 				</>
 			)}
 		</TabsTrigger>
-	);
-	if (description === undefined) {
-		return trigger;
-	}
-	return (
-		<>
-			<Tooltip>
-				<TooltipTrigger render={trigger} />
-				<TooltipContent side="bottom" className="max-w-80 text-pretty">
-					{description}
-				</TooltipContent>
-			</Tooltip>
-			{/* The tab's description for assistive technology; hidden text still describes. */}
-			<span id={descriptionId} hidden>
-				{description}
-			</span>
-		</>
 	);
 }
 

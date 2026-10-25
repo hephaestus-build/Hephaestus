@@ -189,18 +189,17 @@ export const Default: Story = {
 		await expect(third).toHaveAccessibleName("Guide");
 		// The feedback leads its tab; the introduction and its picture wait in the Guide tab.
 		await expect(screen.queryByRole("region", { name: "Introduction" })).not.toBeInTheDocument();
-		// No heading repeats the tab's name: the tab carries what it holds as its description.
+		// No heading repeats the tab's name: a line under the tabs says what the open one holds.
 		await expect(
 			within(screen.getByRole("tabpanel", { name: "Feedback 1" })).queryByRole("heading", {
 				level: 2,
 			}),
 		).toBeNull();
-		await expect(first).toHaveAccessibleDescription(
-			"Feedback about patterns in your work: the open card, then the ones that resolved, newest first.",
-		);
-		await expect(third).toHaveAccessibleDescription(
-			"Why this practice matters, what good looks like, and how to do it.",
-		);
+		await expect(
+			screen.getByText(
+				"Feedback about patterns in your work: the open card, then the ones that resolved, newest first.",
+			),
+		).toBeVisible();
 		await expect(screen.getByRole("tab", { name: "Feedback 1" })).toHaveAttribute(
 			"aria-selected",
 			"true",
@@ -227,6 +226,11 @@ export const ObservationsTab: Story = {
 		);
 		// Below the top, dismissing returns to the group behind, so the control says Back.
 		await expect(screen.getByRole("button", { name: "Back" })).toBeVisible();
+		// The line under the tabs follows the open tab.
+		await expect(
+			screen.getByText(/^Reviews of your work that reached this practice, newest first\./u),
+		).toBeVisible();
+		await expect(screen.queryByText(/^Feedback about patterns in your work/u)).toBeNull();
 		await expect(screen.getByRole("tab", { name: "Observations 3" })).toHaveAttribute(
 			"aria-selected",
 			"true",

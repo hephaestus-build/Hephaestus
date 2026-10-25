@@ -44,9 +44,9 @@ export function countPracticeStandings(practices: readonly HasStanding[]): Stand
 }
 
 /**
- * The counts as a developer reads them: "Nothing to report yet" counts with "Not reviewed", as one
- * "No standing yet". Whether a practice did not apply or was not reviewed is no difference a
- * developer acts on; admin surfaces count the two apart.
+ * The counts as a developer reads them: the two unsettled standings count as one, "No standing
+ * yet". Whether a practice did not apply or was not reviewed is no difference a developer acts on.
+ * Every caller of this module is a developer surface.
  */
 function asDeveloperReads(counts: StandingCounts): StandingCounts {
 	const { NO_OPPORTUNITY = 0, NOT_OBSERVED = 0, ...settled } = counts;

@@ -2,7 +2,6 @@ import { ChevronRightIcon } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 
 import { cn } from "cn";
-import type { StatusDef } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { OPEN_ROW_BAR } from "@/components/practice-vocabulary/PracticeTable";
 import { StatusTooltip } from "@/components/practice-vocabulary/StatusTooltip";
@@ -115,7 +114,7 @@ export function FoldedPractices({
 }
 
 export interface FoldedStandingCellProps {
-	/** Why the row has no standing yet, as `noStandingYetReason` words it. */
+	/** Why the row has no standing yet, as `practiceNoStandingYetReason` or `groupNoStandingYetReason` words it. */
 	reason: string;
 }
 
@@ -133,17 +132,17 @@ export function FoldedStandingCell({ reason }: FoldedStandingCellProps) {
 }
 
 /**
- * A badge with its sentence behind it on hover, focus and tap. The same trigger as StandingBadge's,
+ * "No standing yet", with why behind it on hover, focus and tap. The same trigger as StandingBadge's,
  * so a row treats a press on it the same way.
  */
-function ExplainedBadge({ def, description }: { def: StatusDef; description: string }) {
+export function NoStandingYetBadge({ reason }: { reason: string }) {
 	return (
 		<StatusTooltip
 			openOnTap
-			def={{ ...def, description }}
+			def={{ ...NO_STANDING_YET_DEF, description: reason }}
 			render={
 				<StatusBadge
-					def={def}
+					def={NO_STANDING_YET_DEF}
 					render={<button type="button" />}
 					data-tooltip-only=""
 					className="cursor-help"
@@ -151,9 +150,4 @@ function ExplainedBadge({ def, description }: { def: StatusDef; description: str
 			}
 		/>
 	);
-}
-
-/** "No standing yet", with why behind it. */
-export function NoStandingYetBadge({ reason }: { reason: string }) {
-	return <ExplainedBadge def={NO_STANDING_YET_DEF} description={reason} />;
 }
