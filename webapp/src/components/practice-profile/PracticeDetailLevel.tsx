@@ -347,6 +347,7 @@ export function PracticeDetailLevel({
 				<TabsContent value="feedback" className="min-w-0">
 					<PracticeFeedbackSection
 						feedback={feedback}
+						onShowAllTime={showAllTimeOf(feedback, observationFilter, onObservationFilterChange)}
 						ratingProps={ratingProps}
 						onOpenGroup={onOpenGroup}
 						markedFeedbackId={markedFeedbackId}
@@ -510,8 +511,11 @@ function PracticeFeedbackSection({
 	onOpenGroup,
 	markedFeedbackId,
 	onFeedbackArrivalShown,
+	onShowAllTime,
 }: {
-	feedback: ReturnType<typeof feedbackCardsOf>;
+	feedback: TimeframedFeedback;
+	/** Set when the timeframe hid every card: the empty tab then offers all time. */
+	onShowAllTime?: () => void;
 	ratingProps?: (feedbackId: string) => FeedbackRatingProps;
 	onOpenGroup?: () => void;
 	markedFeedbackId?: string;
@@ -572,7 +576,7 @@ function PracticeFeedbackSection({
 					</p>
 				)}
 			{feedback.open === undefined && feedback.resolved.length === 0 ? (
-				<FeedbackEmpty description="Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on a single piece of work stays there. Open its observation to find recorded comment links." />
+				<NoFeedbackShown onShowAllTime={onShowAllTime} />
 			) : (
 				<div className="flex flex-col gap-6">
 					{feedback.open && (
@@ -844,22 +848,63 @@ function useKeptCard(markedFeedbackId: string | undefined): string | undefined {
 }
 
 /**
- * The cards the level's timeframe keeps: a card by the time it shows (when it was created or last
- * moved), and the card a link arrived at whatever its time, so the arrival always lands.
+ * The cards the level's timeframe keeps: the open card always, as it is the one the reader can
+ * act on now; a resolved card by the time it shows (when it was created or last moved); and the
+ * card a link arrived at whatever its time, so the arrival always lands.
  */
 function withinTimeframe(
 	feedback: ReturnType<typeof feedbackCardsOf>,
 	since: Date | undefined,
 	arrivedAt: string | undefined,
-): ReturnType<typeof feedbackCardsOf> {
+): TimeframedFeedback {
 	if (since === undefined) {
-		return feedback;
+		return { ...feedback, hiddenByTime: false };
 	}
 	const keeps = (card: PracticeFeedbackCardEntry) =>
 		card.feedbackId === arrivedAt || card.timestamp.getTime() >= since.getTime();
+	const resolved = feedback.resolved.filter(keeps);
 	return {
 		...feedback,
-		open: feedback.open !== undefined && keeps(feedback.open) ? feedback.open : undefined,
-		resolved: feedback.resolved.filter(keeps),
+		resolved,
+		hiddenByTime:
+			feedback.open === undefined && resolved.length === 0 && feedback.resolved.length > 0,
 	};
+}
+
+/** The cards the timeframe keeps, and whether it hid every card the practice has. */
+type TimeframedFeedback = ReturnType<typeof feedbackCardsOf> & { hiddenByTime: boolean };
+
+/** The way back to every card, where the timeframe hid them all and the reader may change it. */
+function showAllTimeOf(
+	feedback: TimeframedFeedback,
+	filter: ObservationFilter,
+	onFilterChange: ((filter: ObservationFilter) => void) | undefined,
+): (() => void) | undefined {
+	if (!feedback.hiddenByTime || onFilterChange === undefined) {
+		return undefined;
+	}
+	return () => onFilterChange(changedObservationFilter(filter, { since: undefined }));
+}
+
+/**
+ * The Feedback tab with no card to show: "No feedback yet", or, where the timeframe hid every card,
+ * that none falls in it, with the way to all time, as the Observations tab says it.
+ */
+function NoFeedbackShown({ onShowAllTime }: { onShowAllTime?: () => void }) {
+	if (onShowAllTime === undefined) {
+		return (
+			<FeedbackEmpty description="Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on a single piece of work stays there. Open its observation to find recorded comment links." />
+		);
+	}
+	return (
+		<FeedbackEmpty
+			title="No feedback in this timeframe"
+			description="None falls in this timeframe. Choose a longer one to see earlier feedback."
+			action={
+				<Button variant="outline" size="sm" onClick={onShowAllTime}>
+					Show all time
+				</Button>
+			}
+		/>
+	);
 }

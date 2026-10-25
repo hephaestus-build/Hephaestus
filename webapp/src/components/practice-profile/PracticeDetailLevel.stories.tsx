@@ -8,6 +8,7 @@ import type { DetailStackEntry } from "@/components/layout/detail-drawer/detail-
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import type { PracticeGuidanceState } from "@/components/practice-guidance/PracticeIntro";
+import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import { ReviewResultDetails } from "@/components/profile/ReviewResultRow";
 import type { ReviewFeedState } from "@/components/profile/reviews";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
@@ -30,6 +31,7 @@ import { bundledGuidance, bundledPractice } from "@/stories/practice-guidance-st
 import { packagingGroup } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
+import { daysBefore } from "@/stories/story-clock";
 import { precedes } from "@/test/dom";
 
 import { type ObservationFilter, observationLinkFilter } from "./observation-filter";
@@ -607,6 +609,58 @@ export const FeedbackTimeframe: Story = {
 		const range = screen.getByRole("toolbar", { name: "Timeframe" });
 		await userEvent.click(within(range).getByRole("button", { name: "All time" }));
 		await expect(within(panel).queryAllByRole("article").length).toBeGreaterThan(narrowed);
+	},
+};
+
+/** The described practice's cards, every one shown two months ago: older than any short timeframe. */
+const describedCardsLongAgo = ALL_FEEDBACK_CARDS.filter(
+	(card) => card.practiceSlug === describedPractice.slug,
+).map((card) => ({ ...card, timestamp: daysBefore(60) }));
+
+/** The open card is the one the reader can act on now, so no timeframe hides it. */
+export const OpenCardOutsideTimeframe: Story = {
+	args: {
+		tab: "feedback",
+		practice: describedPractice,
+		feedbackCards: describedCardsLongAgo,
+		observationFilter: { since: "7d" },
+	},
+	play: async () => {
+		const tabpanel = await screen.findByRole("tabpanel", { name: /^Feedback/u });
+		await expectSettledVisible(tabpanel);
+		const panel = within(tabpanel);
+		const open = describedCardsLongAgo.find((card) => isOpenFeedback(card.state));
+		if (open === undefined) {
+			throw new Error("Expected an open card in the fixture.");
+		}
+		await expect(panel.getByText("Current feedback")).toBeVisible();
+		await expect(panel.getByRole("article", { name: open.headline })).toBeVisible();
+		await expect(panel.queryByText("No feedback yet")).toBeNull();
+	},
+};
+
+/**
+ * A timeframe that hides every card says so, as the Observations tab does, instead of "No feedback
+ * yet"; Show all time brings the cards back.
+ */
+export const TimeframeHidesEveryCard: Story = {
+	args: {
+		tab: "feedback",
+		practice: describedPractice,
+		feedbackCards: describedCardsLongAgo.filter((card) => !isOpenFeedback(card.state)),
+		observationFilter: { since: "7d" },
+	},
+	play: async () => {
+		const tabpanel = await screen.findByRole("tabpanel", { name: /^Feedback/u });
+		await expectSettledVisible(tabpanel);
+		const panel = within(tabpanel);
+		await expect(panel.getByText("No feedback in this timeframe")).toBeVisible();
+		await expect(panel.queryByText("No feedback yet")).toBeNull();
+		await expect(panel.queryAllByRole("article")).toHaveLength(0);
+		await userEvent.click(panel.getByRole("button", { name: "Show all time" }));
+		await waitFor(async () => {
+			await expect(panel.queryAllByRole("article").length).toBeGreaterThan(0);
+		});
 	},
 };
 

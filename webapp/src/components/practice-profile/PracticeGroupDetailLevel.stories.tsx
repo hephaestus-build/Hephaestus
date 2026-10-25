@@ -264,11 +264,13 @@ export const OpenPracticeRow: Story = {
 
 /** The table draws its own shape, so nothing jumps when the level lands. */
 export const Loading: Story = {
-	args: { isLoading: true },
+	args: { isLoading: true, standing: undefined, practices: undefined },
 	play: async () => {
 		const table = await screen.findByRole("table", { name: "Practices in this group" });
 		await expectSettledVisible(table);
 		await expect(table).toHaveAttribute("aria-busy", "true");
+		// Nothing is claimed about a standing that has not loaded.
+		await expect(screen.queryByRole("button", { name: "No standing yet" })).toBeNull();
 		await expect(screen.queryByRole("img", { name: "Heph, AI mentor" })).toBeNull();
 		await expect(screen.queryByRole("tab")).toBeNull();
 	},

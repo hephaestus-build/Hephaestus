@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { formatShortDay, formatTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
+import { deliveredOnly } from "./ObservationFeedback";
 import { OwnFeedbackList } from "./OwnFeedbackList";
 import { ReviewResultRow } from "./ReviewResultRow";
 import type { FeedbackResponseControls, ReviewEntry } from "./reviews";
@@ -114,7 +115,7 @@ export function ReviewCard({
 						</Button>
 					</div>
 				)}
-				{renderObservation === undefined && feedback.length > 0 && (
+				{renderObservation === undefined && deliveredOnly(feedback).length > 0 && (
 					<div className="border-t bg-sidebar px-4 py-3">
 						<OwnFeedbackList feedback={feedback} responses={responses} />
 					</div>

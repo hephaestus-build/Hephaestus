@@ -17,6 +17,9 @@ import {
 import { deferred, sleep } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
+/** The note's title as it renders, with its period, so its absence is checked on the real words. */
+const EARLIER_NOTE = `${EARLIER_REVIEWS_COUNTED.title}.`;
+
 // Mounting the real route pulls in the whole app shell and its lazy modules.
 vi.setConfig({ testTimeout: ROUTE_RENDER_WAIT.timeout });
 
@@ -250,7 +253,7 @@ describe("Practices across the workspace", () => {
 	it("says once that standings rest on earlier reviews, and marks the reader's own", async () => {
 		server.use(http.get(OVERVIEW, () => HttpResponse.json(EARLIER_REVIEWS_WORKSPACE)));
 		await renderPage();
-		screen.getByText(`${EARLIER_REVIEWS_COUNTED.title}.`);
+		screen.getByText(EARLIER_NOTE);
 		const table = within(screen.getByRole("table", { name: "All practice groups" }));
 		table.getByText("Based on earlier reviews, the criteria might have changed");
 	});
@@ -258,7 +261,7 @@ describe("Practices across the workspace", () => {
 	it("says nothing about earlier reviews when every counted standing is current", async () => {
 		await renderPage();
 		await screen.findByText("11", undefined, ROUTE_RENDER_WAIT);
-		expect(screen.queryByText(EARLIER_REVIEWS_COUNTED.title)).toBeNull();
+		expect(screen.queryByText(EARLIER_NOTE)).toBeNull();
 	});
 
 	it("reads the overview once and not again on a refocus", async () => {

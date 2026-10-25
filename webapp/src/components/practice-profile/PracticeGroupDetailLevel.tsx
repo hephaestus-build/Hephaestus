@@ -320,8 +320,10 @@ export function PracticeGroupDetailLevel({
 					</span>
 				}
 				mark={<heading.Icon aria-hidden className={cn("size-6 shrink-0", heading.ink)} />}
+				// No chips while the group loads: an unread standing is not "No standing yet".
 				chips={
-					showsStanding && <GroupStandingChips standing={standing} practices={practices ?? []} />
+					showsStanding &&
+					!isLoading && <GroupStandingChips standing={standing} practices={practices ?? []} />
 				}
 				aside={
 					showsStanding ? (

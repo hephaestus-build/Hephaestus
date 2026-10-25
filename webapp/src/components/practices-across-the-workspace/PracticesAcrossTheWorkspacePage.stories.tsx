@@ -57,7 +57,8 @@ const groupsSection = (canvas: {
 	getByRole: (role: "heading", options: { level: number; name: string }) => HTMLElement;
 }) => canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section");
 
-const EARLIER_NOTE = EARLIER_REVIEWS_COUNTED.title;
+/** The note's title as it renders, with its period, so its absence is checked on the real words. */
+const EARLIER_NOTE = `${EARLIER_REVIEWS_COUNTED.title}.`;
 
 /** Presses an (i) and returns its panel, which opens in a portal outside the canvas. */
 async function openTip(canvas: { getByRole: typeof screen.getByRole }, name: string) {
@@ -184,7 +185,7 @@ export const EarlierReviews: Story = {
 	args: { state: { status: "ready", overview: EARLIER_REVIEWS_WORKSPACE } },
 	play: async ({ canvas }) => {
 		// One quiet line, not an alert: nothing is wrong, so a screen reader is not interrupted.
-		await expect(canvas.getByText(`${EARLIER_NOTE}.`)).toBeVisible();
+		await expect(canvas.getByText(EARLIER_NOTE)).toBeVisible();
 		await expect(canvas.queryByRole("alert")).toBeNull();
 		// Earlier assessments do not establish whether the current criteria are met; the words say so.
 		const mark = groupsTable(canvas).getByText(
