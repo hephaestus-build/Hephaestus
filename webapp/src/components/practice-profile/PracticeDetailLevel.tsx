@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } fr
 import { useMediaQuery } from "usehooks-ts";
 
 import type {
+	GroupRef,
 	PracticeGuidanceDto,
 	PracticeStanding,
 	ReviewedPractice,
@@ -35,6 +36,7 @@ import {
 } from "@/components/practice-guidance/PracticeIntro";
 import { REVIEW_FILTER_MAX_LENGTH } from "@/components/practice-trace/trace-format";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
+import { getGroupVisual, groupMark } from "@/components/practice-vocabulary/group-visuals";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import {
 	type FeedbackRatingProps,
@@ -42,6 +44,7 @@ import {
 	type PracticeFeedbackCardEntry,
 	PracticeFeedbackCardSkeleton,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
+import { PracticeTitlePill } from "@/components/practice-vocabulary/PracticePill";
 import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
 import { StandingBasisNote } from "@/components/practice-vocabulary/StandingBasisNote";
 import { ReviewFeed, ReviewFeedSkeleton } from "@/components/profile/ReviewFeed";
@@ -109,6 +112,8 @@ export interface PracticeDetailLevelProps {
 	markedFeedbackId?: string;
 	/** Called as soon as that card arrives, so the address lets go of it and nothing replays it. */
 	onFeedbackArrivalShown?: () => void;
+	/** The practice's group, whose icon leads the heading inside its pill; without it the pill holds the name alone. */
+	group?: GroupRef;
 	/**
 	 * The practice, as the standings carry it: the catalog's words and where the reader stands.
 	 * Absent for a practice with no standing, which the level shows from its words and guidance
@@ -192,6 +197,7 @@ export function PracticeDetailLevel({
 	onOpenGroup,
 	markedFeedbackId,
 	onFeedbackArrivalShown,
+	group,
 	practice,
 	described,
 	guidance,
@@ -401,7 +407,16 @@ export function PracticeDetailLevel({
 				nested={nested}
 				path={path}
 				current="Practice"
-				title={practice?.name ?? described?.name ?? "Practice"}
+				// As the practice is named in its group's table: the gray pill with the group's icon
+				// inside, at the heading's size.
+				title={
+					<PracticeTitlePill
+						name={practice?.name ?? described?.name ?? "Practice"}
+						group={
+							group === undefined ? undefined : groupMark(getGroupVisual(group.icon, group.color))
+						}
+					/>
+				}
 				chips={
 					practice && <PracticeStandingChips practice={practice} neverApplied={neverApplied} />
 				}

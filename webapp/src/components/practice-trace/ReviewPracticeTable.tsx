@@ -14,6 +14,8 @@ import { statusFacetOptions } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	getGroupVisual,
+	type GroupMark,
+	groupMark,
 	UNASSIGNED_GROUP_VISUAL,
 } from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
@@ -206,6 +208,7 @@ export function ReviewPracticeTable({
 								<ResultRow
 									key={result.id}
 									result={result}
+									practiceGroup={group === undefined ? undefined : groupMark(visual)}
 									reviewId={reviewId}
 									onOpenPractice={onOpenPractice}
 									earlierReviewLink={earlierReviewLink}
@@ -260,6 +263,8 @@ function byGroup(
 
 interface ResultRowProps {
 	result: ResultList;
+	/** The group's icon and color inside the practice's pill; without it the pill holds the name alone. */
+	practiceGroup: GroupMark | undefined;
 	reviewId: string;
 	onOpenPractice?: (practiceSlug: string) => void;
 	earlierReviewLink?: (reviewId: string) => ReactNode;
@@ -276,6 +281,7 @@ interface ResultRowProps {
 
 function ResultRow({
 	result,
+	practiceGroup,
 	reviewId,
 	onOpenPractice,
 	earlierReviewLink,
@@ -325,9 +331,10 @@ function ResultRow({
 			</TableCell>
 			<TableCell className="align-middle whitespace-normal">
 				<span className="flex min-w-0 flex-col items-start gap-1">
-					{/* The group heads the rows above, so the row names the practice alone. */}
+					{/* The group heads the rows above; the row names the practice with its group's icon. */}
 					<PracticePill
 						name={result.practiceName}
+						group={practiceGroup}
 						onOpen={
 							onOpenPractice === undefined ? undefined : () => onOpenPractice(result.practiceSlug)
 						}

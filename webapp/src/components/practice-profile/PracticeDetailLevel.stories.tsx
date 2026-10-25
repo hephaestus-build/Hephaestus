@@ -86,7 +86,7 @@ const meta = {
 		guidance: readyGuidance,
 		feed: readyFeed,
 		feedbackCards: ALL_FEEDBACK_CARDS,
-
+		group: packagingGroup,
 		onOpenGroup: fn(),
 		tab: DEFAULT_PRACTICE_TAB,
 		onTabChange: fn(),
@@ -170,7 +170,13 @@ const newestSummary = detailResult.summary ?? "";
 
 export const Default: Story = {
 	play: async () => {
-		await expectSettledVisible(await screen.findByRole("heading", { level: 2, name: "Feedback" }));
+		await expectSettledVisible(await screen.findByRole("tabpanel", { name: /^Feedback/u }));
+		// The heading names the practice as its group's table does: the gray pill with the group's
+		// icon inside it, only larger.
+		const heading = screen.getByRole("heading", { name: focusedChanges.name });
+		const pill = heading.querySelector("svg")?.parentElement;
+		await expect(pill).not.toBe(heading);
+		await expect(getComputedStyle(pill ?? heading).backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
 		const [first, second, third] = screen.getAllByRole("tab");
 		await expect(first).toHaveAccessibleName("Feedback 1");
 		await expect(second).toHaveAccessibleName("Observations 3");

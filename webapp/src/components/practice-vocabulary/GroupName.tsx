@@ -4,6 +4,8 @@ import { cn } from "cn";
 import { InlineLink } from "@/components/common/InlineLink";
 import { hasText } from "@/lib/text";
 
+import { groupInk } from "./group-visuals";
+
 export interface GroupNameProps {
 	name: string;
 	icon: ComponentType<{ className?: string }>;
@@ -16,15 +18,15 @@ export interface GroupNameProps {
 
 /**
  * A group's icon before its name, both in the group's colour, with the name an `InlineLink` under
- * the one rule every link on the page follows. The pill's ground is dropped in both themes: this is
- * a name, not a badge.
+ * the one rule every link on the page follows. Only the pill's color carries over (`groupInk`): this
+ * is a name, not a badge.
  */
 export function GroupName({ name, icon: Icon, pill, onOpen, className }: GroupNameProps) {
 	return (
 		<span
 			className={cn(
 				"inline-flex items-center gap-1.5 font-medium",
-				hasText(pill) ? [pill, "bg-transparent dark:bg-transparent"] : "text-muted-foreground",
+				hasText(pill) ? groupInk(pill) : "text-muted-foreground",
 				className,
 			)}
 		>

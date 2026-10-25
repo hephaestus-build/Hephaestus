@@ -30,6 +30,7 @@ import {
 
 import type { FeedbackTextSegment } from "./feedback-text";
 import { FeedbackText } from "./FeedbackText";
+import type { GroupMark } from "./group-visuals";
 import type { SortDirection } from "./practice-group-list-order";
 import type { StandingScope } from "./practice-group-standing-defs";
 import type { TrendDirection } from "./practice-trend-defs";
@@ -415,6 +416,8 @@ export interface SubjectCellProps {
 	sentences?: FeedbackTextSegment[][];
 	/** Opens a practice a sentence names. */
 	onOpenPractice?: (practiceSlug: string) => void;
+	/** The group the sentences' practices belong to, for their labels (`FeedbackTextProps.practiceGroup`). */
+	practiceGroup?: GroupMark;
 	/** What else goes under the badge: the group table's list of events. */
 	children?: ReactNode;
 	/** `OPEN_ROW_BAR` where the subject is the row's first cell. */
@@ -426,6 +429,7 @@ export function SubjectCell({
 	badge,
 	sentences,
 	onOpenPractice,
+	practiceGroup,
 	children,
 	className,
 }: SubjectCellProps) {
@@ -434,10 +438,16 @@ export function SubjectCell({
 			<div className="flex min-w-0 flex-col items-start gap-2">
 				{badge}
 				{sentences !== undefined && sentences.length > 0 && (
-					<ul className="max-w-md list-disc space-y-1 pl-4 text-sm marker:text-muted-foreground">
+					// `w-full`: in the cell's `items-start` column the list would shrink to its words, and
+					// a row pill in a sentence would then wrap at its own width instead of the column's.
+					<ul className="w-full max-w-md list-disc space-y-1 pl-4 text-sm marker:text-muted-foreground">
 						{sentences.map((sentence, index) => (
 							<li key={index}>
-								<FeedbackText segments={sentence} onOpenPractice={onOpenPractice} />
+								<FeedbackText
+									segments={sentence}
+									onOpenPractice={onOpenPractice}
+									practiceGroup={practiceGroup}
+								/>
 							</li>
 						))}
 					</ul>
