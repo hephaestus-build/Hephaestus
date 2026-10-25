@@ -50,29 +50,12 @@ public final class SandboxLayout {
     public static final String MANIFEST_PATH = "INDEX.json";
 
     /**
-     * Workspace-relative path of the feedback-composition request: whether this run should compose
-     * feedback once its measurements are final, which lanes it may write for, and the bounds each must
-     * respect.
-     *
-     * <p>Absence is the off switch, and it is data rather than an env flag on purpose — the handler that
-     * knows whether a run is a live measurement of somebody's current work is the same handler that
-     * writes this file, so the decision and its parameters travel together.
+     * Path of the feedback-composition request among the files the worker's composer reads: which destinations it
+     * may write for and the bounds each must respect. A sandbox is never given one.
      */
     public static final String FEEDBACK_COMPOSITION_PATH = INPUTS_PREFIX + "feedback-composition.json";
 
-    /** Workspace-relative filename of the composition stage's output, collected from {@link #OUTPUT_PATH}. */
-    public static final String FEEDBACK_FILENAME = "feedback.json";
-
     public static final String PRACTICE_SCRIPT_REPORT_FILE = "practice-scripts.json";
-
-    /** Workspace-relative filename of the composition stage's instructions, staged beside the runner. */
-    public static final String FEEDBACK_COMPOSER_PROMPT_FILENAME = "feedback-composer.md";
-
-    /** Writing guidance shared by the public and private feedback prompts. */
-    public static final String FEEDBACK_STYLE_PROMPT_FILENAME = "feedback-style.md";
-
-    /** The system prompt of the review on the work, which the runner composes in a session of its own. */
-    public static final String REVIEW_COMPOSER_PROMPT_FILENAME = "review-composer.md";
 
     /**
      * Workspace-relative prefix for what earlier reviews recorded and already said.
@@ -197,16 +180,6 @@ public final class SandboxLayout {
      * nothing a second attempt would repeat — the work is requeued, like an unreachable server.
      */
     public static final int EXIT_PROVIDER_UNREACHABLE = 76;
-
-    /**
-     * Exit code emitted by the Pi runner when the review is admitted, but the run itself stopped feedback composition:
-     * it reached its safety ceiling or stalled. Another attempt can compose it from the original inputs. The runner asks
-     * for it for private feedback only once a review on the work exists, and for the review on the work only from the
-     * attempt that admitted the results. The server allows private feedback after an accepted review on the work while
-     * a NOT_MET practice has no prepared private piece, and otherwise only the attempt that admitted the results.
-     * Otherwise the attempt ends like any admitted run.
-     */
-    public static final int EXIT_COMPOSITION_OWED = 77;
 
     /** OCI label declaring the agent image runtime contract. */
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";

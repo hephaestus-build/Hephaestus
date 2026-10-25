@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-	deriveWindows,
 	missingSlugs,
 	planTurns,
 	shouldRecordNow,
@@ -39,12 +38,6 @@ void test("blank and duplicate slugs and an unusable turn size are rejected", ()
 	assert.throws(() => planTurns([{ slug: " " }]), /needs a slug/u);
 	assert.throws(() => planTurns([{ slug: "a" }, { slug: "a" }]), /duplicate/u);
 	assert.throws(() => planTurns([{ slug: "a" }], 0), /maxPerTurn/u);
-});
-
-void test("composition keeps a share of the safety ceiling only when it was requested", () => {
-	assert.deepEqual(deriveWindows(100_000, true), { measureMs: 85_000, compositionMs: 15_000 });
-	assert.deepEqual(deriveWindows(100_000, false), { measureMs: 100_000, compositionMs: 0 });
-	assert.throws(() => deriveWindows(0, true), /budgetMs/u);
 });
 
 const piece = { modelCalls: 6, outputTokens: 8000 };

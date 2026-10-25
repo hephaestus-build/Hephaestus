@@ -82,7 +82,7 @@ export function describeVocabulary<T extends string>(
 
 export const MAX_SUMMARY_CHARS: number = CANDIDATE_LIMITS.summaryChars;
 
-export function trimmedText(value: unknown): string {
+function trimmedText(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
 

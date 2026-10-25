@@ -24,9 +24,9 @@ final class ComposerFiles {
     static final String REPOSITORY_ROOT = SandboxLayout.REPO_MOUNT_RELATIVE.replaceFirst("/$", "");
     static final String PRACTICE_INDEX = SandboxLayout.PRACTICES_PREFIX + "index.json";
     static final String HISTORY_ROOT = SandboxLayout.INPUTS_PREFIX + "history";
-    static final String SUPPORT = "work/composition/in-app-support.json";
-    static final String DELIVERED = "work/composition/history/feedback.json";
-    static final String PREPARED = "work/composition/history/prepared.json";
+    static final String SUPPORT = "composition/in-app-support.json";
+    static final String DELIVERED = "composition/history/feedback.json";
+    static final String PREPARED = "composition/history/prepared.json";
 
     private final Map<String, byte[]> files;
 

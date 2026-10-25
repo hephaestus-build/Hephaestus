@@ -1,6 +1,6 @@
 import path from "node:path";
 
-export const SUPPORTED_SCHEMA_VERSION = 6;
+export const SUPPORTED_SCHEMA_VERSION = 7;
 
 export function taskPaths(value: unknown) {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -24,7 +24,6 @@ export function taskPaths(value: unknown) {
 		repositoryRoot: workspacePath("repositoryRoot"),
 		manifest: workspacePath("manifest"),
 		practiceIndex: workspacePath("practiceIndex"),
-		compositionRequest: workspacePath("compositionRequest"),
 		preparedFeedback: workspacePath("preparedFeedback"),
 		practiceScripts: workspacePath("practiceScripts"),
 	};
@@ -37,7 +36,6 @@ export function resolveTaskPaths(root: string, value: unknown) {
 		repositoryRoot: path.resolve(root, paths.repositoryRoot),
 		manifest: path.resolve(root, paths.manifest),
 		practiceIndex: path.resolve(root, paths.practiceIndex),
-		compositionRequest: path.resolve(root, paths.compositionRequest),
 		preparedFeedback: path.resolve(root, paths.preparedFeedback),
 		practiceScripts: path.resolve(root, paths.practiceScripts),
 	};

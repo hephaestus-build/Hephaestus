@@ -360,18 +360,6 @@ export const zBackfillSummary = z.object({
     state: z.string()
 });
 
-export const zBasis = z.object({
-    outcome: z.enum([
-        'MET',
-        'NOT_MET',
-        'DOES_NOT_APPLY',
-        'COULD_NOT_DETERMINE'
-    ]),
-    practiceSlug: z.string(),
-    practiceVersionId: z.string().nullable(),
-    resultId: z.uuid()
-});
-
 export const zBindPracticeGroupRequest = z.object({
     groupSlug: z.string().nullable()
 });
@@ -735,32 +723,6 @@ export const zContributor = z.object({
     name: z.string()
 });
 
-export const zCopy = z.object({
-    body: z.string().nullable(),
-    endLine: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    externalRef: z.string().nullable(),
-    externalUrl: z.string().nullable(),
-    id: z.uuid(),
-    kind: z.enum([
-        'SUMMARY',
-        'LINE_NOTE',
-        'FILE_NOTE',
-        'CHAT_TURN'
-    ]),
-    path: z.string().nullable(),
-    postedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    side: z.enum(['OLD', 'NEW']).nullable(),
-    startLine: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    state: z.enum([
-        'PLANNED',
-        'WRITE_STARTED',
-        'POSTED',
-        'FAILED',
-        'WITHHELD',
-        'RETRACTED'
-    ])
-});
-
 export const zCoverage = z.object({
     hasMore: z.boolean().optional(),
     maxEntries: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
@@ -1081,37 +1043,6 @@ export const zEmailTestResponse = z.object({
         'RATE_LIMITED'
     ]),
     to: z.string().optional()
-});
-
-export const zEntry = z.object({
-    basedOn: z.array(zBasis),
-    body: z.string().nullable(),
-    bodyUnavailable: z.boolean(),
-    copies: z.array(zCopy),
-    currentness: z.enum([
-        'CURRENT',
-        'STALE',
-        'UNVERIFIABLE'
-    ]),
-    deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    destination: z.enum([
-        'ON_WORK',
-        'PRACTICE_PAGE',
-        'CONVERSATION'
-    ]),
-    id: z.uuid(),
-    itemVersion: z.string().nullable(),
-    state: z.enum([
-        'AWAITING_APPROVAL',
-        'READY',
-        'DELIVERED',
-        'UNCONFIRMED',
-        'WITHHELD',
-        'REJECTED',
-        'REPLACED',
-        'FAILED'
-    ]),
-    withdrawn: z.boolean()
 });
 
 export const zErasureRequest = z.object({
@@ -1836,11 +1767,6 @@ export const zDeliveredWorkFeedback = z.object({
     item: zItemRef.nullable()
 });
 
-export const zHistory = z.object({
-    feedback: z.array(zEntry).optional(),
-    item: zItemRef.optional()
-});
-
 export const zItemFacts = z.object({
     facts: z.array(zItemFact),
     item: zItemRef
@@ -2297,12 +2223,6 @@ export const zMovePracticeRequest = z.object({
     position: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
-export const zNote = z.object({
-    body: z.string().optional(),
-    citationIndex: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    problemId: z.uuid().optional()
-});
-
 export const zNotificationPreferences = z.object({
     deliveryConfigured: z.boolean(),
     emailAvailable: z.boolean(),
@@ -2422,12 +2342,6 @@ export const zOwnItemEvent = z.object({
     displayName: z.string(),
     name: z.string(),
     occurredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date())
-});
-
-export const zPage = z.object({
-    body: z.string().optional(),
-    nextStep: z.string().optional(),
-    title: z.string().optional()
 });
 
 export const zPageMetadata = z.object({
@@ -2746,12 +2660,6 @@ export const zPracticeGuidanceDto = z.object({
     guide: zPracticeGuide.nullable(),
     practiceSlug: z.string(),
     visual: zPracticeVisual.nullable()
-});
-
-export const zPrepareFeedbackResponse = z.object({
-    contentDigest: z.string(),
-    feedbackIds: z.array(z.uuid()),
-    preparedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date())
 });
 
 export const zPreviewRequest = z.object({
@@ -3109,17 +3017,6 @@ export const zPublicActivityWorkPage = z.object({
 export const zPublicActivityWorkspaceSettings = z.object({
     allowSearchEngines: z.boolean(),
     enabled: z.boolean()
-});
-
-/**
- * One authorized history read. <code>publicationContext</code> names this exact response: preparation of a public piece
- * composed from it must send it back unchanged.
- */
-export const zPublicFeedbackHistory = z.object({
-    contractVersion: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    history: zHistory,
-    publicationContext: z.string().nullable(),
-    readAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date())
 });
 
 export const zQuestion = z.object({
@@ -5412,106 +5309,6 @@ export const zAdmissionRequest = z.object({
     nonResults: z.array(zRuntimeNonResult),
     results: z.array(zSubmittedResult).optional(),
     reviewId: z.uuid().optional()
-});
-
-export const zSupport = z.object({
-    problemId: z.uuid().optional(),
-    resultId: z.uuid().optional()
-});
-
-export const zCopySupport = z.object({
-    basedOn: z.array(zSupport).optional(),
-    kind: z.enum([
-        'SUMMARY',
-        'LINE_NOTE',
-        'FILE_NOTE',
-        'CHAT_TURN'
-    ]).optional(),
-    position: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional()
-});
-
-/**
- * Why results stay unsaid: the composer's reason with the prior advice it rests on, or NOT_COMPOSED.
- */
-export const zQuietDecision = z.object({
-    basedOn: z.array(zSupport).optional(),
-    reason: z.string().optional(),
-    witnessIds: z.array(z.string()).optional()
-});
-
-/**
- * Exact support and quiet decisions retained with the immutable preparation receipt. A public piece also retains the
- * publication context of the history read it was composed from; the server sets it, never the composer.
- */
-export const zFeedbackCompositionTrace = z.object({
-    copies: z.array(zCopySupport).optional(),
-    primaryResultId: z.uuid().optional(),
-    publicationContext: z.string().optional(),
-    replacesId: z.uuid().optional(),
-    withheld: z.array(zQuietDecision).optional()
-});
-
-export const zComposedFeedback = z.object({
-    destination: z.enum([
-        'ON_WORK',
-        'PRACTICE_PAGE',
-        'CONVERSATION'
-    ]).optional(),
-    notes: z.array(zNote).optional(),
-    page: zPage.optional(),
-    resultIds: z.array(z.uuid()).optional(),
-    summary: z.string().optional(),
-    trace: zFeedbackCompositionTrace.optional(),
-    withheldReason: z.enum([
-        'VOLUME_CAPPED',
-        'COMPOSER_WITHHELD',
-        'NOTHING_NEW',
-        'REPEATS_DELIVERED_NOTE',
-        'REACTED_DISAGREE',
-        'REACTED_NOT_APPLICABLE',
-        'CONVERSATION_EXPIRED',
-        'DELIVERY_UNCONFIRMED',
-        'ITEM_GONE',
-        'ITEM_CLOSED',
-        'ITEM_MERGED',
-        'ITEM_STATE_INELIGIBLE',
-        'ISSUE_SNAPSHOT_CHANGED',
-        'PUBLIC_SUBJECT_INELIGIBLE',
-        'NO_AI',
-        'DELIVERY_OFF',
-        'PERSON_SUPPRESSED',
-        'RECIPIENT_UNAVAILABLE',
-        'EMPTY_AFTER_SANITIZE',
-        'INSTANCE_SILENCED',
-        'FEEDBACK_OFF',
-        'WORKSPACE_DISABLED',
-        'WORKSPACE_DELIVERY_PAUSED',
-        'STALE_ROLLOUT_REVISION',
-        'OUTSIDE_CURRENT_SCOPE',
-        'APPROVAL_STALE',
-        'APPROVAL_NO_LONGER_ELIGIBLE',
-        'PRACTICE_REQUIRES_APPROVAL',
-        'BACKFILL_QUIET',
-        'RESULT_MARKED_INCORRECT',
-        'REVIEWED_VERSION_CHANGED',
-        'REVIEW_CANCELLED',
-        'EVIDENCE_NOT_PERMITTED',
-        'NO_EVIDENCE',
-        'UNCORROBORATED',
-        'PUBLIC_HISTORY_CHANGED',
-        'PUBLIC_DELIVERY_UNRESOLVED',
-        'NOT_COMPOSED'
-    ]).optional()
-});
-
-export const zPrepareFeedbackRequest = z.object({
-    attempt: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    basisResultIds: z.array(z.uuid()),
-    composition: z.array(zComposedFeedback),
-    jobId: z.uuid(),
-    publicComposition: z.boolean(),
-    publicationContext: z.string().nullable(),
-    reviewId: z.uuid()
 });
 
 export const zSupportOccurrence = z.object({

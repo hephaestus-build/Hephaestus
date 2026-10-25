@@ -169,7 +169,6 @@ export function stageGoldenWorkspace(
 			repositoryRoot: "repos/primary",
 			manifest: "evidence/manifest.json",
 			practiceIndex: "catalog/practices/index.json",
-			compositionRequest: "evidence/composition.json",
 			preparedFeedback: "history/prepared.json",
 			practiceScripts: PRACTICES_DIR,
 			prompt: "Review the practice.",

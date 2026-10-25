@@ -2331,46 +2331,6 @@ paths:
       summary: Admit results for the current review attempt
       tags:
       - result-admission
-  /internal/llm/prepare-feedback:
-    post:
-      description: The worker composes and prepares the feedback after the sandbox
-        ends. A sandbox that asks is answered 410.
-      operationId: prepareFeedback
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PrepareFeedbackRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PrepareFeedbackResponse"
-          description: OK
-      security:
-      - workerBearer: []
-      summary: "Refused: a sandbox prepares no feedback"
-      tags:
-      - result-admission
-  /internal/llm/public-feedback-history:
-    post:
-      description: The worker reads the history when it composes the feedback after
-        the sandbox ends. A sandbox that asks is answered 410.
-      operationId: readPublicFeedbackHistory
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PublicFeedbackHistory"
-          description: OK
-      security:
-      - workerBearer: []
-      summary: "Refused: a sandbox reads no feedback history"
-      tags:
-      - result-admission
   /notifications/unsubscribe/{token}:
     post:
       operationId: unsubscribeEmail
@@ -13143,30 +13103,6 @@ components:
           description: Integration-defined backfill state string
       required:
       - state
-    Basis:
-      type: object
-      properties:
-        outcome:
-          type: string
-          enum:
-          - MET
-          - NOT_MET
-          - DOES_NOT_APPLY
-          - COULD_NOT_DETERMINE
-        practiceSlug:
-          type: string
-        practiceVersionId:
-          type:
-          - string
-          - "null"
-        resultId:
-          type: string
-          format: uuid
-      required:
-      - outcome
-      - practiceSlug
-      - practiceVersionId
-      - resultId
     BindPracticeGroupRequest:
       type: object
       properties:
@@ -13789,71 +13725,6 @@ components:
       - practices
       - readAt
       - state
-    ComposedFeedback:
-      type: object
-      properties:
-        destination:
-          type: string
-          enum:
-          - ON_WORK
-          - PRACTICE_PAGE
-          - CONVERSATION
-        notes:
-          type: array
-          items:
-            $ref: "#/components/schemas/Note"
-        page:
-          $ref: "#/components/schemas/Page"
-        resultIds:
-          type: array
-          items:
-            type: string
-            format: uuid
-        summary:
-          type: string
-        trace:
-          $ref: "#/components/schemas/FeedbackCompositionTrace"
-        withheldReason:
-          type: string
-          enum:
-          - VOLUME_CAPPED
-          - COMPOSER_WITHHELD
-          - NOTHING_NEW
-          - REPEATS_DELIVERED_NOTE
-          - REACTED_DISAGREE
-          - REACTED_NOT_APPLICABLE
-          - CONVERSATION_EXPIRED
-          - DELIVERY_UNCONFIRMED
-          - ITEM_GONE
-          - ITEM_CLOSED
-          - ITEM_MERGED
-          - ITEM_STATE_INELIGIBLE
-          - ISSUE_SNAPSHOT_CHANGED
-          - PUBLIC_SUBJECT_INELIGIBLE
-          - NO_AI
-          - DELIVERY_OFF
-          - PERSON_SUPPRESSED
-          - RECIPIENT_UNAVAILABLE
-          - EMPTY_AFTER_SANITIZE
-          - INSTANCE_SILENCED
-          - FEEDBACK_OFF
-          - WORKSPACE_DISABLED
-          - WORKSPACE_DELIVERY_PAUSED
-          - STALE_ROLLOUT_REVISION
-          - OUTSIDE_CURRENT_SCOPE
-          - APPROVAL_STALE
-          - APPROVAL_NO_LONGER_ELIGIBLE
-          - PRACTICE_REQUIRES_APPROVAL
-          - BACKFILL_QUIET
-          - RESULT_MARKED_INCORRECT
-          - REVIEWED_VERSION_CHANGED
-          - REVIEW_CANCELLED
-          - EVIDENCE_NOT_PERMITTED
-          - NO_EVIDENCE
-          - UNCORROBORATED
-          - PUBLIC_HISTORY_CHANGED
-          - PUBLIC_DELIVERY_UNRESOLVED
-          - NOT_COMPOSED
     ConfigAuditActorRef:
       type: object
       description: |-
@@ -14338,94 +14209,6 @@ components:
       - readAt
       - results
       - state
-    Copy:
-      type: object
-      properties:
-        body:
-          type:
-          - string
-          - "null"
-        endLine:
-          type:
-          - "null"
-          - integer
-          format: int32
-        externalRef:
-          type:
-          - string
-          - "null"
-        externalUrl:
-          type:
-          - string
-          - "null"
-        id:
-          type: string
-          format: uuid
-        kind:
-          type: string
-          enum:
-          - SUMMARY
-          - LINE_NOTE
-          - FILE_NOTE
-          - CHAT_TURN
-        path:
-          type:
-          - string
-          - "null"
-        postedAt:
-          type: string
-          format: date-time
-        side:
-          type:
-          - string
-          - "null"
-          enum:
-          - OLD
-          - NEW
-          - null
-        startLine:
-          type:
-          - "null"
-          - integer
-          format: int32
-        state:
-          type: string
-          enum:
-          - PLANNED
-          - WRITE_STARTED
-          - POSTED
-          - FAILED
-          - WITHHELD
-          - RETRACTED
-      required:
-      - body
-      - endLine
-      - externalRef
-      - externalUrl
-      - id
-      - kind
-      - path
-      - postedAt
-      - side
-      - startLine
-      - state
-    CopySupport:
-      type: object
-      properties:
-        basedOn:
-          type: array
-          items:
-            $ref: "#/components/schemas/Support"
-        kind:
-          type: string
-          enum:
-          - SUMMARY
-          - LINE_NOTE
-          - FILE_NOTE
-          - CHAT_TURN
-        position:
-          type: integer
-          format: int32
     Coverage:
       type: object
       properties:
@@ -15326,70 +15109,6 @@ components:
             \ no recipient to resolve"
       required:
       - outcome
-    Entry:
-      type: object
-      properties:
-        basedOn:
-          type: array
-          items:
-            $ref: "#/components/schemas/Basis"
-        body:
-          type:
-          - string
-          - "null"
-        bodyUnavailable:
-          type: boolean
-        copies:
-          type: array
-          items:
-            $ref: "#/components/schemas/Copy"
-        currentness:
-          type: string
-          enum:
-          - CURRENT
-          - STALE
-          - UNVERIFIABLE
-        deliveredAt:
-          type: string
-          format: date-time
-        destination:
-          type: string
-          enum:
-          - ON_WORK
-          - PRACTICE_PAGE
-          - CONVERSATION
-        id:
-          type: string
-          format: uuid
-        itemVersion:
-          type:
-          - string
-          - "null"
-        state:
-          type: string
-          enum:
-          - AWAITING_APPROVAL
-          - READY
-          - DELIVERED
-          - UNCONFIRMED
-          - WITHHELD
-          - REJECTED
-          - REPLACED
-          - FAILED
-        withdrawn:
-          type: boolean
-      required:
-      - basedOn
-      - body
-      - bodyUnavailable
-      - copies
-      - currentness
-      - deliveredAt
-      - destination
-      - id
-      - itemVersion
-      - state
-      - withdrawn
     ErasureRequest:
       type: object
       properties:
@@ -15639,28 +15358,6 @@ components:
       - incorrectBasis
       - modelAllowed
       - writeStarted
-    FeedbackCompositionTrace:
-      type: object
-      description: |-
-        Exact support and quiet decisions retained with the immutable preparation receipt. A public piece also retains the
-         publication context of the history read it was composed from; the server sets it, never the composer.
-      properties:
-        copies:
-          type: array
-          items:
-            $ref: "#/components/schemas/CopySupport"
-        primaryResultId:
-          type: string
-          format: uuid
-        publicationContext:
-          type: string
-        replacesId:
-          type: string
-          format: uuid
-        withheld:
-          type: array
-          items:
-            $ref: "#/components/schemas/QuietDecision"
     FeedbackCopy:
       type: object
       properties:
@@ -16476,15 +16173,6 @@ components:
       - icon
       - name
       - slug
-    History:
-      type: object
-      properties:
-        feedback:
-          type: array
-          items:
-            $ref: "#/components/schemas/Entry"
-        item:
-          $ref: "#/components/schemas/ItemRef"
     HostCoverage:
       allOf:
       - $ref: "#/components/schemas/ResultCoverage"
@@ -18144,19 +17832,6 @@ components:
       - practiceSlug
       - reason
       - status
-    Note:
-      type: object
-      properties:
-        body:
-          type: string
-        citationIndex:
-          type: integer
-          format: int32
-        problemId:
-          type: string
-          format: uuid
-      required:
-      - citationIndex
     NotificationPreferences:
       type: object
       properties:
@@ -18538,15 +18213,6 @@ components:
       - item
       - results
       - review
-    Page:
-      type: object
-      properties:
-        body:
-          type: string
-        nextStep:
-          type: string
-        title:
-          type: string
     PageMetadata:
       properties:
         number:
@@ -20905,58 +20571,6 @@ components:
       - reviewedWork
       - window
       - yourPractices
-    PrepareFeedbackRequest:
-      type: object
-      properties:
-        attempt:
-          type: integer
-          format: int32
-        basisResultIds:
-          type: array
-          items:
-            type: string
-            format: uuid
-        composition:
-          type: array
-          items:
-            $ref: "#/components/schemas/ComposedFeedback"
-        jobId:
-          type: string
-          format: uuid
-        publicComposition:
-          type: boolean
-        publicationContext:
-          type:
-          - string
-          - "null"
-        reviewId:
-          type: string
-          format: uuid
-      required:
-      - attempt
-      - basisResultIds
-      - composition
-      - jobId
-      - publicComposition
-      - publicationContext
-      - reviewId
-    PrepareFeedbackResponse:
-      type: object
-      properties:
-        contentDigest:
-          type: string
-        feedbackIds:
-          type: array
-          items:
-            type: string
-            format: uuid
-        preparedAt:
-          type: string
-          format: date-time
-      required:
-      - contentDigest
-      - feedbackIds
-      - preparedAt
     PreviewRequest:
       type: object
       properties:
@@ -21789,29 +21403,6 @@ components:
       required:
       - allowSearchEngines
       - enabled
-    PublicFeedbackHistory:
-      type: object
-      description: |-
-        One authorized history read. <code>publicationContext</code> names this exact response: preparation of a public piece
-         composed from it must send it back unchanged.
-      properties:
-        contractVersion:
-          type: integer
-          format: int32
-        history:
-          $ref: "#/components/schemas/History"
-        publicationContext:
-          type:
-          - string
-          - "null"
-        readAt:
-          type: string
-          format: date-time
-      required:
-      - contractVersion
-      - history
-      - publicationContext
-      - readAt
     Question:
       type: object
       properties:
@@ -21943,21 +21534,6 @@ components:
       - preparedAt
       - recordedClaimCurrentness
       - threadKey
-    QuietDecision:
-      type: object
-      description: "Why results stay unsaid: the composer's reason with the prior\
-        \ advice it rests on, or NOT_COMPOSED."
-      properties:
-        basedOn:
-          type: array
-          items:
-            $ref: "#/components/schemas/Support"
-        reason:
-          type: string
-        witnessIds:
-          type: array
-          items:
-            type: string
     RateLimitSnapshot:
       type: object
       description: "Vendor API rate-limit observation, read from in-memory trackers\
@@ -26428,15 +26004,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ReadReceipt"
-    Support:
-      type: object
-      properties:
-        problemId:
-          type: string
-          format: uuid
-        resultId:
-          type: string
-          format: uuid
     SupportOccurrence:
       type: object
       properties:

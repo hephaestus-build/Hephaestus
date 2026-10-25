@@ -5,7 +5,6 @@ import {
 	admittedResultSchema,
 	admit,
 	parseAdmission,
-	leanResults,
 } from "../../../main/resources/agent/pi-admitted-results.ts";
 
 import { isJsonObject } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
@@ -21,20 +20,6 @@ const admitted = {
 	],
 	explanation: "An authentication call is unguarded.",
 };
-
-void test("admission projection preserves evidence and gives composition stable citation and problem references", () => {
-	const result = admittedResultSchema.parse(admitted);
-	assert.equal(result.explanation, admitted.explanation);
-	assert.deepEqual(result.citations, [{ ...admitted.evidence.citations[0], index: 0 }]);
-	assert.deepEqual(result.problems, [
-		{
-			problemId: "problem-1",
-			severity: "MAJOR",
-			citations: [{ quote: "insecure()", anchorable: true, index: 0 }],
-		},
-	]);
-	assert.equal(leanResults([result])[0]?.problems[0]?.citations[0]?.anchorable, true);
-});
 
 void test("admission rejects an invalid identity, unknown outcome and a verdict inconsistent with its problems", () => {
 	for (const result of [
@@ -63,35 +48,8 @@ void test("admission accepts the unchanged raw response", () => {
 	assert.doesNotThrow(() => parseAdmission(response));
 });
 
-void test("admission refuses the version 3 answer and an answer without private progress", () => {
-	const { privateProgress: _progress, ...withoutProgress } = response;
-	assert.throws(() =>
-		parseAdmission({ ...withoutProgress, contractVersion: 3, privatePrepared: false }),
-	);
-	assert.throws(() => parseAdmission({ ...withoutProgress, privatePrepared: false }));
-});
-
-void test("earlier private progress decides only the practices of results this admission holds", () => {
-	const admission = parseAdmission(response);
-	const result = admission.results[0];
-	assert.ok(result);
-	assert.deepEqual(admission.privateProgress, {
-		decidedPractices: [],
-		deliveries: { PRACTICE_PAGE: 0, CONVERSATION: 0 },
-	});
-	const progressed = parseAdmission({
-		...response,
-		privateProgress: {
-			// The second id belongs to no admitted result: it decides nothing here.
-			decidedResultIds: [result.resultId, "00000000-0000-4000-8000-00000000abcd"],
-			practicePageDeliveries: 1,
-			conversationDeliveries: 0,
-		},
-	});
-	assert.deepEqual(progressed.privateProgress, {
-		decidedPractices: [result.practiceSlug],
-		deliveries: { PRACTICE_PAGE: 1, CONVERSATION: 0 },
-	});
+void test("admission refuses the version 3 answer", () => {
+	assert.throws(() => parseAdmission({ ...response, contractVersion: 3 }));
 });
 
 void test("admission retries an interrupted answer with the exact frozen request", async () => {
@@ -129,17 +87,6 @@ for (const [field, value, path] of [
 	["contractVersion", 3, ["contractVersion"]],
 	["admissionDigest", "not a digest", ["admissionDigest"]],
 	["withheld", [{ practiceSlug: "names-things" }], ["withheld", 0, "reason"]],
-	["publicReviewed", "false", ["publicReviewed"]],
-	[
-		"privateProgress",
-		{ decidedResultIds: ["result-1"], practicePageDeliveries: 0, conversationDeliveries: 0 },
-		["privateProgress", "decidedResultIds", 0],
-	],
-	[
-		"privateProgress",
-		{ decidedResultIds: [], practicePageDeliveries: -1, conversationDeliveries: 0 },
-		["privateProgress", "practicePageDeliveries"],
-	],
 ] as const) {
 	void test(`admission rejects malformed ${field} at its issue path`, () => {
 		assert.throws(

@@ -16,8 +16,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * One composer conversation with the attempt's frozen chat model: the system prompt, the turns, the tools and what the
- * model called. It speaks the two chat protocols the proxy serves, with the request fields the sandbox runner's model
- * client sends on them, and it never streams.
+ * model called. It speaks the two chat protocols the proxy serves, and it never streams.
  */
 final class ModelSession {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;

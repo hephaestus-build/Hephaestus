@@ -132,11 +132,6 @@ class PracticeRunnerLiveLlmTest {
     private void runAndVerify(LiveLlmCredentials creds, ProxyStandIn proxy, @Nullable JsonNode scenario)
             throws Exception {
         Map<String, String> environment = stageWorkspace(creds, scenario);
-        // Live measurements run without a composition request or ambient credential to prevent provider feedback
-        // writes.
-        assertThat(Files.exists(WORKSPACE.resolve(SandboxLayout.FEEDBACK_COMPOSITION_PATH)))
-                .as("live harness does not request feedback composition")
-                .isFalse();
         Process runner =
                 LiveRunnerWorkspace.spawn(WORKSPACE, environment, proxy.baseUrl(), "live-test-job-token", null);
 

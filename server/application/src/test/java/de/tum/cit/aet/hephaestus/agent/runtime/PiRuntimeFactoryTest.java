@@ -36,11 +36,6 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
         }
 
         @Override
-        public List<String> promptResources() {
-            return PRACTICE.promptResources();
-        }
-
-        @Override
         public Map<String, String> additionalEnv() {
             return Map.of();
         }
@@ -123,9 +118,6 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
                     SandboxLayout.RUNNER_SCRIPT_FILENAME, plan.inputFiles().get(SandboxLayout.RUNNER_SCRIPT_FILENAME));
             for (String sidecar : PRACTICE.sidecarScripts()) {
                 scaffolding.put(sidecar, plan.inputFiles().get(sidecar));
-            }
-            for (String prompt : PRACTICE.promptResources()) {
-                scaffolding.put(prompt, plan.inputFiles().get(prompt));
             }
 
             assertThat(plan.promptDigest()).isEqualTo(ProvenanceDigest.rootDigestHex(scaffolding));

@@ -43,3 +43,7 @@ in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/
 in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry added the new `NOT_COMPOSED` enum value to the `copies/items/stopReason` response property for the response status `202`
 in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry added the new `NOT_COMPOSED` enum value to the `stopReason` response property for the response status `202`
 in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/feedback-checks added the new `NOT_COMPOSED` enum value to the `items/reason` response property for the response status `200`
+
+# #3238: the review sandbox composes nothing, so its two internal composition routes are removed. Only the sandbox called them.
+in API POST /internal/llm/prepare-feedback api path removed without deprecation
+in API POST /internal/llm/public-feedback-history api path removed without deprecation

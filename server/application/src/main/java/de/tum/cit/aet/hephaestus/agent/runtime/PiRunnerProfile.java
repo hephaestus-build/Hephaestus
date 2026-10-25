@@ -29,9 +29,7 @@ public interface PiRunnerProfile {
             SandboxLayout.PI_AGENT_DIR,
             // The SDK writes one JSONL file per session, from the session's first message on.
             SandboxLayout.WORKSPACE_ROOT + "/" + SandboxLayout.SESSIONS_DIR,
-            // pi-runner.ts writes work/composition/results.json, the admitted results it
-            // composes feedback from, and work/notes/review.md, its record of what the review recorded.
-            SandboxLayout.WORKSPACE_ROOT + "/" + SandboxLayout.WORK_PREFIX + "composition",
+            // pi-runner.ts writes work/notes/review.md, its record of what the review recorded.
             SandboxLayout.WORKSPACE_ROOT + "/" + SandboxLayout.WORK_PREFIX + "notes",
             SandboxLayout.OUTPUT_PATH,
             AGENT_TMPDIR);
@@ -56,16 +54,6 @@ public interface PiRunnerProfile {
      * Each is staged at the workspace root next to the runner so the import resolves. Empty by default.
      */
     default List<String> sidecarScripts() {
-        return List.of();
-    }
-
-    /**
-     * Prompt files this runner reads from the workspace root by name (e.g. the composition stage's
-     * instructions). Staged like the sidecars, and digested with the rest of the prompt scaffolding —
-     * they ARE prompt content, so a run's recorded prompt version must move when they do. Empty by
-     * default.
-     */
-    default List<String> promptResources() {
         return List.of();
     }
 

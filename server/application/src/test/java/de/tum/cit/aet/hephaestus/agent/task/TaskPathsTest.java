@@ -16,7 +16,6 @@ class TaskPathsTest extends BaseUnitTest {
                 "repos/project",
                 "manifest.json",
                 "catalog/index.json",
-                "composition.json",
                 "history/prepared.json",
                 "scripts/practices");
         assertThat(paths.contextRoot()).isEqualTo("areas/scm");
@@ -43,7 +42,7 @@ class TaskPathsTest extends BaseUnitTest {
                 "area\u0085file"
             })
     void shouldRejectUnsafeOrNonNormalizedPaths(String path) {
-        assertThatThrownBy(() -> new TaskPaths(path, "repo", "manifest", "index", "composition", "prepared", "scripts"))
+        assertThatThrownBy(() -> new TaskPaths(path, "repo", "manifest", "index", "prepared", "scripts"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("workspace-relative");
     }

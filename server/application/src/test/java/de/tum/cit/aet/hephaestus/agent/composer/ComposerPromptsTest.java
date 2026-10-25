@@ -9,7 +9,7 @@ import java.util.Objects;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-/** The worker's composers use the voice, placement and contracts the runner's golden file holds. */
+/** The worker's composers use the voice, placement and contracts the golden file holds. */
 @Tag("unit")
 class ComposerPromptsTest {
 

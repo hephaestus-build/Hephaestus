@@ -9,18 +9,11 @@ public record TaskPaths(
         String repositoryRoot,
         String manifest,
         String practiceIndex,
-        String compositionRequest,
         String preparedFeedback,
         String practiceScripts) {
     public TaskPaths {
-        for (String path : List.of(
-                contextRoot,
-                repositoryRoot,
-                manifest,
-                practiceIndex,
-                compositionRequest,
-                preparedFeedback,
-                practiceScripts)) {
+        for (String path :
+                List.of(contextRoot, repositoryRoot, manifest, practiceIndex, preparedFeedback, practiceScripts)) {
             if (path.matches("\\p{Z}*")
                     || path.startsWith("/")
                     || path.indexOf('\\') >= 0
@@ -42,7 +35,6 @@ public record TaskPaths(
                 SandboxLayout.REPO_MOUNT_RELATIVE.replaceFirst("/$", ""),
                 SandboxLayout.MANIFEST_PATH,
                 SandboxLayout.PRACTICES_PREFIX + "index.json",
-                SandboxLayout.FEEDBACK_COMPOSITION_PATH,
                 SandboxLayout.HISTORY_PREFIX + "prepared.json",
                 SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX.replaceFirst("/$", ""));
     }

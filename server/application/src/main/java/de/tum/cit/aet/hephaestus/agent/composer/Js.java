@@ -11,8 +11,9 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The JavaScript value semantics the ported renderers and checks rely on. A {@code MissingNode} is JavaScript's
- * {@code undefined}, a {@code NullNode} its {@code null}; read fields with {@code path}, never {@code get}.
+ * The value semantics the renderers and checks rely on: a {@code MissingNode} is an absent value and a
+ * {@code NullNode} an explicit null, as the JSON the prompts show keeps them apart. Read fields with {@code path},
+ * never {@code get}.
  */
 final class Js {
     private Js() {}
@@ -70,7 +71,7 @@ final class Js {
                 || c == 0xFEFF;
     }
 
-    /** A non-blank string, or null: the runner's {@code textOf}. */
+    /** A non-blank string, or null. */
     static @Nullable String textOf(JsonNode value) {
         return value.isString() && !blank(value.asString()) ? value.asString() : null;
     }

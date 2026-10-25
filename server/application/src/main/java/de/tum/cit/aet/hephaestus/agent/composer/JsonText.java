@@ -6,8 +6,8 @@ import java.util.Map;
 import tools.jackson.databind.JsonNode;
 
 /**
- * JSON text as JavaScript's {@code JSON.stringify(value, null, indent)} writes it: the composer prompts embed such
- * blocks, and the model reads the same bytes the sandbox runner showed it.
+ * JSON text as JavaScript's {@code JSON.stringify(value, null, indent)} writes it. The prompts embed such blocks in
+ * this layout, which the golden fixtures record; Jackson's pretty printer spaces and escapes them differently.
  */
 final class JsonText {
     private JsonText() {}

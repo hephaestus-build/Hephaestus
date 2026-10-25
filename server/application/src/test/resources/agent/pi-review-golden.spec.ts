@@ -30,6 +30,7 @@ import {
 
 // Run each golden capture in its own process; runner paths and state are module-local.
 
+import { SUPPORTED_SCHEMA_VERSION } from "../../../main/resources/agent/pi-task-paths.ts";
 import { mockChange, mockPiCodingAgent } from "./program-host-runner.ts";
 
 const GOLDEN = nodePath.join(import.meta.dirname, "golden-prompts");
@@ -76,7 +77,7 @@ function runScenario(name: string): Map<string, string> {
 	try {
 		stageGoldenWorkspace(
 			cwd,
-			6,
+			SUPPORTED_SCHEMA_VERSION,
 			readFileSync(
 				new URL("../../../main/resources/agent/pi-orchestrator.md", import.meta.url),
 				"utf8",
@@ -269,16 +270,8 @@ if (scenario !== undefined && scenario !== "") {
 		return Response.json({
 			contractVersion: 4,
 			admissionDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			publicReviewed: false,
-			privateProgress: {
-				decidedResultIds: [],
-				practicePageDeliveries: 0,
-				conversationDeliveries: 0,
-			},
 			admitted: [],
 			withheld: [],
-			practicePageSupport: null,
-			conversationEligibility: null,
 		});
 	});
 	const manager = {

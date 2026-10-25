@@ -1,13 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import {
-	existsSync,
-	mkdtempSync,
-	realpathSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { mkdtempSync, realpathSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { after, test } from "node:test";
@@ -235,7 +228,7 @@ void test("the execution report has one entry for each admitted practice, sorted
 	);
 });
 
-void test("the admission request is result.json and review-state.json, sorted by slug, sent after the review input is removed", () => {
+void test("the admission request is result.json and review-state.json, sorted by slug", () => {
 	const admissions = capturedLines(main.cwd, "admission");
 	assert.equal(admissions.length, 1);
 	const [admission] = admissions;
@@ -246,8 +239,6 @@ void test("the admission request is result.json and review-state.json, sorted by
 		contractVersion: 3,
 		results: [{ practiceSlug: "a-direct" }, { practiceSlug: "b-builtin" }],
 	});
-	assert.equal(field(admission, "reviewInputPresent"), false);
-	assert.equal(existsSync(nodePath.join(main.cwd, "work/review-input")), false);
 	assert.deepEqual(capturedLines(main.cwd, "change-view"), [true]);
 });
 
@@ -278,40 +269,4 @@ void test("a practice that the run's safety line stops before it starts is repor
 	});
 	const prompted = capturedLines(stopped.cwd, "prompts").map((line) => field(line, "slug"));
 	assert.equal(prompted.includes("c-never"), false);
-});
-
-void test("a composition continuation derives no change, runs no program and writes no execution report", async () => {
-	const continued = await run(
-		[
-			{ slug: "a-direct", program: directProgram('ctx.log("the program ran");') },
-			{ slug: "b-builtin" },
-		],
-		{},
-		{},
-		(cwd) => {
-			writeFileSync(
-				nodePath.join(cwd, "evidence/composition-continuation.json"),
-				JSON.stringify({
-					contractVersion: 4,
-					admissionDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-					publicReviewed: false,
-					privateProgress: {
-						decidedResultIds: [],
-						practicePageDeliveries: 0,
-						conversationDeliveries: 0,
-					},
-					admitted: [],
-					withheld: [],
-					practicePageSupport: null,
-					conversationEligibility: null,
-				}),
-			);
-		},
-	);
-	assert.equal(continued.status, 0, continued.stderr);
-	assert.doesNotMatch(continued.stderr, /the program ran/u);
-	assert.deepEqual(capturedLines(continued.cwd, "prompts"), []);
-	assert.deepEqual(capturedLines(continued.cwd, "admission"), []);
-	assert.deepEqual(capturedLines(continued.cwd, "change-view"), []);
-	assert.equal(existsSync(nodePath.join(continued.cwd, "out/practice-scripts.json")), false);
 });
