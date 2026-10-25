@@ -228,7 +228,7 @@ const onWork = (event: ProfileEvent, joiner: string | undefined): FeedbackTextSe
  */
 const backToClean = (event: ProfileEvent): string =>
 	event.cleanNeeded === undefined
-		? "back to none clean in a row"
+		? "back to no clean work in a row"
 		: `back to none of ${event.cleanNeeded} clean in a row`;
 
 /**
@@ -270,9 +270,8 @@ const standingOf = (event: ChangeEvent) => event.label ?? "a new standing";
 const trendShown = (event: ChangeEvent) => event.label ?? "a new trend";
 
 /**
- * A standing that moved says whose it is: the reader's. "Moved to Mixed feedback" left a student
- * asking what had moved. A practice and its group share the words, so a group that moved with its
- * practices is said once with them.
+ * A standing that moved says whose it is: the reader's, not the group's alone. A practice and its
+ * group share the words, so a group that moved with its practices is said once with them.
  */
 const MOVED = {
 	predicate: (event, plural) => `${plural ? "are" : "is"} now at ${standingOf(event)} for you`,

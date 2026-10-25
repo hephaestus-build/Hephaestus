@@ -712,8 +712,6 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
                 .findFirst()
                 .orElseThrow();
         assertThat(card.evidence()).hasSize(1);
-        // The card's timeline draws each piece by what the review made of it.
-        assertThat(card.evidence().getFirst().outcome()).isEqualTo(supportingResult.getOutcome());
         return card.evidence().getFirst().item();
     }
 

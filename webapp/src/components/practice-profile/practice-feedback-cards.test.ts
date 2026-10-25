@@ -47,7 +47,6 @@ const evidence = (n: number, recordedAt: string): PracticePageEvidence => ({
 	item: pullRequest(n),
 	recordedAt: new Date(recordedAt),
 	summary: null,
-	outcome: "NOT_MET",
 });
 
 const feedback: PracticePageFeedback = {

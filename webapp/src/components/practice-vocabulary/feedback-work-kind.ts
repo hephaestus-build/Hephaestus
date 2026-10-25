@@ -5,6 +5,9 @@ import { count } from "./feedback-text";
 
 type WorkRef = Pick<ItemRef, "id" | "kind" | "provider">;
 
+/** One piece of work's identity across kinds: an issue and a pull request can share a number. */
+export const workKey = (ref: Pick<ItemRef, "id" | "kind">) => `${ref.kind} ${ref.id}`;
+
 /** What a feedback card's head says about the work the pattern recurs in. */
 export interface WorkSeenIn<TRef extends WorkRef = WorkRef> {
 	/**
@@ -29,7 +32,7 @@ export interface WorkSeenIn<TRef extends WorkRef = WorkRef> {
 export function workSeenIn<TRef extends WorkRef>(
 	refs: readonly TRef[],
 ): WorkSeenIn<TRef> | undefined {
-	const distinct = new Map(refs.map((ref) => [`${ref.kind} ${ref.id}`, ref]));
+	const distinct = new Map(refs.map((ref) => [workKey(ref), ref]));
 	const pieces = [...distinct.values()];
 	if (pieces.length === 0) {
 		return undefined;

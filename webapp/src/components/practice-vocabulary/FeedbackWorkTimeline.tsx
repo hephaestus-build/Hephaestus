@@ -1,4 +1,3 @@
-import { CircleDotIcon } from "lucide-react";
 import { type ComponentProps, Fragment, type ReactNode, useLayoutEffect, useRef } from "react";
 
 import { cn } from "cn";
@@ -17,8 +16,6 @@ const OUTCOME_WORDS: Record<Outcome, string> = {
 	COULD_NOT_DETERMINE: "not decided",
 };
 
-const EVIDENCE_WORDS = "evidence for this feedback";
-
 /**
  * Half the thin line between two places on the timeline, from the edge of one to the middle of the
  * gap: green where it joins two clean pieces of the run, dashed towards the places still missing,
@@ -35,9 +32,9 @@ type Joint = "clean" | "plain" | "missing" | "none";
  */
 const DASHES = {
 	/** The half before a place: from the middle, dash first. */
-	before: "bg-[repeating-linear-gradient(to_right,currentColor_0_3px,transparent_3px_6px)] bg-left",
+	before: "bg-[repeating-linear-gradient(to_right,currentColor_0_3px,transparent_3px_6px)]",
 	/** The half after a place: back from the middle, gap first. */
-	after: "bg-[repeating-linear-gradient(to_left,transparent_0_3px,currentColor_3px_6px)] bg-right",
+	after: "bg-[repeating-linear-gradient(to_left,transparent_0_3px,currentColor_3px_6px)]",
 } as const;
 
 function JointLine({ kind, side }: { kind: Joint; side: "before" | "after" }) {
@@ -206,8 +203,8 @@ export function FeedbackWorkTimeline({
 				{pieces.map((piece, index) => {
 					// The outcome's own icon in its own tone, as the profile and the admin pages draw it. Clean
 					// work before the feedback is muted: only the work since counts towards resolving it.
-					const def = piece.outcome === undefined ? undefined : OUTCOME_DEFS[piece.outcome];
-					const Icon = def?.icon ?? CircleDotIcon;
+					const def = OUTCOME_DEFS[piece.outcome];
+					const Icon = def.icon;
 					const beforeFeedback = index < split;
 					return (
 						<Fragment key={piece.key}>
@@ -221,7 +218,7 @@ export function FeedbackWorkTimeline({
 										data-before-feedback={beforeFeedback ? "" : undefined}
 										className={cn(
 											"size-4 shrink-0",
-											def === undefined || (beforeFeedback && piece.outcome === "MET")
+											beforeFeedback && piece.outcome === "MET"
 												? "text-muted-foreground"
 												: statusToneClass(def.badgeVariant),
 										)}
@@ -242,8 +239,7 @@ export function FeedbackWorkTimeline({
 									>
 										<span aria-hidden>{formatShortDay(piece.date)}</span>
 										<span className="sr-only">
-											, {formatDay(piece.date)},{" "}
-											{piece.outcome === undefined ? EVIDENCE_WORDS : OUTCOME_WORDS[piece.outcome]}
+											, {formatDay(piece.date)}, {OUTCOME_WORDS[piece.outcome]}
 											{beforeFeedback && ", before this feedback"}
 										</span>
 									</time>

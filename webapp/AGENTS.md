@@ -438,6 +438,11 @@ A card has a wash in exactly two states: new, in the accent, and resolved by the
 A card that the reader marked as addressed or not applicable closes on the neutral ground.
 `success` is the only status color that paints a surface.
 
+The next step band is the card's call to action while the reader can still act on it.
+On open feedback (`isOpenFeedback`: new and open), the band takes the accent wash, the accent edge, and the accent icon.
+On a card that the work resolved, it takes the `success` wash.
+On a marked or closed card, it keeps the neutral `bg-sidebar` ground and a muted icon.
+
 ## Testing
 
 `getByRole` > `getByLabelText` > `getByText`, and the ladder ends there: a `data-testid` skips past the

@@ -248,8 +248,7 @@ public class PracticePageFeedbackService {
                                         result.getReviewId(),
                                         Objects.requireNonNull(references.get(result.getItemId())),
                                         result.getSummary(),
-                                        result.getRecordedAt(),
-                                        result.getOutcome()))
+                                        result.getRecordedAt()))
                                 .toList(),
                 feedback.getCreatedAt(),
                 readAt,

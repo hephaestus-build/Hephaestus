@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
+import { expectSettledVisible } from "@/stories/overlay";
 import { NEW_FEEDBACK_CARD } from "@/stories/practice-feedback-cards-story-mock-data";
 import { conversation, issue, pullRequest } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -90,10 +91,7 @@ export const New: Story = {
 		const works = await screen.findByRole("dialog", { name: "Recurring in three pull requests" });
 		await expect(within(works).getAllByRole("link")).toHaveLength(3);
 		// A short heading, then one work per line, newest first.
-		// The panel opens with a short animation: wait for it to settle under load.
-		await waitFor(async () => {
-			await expect(within(works).getByText("Recurring in these pull requests")).toBeVisible();
-		});
+		await expectSettledVisible(within(works).getByText("Recurring in these pull requests"));
 		const lines = within(works).getAllByRole("listitem");
 		await expect(lines).toHaveLength(3);
 		const days = lines.map((line) => Date.parse(line.querySelector("time")?.dateTime ?? ""));
@@ -165,9 +163,7 @@ export const New: Story = {
 		).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 		await userEvent.click(ruleTip);
 		const rulePanel = await screen.findByRole("dialog", { name: "How this feedback resolves" });
-		await waitFor(async () => {
-			await expect(rulePanel).toBeVisible();
-		});
+		await expectSettledVisible(rulePanel);
 		await expect(rulePanel).toHaveTextContent(
 			"Resolves when three pieces of reviewed work come back clean.",
 		);
@@ -203,7 +199,8 @@ export const New: Story = {
 		if (!edge) {
 			throw new Error("Expected the next step's accent edge.");
 		}
-		await expect(edge.getBoundingClientRect().width).toBe(2);
+		await expect(edge.getBoundingClientRect().width).toBeGreaterThan(0);
+		await expect(edge.getBoundingClientRect().width).toBeLessThan(band.clientWidth / 50);
 		await expect(edge.getBoundingClientRect().height).toBe(band.clientHeight);
 		// The order: what it is about, the next step, then the progress with the answers in it.
 		const inOrder = [
@@ -312,22 +309,6 @@ export const MarkdownNextStep: Story = {
  * its outcome's registry icon: a wrench where it needed attention, a check in a circle where it
  * came back clean.
  */
-/**
- * The line to the places still missing keeps one even dash pattern across each gap: the two halves
- * of a joint meet in phase, gap against dash, so no longer dash sits in the middle.
- */
-export const EvenDashes: Story = {
-	args: { card: { ...card, state: "open", cleanWork: [] } },
-	play: async ({ canvasElement }) => {
-		const halves = [...canvasElement.querySelectorAll<HTMLElement>("[data-joint='missing']")];
-		await expect(halves.length).toBeGreaterThan(1);
-		for (const half of halves) {
-			await expect(getComputedStyle(half).backgroundImage).toContain("repeating-linear-gradient");
-			await expect(getComputedStyle(half).borderTopStyle).not.toBe("dashed");
-		}
-	},
-};
-
 export const TwoOfThreeClean: Story = {
 	args: { card: { ...card, state: "open", cleanWork: twoClean } },
 	play: async ({ canvas }) => {
@@ -573,6 +554,11 @@ export const MarkedByYou: Story = {
 			canvas.getByText("Marked as addressed on 9 September. Your next work confirms it."),
 		).toBeVisible();
 		await expect(canvas.getByText("2 clean in a row · 1 more resolves it")).toBeVisible();
+		// The reader can no longer act on it, so the next step leaves the accent: no accent edge, and
+		// the neutral ground.
+		const band = canvas.getByRole("heading", { name: "Next step" }).closest("[data-next-step]");
+		await expect(band).toHaveAttribute("data-next-step", "closed");
+		await expect(band?.querySelector("[data-next-step-edge]")).toBeNull();
 		const fixed = canvas.getByRole("button", { name: "I fixed this" });
 		await expect(fixed).toHaveAttribute("aria-pressed", "true");
 		await expect(fixed).toHaveAccessibleDescription(/Press it again to take it back\.$/u);

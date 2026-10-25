@@ -26,7 +26,7 @@ import { FEEDBACK_RESOLUTION_DEFS, type FeedbackResolution } from "./feedback-re
 import { FEEDBACK_STATE_DEFS, type FeedbackState, isOpenFeedback } from "./feedback-state-defs";
 import { count, type FeedbackTextSegment, linkWork } from "./feedback-text";
 import { FEEDBACK_USEFULNESS_DEFS, type FeedbackUsefulness } from "./feedback-usefulness-defs";
-import { type WorkSeenIn, workSeenIn } from "./feedback-work-kind";
+import { type WorkSeenIn, workKey, workSeenIn } from "./feedback-work-kind";
 import { FeedbackText } from "./FeedbackText";
 import { FeedbackWorkTimeline } from "./FeedbackWorkTimeline";
 import type { Outcome } from "./outcome-defs";
@@ -46,15 +46,14 @@ export type ResolvingAnswer = Exclude<FeedbackResolution, "DISAGREE">;
 
 /**
  * One piece of reviewed work on the card's timeline — the evidence behind the feedback — with
- * what the review saw on it where the record says so. Practice-page evidence carries no outcome,
- * and the timeline invents none for it.
+ * what the review saw on it.
  */
 export interface ReviewedWorkOutcome {
 	/** The work by number — "!425" — linked to its page when the provider has one. */
 	ref: ItemRef;
 	/** When the work was reviewed; the timeline orders by it and shows it as the short day, "28 Aug". */
 	date: Date;
-	outcome?: Outcome;
+	outcome: Outcome;
 }
 
 /**
@@ -248,14 +247,11 @@ const CARD_LINK_STATE =
 const ZONE_HEADING = "text-sm font-semibold text-foreground";
 
 /**
- * The card's edge and its inner rules. Students read the inner rules as the card's end when both
- * had one strength, so the outer edge is the one strong line, with a faint shadow, and the rules
- * inside are half as strong.
+ * The card's edge and its inner rules: the outer edge is the one strong line, with a faint shadow,
+ * and the rules inside are half as strong, so no inner rule reads as the card's end.
  */
 const CARD_EDGE = "rounded-xl border border-foreground/15 bg-background shadow-sm";
 const INNER_RULE = "border-border/50";
-
-const workKey = (ref: { kind: string; id: string | number }) => `${ref.kind} ${ref.id}`;
 
 function UnverifiedHistoryNotice({ unverified }: { unverified?: boolean }) {
 	return unverified === true ? (
@@ -465,7 +461,7 @@ export function PracticeFeedbackCard({
 				)}
 			</div>
 
-			<NextStepBand resolved={resolved} nextStep={nextStep} />
+			<NextStepBand tone={nextStepTone(state)} nextStep={nextStep} />
 
 			{/*
 			 * Work reviewed for this practice: on the left, where the practice was seen, along the timeline; on the
@@ -637,38 +633,53 @@ export function PracticeFeedbackCard({
 }
 
 /**
- * What to do: the card's call to action. A calm mentor wash with a 2 px accent on its left edge,
- * drawn as its own strip and not as a border, so it meets the rules above and below square instead
- * of in a mitred corner, and the band stays unpositioned under the card's link. Once the work
- * resolved the feedback, the band wears the success wash and leads with the green tick instead.
+ * What to do. On open feedback it is the card's call to action: a calm mentor wash with a 2 px
+ * accent on its left edge, drawn as its own strip and not as a border, so it meets the rules above
+ * and below square instead of in a mitred corner, and the band stays unpositioned under the card's
+ * link. Once the work resolved the feedback, the band wears the success wash and leads with the
+ * green tick. Feedback the reader marked, or a practice change closed, keeps the neutral ground
+ * (`webapp/AGENTS.md` § Practice surfaces palette).
  */
-function NextStepBand({ resolved, nextStep }: { resolved: boolean; nextStep: string }) {
+type NextStepTone = "open" | "resolved" | "closed";
+
+function nextStepTone(state: FeedbackState): NextStepTone {
+	if (state === "resolved") {
+		return "resolved";
+	}
+	return isOpenFeedback(state) ? "open" : "closed";
+}
+
+function NextStepBand({ tone, nextStep }: { tone: NextStepTone; nextStep: string }) {
 	return (
 		<div
-			data-next-step=""
+			data-next-step={tone}
 			className={cn(
 				"flex border-y",
 				INNER_RULE,
-				resolved ? "bg-success/10 dark:bg-success/15" : "bg-mentor/5 dark:bg-mentor/10",
+				tone === "open" && "bg-mentor/5 dark:bg-mentor/10",
+				tone === "resolved" && "bg-success/10 dark:bg-success/15",
+				tone === "closed" && "bg-sidebar",
 			)}
 		>
-			{!resolved && (
+			{tone === "open" && (
 				<span aria-hidden data-next-step-edge="" className="w-0.5 shrink-0 bg-mentor" />
 			)}
 			<div
 				className={cn(
 					"grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 py-3 pr-4",
-					resolved ? "pl-4" : "pl-3.5",
+					tone === "open" ? "pl-3.5" : "pl-4",
 				)}
 			>
 				<span className="flex h-5 items-center" aria-hidden>
-					{resolved ? (
+					{tone === "resolved" ? (
 						<span className="inline-flex size-4 items-center justify-center rounded-full bg-success">
 							<CheckIcon className="size-3 text-success-foreground" strokeWidth={3} />
 						</span>
 					) : (
 						// Footprints: the steps to take next, not the card's state, which its badge says.
-						<FootprintsIcon className="size-4 text-mentor" />
+						<FootprintsIcon
+							className={cn("size-4", tone === "open" ? "text-mentor" : "text-muted-foreground")}
+						/>
 					)}
 				</span>
 				<div className="flex min-w-0 flex-col gap-1">
@@ -703,12 +714,7 @@ export function PracticeFeedbackCardSkeleton() {
 				</div>
 				<Skeleton className="h-5 w-52 self-end" />
 			</div>
-			<div
-				className={cn(
-					"flex flex-col gap-1 border-y bg-mentor/5 px-4 py-3 pl-12 dark:bg-mentor/10",
-					INNER_RULE,
-				)}
-			>
+			<div className={cn("flex flex-col gap-1 border-y bg-sidebar px-4 py-3 pl-12", INNER_RULE)}>
 				<Skeleton className="h-5 w-20" />
 				<Skeleton className="h-5 w-full max-w-xl" />
 			</div>

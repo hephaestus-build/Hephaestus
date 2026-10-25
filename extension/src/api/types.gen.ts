@@ -3622,10 +3622,6 @@ export type PracticePageCleanWork = {
 
 export type PracticePageEvidence = {
     item: ItemRef;
-    /**
-     * What the review made of the practice on this work, so the timeline can draw it
-     */
-    outcome: 'MET' | 'NOT_MET' | 'DOES_NOT_APPLY' | 'COULD_NOT_DETERMINE';
     recordedAt: string;
     resultId: string;
     reviewId: string;

@@ -163,7 +163,7 @@ describe("a fall back", () => {
 			}),
 			"review-ready-work",
 		).practiceSentences;
-		expect(plainBullets(sentences["diff-size"])).toBe("Back to none clean in a row after !425.");
+		expect(plainBullets(sentences["diff-size"])).toBe("Back to no clean work in a row after !425.");
 	});
 });
 

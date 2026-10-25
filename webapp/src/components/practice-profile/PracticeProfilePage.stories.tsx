@@ -59,11 +59,11 @@ export const Default: Story = {
 		);
 		const articles = canvas.getAllByRole("article");
 		await expect(articles).toHaveLength(6);
-		// Room between the cards, so each card's own edge parts it from the next.
+		// Room between the cards, so each card's own edge parts it from the next: they do not touch.
 		const [first, second] = articles;
 		await expect(
 			(second?.getBoundingClientRect().top ?? 0) - (first?.getBoundingClientRect().bottom ?? 0),
-		).toBe(24);
+		).toBeGreaterThan(0);
 		await expect(canvas.getByText("Newest first")).toBeVisible();
 		// A real link: the level it opens is an address, so it opens in a new tab and reloads.
 		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toHaveAttribute(

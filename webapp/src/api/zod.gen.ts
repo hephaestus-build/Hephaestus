@@ -2536,12 +2536,6 @@ export const zPracticePageCleanWork = z.object({
 
 export const zPracticePageEvidence = z.object({
     item: zItemRef,
-    outcome: z.enum([
-        'MET',
-        'NOT_MET',
-        'DOES_NOT_APPLY',
-        'COULD_NOT_DETERMINE'
-    ]),
     recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
     resultId: z.uuid(),
     reviewId: z.uuid(),

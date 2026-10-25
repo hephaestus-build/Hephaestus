@@ -1,3 +1,4 @@
+import { workKey } from "./feedback-work-kind";
 import type { CleanWork, ReviewedWorkOutcome } from "./PracticeFeedbackCard";
 
 /**
@@ -48,11 +49,11 @@ export function timelinePieces(
 		// The same thread can be reviewed twice on different days.
 		...reviewedWork.map((work) => ({
 			...work,
-			key: `${work.ref.kind} ${work.ref.id} ${work.date.getTime()}`,
+			key: `${workKey(work.ref)} ${work.date.getTime()}`,
 		})),
 		...cleanWork.map((clean) => ({
 			...clean,
-			key: `${clean.ref.kind} ${clean.ref.id} clean`,
+			key: `${workKey(clean.ref)} clean`,
 			outcome: "MET" as const,
 		})),
 	]
