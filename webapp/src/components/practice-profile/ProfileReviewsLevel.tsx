@@ -37,6 +37,7 @@ import { nonEmpty } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 
 import {
+	LISTED_REVIEW_STATUSES,
 	PROFILE_REVIEWS_PAGE_SIZE,
 	REVIEW_TIMEFRAMES,
 	REVIEW_TIMEFRAME_DEFS,
@@ -54,12 +55,9 @@ const TIMEFRAME_OPTIONS: readonly FilterOption<ReviewTimeframe | typeof ALL_TIME
 	{ value: ALL_TIME, label: "All time" },
 ];
 
-/**
- * The statuses as the developer's own review surfaces name them, with their icons. The list holds a
- * review only once it records something about the reader, so a waiting review is never in it.
- */
-const STATUS_OPTIONS = statusFacetOptions(OWN_REVIEW_STATUS_DEFS).filter(
-	(option) => option.value !== "QUEUED",
+/** The statuses the list can hold, as the developer's own review surfaces name them, with their icons. */
+const STATUS_OPTIONS = statusFacetOptions(OWN_REVIEW_STATUS_DEFS).filter((option) =>
+	LISTED_REVIEW_STATUSES.includes(option.value),
 );
 
 const NEWEST = "NEWEST";

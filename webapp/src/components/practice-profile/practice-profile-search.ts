@@ -168,6 +168,14 @@ export const DEFAULT_FEEDBACK_TAB: FeedbackTab = "open";
  */
 const itemIdSchema = z.coerce.string().regex(/^[1-9]\d{0,18}$/u);
 
+/**
+ * The statuses Reviews of your work can hold: a review is listed only once it records something
+ * about the reader, so a waiting review is never in it, and a link that asks for one asks for none.
+ */
+export const LISTED_REVIEW_STATUSES: readonly ReviewStatus[] = statusValues(
+	OWN_REVIEW_STATUS_DEFS,
+).filter((status) => status !== "QUEUED");
+
 const practiceProfileFilterSchema = z.object({
 	dir: z
 		.enum(SORT_DIRECTIONS)
@@ -183,9 +191,7 @@ const practiceProfileFilterSchema = z.object({
 		),
 	),
 	reviewSince: z.enum(REVIEW_TIMEFRAMES).optional().catch(undefined),
-	reviewStatus: multiValue.transform((values) =>
-		narrowToEnum(values, statusValues(OWN_REVIEW_STATUS_DEFS)),
-	),
+	reviewStatus: multiValue.transform((values) => narrowToEnum(values, LISTED_REVIEW_STATUSES)),
 	reviewOrder: z.enum(REVIEW_ORDERS).optional().catch(undefined),
 	reviewItem: itemIdSchema.optional().catch(undefined),
 	reviewGroup: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
