@@ -440,7 +440,12 @@ await test("the `postgres` service takes the carried pin and nothing else the co
 			(match) => match.groups?.name,
 		),
 	);
-	assert.deepEqual([...interpolated], ["HEPHAESTUS_IMAGE_POSTGRES"]);
+	// Operator settings come from the host's `.env`, which a release does not change.
+	const operatorSettings = new Set(["POSTGRES_MEM_LIMIT"]);
+	assert.deepEqual(
+		[...interpolated].filter((name) => name === undefined || !operatorSettings.has(name)),
+		["HEPHAESTUS_IMAGE_POSTGRES"],
+	);
 });
 
 await test("the database image is kept while git says nothing rebuilt it that day", async () => {

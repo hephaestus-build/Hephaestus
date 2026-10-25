@@ -12,6 +12,12 @@ spring:
     liquibase:
         enabled: false
 
+    # Only an Outline delivery reads the database, with one indexed query; the other receivers read nothing.
+    datasource:
+        hikari:
+            maximum-pool-size: ${HIKARI_MAXIMUM_POOL_SIZE:2}
+            minimum-idle: 1
+
     jpa:
         hibernate:
             ddl-auto: none

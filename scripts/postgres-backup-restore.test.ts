@@ -47,6 +47,7 @@ childProcess.spawnSync = (command, args, options = {}) => {
   if (args[0] === "image" && args[1] === "inspect" && !${imageExists}) status = 1;
   if (args[0] === "port") stdout = "127.0.0.1:54321";
   if (args.includes("SHOW server_version_num")) stdout = "180000";
+  if (args.some((arg) => arg.includes("current_setting('shared_buffers')"))) stdout = "512MB pg_stat_statements";
   return { status, stdout, stderr: status ? "missing image" : "" };
 };
 syncBuiltinESMExports();

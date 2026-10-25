@@ -1,6 +1,6 @@
 # ADR 0018: pg_partman for `auth_event` partitioning (supersedes ADR 0017's self-managed partitions)
 
-**Status:** Accepted (PostgreSQL version superseded by [ADR 0038](0038-postgresql-18-release-baseline.md); amended 2026-09-17 — image name and changeset location)
+**Status:** Accepted (PostgreSQL version superseded by [ADR 0038](0038-postgresql-18-release-baseline.md); amended 2026-09-17 — image name and changeset location; 2026-10-25 — `pg_stat_statements` preloaded)
 **Date:** 2026-06-09
 **Authors:** Felix T.J. Dietrich
 **Supersedes (partition sub-decision only):** [ADR 0017](0017-replace-keycloak-with-spring-native-auth.md)
@@ -69,3 +69,9 @@ server role, and `docker/postgres/Dockerfile` sets no `shared_preload_libraries`
   database registers `auth_event` with `partman.create_parent` (monthly, `p_premake := 2`,
   retention 12 months) in changeset `baseline_v0_77_4-seed` of
   `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.xml`.
+
+## Update — 2026-10-25
+
+The image now sets `shared_preload_libraries=pg_stat_statements` in its entrypoint
+(`docker/postgres/size-from-memory.sh`), for statement statistics. The decision above stands: the
+pg_partman background worker is still not preloaded, and maintenance stays in the app scheduler.
